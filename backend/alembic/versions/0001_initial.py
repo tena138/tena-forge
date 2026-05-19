@@ -17,8 +17,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    batch_status = postgresql.ENUM("pending", "processing", "done", "error", name="batch_status")
-    batch_status.create(op.get_bind(), checkfirst=True)
+    batch_status = postgresql.ENUM("pending", "processing", "done", "error", name="batch_status", create_type=False)
+    postgresql.ENUM("pending", "processing", "done", "error", name="batch_status").create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         "batches",
