@@ -73,6 +73,7 @@ def _ensure_academy_columns(connection, inspector) -> bool:
     bool_true = "TRUE" if connection.dialect.name == "postgresql" else "1"
     timestamp_default = "CURRENT_TIMESTAMP" if connection.dialect.name == "postgresql" else "'1970-01-01 00:00:00'"
     specs = [
+        ("email", "VARCHAR(320) NULL"),
         ("email_verified", f"BOOLEAN NOT NULL DEFAULT {bool_false}"),
         ("email_verified_at", "TIMESTAMP NULL"),
         ("password_hash", "VARCHAR(255) NULL"),
@@ -113,7 +114,7 @@ def _ensure_academy_columns(connection, inspector) -> bool:
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_academies_account_type ON academies (account_type)"))
         changed = True
     if "ix_academies_email" not in _index_names(inspector, "academies"):
-        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_academies_email ON academies (email)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_academies_email ON academies (email)"))
         changed = True
     return changed
 
@@ -135,7 +136,10 @@ def _looks_physically_migrated(inspector) -> bool:
 def main() -> None:
     engine = create_engine(get_settings().database_url, pool_pre_ping=True)
     with engine.begin() as connection:
+        _create_missing_tables(connection)
         inspector = inspect(connection)
+        if _ensure_academy_columns(connection, inspector):
+            inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
             return
         versions = [
