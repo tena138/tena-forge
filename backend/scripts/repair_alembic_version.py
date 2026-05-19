@@ -10,6 +10,27 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 HEAD_REVISION = "0016_batch_subject_unit_candidates"
+ACADEMY_REQUIRED_COLUMNS = {
+    "email_verified",
+    "email_verified_at",
+    "password_hash",
+    "academy_name",
+    "account_type",
+    "business_number",
+    "phone",
+    "address",
+    "plan",
+    "plan_expires_at",
+    "is_active",
+    "is_suspended",
+    "suspension_reason",
+    "created_at",
+    "updated_at",
+    "last_login_at",
+    "last_login_ip",
+    "failed_login_attempts",
+    "locked_until",
+}
 
 
 def _column_names(inspector, table_name: str) -> set[str]:
@@ -32,22 +53,67 @@ def _create_missing_tables(connection) -> None:
     Base.metadata.create_all(bind=connection)
 
 
-def _ensure_academy_account_type(connection, inspector) -> bool:
+def _add_column_if_missing(connection, inspector, table_name: str, column_name: str, definition: str) -> bool:
+    if column_name in _column_names(inspector, table_name):
+        return False
+    if connection.dialect.name == "postgresql":
+        ddl = f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {column_name} {definition}"
+    else:
+        ddl = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+    connection.execute(text(ddl))
+    return True
+
+
+def _ensure_academy_columns(connection, inspector) -> bool:
     if "academies" not in inspector.get_table_names():
         return False
 
     changed = False
-    if "account_type" not in _column_names(inspector, "academies"):
-        if connection.dialect.name == "postgresql":
-            ddl = "ALTER TABLE academies ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) NOT NULL DEFAULT 'academy'"
-        else:
-            ddl = "ALTER TABLE academies ADD COLUMN account_type VARCHAR(20) NOT NULL DEFAULT 'academy'"
-        connection.execute(text(ddl))
-        changed = True
+    bool_false = "FALSE" if connection.dialect.name == "postgresql" else "0"
+    bool_true = "TRUE" if connection.dialect.name == "postgresql" else "1"
+    timestamp_default = "CURRENT_TIMESTAMP" if connection.dialect.name == "postgresql" else "'1970-01-01 00:00:00'"
+    specs = [
+        ("email_verified", f"BOOLEAN NOT NULL DEFAULT {bool_false}"),
+        ("email_verified_at", "TIMESTAMP NULL"),
+        ("password_hash", "VARCHAR(255) NULL"),
+        ("academy_name", "VARCHAR(255) NOT NULL DEFAULT 'Tena User'"),
+        ("account_type", "VARCHAR(20) NOT NULL DEFAULT 'academy'"),
+        ("business_number", "VARCHAR(50) NULL"),
+        ("phone", "VARCHAR(50) NULL"),
+        ("address", "VARCHAR(500) NULL"),
+        ("plan", "VARCHAR(20) NOT NULL DEFAULT 'free'"),
+        ("plan_expires_at", "TIMESTAMP NULL"),
+        ("is_active", f"BOOLEAN NOT NULL DEFAULT {bool_true}"),
+        ("is_suspended", f"BOOLEAN NOT NULL DEFAULT {bool_false}"),
+        ("suspension_reason", "TEXT NULL"),
+        ("created_at", f"TIMESTAMP NOT NULL DEFAULT {timestamp_default}"),
+        ("updated_at", f"TIMESTAMP NOT NULL DEFAULT {timestamp_default}"),
+        ("last_login_at", "TIMESTAMP NULL"),
+        ("last_login_ip", "VARCHAR(64) NULL"),
+        ("failed_login_attempts", "INTEGER NOT NULL DEFAULT 0"),
+        ("locked_until", "TIMESTAMP NULL"),
+    ]
+    for column_name, definition in specs:
+        if _add_column_if_missing(connection, inspector, "academies", column_name, definition):
+            changed = True
+            inspector = inspect(connection)
+
+    connection.execute(text(f"UPDATE academies SET email_verified = {bool_false} WHERE email_verified IS NULL"))
+    connection.execute(text("UPDATE academies SET academy_name = split_part(email, '@', 1) WHERE academy_name IS NULL OR academy_name = ''")) if connection.dialect.name == "postgresql" else connection.execute(text("UPDATE academies SET academy_name = substr(email, 1, instr(email, '@') - 1) WHERE academy_name IS NULL OR academy_name = ''"))
+    connection.execute(text("UPDATE academies SET account_type = 'academy' WHERE account_type IS NULL OR account_type = ''"))
+    connection.execute(text("UPDATE academies SET plan = 'free' WHERE plan IS NULL"))
+    connection.execute(text(f"UPDATE academies SET is_active = {bool_true} WHERE is_active IS NULL"))
+    connection.execute(text(f"UPDATE academies SET is_suspended = {bool_false} WHERE is_suspended IS NULL"))
+    connection.execute(text(f"UPDATE academies SET created_at = {timestamp_default} WHERE created_at IS NULL"))
+    connection.execute(text(f"UPDATE academies SET updated_at = {timestamp_default} WHERE updated_at IS NULL"))
+    connection.execute(text("UPDATE academies SET failed_login_attempts = 0 WHERE failed_login_attempts IS NULL"))
 
     inspector = inspect(connection)
     if "ix_academies_account_type" not in _index_names(inspector, "academies"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_academies_account_type ON academies (account_type)"))
+        changed = True
+    if "ix_academies_email" not in _index_names(inspector, "academies"):
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_academies_email ON academies (email)"))
         changed = True
     return changed
 
@@ -58,7 +124,7 @@ def _schema_is_at_head(inspector) -> bool:
     return (
         required_tables.issubset(tables)
         and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
-        and _has_columns(inspector, "academies", {"account_type"})
+        and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
     )
 
 
@@ -82,7 +148,7 @@ def main() -> None:
         if versions == [HEAD_REVISION] or _looks_physically_migrated(inspector):
             _create_missing_tables(connection)
             inspector = inspect(connection)
-            if _ensure_academy_account_type(connection, inspector):
+            if _ensure_academy_columns(connection, inspector):
                 inspector = inspect(connection)
 
         if not _schema_is_at_head(inspector):
