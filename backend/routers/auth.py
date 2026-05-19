@@ -215,10 +215,10 @@ def _apply_failed_login_policy(academy: Academy) -> None:
 @limiter.limit("5/hour")
 def request_registration_code(payload: RegistrationCodeRequest, request: Request, db: Session = Depends(get_db)):
     email = payload.email.lower()
-    existing = db.scalar(select(Academy).where(Academy.email == email))
+    existing_id = db.scalar(select(Academy.id).where(Academy.email == email))
     code = f"{secrets.randbelow(1_000_000):06d}"
     verification_session = _create_registration_session(email, code)
-    if not existing:
+    if not existing_id:
         send_registration_code_email(email, code)
     return {
         "message": "인증 코드를 이메일로 보냈습니다.",
