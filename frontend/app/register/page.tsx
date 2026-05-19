@@ -13,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { registerAcademy, resendVerification } from "@/lib/auth-api";
 
+const checkboxBoolean = z.preprocess((value) => value === true || value === "true" || value === "on", z.boolean());
+const requiredAgreement = (message: string) => checkboxBoolean.refine((value) => value === true, { message });
+
 const schema = z
   .object({
     email: z.string().email("올바른 이메일을 입력해주세요."),
@@ -24,9 +27,9 @@ const schema = z
     phone: z.string().optional(),
     address: z.string().optional(),
     address_detail: z.string().optional(),
-    agree_terms: z.boolean().refine(Boolean, "서비스 이용약관에 동의해주세요."),
-    agree_privacy: z.boolean().refine(Boolean, "개인정보 처리방침에 동의해주세요."),
-    agree_marketing: z.boolean(),
+    agree_terms: requiredAgreement("서비스 이용약관에 동의해주세요."),
+    agree_privacy: requiredAgreement("개인정보 처리방침에 동의해주세요."),
+    agree_marketing: checkboxBoolean,
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.confirmPassword) {
@@ -37,14 +40,15 @@ const schema = z
     }
   });
 
-type RegisterForm = z.infer<typeof schema>;
+type RegisterFormInput = z.input<typeof schema>;
+type RegisterForm = z.output<typeof schema>;
 
 export default function RegisterPage() {
   const [step, setStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState("");
   const [successEmail, setSuccessEmail] = useState("");
-  const form = useForm<RegisterForm>({
+  const form = useForm<RegisterFormInput, unknown, RegisterForm>({
     resolver: zodResolver(schema),
     defaultValues: {
       email: "",
@@ -67,22 +71,29 @@ export default function RegisterPage() {
 
   async function next() {
     const fields = step === 1 ? ["email", "password", "confirmPassword"] : ["account_type", "academy_name"];
-    const ok = await form.trigger(fields as Array<keyof RegisterForm>);
+    const ok = await form.trigger(fields as Array<keyof RegisterFormInput>);
     if (ok) setStep((value) => value + 1);
   }
 
   async function submit(values: RegisterForm) {
     setServerError("");
     try {
-      const address = [values.address, values.address_detail].filter(Boolean).join(" ");
+      const address = [values.address, values.address_detail].map((value) => value?.trim()).filter(Boolean).join(" ");
       const result = await registerAcademy({
-        ...values,
-        address,
-        business_number: values.business_number || undefined,
+        email: values.email.trim(),
+        password: values.password,
+        account_type: values.account_type,
+        academy_name: values.academy_name.trim(),
+        business_number: values.business_number?.trim() || undefined,
+        phone: values.phone?.trim() || undefined,
+        address: address || undefined,
+        agree_terms: values.agree_terms === true,
+        agree_privacy: values.agree_privacy === true,
+        agree_marketing: values.agree_marketing === true,
       });
       setSuccessEmail(result.email);
     } catch (error: any) {
-      setServerError(error.response?.data?.detail || "회원가입에 실패했습니다.");
+      setServerError(formatRegisterError(error));
     }
   }
 
@@ -96,7 +107,7 @@ export default function RegisterPage() {
       <AuthCard title="이메일을 확인해주세요" subtitle={`${successEmail}로 인증 링크를 발송했습니다.`}>
         <div className="space-y-4 text-center">
           <p className="rounded-lg border border-sky-300/20 bg-sky-400/10 px-4 py-5 text-sm leading-6 text-sky-100">
-            받은 편지함에서 인증 링크를 눌러 가입을 완료해주세요.
+            받은 메일함에서 인증 링크를 눌러 가입을 완료해주세요.
           </p>
           <Button className="w-full" onClick={() => resendVerification(successEmail)}>
             이메일 재발송
@@ -215,7 +226,7 @@ export default function RegisterPage() {
             <Agreement label="서비스 이용약관에 동의합니다. *" error={form.formState.errors.agree_terms?.message} {...form.register("agree_terms")} />
             <Agreement label="개인정보 처리방침에 동의합니다. *" error={form.formState.errors.agree_privacy?.message} {...form.register("agree_privacy")} />
             <Agreement label="마케팅 정보 수신에 동의합니다." {...form.register("agree_marketing")} />
-            {serverError && <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p>}
+            {serverError && <p className="whitespace-pre-line rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p>}
             <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant="outline" className="h-11" onClick={() => setStep(2)}>
                 이전
@@ -227,6 +238,17 @@ export default function RegisterPage() {
       </form>
     </AuthCard>
   );
+}
+
+function formatRegisterError(error: any) {
+  const detail = error.response?.data?.detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.map((item) => item?.msg).filter(Boolean);
+    if (messages.length) return messages.join("\n");
+  }
+  if (typeof detail === "string") return detail;
+  if (detail?.message) return String(detail.message);
+  return "회원가입에 실패했습니다.";
 }
 
 function AccountTypeCard({ active, title, description, onClick }: { active: boolean; title: string; description: string; onClick: () => void }) {
