@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -139,11 +140,56 @@ def repair_production_schema_and_admin():
 
     repair_alembic_version()
     ensure_admin_account()
+    print("Production schema repair and admin bootstrap completed.", flush=True)
 
 
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/health/db")
+def health_db():
+    try:
+        from scripts.ensure_admin_account import ADMIN_EMAIL
+        from scripts.repair_alembic_version import ACADEMY_REQUIRED_COLUMNS
+
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        academy_columns = {column["name"] for column in inspector.get_columns("academies")} if "academies" in tables else set()
+        alembic_versions = []
+        admin_exists = None
+        if "alembic_version" in tables:
+            with engine.begin() as connection:
+                alembic_versions = [row[0] for row in connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).all()]
+        if {"academies"}.issubset(tables) and {"email", "password_hash"}.issubset(academy_columns):
+            with engine.begin() as connection:
+                admin_exists = bool(
+                    connection.execute(
+                        text("SELECT 1 FROM academies WHERE email = :email LIMIT 1"),
+                        {"email": ADMIN_EMAIL},
+                    ).first()
+                )
+        return {
+            "ok": not sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
+            "commit": (os.getenv("RENDER_GIT_COMMIT") or "unknown")[:7],
+            "admin_email": ADMIN_EMAIL,
+            "admin_exists": admin_exists,
+            "bootstrap_password_configured": bool(os.getenv("BOOTSTRAP_ADMIN_PASSWORD")),
+            "alembic_versions": alembic_versions,
+            "missing_tables": sorted({"academies", "user_roles", "batches", "problems", "problem_sets"} - tables),
+            "missing_academy_columns": sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
+        }
+    except Exception as exc:
+        return JSONResponse(
+            {
+                "ok": False,
+                "commit": (os.getenv("RENDER_GIT_COMMIT") or "unknown")[:7],
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            },
+            status_code=500,
+        )
 
 
 def _ensure_sqlite_columns():
