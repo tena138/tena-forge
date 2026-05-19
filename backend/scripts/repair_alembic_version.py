@@ -5,7 +5,8 @@ from sqlalchemy import create_engine, inspect, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from database import get_settings
+from database import Base, get_settings
+import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 HEAD_REVISION = "0016_batch_subject_unit_candidates"
@@ -25,6 +26,10 @@ def _index_names(inspector, table_name: str) -> set[str]:
 
 def _has_columns(inspector, table_name: str, column_names: set[str]) -> bool:
     return column_names.issubset(_column_names(inspector, table_name))
+
+
+def _create_missing_tables(connection) -> None:
+    Base.metadata.create_all(bind=connection)
 
 
 def _ensure_academy_account_type(connection, inspector) -> bool:
@@ -48,26 +53,41 @@ def _ensure_academy_account_type(connection, inspector) -> bool:
 
 
 def _schema_is_at_head(inspector) -> bool:
-    return _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"}) and _has_columns(inspector, "academies", {"account_type"})
+    required_tables = {"academies", "user_roles", "batches", "problems", "problem_sets"}
+    tables = set(inspector.get_table_names())
+    return (
+        required_tables.issubset(tables)
+        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
+        and _has_columns(inspector, "academies", {"account_type"})
+    )
+
+
+def _looks_physically_migrated(inspector) -> bool:
+    return _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
 
 
 def main() -> None:
     engine = create_engine(get_settings().database_url, pool_pre_ping=True)
     with engine.begin() as connection:
         inspector = inspect(connection)
-        if _ensure_academy_account_type(connection, inspector):
-            inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
             return
-        if not _schema_is_at_head(inspector):
-            return
-
         versions = [
             row[0]
             for row in connection.execute(
                 text("SELECT version_num FROM alembic_version ORDER BY version_num")
             ).all()
         ]
+
+        if versions == [HEAD_REVISION] or _looks_physically_migrated(inspector):
+            _create_missing_tables(connection)
+            inspector = inspect(connection)
+            if _ensure_academy_account_type(connection, inspector):
+                inspector = inspect(connection)
+
+        if not _schema_is_at_head(inspector):
+            return
+
         if versions == [HEAD_REVISION]:
             return
 
