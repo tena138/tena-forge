@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 import emails
 from jinja2 import Template
@@ -6,6 +7,7 @@ from jinja2 import Template
 from database import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 BASE_TEMPLATE = """
 <!doctype html>
@@ -48,11 +50,11 @@ def _button(label: str, url: str) -> str:
     )
 
 
-def _send(to: str, subject: str, body: str) -> None:
+def _send(to: str, subject: str, body: str) -> bool:
     html = Template(BASE_TEMPLATE).render(body=body)
     if not settings.smtp_host:
-        print(f"[email skipped] to={to} subject={subject}")
-        return
+        logger.warning("Email skipped because SMTP_HOST is not configured: to=%s subject=%s", to, subject)
+        return False
     message = emails.html(
         html=html,
         subject=subject,
@@ -65,7 +67,12 @@ def _send(to: str, subject: str, body: str) -> None:
         "password": settings.smtp_password or None,
         "tls": True,
     }
-    message.send(to=to, smtp=smtp)
+    try:
+        message.send(to=to, smtp=smtp)
+    except Exception:
+        logger.exception("Email send failed: to=%s subject=%s", to, subject)
+        return False
+    return True
 
 
 def send_verification_email(email: str, academy_name: str, token: str) -> None:
@@ -80,14 +87,14 @@ def send_verification_email(email: str, academy_name: str, token: str) -> None:
     _send(email, "[Tena Forge] 이메일 인증을 완료해주세요", body)
 
 
-def send_registration_code_email(email: str, code: str) -> None:
+def send_registration_code_email(email: str, code: str) -> bool:
     body = (
         "<p>Tena Forge 회원가입을 계속하려면 아래 인증 코드를 입력해주세요.</p>"
         f"<p style='margin:28px 0;text-align:center;font-size:32px;font-weight:800;letter-spacing:8px;color:#4f46e5;'>{code}</p>"
         "<p>이 코드는 10분 동안만 사용할 수 있습니다.</p>"
         "<p style='color:#6b7280;'>본인이 요청하지 않았다면 이 메일을 무시해주세요.</p>"
     )
-    _send(email, "[Tena Forge] 회원가입 인증 코드", body)
+    return _send(email, "[Tena Forge] 회원가입 인증 코드", body)
 
 
 def send_password_reset_email(email: str, token: str, ip_address: str) -> None:

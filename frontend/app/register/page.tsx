@@ -209,6 +209,9 @@ export default function RegisterPage() {
 }
 
 function formatRegisterError(error: any) {
+  if (!error.response) {
+    return "서버에 연결할 수 없습니다. API 주소와 CORS 설정을 확인해주세요.";
+  }
   const detail = error.response?.data?.detail;
   if (Array.isArray(detail)) {
     const messages = detail.map((item) => item?.msg).filter(Boolean);
@@ -216,6 +219,9 @@ function formatRegisterError(error: any) {
   }
   if (typeof detail === "string") return detail;
   if (detail?.message) return String(detail.message);
+  if (error.response?.status >= 500) {
+    return "서버에서 인증 코드 처리 중 오류가 발생했습니다. Render 배포 로그를 확인해주세요.";
+  }
   return "회원가입에 실패했습니다.";
 }
 
