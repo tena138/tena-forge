@@ -1,11 +1,15 @@
 import uuid
 import time
+import secrets
+import hashlib
+import hmac
 from datetime import timedelta
 from urllib.parse import urlencode
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
+from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -32,6 +36,8 @@ from schemas import (
     OAuthAccountRead,
     LoginRequest,
     ProfileUpdateRequest,
+    RegistrationCodeRequest,
+    RegistrationCodeResponse,
     RegisterRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
@@ -50,6 +56,7 @@ from services.auth_email import (
     send_new_device_login_email,
     send_password_changed_email,
     send_password_reset_email,
+    send_registration_code_email,
     send_verification_email,
 )
 from services.auth_security import (
@@ -150,6 +157,46 @@ def _create_password_reset(db: Session, academy: Academy, ip_address: str) -> st
     return token
 
 
+def _default_academy_name(email: str) -> str:
+    local_part = email.split("@", 1)[0].strip()
+    return (local_part[:64] or "Tena 사용자")
+
+
+def _registration_code_proof(email: str, code: str, nonce: str, expires_at: int) -> str:
+    message = f"{email}:{code}:{nonce}:{expires_at}".encode("utf-8")
+    return hmac.new(settings.secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
+
+def _create_registration_session(email: str, code: str) -> str:
+    now = int(time.time())
+    expires_at = now + 600
+    nonce = secrets.token_urlsafe(18)
+    payload = {
+        "type": "registration_code",
+        "email": email,
+        "nonce": nonce,
+        "proof": _registration_code_proof(email, code, nonce, expires_at),
+        "iat": now,
+        "exp": expires_at,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
+def _verify_registration_code(email: str, code: str, verification_session: str) -> None:
+    try:
+        payload = jwt.decode(verification_session, settings.secret_key, algorithms=[settings.algorithm])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="인증 코드가 만료되었거나 올바르지 않습니다.")
+    if payload.get("type") != "registration_code" or payload.get("email") != email:
+        raise HTTPException(status_code=400, detail="인증 코드가 요청한 이메일과 일치하지 않습니다.")
+    nonce = str(payload.get("nonce") or "")
+    expires_at = int(payload.get("exp") or 0)
+    expected_proof = str(payload.get("proof") or "")
+    actual_proof = _registration_code_proof(email, code.strip(), nonce, expires_at)
+    if not nonce or not secrets.compare_digest(expected_proof, actual_proof):
+        raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않습니다.")
+
+
 def _apply_failed_login_policy(academy: Academy) -> None:
     academy.failed_login_attempts += 1
     attempts = academy.failed_login_attempts
@@ -164,32 +211,48 @@ def _apply_failed_login_policy(academy: Academy) -> None:
         academy.locked_until = now_utc() + timedelta(minutes=15)
 
 
+@router.post("/register/code", response_model=RegistrationCodeResponse)
+@limiter.limit("5/hour")
+def request_registration_code(payload: RegistrationCodeRequest, request: Request, db: Session = Depends(get_db)):
+    email = payload.email.lower()
+    existing = db.scalar(select(Academy).where(Academy.email == email))
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    verification_session = _create_registration_session(email, code)
+    if not existing:
+        send_registration_code_email(email, code)
+    return {
+        "message": "인증 코드를 이메일로 보냈습니다.",
+        "verification_session": verification_session,
+        "expires_in_seconds": 600,
+    }
+
+
 @router.post("/register")
 @limiter.limit("3/hour")
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     email = payload.email.lower()
-    validate_password_policy(payload.password, email, payload.academy_name)
+    _verify_registration_code(email, payload.verification_code, payload.verification_session)
+    academy_name = (payload.academy_name or _default_academy_name(email)).strip()
+    validate_password_policy(payload.password, email, academy_name)
     existing = db.scalar(select(Academy).where(Academy.email == email))
     if existing:
         raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
     academy = Academy(
         email=email,
         password_hash=hash_password(payload.password),
-        academy_name=payload.academy_name,
+        academy_name=academy_name,
         account_type=payload.account_type,
         business_number=payload.business_number,
         phone=payload.phone,
         address=payload.address,
         plan=AcademyPlan.free,
-        is_active=False,
-        email_verified=False,
+        is_active=True,
+        email_verified=True,
+        email_verified_at=now_utc(),
     )
     db.add(academy)
-    db.flush()
-    token = _create_email_verification(db, academy)
     db.commit()
-    send_verification_email(academy.email, academy.academy_name, token)
-    return {"message": "이메일을 확인해주세요", "email": academy.email}
+    return {"message": "회원가입이 완료되었습니다.", "email": academy.email}
 
 
 @router.post("/verify-email", response_model=TokenResponse)

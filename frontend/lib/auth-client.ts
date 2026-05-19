@@ -92,6 +92,7 @@ authHttp.interceptors.response.use(
     const isPublicAuthRoute = [
       "/api/auth/login",
       "/api/auth/register",
+      "/api/auth/register/code",
       "/api/auth/refresh",
       "/api/auth/forgot-password",
       "/api/auth/reset-password",

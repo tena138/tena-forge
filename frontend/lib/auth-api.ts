@@ -33,6 +33,11 @@ export async function registerAcademy(payload: unknown) {
   return response.data as { message: string; email: string };
 }
 
+export async function requestRegistrationCode(email: string) {
+  const response = await authHttp.post("/api/auth/register/code", { email });
+  return response.data as { message: string; verification_session: string; expires_in_seconds: number };
+}
+
 export async function loginAcademy(payload: unknown) {
   const response = await authHttp.post("/api/auth/login", payload);
   const data = response.data as LoginResult;

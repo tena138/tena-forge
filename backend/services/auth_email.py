@@ -80,6 +80,16 @@ def send_verification_email(email: str, academy_name: str, token: str) -> None:
     _send(email, "[Tena Forge] 이메일 인증을 완료해주세요", body)
 
 
+def send_registration_code_email(email: str, code: str) -> None:
+    body = (
+        "<p>Tena Forge 회원가입을 계속하려면 아래 인증 코드를 입력해주세요.</p>"
+        f"<p style='margin:28px 0;text-align:center;font-size:32px;font-weight:800;letter-spacing:8px;color:#4f46e5;'>{code}</p>"
+        "<p>이 코드는 10분 동안만 사용할 수 있습니다.</p>"
+        "<p style='color:#6b7280;'>본인이 요청하지 않았다면 이 메일을 무시해주세요.</p>"
+    )
+    _send(email, "[Tena Forge] 회원가입 인증 코드", body)
+
+
 def send_password_reset_email(email: str, token: str, ip_address: str) -> None:
     url = f"{settings.frontend_url}/reset-password?token={token}"
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")

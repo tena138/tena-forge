@@ -11,7 +11,7 @@ import zxcvbn from "zxcvbn";
 import { AuthCard, DividerText, FieldError, FullWidthButton, PasswordStrength, SocialButtons } from "@/components/auth/auth-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { registerAcademy, resendVerification } from "@/lib/auth-api";
+import { registerAcademy, requestRegistrationCode } from "@/lib/auth-api";
 
 const checkboxBoolean = z.preprocess((value) => value === true || value === "true" || value === "on", z.boolean());
 const requiredAgreement = (message: string) => checkboxBoolean.refine((value) => value === true, { message });
@@ -21,12 +21,8 @@ const schema = z
     email: z.string().email("올바른 이메일을 입력해주세요."),
     password: z.string().min(8, "8자 이상 입력해주세요."),
     confirmPassword: z.string().min(1, "비밀번호 확인을 입력해주세요."),
-    account_type: z.enum(["academy", "student"]),
-    academy_name: z.string().min(2, "이름 또는 소속명은 2자 이상이어야 합니다."),
-    business_number: z.string().optional(),
-    phone: z.string().optional(),
-    address: z.string().optional(),
-    address_detail: z.string().optional(),
+    verification_code: z.string().default(""),
+    verification_session: z.string().default(""),
     agree_terms: requiredAgreement("서비스 이용약관에 동의해주세요."),
     agree_privacy: requiredAgreement("개인정보 처리방침에 동의해주세요."),
     agree_marketing: checkboxBoolean,
@@ -44,22 +40,20 @@ type RegisterFormInput = z.input<typeof schema>;
 type RegisterForm = z.output<typeof schema>;
 
 export default function RegisterPage() {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState("");
   const [successEmail, setSuccessEmail] = useState("");
+  const [sendingCode, setSendingCode] = useState(false);
+  const [codeSentTo, setCodeSentTo] = useState("");
   const form = useForm<RegisterFormInput, unknown, RegisterForm>({
     resolver: zodResolver(schema),
     defaultValues: {
       email: "",
       password: "",
       confirmPassword: "",
-      account_type: "academy",
-      academy_name: "",
-      business_number: "",
-      phone: "",
-      address: "",
-      address_detail: "",
+      verification_code: "",
+      verification_session: "",
       agree_terms: false,
       agree_privacy: false,
       agree_marketing: false,
@@ -67,26 +61,43 @@ export default function RegisterPage() {
     mode: "onChange",
   });
   const password = form.watch("password");
-  const accountType = form.watch("account_type");
 
-  async function next() {
-    const fields = step === 1 ? ["email", "password", "confirmPassword"] : ["account_type", "academy_name"];
-    const ok = await form.trigger(fields as Array<keyof RegisterFormInput>);
-    if (ok) setStep((value) => value + 1);
+  async function sendCode() {
+    setServerError("");
+    const ok = await form.trigger(["email", "password", "confirmPassword", "agree_terms", "agree_privacy"]);
+    if (!ok) return;
+    setSendingCode(true);
+    try {
+      const email = String(form.getValues("email")).trim();
+      const result = await requestRegistrationCode(email);
+      form.setValue("verification_session", result.verification_session, { shouldValidate: true });
+      form.setValue("verification_code", "", { shouldValidate: false });
+      setCodeSentTo(email);
+      setStep(2);
+    } catch (error: any) {
+      setServerError(formatRegisterError(error));
+    } finally {
+      setSendingCode(false);
+    }
   }
 
   async function submit(values: RegisterForm) {
     setServerError("");
+    const verificationCode = values.verification_code.trim();
+    if (!values.verification_session) {
+      form.setError("verification_session", { message: "인증 코드를 먼저 받아주세요." });
+      return;
+    }
+    if (!/^\d{6}$/.test(verificationCode)) {
+      form.setError("verification_code", { message: "이메일로 받은 6자리 인증 코드를 입력해주세요." });
+      return;
+    }
     try {
-      const address = [values.address, values.address_detail].map((value) => value?.trim()).filter(Boolean).join(" ");
       const result = await registerAcademy({
         email: values.email.trim(),
         password: values.password,
-        account_type: values.account_type,
-        academy_name: values.academy_name.trim(),
-        business_number: values.business_number?.trim() || undefined,
-        phone: values.phone?.trim() || undefined,
-        address: address || undefined,
+        verification_code: verificationCode,
+        verification_session: values.verification_session,
         agree_terms: values.agree_terms === true,
         agree_privacy: values.agree_privacy === true,
         agree_marketing: values.agree_marketing === true,
@@ -97,23 +108,15 @@ export default function RegisterPage() {
     }
   }
 
-  function formatBusinessNumber(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 10);
-    return digits.replace(/(\d{3})(\d{0,2})(\d{0,5})/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
-  }
-
   if (successEmail) {
     return (
-      <AuthCard title="이메일을 확인해주세요" subtitle={`${successEmail}로 인증 링크를 발송했습니다.`}>
+      <AuthCard title="가입이 완료되었습니다" subtitle={`${successEmail} 계정으로 로그인할 수 있습니다.`}>
         <div className="space-y-4 text-center">
-          <p className="rounded-lg border border-sky-300/20 bg-sky-400/10 px-4 py-5 text-sm leading-6 text-sky-100">
-            받은 메일함에서 인증 링크를 눌러 가입을 완료해주세요.
+          <p className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-4 py-5 text-sm leading-6 text-emerald-100">
+            이메일 인증이 완료되어 계정이 활성화되었습니다.
           </p>
-          <Button className="w-full" onClick={() => resendVerification(successEmail)}>
-            이메일 재발송
-          </Button>
-          <Link href="/login" className="block text-sm font-semibold text-primary hover:underline">
-            로그인으로 돌아가기
+          <Link href="/login" className="block">
+            <Button className="h-11 w-full">로그인으로 이동</Button>
           </Link>
         </div>
       </AuthCard>
@@ -122,8 +125,8 @@ export default function RegisterPage() {
 
   return (
     <AuthCard title="Tena 통합 회원가입">
-      <div className="mb-6 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-        {["계정 정보", "사용 유형", "약관 동의"].map((label, index) => (
+      <div className="mb-6 grid grid-cols-2 gap-2 text-center text-xs font-semibold">
+        {["계정 정보", "이메일 확인"].map((label, index) => (
           <div key={label} className={`rounded-[8px] border py-2 ${step >= index + 1 ? "border-primary/50 bg-primary/90 text-white" : "border-white/10 bg-white/[0.04] text-slate-400"}`}>
             {index + 1}. {label}
           </div>
@@ -154,8 +157,12 @@ export default function RegisterPage() {
               <Input type="password" autoComplete="new-password" className="mt-1.5 h-11" {...form.register("confirmPassword")} />
               <FieldError message={form.formState.errors.confirmPassword?.message} />
             </label>
-            <Button type="button" className="h-11 w-full" onClick={next}>
-              다음
+            <Agreement label="서비스 이용약관에 동의합니다. *" error={form.formState.errors.agree_terms?.message} {...form.register("agree_terms")} />
+            <Agreement label="개인정보 처리방침에 동의합니다. *" error={form.formState.errors.agree_privacy?.message} {...form.register("agree_privacy")} />
+            <Agreement label="마케팅 정보 수신에 동의합니다." {...form.register("agree_marketing")} />
+            {serverError && <p className="whitespace-pre-line rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p>}
+            <Button type="button" className="h-11 w-full" disabled={sendingCode} onClick={sendCode}>
+              {sendingCode ? "인증 코드 전송 중..." : "인증 코드 받기"}
             </Button>
             <DividerText />
             <SocialButtons compact />
@@ -170,69 +177,24 @@ export default function RegisterPage() {
 
         {step === 2 && (
           <>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <AccountTypeCard
-                active={accountType === "academy"}
-                title="학원 계정"
-                description="Academy OS로 좌석, 클래스, 과제, 테스트, 자료 배포를 관리합니다."
-                onClick={() => form.setValue("account_type", "academy", { shouldValidate: true })}
-              />
-              <AccountTypeCard
-                active={accountType === "student"}
-                title="학생 계정"
-                description="Student App으로 학원 연결, 과제, 오답노트, 캘린더를 사용합니다."
-                onClick={() => form.setValue("account_type", "student", { shouldValidate: true })}
-              />
+            <div className="rounded-lg border border-sky-300/20 bg-sky-400/10 px-4 py-3 text-sm leading-6 text-sky-100">
+              {codeSentTo}로 보낸 6자리 코드를 입력해주세요.
             </div>
-
             <label className="block text-sm font-semibold text-slate-200">
-              {accountType === "academy" ? "학원명 또는 소속명 *" : "학생 이름 *"}
-              <Input className="mt-1.5 h-11" {...form.register("academy_name")} />
-              <FieldError message={form.formState.errors.academy_name?.message} />
+              인증 코드 *
+              <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="mt-1.5 h-12 text-center text-lg font-bold tracking-[0.35em]" {...form.register("verification_code")} />
+              <FieldError message={form.formState.errors.verification_code?.message || form.formState.errors.verification_session?.message} />
             </label>
-
-            {accountType === "academy" && (
-              <>
-                <label className="block text-sm font-semibold text-slate-200">
-                  사업자등록번호
-                  <Input className="mt-1.5 h-11" placeholder="___-__-_____" value={form.watch("business_number") || ""} onChange={(event) => form.setValue("business_number", formatBusinessNumber(event.target.value))} />
-                  <span className="mt-1 block text-xs font-normal text-slate-400">선택사항이며 나중에 입력할 수 있습니다.</span>
-                </label>
-                <label className="block text-sm font-semibold text-slate-200">
-                  대표 전화
-                  <Input className="mt-1.5 h-11" {...form.register("phone")} />
-                </label>
-                <label className="block text-sm font-semibold text-slate-200">
-                  주소
-                  <Input className="mt-1.5 h-11" {...form.register("address")} />
-                  <Input className="mt-2 h-11" placeholder="상세 주소" {...form.register("address_detail")} />
-                </label>
-              </>
-            )}
-
+            {serverError && <p className="whitespace-pre-line rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p>}
             <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant="outline" className="h-11" onClick={() => setStep(1)}>
                 이전
               </Button>
-              <Button type="button" className="h-11" onClick={next}>
-                다음
-              </Button>
-            </div>
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <Agreement label="서비스 이용약관에 동의합니다. *" error={form.formState.errors.agree_terms?.message} {...form.register("agree_terms")} />
-            <Agreement label="개인정보 처리방침에 동의합니다. *" error={form.formState.errors.agree_privacy?.message} {...form.register("agree_privacy")} />
-            <Agreement label="마케팅 정보 수신에 동의합니다." {...form.register("agree_marketing")} />
-            {serverError && <p className="whitespace-pre-line rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p>}
-            <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" className="h-11" onClick={() => setStep(2)}>
-                이전
-              </Button>
               <FullWidthButton loading={form.formState.isSubmitting}>가입 완료</FullWidthButton>
             </div>
+            <button type="button" disabled={sendingCode} onClick={sendCode} className="block w-full text-center text-sm font-semibold text-primary hover:underline disabled:opacity-60">
+              인증 코드 다시 받기
+            </button>
           </>
         )}
       </form>
@@ -249,15 +211,6 @@ function formatRegisterError(error: any) {
   if (typeof detail === "string") return detail;
   if (detail?.message) return String(detail.message);
   return "회원가입에 실패했습니다.";
-}
-
-function AccountTypeCard({ active, title, description, onClick }: { active: boolean; title: string; description: string; onClick: () => void }) {
-  return (
-    <button type="button" className={`rounded-[10px] border p-4 text-left transition ${active ? "border-sky-300/60 bg-sky-300/12 text-white" : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/[0.06]"}`} onClick={onClick}>
-      <span className="block text-sm font-bold">{title}</span>
-      <span className="mt-1 block text-xs leading-5 text-slate-400">{description}</span>
-    </button>
-  );
 }
 
 function Agreement({ label, error, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }) {

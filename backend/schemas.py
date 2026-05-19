@@ -1080,7 +1080,9 @@ class AcademyProfile(BaseModel):
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    academy_name: str = Field(min_length=2, max_length=255)
+    verification_code: str = Field(min_length=6, max_length=6)
+    verification_session: str = Field(min_length=16)
+    academy_name: str | None = Field(default=None, min_length=2, max_length=255)
     account_type: str = "academy"
     business_number: str | None = Field(default=None, max_length=50)
     phone: str | None = Field(default=None, max_length=50)
@@ -1102,6 +1104,16 @@ class RegisterRequest(BaseModel):
         if not value:
             raise ValueError("필수 약관에 동의해야 합니다.")
         return value
+
+
+class RegistrationCodeRequest(BaseModel):
+    email: EmailStr
+
+
+class RegistrationCodeResponse(BaseModel):
+    message: str
+    verification_session: str
+    expires_in_seconds: int = 600
 
 
 class VerifyEmailRequest(BaseModel):
