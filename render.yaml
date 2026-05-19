@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head
+    preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head && python scripts/ensure_admin_account.py
     plan: starter
     healthCheckPath: /health
     disk:
@@ -34,6 +34,12 @@ services:
         generateValue: true
       - key: ENCRYPTION_KEY
         sync: false
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        value: admin@tenaforge.com
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: BOOTSTRAP_ADMIN_NAME
+        value: Tena Admin
       - key: AI_MODEL_POOL
         value: gpt-5.4-mini,gpt-5-mini
       - key: AI_SOLUTION_MODEL_POOL
