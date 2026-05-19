@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    preDeployCommand: alembic upgrade head
+    preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head
     plan: starter
     healthCheckPath: /health
     disk:
