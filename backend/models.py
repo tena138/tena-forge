@@ -1,0 +1,1331 @@
+import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, CHAR, DateTime, Enum, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
+
+from database import Base
+
+
+class GUID(TypeDecorator):
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=True))
+        return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == "postgresql":
+            return value
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
+class BatchStatus(str, enum.Enum):
+    pending = "pending"
+    processing = "processing"
+    done = "done"
+    error = "error"
+
+
+class AcademyPlan(str, enum.Enum):
+    free = "free"
+    basic = "basic"
+    pro = "pro"
+    enterprise = "enterprise"
+
+
+class OAuthProvider(str, enum.Enum):
+    google = "google"
+    kakao = "kakao"
+    naver = "naver"
+
+
+class DashboardAnnouncement(Base):
+    __tablename__ = "dashboard_announcements"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    eyebrow: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    badge: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    cta_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    cta_href: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    secondary_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    secondary_href: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    media_type: Mapped[str] = mapped_column(String(20), default="none", nullable=False)
+    media_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    media_alt: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    theme: Mapped[str] = mapped_column(String(40), default="product", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class Academy(Base):
+    __tablename__ = "academies"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    academy_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    account_type: Mapped[str] = mapped_column(String(20), default="academy", nullable=False, index=True)
+    business_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    plan: Mapped[AcademyPlan] = mapped_column(Enum(AcademyPlan, name="academy_plan"), default=AcademyPlan.free, nullable=False)
+    plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_suspended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    suspension_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_login_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship("OAuthAccount", back_populates="academy", cascade="all, delete-orphan")
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship("RefreshToken", back_populates="academy", cascade="all, delete-orphan")
+    email_verifications: Mapped[list["EmailVerification"]] = relationship("EmailVerification", back_populates="academy", cascade="all, delete-orphan")
+    password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship("PasswordResetToken", back_populates="academy", cascade="all, delete-orphan")
+    login_history: Mapped[list["LoginHistory"]] = relationship("LoginHistory", back_populates="academy", cascade="all, delete-orphan")
+    active_sessions: Mapped[list["ActiveSession"]] = relationship("ActiveSession", back_populates="academy", cascade="all, delete-orphan")
+    totp_secret: Mapped["TotpSecret | None"] = relationship("TotpSecret", back_populates="academy", cascade="all, delete-orphan", uselist=False)
+
+    @property
+    def totp_enabled(self) -> bool:
+        return bool(self.totp_secret and self.totp_secret.enabled)
+
+    @property
+    def totp_enabled_at(self) -> datetime | None:
+        return self.totp_secret.enabled_at if self.totp_secret and self.totp_secret.enabled else None
+
+
+class OAuthAccount(Base):
+    __tablename__ = "oauth_accounts"
+    __table_args__ = (UniqueConstraint("provider", "provider_account_id", name="uq_oauth_provider_account"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academies.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[OAuthProvider] = mapped_column(Enum(OAuthProvider, name="oauth_provider"), nullable=False)
+    provider_account_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    academy: Mapped[Academy] = relationship("Academy", back_populates="oauth_accounts")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academies.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    device_info: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ip_address: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    academy: Mapped[Academy] = relationship("Academy", back_populates="refresh_tokens")
+    active_session: Mapped["ActiveSession | None"] = relationship("ActiveSession", back_populates="refresh_token", cascade="all, delete-orphan", uselist=False)
+
+
+class EmailVerification(Base):
+    __tablename__ = "email_verifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academies.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    academy: Mapped[Academy] = relationship("Academy", back_populates="email_verifications")
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academies.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ip_address: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    academy: Mapped[Academy] = relationship("Academy", back_populates="password_reset_tokens")
+
+
+class LoginHistory(Base):
+    __tablename__ = "login_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("academies.id", ondelete="CASCADE"), nullable=True, index=True)
+    ip_address: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_agent: Mapped[str] = mapped_column(Text, nullable=False)
+    device_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    os: Mapped[str] = mapped_column(String(128), nullable=False)
+    browser: Mapped[str] = mapped_column(String(128), nullable=False)
+    country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    login_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    academy: Mapped[Academy | None] = relationship("Academy", back_populates="login_history")
+
+
+class ActiveSession(Base):
+    __tablename__ = "active_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academies.id", ondelete="CASCADE"), nullable=False, index=True)
+    refresh_token_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("refresh_tokens.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    last_active_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    academy: Mapped[Academy] = relationship("Academy", back_populates="active_sessions")
+    refresh_token: Mapped[RefreshToken] = relationship("RefreshToken", back_populates="active_session")
+
+
+class TotpSecret(Base):
+    __tablename__ = "totp_secrets"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academies.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    backup_codes: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+
+    academy: Mapped[Academy] = relationship("Academy", back_populates="totp_secret")
+
+
+class Batch(Base):
+    __tablename__ = "batches"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    problem_pdf_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    solution_pdf_filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[BatchStatus] = mapped_column(Enum(BatchStatus, name="batch_status"), default=BatchStatus.pending, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(40), default="self_created", nullable=False, index=True)
+    source_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rights_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rights_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rights_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subject_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    unit_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    progress_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    progress_current: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    progress_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    progress_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    progress_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    failure_stage: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_hint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    problems: Mapped[list["Problem"]] = relationship("Problem", back_populates="batch", cascade="all, delete-orphan")
+
+
+class Problem(Base):
+    __tablename__ = "problems"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    problem_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    problem_text: Mapped[str] = mapped_column(Text, nullable=False)
+    has_visual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    visual_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    review_page_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    review_page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    solution_steps: Mapped[str | None] = mapped_column(Text, nullable=True)
+    key_concept: Mapped[str | None] = mapped_column(Text, nullable=True)
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    source_batch_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(40), default="self_created", nullable=False, index=True)
+    source_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rights_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rights_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rights_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    visibility: Mapped[str] = mapped_column(String(32), default="private", nullable=False, index=True)
+    origin_type: Mapped[str] = mapped_column(String(32), default="owned", nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    delete_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+    batch: Mapped[Batch] = relationship("Batch", back_populates="problems")
+    tags: Mapped["Tag"] = relationship("Tag", back_populates="problem", cascade="all, delete-orphan", uselist=False)
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    problem_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problems.id", ondelete="CASCADE"), unique=True, nullable=False)
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    unit: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    difficulty: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    problem_type: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    source: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
+
+    problem: Mapped[Problem] = relationship("Problem", back_populates="tags")
+
+
+class ProblemSet(Base):
+    __tablename__ = "problem_sets"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    subtitle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    grade: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    unit: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    difficulty: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    problem_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    visibility: Mapped[str] = mapped_column(String(32), default="private", nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(40), default="self_created", nullable=False, index=True)
+    rights_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_publish_to_marketplace: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    preview_problem_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    items: Mapped[list["ProblemSetItem"]] = relationship(
+        "ProblemSetItem",
+        back_populates="problem_set",
+        cascade="all, delete-orphan",
+        order_by="ProblemSetItem.order_index",
+    )
+
+
+class ProblemSetItem(Base):
+    __tablename__ = "problem_set_items"
+    __table_args__ = (UniqueConstraint("problem_set_id", "problem_id", name="uq_problem_set_problem"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    problem_set_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problem_sets.id", ondelete="CASCADE"), nullable=False, index=True)
+    problem_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    problem_set: Mapped[ProblemSet] = relationship("ProblemSet", back_populates="items")
+    problem: Mapped[Problem] = relationship("Problem")
+
+
+class ExamTemplate(Base):
+    __tablename__ = "exam_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    academy_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    canvas_json: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    header_fields: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    footer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    font_size: Mapped[int] = mapped_column(Integer, default=11, nullable=False)
+    problems_per_page: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    include_solution: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    versions: Mapped[list["TemplateVersion"]] = relationship("TemplateVersion", back_populates="template", cascade="all, delete-orphan")
+
+
+class TemplateVersion(Base):
+    __tablename__ = "template_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("exam_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    canvas_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
+    saved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    element_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    template: Mapped[ExamTemplate] = relationship("ExamTemplate", back_populates="versions")
+
+
+# Template Hub: database-backed, shareable HTML/CSS templates.
+class HubTemplate(Base):
+    __tablename__ = "template_hub_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    visibility: Mapped[str] = mapped_column(String(24), default="private", nullable=False, index=True)
+    html: Mapped[str] = mapped_column(Text, nullable=False)
+    css: Mapped[str | None] = mapped_column(Text, nullable=True)
+    schema_json: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    source_type: Mapped[str] = mapped_column(String(40), default="self_created", nullable=False, index=True)
+    rights_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rights_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    forked_from_template_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("template_hub_templates.id", ondelete="SET NULL"), nullable=True, index=True)
+    like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    use_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    forked_from: Mapped["HubTemplate | None"] = relationship("HubTemplate", remote_side=[id])
+
+
+class MarketplaceListing(Base):
+    __tablename__ = "marketplace_listings"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    seller_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    content_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    content_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    subtitle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    subject: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    grade: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    unit: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    pricing_type: Mapped[str] = mapped_column(String(32), default="free", nullable=False, index=True)
+    price_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price_currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    subscription_period: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    license_type: Mapped[str] = mapped_column(String(40), default="free_use", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False, index=True)
+    rights_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rights_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    save_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    use_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class LicenseEntitlement(Base):
+    __tablename__ = "license_entitlements"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    buyer_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    buyer_academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    seller_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    listing_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("marketplace_listings.id", ondelete="CASCADE"), nullable=False, index=True)
+    content_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    content_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    license_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False, index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    can_view: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_export: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_edit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_publish: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_permanently_save: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    listing: Mapped[MarketplaceListing] = relationship("MarketplaceListing")
+
+
+class CreatorProfile(Base):
+    __tablename__ = "creator_profiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    cover_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    specialties: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    verified_status: Mapped[str] = mapped_column(String(32), default="unverified", nullable=False, index=True)
+    follower_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    listing_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    reporter_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    target_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="open", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+# Production SaaS foundation: roles, subscriptions, creator approval, curated marketplace,
+# signed/private file access metadata, orders, licenses, payout ledger, and audit logs.
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    __table_args__ = (UniqueConstraint("user_id", "role", name="uq_user_role"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    granted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Plan(Base):
+    __tablename__ = "plans"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    monthly_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    monthly_upload_count: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    monthly_processed_pages: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    storage_quota_mb: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    monthly_ai_tokens: Mapped[int] = mapped_column(Integer, default=100000, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    plan_code: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="trialing", nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="mock", nullable=False)
+    provider_customer_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class SubscriptionEvent(Base):
+    __tablename__ = "subscription_events"
+    __table_args__ = (UniqueConstraint("provider", "provider_event_id", name="uq_subscription_event_provider_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    provider_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    payload: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UsageLog(Base):
+    __tablename__ = "usage_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    usage_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    pages_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    storage_mb: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    estimated_cost: Mapped[float] = mapped_column(Numeric(12, 4), default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class ProcessingJob(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False, index=True)
+    input_file_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    output_file_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    page_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    options: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class JobFile(Base):
+    __tablename__ = "job_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    storage_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    original_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class JobOutput(Base):
+    __tablename__ = "job_outputs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    storage_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    output_type: Mapped[str] = mapped_column(String(32), default="html", nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CreatorApplication(Base):
+    __tablename__ = "creator_applications"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    business_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    business_registration_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    tax_invoice_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    payout_bank_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    payout_account_number: Mapped[str] = mapped_column(String(120), nullable=False)
+    payout_account_holder: Mapped[str] = mapped_column(String(120), nullable=False)
+    portfolio_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    sample_content_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    introduction: Mapped[str] = mapped_column(Text, nullable=False)
+    rights_agreed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    seller_terms_agreed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    infringement_policy_agreed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    payout_policy_agreed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="submitted", nullable=False, index=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class PayoutAccount(Base):
+    __tablename__ = "payout_accounts"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    creator_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    bank_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    account_number: Mapped[str] = mapped_column(String(120), nullable=False)
+    account_holder: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False, index=True)
+    tax_info: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    creator_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    grade_level: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    curriculum: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    unit_tags: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    difficulty: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    question_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    exam_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    preview_images: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    license_type: Mapped[str] = mapped_column(String(40), default="personal_tutor", nullable=False)
+    price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="draft", nullable=False, index=True)
+    rights_declared: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    redistribution_allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    watermark_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ProductVersion(Base):
+    __tablename__ = "product_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    changelog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preview_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="draft", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ProductAsset(Base):
+    __tablename__ = "product_assets"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_version_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("product_versions.id", ondelete="CASCADE"), nullable=True, index=True)
+    creator_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    storage_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    asset_kind: Mapped[str] = mapped_column(String(40), default="download", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ProductLicenseTier(Base):
+    __tablename__ = "product_license_tiers"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    allowed_students_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    allowed_print_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    allowed_branches_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    commercial_use_allowed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    redistribution_allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    license_terms_text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MarketplaceOrder(Base):
+    __tablename__ = "marketplace_orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    buyer_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
+    gross_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    payment_fee_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    platform_commission_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    creator_net_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    payment_provider: Mapped[str] = mapped_column(String(40), default="mock", nullable=False)
+    payment_provider_order_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    commission_rate_snapshot: Mapped[float] = mapped_column(Numeric(6, 4), default=0.10, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class MarketplaceOrderItem(Base):
+    __tablename__ = "marketplace_order_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("marketplace_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id"), nullable=False, index=True)
+    product_version_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("product_versions.id"), nullable=True, index=True)
+    license_tier_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("product_license_tiers.id"), nullable=False, index=True)
+    creator_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    unit_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MarketplacePayment(Base):
+    __tablename__ = "marketplace_payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("marketplace_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="mock", nullable=False)
+    provider_payment_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="paid", nullable=False, index=True)
+    raw_event: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MarketplaceRefund(Base):
+    __tablename__ = "marketplace_refunds"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("marketplace_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ProductLicense(Base):
+    __tablename__ = "licenses"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    buyer_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id"), nullable=False, index=True)
+    product_version_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("product_versions.id"), nullable=True, index=True)
+    creator_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    license_tier_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("product_license_tiers.id"), nullable=False, index=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("marketplace_orders.id"), nullable=False, index=True)
+    terms_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CreatorBalanceLedger(Base):
+    __tablename__ = "creator_balance_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    creator_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    order_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    entry_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Payout(Base):
+    __tablename__ = "payouts"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    creator_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False, index=True)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PayoutItem(Base):
+    __tablename__ = "payout_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    payout_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("payouts.id", ondelete="CASCADE"), nullable=False, index=True)
+    ledger_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("creator_balance_ledger.id"), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CopyrightReport(Base):
+    __tablename__ = "copyright_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    reporter_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    reporter_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("products.id"), nullable=True, index=True)
+    claim_description: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="submitted", nullable=False, index=True)
+    admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    target_type: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    target_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class PlatformSetting(Base):
+    __tablename__ = "platform_settings"
+
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+# Academy student app foundation -------------------------------------------------
+# Seats are reusable academy-owned access units. Invite codes are rotatable
+# credentials that let a student claim one currently unassigned seat.
+
+
+class AcademyStudentPlan(Base):
+    __tablename__ = "academy_student_plans"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    included_seats: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    monthly_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    additional_seat_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    daily_upload_quota_per_student: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    daily_extraction_quota_per_student: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    daily_export_quota_per_student: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AcademyStudentSubscription(Base):
+    __tablename__ = "academy_student_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    plan_code: Mapped[str] = mapped_column(String(40), default="tutor", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False, index=True)
+    purchased_additional_seats: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    overage_policy: Mapped[str] = mapped_column(String(32), default="BLOCK_AT_LIMIT", nullable=False)
+    billing_metadata: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AcademyStaffMembership(Base):
+    __tablename__ = "academy_staff_memberships"
+    __table_args__ = (UniqueConstraint("academy_id", "user_id", name="uq_academy_staff_user"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(24), default="teacher", nullable=False, index=True)
+    can_manage_billing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_manage_seats: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_manage_materials: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_assignments: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AcademySeat(Base):
+    __tablename__ = "academy_seats"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    seat_number: Mapped[str] = mapped_column(String(80), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    invite_code_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    invite_code_preview: Mapped[str] = mapped_column(String(12), nullable=False)
+    current_student_membership_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_rotated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class StudentAcademyMembership(Base):
+    __tablename__ = "student_academy_memberships"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_seat_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_seats.id"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False, index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+
+
+class SeatAssignmentHistory(Base):
+    __tablename__ = "seat_assignment_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_seat_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_seats.id"), nullable=False, index=True)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), nullable=False, index=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    released_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AcademyClass(Base):
+    __tablename__ = "academy_classes"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    grade_level: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ClassStudent(Base):
+    __tablename__ = "class_students"
+    __table_args__ = (UniqueConstraint("class_id", "student_membership_id", name="uq_class_student_membership"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    class_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id"), nullable=False, index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    left_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ClassTeacher(Base):
+    __tablename__ = "class_teachers"
+    __table_args__ = (UniqueConstraint("class_id", "academy_staff_user_id", name="uq_class_teacher_user"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    class_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    academy_staff_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    role_in_class: Mapped[str] = mapped_column(String(40), default="teacher", nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_by_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assignment_type: Mapped[str] = mapped_column(String(40), default="homework", nullable=False, index=True)
+    submission_mode: Mapped[str] = mapped_column(String(40), default="completion", nullable=False)
+    target_type: Mapped[str] = mapped_column(String(40), default="class", nullable=False)
+    open_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    close_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    allow_late_submission: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    late_submission_policy: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_release_policy: Mapped[str] = mapped_column(String(40), default="manual", nullable=False)
+    time_limit_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AssignmentTarget(Base):
+    __tablename__ = "assignment_targets"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    target_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+
+
+class AssignmentContent(Base):
+    __tablename__ = "assignment_contents"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    content_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    content_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    text_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    file_asset_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class AssignmentSubmission(Base):
+    __tablename__ = "assignment_submissions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id"), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="assigned", nullable=False, index=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    score: Mapped[Numeric | None] = mapped_column(Numeric(8, 2), nullable=True)
+    feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    teacher_reviewed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AssignmentAnswer(Base):
+    __tablename__ = "assignment_answers"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    submission_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("assignment_submissions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    item_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answer_choice: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    solution_image_asset_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class TestSession(Base):
+    __tablename__ = "test_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id"), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="in_progress", nullable=False, index=True)
+    score: Mapped[Numeric | None] = mapped_column(Numeric(8, 2), nullable=True)
+    raw_score: Mapped[Numeric | None] = mapped_column(Numeric(8, 2), nullable=True)
+    max_score: Mapped[Numeric | None] = mapped_column(Numeric(8, 2), nullable=True)
+    suspicious_event_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class TestSessionEvent(Base):
+    __tablename__ = "test_session_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    test_session_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("test_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CalendarEvent(Base):
+    __tablename__ = "calendar_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    owner_type: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    class_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    student_membership_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    created_by_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(40), default="custom", nullable=False, index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    visibility: Mapped[str] = mapped_column(String(40), default="personal_private", nullable=False, index=True)
+    recurrence_rule: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AcademyMaterial(Base):
+    __tablename__ = "academy_materials"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_by_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    material_type: Mapped[str] = mapped_column(String(40), default="pdf", nullable=False, index=True)
+    storage_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    external_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    permissions: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AcademyMaterialAssignment(Base):
+    __tablename__ = "academy_material_assignments"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    material_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_materials.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    target_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MaterialDeliveryLog(Base):
+    __tablename__ = "material_delivery_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    material_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_materials.id"), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class WatermarkedExport(Base):
+    __tablename__ = "watermarked_exports"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    source_material_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    source_wrong_answer_export_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    export_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    export_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DailyStudentQuotaUsage(Base):
+    __tablename__ = "daily_student_quota_usage"
+    __table_args__ = (UniqueConstraint("student_user_id", "date", "source", name="uq_daily_quota_student_date_source"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    date: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    upload_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    extraction_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    export_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source: Mapped[str] = mapped_column(String(80), default="personal", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class MonthlyUsageRecord(Base):
+    __tablename__ = "monthly_usage_records"
+    __table_args__ = (UniqueConstraint("academy_id", "month", name="uq_monthly_usage_academy_month"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    month: Mapped[str] = mapped_column(String(7), nullable=False, index=True)
+    active_seats: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    assigned_seats: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    upload_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    extraction_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    export_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    estimated_bill: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class WrongAnswerItem(Base):
+    __tablename__ = "wrong_answer_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    student_membership_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    source_type: Mapped[str] = mapped_column(String(40), default="manual_entry", nullable=False, index=True)
+    source_ref_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    original_image_asset_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    original_pdf_page_asset_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    extracted_problem_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_choices: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    extracted_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    unit: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    difficulty: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    tags: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    visibility: Mapped[str] = mapped_column(String(40), default="private", nullable=False, index=True)
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class WrongAnswerReview(Base):
+    __tablename__ = "wrong_answer_reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    wrong_answer_item_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("wrong_answer_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    result: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class WrongAnswerAttempt(Base):
+    __tablename__ = "wrong_answer_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    wrong_answer_item_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("wrong_answer_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    result: Mapped[str] = mapped_column(String(40), nullable=False)
+    answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    solution_image_asset_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class WrongAnswerExport(Base):
+    __tablename__ = "wrong_answer_exports"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    item_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    export_pdf_asset_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    export_id: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    quota_units_used: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    watermark_applied: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class Announcement(Base):
+    __tablename__ = "academy_announcements"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    target_type: Mapped[str] = mapped_column(String(24), default="academy", nullable=False, index=True)
+    target_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_acknowledgement: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class StudentNotification(Base):
+    __tablename__ = "student_notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    notification_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AbuseSignal(Base):
+    __tablename__ = "abuse_signals"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    signal_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(24), default="low", nullable=False, index=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

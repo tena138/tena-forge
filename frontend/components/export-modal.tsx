@@ -1,0 +1,444 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { FileDown, Loader2, Sparkles } from "lucide-react";
+
+import { TemplatePageView } from "@/components/templates/visual-template-renderer";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ExamTemplate, api, downloadExport } from "@/lib/api";
+import { collectVisualTemplateManualVariables, createDynamicPreviewPages } from "@/lib/visualTemplateEngine";
+import { PAGE_SIZES, TemplateSet } from "@/lib/visualTemplateTypes";
+import { HubTemplate, listMyTemplates, listPublicTemplates } from "@/lib/templateHub";
+
+type ExportTemplateKind = "visual" | "legacy" | "html";
+
+type ExportTemplateOption = {
+  id: string;
+  kind: ExportTemplateKind;
+  title: string;
+  description?: string | null;
+  badge: string;
+  templateSet?: TemplateSet;
+  legacy?: ExamTemplate;
+  hub?: HubTemplate;
+};
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dateLabel(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.replaceAll("-", ".") : value;
+}
+
+function timeLabel(startTime: string, endTime: string) {
+  const start = startTime.trim();
+  const end = endTime.trim();
+  if (start && end) return `${start} ~ ${end}`;
+  return start || end;
+}
+
+function dateTimeLabel(date: string, startTime: string, endTime: string) {
+  return [dateLabel(date), timeLabel(startTime, endTime)].filter(Boolean).join(" ");
+}
+
+function getVisualTemplateSet(template: HubTemplate): TemplateSet | null {
+  const schema = template.schema_json as { visualTemplateSet?: unknown } | null;
+  const visual = schema?.visualTemplateSet;
+  if (!visual || typeof visual !== "object") return null;
+  const candidate = visual as TemplateSet;
+  if (!Array.isArray(candidate.pages) || !candidate.defaultPageSize) return null;
+  return candidate;
+}
+
+function dedupeHubTemplates(items: HubTemplate[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function templateCategoryLabel(value: string) {
+  return {
+    exam: "시험지",
+    workbook: "교재",
+    worksheet: "워크북",
+    wrong_answer_note: "오답노트",
+    solution_book: "해설지",
+    concept_note: "개념노트",
+    unit_test: "단원평가지",
+    cover: "표지",
+  }[value] || value;
+}
+
+function outputLabel(kind?: ExportTemplateKind) {
+  return kind === "html" ? "HTML" : "PDF";
+}
+
+function VisualTemplatePreview({ templateSet }: { templateSet: TemplateSet }) {
+  const page = useMemo(() => createDynamicPreviewPages(templateSet)[0] || templateSet.pages[0], [templateSet]);
+  const size = page?.pageSize || templateSet.defaultPageSize || PAGE_SIZES.A4_PORTRAIT;
+  const previewWidth = 340;
+  const scale = Math.min(0.42, previewWidth / Math.max(size.width, 1));
+  const scaledWidth = size.width * scale;
+  const scaledHeight = size.height * scale;
+  if (!page) return <div className="flex h-full items-center justify-center text-xs text-muted-foreground">미리보기 없음</div>;
+
+  return (
+    <div className="relative flex h-full w-full items-start justify-center overflow-hidden bg-[#111318] px-4 py-3">
+      <div className="relative shrink-0" style={{ width: scaledWidth, height: scaledHeight }}>
+        <TemplatePageView templateSet={templateSet} page={page} scale={scale} scaleOrigin="top-left" selectedIds={[]} />
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#111318] to-transparent" />
+    </div>
+  );
+}
+
+function LegacyTemplatePreview({ template }: { template: ExamTemplate }) {
+  return (
+    <div className="flex h-full flex-col bg-white p-4 text-[#111827]">
+      <div className="border-b-2 border-[#111827] pb-3 text-center text-sm font-black">{template.academy_name || "Tena Forge"}</div>
+      <div className="mt-5 grid flex-1 grid-cols-2 gap-3">
+        {Array.from({ length: Math.max(1, template.problems_per_page) }).map((_, index) => (
+          <div key={index} className="rounded-md border border-slate-200 p-3">
+            <div className="mb-2 h-3 w-12 rounded bg-slate-900" />
+            <div className="space-y-1">
+              <div className="h-2 rounded bg-slate-200" />
+              <div className="h-2 rounded bg-slate-200" />
+              <div className="h-2 w-2/3 rounded bg-slate-200" />
+            </div>
+            <div className="mt-4 h-10 rounded border border-dashed border-slate-300" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 text-center text-[10px] text-slate-400">PDF Legacy</div>
+    </div>
+  );
+}
+
+export function ExportModal({
+  open,
+  onOpenChange,
+  source,
+  problemSetId,
+  problemIds,
+  count,
+  initialTemplateId,
+  hideTemplateSelection = false,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  source: "set" | "selection";
+  problemSetId?: string | null;
+  problemIds?: string[];
+  count: number;
+  initialTemplateId?: string | null;
+  hideTemplateSelection?: boolean;
+}) {
+  const [legacyTemplates, setLegacyTemplates] = useState<ExamTemplate[]>([]);
+  const [hubTemplates, setHubTemplates] = useState<HubTemplate[]>([]);
+  const [selectedKind, setSelectedKind] = useState<ExportTemplateKind>("visual");
+  const [selectedId, setSelectedId] = useState("");
+  const [examTitle, setExamTitle] = useState("시험지");
+  const [className, setClassName] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [date, setDate] = useState(today());
+  const [examStartTime, setExamStartTime] = useState("");
+  const [examEndTime, setExamEndTime] = useState("");
+  const [customVariables, setCustomVariables] = useState<Record<string, string>>({});
+  const [includeSolution, setIncludeSolution] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const examTime = timeLabel(examStartTime, examEndTime);
+  const examDateTime = dateTimeLabel(date, examStartTime, examEndTime);
+
+  useEffect(() => {
+    if (!open) return;
+
+    api<ExamTemplate[]>("/api/templates")
+      .then((data) => {
+        setLegacyTemplates(data);
+        if (hideTemplateSelection) {
+          const preferred = data.find((template) => template.id === initialTemplateId) || data[0];
+          if (preferred) {
+            setSelectedKind("legacy");
+            setSelectedId(preferred.id);
+            setIncludeSolution(preferred.include_solution);
+          }
+        }
+      })
+      .catch(() => setLegacyTemplates([]));
+
+    if (!hideTemplateSelection) {
+      Promise.all([
+        listMyTemplates().catch(() => [] as HubTemplate[]),
+        listPublicTemplates({ sort: "most_used" }).catch(() => [] as HubTemplate[]),
+      ]).then(([mine, publicItems]) => setHubTemplates(dedupeHubTemplates([...mine, ...publicItems])));
+    }
+  }, [open, initialTemplateId, hideTemplateSelection]);
+
+  const options = useMemo<ExportTemplateOption[]>(() => {
+    const visual = hubTemplates
+      .map((template) => ({ template, templateSet: getVisualTemplateSet(template) }))
+      .filter((item): item is { template: HubTemplate; templateSet: TemplateSet } => !!item.templateSet)
+      .map((item) => ({
+        id: item.template.id,
+        kind: "visual" as const,
+        title: item.template.title,
+        description: item.template.description,
+        badge: templateCategoryLabel(item.template.category),
+        templateSet: item.templateSet,
+        hub: item.template,
+      }));
+
+    const html = hubTemplates
+      .filter((template) => !getVisualTemplateSet(template))
+      .map((template) => ({
+        id: template.id,
+        kind: "html" as const,
+        title: template.title,
+        description: template.description,
+        badge: "HTML",
+        hub: template,
+      }));
+
+    const legacy = legacyTemplates.map((template) => ({
+      id: template.id,
+      kind: "legacy" as const,
+      title: template.name,
+      description: template.academy_name || "이전 시험지 템플릿",
+      badge: `${template.problems_per_page}문항/쪽`,
+      legacy: template,
+    }));
+
+    return hideTemplateSelection ? legacy : [...visual, ...legacy, ...html];
+  }, [hideTemplateSelection, hubTemplates, legacyTemplates]);
+
+  useEffect(() => {
+    if (!open || hideTemplateSelection) return;
+    if (selectedId && options.some((option) => option.id === selectedId && option.kind === selectedKind)) return;
+    const firstVisual = options.find((option) => option.kind === "visual");
+    const first = firstVisual || options[0];
+    if (first) {
+      setSelectedKind(first.kind);
+      setSelectedId(first.id);
+      if (first.legacy) setIncludeSolution(first.legacy.include_solution);
+    }
+  }, [open, hideTemplateSelection, options, selectedId, selectedKind]);
+
+  const selected = options.find((option) => option.id === selectedId && option.kind === selectedKind);
+  const visualOptions = options.filter((option) => option.kind === "visual");
+  const legacyOptions = options.filter((option) => option.kind === "legacy");
+  const htmlOptions = options.filter((option) => option.kind === "html");
+  const manualVariables = useMemo(() => collectVisualTemplateManualVariables(selected?.templateSet), [selected?.templateSet]);
+
+  useEffect(() => {
+    setCustomVariables((current) => {
+      const next: Record<string, string> = {};
+      for (const key of manualVariables) next[key] = current[key] || "";
+      return next;
+    });
+  }, [manualVariables]);
+
+  function selectOption(option: ExportTemplateOption) {
+    setSelectedKind(option.kind);
+    setSelectedId(option.id);
+    if (option.legacy) setIncludeSolution(option.legacy.include_solution);
+  }
+
+  async function submit() {
+    if (!selected || !examTitle.trim() || loading) return;
+    setLoading(true);
+    try {
+      await downloadExport({
+        source,
+        problem_set_id: source === "set" ? problemSetId || null : null,
+        problem_ids: source === "selection" ? problemIds || [] : null,
+        template_id: selected.kind === "legacy" ? selected.id : null,
+        hub_template_id: selected.kind === "visual" || selected.kind === "html" ? selected.id : null,
+        exam_title: examTitle,
+        class_name: className,
+        student_name: studentName,
+        date,
+        exam_start_time: examStartTime,
+        exam_end_time: examEndTime,
+        exam_time: examTime,
+        exam_datetime: examDateTime,
+        custom_variables: customVariables,
+        include_solution: includeSolution,
+      });
+      onOpenChange(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-6xl bg-[#0b0d12] text-slate-100">
+        <div className="grid gap-5 lg:grid-cols-[330px_minmax(0,1fr)]">
+          <section className="space-y-4 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">내보내기 설정</h2>
+              <p className="mt-1 text-sm text-slate-400">선택한 문항을 템플릿에 배치해 출력합니다.</p>
+            </div>
+            <Input placeholder="시험지명" value={examTitle} onChange={(event) => setExamTitle(event.target.value)} />
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <Input placeholder="반" value={className} onChange={(event) => setClassName(event.target.value)} />
+              <Input placeholder="이름" value={studentName} onChange={(event) => setStudentName(event.target.value)} />
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">시험 일시</div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="시험 일자" />
+                <Input type="time" value={examStartTime} onChange={(event) => setExamStartTime(event.target.value)} aria-label="시험 시작 시간" />
+                <Input type="time" value={examEndTime} onChange={(event) => setExamEndTime(event.target.value)} aria-label="시험 종료 시간" />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                템플릿의 {"{{exam_datetime}}"}, {"{{exam_time}}"}, {"{{exam_start_time}}"} 필드에 출력됩니다.
+              </p>
+              <div className="mt-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-slate-300">
+                {examDateTime || "시험 일시 미입력"}
+              </div>
+            </div>
+            {manualVariables.length ? (
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">템플릿 입력값</div>
+                <div className="mt-3 grid gap-2">
+                  {manualVariables.map((name) => (
+                    <label key={name} className="grid gap-1.5 text-xs font-semibold text-slate-400">
+                      {name}:
+                      <Input
+                        value={customVariables[name] || ""}
+                        onChange={(event) => setCustomVariables((current) => ({ ...current, [name]: event.target.value }))}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <label className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+              해설 포함
+              <input type="checkbox" checked={includeSolution} onChange={(event) => setIncludeSolution(event.target.checked)} />
+            </label>
+            <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 text-sm">
+              <p className="font-medium text-violet-100">출력 요약</p>
+              <p className="mt-2 text-slate-300">
+                {count}문항 · {selected?.title || "템플릿 미선택"} · {outputLabel(selected?.kind)}
+              </p>
+              {!count ? <p className="mt-2 text-xs text-slate-500">문항을 먼저 선택해야 내보내기를 실행할 수 있습니다.</p> : null}
+            </div>
+            <Button className="w-full" disabled={!selected || loading || !count} onClick={submit}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+              {selected?.kind === "html" ? "템플릿 HTML 생성" : "PDF 생성"}
+            </Button>
+          </section>
+
+          <section className="min-w-0 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">템플릿 선택</h2>
+                <p className="mt-1 text-sm text-slate-400">Visual Template Studio에서 만든 템플릿을 우선 사용합니다.</p>
+              </div>
+              {!hideTemplateSelection ? (
+                <Link className="rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/[0.06]" href="/templates/new">
+                  새 템플릿 만들기
+                </Link>
+              ) : null}
+            </div>
+
+            {visualOptions.length ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
+                  <Sparkles className="h-4 w-4" /> Visual Template Studio
+                </div>
+                <div className="grid max-h-[620px] gap-4 overflow-auto pr-1 xl:grid-cols-2">
+                  {visualOptions.map((option) => (
+                    <button
+                      key={`visual-${option.id}`}
+                      className={`overflow-hidden rounded-xl border text-left transition hover:-translate-y-0.5 ${
+                        selectedKind === option.kind && selectedId === option.id
+                          ? "border-violet-300 bg-violet-500/15 shadow-[0_0_0_1px_rgba(167,139,250,.2)]"
+                          : "border-white/10 bg-white/[0.04] hover:border-violet-300/45"
+                      }`}
+                      onClick={() => selectOption(option)}
+                    >
+                      <div className="h-80 border-b border-white/10 bg-[#111318]">
+                        {option.templateSet ? <VisualTemplatePreview templateSet={option.templateSet} /> : null}
+                      </div>
+                      <div className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="line-clamp-1 font-semibold text-white">{option.title}</span>
+                          <Badge variant="secondary">{option.badge}</Badge>
+                        </div>
+                        {option.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-400">{option.description}</p> : null}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              !hideTemplateSelection && (
+                <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] p-5 text-sm text-slate-400">
+                  아직 Visual Template Studio 템플릿이 없습니다. 새 템플릿을 만들면 여기에서 바로 선택할 수 있습니다.
+                </div>
+              )
+            )}
+
+            {legacyOptions.length ? (
+              <details className="rounded-xl border border-white/10 bg-white/[0.035] p-3" open={!visualOptions.length}>
+                <summary className="cursor-pointer text-sm font-semibold text-slate-200">이전 시험지 템플릿</summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {legacyOptions.map((option) => (
+                    <button
+                      key={`legacy-${option.id}`}
+                      className={`overflow-hidden rounded-xl border text-left transition ${
+                        selectedKind === option.kind && selectedId === option.id ? "border-violet-300 bg-violet-500/15" : "border-white/10 bg-black/20 hover:border-violet-300/45"
+                      }`}
+                      onClick={() => selectOption(option)}
+                    >
+                      <div className="h-28 border-b border-white/10">{option.legacy ? <LegacyTemplatePreview template={option.legacy} /> : null}</div>
+                      <div className="p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="line-clamp-1 font-semibold text-white">{option.title}</span>
+                          <Badge variant="secondary">{option.badge}</Badge>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+
+            {htmlOptions.length ? (
+              <details className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-200">고급 HTML 템플릿</summary>
+                <div className="mt-3 space-y-2">
+                  {htmlOptions.map((option) => (
+                    <button
+                      key={`html-${option.id}`}
+                      className={`w-full rounded-lg border p-3 text-left ${
+                        selectedKind === option.kind && selectedId === option.id ? "border-violet-300 bg-violet-500/15" : "border-white/10 bg-black/20 hover:border-violet-300/45"
+                      }`}
+                      onClick={() => selectOption(option)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-white">{option.title}</span>
+                        <Badge variant="secondary">HTML</Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

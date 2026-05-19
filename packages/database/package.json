@@ -1,0 +1,10 @@
+{
+  "name": "@tena-forge/database",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.84.0"
+  }
+}

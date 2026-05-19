@@ -1,0 +1,291 @@
+export type PlanType = "free" | "basic" | "pro" | "enterprise";
+export type PaidPlanType = "basic" | "pro";
+export type BillingCycle = "monthly" | "annual";
+export type PackageGroup = "ai" | "storage" | "student" | "processing";
+
+export type PlanSpecs = {
+  monthlyAiCredits: number | "custom";
+  dailyAiLimit: number | "custom";
+  problemDb: number | "custom";
+  fileStorageGb: number | "custom";
+  studentKeys: number | "custom";
+  processingSpeed: "Standard" | "Fast" | "Custom";
+  concurrentJobs: number | "custom";
+  concurrentPdfExtractions: number | "custom" | false;
+  marketplace: boolean | "custom";
+};
+
+export type PlanConfig = {
+  id: PlanType;
+  name: string;
+  audience: string;
+  positioning: string;
+  baseMonthlyPrice: number;
+  cta: string;
+  specs: PlanSpecs;
+  cardSpecs: string[];
+};
+
+export type PackageOption = {
+  id: string;
+  group: PackageGroup;
+  name: string;
+  label: string;
+  monthlyPriceDelta: number;
+  specs: Partial<PlanSpecs>;
+  description: string;
+};
+
+export type SelectedPackageIds = Partial<Record<PackageGroup, string>>;
+
+export const BILLING = {
+  annualDiscountPercent: 20,
+} as const;
+
+export const PLANS: Record<PlanType, PlanConfig> = {
+  free: {
+    id: "free",
+    name: "Free",
+    audience: "무료 시작 플랜",
+    positioning: "PDF 추출과 AI 정리를 먼저 체험해보는 무료 시작 플랜",
+    baseMonthlyPrice: 0,
+    cta: "무료로 시작하기",
+    specs: {
+      monthlyAiCredits: 20,
+      dailyAiLimit: 5,
+      problemDb: 100,
+      fileStorageGb: 0.3,
+      studentKeys: 0,
+      processingSpeed: "Standard",
+      concurrentJobs: 1,
+      concurrentPdfExtractions: false,
+      marketplace: false,
+    },
+    cardSpecs: [
+      "학생 키 0개",
+      "월 AI 20 credits",
+      "일 AI 한도 5 credits",
+      "문제 DB 100문항",
+      "파일 저장공간 300MB",
+      "처리 속도 Standard",
+      "PDF 추출 가능, AI credits 차감",
+    ],
+  },
+  basic: {
+    id: "basic",
+    name: "Basic",
+    audience: "개인 과외 교습자",
+    positioning: "개인 과외 교습자를 위한 실사용 플랜",
+    baseMonthlyPrice: 48_000,
+    cta: "Basic 구성하기",
+    specs: {
+      monthlyAiCredits: 500,
+      dailyAiLimit: 50,
+      problemDb: 5_000,
+      fileStorageGb: 20,
+      studentKeys: 10,
+      processingSpeed: "Standard",
+      concurrentJobs: 1,
+      concurrentPdfExtractions: false,
+      marketplace: false,
+    },
+    cardSpecs: [
+      "학생 키 기본 제공",
+      "PDF 추출 가능, AI credits 차감",
+      "개인 문제 DB",
+      "학생별 과제 배포 가능",
+      "처리 속도 Standard",
+    ],
+  },
+  pro: {
+    id: "pro",
+    name: "Pro",
+    audience: "전문 교습자, 학원, 콘텐츠팀",
+    positioning: "전문 교습자, 학원, 콘텐츠팀을 위한 고사양 플랜",
+    baseMonthlyPrice: 108_000,
+    cta: "Pro 구성하기",
+    specs: {
+      monthlyAiCredits: 3_000,
+      dailyAiLimit: 300,
+      problemDb: 30_000,
+      fileStorageGb: 100,
+      studentKeys: 100,
+      processingSpeed: "Fast",
+      concurrentJobs: 3,
+      concurrentPdfExtractions: 3,
+      marketplace: true,
+    },
+    cardSpecs: [
+      "대량 AI credits",
+      "대용량 문제 DB",
+      "학생 키 대량 운영",
+      "처리 속도 Fast",
+      "여러 PDF 동시 추출 가능",
+      "마켓플레이스 사용 가능",
+      "저작권 자료 전산화 판매 가능",
+      "문항 공모 참여 가능",
+    ],
+  },
+  enterprise: {
+    id: "enterprise",
+    name: "Enterprise",
+    audience: "대형 학원, 출판사, 기관",
+    positioning: "AI 사용량, 문제 DB, 저장공간, 학생 키, 처리 구조를 맞춤 설계합니다.",
+    baseMonthlyPrice: 0,
+    cta: "도입 문의하기",
+    specs: {
+      monthlyAiCredits: "custom",
+      dailyAiLimit: "custom",
+      problemDb: "custom",
+      fileStorageGb: "custom",
+      studentKeys: "custom",
+      processingSpeed: "Custom",
+      concurrentJobs: "custom",
+      concurrentPdfExtractions: "custom",
+      marketplace: "custom",
+    },
+    cardSpecs: [],
+  },
+};
+
+export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, PackageOption[]>>> = {
+  basic: {
+    ai: [
+      { id: "basic-ai", group: "ai", name: "Basic AI", label: "포함", monthlyPriceDelta: 0, specs: { monthlyAiCredits: 500, dailyAiLimit: 50 }, description: "500 monthly AI credits, 50 daily AI limit" },
+      { id: "basic-ai-plus", group: "ai", name: "AI Plus", label: "+₩12,000 / 월", monthlyPriceDelta: 12_000, specs: { monthlyAiCredits: 1_000, dailyAiLimit: 70 }, description: "1,000 monthly AI credits, 70 daily AI limit" },
+      { id: "basic-ai-max", group: "ai", name: "AI Max", label: "+₩29,000 / 월", monthlyPriceDelta: 29_000, specs: { monthlyAiCredits: 2_000, dailyAiLimit: 100 }, description: "2,000 monthly AI credits, 100 daily AI limit" },
+    ],
+    storage: [
+      { id: "basic-storage", group: "storage", name: "Basic Storage", label: "포함", monthlyPriceDelta: 0, specs: { problemDb: 5_000, fileStorageGb: 20 }, description: "5,000 questions, 20GB file storage" },
+      { id: "basic-storage-plus", group: "storage", name: "Storage Plus", label: "+₩10,000 / 월", monthlyPriceDelta: 10_000, specs: { problemDb: 10_000, fileStorageGb: 50 }, description: "10,000 questions, 50GB file storage" },
+      { id: "basic-storage-max", group: "storage", name: "Storage Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { problemDb: 20_000, fileStorageGb: 100 }, description: "20,000 questions, 100GB file storage" },
+    ],
+    student: [
+      { id: "basic-student", group: "student", name: "Basic Student", label: "포함", monthlyPriceDelta: 0, specs: { studentKeys: 10 }, description: "10 student keys" },
+      { id: "basic-student-plus", group: "student", name: "Student Plus", label: "+₩9,000 / 월", monthlyPriceDelta: 9_000, specs: { studentKeys: 25 }, description: "25 student keys" },
+      { id: "basic-student-max", group: "student", name: "Student Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { studentKeys: 50 }, description: "50 student keys" },
+    ],
+  },
+  pro: {
+    ai: [
+      { id: "pro-ai", group: "ai", name: "Pro AI", label: "포함", monthlyPriceDelta: 0, specs: { monthlyAiCredits: 3_000, dailyAiLimit: 300 }, description: "3,000 monthly AI credits, 300 daily AI limit" },
+      { id: "pro-ai-plus", group: "ai", name: "Pro AI Plus", label: "+₩39,000 / 월", monthlyPriceDelta: 39_000, specs: { monthlyAiCredits: 5_000, dailyAiLimit: 500 }, description: "5,000 monthly AI credits, 500 daily AI limit" },
+      { id: "pro-ai-max", group: "ai", name: "Pro AI Max", label: "+₩89,000 / 월", monthlyPriceDelta: 89_000, specs: { monthlyAiCredits: 10_000, dailyAiLimit: 1_000 }, description: "10,000 monthly AI credits, 1,000 daily AI limit" },
+    ],
+    storage: [
+      { id: "pro-storage", group: "storage", name: "Pro Storage", label: "포함", monthlyPriceDelta: 0, specs: { problemDb: 30_000, fileStorageGb: 100 }, description: "30,000 questions, 100GB file storage" },
+      { id: "pro-storage-plus", group: "storage", name: "Storage Plus", label: "+₩29,000 / 월", monthlyPriceDelta: 29_000, specs: { problemDb: 100_000, fileStorageGb: 300 }, description: "100,000 questions, 300GB file storage" },
+      { id: "pro-storage-max", group: "storage", name: "Storage Max", label: "+₩79,000 / 월", monthlyPriceDelta: 79_000, specs: { problemDb: 300_000, fileStorageGb: 1_024 }, description: "300,000 questions, 1TB file storage" },
+    ],
+    student: [
+      { id: "pro-student", group: "student", name: "Pro Student", label: "포함", monthlyPriceDelta: 0, specs: { studentKeys: 100 }, description: "100 student keys" },
+      { id: "pro-student-plus", group: "student", name: "Student Plus", label: "+₩39,000 / 월", monthlyPriceDelta: 39_000, specs: { studentKeys: 300 }, description: "300 student keys" },
+      { id: "pro-student-max", group: "student", name: "Student Max", label: "+₩79,000 / 월", monthlyPriceDelta: 79_000, specs: { studentKeys: 500 }, description: "500 student keys" },
+    ],
+    processing: [
+      { id: "pro-processing", group: "processing", name: "Pro Processing", label: "포함", monthlyPriceDelta: 0, specs: { processingSpeed: "Fast", concurrentJobs: 3, concurrentPdfExtractions: 3 }, description: "Fast processing, 3 concurrent jobs" },
+      { id: "pro-processing-plus", group: "processing", name: "Processing Plus", label: "+₩49,000 / 월", monthlyPriceDelta: 49_000, specs: { processingSpeed: "Fast", concurrentJobs: 5, concurrentPdfExtractions: 5 }, description: "Fast processing, 5 concurrent jobs" },
+      { id: "pro-processing-max", group: "processing", name: "Processing Max", label: "+₩119,000 / 월", monthlyPriceDelta: 119_000, specs: { processingSpeed: "Fast", concurrentJobs: 10, concurrentPdfExtractions: 10 }, description: "Fast processing, 10 concurrent jobs" },
+    ],
+  },
+};
+
+export const PACKAGE_LABELS: Record<PackageGroup, string> = {
+  ai: "AI Pack",
+  storage: "Storage Pack",
+  student: "Student Pack",
+  processing: "Processing Pack",
+};
+
+export function formatKRW(amount: number) {
+  return new Intl.NumberFormat("ko-KR", {
+    style: "currency",
+    currency: "KRW",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+export function getDefaultSelections(plan: PaidPlanType): Record<PackageGroup, string> {
+  const groups = PACKAGE_GROUPS[plan];
+  return {
+    ai: groups.ai?.[0]?.id || "",
+    storage: groups.storage?.[0]?.id || "",
+    student: groups.student?.[0]?.id || "",
+    processing: groups.processing?.[0]?.id || "",
+  };
+}
+
+export function getPackageOption(plan: PaidPlanType, group: PackageGroup, packageId?: string) {
+  const options = PACKAGE_GROUPS[plan][group] || [];
+  return options.find((option) => option.id === packageId) || options[0] || null;
+}
+
+export function resolveSelectedPackages(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds) {
+  const defaults = getDefaultSelections(plan);
+  const selected: Partial<Record<PackageGroup, PackageOption>> = {};
+  for (const group of Object.keys(PACKAGE_GROUPS[plan]) as PackageGroup[]) {
+    const option = getPackageOption(plan, group, selectedPackageIds[group] || defaults[group]);
+    if (!option) throw new Error(`Invalid package group: ${group}`);
+    selected[group] = option;
+  }
+  return selected;
+}
+
+export function calculateMonthlyPrice(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds) {
+  const selected = resolveSelectedPackages(plan, selectedPackageIds);
+  return Object.values(selected).reduce((total, option) => total + (option?.monthlyPriceDelta || 0), PLANS[plan].baseMonthlyPrice);
+}
+
+export function calculateAnnualPrice(monthlyPrice: number) {
+  const discountedMonthly = Math.round(monthlyPrice * (1 - BILLING.annualDiscountPercent / 100));
+  return {
+    discountedMonthly,
+    annualTotal: discountedMonthly * 12,
+    discountAmount: monthlyPrice * 12 - discountedMonthly * 12,
+  };
+}
+
+export function calculateChargeAmount(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds, billingCycle: BillingCycle) {
+  const monthly = calculateMonthlyPrice(plan, selectedPackageIds);
+  if (billingCycle === "annual") return calculateAnnualPrice(monthly).annualTotal;
+  return monthly;
+}
+
+export function getResolvedSpecs(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds): PlanSpecs {
+  const selected = resolveSelectedPackages(plan, selectedPackageIds);
+  return Object.values(selected).reduce<PlanSpecs>(
+    (specs, option) => ({ ...specs, ...(option?.specs || {}) }),
+    { ...PLANS[plan].specs }
+  );
+}
+
+export function parseSelectedPackageIds(value: string | null): SelectedPackageIds {
+  if (!value) return {};
+  const selected: SelectedPackageIds = {};
+  for (const part of value.split(",")) {
+    const [group, id] = part.split(":");
+    if (group && id && ["ai", "storage", "student", "processing"].includes(group)) {
+      selected[group as PackageGroup] = id;
+    }
+  }
+  return selected;
+}
+
+export function stringifySelectedPackageIds(selectedPackageIds: SelectedPackageIds) {
+  return (Object.entries(selectedPackageIds) as Array<[PackageGroup, string]>)
+    .filter(([, value]) => Boolean(value))
+    .map(([group, id]) => `${group}:${id}`)
+    .join(",");
+}
+
+export function validatePlanSelection(plan: unknown, billingCycle: unknown, selectedPackageIds: unknown): {
+  plan: PaidPlanType;
+  billingCycle: BillingCycle;
+  selectedPackageIds: SelectedPackageIds;
+} {
+  if (plan !== "basic" && plan !== "pro") throw new Error("Invalid plan");
+  if (billingCycle !== "monthly" && billingCycle !== "annual") throw new Error("Invalid billing cycle");
+  const selected = typeof selectedPackageIds === "object" && selectedPackageIds ? selectedPackageIds as SelectedPackageIds : {};
+  resolveSelectedPackages(plan, selected);
+  return { plan, billingCycle, selectedPackageIds: selected };
+}

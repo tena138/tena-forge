@@ -1,0 +1,646 @@
+import uuid
+import time
+from datetime import timedelta
+from urllib.parse import urlencode
+
+from authlib.integrations.starlette_client import OAuth
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from database import get_db, get_settings
+from limiter import limiter
+from models import (
+    Academy,
+    AcademyPlan,
+    ActiveSession,
+    EmailVerification,
+    OAuthAccount,
+    OAuthProvider,
+    PasswordResetToken,
+    RefreshToken,
+    TotpSecret,
+)
+from schemas import (
+    AcademyProfile,
+    AccountDeleteRequest,
+    BackupCodeLoginRequest,
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    LoginHistoryRead,
+    OAuthAccountRead,
+    LoginRequest,
+    ProfileUpdateRequest,
+    RegisterRequest,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
+    ResetPasswordValidateResponse,
+    SessionRead,
+    TokenResponse,
+    TotpDisableRequest,
+    TotpEnableRequest,
+    TotpRequiredResponse,
+    TotpSetupResponse,
+    VerifyEmailRequest,
+)
+from services.auth_email import (
+    send_account_locked_email,
+    send_backup_code_used_email,
+    send_new_device_login_email,
+    send_password_changed_email,
+    send_password_reset_email,
+    send_verification_email,
+)
+from services.auth_security import (
+    blacklist_access_jti,
+    clear_refresh_cookie,
+    consume_backup_code,
+    create_access_token,
+    decrypt_secret,
+    encrypt_secret,
+    get_current_academy,
+    get_raw_access_token,
+    get_real_ip,
+    get_refresh_token_from_cookie,
+    hash_password,
+    issue_refresh_token,
+    make_totp_setup,
+    now_utc,
+    parse_user_agent,
+    random_url_token,
+    record_login_history,
+    revoke_all_refresh_tokens,
+    revoke_refresh_token,
+    set_refresh_cookie,
+    sha256_token,
+    timing_attack_delay,
+    validate_password_policy,
+    verify_password,
+    verify_refresh_record,
+    verify_totp,
+)
+
+settings = get_settings()
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+oauth = OAuth()
+
+if settings.google_client_id and settings.google_client_secret:
+    oauth.register(
+        name="google",
+        client_id=settings.google_client_id,
+        client_secret=settings.google_client_secret,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+if settings.kakao_client_id:
+    oauth.register(
+        name="kakao",
+        client_id=settings.kakao_client_id,
+        client_secret=settings.kakao_client_secret or None,
+        authorize_url="https://kauth.kakao.com/oauth/authorize",
+        access_token_url="https://kauth.kakao.com/oauth/token",
+        client_kwargs={"scope": "account_email profile_nickname"},
+    )
+
+if settings.naver_client_id and settings.naver_client_secret:
+    oauth.register(
+        name="naver",
+        client_id=settings.naver_client_id,
+        client_secret=settings.naver_client_secret,
+        authorize_url="https://nid.naver.com/oauth2.0/authorize",
+        access_token_url="https://nid.naver.com/oauth2.0/token",
+    )
+
+
+def _profile(academy: Academy) -> AcademyProfile:
+    return AcademyProfile.model_validate(academy)
+
+
+def _issue_token_response(db: Session, request: Request, response: Response, academy: Academy, remember: bool = True) -> TokenResponse:
+    access_token, _, _ = create_access_token(academy)
+    refresh_token, _ = issue_refresh_token(db, request, academy, remember=remember)
+    set_refresh_cookie(response, refresh_token, remember=remember)
+    return TokenResponse(access_token=access_token, academy=_profile(academy))
+
+
+def _create_email_verification(db: Session, academy: Academy) -> str:
+    token = random_url_token(32)
+    db.add(
+        EmailVerification(
+            academy_id=academy.id,
+            token_hash=sha256_token(token),
+            expires_at=now_utc() + timedelta(hours=24),
+        )
+    )
+    return token
+
+
+def _create_password_reset(db: Session, academy: Academy, ip_address: str) -> str:
+    token = random_url_token(32)
+    db.add(
+        PasswordResetToken(
+            academy_id=academy.id,
+            token_hash=sha256_token(token),
+            expires_at=now_utc() + timedelta(minutes=15),
+            ip_address=ip_address,
+        )
+    )
+    return token
+
+
+def _apply_failed_login_policy(academy: Academy) -> None:
+    academy.failed_login_attempts += 1
+    attempts = academy.failed_login_attempts
+    if attempts >= 20:
+        academy.is_suspended = True
+        academy.suspension_reason = "로그인 실패가 반복되어 계정이 잠겼습니다. 관리자에게 문의해주세요."
+        academy.locked_until = None
+    elif attempts >= 10:
+        academy.locked_until = now_utc() + timedelta(hours=24)
+        send_account_locked_email(academy.email, academy.locked_until)
+    elif attempts >= 5:
+        academy.locked_until = now_utc() + timedelta(minutes=15)
+
+
+@router.post("/register")
+@limiter.limit("3/hour")
+def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    email = payload.email.lower()
+    validate_password_policy(payload.password, email, payload.academy_name)
+    existing = db.scalar(select(Academy).where(Academy.email == email))
+    if existing:
+        raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
+    academy = Academy(
+        email=email,
+        password_hash=hash_password(payload.password),
+        academy_name=payload.academy_name,
+        account_type=payload.account_type,
+        business_number=payload.business_number,
+        phone=payload.phone,
+        address=payload.address,
+        plan=AcademyPlan.free,
+        is_active=False,
+        email_verified=False,
+    )
+    db.add(academy)
+    db.flush()
+    token = _create_email_verification(db, academy)
+    db.commit()
+    send_verification_email(academy.email, academy.academy_name, token)
+    return {"message": "이메일을 확인해주세요", "email": academy.email}
+
+
+@router.post("/verify-email", response_model=TokenResponse)
+def verify_email(payload: VerifyEmailRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    token_hash = sha256_token(payload.token)
+    record = db.scalar(
+        select(EmailVerification).where(
+            EmailVerification.token_hash == token_hash,
+            EmailVerification.expires_at > now_utc(),
+            EmailVerification.used_at.is_(None),
+        )
+    )
+    if not record:
+        raise HTTPException(status_code=400, detail="유효하지 않거나 만료된 링크입니다")
+    academy = record.academy
+    academy.email_verified = True
+    academy.email_verified_at = now_utc()
+    academy.is_active = True
+    record.used_at = now_utc()
+    academy.last_login_at = now_utc()
+    academy.last_login_ip = get_real_ip(request)
+    record_login_history(db, request, academy, True, provider="email")
+    result = _issue_token_response(db, request, response, academy)
+    db.commit()
+    return result
+
+
+@router.post("/resend-verification")
+@limiter.limit("2/hour")
+def resend_verification(payload: ResendVerificationRequest, request: Request, db: Session = Depends(get_db)):
+    academy = db.scalar(select(Academy).where(Academy.email == payload.email.lower()))
+    if academy and not academy.email_verified:
+        token = _create_email_verification(db, academy)
+        db.commit()
+        send_verification_email(academy.email, academy.academy_name, token)
+    return {"message": "인증 이메일을 확인해주세요"}
+
+
+@router.post("/login", response_model=TokenResponse | TotpRequiredResponse)
+@limiter.limit("5 per 15 minutes")
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    academy = db.scalar(select(Academy).where(Academy.email == payload.email.lower()))
+    generic = "이메일 또는 비밀번호가 올바르지 않습니다"
+    if not academy:
+        timing_attack_delay()
+        record_login_history(db, request, None, False, failure_reason="not_found")
+        db.commit()
+        raise HTTPException(status_code=401, detail=generic)
+    if not academy.is_active or not academy.email_verified:
+        record_login_history(db, request, academy, False, failure_reason="email_unverified")
+        db.commit()
+        raise HTTPException(status_code=401, detail="이메일 인증이 필요합니다")
+    if academy.is_suspended:
+        record_login_history(db, request, academy, False, failure_reason="suspended")
+        db.commit()
+        raise HTTPException(status_code=403, detail=academy.suspension_reason or "정지된 계정입니다.")
+    if academy.locked_until and academy.locked_until > now_utc():
+        record_login_history(db, request, academy, False, failure_reason="locked")
+        db.commit()
+        raise HTTPException(status_code=423, detail={"message": "계정이 잠겨 있습니다", "locked_until": academy.locked_until.isoformat()})
+    if not verify_password(payload.password, academy.password_hash):
+        _apply_failed_login_policy(academy)
+        record_login_history(db, request, academy, False, failure_reason="bad_password")
+        db.commit()
+        raise HTTPException(status_code=401, detail=generic)
+    if academy.totp_secret and academy.totp_secret.enabled:
+        if not payload.totp_code:
+            return TotpRequiredResponse(academy_id=academy.id)
+        if not verify_totp(academy.totp_secret.secret_encrypted, payload.totp_code):
+            record_login_history(db, request, academy, False, failure_reason="bad_totp")
+            db.commit()
+            raise HTTPException(status_code=401, detail="인증 코드가 올바르지 않습니다")
+    academy.failed_login_attempts = 0
+    academy.locked_until = None
+    academy.last_login_at = now_utc()
+    academy.last_login_ip = get_real_ip(request)
+    record_login_history(db, request, academy, True, provider="email")
+    parsed = parse_user_agent(request.headers.get("user-agent", ""))
+    send_new_device_login_email(academy.email, parsed["browser"], parsed["os"], get_real_ip(request))
+    result = _issue_token_response(db, request, response, academy, remember=payload.remember)
+    db.commit()
+    return result
+
+
+@router.post("/refresh")
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+    try:
+        token = get_refresh_token_from_cookie(request)
+        old_refresh = verify_refresh_record(db, token)
+    except HTTPException:
+        clear_refresh_cookie(response)
+        raise
+    academy = old_refresh.academy
+    if old_refresh.active_session:
+        db.delete(old_refresh.active_session)
+    revoke_refresh_token(old_refresh, "rotated")
+    access_token, _, _ = create_access_token(academy)
+    new_refresh, _ = issue_refresh_token(db, request, academy, remember=True)
+    set_refresh_cookie(response, new_refresh, remember=True)
+    db.commit()
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/logout")
+def logout(
+    request: Request,
+    response: Response,
+    token_data: tuple[str, dict] = Depends(get_raw_access_token),
+    db: Session = Depends(get_db),
+):
+    _, payload = token_data
+    blacklist_access_jti(payload["jti"], now_utc() + timedelta(seconds=max(1, int(payload["exp"]) - int(time.time()))))
+    raw_refresh = request.cookies.get(settings.refresh_cookie_name)
+    if raw_refresh:
+        try:
+            refresh = verify_refresh_record(db, raw_refresh)
+            if refresh.active_session:
+                db.delete(refresh.active_session)
+            revoke_refresh_token(refresh, "logout")
+        except HTTPException:
+            pass
+    clear_refresh_cookie(response)
+    db.commit()
+    return {"message": "로그아웃되었습니다"}
+
+
+@router.post("/logout-all")
+def logout_all(
+    response: Response,
+    academy: Academy = Depends(get_current_academy),
+    db: Session = Depends(get_db),
+):
+    revoke_all_refresh_tokens(db, academy.id, "logout_all")
+    db.query(ActiveSession).filter(ActiveSession.academy_id == academy.id).delete(synchronize_session=False)
+    clear_refresh_cookie(response)
+    db.commit()
+    return {"message": "모든 기기에서 로그아웃되었습니다"}
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/hour")
+def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    academy = db.scalar(select(Academy).where(Academy.email == payload.email.lower()))
+    if academy:
+        token = _create_password_reset(db, academy, get_real_ip(request))
+        db.commit()
+        send_password_reset_email(academy.email, token, get_real_ip(request))
+    return {"message": "이메일을 발송했습니다. 받은 편지함을 확인해주세요."}
+
+
+@router.get("/reset-password/validate", response_model=ResetPasswordValidateResponse)
+def validate_reset_token(token: str = Query(...), db: Session = Depends(get_db)):
+    record = db.scalar(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token_hash == sha256_token(token),
+            PasswordResetToken.expires_at > now_utc(),
+            PasswordResetToken.used_at.is_(None),
+        )
+    )
+    return {"valid": bool(record)}
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    record = db.scalar(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token_hash == sha256_token(payload.token),
+            PasswordResetToken.expires_at > now_utc(),
+            PasswordResetToken.used_at.is_(None),
+        )
+    )
+    if not record:
+        raise HTTPException(status_code=400, detail="유효하지 않거나 만료된 링크입니다")
+    academy = record.academy
+    validate_password_policy(payload.new_password, academy.email, academy.academy_name)
+    academy.password_hash = hash_password(payload.new_password)
+    record.used_at = now_utc()
+    revoke_all_refresh_tokens(db, academy.id, "password_reset")
+    db.query(ActiveSession).filter(ActiveSession.academy_id == academy.id).delete(synchronize_session=False)
+    db.commit()
+    send_password_changed_email(academy.email, get_real_ip(request))
+    return {"message": "비밀번호가 변경되었습니다"}
+
+
+@router.post("/change-password")
+def change_password(payload: ChangePasswordRequest, request: Request, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    if not verify_password(payload.current_password, academy.password_hash):
+        raise HTTPException(status_code=401, detail="현재 비밀번호가 올바르지 않습니다")
+    if verify_password(payload.new_password, academy.password_hash):
+        raise HTTPException(status_code=400, detail="기존 비밀번호와 다른 비밀번호를 사용해주세요")
+    validate_password_policy(payload.new_password, academy.email, academy.academy_name)
+    academy.password_hash = hash_password(payload.new_password)
+    revoke_all_refresh_tokens(db, academy.id, "password_changed")
+    db.query(ActiveSession).filter(ActiveSession.academy_id == academy.id).delete(synchronize_session=False)
+    db.commit()
+    send_password_changed_email(academy.email, get_real_ip(request))
+    return {"message": "비밀번호가 변경되었습니다"}
+
+
+@router.post("/2fa/setup", response_model=TotpSetupResponse)
+def setup_2fa(academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    _, secret, backup_codes, qr_code_url = make_totp_setup(db, academy)
+    db.commit()
+    return TotpSetupResponse(qr_code_url=qr_code_url, secret=secret, backup_codes=backup_codes)
+
+
+@router.post("/2fa/enable")
+def enable_2fa(payload: TotpEnableRequest, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    if not academy.totp_secret or not verify_totp(academy.totp_secret.secret_encrypted, payload.totp_code):
+        raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않습니다")
+    academy.totp_secret.enabled = True
+    academy.totp_secret.enabled_at = now_utc()
+    revoke_all_refresh_tokens(db, academy.id, "2fa_enabled")
+    db.commit()
+    return {"message": "2단계 인증이 활성화되었습니다"}
+
+
+@router.post("/2fa/disable")
+def disable_2fa(payload: TotpDisableRequest, request: Request, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    if not verify_password(payload.password, academy.password_hash):
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다")
+    if not academy.totp_secret or not verify_totp(academy.totp_secret.secret_encrypted, payload.totp_code):
+        raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않습니다")
+    db.delete(academy.totp_secret)
+    db.commit()
+    send_password_changed_email(academy.email, get_real_ip(request))
+    return {"message": "2단계 인증이 비활성화되었습니다"}
+
+
+@router.post("/2fa/backup-code", response_model=TokenResponse)
+def login_with_backup_code(payload: BackupCodeLoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    academy = db.get(Academy, payload.academy_id)
+    if not academy or not academy.totp_secret or not academy.totp_secret.enabled:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    if not consume_backup_code(academy.totp_secret, payload.backup_code):
+        record_login_history(db, request, academy, False, failure_reason="bad_backup_code")
+        db.commit()
+        raise HTTPException(status_code=401, detail="백업 코드가 올바르지 않습니다")
+    academy.failed_login_attempts = 0
+    academy.last_login_at = now_utc()
+    academy.last_login_ip = get_real_ip(request)
+    record_login_history(db, request, academy, True, provider="email")
+    result = _issue_token_response(db, request, response, academy)
+    db.commit()
+    send_backup_code_used_email(academy.email, get_real_ip(request))
+    return result
+
+
+@router.get("/sessions", response_model=list[SessionRead])
+def list_sessions(request: Request, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    current_refresh_id = None
+    raw_refresh = request.cookies.get(settings.refresh_cookie_name)
+    if raw_refresh:
+        try:
+            current_refresh_id, _ = raw_refresh.split(".", 1)
+            current_refresh_id = uuid.UUID(current_refresh_id)
+        except Exception:
+            current_refresh_id = None
+    sessions = db.scalars(select(ActiveSession).where(ActiveSession.academy_id == academy.id).order_by(ActiveSession.last_active_at.desc())).all()
+    result = []
+    for session in sessions:
+        refresh = session.refresh_token
+        parsed = parse_user_agent(refresh.device_info or "")
+        result.append(
+            SessionRead(
+                id=session.id,
+                device_info=refresh.device_info,
+                browser=parsed["browser"] if parsed["browser"] != "Unknown" else (refresh.device_info or "Unknown"),
+                os=parsed["os"],
+                ip_address=refresh.ip_address,
+                last_active_at=session.last_active_at,
+                created_at=session.created_at,
+                is_current=refresh.id == current_refresh_id,
+            )
+        )
+    return result
+
+
+@router.delete("/sessions/{session_id}")
+def revoke_session(session_id: uuid.UUID, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    session = db.get(ActiveSession, session_id)
+    if not session or session.academy_id != academy.id:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    revoke_refresh_token(session.refresh_token, "session_revoked")
+    db.delete(session)
+    db.commit()
+    return {"message": "세션이 종료되었습니다"}
+
+
+@router.delete("/sessions")
+def revoke_other_sessions(request: Request, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    current_id = None
+    raw_refresh = request.cookies.get(settings.refresh_cookie_name)
+    if raw_refresh:
+        try:
+            current_id, _ = raw_refresh.split(".", 1)
+            current_id = uuid.UUID(current_id)
+        except Exception:
+            current_id = None
+    revoke_all_refresh_tokens(db, academy.id, "other_sessions_revoked", except_id=current_id)
+    if current_id:
+        db.query(ActiveSession).filter(ActiveSession.academy_id == academy.id, ActiveSession.refresh_token_id != current_id).delete(synchronize_session=False)
+    else:
+        db.query(ActiveSession).filter(ActiveSession.academy_id == academy.id).delete(synchronize_session=False)
+    db.commit()
+    return {"message": "다른 기기에서 로그아웃되었습니다"}
+
+
+@router.get("/me", response_model=AcademyProfile)
+def me(academy: Academy = Depends(get_current_academy)):
+    return academy
+
+
+@router.patch("/me", response_model=AcademyProfile)
+def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    for field in ("academy_name", "account_type", "phone", "address", "business_number"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(academy, field, value)
+    db.commit()
+    db.refresh(academy)
+    return academy
+
+
+@router.get("/login-history", response_model=list[LoginHistoryRead])
+def login_history(academy: Academy = Depends(get_current_academy)):
+    return sorted(academy.login_history, key=lambda item: item.login_at, reverse=True)[:30]
+
+
+@router.get("/oauth-accounts", response_model=list[OAuthAccountRead])
+def oauth_accounts(academy: Academy = Depends(get_current_academy)):
+    return academy.oauth_accounts
+
+
+@router.delete("/oauth-accounts/{provider}")
+def unlink_oauth_account(provider: OAuthProvider, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    account = next((item for item in academy.oauth_accounts if item.provider == provider), None)
+    if not account:
+        raise HTTPException(status_code=404, detail="연결된 소셜 계정을 찾을 수 없습니다")
+    if not academy.password_hash and len(academy.oauth_accounts) <= 1:
+        raise HTTPException(status_code=400, detail="로그인 수단이 하나 이상 필요합니다")
+    db.delete(account)
+    db.commit()
+    return {"message": "소셜 계정 연결이 해제되었습니다"}
+
+
+@router.delete("/me")
+def delete_account(payload: AccountDeleteRequest, response: Response, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    if academy.password_hash and not verify_password(payload.password, academy.password_hash):
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다")
+    revoke_all_refresh_tokens(db, academy.id, "account_deleted")
+    db.delete(academy)
+    clear_refresh_cookie(response)
+    db.commit()
+    return {"message": "계정이 삭제되었습니다"}
+
+
+def _oauth_client(name: str):
+    client = getattr(oauth, name, None)
+    if client is None:
+        raise HTTPException(status_code=503, detail=f"{name} OAuth 설정이 필요합니다")
+    return client
+
+
+@router.get("/google")
+async def google_login(request: Request):
+    redirect_uri = str(request.url_for("google_callback"))
+    return await _oauth_client("google").authorize_redirect(request, redirect_uri)
+
+
+@router.get("/google/callback", name="google_callback")
+async def google_callback(request: Request, db: Session = Depends(get_db)):
+    token = await _oauth_client("google").authorize_access_token(request)
+    info = token.get("userinfo") or await _oauth_client("google").parse_id_token(request, token)
+    return _oauth_finalize(db, request, "google", str(info["sub"]), info.get("email"), info.get("name") or "Google Academy", token)
+
+
+@router.get("/kakao")
+async def kakao_login(request: Request):
+    redirect_uri = str(request.url_for("kakao_callback"))
+    return await _oauth_client("kakao").authorize_redirect(request, redirect_uri)
+
+
+@router.get("/kakao/callback", name="kakao_callback")
+async def kakao_callback(request: Request, db: Session = Depends(get_db)):
+    token = await _oauth_client("kakao").authorize_access_token(request)
+    response = await _oauth_client("kakao").get("https://kapi.kakao.com/v2/user/me", token=token)
+    data = response.json()
+    account = data.get("kakao_account", {})
+    profile = account.get("profile", {})
+    return _oauth_finalize(db, request, "kakao", str(data["id"]), account.get("email"), profile.get("nickname") or "Kakao Academy", token)
+
+
+@router.get("/naver")
+async def naver_login(request: Request):
+    redirect_uri = str(request.url_for("naver_callback"))
+    return await _oauth_client("naver").authorize_redirect(request, redirect_uri)
+
+
+@router.get("/naver/callback", name="naver_callback")
+async def naver_callback(request: Request, db: Session = Depends(get_db)):
+    token = await _oauth_client("naver").authorize_access_token(request)
+    response = await _oauth_client("naver").get("https://openapi.naver.com/v1/nid/me", token=token)
+    data = response.json().get("response", {})
+    return _oauth_finalize(db, request, "naver", str(data["id"]), data.get("email"), data.get("name") or data.get("nickname") or "Naver Academy", token)
+
+
+def _oauth_finalize(db: Session, request: Request, provider: str, provider_account_id: str, email: str | None, name: str, token: dict):
+    oauth_account = db.scalar(
+        select(OAuthAccount).where(
+            OAuthAccount.provider == OAuthProvider(provider),
+            OAuthAccount.provider_account_id == provider_account_id,
+        )
+    )
+    if oauth_account:
+        academy = oauth_account.academy
+    else:
+        academy = db.scalar(select(Academy).where(Academy.email == email.lower())) if email else None
+        if not academy:
+            academy = Academy(
+                email=(email or f"{provider_account_id}@{provider}.oauth").lower(),
+                academy_name=name,
+                email_verified=True,
+                email_verified_at=now_utc(),
+                is_active=True,
+                password_hash=None,
+            )
+            db.add(academy)
+            db.flush()
+        oauth_account = OAuthAccount(
+            academy_id=academy.id,
+            provider=OAuthProvider(provider),
+            provider_account_id=provider_account_id,
+            provider_email=email,
+            access_token=encrypt_secret(token.get("access_token")) or "",
+            refresh_token=encrypt_secret(token.get("refresh_token")),
+            token_expires_at=now_utc() + timedelta(seconds=int(token.get("expires_in", 0))) if token.get("expires_in") else None,
+        )
+        db.add(oauth_account)
+    oauth_account.access_token = encrypt_secret(token.get("access_token")) or oauth_account.access_token
+    oauth_account.refresh_token = encrypt_secret(token.get("refresh_token")) or oauth_account.refresh_token
+    academy.email_verified = True
+    academy.email_verified_at = academy.email_verified_at or now_utc()
+    academy.is_active = True
+    academy.last_login_at = now_utc()
+    academy.last_login_ip = get_real_ip(request)
+    record_login_history(db, request, academy, True, provider=provider)
+    access_token, _, _ = create_access_token(academy)
+    refresh_token, _ = issue_refresh_token(db, request, academy, remember=True)
+    db.commit()
+    query = urlencode({"provider": provider})
+    redirect = RedirectResponse(f"{settings.frontend_url}/#access_token={access_token}&{query}", status_code=302)
+    set_refresh_cookie(redirect, refresh_token, remember=True)
+    return redirect

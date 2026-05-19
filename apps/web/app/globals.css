@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --background: 224 28% 5%;
+  --foreground: 220 18% 94%;
+  --card: 224 22% 9%;
+  --muted: 224 18% 14%;
+  --muted-foreground: 220 10% 64%;
+  --primary: 263 83% 62%;
+  --border: 224 16% 18%;
+}
+
+.dark {
+  --background: 252 22% 7%;
+  --foreground: 260 24% 96%;
+  --card: 252 20% 11%;
+  --muted: 252 14% 18%;
+  --muted-foreground: 254 12% 70%;
+  --primary: 263 88% 58%;
+  --border: 252 14% 24%;
+}
+
+html {
+  min-height: 100%;
+  overscroll-behavior-y: none;
+  background:
+    radial-gradient(circle at 18% -12%, hsl(263 83% 62% / 0.18), transparent 30rem),
+    radial-gradient(circle at 92% 8%, hsl(250 60% 32% / 0.10), transparent 24rem),
+    linear-gradient(180deg, hsl(224 28% 7%), hsl(var(--background)) 42%, hsl(224 34% 3%));
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  overscroll-behavior-y: none;
+  color: hsl(var(--foreground));
+  background:
+    radial-gradient(circle at 8% 0%, hsl(263 88% 58% / 0.18), transparent 28rem),
+    linear-gradient(180deg, hsl(var(--background)), hsl(252 24% 6%));
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  border-color: hsl(var(--border));
+}
+
+.forge-panel {
+  border: 1px solid rgb(255 255 255 / 0.10);
+  background: hsl(var(--card) / 0.90);
+  box-shadow: 0 18px 56px rgb(0 0 0 / 0.34);
+  backdrop-filter: blur(16px);
+}
+
+.forge-surface {
+  border: 1px solid rgb(255 255 255 / 0.10);
+  background: hsl(var(--card) / 0.90);
+  box-shadow: 0 18px 56px rgb(0 0 0 / 0.34);
+}
+
+.forge-logo-plate {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+.scrollbar-dark,
+.scrollbar-thin-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(100 116 139 / 0.42) rgb(2 6 23 / 0.36);
+}
+
+.scrollbar-dark::-webkit-scrollbar,
+.scrollbar-thin-dark::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-track,
+.scrollbar-thin-dark::-webkit-scrollbar-track {
+  background: rgb(2 6 23 / 0.32);
+  border-left: 1px solid rgb(255 255 255 / 0.04);
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb,
+.scrollbar-thin-dark::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border: 2px solid rgb(2 6 23 / 0.54);
+  border-radius: 999px;
+  background: rgb(100 116 139 / 0.34);
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb:hover,
+.scrollbar-thin-dark::-webkit-scrollbar-thumb:hover {
+  background: rgb(148 163 184 / 0.46);
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb:active,
+.scrollbar-thin-dark::-webkit-scrollbar-thumb:active {
+  background: rgb(167 139 250 / 0.52);
+}

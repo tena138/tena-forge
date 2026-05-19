@@ -1,0 +1,358 @@
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from jose import ExpiredSignatureError, JWTError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import inspect, select, text
+
+from database import Base, SessionLocal, engine, get_settings
+from limiter import limiter
+from models import Batch, BatchStatus
+from models import Problem, ProblemSetItem
+from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
+from services.auth_security import decode_access_token, is_jti_blacklisted
+
+settings = get_settings()
+
+app = FastAPI(title="Tena Forge API")
+
+allowed_origins = {
+    settings.frontend_url,
+    settings.cors_origin,
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+}
+
+
+def auth_error_response(request, detail, status_code=401):
+    response = JSONResponse({"detail": detail}, status_code=status_code)
+    origin = request.headers.get("origin")
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=sorted(origin for origin in allowed_origins if origin),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Cache-Control"],
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def security_and_auth_middleware(request, call_next):
+    path = request.url.path
+    if request.method != "OPTIONS" and path.startswith("/api/") and not path.startswith("/api/auth/"):
+        authorization = request.headers.get("authorization", "")
+        if not authorization.lower().startswith("bearer "):
+            return auth_error_response(request, "Authentication required")
+        token = authorization.split(" ", 1)[1].strip()
+        try:
+            payload = decode_access_token(token)
+            if payload.get("type") != "access" or is_jti_blacklisted(payload.get("jti", "")):
+                return auth_error_response(request, "Authentication required")
+            request.state.academy_id = payload.get("sub")
+        except ExpiredSignatureError:
+            return auth_error_response(request, {"code": "TOKEN_EXPIRED"})
+        except JWTError:
+            return auth_error_response(request, "Authentication required")
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
+
+
+Path(settings.uploads_dir).mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=settings.uploads_dir), name="static")
+
+app.include_router(auth.router)
+app.include_router(academy_student_app.router)
+app.include_router(saas.router)
+app.include_router(creators.router)
+app.include_router(creator_products.router)
+app.include_router(marketplace_products.router)
+app.include_router(admin_saas.router)
+app.include_router(legal_marketplace.router)
+app.include_router(dashboard_announcements.router)
+app.include_router(batches.router)
+app.include_router(problems.router)
+app.include_router(problem_sets.router)
+app.include_router(templates.router)
+app.include_router(template_hub.router)
+app.include_router(marketplace.router)
+app.include_router(licensed_library.router)
+app.include_router(stores.router)
+app.include_router(export.router)
+app.include_router(assets.router)
+
+
+@app.on_event("startup")
+def create_sqlite_tables_for_local_dev():
+    if settings.database_url.startswith("sqlite"):
+        Base.metadata.create_all(bind=engine)
+        columns = {column["name"] for column in inspect(engine).get_columns("tags")}
+        if "source" not in columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE tags ADD COLUMN source VARCHAR(500)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_tags_source ON tags (source)"))
+        template_columns = {column["name"] for column in inspect(engine).get_columns("exam_templates")}
+        if "canvas_json" not in template_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE exam_templates ADD COLUMN canvas_json JSON"))
+        template_columns = {column["name"] for column in inspect(engine).get_columns("exam_templates")}
+        if "updated_at" not in template_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE exam_templates ADD COLUMN updated_at DATETIME"))
+                connection.execute(text("UPDATE exam_templates SET updated_at = created_at WHERE updated_at IS NULL"))
+        _ensure_sqlite_columns()
+        _seed_saas_foundation()
+        _mark_interrupted_batches()
+        _purge_expired_trashed_problems()
+
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+
+def _ensure_sqlite_columns():
+    column_specs = {
+        "batches": {
+            "source_type": "VARCHAR(40) DEFAULT 'self_created' NOT NULL",
+            "source_label": "VARCHAR(255)",
+            "rights_confirmed": "BOOLEAN DEFAULT 0 NOT NULL",
+            "rights_confirmed_at": "DATETIME",
+            "rights_note": "TEXT",
+            "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
+            "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
+            "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",
+            "academy_id": "VARCHAR(64)",
+            "progress_message": "VARCHAR(500)",
+            "progress_current": "INTEGER",
+            "progress_total": "INTEGER",
+            "progress_started_at": "DATETIME",
+            "progress_updated_at": "DATETIME",
+            "failure_stage": "VARCHAR(500)",
+            "failure_reason": "TEXT",
+            "failure_hint": "TEXT",
+            "failed_at": "DATETIME",
+        },
+        "problems": {
+            "source_type": "VARCHAR(40) DEFAULT 'self_created' NOT NULL",
+            "source_label": "VARCHAR(255)",
+            "rights_confirmed": "BOOLEAN DEFAULT 0 NOT NULL",
+            "rights_confirmed_at": "DATETIME",
+            "rights_note": "TEXT",
+            "visibility": "VARCHAR(32) DEFAULT 'private' NOT NULL",
+            "origin_type": "VARCHAR(32) DEFAULT 'owned' NOT NULL",
+            "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",
+            "academy_id": "VARCHAR(64)",
+            "updated_at": "DATETIME",
+            "review_page_image_url": "VARCHAR(1000)",
+            "review_page_number": "INTEGER",
+            "deleted_at": "DATETIME",
+            "delete_scheduled_at": "DATETIME",
+        },
+        "academies": {
+            "account_type": "VARCHAR(20) DEFAULT 'academy' NOT NULL",
+        },
+        "problem_sets": {
+            "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",
+            "academy_id": "VARCHAR(64)",
+            "subtitle": "VARCHAR(255)",
+            "description": "TEXT",
+            "subject": "VARCHAR(120)",
+            "grade": "VARCHAR(120)",
+            "unit": "VARCHAR(255)",
+            "difficulty": "VARCHAR(40)",
+            "problem_count": "INTEGER DEFAULT 0 NOT NULL",
+            "visibility": "VARCHAR(32) DEFAULT 'private' NOT NULL",
+            "source_type": "VARCHAR(40) DEFAULT 'self_created' NOT NULL",
+            "rights_confirmed": "BOOLEAN DEFAULT 0 NOT NULL",
+            "can_publish_to_marketplace": "BOOLEAN DEFAULT 0 NOT NULL",
+            "thumbnail_url": "VARCHAR(1000)",
+            "preview_problem_ids": "JSON",
+        },
+        "template_hub_templates": {
+            "academy_id": "VARCHAR(64)",
+            "source_type": "VARCHAR(40) DEFAULT 'self_created' NOT NULL",
+            "rights_confirmed": "BOOLEAN DEFAULT 0 NOT NULL",
+            "rights_confirmed_at": "DATETIME",
+        },
+    }
+    with engine.begin() as connection:
+        for table_name, specs in column_specs.items():
+            existing = {row[1] for row in connection.execute(text(f"PRAGMA table_info({table_name})")).fetchall()}
+            for column_name, sql_type in specs.items():
+                if column_name not in existing:
+                    connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {sql_type}"))
+                    existing.add(column_name)
+
+
+def _mark_interrupted_batches():
+    db = SessionLocal()
+    try:
+        stale_before = datetime.utcnow() - timedelta(minutes=30)
+        pending_stale_before = datetime.utcnow() - timedelta(minutes=10)
+        interrupted = (
+            db.query(Batch)
+            .filter(
+                (
+                    (Batch.status == BatchStatus.processing)
+                    & (
+                        (Batch.progress_updated_at.is_(None))
+                        | (Batch.progress_updated_at < stale_before)
+                    )
+                )
+                | (
+                    (Batch.status == BatchStatus.pending)
+                    & (Batch.created_at < pending_stale_before)
+                )
+            )
+            .all()
+        )
+        for batch in interrupted:
+            batch.status = BatchStatus.error
+            batch.progress_message = "서버 재시작으로 처리가 중단되었습니다."
+            batch.failure_stage = batch.progress_message or "처리 중"
+            batch.failure_reason = "처리 중 서버가 재시작되거나 백그라운드 작업이 중단되어 상태를 이어받을 수 없습니다."
+            batch.failure_hint = "히스토리에서 해당 배치를 재처리하면 다시 시작할 수 있습니다."
+            batch.failed_at = datetime.utcnow()
+        if interrupted:
+            db.commit()
+    finally:
+        db.close()
+
+
+def _purge_expired_trashed_problems():
+    db = SessionLocal()
+    try:
+        expired = db.query(Problem).filter(
+            Problem.delete_scheduled_at.is_not(None),
+            Problem.delete_scheduled_at <= datetime.utcnow(),
+        ).all()
+        for problem in expired:
+            db.query(ProblemSetItem).filter(ProblemSetItem.problem_id == problem.id).delete(synchronize_session=False)
+            db.delete(problem)
+        if expired:
+            db.commit()
+    finally:
+        db.close()
+
+
+def _seed_saas_foundation():
+    from models import (
+        Academy,
+        AcademyPlan,
+        CreatorBalanceLedger,
+        CreatorProfile,
+        MarketplaceOrder,
+        MarketplaceOrderItem,
+        Plan,
+        PlatformSetting,
+        Product,
+        ProductLicense,
+        ProductLicenseTier,
+        ProductVersion,
+        UserRole,
+    )
+    from services.auth_security import hash_password
+
+    db = SessionLocal()
+    try:
+        default_plans = [
+            ("free", "Free", 0, 3, 30, 100, 100000),
+            ("pro", "Pro", 29000, 100, 1000, 5120, 5000000),
+            ("team", "Team", 99000, 500, 10000, 51200, 50000000),
+            ("enterprise", "Enterprise", 0, 999999, 999999, 999999, 999999999),
+        ]
+        for code, name, price, uploads, pages, storage, tokens in default_plans:
+            if not db.scalar(select(Plan).where(Plan.code == code)):
+                db.add(Plan(code=code, name=name, monthly_price=price, monthly_upload_count=uploads, monthly_processed_pages=pages, storage_quota_mb=storage, monthly_ai_tokens=tokens))
+        if not db.get(PlatformSetting, "marketplace"):
+            db.add(PlatformSetting(key="marketplace", value={"default_commission_rate": 0.10, "payout_period": "monthly", "minimum_product_price": 0}))
+        admin = db.scalar(select(Academy).where(Academy.email == "admin@tenaforge.com"))
+        if not admin:
+            admin = Academy(
+                email="admin@tenaforge.com",
+                password_hash=hash_password("AdminTest!2026"),
+                academy_name="Tena Admin",
+                email_verified=True,
+                email_verified_at=datetime.utcnow(),
+                is_active=True,
+                plan=AcademyPlan.pro,
+            )
+            db.add(admin)
+            db.flush()
+        else:
+            admin.password_hash = hash_password("AdminTest!2026")
+            admin.email_verified = True
+            admin.email_verified_at = admin.email_verified_at or datetime.utcnow()
+            admin.is_active = True
+        if admin and not db.scalar(select(UserRole).where(UserRole.user_id == str(admin.id), UserRole.role == "admin")):
+            db.add(UserRole(user_id=str(admin.id), role="admin", granted_by="seed"))
+        normal_user = db.scalar(select(Academy).where(Academy.email == "user@tenaforge.com"))
+        if not normal_user:
+            normal_user = Academy(
+                email="user@tenaforge.com",
+                password_hash=hash_password("UserTest!2026"),
+                academy_name="일반 사용자",
+                email_verified=True,
+                email_verified_at=datetime.utcnow(),
+                is_active=True,
+                plan=AcademyPlan.basic,
+            )
+            db.add(normal_user)
+        else:
+            normal_user.password_hash = hash_password("UserTest!2026")
+            normal_user.email_verified = True
+            normal_user.email_verified_at = normal_user.email_verified_at or datetime.utcnow()
+            normal_user.is_active = True
+        creator_user = db.scalar(select(Academy).where(Academy.email == "creator@tenaforge.com"))
+        if not creator_user:
+            creator_user = Academy(email="creator@tenaforge.com", password_hash=hash_password("CreatorTest!2026"), academy_name="샘플 크리에이터", email_verified=True, email_verified_at=datetime.utcnow(), is_active=True)
+            db.add(creator_user)
+            db.flush()
+        else:
+            creator_user.password_hash = hash_password("CreatorTest!2026")
+            creator_user.email_verified = True
+            creator_user.email_verified_at = creator_user.email_verified_at or datetime.utcnow()
+            creator_user.is_active = True
+        creator_id = str(creator_user.id)
+        if not db.scalar(select(UserRole).where(UserRole.user_id == creator_id, UserRole.role == "creator")):
+            db.add(UserRole(user_id=creator_id, role="creator", granted_by="seed"))
+        if not db.scalar(select(CreatorProfile).where(CreatorProfile.owner_id == creator_id)):
+            db.add(CreatorProfile(owner_id=creator_id, display_name="Tena Math Lab", slug="tena-math-lab", bio="검토된 수학 모의고사와 문제 세트를 제작합니다.", verified_status="verified", specialties=["수학", "모의고사"]))
+        product = db.scalar(select(Product).where(Product.slug == "sample-math-mock-exam"))
+        if not product:
+            product = Product(creator_id=creator_id, title="고1 수학 모의고사 샘플", slug="sample-math-mock-exam", description="검토된 고1 수학 모의고사 PDF와 문항 패키지 샘플입니다.", subject="수학", grade_level="고1", curriculum="공통수학", unit_tags=["이차함수", "방정식"], difficulty="중", question_count=20, exam_type="모의고사", price=0, status="published", rights_declared=True, published_at=datetime.utcnow())
+            db.add(product)
+            db.flush()
+            version = ProductVersion(product_id=product.id, version_number=1, changelog="초기 샘플 버전", status="approved")
+            db.add(version)
+            db.flush()
+            tier = ProductLicenseTier(product_id=product.id, code="personal_tutor", name="개인 강사용", price=0, allowed_students_count=30, allowed_print_count=100, allowed_branches_count=1, commercial_use_allowed=True, redistribution_allowed=False, license_terms_text="구매자 본인의 수업에서만 사용할 수 있으며 재배포는 금지됩니다.")
+            db.add(tier)
+        db.commit()
+    finally:
+        db.close()

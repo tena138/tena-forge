@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: tena-forge-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: tena-forge-uploads
+      mountPath: /uploads
+      sizeGB: 20
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tena-forge-db
+          property: connectionString
+      - key: UPLOADS_DIR
+        value: /uploads
+      - key: STORAGE_TYPE
+        value: local
+      - key: PORT
+        value: 8000
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: REFRESH_SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: AI_MODEL_POOL
+        value: gpt-5.4-mini,gpt-5-mini
+      - key: AI_SOLUTION_MODEL_POOL
+        value: gpt-5.4-mini,gpt-5-mini
+      - key: AI_SOLUTION_MODE
+        value: full
+      - key: AI_SOLUTION_MAX_OUTPUT_TOKENS
+        value: "8192"
+      - key: AI_SOLUTION_IMAGE_DETAIL
+        value: high
+      - key: PDF_SOLUTION_RENDER_DPI
+        value: "180"
+
+databases:
+  - name: tena-forge-db
+    databaseName: tenaforge
+    user: tenaforge
+    plan: starter

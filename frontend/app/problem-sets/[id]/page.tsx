@@ -1,0 +1,414 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { closestCenter, DndContext, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ChevronLeft, ChevronRight, FileDown, GripVertical, Plus, Save, Search, Trash2 } from "lucide-react";
+
+import { ExportModal } from "@/components/export-modal";
+import { MathText } from "@/components/math-text";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { api, Problem, ProblemSet, ProblemSetItem } from "@/lib/api";
+
+type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
+type Facets = { subjects: string[]; units: string[]; problem_types: string[]; sources: string[] };
+const PICKER_PAGE_LIMIT = 96;
+
+const difficulties = ["하", "중", "상", "최상"];
+
+function SortableRow({ item, onRemove }: { item: ProblemSetItem; onRemove: (problemId: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.problem_id });
+
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="flex items-center gap-3 rounded-lg border bg-card/90 p-3 shadow-sm">
+      <button className="text-muted-foreground" {...attributes} {...listeners} aria-label="순서 이동">
+        <GripVertical className="h-5 w-5" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold">{item.problem.tags?.source || `${item.problem.problem_number}번`}</span>
+          <Badge variant="secondary">{item.problem.tags?.subject || "과목 미지정"}</Badge>
+          {item.problem.tags?.unit && <Badge variant="outline">{item.problem.tags.unit}</Badge>}
+        </div>
+        <MathText className="mt-1 text-sm text-muted-foreground" clamp value={item.problem.problem_text.slice(0, 180)} />
+      </div>
+      <Button size="icon" variant="ghost" onClick={() => onRemove(item.problem_id)} aria-label="세트에서 문항 제거">
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function toggleValue(value: string, list: string[], setList: (next: string[]) => void) {
+  setList(list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
+}
+
+function ProblemPickerModal({
+  open,
+  onOpenChange,
+  existingIds,
+  onAdd,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  existingIds: string[];
+  onAdd: (problemIds: string[]) => Promise<void>;
+}) {
+  const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: PICKER_PAGE_LIMIT, pages: 1 });
+  const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], problem_types: [], sources: [] });
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [unit, setUnit] = useState("");
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [types, setTypes] = useState<string[]>([]);
+  const [diffs, setDiffs] = useState<string[]>([]);
+  const [needsReview, setNeedsReview] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const existing = useMemo(() => new Set(existingIds), [existingIds]);
+
+  function buildQuery(nextPage = page, limit = PICKER_PAGE_LIMIT) {
+    const params = new URLSearchParams({ page: String(nextPage), limit: String(limit) });
+    if (search.trim()) params.set("search", search.trim());
+    if (unit.trim()) params.set("unit", unit.trim());
+    if (needsReview) params.set("needs_review", "true");
+    subjects.forEach((subject) => params.append("subject", subject));
+    types.forEach((type) => params.append("problem_type", type));
+    diffs.forEach((difficulty) => params.append("difficulty", difficulty));
+    return params.toString();
+  }
+
+  async function loadProblems(nextPage = page) {
+    setLoading(true);
+    try {
+      const nextData = await api<ProblemPage>(`/api/problems?${buildQuery(nextPage)}`);
+      setData(nextData);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    api<Facets>("/api/problems/facets").then(setFacets).catch(() => undefined);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    loadProblems(page).catch(() => setData({ items: [], total: 0, page: 1, limit: PICKER_PAGE_LIMIT, pages: 1 }));
+  }, [open, page, search, unit, needsReview, subjects, types, diffs]);
+
+  useEffect(() => {
+    if (!open) return;
+    setPage(1);
+    setSearch("");
+    setUnit("");
+    setSubjects([]);
+    setTypes([]);
+    setDiffs([]);
+    setNeedsReview(false);
+    setSelectedIds([]);
+  }, [open]);
+
+  function resetFilters() {
+    setPage(1);
+    setSearch("");
+    setUnit("");
+    setSubjects([]);
+    setTypes([]);
+    setDiffs([]);
+    setNeedsReview(false);
+  }
+
+  function toggle(problemId: string) {
+    if (existing.has(problemId)) return;
+    setSelectedIds((current) => (current.includes(problemId) ? current.filter((id) => id !== problemId) : [...current, problemId]));
+  }
+
+  function selectCurrentPage() {
+    const ids = data.items.filter((problem) => !existing.has(problem.id)).map((problem) => problem.id);
+    setSelectedIds((current) => Array.from(new Set([...current, ...ids])));
+  }
+
+  async function addSelected() {
+    if (!selectedIds.length) return;
+    setSaving(true);
+    try {
+      await onAdd(selectedIds);
+      setSelectedIds([]);
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addAllMatching() {
+    setSaving(true);
+    try {
+      const collected: string[] = [];
+      const totalPages = Math.max(1, Math.ceil(data.total / 100));
+      for (let nextPage = 1; nextPage <= totalPages; nextPage += 1) {
+        const pageData = await api<ProblemPage>(`/api/problems?${buildQuery(nextPage, 100)}`);
+        pageData.items.forEach((problem) => {
+          if (!existing.has(problem.id)) collected.push(problem.id);
+        });
+      }
+      const unique = Array.from(new Set(collected));
+      if (unique.length) await onAdd(unique);
+      setSelectedIds([]);
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const availableOnPage = data.items.filter((problem) => !existing.has(problem.id)).length;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!h-[88vh] !max-h-[88vh] !w-[96vw] !max-w-[1500px] !overflow-hidden !p-0">
+        <div className="flex h-full min-h-0 flex-col gap-3 p-5">
+          <div className="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">문항 추가</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                검색과 태그로 후보를 좁힌 뒤 현재 화면 또는 조건 전체를 한 번에 추가합니다.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={selectCurrentPage} disabled={!availableOnPage || saving}>
+                현재 화면 선택
+              </Button>
+              <Button variant="outline" onClick={addAllMatching} disabled={!data.total || saving}>
+                조건 전체 추가
+              </Button>
+              <Button disabled={!selectedIds.length || saving} onClick={addSelected}>
+                <Plus className="h-4 w-4" />선택 {selectedIds.length}개 추가
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid shrink-0 gap-3 xl:grid-cols-[1.2fr_0.8fr_auto]">
+            <div className="flex items-center gap-2 rounded-md border bg-card/80 px-2">
+              <Search className="h-4 w-4 text-primary" />
+              <Input
+                className="border-0 bg-transparent focus-visible:ring-0"
+                placeholder="문항 내용, 답, 출처 검색"
+                value={search}
+                onChange={(event) => {
+                  setPage(1);
+                  setSearch(event.target.value);
+                }}
+              />
+            </div>
+            <Input
+              value={unit}
+              onChange={(event) => {
+                setPage(1);
+                setUnit(event.target.value);
+              }}
+              placeholder="단원 검색"
+            />
+            <Button variant="outline" onClick={resetFilters}>필터 초기화</Button>
+          </div>
+
+          <div className="grid shrink-0 gap-3 xl:grid-cols-3">
+            <FilterChips title="과목" options={facets.subjects} values={subjects} onToggle={(value) => { setPage(1); toggleValue(value, subjects, setSubjects); }} />
+            <FilterChips title="난이도" options={difficulties} values={diffs} onToggle={(value) => { setPage(1); toggleValue(value, diffs, setDiffs); }} />
+            <FilterChips title="문항 유형" options={facets.problem_types} values={types} onToggle={(value) => { setPage(1); toggleValue(value, types, setTypes); }} />
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-md border bg-card/60 px-3 py-2 text-sm">
+            <span>조건 결과 {data.total.toLocaleString("ko-KR")}개 / 현재 화면 {data.items.length}개 / 선택 {selectedIds.length}개</span>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={needsReview}
+                onChange={(event) => {
+                  setPage(1);
+                  setNeedsReview(event.target.checked);
+                }}
+              />
+              검토 필요만
+            </label>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-black/10">
+            {loading ? (
+              <div className="py-16 text-center text-sm text-muted-foreground">문항을 불러오는 중입니다.</div>
+            ) : data.items.length ? (
+              <div className="grid gap-2 p-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {data.items.map((problem) => {
+                  const alreadyAdded = existing.has(problem.id);
+                  const selected = selectedIds.includes(problem.id);
+                  return (
+                    <button
+                      key={problem.id}
+                      className={`flex min-h-[96px] w-full items-start gap-3 rounded-md border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "bg-card/70 hover:bg-accent"} ${alreadyAdded ? "opacity-55" : ""}`}
+                      disabled={saving || alreadyAdded}
+                      onClick={() => toggle(problem.id)}
+                    >
+                      <input className="mt-1 h-4 w-4" type="checkbox" checked={selected || alreadyAdded} disabled={alreadyAdded} readOnly />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold">{problem.tags?.source || `${problem.problem_number}번`}</span>
+                          <Badge variant="secondary">{problem.tags?.subject || "과목 미지정"}</Badge>
+                          <Badge variant="outline">{problem.tags?.unit || "단원 미지정"}</Badge>
+                          <Badge variant="outline">{problem.tags?.difficulty || "난이도 미지정"}</Badge>
+                          {alreadyAdded && <Badge variant="success">이미 추가됨</Badge>}
+                        </div>
+                        <MathText className="mt-1 text-sm text-muted-foreground" clamp value={problem.problem_text} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-16 text-center text-sm text-muted-foreground">조건에 맞는 문항이 없습니다.</div>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center justify-between border-t pt-3">
+            <Button variant="outline" size="sm" disabled={page <= 1 || saving} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+              <ChevronLeft className="h-4 w-4" />이전
+            </Button>
+            <span className="text-sm text-muted-foreground">{data.page} / {data.pages}</span>
+            <Button variant="outline" size="sm" disabled={page >= data.pages || saving} onClick={() => setPage((value) => value + 1)}>
+              다음<ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FilterChips({ title, options, values, onToggle }: { title: string; options: string[]; values: string[]; onToggle: (value: string) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-medium">{title}</div>
+      <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-md border bg-card/50 p-2">
+        {options.length ? options.map((option) => (
+          <button
+            key={option}
+            className={`rounded-md border px-2 py-1 text-xs transition-colors ${values.includes(option) ? "border-primary bg-primary text-primary-foreground" : "bg-card/70 hover:bg-accent"}`}
+            onClick={() => onToggle(option)}
+          >
+            {option}
+          </button>
+        )) : <span className="text-sm text-muted-foreground">태그 없음</span>}
+      </div>
+    </div>
+  );
+}
+
+export default function ProblemSetDetailPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [problemSet, setProblemSet] = useState<ProblemSet | null>(null);
+  const [name, setName] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  async function load() {
+    const data = await api<ProblemSet>(`/api/problem-sets/${params.id}`);
+    setProblemSet(data);
+    setName(data.name);
+  }
+
+  useEffect(() => {
+    load().catch(() => router.push("/problem-sets"));
+  }, [params.id]);
+
+  const ids = useMemo(() => problemSet?.items.map((item) => item.problem_id) || [], [problemSet]);
+
+  async function saveName() {
+    if (!problemSet || !name.trim()) return;
+    const updated = await api<ProblemSet>(`/api/problem-sets/${problemSet.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    setProblemSet(updated);
+  }
+
+  async function reorder(event: DragEndEvent) {
+    if (!problemSet || event.active.id === event.over?.id || !event.over) return;
+    const oldIndex = ids.indexOf(String(event.active.id));
+    const newIndex = ids.indexOf(String(event.over.id));
+    const nextIds = arrayMove(ids, oldIndex, newIndex);
+    const updated = await api<ProblemSet>(`/api/problem-sets/${problemSet.id}/reorder`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ordered_problem_ids: nextIds }),
+    });
+    setProblemSet(updated);
+  }
+
+  async function remove(problemId: string) {
+    if (!problemSet) return;
+    await api(`/api/problem-sets/${problemSet.id}/items/${problemId}`, { method: "DELETE" });
+    await load();
+  }
+
+  async function addProblems(problemIds: string[]) {
+    if (!problemSet || !problemIds.length) return;
+    const updated = await api<ProblemSet>(`/api/problem-sets/${problemSet.id}/items/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ problem_ids: problemIds }),
+    });
+    setProblemSet(updated);
+  }
+
+  if (!problemSet) return <div className="py-20 text-center text-muted-foreground">세트를 불러오는 중입니다.</div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="forge-section-title">문항 세트 편집</h1>
+          <p className="forge-subtitle">{problemSet.items.length}개 문항을 순서대로 관리합니다.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4" />문항 추가
+          </Button>
+          <Button onClick={() => setExportOpen(true)}>
+            <FileDown className="h-4 w-4" />내보내기
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="space-y-4 pt-5">
+          <div className="flex gap-2">
+            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <Button disabled={!name.trim() || name === problemSet.name} onClick={saveName}>
+              <Save className="h-4 w-4" />저장
+            </Button>
+          </div>
+          <DndContext collisionDetection={closestCenter} onDragEnd={reorder}>
+            <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {problemSet.items.map((item) => <SortableRow key={item.id} item={item} onRemove={remove} />)}
+              </div>
+            </SortableContext>
+          </DndContext>
+          {!problemSet.items.length && <div className="py-12 text-center text-muted-foreground">아직 세트에 문항이 없습니다.</div>}
+        </CardContent>
+      </Card>
+
+      <ProblemPickerModal open={addOpen} onOpenChange={setAddOpen} existingIds={ids} onAdd={addProblems} />
+      <ExportModal open={exportOpen} onOpenChange={setExportOpen} source="set" problemSetId={problemSet.id} count={problemSet.items.length} />
+    </div>
+  );
+}

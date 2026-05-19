@@ -1,0 +1,31 @@
+"use client";
+
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+
+export const Dialog = DialogPrimitive.Root;
+export const DialogTrigger = DialogPrimitive.Trigger;
+
+export function DialogContent({ className, children, ...props }: DialogPrimitive.DialogContentProps) {
+  return (
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" />
+      <DialogPrimitive.Content
+        className={cn(
+          "fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border bg-card p-4 shadow-2xl",
+          className
+        )}
+        {...props}
+      >
+        <DialogPrimitive.Title className="sr-only">대화상자</DialogPrimitive.Title>
+        <DialogPrimitive.Description className="sr-only">작업을 진행하기 위한 팝업 창입니다.</DialogPrimitive.Description>
+        {children}
+        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1 hover:bg-accent hover:text-accent-foreground" aria-label="닫기">
+          <X className="h-5 w-5" />
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+}
