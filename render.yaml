@@ -50,4 +50,5 @@ databases:
   - name: tena-forge-db
     databaseName: tenaforge
     user: tenaforge
-    plan: starter
+    plan: basic-256mb
+    diskSizeGB: 15
