@@ -13,9 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { registerAcademy, requestRegistrationCode } from "@/lib/auth-api";
 
-const checkboxBoolean = z.preprocess((value) => value === true || value === "true" || value === "on", z.boolean());
-const requiredAgreement = (message: string) => checkboxBoolean.refine((value) => value === true, { message });
-
 const schema = z
   .object({
     email: z.string().email("올바른 이메일을 입력해주세요."),
@@ -23,9 +20,9 @@ const schema = z
     confirmPassword: z.string().min(1, "비밀번호 확인을 입력해주세요."),
     verification_code: z.string().default(""),
     verification_session: z.string().default(""),
-    agree_terms: requiredAgreement("서비스 이용약관에 동의해주세요."),
-    agree_privacy: requiredAgreement("개인정보 처리방침에 동의해주세요."),
-    agree_marketing: checkboxBoolean,
+    agree_terms: z.boolean().refine((value) => value === true, "서비스 이용약관에 동의해주세요."),
+    agree_privacy: z.boolean().refine((value) => value === true, "개인정보 처리방침에 동의해주세요."),
+    agree_marketing: z.boolean(),
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.confirmPassword) {
@@ -38,6 +35,7 @@ const schema = z
 
 type RegisterFormInput = z.input<typeof schema>;
 type RegisterForm = z.output<typeof schema>;
+type AgreementName = "agree_terms" | "agree_privacy" | "agree_marketing";
 
 export default function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1);
@@ -61,6 +59,14 @@ export default function RegisterPage() {
     mode: "onChange",
   });
   const password = form.watch("password");
+  const agreeTerms = form.watch("agree_terms");
+  const agreePrivacy = form.watch("agree_privacy");
+  const agreeMarketing = form.watch("agree_marketing");
+
+  function setAgreement(name: AgreementName, checked: boolean) {
+    form.setValue(name, checked, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+    if (checked) form.clearErrors(name);
+  }
 
   async function sendCode() {
     setServerError("");
@@ -157,9 +163,9 @@ export default function RegisterPage() {
               <Input type="password" autoComplete="new-password" className="mt-1.5 h-11" {...form.register("confirmPassword")} />
               <FieldError message={form.formState.errors.confirmPassword?.message} />
             </label>
-            <Agreement label="서비스 이용약관에 동의합니다. *" error={form.formState.errors.agree_terms?.message} {...form.register("agree_terms")} />
-            <Agreement label="개인정보 처리방침에 동의합니다. *" error={form.formState.errors.agree_privacy?.message} {...form.register("agree_privacy")} />
-            <Agreement label="마케팅 정보 수신에 동의합니다." {...form.register("agree_marketing")} />
+            <Agreement label="서비스 이용약관에 동의합니다. *" checked={agreeTerms === true} error={form.formState.errors.agree_terms?.message} onCheckedChange={(checked) => setAgreement("agree_terms", checked)} />
+            <Agreement label="개인정보 처리방침에 동의합니다. *" checked={agreePrivacy === true} error={form.formState.errors.agree_privacy?.message} onCheckedChange={(checked) => setAgreement("agree_privacy", checked)} />
+            <Agreement label="마케팅 정보 수신에 동의합니다." checked={agreeMarketing === true} onCheckedChange={(checked) => setAgreement("agree_marketing", checked)} />
             {serverError && <p className="whitespace-pre-line rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p>}
             <Button type="button" className="h-11 w-full" disabled={sendingCode} onClick={sendCode}>
               {sendingCode ? "인증 코드 전송 중..." : "인증 코드 받기"}
@@ -213,11 +219,11 @@ function formatRegisterError(error: any) {
   return "회원가입에 실패했습니다.";
 }
 
-function Agreement({ label, error, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }) {
+function Agreement({ label, checked, error, onCheckedChange }: { label: string; checked: boolean; error?: string; onCheckedChange: (checked: boolean) => void }) {
   return (
     <label className="block rounded-lg border border-white/10 bg-white/[0.035] p-3 text-sm font-semibold text-slate-200">
       <span className="flex items-center gap-2">
-        <input type="checkbox" className="h-4 w-4 accent-primary" {...props} />
+        <input type="checkbox" className="h-4 w-4 accent-primary" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} />
         {label}
       </span>
       <FieldError message={error} />
