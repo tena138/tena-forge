@@ -30,15 +30,24 @@ def _uuid_type():
     return sa.CHAR(length=36)
 
 
-academy_plan = sa.Enum("free", "basic", "pro", "enterprise", name="academy_plan")
-oauth_provider = sa.Enum("google", "kakao", "naver", name="oauth_provider")
+ACADEMY_PLAN_VALUES = ("free", "basic", "pro", "enterprise")
+OAUTH_PROVIDER_VALUES = ("google", "kakao", "naver")
+
+
+def _enum_type(name: str, values: tuple[str, ...], create_type: bool = False):
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        return postgresql.ENUM(*values, name=name, create_type=create_type)
+    return sa.Enum(*values, name=name)
 
 
 def upgrade() -> None:
     bind = op.get_bind()
+    academy_plan = _enum_type("academy_plan", ACADEMY_PLAN_VALUES)
+    oauth_provider = _enum_type("oauth_provider", OAUTH_PROVIDER_VALUES)
     if bind.dialect.name == "postgresql":
-        academy_plan.create(bind, checkfirst=True)
-        oauth_provider.create(bind, checkfirst=True)
+        _enum_type("academy_plan", ACADEMY_PLAN_VALUES, create_type=True).create(bind, checkfirst=True)
+        _enum_type("oauth_provider", OAUTH_PROVIDER_VALUES, create_type=True).create(bind, checkfirst=True)
 
     op.create_table(
         "academies",
@@ -200,5 +209,5 @@ def downgrade() -> None:
     op.drop_table("academies")
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        oauth_provider.drop(bind, checkfirst=True)
-        academy_plan.drop(bind, checkfirst=True)
+        _enum_type("oauth_provider", OAUTH_PROVIDER_VALUES, create_type=True).drop(bind, checkfirst=True)
+        _enum_type("academy_plan", ACADEMY_PLAN_VALUES, create_type=True).drop(bind, checkfirst=True)
