@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,8 +22,8 @@ class LocalWorkerJob(BaseModel):
     id: UUID
     name: str
     has_solution_pdf: bool
-    subject_candidates: list[str] = []
-    unit_candidates: list[str] = []
+    subject_candidates: list[str] = Field(default_factory=list)
+    unit_candidates: list[str] = Field(default_factory=list)
 
 
 class LocalWorkerProgress(BaseModel):
@@ -51,7 +51,7 @@ class LocalWorkerProblem(BaseModel):
 
 class LocalWorkerComplete(BaseModel):
     problems: list[LocalWorkerProblem]
-    solutions: dict[str, dict[str, Any]] = {}
+    solutions: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class LocalWorkerFail(BaseModel):
@@ -92,6 +92,7 @@ def _set_progress(batch: Batch, payload: LocalWorkerProgress) -> None:
 @router.get("/jobs/next", response_model=LocalWorkerJob | None)
 def next_job(request: Request, db: Session = Depends(get_db)):
     owner_id = current_owner_id(request)
+    now = datetime.utcnow()
     batch = db.scalars(
         select(Batch)
         .where(Batch.owner_id == owner_id, Batch.status == BatchStatus.pending)
@@ -99,8 +100,19 @@ def next_job(request: Request, db: Session = Depends(get_db)):
         .limit(1)
     ).first()
     if not batch:
+        stale_before = now - timedelta(minutes=5)
+        batch = db.scalars(
+            select(Batch)
+            .where(
+                Batch.owner_id == owner_id,
+                Batch.status == BatchStatus.processing,
+                (Batch.progress_updated_at.is_(None) | (Batch.progress_updated_at < stale_before)),
+            )
+            .order_by(Batch.created_at.asc())
+            .limit(1)
+        ).first()
+    if not batch:
         return None
-    now = datetime.utcnow()
     batch.status = BatchStatus.processing
     batch.progress_message = "로컬 워커에서 처리 시작"
     batch.progress_current = 0
