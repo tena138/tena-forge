@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { Cloud, FileText, Loader2, MonitorCog, ShieldCheck, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, Cloud, FileText, Loader2, MonitorCog, ShieldCheck, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -540,21 +540,6 @@ export default function UploadPage() {
                 type="button"
                 className={cn(
                   "rounded-[8px] border p-4 text-left transition",
-                  processingMode === "local" ? "border-violet-300/70 bg-violet-400/12 text-white" : "border-white/10 bg-black/25 text-slate-300 hover:border-white/20"
-                )}
-                onClick={() => setProcessingMode("local")}
-              >
-                <div className="flex items-center gap-2 font-bold">
-                  <MonitorCog className="h-4 w-4 text-violet-200" />
-                  로컬 처리
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-400">내 컴퓨터 성능으로 추출합니다. 서버 추가금이 없고 대량 처리 비용이 가장 낮습니다.</p>
-                <p className="mt-3 text-xs font-semibold text-violet-100">선택 옵션</p>
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "rounded-[8px] border p-4 text-left transition",
                   processingMode === "cloud" ? "border-cyan-300/70 bg-cyan-400/12 text-white" : "border-white/10 bg-black/25 text-slate-300 hover:border-white/20"
                 )}
                 onClick={() => setProcessingMode("cloud")}
@@ -566,7 +551,34 @@ export default function UploadPage() {
                 <p className="mt-2 text-sm leading-6 text-slate-400">로컬 앱을 켜지 않아도 서버에서 추출합니다. 사용량이 서버 비용에 반영됩니다.</p>
                 <p className="mt-3 text-xs font-semibold text-cyan-100">웹앱 기본 처리</p>
               </button>
+              <button
+                type="button"
+                className={cn(
+                  "rounded-[8px] border p-4 text-left transition",
+                  processingMode === "local" ? "border-violet-300/70 bg-violet-400/12 text-white" : "border-white/10 bg-black/25 text-slate-300 hover:border-white/20"
+                )}
+                onClick={() => setProcessingMode("local")}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  <MonitorCog className="h-4 w-4 text-violet-200" />
+                  로컬 처리
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-400">내 컴퓨터 성능으로 추출합니다. 업로드 후 별도 로컬 실행기가 켜져 있어야 시작됩니다.</p>
+                <p className="mt-3 text-xs font-semibold text-violet-100">고급 사용자용</p>
+              </button>
             </div>
+            {processingMode === "local" ? (
+              <div className="mt-4 rounded-[8px] border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
+                <div className="flex items-center gap-2 font-bold">
+                  <AlertTriangle className="h-4 w-4" />
+                  로컬 처리 선택 시 주의
+                </div>
+                <p className="mt-2 leading-6 text-amber-100/90">
+                  이 방식은 업로드만 서버에 저장하고, 실제 추출은 사용자의 PC에서 로컬 실행기를 켤 때 시작됩니다.
+                  일반 사용자는 클라우드 처리를 선택하는 것이 가장 자연스럽습니다.
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">

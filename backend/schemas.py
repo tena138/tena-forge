@@ -241,6 +241,7 @@ class BatchUploadResponse(BaseModel):
 class BatchStatusResponse(BaseModel):
     batch_id: UUID
     status: BatchStatus
+    processing_mode: str = "local"
     progress_message: str
     progress_percent: int | None = None
     estimated_seconds_remaining: int | None = None

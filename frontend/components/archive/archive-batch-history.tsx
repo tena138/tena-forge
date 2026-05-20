@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ClipboardCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Cloud, Eye, FileText, Info, MonitorCog, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -131,6 +131,34 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
   );
 }
 
+function LocalWorkerPanel({ batch, busy, onRunCloud }: { batch: Batch; busy: boolean; onRunCloud: (batch: Batch) => void }) {
+  if (batch.processing_mode !== "local" || batch.status === "done" || batch.status === "error") return null;
+  const waiting = batch.status === "pending";
+
+  return (
+    <div className="rounded-lg border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 font-bold">
+            <MonitorCog className="h-4 w-4" />
+            {waiting ? "로컬 실행기를 기다리는 중입니다." : "로컬 실행기에서 처리 중입니다."}
+          </div>
+          <p className="mt-2 max-w-3xl leading-6 text-amber-100/90">
+            로컬 처리는 서버가 자동으로 추출하지 않습니다. 사용자의 PC에 설치된 Tena Forge 로컬 실행기가 켜져 있어야 작업을 가져가서 처리합니다.
+            일반 사용자는 클라우드 처리로 전환하면 이 화면에서 바로 서버 처리를 시작할 수 있습니다.
+          </p>
+        </div>
+        {waiting ? (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => onRunCloud(batch)}>
+            <Cloud className="h-4 w-4" />
+            클라우드로 처리 시작
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function ArchiveBatchHistory({
   compact = false,
   refreshKey,
@@ -178,6 +206,21 @@ export function ArchiveBatchHistory({
     setBusyId(batch.id);
     try {
       const response = await api<{ batch_id: string; status: Batch["status"] }>(`/api/batches/${batch.id}/retry`, { method: "POST" });
+      rememberActiveBatch(response.batch_id);
+      await loadBatches();
+      router.push("/archive/new");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function runBatchInCloud(batch: Batch) {
+    if (batch.status === "processing") return;
+    const ok = window.confirm(`'${batch.name}' 배치를 클라우드 처리로 전환할까요? 서버에서 바로 추출을 시작합니다.`);
+    if (!ok) return;
+    setBusyId(batch.id);
+    try {
+      const response = await api<{ batch_id: string; status: Batch["status"] }>(`/api/batches/${batch.id}/run-cloud`, { method: "POST" });
       rememberActiveBatch(response.batch_id);
       await loadBatches();
       router.push("/archive/new");
@@ -248,6 +291,7 @@ export function ArchiveBatchHistory({
             </CardHeader>
             <CardContent className="space-y-4">
               <BatchErrorPanel batch={batch} />
+              <LocalWorkerPanel batch={batch} busy={busyId === batch.id} onRunCloud={runBatchInCloud} />
               <BatchInfoPanel batch={batch} />
 
               <div className="grid gap-3 md:grid-cols-2">

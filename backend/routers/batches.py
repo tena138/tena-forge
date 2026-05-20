@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import get_db, get_settings
 from models import Batch, BatchStatus, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, SOURCE_TYPES
 from services.batch_jobs import launch_batch_worker
@@ -19,8 +19,6 @@ router = APIRouter(prefix="/api/batches", tags=["batches"])
 
 
 def _default_processing_mode() -> str:
-    from database import get_settings
-
     configured = str(get_settings().batch_processing_mode or "local").strip().lower()
     return "cloud" if configured == "cloud" else "local"
 
@@ -33,6 +31,8 @@ def _normalize_processing_mode(raw: str | None) -> str:
 
 
 def _ensure_processing_mode_allowed(db: Session, owner_id: str, processing_mode: str) -> None:
+    if processing_mode == "cloud" and _default_processing_mode() == "cloud":
+        return
     if processing_mode == "cloud" and not has_cloud_processing(db, owner_id):
         raise HTTPException(status_code=402, detail="클라우드 처리는 Cloud Processing 애드온 또는 상위 플랜에서 사용할 수 있습니다.")
 
@@ -186,7 +186,7 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     progress = get_progress_detail(batch)
-    return {"batch_id": batch.id, "status": batch.status, **progress}
+    return {"batch_id": batch.id, "status": batch.status, "processing_mode": batch.processing_mode, **progress}
 
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
@@ -221,6 +221,49 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
         batch.progress_updated_at = datetime.utcnow()
         db.commit()
         return {"batch_id": batch.id, "status": batch.status}
+
+    try:
+        launch_batch_worker(batch.id)
+    except Exception as exc:
+        batch.status = BatchStatus.error
+        batch.progress_message = "처리 작업을 시작하지 못했습니다."
+        batch.failure_stage = "작업 시작"
+        batch.failure_reason = str(exc)
+        batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
+        db.commit()
+        raise HTTPException(status_code=500, detail="처리 작업을 시작하지 못했습니다.")
+    return {"batch_id": batch.id, "status": batch.status}
+
+
+@router.post("/{batch_id}/run-cloud", response_model=BatchUploadResponse)
+def run_batch_in_cloud(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id)).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    if batch.status == BatchStatus.done:
+        raise HTTPException(status_code=400, detail="이미 완료된 배치는 전환할 수 없습니다.")
+    if batch.status == BatchStatus.processing:
+        raise HTTPException(status_code=400, detail="이미 처리 중인 배치는 전환할 수 없습니다.")
+    if batch.processing_mode == "cloud":
+        raise HTTPException(status_code=400, detail="이미 클라우드 처리 배치입니다.")
+    _ensure_processing_mode_allowed(db, owner_id, "cloud")
+
+    for problem in list(batch.problems):
+        db.delete(problem)
+    batch.status = BatchStatus.pending
+    batch.processing_mode = "cloud"
+    batch.progress_message = "클라우드 처리 대기 중"
+    batch.progress_current = 0
+    batch.progress_total = None
+    batch.progress_started_at = None
+    batch.progress_updated_at = datetime.utcnow()
+    batch.failure_stage = None
+    batch.failure_reason = None
+    batch.failure_hint = None
+    batch.failed_at = None
+    db.commit()
+    db.refresh(batch)
 
     try:
         launch_batch_worker(batch.id)
