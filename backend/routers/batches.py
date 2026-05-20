@@ -80,24 +80,49 @@ def _tagged_expression():
     )
 
 
-def _batch_read(db: Session, batch: Batch) -> BatchRead:
+def _batch_read(
+    db: Session,
+    batch: Batch,
+    problem_count: int | None = None,
+    review_count: int | None = None,
+    tagged_count: int | None = None,
+) -> BatchRead:
     tagged_expression = _tagged_expression()
-    problem_count = db.scalar(select(func.count(Problem.id)).where(Problem.source_batch_id == batch.id)) or 0
-    review_count = db.scalar(
-        select(func.count(Problem.id)).where(
-            Problem.source_batch_id == batch.id,
-            Problem.needs_review.is_(True),
-        )
-    ) or 0
-    tagged_count = db.scalar(
-        select(func.coalesce(func.sum(tagged_expression), 0))
-        .select_from(Problem)
-        .outerjoin(Tag, Tag.problem_id == Problem.id)
-        .where(Problem.source_batch_id == batch.id)
-    ) or 0
+    if problem_count is None:
+        problem_count = db.scalar(select(func.count(Problem.id)).where(Problem.source_batch_id == batch.id)) or 0
+    if review_count is None:
+        review_count = db.scalar(
+            select(func.count(Problem.id)).where(
+                Problem.source_batch_id == batch.id,
+                Problem.needs_review.is_(True),
+            )
+        ) or 0
+    if tagged_count is None:
+        tagged_count = db.scalar(
+            select(func.coalesce(func.sum(tagged_expression), 0))
+            .select_from(Problem)
+            .outerjoin(Tag, Tag.problem_id == Problem.id)
+            .where(Problem.source_batch_id == batch.id)
+        ) or 0
+    problem_count = int(problem_count or 0)
+    review_count = int(review_count or 0)
+    tagged_count = int(tagged_count or 0)
     progress = get_progress_detail(batch)
-    return BatchRead.model_validate(batch).model_copy(
-        update={
+    return BatchRead.model_validate(
+        {
+            "id": batch.id,
+            "name": batch.name or "아카이빙 배치",
+            "problem_pdf_filename": batch.problem_pdf_filename or "",
+            "solution_pdf_filename": batch.solution_pdf_filename,
+            "status": batch.status or BatchStatus.pending,
+            "source_type": batch.source_type or "self_created",
+            "source_label": batch.source_label,
+            "rights_confirmed": bool(batch.rights_confirmed),
+            "rights_note": batch.rights_note,
+            "subject_candidates": batch.subject_candidates,
+            "unit_candidates": batch.unit_candidates,
+            "processing_mode": batch.processing_mode or "local",
+            "created_at": batch.created_at,
             "problem_count": problem_count,
             "review_count": review_count,
             "tagged_count": tagged_count,
@@ -196,18 +221,7 @@ def list_batches(request: Request, db: Session = Depends(get_db)):
     ).all()
     result = []
     for batch, problem_count, review_count, tagged_count in rows:
-        progress = get_progress_detail(batch)
-        result.append(
-            BatchRead.model_validate(batch).model_copy(
-                update={
-                    "problem_count": problem_count,
-                    "review_count": review_count,
-                    "tagged_count": tagged_count,
-                    "untagged_count": max(problem_count - tagged_count, 0),
-                    **progress,
-                }
-            )
-        )
+        result.append(_batch_read(db, batch, problem_count, review_count, tagged_count))
     return result
 
 

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Generic, TypeVar
 from uuid import UUID
@@ -235,12 +236,34 @@ class BatchRead(BaseModel):
     @field_validator("subject_candidates", "unit_candidates", mode="before")
     @classmethod
     def empty_list_for_legacy_null(cls, value):
-        return value or []
+        if not value:
+            return []
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item or "").strip()]
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                parsed = [value]
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if str(item or "").strip()]
+            return [str(parsed)] if str(parsed or "").strip() else []
+        return []
 
     @field_validator("processing_mode", mode="before")
     @classmethod
     def default_processing_mode_for_legacy_null(cls, value):
         return value or "local"
+
+    @field_validator("source_type", mode="before")
+    @classmethod
+    def default_source_type_for_legacy_null(cls, value):
+        return value or "self_created"
+
+    @field_validator("rights_confirmed", mode="before")
+    @classmethod
+    def default_rights_confirmed_for_legacy_null(cls, value):
+        return bool(value)
 
 
 class BatchUploadResponse(BaseModel):
