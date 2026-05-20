@@ -8,13 +8,30 @@ from sqlalchemy import select
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import SessionLocal
-from models import Academy, AcademyPlan, UserRole
+from models import Academy, AcademyPlan, Batch, HubTemplate, Problem, ProblemSet, UserRole
 from services.auth_security import hash_password
 
 
 ADMIN_EMAIL = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@tenaforge.com").strip().lower()
 ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "").strip()
 ADMIN_NAME = os.getenv("BOOTSTRAP_ADMIN_NAME", "Tena Admin").strip() or "Tena Admin"
+LEGACY_OWNER_ID = "local_user"
+
+
+def _claim_legacy_local_data(db, admin: Academy) -> None:
+    admin_id = str(admin.id)
+    total = 0
+    for model in (Batch, Problem, ProblemSet, HubTemplate):
+        updates = {model.owner_id: admin_id}
+        if hasattr(model, "academy_id"):
+            updates[model.academy_id] = admin_id
+        total += (
+            db.query(model)
+            .filter(model.owner_id == LEGACY_OWNER_ID)
+            .update(updates, synchronize_session=False)
+        )
+    if total:
+        print(f"Claimed {total} legacy local records for {ADMIN_EMAIL}.")
 
 
 def main() -> None:
@@ -65,6 +82,7 @@ def main() -> None:
             db.add(UserRole(user_id=str(admin.id), role="admin", granted_by="bootstrap"))
             print(f"Granted admin role: {ADMIN_EMAIL}")
 
+        _claim_legacy_local_data(db, admin)
         db.commit()
     finally:
         db.close()

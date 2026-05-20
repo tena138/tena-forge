@@ -232,6 +232,16 @@ class BatchRead(BaseModel):
     failure_hint: str | None = None
     failed_at: datetime | None = None
 
+    @field_validator("subject_candidates", "unit_candidates", mode="before")
+    @classmethod
+    def empty_list_for_legacy_null(cls, value):
+        return value or []
+
+    @field_validator("processing_mode", mode="before")
+    @classmethod
+    def default_processing_mode_for_legacy_null(cls, value):
+        return value or "local"
+
 
 class BatchUploadResponse(BaseModel):
     batch_id: UUID
