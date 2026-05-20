@@ -262,6 +262,7 @@ export default function UploadPage() {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [historyBatchSnapshot, setHistoryBatchSnapshot] = useState<Batch | null>(null);
   const [message, setMessage] = useState("");
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -353,6 +354,7 @@ export default function UploadPage() {
     }
     if (!batchName || !problemPdf || !rightsConfirmed || !selectedSubjects.length) return;
     setSubmitting(true);
+    setUploadPercent(0);
     setMessage("업로드 중입니다.");
     const form = new FormData();
     form.append("batch_name", batchName);
@@ -366,15 +368,24 @@ export default function UploadPage() {
     if (solutionPdf) form.append("solution_pdf", solutionPdf);
     let data: UploadResponse;
     try {
-      const response = await authHttp.post<UploadResponse>("/api/batches/upload", form);
+      const response = await authHttp.post<UploadResponse>("/api/batches/upload", form, {
+        onUploadProgress: (event) => {
+          if (!event.total) return;
+          const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+          setUploadPercent(percent);
+          setMessage(percent >= 100 ? "업로드 완료. 아카이빙 작업을 시작하는 중입니다." : `PDF 업로드 중입니다. ${percent}%`);
+        },
+      });
       data = response.data;
     } catch (error: any) {
       const detail = error.response?.data?.detail;
       setSubmitting(false);
+      setUploadPercent(null);
       setMessage(typeof detail === "string" ? detail : "업로드에 실패했습니다.");
       return;
     }
     setSubmitting(false);
+    setUploadPercent(null);
     setBatchId(data.batch_id);
     rememberActiveBatch(data.batch_id);
     setMessage("업로드 완료. 아래 아카이빙 기록에서 진행률을 확인할 수 있습니다.");
@@ -542,6 +553,14 @@ export default function UploadPage() {
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             아카이빙 시작
           </Button>
+          {uploadPercent !== null ? (
+            <div className="space-y-1">
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-violet-400 transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+              </div>
+              <p className="text-xs text-slate-500">{uploadPercent >= 100 ? "서버에서 배치 생성 중" : `업로드 ${uploadPercent}%`}</p>
+            </div>
+          ) : null}
           {message ? <p className="text-sm text-slate-400">{message}</p> : null}
         </CardContent>
       </Card>
