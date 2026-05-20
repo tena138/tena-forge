@@ -394,6 +394,10 @@ def get_progress_detail(batch: Batch) -> dict[str, Any]:
     if ai_request_match and int(ai_request_match.group(1)) == 0:
         return {"progress_message": message, "progress_percent": percent, "estimated_seconds_remaining": None, **base}
 
+    min_samples = min(total, max(3, math.ceil(total * 0.05)))
+    if current < min_samples or elapsed < 30:
+        return {"progress_message": message, "progress_percent": percent, "estimated_seconds_remaining": None, **base}
+
     estimated_total = elapsed * total / current
     remaining = max(int(estimated_total - elapsed), 0)
     return {"progress_message": message, "progress_percent": percent, "estimated_seconds_remaining": remaining, **base}
