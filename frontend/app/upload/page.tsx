@@ -93,6 +93,11 @@ function nextPaletteColor(current: string) {
   return tagPalette[index >= 0 ? (index + 1) % tagPalette.length : hashText(current) % tagPalette.length];
 }
 
+function fileNameToBatchName(fileName: string) {
+  const cleanName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  return cleanName || fileName.trim();
+}
+
 function TagColorPicker({
   value,
   onChange,
@@ -239,6 +244,7 @@ function DropZone({
 
 export default function UploadPage() {
   const [batchName, setBatchName] = useState("");
+  const [autoBatchName, setAutoBatchName] = useState("");
   const [problemPdf, setProblemPdf] = useState<File | null>(null);
   const [solutionPdf, setSolutionPdf] = useState<File | null>(null);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -321,6 +327,18 @@ export default function UploadPage() {
       writeTagColors(UNIT_TAG_COLORS_KEY, next);
       return next;
     });
+  }
+
+  function handleProblemPdfChange(file: File | null) {
+    const nextAutoBatchName = file ? fileNameToBatchName(file.name) : "";
+    setProblemPdf(file);
+    setBatchName((current) => {
+      const trimmed = current.trim();
+      if (!file) return autoBatchName && trimmed === autoBatchName ? "" : current;
+      if (!trimmed || trimmed === autoBatchName) return nextAutoBatchName;
+      return current;
+    });
+    setAutoBatchName(nextAutoBatchName);
   }
 
   async function submit() {
@@ -494,7 +512,7 @@ export default function UploadPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <DropZone label="문제 PDF" helper="문제 PDF" file={problemPdf} required onChange={setProblemPdf} />
+            <DropZone label="문제 PDF" helper="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
             <DropZone label="해설 PDF" helper="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
           </div>
 
