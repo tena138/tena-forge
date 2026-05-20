@@ -1,6 +1,5 @@
 import argparse
 import getpass
-import json
 import os
 import sys
 import tempfile
@@ -60,7 +59,13 @@ def login(client: httpx.Client, email: str | None, password: str | None, totp_co
     return access_token
 
 
-def post_progress(client: httpx.Client, batch_id: str, message: str, current: int | None = None, total: int | None = None) -> None:
+def post_progress(
+    client: httpx.Client,
+    batch_id: str,
+    message: str,
+    current: int | None = None,
+    total: int | None = None,
+) -> None:
     client.post(
         f"/api/local-worker/jobs/{batch_id}/progress",
         json={"message": message, "current": current, "total": total},
@@ -126,12 +131,16 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
         problem_units = problem_page_count * units_per_page
         total_units = solution_units + problem_units
         problem_dpi = choose_render_dpi(str(problem_pdf), problem_page_count)
-        solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(str(solution_pdf), solution_page_count)) if has_solution else problem_dpi
+        solution_dpi = (
+            settings.pdf_solution_render_dpi or choose_render_dpi(str(solution_pdf), solution_page_count)
+        ) if has_solution else problem_dpi
         post_progress(client, batch_id, "PDF 페이지 수 확인 완료", 0, total_units)
 
         solutions: dict[int, dict[str, Any]] = {}
         if has_solution:
-            solution_models = [model.strip() for model in settings.ai_solution_model_pool.split(",") if model.strip()] or [settings.ai_model]
+            solution_models = [model.strip() for model in settings.ai_solution_model_pool.split(",") if model.strip()]
+            if not solution_models:
+                solution_models = [settings.ai_model]
             processed_solution_pages = 0
             for range_group in iter_split_page_range_groups(solution_page_count, len(solution_models)):
                 chunk_len = sum(end - start for start, end in range_group)
@@ -139,16 +148,30 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
                 rendered_groups = []
                 rendered_pages = 0
                 for start, end in range_group:
-                    post_progress(client, batch_id, f"해설 PDF 렌더링 중 ({start + 1}-{end}/{solution_page_count}페이지)", base + rendered_pages, total_units)
+                    post_progress(
+                        client,
+                        batch_id,
+                        f"해설 PDF 렌더링 중 ({start + 1}-{end}/{solution_page_count}페이지)",
+                        base + rendered_pages,
+                        total_units,
+                    )
                     rendered = render_pdf(str(solution_pdf), start_page=start, end_page=end, dpi=solution_dpi)
                     rendered_groups.append(rendered)
                     rendered_pages += end - start
                 solution_pages = interleave_rendered_page_groups(rendered_groups)
-                post_progress(client, batch_id, f"해설 원문 추출 중 ({format_page_range_group(range_group, solution_page_count)})", base + chunk_len, total_units)
+                post_progress(
+                    client,
+                    batch_id,
+                    f"해설 원문 추출 중 ({format_page_range_group(range_group, solution_page_count)})",
+                    base + chunk_len,
+                    total_units,
+                )
                 solutions.update(extract_solutions(solution_pages, display_total_pages=solution_page_count))
                 processed_solution_pages += chunk_len
 
-        problem_models = [model.strip() for model in settings.ai_model_pool.split(",") if model.strip()] or [settings.ai_model]
+        problem_models = [model.strip() for model in settings.ai_model_pool.split(",") if model.strip()]
+        if not problem_models:
+            problem_models = [settings.ai_model]
         processed_problem_pages = 0
         all_problems: list[dict[str, Any]] = []
         for range_group in iter_split_page_range_groups(problem_page_count, len(problem_models)):
@@ -157,13 +180,25 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
             rendered_groups = []
             rendered_pages = 0
             for start, end in range_group:
-                post_progress(client, batch_id, f"문제 PDF 렌더링 중 ({start + 1}-{end}/{problem_page_count}페이지)", base + rendered_pages, total_units)
+                post_progress(
+                    client,
+                    batch_id,
+                    f"문제 PDF 렌더링 중 ({start + 1}-{end}/{problem_page_count}페이지)",
+                    base + rendered_pages,
+                    total_units,
+                )
                 rendered = render_pdf(str(problem_pdf), start_page=start, end_page=end, dpi=problem_dpi)
                 rendered_groups.append(rendered)
                 rendered_pages += end - start
             problem_pages = interleave_rendered_page_groups(rendered_groups)
             page_range_label = format_page_range_group(range_group, problem_page_count)
-            post_progress(client, batch_id, f"문항 추출 중 ({page_range_label})", base + chunk_len, total_units)
+            post_progress(
+                client,
+                batch_id,
+                f"문항 추출 중 ({page_range_label})",
+                base + chunk_len,
+                total_units,
+            )
             extracted = extract_and_cross_check(
                 problem_pages,
                 display_total_pages=problem_page_count,
@@ -171,7 +206,13 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
                 unit_candidates=job.get("unit_candidates") or [],
             )
             attach_visuals(extracted, problem_pages, batch_id)
-            post_progress(client, batch_id, f"검토용 원본 페이지 업로드 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
+            post_progress(
+                client,
+                batch_id,
+                f"검토용 원본 페이지 업로드 중 ({page_range_label})",
+                base + chunk_len * units_per_page,
+                total_units,
+            )
             attach_review_page_images_remote(client, batch_id, extracted, problem_pages)
             for problem in extracted:
                 cleaned, suspicious = strip_answer_choices(problem["problem_text"])
@@ -212,7 +253,11 @@ def run(args: argparse.Namespace) -> None:
                 print(f"[{batch_id}] failed: {exc}", file=sys.stderr)
                 client.post(
                     f"/api/local-worker/jobs/{batch_id}/fail",
-                    json={"stage": "local worker", "reason": str(exc), "hint": "로컬 워커 로그와 OPENAI_API_KEY 설정을 확인하세요."},
+                    json={
+                        "stage": "local worker",
+                        "reason": str(exc),
+                        "hint": "로컬 워커 로그와 OPENAI_API_KEY 설정을 확인하세요.",
+                    },
                 )
                 if not args.watch:
                     raise
