@@ -331,6 +331,23 @@ def run_batch_in_cloud(batch_id: UUID, request: Request, db: Session = Depends(g
     return {"batch_id": batch.id, "status": batch.status}
 
 
+@router.post("/{batch_id}/review-needed", response_model=BatchRead)
+def mark_batch_review_needed(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id)).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    db.query(Problem).filter(
+        Problem.source_batch_id == batch.id,
+        Problem.owner_id == owner_id,
+        Problem.deleted_at.is_(None),
+    ).update({Problem.needs_review: True}, synchronize_session=False)
+    batch.progress_updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(batch)
+    return _batch_read(db, batch)
+
+
 @router.delete("/{batch_id}", status_code=204)
 def delete_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()

@@ -250,6 +250,20 @@ export function ArchiveBatchHistory({
     }
   }
 
+  async function markBatchReviewNeeded(batch: Batch) {
+    if (!batch.problem_count || busyId === batch.id) return;
+    const ok = window.confirm(`'${batch.name}' 배치의 문항 ${batch.problem_count}개를 다시 검토 필요 상태로 표시할까요?`);
+    if (!ok) return;
+    setBusyId(batch.id);
+    try {
+      const updated = await api<Batch>(`/api/batches/${batch.id}/review-needed`, { method: "POST" });
+      setBatches((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      if (activeBatchId === updated.id) onActiveBatchSnapshot?.(updated);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function deleteBatch(batch: Batch) {
     const ok = window.confirm(`'${batch.name}' 배치를 삭제할까요? 연결된 문항과 태그도 함께 삭제됩니다.`);
     if (!ok) return;
@@ -295,6 +309,12 @@ export function ArchiveBatchHistory({
                     <ClipboardCheck className="h-4 w-4" />
                     배치 검토
                   </Button>
+                  {batch.status === "done" && batch.problem_count > 0 && batch.review_count === 0 ? (
+                    <Button variant="outline" size="sm" disabled={busyId === batch.id} onClick={() => markBatchReviewNeeded(batch)}>
+                      <RotateCcw className="h-4 w-4" />
+                      검토 대기열로 복구
+                    </Button>
+                  ) : null}
                   <Button variant="outline" size="sm" onClick={() => router.push(`/problems?batch_id=${batch.id}`)}>
                     <Eye className="h-4 w-4" />
                     문항 보기
