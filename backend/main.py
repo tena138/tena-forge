@@ -168,6 +168,7 @@ def health_db():
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
         academy_columns = {column["name"] for column in inspector.get_columns("academies")} if "academies" in tables else set()
+        batch_columns = {column["name"] for column in inspector.get_columns("batches")} if "batches" in tables else set()
         alembic_versions = []
         admin_exists = None
         if "alembic_version" in tables:
@@ -190,6 +191,7 @@ def health_db():
             "alembic_versions": alembic_versions,
             "missing_tables": sorted({"academies", "user_roles", "batches", "problems", "problem_sets"} - tables),
             "missing_academy_columns": sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
+            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_mode"} - batch_columns),
         }
     except Exception as exc:
         return JSONResponse(

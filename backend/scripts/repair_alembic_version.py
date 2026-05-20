@@ -120,6 +120,28 @@ def _ensure_academy_columns(connection, inspector) -> bool:
     return changed
 
 
+def _ensure_batch_columns(connection, inspector) -> bool:
+    if "batches" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    json_definition = "JSONB NOT NULL DEFAULT '[]'::jsonb" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '[]'"
+    specs = [
+        ("subject_candidates", json_definition),
+        ("unit_candidates", json_definition),
+        ("processing_mode", "VARCHAR(20) NOT NULL DEFAULT 'local'"),
+    ]
+    for column_name, definition in specs:
+        if _add_column_if_missing(connection, inspector, "batches", column_name, definition):
+            changed = True
+            inspector = inspect(connection)
+    connection.execute(text("UPDATE batches SET processing_mode = 'local' WHERE processing_mode IS NULL OR processing_mode = ''"))
+    if "ix_batches_processing_mode" not in _index_names(inspector, "batches"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_processing_mode ON batches (processing_mode)"))
+        changed = True
+    return changed
+
+
 def _schema_is_at_head(inspector) -> bool:
     required_tables = {"academies", "user_roles", "batches", "problems", "problem_sets"}
     tables = set(inspector.get_table_names())
@@ -150,6 +172,8 @@ def main() -> None:
         _create_missing_tables(connection)
         inspector = inspect(connection)
         if _ensure_academy_columns(connection, inspector):
+            inspector = inspect(connection)
+        if _ensure_batch_columns(connection, inspector):
             inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
             connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)"))
