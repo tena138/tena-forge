@@ -9,9 +9,11 @@ from database import get_db
 from models import MarketplaceListing, Problem, ProblemSet, ProblemSetItem
 from schemas import (
     MarketplaceSubmissionRequest,
+    ProblemRead,
     ProblemSetAppendItem,
     ProblemSetAppendItems,
     ProblemSetCreate,
+    ProblemSetItemRead,
     ProblemSetListItem,
     ProblemSetRead,
     ProblemSetReorder,
@@ -19,6 +21,7 @@ from schemas import (
 )
 from services.license_service import is_marketplace_publish_allowed
 from services.ownership import current_owner_id
+from services.private_files import sign_static_url
 
 router = APIRouter(prefix="/api/problem-sets", tags=["problem sets"])
 
@@ -44,6 +47,26 @@ def _get_set(db: Session, set_id: UUID, owner_id: str) -> ProblemSet:
     problem_set.items.sort(key=lambda item: item.order_index)
     _sync_marketplace_eligibility(problem_set)
     return problem_set
+
+
+def _serialize_problem(problem: Problem) -> ProblemRead:
+    owner_id = str(problem.owner_id or "")
+    item = ProblemRead.model_validate(problem)
+    return item.model_copy(
+        update={
+            "visual_url": sign_static_url(item.visual_url, owner_id),
+            "review_page_image_url": sign_static_url(item.review_page_image_url, owner_id),
+        }
+    )
+
+
+def _serialize_problem_set(problem_set: ProblemSet) -> ProblemSetRead:
+    item = ProblemSetRead.model_validate(problem_set)
+    signed_items = []
+    for set_item in sorted(problem_set.items, key=lambda row: row.order_index):
+        read_item = ProblemSetItemRead.model_validate(set_item)
+        signed_items.append(read_item.model_copy(update={"problem": _serialize_problem(set_item.problem)}))
+    return item.model_copy(update={"items": signed_items})
 
 
 def _replace_items(db: Session, problem_set: ProblemSet, problem_ids: list[UUID], owner_id: str) -> None:
@@ -87,7 +110,7 @@ def create_problem_set(payload: ProblemSetCreate, request: Request, db: Session 
     db.add(problem_set)
     _replace_items(db, problem_set, payload.problem_ids, owner_id)
     db.commit()
-    return _get_set(db, problem_set.id, owner_id)
+    return _serialize_problem_set(_get_set(db, problem_set.id, owner_id))
 
 
 @router.get("", response_model=list[ProblemSetListItem])
@@ -134,7 +157,7 @@ def list_problem_sets(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/{set_id}", response_model=ProblemSetRead)
 def get_problem_set(set_id: UUID, request: Request, db: Session = Depends(get_db)):
-    return _get_set(db, set_id, current_owner_id(request))
+    return _serialize_problem_set(_get_set(db, set_id, current_owner_id(request)))
 
 
 @router.patch("/{set_id}", response_model=ProblemSetRead)
@@ -156,7 +179,7 @@ def update_problem_set(set_id: UUID, payload: ProblemSetUpdate, request: Request
     _sync_marketplace_eligibility(problem_set)
     problem_set.updated_at = datetime.utcnow()
     db.commit()
-    return _get_set(db, set_id, owner_id)
+    return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
 
 @router.delete("/{set_id}", status_code=204)
@@ -178,12 +201,12 @@ def append_problem_set_item(set_id: UUID, payload: ProblemSetAppendItem, request
     if not db.scalars(select(Problem).where(Problem.id == payload.problem_id, Problem.owner_id == owner_id)).first():
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
     if any(item.problem_id == payload.problem_id for item in problem_set.items):
-        return problem_set
+        return _serialize_problem_set(problem_set)
     next_index = max([item.order_index for item in problem_set.items], default=-1) + 1
     db.add(ProblemSetItem(problem_set_id=set_id, problem_id=payload.problem_id, order_index=next_index))
     problem_set.updated_at = datetime.utcnow()
     db.commit()
-    return _get_set(db, set_id, owner_id)
+    return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
 
 @router.post("/{set_id}/items/bulk", response_model=ProblemSetRead)
@@ -200,7 +223,7 @@ def append_problem_set_items(set_id: UUID, payload: ProblemSetAppendItems, reque
           seen.add(problem_id)
 
     if not unique_ids:
-        return problem_set
+        return _serialize_problem_set(problem_set)
 
     found = set(
         db.scalars(
@@ -220,7 +243,7 @@ def append_problem_set_items(set_id: UUID, payload: ProblemSetAppendItems, reque
         db.add(ProblemSetItem(problem_set_id=set_id, problem_id=problem_id, order_index=next_index + offset))
     problem_set.updated_at = datetime.utcnow()
     db.commit()
-    return _get_set(db, set_id, owner_id)
+    return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
 
 @router.delete("/{set_id}/items/{problem_id}", status_code=204)
@@ -249,7 +272,7 @@ def reorder_problem_set(set_id: UUID, payload: ProblemSetReorder, request: Reque
         by_problem_id[problem_id].order_index = index
     problem_set.updated_at = datetime.utcnow()
     db.commit()
-    return _get_set(db, set_id, owner_id)
+    return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
 
 @router.post("/{set_id}/publish", response_model=ProblemSetRead)
@@ -259,7 +282,7 @@ def publish_problem_set(set_id: UUID, request: Request, db: Session = Depends(ge
     problem_set.visibility = "public"
     problem_set.updated_at = datetime.utcnow()
     db.commit()
-    return _get_set(db, set_id, owner_id)
+    return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
 
 @router.post("/{set_id}/unpublish", response_model=ProblemSetRead)
@@ -269,7 +292,7 @@ def unpublish_problem_set(set_id: UUID, request: Request, db: Session = Depends(
     problem_set.visibility = "private"
     problem_set.updated_at = datetime.utcnow()
     db.commit()
-    return _get_set(db, set_id, owner_id)
+    return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
 
 @router.post("/{set_id}/submit-to-marketplace")

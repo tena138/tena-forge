@@ -20,6 +20,7 @@ from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigatio
 from services.math_normalization import normalize_geometry_notation
 from services.ownership import current_owner_id
 from services.pipeline import strip_answer_choices, vision_json
+from services.private_files import sign_static_url
 from services.storage import save_visual_bytes
 
 router = APIRouter(prefix="/api/problems", tags=["problems"])
@@ -76,6 +77,17 @@ def _problem_order(sort: str | None):
     if value == "number_desc":
         return (Problem.problem_number.desc(), Problem.created_at.desc(), Problem.id.asc())
     return _problem_source_order()
+
+
+def _serialize_problem(problem: Problem, schema=ProblemRead):
+    owner_id = str(problem.owner_id or "")
+    item = schema.model_validate(problem)
+    return item.model_copy(
+        update={
+            "visual_url": sign_static_url(item.visual_url, owner_id),
+            "review_page_image_url": sign_static_url(getattr(item, "review_page_image_url", None), owner_id),
+        }
+    )
 
 
 def _read_review_page_image(problem: Problem) -> bytes:
@@ -311,7 +323,7 @@ def list_problems(
         .offset((page - 1) * limit)
         .limit(limit)
     ).unique().all()
-    return {"items": items, "total": total, "page": page, "limit": limit, "pages": math.ceil(total / limit) if total else 1}
+    return {"items": [_serialize_problem(item, ProblemListItem) for item in items], "total": total, "page": page, "limit": limit, "pages": math.ceil(total / limit) if total else 1}
 
 
 @router.get("/{problem_id}/navigation", response_model=ProblemNavigation)
@@ -378,7 +390,7 @@ def problem_detail(problem_id: UUID, request: Request, db: Session = Depends(get
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
-    return problem
+    return _serialize_problem(problem)
 
 
 @router.patch("/{problem_id}/tags", response_model=TagRead)
@@ -417,7 +429,7 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
     problem.needs_review = True
     db.commit()
     db.refresh(problem)
-    return problem
+    return _serialize_problem(problem)
 
 
 @router.post("/{problem_id}/reextract", response_model=ProblemRead)
@@ -457,7 +469,7 @@ def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(
     problem.needs_review = True if suspicious else problem.needs_review
     db.commit()
     db.refresh(problem)
-    return problem
+    return _serialize_problem(problem)
 
 
 @router.patch("/{problem_id}/visual-crop", response_model=ProblemRead)
@@ -501,7 +513,7 @@ def crop_visual(problem_id: UUID, payload: VisualCropUpdate, request: Request, d
     problem.needs_review = True
     db.commit()
     db.refresh(problem)
-    return problem
+    return _serialize_problem(problem)
 
 
 @router.delete("/{problem_id}/visual", response_model=ProblemRead)
@@ -518,7 +530,7 @@ def delete_visual(problem_id: UUID, request: Request, db: Session = Depends(get_
     problem.needs_review = True
     db.commit()
     db.refresh(problem)
-    return problem
+    return _serialize_problem(problem)
 
 
 @router.patch("/{problem_id}/review", response_model=ProblemRead)
@@ -529,7 +541,7 @@ def update_review(problem_id: UUID, payload: ReviewUpdate, request: Request, db:
     problem.needs_review = payload.needs_review
     db.commit()
     db.refresh(problem)
-    return problem
+    return _serialize_problem(problem)
 
 
 @router.delete("/{problem_id}", status_code=204)

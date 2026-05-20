@@ -2,10 +2,10 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from jose import ExpiredSignatureError, JWTError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -18,6 +18,7 @@ from models import Batch, BatchStatus
 from models import Problem, ProblemSetItem
 from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
+from services.private_files import guess_media_type, static_file_path, verify_static_file_token
 
 settings = get_settings()
 
@@ -84,7 +85,16 @@ async def security_and_auth_middleware(request, call_next):
 
 
 Path(settings.uploads_dir).mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=settings.uploads_dir), name="static")
+
+
+@app.get("/static/{relative_path:path}")
+def private_static_file(relative_path: str, token: str | None = Query(default=None)):
+    if not relative_path.startswith("announcements/"):
+        verify_static_file_token(relative_path, token)
+    path = static_file_path(relative_path)
+    if not path.exists() or not path.is_file():
+        return JSONResponse({"detail": "File not found."}, status_code=404)
+    return FileResponse(path, media_type=guess_media_type(path))
 
 app.include_router(auth.router)
 app.include_router(academy_student_app.router)
