@@ -24,6 +24,7 @@ from services.ownership import current_owner_id
 
 ADMIN_ROLES = {"admin", "super_admin"}
 CREATOR_ROLES = {"creator"}
+CLOUD_PROCESSING_PLAN_CODES = {"basic_cloud", "pro_cloud", "team", "enterprise"}
 
 
 def audit(db: Session, actor_id: str | None, action: str, target_type: str | None = None, target_id: str | None = None, metadata: dict | None = None) -> None:
@@ -65,7 +66,10 @@ def require_creator(request: Request, db: Session) -> str:
 def ensure_default_plans(db: Session) -> None:
     defaults = [
         ("free", "Free", 0, 3, 30, 100, 100_000),
+        ("basic_local", "Basic Local", 48000, 100, 1000, 20480, 5_000_000),
+        ("basic_cloud", "Basic Cloud", 79000, 100, 1000, 20480, 5_000_000),
         ("pro", "Pro", 29000, 100, 1000, 5120, 5_000_000),
+        ("pro_cloud", "Pro Cloud", 157000, 500, 10000, 51200, 50_000_000),
         ("team", "Team", 99000, 500, 10000, 51200, 50_000_000),
         ("enterprise", "Enterprise", 0, 999999, 999999, 999999, 999999999),
     ]
@@ -90,6 +94,17 @@ def active_subscription(db: Session, user_id: str) -> Subscription | None:
         .where(Subscription.user_id == user_id, Subscription.status.in_(["trialing", "active"]))
         .order_by(Subscription.created_at.desc())
     )
+
+
+def has_cloud_processing(db: Session, user_id: str) -> bool:
+    roles = get_roles(db, user_id)
+    if roles & ADMIN_ROLES:
+        return True
+    subscription = active_subscription(db, user_id)
+    if not subscription:
+        return False
+    plan_code = str(subscription.plan_code or "").strip().lower()
+    return plan_code in CLOUD_PROCESSING_PLAN_CODES or plan_code.endswith("_cloud")
 
 
 def usage_summary(db: Session, user_id: str) -> tuple[Plan, Subscription | None, int, int, int, float]:

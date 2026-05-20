@@ -95,7 +95,7 @@ def next_job(request: Request, db: Session = Depends(get_db)):
     now = datetime.utcnow()
     batch = db.scalars(
         select(Batch)
-        .where(Batch.owner_id == owner_id, Batch.status == BatchStatus.pending)
+        .where(Batch.owner_id == owner_id, Batch.status == BatchStatus.pending, Batch.processing_mode == "local")
         .order_by(Batch.created_at.asc())
         .limit(1)
     ).first()
@@ -106,6 +106,7 @@ def next_job(request: Request, db: Session = Depends(get_db)):
             .where(
                 Batch.owner_id == owner_id,
                 Batch.status == BatchStatus.processing,
+                Batch.processing_mode == "local",
                 (Batch.progress_updated_at.is_(None) | (Batch.progress_updated_at < stale_before)),
             )
             .order_by(Batch.created_at.asc())

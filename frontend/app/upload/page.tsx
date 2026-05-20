@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { FileText, Loader2, ShieldCheck, UploadCloud, X } from "lucide-react";
+import { Cloud, FileText, Loader2, MonitorCog, ShieldCheck, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 
 type UploadResponse = { batch_id: string; status: BatchStatus };
 type TagColorMap = Record<string, string>;
+type ProcessingMode = "local" | "cloud";
 
 const SUBJECT_TAG_COLORS_KEY = "tena-forge-upload-subject-tag-colors";
 const UNIT_TAG_COLORS_KEY = "tena-forge-upload-unit-tag-colors";
@@ -259,6 +260,7 @@ export default function UploadPage() {
   const sourceLabel = "";
   const [rightsNote, setRightsNote] = useState("");
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("local");
   const [batchId, setBatchId] = useState<string | null>(null);
   const [historyBatchSnapshot, setHistoryBatchSnapshot] = useState<Batch | null>(null);
   const [message, setMessage] = useState("");
@@ -365,6 +367,7 @@ export default function UploadPage() {
     form.append("rights_note", rightsNote);
     form.append("subject_candidates", JSON.stringify(selectedSubjects));
     form.append("unit_candidates", JSON.stringify(finalUnitCandidates));
+    form.append("processing_mode", processingMode);
     if (solutionPdf) form.append("solution_pdf", solutionPdf);
     let data: UploadResponse;
     try {
@@ -525,6 +528,45 @@ export default function UploadPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <DropZone label="문제 PDF" helper="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
             <DropZone label="해설 PDF" helper="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+            <h2 className="text-sm font-bold text-white">추출 처리 방식</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              로컬 처리는 사용자의 PC에서 실행되며 기본 제공됩니다. 클라우드 처리는 서버가 대신 처리하므로 Cloud Processing 애드온 또는 상위 플랜에서만 사용할 수 있습니다.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                className={cn(
+                  "rounded-[8px] border p-4 text-left transition",
+                  processingMode === "local" ? "border-violet-300/70 bg-violet-400/12 text-white" : "border-white/10 bg-black/25 text-slate-300 hover:border-white/20"
+                )}
+                onClick={() => setProcessingMode("local")}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  <MonitorCog className="h-4 w-4 text-violet-200" />
+                  로컬 처리
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-400">내 컴퓨터 성능으로 추출합니다. 서버 추가금이 없고 대량 처리 비용이 가장 낮습니다.</p>
+                <p className="mt-3 text-xs font-semibold text-violet-100">기본 제공</p>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "rounded-[8px] border p-4 text-left transition",
+                  processingMode === "cloud" ? "border-cyan-300/70 bg-cyan-400/12 text-white" : "border-white/10 bg-black/25 text-slate-300 hover:border-white/20"
+                )}
+                onClick={() => setProcessingMode("cloud")}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  <Cloud className="h-4 w-4 text-cyan-200" />
+                  클라우드 처리
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-400">로컬 앱을 켜지 않아도 서버에서 추출합니다. 사용량이 서버 비용에 반영됩니다.</p>
+                <p className="mt-3 text-xs font-semibold text-cyan-100">유료 애드온 필요</p>
+              </button>
+            </div>
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">

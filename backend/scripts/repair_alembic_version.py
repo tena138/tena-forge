@@ -9,7 +9,8 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-HEAD_REVISION = "0016_batch_subject_unit_candidates"
+PREVIOUS_REVISION = "0016_batch_subject_unit_candidates"
+HEAD_REVISION = "0017_batch_processing_mode"
 ACADEMY_REQUIRED_COLUMNS = {
     "email_verified",
     "email_verified_at",
@@ -124,12 +125,22 @@ def _schema_is_at_head(inspector) -> bool:
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
+        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_mode"})
+        and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
+    )
+
+
+def _schema_is_at_previous(inspector) -> bool:
+    required_tables = {"academies", "user_roles", "batches", "problems", "problem_sets"}
+    tables = set(inspector.get_table_names())
+    return (
+        required_tables.issubset(tables)
         and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
     )
 
 
-def _looks_physically_migrated(inspector) -> bool:
+def _looks_physically_migrated_to_previous(inspector) -> bool:
     return _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
 
 
@@ -141,7 +152,8 @@ def main() -> None:
         if _ensure_academy_columns(connection, inspector):
             inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
-            return
+            connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)"))
+            inspector = inspect(connection)
         versions = [
             row[0]
             for row in connection.execute(
@@ -149,24 +161,28 @@ def main() -> None:
             ).all()
         ]
 
-        if versions == [HEAD_REVISION] or _looks_physically_migrated(inspector):
+        if versions == [HEAD_REVISION] or _looks_physically_migrated_to_previous(inspector):
             _create_missing_tables(connection)
             inspector = inspect(connection)
             if _ensure_academy_columns(connection, inspector):
                 inspector = inspect(connection)
 
-        if not _schema_is_at_head(inspector):
+        if _schema_is_at_head(inspector):
+            target_revision = HEAD_REVISION
+        elif _schema_is_at_previous(inspector):
+            target_revision = PREVIOUS_REVISION
+        else:
             return
 
-        if versions == [HEAD_REVISION]:
+        if versions == [target_revision]:
             return
 
         connection.execute(text("DELETE FROM alembic_version"))
         connection.execute(
             text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"),
-            {"version_num": HEAD_REVISION},
+            {"version_num": target_revision},
         )
-        print(f"Repaired alembic_version from {versions!r} to {HEAD_REVISION}.")
+        print(f"Repaired alembic_version from {versions!r} to {target_revision}.")
 
 
 if __name__ == "__main__":

@@ -213,6 +213,7 @@ def _ensure_sqlite_columns():
             "rights_note": "TEXT",
             "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
             "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
+            "processing_mode": "VARCHAR(20) DEFAULT 'local' NOT NULL",
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",
             "academy_id": "VARCHAR(64)",
             "progress_message": "VARCHAR(500)",
@@ -289,13 +290,11 @@ def _mark_interrupted_batches():
                 | (Batch.progress_updated_at < stale_before)
             )
         )
-        if settings.batch_processing_mode == "local":
-            stale_condition = processing_condition
-        else:
-            stale_condition = processing_condition | (
-                (Batch.status == BatchStatus.pending)
-                & (Batch.created_at < pending_stale_before)
-            )
+        stale_condition = processing_condition | (
+            (Batch.status == BatchStatus.pending)
+            & (Batch.processing_mode != "local")
+            & (Batch.created_at < pending_stale_before)
+        )
         interrupted = (
             db.query(Batch)
             .filter(stale_condition)
@@ -352,7 +351,10 @@ def _seed_saas_foundation():
     try:
         default_plans = [
             ("free", "Free", 0, 3, 30, 100, 100000),
+            ("basic_local", "Basic Local", 48000, 100, 1000, 20480, 5000000),
+            ("basic_cloud", "Basic Cloud", 79000, 100, 1000, 20480, 5000000),
             ("pro", "Pro", 29000, 100, 1000, 5120, 5000000),
+            ("pro_cloud", "Pro Cloud", 157000, 500, 10000, 51200, 50000000),
             ("team", "Team", 99000, 500, 10000, 51200, 50000000),
             ("enterprise", "Enterprise", 0, 999999, 999999, 999999, 999999999),
         ]

@@ -215,7 +215,8 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
                 </p>
               </PackageSection>
 
-              {plan === "basic" ? <LockedProFeatures register={sectionRefs} /> : <PackageSection plan={plan} group="processing" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />}
+              <PackageSection plan={plan} group="processing" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
+              {plan === "basic" ? <LockedProFeatures register={sectionRefs} /> : null}
 
               {plan === "pro" && (
                 <ConfigSection id="marketplace" register={sectionRefs} eyebrow="Marketplace" title="마켓플레이스 포함">
@@ -475,7 +476,7 @@ function ProductStage({
   const consoleSectionRefs = useRef<Partial<Record<SceneKey, HTMLElement | null>>>({});
   const [cameraY, setCameraY] = useState(0);
   const [focusSettled, setFocusSettled] = useState(true);
-  const focusSignature = `${scene}:${specs.monthlyAiCredits}:${specs.fileStorageGb}:${specs.studentKeys}`;
+  const focusSignature = `${scene}:${specs.monthlyAiCredits}:${specs.fileStorageGb}:${specs.studentKeys}:${specs.processingMode}`;
 
   useEffect(() => {
     setFocusSettled(false);
@@ -1225,11 +1226,12 @@ function FullPlanSummarySection({
               <SummaryLine>월 AI {specs.monthlyAiCredits.toLocaleString()} credits · 일 한도 {specs.dailyAiLimit.toLocaleString()} credits</SummaryLine>
               <SummaryLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항 · 저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SummaryLine>
               <SummaryLine>학생 키 {specs.studentKeys.toLocaleString()}개 · 처리 속도 {specs.processingSpeed}</SummaryLine>
+              <SummaryLine>추출 방식 {specs.processingMode} · {specs.cloudProcessing ? "클라우드 처리 포함" : "로컬 처리 기본"}</SummaryLine>
               <SummaryLine>PDF 추출은 AI credits를 사용합니다.</SummaryLine>
               {plan === "basic" ? (
                 <>
-                  <SummaryLine>여러 PDF 동시 추출 불가</SummaryLine>
-                  <SummaryLine>마켓플레이스 불가</SummaryLine>
+                  <SummaryLine>여러 PDF 동시 추출은 Pro에서 확장</SummaryLine>
+                  <SummaryLine>마켓플레이스는 Pro에서 사용 가능</SummaryLine>
                 </>
               ) : (
                 <SummaryLine>마켓플레이스 포함 · 여러 PDF 동시 추출 {specs.concurrentPdfExtractions}개</SummaryLine>

@@ -240,6 +240,7 @@ class Batch(Base):
     rights_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     subject_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     unit_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    processing_mode: Mapped[str] = mapped_column(String(20), default="local", nullable=False, index=True)
     owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
     academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     progress_message: Mapped[str | None] = mapped_column(String(500), nullable=True)

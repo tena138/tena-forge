@@ -54,6 +54,7 @@ export type Batch = {
   rights_note: string | null;
   subject_candidates?: string[];
   unit_candidates?: string[];
+  processing_mode?: "local" | "cloud";
   created_at: string;
   problem_count: number;
   review_count: number;

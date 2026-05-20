@@ -96,10 +96,14 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
         <Info className="h-4 w-4 text-violet-200" />
         처리 정보
       </div>
-      <div className="mt-3 grid gap-3 text-sm md:grid-cols-4">
+      <div className="mt-3 grid gap-3 text-sm md:grid-cols-5">
         <div>
           <p className="text-xs text-slate-500">자료 출처</p>
           <p className="mt-1 text-slate-200">{sourceLabel(batch.source_type)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-500">처리 방식</p>
+          <p className="mt-1 text-slate-200">{batch.processing_mode === "cloud" ? "클라우드" : "로컬"}</p>
         </div>
         <div>
           <p className="text-xs text-slate-500">최근 단계</p>

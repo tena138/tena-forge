@@ -12,15 +12,33 @@ from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, SOURCE_
 from services.batch_jobs import launch_batch_worker
 from services.ownership import current_academy_id, current_owner_id
 from services.pipeline import get_progress_detail
+from services.saas_security import has_cloud_processing
 from services.storage import save_upload
 
 router = APIRouter(prefix="/api/batches", tags=["batches"])
 
 
-def _uses_cloud_batch_worker() -> bool:
+def _default_processing_mode() -> str:
     from database import get_settings
 
-    return str(get_settings().batch_processing_mode or "cloud").strip().lower() != "local"
+    configured = str(get_settings().batch_processing_mode or "local").strip().lower()
+    return "cloud" if configured == "cloud" else "local"
+
+
+def _normalize_processing_mode(raw: str | None) -> str:
+    value = str(raw or _default_processing_mode()).strip().lower()
+    if value not in {"local", "cloud"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 처리 방식입니다.")
+    return value
+
+
+def _ensure_processing_mode_allowed(db: Session, owner_id: str, processing_mode: str) -> None:
+    if processing_mode == "cloud" and not has_cloud_processing(db, owner_id):
+        raise HTTPException(status_code=402, detail="클라우드 처리는 Cloud Processing 애드온 또는 상위 플랜에서 사용할 수 있습니다.")
+
+
+def _should_launch_cloud_worker(processing_mode: str | None) -> bool:
+    return _normalize_processing_mode(processing_mode) == "cloud"
 
 
 def _parse_candidate_list(raw: str | None, max_items: int = 24) -> list[str]:
@@ -58,6 +76,7 @@ def upload_batch(
     rights_note: str | None = Form(default=None),
     subject_candidates: str | None = Form(default=None),
     unit_candidates: str | None = Form(default=None),
+    processing_mode: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     if not problem_pdf.filename or not problem_pdf.filename.lower().endswith(".pdf"):
@@ -69,9 +88,12 @@ def upload_batch(
     if not rights_confirmed:
         raise HTTPException(status_code=400, detail="자료 업로드 및 아카이빙 권리 확인이 필요합니다.")
 
+    owner_id = current_owner_id(request)
+    selected_processing_mode = _normalize_processing_mode(processing_mode)
+    _ensure_processing_mode_allowed(db, owner_id, selected_processing_mode)
+
     problem_path = save_upload(problem_pdf)
     solution_path = save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None
-    owner_id = current_owner_id(request)
     batch = Batch(
         name=batch_name,
         problem_pdf_filename=problem_path,
@@ -83,6 +105,7 @@ def upload_batch(
         rights_note=rights_note,
         subject_candidates=_parse_candidate_list(subject_candidates),
         unit_candidates=_parse_candidate_list(unit_candidates, max_items=80),
+        processing_mode=selected_processing_mode,
         owner_id=owner_id,
         academy_id=current_academy_id(request),
         progress_message="처리 대기 중",
@@ -90,11 +113,13 @@ def upload_batch(
     db.add(batch)
     db.commit()
     db.refresh(batch)
-    if not _uses_cloud_batch_worker():
+
+    if not _should_launch_cloud_worker(batch.processing_mode):
         batch.progress_message = "로컬 워커 대기 중"
         batch.progress_updated_at = datetime.utcnow()
         db.commit()
         return {"batch_id": batch.id, "status": batch.status}
+
     try:
         launch_batch_worker(batch.id)
     except Exception as exc:
@@ -102,7 +127,7 @@ def upload_batch(
         batch.progress_message = "처리 작업을 시작하지 못했습니다."
         batch.failure_stage = "작업 시작"
         batch.failure_reason = str(exc)
-        batch.failure_hint = "서버의 Python 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
+        batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
         db.commit()
         raise HTTPException(status_code=500, detail="처리 작업을 시작하지 못했습니다.")
     return {"batch_id": batch.id, "status": batch.status}
@@ -166,14 +191,19 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
 def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
+    owner_id = current_owner_id(request)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id)).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     if batch.status == BatchStatus.processing:
         raise HTTPException(status_code=400, detail="처리 중인 배치는 다시 처리할 수 없습니다.")
+    processing_mode = _normalize_processing_mode(batch.processing_mode)
+    _ensure_processing_mode_allowed(db, owner_id, processing_mode)
+
     for problem in list(batch.problems):
         db.delete(problem)
     batch.status = BatchStatus.pending
+    batch.processing_mode = processing_mode
     batch.progress_message = "처리 대기 중"
     batch.progress_current = 0
     batch.progress_total = None
@@ -185,11 +215,13 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
     batch.failed_at = None
     db.commit()
     db.refresh(batch)
-    if not _uses_cloud_batch_worker():
+
+    if not _should_launch_cloud_worker(batch.processing_mode):
         batch.progress_message = "로컬 워커 대기 중"
         batch.progress_updated_at = datetime.utcnow()
         db.commit()
         return {"batch_id": batch.id, "status": batch.status}
+
     try:
         launch_batch_worker(batch.id)
     except Exception as exc:
@@ -197,7 +229,7 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
         batch.progress_message = "처리 작업을 시작하지 못했습니다."
         batch.failure_stage = "작업 시작"
         batch.failure_reason = str(exc)
-        batch.failure_hint = "서버의 Python 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
+        batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
         db.commit()
         raise HTTPException(status_code=500, detail="처리 작업을 시작하지 못했습니다.")
     return {"batch_id": batch.id, "status": batch.status}

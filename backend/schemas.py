@@ -218,6 +218,7 @@ class BatchRead(BaseModel):
     rights_note: str | None = None
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
+    processing_mode: str = "local"
     created_at: datetime
     problem_count: int = 0
     review_count: int = 0
