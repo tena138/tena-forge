@@ -132,12 +132,10 @@ authHttp.interceptors.response.use(
         return authHttp(original);
       } catch {
         clearAuthState();
-        if (typeof window !== "undefined") window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
       }
     }
     if (error.response?.status === 401 && code !== "TOKEN_EXPIRED" && typeof window !== "undefined" && !isPublicAuthRoute) {
       clearAuthState();
-      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
     }
     const detail = error.response?.data?.detail;
     const isSuspended = typeof detail === "string" && detail.includes("정지");

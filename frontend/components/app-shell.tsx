@@ -13,13 +13,18 @@ import { HeaderNotifications } from "@/components/header-notifications";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
-import { AUTH_CHANGED_EVENT, ensureAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { AUTH_CHANGED_EVENT, clearAuthState, ensureAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 import { cn } from "@/lib/utils";
 
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
 const marketingRoutes = ["/", "/plan", "/checkout", "/pricing", "/terms", "/privacy", "/copyright-policy"];
 const SIDEBAR_COLLAPSED_KEY = "tena-sidebar-collapsed";
+
+function isAuthFailure(error: unknown) {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 401 || status === 403;
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -78,16 +83,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .then(async (token) => {
         if (!active) return;
         if (!token) {
+          clearAuthState();
           const loginUrl = `/login?redirect=${encodeURIComponent(pathname)}`;
           router.replace(loginUrl);
           return;
         }
-        await fetchMe();
+        try {
+          await fetchMe();
+        } catch (error) {
+          if (!active) return;
+          if (isAuthFailure(error)) {
+            clearAuthState();
+            router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+            return;
+          }
+          setSessionReady(true);
+          return;
+        }
         if (!active) return;
         setSessionReady(true);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
+        if (!isAuthFailure(error)) {
+          setSessionReady(true);
+          return;
+        }
+        clearAuthState();
         router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
       });
     return () => {

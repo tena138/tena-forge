@@ -44,7 +44,6 @@ function LoginPageContent() {
 
   function finishLogin(accountType?: AccountType) {
     router.replace(resolvePostLoginRedirect(redirect, accountType));
-    router.refresh();
   }
 
   async function submit(values: LoginForm, totp?: string) {
