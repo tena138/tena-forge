@@ -20,6 +20,8 @@ services:
         value: /uploads
       - key: STORAGE_TYPE
         value: local
+      - key: BATCH_PROCESSING_MODE
+        value: local
       - key: PORT
         value: 8000
       - key: FRONTEND_URL

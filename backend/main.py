@@ -16,7 +16,7 @@ from database import Base, SessionLocal, engine, get_settings
 from limiter import limiter
 from models import Batch, BatchStatus
 from models import Problem, ProblemSetItem
-from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
+from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, local_worker, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
 
@@ -112,6 +112,7 @@ app.include_router(templates.router)
 app.include_router(template_hub.router)
 app.include_router(marketplace.router)
 app.include_router(licensed_library.router)
+app.include_router(local_worker.router)
 app.include_router(stores.router)
 app.include_router(export.router)
 app.include_router(assets.router)
@@ -281,21 +282,23 @@ def _mark_interrupted_batches():
     try:
         stale_before = datetime.utcnow() - timedelta(minutes=30)
         pending_stale_before = datetime.utcnow() - timedelta(minutes=10)
+        processing_condition = (
+            (Batch.status == BatchStatus.processing)
+            & (
+                (Batch.progress_updated_at.is_(None))
+                | (Batch.progress_updated_at < stale_before)
+            )
+        )
+        if settings.batch_processing_mode == "local":
+            stale_condition = processing_condition
+        else:
+            stale_condition = processing_condition | (
+                (Batch.status == BatchStatus.pending)
+                & (Batch.created_at < pending_stale_before)
+            )
         interrupted = (
             db.query(Batch)
-            .filter(
-                (
-                    (Batch.status == BatchStatus.processing)
-                    & (
-                        (Batch.progress_updated_at.is_(None))
-                        | (Batch.progress_updated_at < stale_before)
-                    )
-                )
-                | (
-                    (Batch.status == BatchStatus.pending)
-                    & (Batch.created_at < pending_stale_before)
-                )
-            )
+            .filter(stale_condition)
             .all()
         )
         for batch in interrupted:

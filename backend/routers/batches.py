@@ -17,6 +17,12 @@ from services.storage import save_upload
 router = APIRouter(prefix="/api/batches", tags=["batches"])
 
 
+def _uses_cloud_batch_worker() -> bool:
+    from database import get_settings
+
+    return str(get_settings().batch_processing_mode or "cloud").strip().lower() != "local"
+
+
 def _parse_candidate_list(raw: str | None, max_items: int = 24) -> list[str]:
     if not raw:
         return []
@@ -84,6 +90,11 @@ def upload_batch(
     db.add(batch)
     db.commit()
     db.refresh(batch)
+    if not _uses_cloud_batch_worker():
+        batch.progress_message = "로컬 워커 대기 중"
+        batch.progress_updated_at = datetime.utcnow()
+        db.commit()
+        return {"batch_id": batch.id, "status": batch.status}
     try:
         launch_batch_worker(batch.id)
     except Exception as exc:
@@ -174,6 +185,11 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
     batch.failed_at = None
     db.commit()
     db.refresh(batch)
+    if not _uses_cloud_batch_worker():
+        batch.progress_message = "로컬 워커 대기 중"
+        batch.progress_updated_at = datetime.utcnow()
+        db.commit()
+        return {"batch_id": batch.id, "status": batch.status}
     try:
         launch_batch_worker(batch.id)
     except Exception as exc:

@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     pdf_render_dpi: int = 180
     pdf_solution_render_dpi: int = 180
     pdf_large_file_dpi: int = 160
+    batch_processing_mode: str = "cloud"
 
     class Config:
         env_file = (".env", str(Path(__file__).resolve().parents[1] / ".env"))
