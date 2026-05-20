@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus, Problem, Tag
+from services.matcher import match as match_solutions
 from services.math_normalization import normalize_geometry_notation
 from services.storage import save_visual_bytes
 
@@ -122,12 +123,19 @@ def build_extraction_prompt(subject_candidates: list[str] | None = None, unit_ca
 SOLUTION_PROMPT = r"""You are extracting answers and solutions from a Korean exam solution booklet.
 For each problem on this page return:
 {
-  "problem_number": <integer>,
+  "problem_number": "<problem number exactly as written in the source>",
   "answer": "<final answer as value, number, or expression ??never a choice number like ??",
   "solution_steps": "<full step-by-step solution in Korean>",
-  "key_concept": "<one sentence: the core concept this problem tests>"
+  "key_concept": "<one sentence: the core concept this problem tests>",
+  "section_label": "<section/unit/exam label from page header/footer or unit title only, or null>",
+  "page_idx": <0-based solution PDF page index supplied by the system>,
+  "referenced_problem_snippet": "<30-120 chars of explicitly quoted problem text from the solution, or null>",
+  "solution_first_line": "<first line of the solution explanation>"
 }
 If the answer is given as a choice number (e.g. ?뺣떟: ??, resolve it to the actual value from the solution text. If unresolvable, set answer to null.
+problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
+referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
+section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
 Convert every mathematical expression in answer, solution_steps, and key_concept into LaTeX.
 Use inline LaTeX delimiters like $x=2$ inside Korean sentences.
 Use display LaTeX delimiters like $$\int_0^1 f(x)\,dx$$ for standalone formulas.
@@ -140,10 +148,14 @@ Your highest priority is faithful transcription, not summarization.
 Identify every solution visible on this page.
 For each problem return:
 {
-  "problem_number": <integer>,
+  "problem_number": "<problem number exactly as written in the source>",
   "answer": "<final answer as value, number, or expression; never a choice symbol like ??",
   "solution_steps": "<verbatim full Korean solution text visible for this problem, preserving all steps, equations, conditions, cases, line breaks, and explanatory sentences>",
-  "key_concept": "<one short sentence describing the core concept tested>"
+  "key_concept": "<one short sentence describing the core concept tested>",
+  "section_label": "<section/unit/exam label from page header/footer or unit title only, or null>",
+  "page_idx": <0-based solution PDF page index supplied by the system>,
+  "referenced_problem_snippet": "<30-120 chars of explicitly quoted problem text from the solution, or null>",
+  "solution_first_line": "<first line of the solution explanation>"
 }
 
 Rules for solution_steps:
@@ -162,6 +174,13 @@ Rules for answer:
 - If the answer is given as a choice number or symbol, resolve it to the actual value from the visible solution text.
 - If the actual value cannot be resolved from the visible page, set answer to null.
 
+Rules for matching metadata:
+- problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
+- referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
+- section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+- page_idx must be the exact 0-based solution PDF page index supplied by the system.
+- solution_first_line must be the first visible sentence or line of the solution explanation.
+
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
 SOLUTION_FAST_PROMPT = r"""You are extracting answer metadata from a Korean exam solution page.
@@ -169,10 +188,14 @@ SOLUTION_FAST_PROMPT = r"""You are extracting answer metadata from a Korean exam
 Identify every solution visible on this page.
 For each problem return:
 {
-  "problem_number": <integer>,
+  "problem_number": "<problem number exactly as written in the source>",
   "answer": "<final answer as value, number, or expression; never a choice symbol like ①>",
   "solution_steps": "<concise Korean solution summary, maximum 3 sentences>",
-  "key_concept": "<one short Korean phrase describing the core concept>"
+  "key_concept": "<one short Korean phrase describing the core concept>",
+  "section_label": "<section/unit/exam label from page header/footer or unit title only, or null>",
+  "page_idx": <0-based solution PDF page index supplied by the system>,
+  "referenced_problem_snippet": "<30-120 chars of explicitly quoted problem text from the solution, or null>",
+  "solution_first_line": "<first line of the solution explanation>"
 }
 
 Rules:
@@ -181,6 +204,10 @@ Rules:
 - Do not invent missing steps.
 - Convert mathematical expressions into LaTeX.
 - If the actual answer cannot be resolved from the visible page, set answer to null.
+- problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
+- referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
+- section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+- page_idx must be the exact 0-based solution PDF page index supplied by the system.
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
@@ -438,7 +465,7 @@ def process_batch(batch_id: UUID) -> None:
         solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)) if should_extract_solutions else problem_dpi
         set_progress(batch_id, "PDF 페이지 수 확인 완료", 0, total_units)
 
-        solutions: dict[int, dict[str, Any]] = {}
+        solutions: list[dict[str, Any]] = []
         if should_extract_solutions:
             solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
             processed_solution_pages = 0
@@ -461,7 +488,7 @@ def process_batch(batch_id: UUID) -> None:
                     rendered_groups.append(rendered)
                     rendered_pages += end - start
                 solution_pages = interleave_rendered_page_groups(rendered_groups)
-                solutions.update(
+                solutions.extend(
                     extract_solutions(
                         solution_pages,
                         batch_id,
@@ -473,6 +500,7 @@ def process_batch(batch_id: UUID) -> None:
                 processed_solution_pages += chunk_len
 
         problem_model_pool = _ai_model_pool()
+        all_extracted: list[dict[str, Any]] = []
         processed_problem_pages = 0
         for range_group in iter_split_page_range_groups(problem_page_count, len(problem_model_pool)):
             chunk_len = sum(end - start for start, end in range_group)
@@ -514,9 +542,14 @@ def process_batch(batch_id: UUID) -> None:
                 problem["needs_review"] = problem["needs_review"] or suspicious
 
             set_progress(batch_id, f"문항 저장 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
-            save_results(db, batch, extracted, solutions)
-            db.commit()
+            all_extracted.extend(extracted)
             processed_problem_pages += chunk_len
+
+        set_progress(batch_id, "문항-해설 매칭 중", total_units, total_units)
+        matched_problems = match_solutions(all_extracted, solutions)
+        set_progress(batch_id, "문항 저장 중", total_units, total_units)
+        save_results(db, batch, matched_problems)
+        db.commit()
 
         batch.status = BatchStatus.done
         batch.progress_message = "완료"
@@ -1049,10 +1082,10 @@ def _longer_text(values: list[Any]) -> str | None:
     return max(texts, key=len) if texts else None
 
 
-def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, offset: int = 0, total: int | None = None, display_total_pages: int | None = None) -> dict[int, dict[str, Any]]:
+def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, offset: int = 0, total: int | None = None, display_total_pages: int | None = None) -> list[dict[str, Any]]:
     settings = get_settings()
     client = OpenAI(api_key=settings.openai_api_key)
-    by_number: dict[int, list[dict[str, Any]]] = {}
+    by_key: dict[tuple[int, str | None, str], list[dict[str, Any]]] = {}
     extraction_passes = max(settings.ai_extraction_passes, 1)
     total_steps = total or len(pages) * extraction_passes
     model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
@@ -1072,7 +1105,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                 vision_json,
                 client,
                 page.base64_png,
-                solution_prompt,
+                f"{solution_prompt}\n\nCurrent solution PDF page_idx: {page.page_index}. Return this exact integer in page_idx for every item on this page.",
                 _page_split_model(model_pool, page.page_index, display_total_pages),
                 page.ai_image_mime,
                 solution_max_tokens,
@@ -1092,36 +1125,57 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                     total_steps,
                 )
             for item in items:
-                try:
-                    number = int(item["problem_number"])
-                except (KeyError, TypeError, ValueError):
+                number = str(item.get("problem_number") or "").strip()
+                if not number:
                     continue
-                by_number.setdefault(number, []).append(
+                section_label = str(item.get("section_label") or "").strip() or None
+                by_key.setdefault((page.page_index, section_label, number), []).append(
                     {
+                        "problem_number": number,
                         "answer": item.get("answer"),
                         "solution_steps": item.get("solution_steps"),
                         "key_concept": item.get("key_concept"),
+                        "section_label": section_label,
+                        "page_idx": page.page_index,
+                        "referenced_problem_snippet": item.get("referenced_problem_snippet"),
+                        "solution_first_line": item.get("solution_first_line"),
                     }
                 )
 
-    solutions: dict[int, dict[str, Any]] = {}
-    for number, runs in by_number.items():
+    solutions: list[dict[str, Any]] = []
+    for (page_idx, _section_label, number), runs in sorted(by_key.items(), key=lambda value: (value[0][0], value[0][1] or "", value[0][2])):
         solution_texts = [str(run.get("solution_steps") or "").strip() for run in runs if str(run.get("solution_steps") or "").strip()]
         answer_texts = [str(run.get("answer") or "").strip() for run in runs if str(run.get("answer") or "").strip()]
         concept_texts = [str(run.get("key_concept") or "").strip() for run in runs if str(run.get("key_concept") or "").strip()]
-        solutions[number] = {
+        snippets = [str(run.get("referenced_problem_snippet") or "").strip() for run in runs if str(run.get("referenced_problem_snippet") or "").strip()]
+        first_lines = [str(run.get("solution_first_line") or "").strip() for run in runs if str(run.get("solution_first_line") or "").strip()]
+        section_labels = [str(run.get("section_label") or "").strip() for run in runs if str(run.get("section_label") or "").strip()]
+        solution_steps = _longer_text(solution_texts)
+        solution_first_line = _longer_text(first_lines)
+        if not solution_first_line and solution_steps:
+            solution_first_line = solution_steps.splitlines()[0]
+        solutions.append({
+            "problem_number": number,
             "answer": _longer_text(answer_texts),
-            "solution_steps": _longer_text(solution_texts),
+            "solution_steps": solution_steps,
             "key_concept": _longer_text(concept_texts),
+            "section_label": _longer_text(section_labels),
+            "page_idx": page_idx,
+            "referenced_problem_snippet": _longer_text(snippets),
+            "solution_first_line": solution_first_line,
             "needs_review": len(runs) < extraction_passes or len(set(solution_texts)) > 1 or len(set(answer_texts)) > 1,
-        }
+        })
     return solutions
 
 
-def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]], solutions: dict[int, dict[str, Any]]) -> None:
+def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> None:
     batch_name = (batch.name or "이름 없는 배치").strip()
     for item in problems:
-        solution = solutions.get(item["problem_number"], {})
+        solution = item.get("solution") or {
+            "answer": item.get("answer"),
+            "solution_steps": item.get("solution_steps"),
+            "key_concept": item.get("key_concept"),
+        }
         answer = solution.get("answer")
         if isinstance(answer, str) and CHOICE_SYMBOL_PATTERN.search(answer.strip()):
             answer = None

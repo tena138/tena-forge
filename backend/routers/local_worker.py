@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Batch, BatchStatus, Problem
+from services.matcher import match as match_solutions
 from services.ownership import current_owner_id
 from services.pipeline import save_results
 from services.storage import save_visual_bytes
@@ -172,13 +173,25 @@ def complete_job(batch_id: UUID, payload: LocalWorkerComplete, request: Request,
     batch = _owned_batch(db, batch_id, current_owner_id(request))
     db.query(Problem).filter(Problem.source_batch_id == batch.id).delete(synchronize_session=False)
     problems = [problem.model_dump() for problem in payload.problems]
-    solutions = {}
+    solutions = []
     for key, value in payload.solutions.items():
-        try:
-            solutions[int(key)] = value
-        except (TypeError, ValueError):
-            continue
-    save_results(db, batch, problems, solutions)
+        solution = dict(value or {})
+        solution.setdefault("problem_number", str(key))
+        solutions.append(solution)
+    if not solutions:
+        for problem in problems:
+            if problem.get("answer") or problem.get("solution_steps") or problem.get("key_concept"):
+                solutions.append(
+                    {
+                        "problem_number": str(problem.get("problem_number") or ""),
+                        "answer": problem.get("answer"),
+                        "solution_steps": problem.get("solution_steps"),
+                        "key_concept": problem.get("key_concept"),
+                        "page_idx": problem.get("page_index", 0),
+                    }
+                )
+    matched_problems = match_solutions(problems, solutions)
+    save_results(db, batch, matched_problems)
     batch.status = BatchStatus.done
     batch.progress_message = "완료"
     batch.progress_current = batch.progress_total or len(problems) or 1
