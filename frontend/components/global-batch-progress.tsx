@@ -17,6 +17,7 @@ import {
   shouldForgetActiveBatchAfterStatusError
 } from "@/lib/batch-progress";
 import { addBatchStatusNotification } from "@/lib/batch-notifications";
+import { launchLocalWorker } from "@/lib/local-worker-launch";
 
 export function GlobalBatchProgress() {
   const [batchId, setBatchId] = useState<string | null>(null);
@@ -91,7 +92,7 @@ export function GlobalBatchProgress() {
             {needsLocalWorker ? "로컬 실행기가 필요합니다." : message}
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {needsLocalWorker ? "상태 보기에서 클라우드 처리로 전환할 수 있습니다." : statusData.progress_message}
+            {needsLocalWorker ? "브라우저 확인 창에서 열기/허용을 누르면 시작됩니다." : statusData.progress_message}
           </p>
         </div>
         <span className="shrink-0 text-sm text-muted-foreground">{progress}%</span>
@@ -101,9 +102,12 @@ export function GlobalBatchProgress() {
       </div>
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>{formatRemaining(statusData.estimated_seconds_remaining)}</span>
-        <Link href="/archive/new">
-          <Button size="sm" variant="outline">상태 보기</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {needsLocalWorker ? <Button size="sm" variant="outline" onClick={() => launchLocalWorker(batchId)}>실행기 열기</Button> : null}
+          <Link href="/archive/new">
+            <Button size="sm" variant="outline">상태 보기</Button>
+          </Link>
+        </div>
       </div>
     </div>
   );

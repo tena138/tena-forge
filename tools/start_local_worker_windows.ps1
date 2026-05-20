@@ -2,7 +2,8 @@ param(
     [switch]$Clean,
     [switch]$InstallOnly,
     [switch]$Once,
-    [string]$VenvPath
+    [string]$VenvPath,
+    [string]$ProtocolUrl
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,35 @@ if (-not $VenvPath) {
 }
 if (-not [System.IO.Path]::IsPathRooted($VenvPath)) {
     $VenvPath = Join-Path $Root $VenvPath
+}
+
+function Read-ProtocolQuery {
+    param([string]$Url)
+    $values = @{}
+    if (-not $Url) {
+        return $values
+    }
+    try {
+        $uri = [Uri]$Url
+        $query = $uri.Query.TrimStart("?")
+        if (-not $query) {
+            return $values
+        }
+        foreach ($pair in $query.Split("&")) {
+            if (-not $pair) {
+                continue
+            }
+            $parts = $pair.Split("=", 2)
+            $key = [Uri]::UnescapeDataString($parts[0])
+            $value = if ($parts.Length -gt 1) { [Uri]::UnescapeDataString($parts[1]) } else { "" }
+            if ($key) {
+                $values[$key] = $value
+            }
+        }
+    } catch {
+        Write-Host "Could not parse protocol URL. Continuing with saved settings." -ForegroundColor Yellow
+    }
+    return $values
 }
 
 function Write-Step {
@@ -146,6 +176,11 @@ function Ensure-Venv {
 
 Read-EnvFile -Path $ConfigPath
 
+$protocolValues = Read-ProtocolQuery -Url $ProtocolUrl
+if ($protocolValues["api_url"]) {
+    $env:TENA_FORGE_API_URL = $protocolValues["api_url"]
+}
+
 if (-not $env:TENA_FORGE_API_URL) {
     $env:TENA_FORGE_API_URL = $DefaultApiUrl
 }
@@ -201,6 +236,12 @@ $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
 Write-Step "Starting Tena Forge local worker"
+if ($ProtocolUrl) {
+    Write-Host "Launched from browser handoff."
+    if ($protocolValues["batch_id"]) {
+        Write-Host "Requested batch: $($protocolValues["batch_id"])"
+    }
+}
 Write-Host "API: $env:TENA_FORGE_API_URL"
 Write-Host "Email: $env:TENA_FORGE_EMAIL"
 Write-Host "Enter your password in the next prompt. It will not be displayed."

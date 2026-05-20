@@ -234,13 +234,16 @@ def issue_refresh_token(db: Session, request: Request, academy: Academy, remembe
 
 def set_refresh_cookie(response: Response, token: str, remember: bool = True) -> None:
     max_age = settings.refresh_token_expire_days * 24 * 60 * 60 if remember else None
+    same_site = (settings.refresh_cookie_samesite or "strict").lower()
+    if same_site not in {"strict", "lax", "none"}:
+        same_site = "strict"
     response.set_cookie(
         settings.refresh_cookie_name,
         token,
         max_age=max_age,
         httponly=True,
         secure=settings.refresh_cookie_secure,
-        samesite="strict",
+        samesite=same_site,
         path="/",
     )
 

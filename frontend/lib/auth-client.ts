@@ -4,13 +4,31 @@ import Cookies from "js-cookie";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export const AUTH_CHANGED_EVENT = "tena-auth-changed";
 const PROFILE_STORAGE_KEY = "tena-auth-profile";
+const ACCESS_TOKEN_STORAGE_KEY = "tena-access-token";
 
-let accessToken: string | null = null;
+function readStoredAccessToken() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let accessToken: string | null = readStoredAccessToken();
 let refreshPromise: Promise<string | null> | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
-  if (token) Cookies.set("tf_logged_in", "1", { sameSite: "strict" });
+  if (typeof window !== "undefined") {
+    try {
+      if (token) window.sessionStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+      else window.sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    } catch {
+      // Session storage is optional; in-memory auth still works for this tab.
+    }
+  }
+  if (token) Cookies.set("tf_logged_in", "1", { sameSite: "lax", expires: 30 });
   else Cookies.remove("tf_logged_in");
 }
 
@@ -47,6 +65,11 @@ export function clearAuthState() {
   accessToken = null;
   Cookies.remove("tf_logged_in");
   if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    } catch {
+      // Ignore unavailable session storage.
+    }
     localStorage.removeItem(PROFILE_STORAGE_KEY);
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   }

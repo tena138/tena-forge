@@ -25,13 +25,6 @@ export function middleware(request: NextRequest) {
   const isAsset = pathname.startsWith("/_next") || pathname.startsWith("/api/auth") || pathname.includes(".");
 
   if (isPublic || isAsset) return NextResponse.next();
-
-  const loggedIn = request.cookies.get("tf_logged_in")?.value === "1";
-  if (!loggedIn) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
   return NextResponse.next();
 }
 

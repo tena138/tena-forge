@@ -13,7 +13,7 @@ import { HeaderNotifications } from "@/components/header-notifications";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
-import { AUTH_CHANGED_EVENT, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { AUTH_CHANGED_EVENT, ensureAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 import { cn } from "@/lib/utils";
 
@@ -23,8 +23,10 @@ const SIDEBAR_COLLAPSED_KEY = "tena-sidebar-collapsed";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [homeHref, setHomeHref] = useState("/academy");
+  const [sessionReady, setSessionReady] = useState(false);
   const isAuthRoute = authRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isMarketingRoute = marketingRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
@@ -65,6 +67,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [pathname]);
 
+  useEffect(() => {
+    if (isAuthRoute || isMarketingRoute) {
+      setSessionReady(true);
+      return;
+    }
+    let active = true;
+    setSessionReady(false);
+    ensureAccessToken()
+      .then(async (token) => {
+        if (!active) return;
+        if (!token) {
+          const loginUrl = `/login?redirect=${encodeURIComponent(pathname)}`;
+          router.replace(loginUrl);
+          return;
+        }
+        await fetchMe();
+        if (!active) return;
+        setSessionReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAuthRoute, isMarketingRoute, pathname, router]);
+
   if (isAuthRoute || isMarketingRoute) {
     return (
       <div className="min-h-screen bg-background" data-app-shell>
@@ -75,6 +105,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
         {children}
+      </div>
+    );
+  }
+
+  if (!sessionReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-slate-400" data-app-shell>
+        세션을 복구하는 중입니다...
       </div>
     );
   }

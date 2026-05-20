@@ -22,6 +22,16 @@ To force a clean reinstall from PowerShell:
 .\tools\start_local_worker_windows.ps1 -Clean -InstallOnly -VenvPath .local-worker-test-venv
 ```
 
+To let the web app open the worker after a local-processing upload, register the
+browser handoff protocol once:
+
+```text
+tools/register_local_worker_protocol_windows.cmd
+```
+
+After this, a browser prompt for `tenaforge://` links can open the worker. The
+user still needs to approve the browser/Windows prompt.
+
 ## Manual setup
 
 From the repository root:

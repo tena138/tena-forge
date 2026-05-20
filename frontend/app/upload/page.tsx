@@ -12,6 +12,7 @@ import { ColorPicker } from "@/components/editor/color-picker";
 import { Batch, BatchStatus, SourceType } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
+import { launchLocalWorker } from "@/lib/local-worker-launch";
 import { cn } from "@/lib/utils";
 
 type UploadResponse = { batch_id: string; status: BatchStatus };
@@ -264,6 +265,7 @@ export default function UploadPage() {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [historyBatchSnapshot, setHistoryBatchSnapshot] = useState<Batch | null>(null);
   const [message, setMessage] = useState("");
+  const [localLaunchBatchId, setLocalLaunchBatchId] = useState<string | null>(null);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -391,6 +393,13 @@ export default function UploadPage() {
     setUploadPercent(null);
     setBatchId(data.batch_id);
     rememberActiveBatch(data.batch_id);
+    if (processingMode === "local") {
+      setLocalLaunchBatchId(data.batch_id);
+      setMessage("업로드 완료. 브라우저가 로컬 실행기를 열지 묻는 창을 띄우면 허용을 눌러주세요.");
+      window.setTimeout(() => launchLocalWorker(data.batch_id), 150);
+      return;
+    }
+    setLocalLaunchBatchId(null);
     setMessage("업로드 완료. 아래 아카이빙 기록에서 진행률을 확인할 수 있습니다.");
   }
 
@@ -575,7 +584,7 @@ export default function UploadPage() {
                 </div>
                 <p className="mt-2 leading-6 text-amber-100/90">
                   이 방식은 업로드만 서버에 저장하고, 실제 추출은 사용자의 PC에서 로컬 실행기를 켤 때 시작됩니다.
-                  일반 사용자는 클라우드 처리를 선택하는 것이 가장 자연스럽습니다.
+                  업로드가 끝나면 브라우저가 실행기 열기 권한을 요청하므로 허용을 눌러주세요.
                 </p>
               </div>
             ) : null}
@@ -616,6 +625,20 @@ export default function UploadPage() {
             </div>
           ) : null}
           {message ? <p className="text-sm text-slate-400">{message}</p> : null}
+          {localLaunchBatchId ? (
+            <div className="rounded-[8px] border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-bold">로컬 실행기 연결 대기 중</p>
+                  <p className="mt-1 leading-6 text-amber-100/90">브라우저 또는 Windows 확인 창에서 열기/허용을 누르면 로컬 추출이 시작됩니다.</p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => launchLocalWorker(localLaunchBatchId)}>
+                  <MonitorCog className="h-4 w-4" />
+                  로컬 실행기 다시 열기
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
