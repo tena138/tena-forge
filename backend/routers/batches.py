@@ -7,6 +7,7 @@ from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from database import get_db, get_settings
+from limiter import limiter
 from models import Batch, BatchStatus, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, SOURCE_TYPES
 from services.batch_jobs import launch_batch_worker
@@ -202,6 +203,7 @@ def upload_batch(
 
 
 @router.get("", response_model=list[BatchRead])
+@limiter.exempt
 def list_batches(request: Request, db: Session = Depends(get_db)):
     owner_id = current_owner_id(request)
     tagged_expression = _tagged_expression()
@@ -226,6 +228,7 @@ def list_batches(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/{batch_id}", response_model=BatchRead)
+@limiter.exempt
 def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
     if not batch:
@@ -234,6 +237,7 @@ def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/{batch_id}/status", response_model=BatchStatusResponse)
+@limiter.exempt
 def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
     if not batch:

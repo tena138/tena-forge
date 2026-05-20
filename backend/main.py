@@ -7,7 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
 from jose import ExpiredSignatureError, JWTError
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import inspect, select, text
@@ -36,12 +35,25 @@ allowed_origins = {
 
 def auth_error_response(request, detail, status_code=401):
     response = JSONResponse({"detail": detail}, status_code=status_code)
+    add_cors_headers(request, response)
+    return response
+
+
+def add_cors_headers(request, response):
     origin = request.headers.get("origin")
     if origin in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Vary"] = "Origin"
     return response
+
+
+def rate_limit_error_response(request, exc):
+    response = JSONResponse({"detail": "Too many requests. Please retry shortly."}, status_code=429)
+    view_rate_limit = getattr(request.state, "view_rate_limit", None)
+    if view_rate_limit is not None:
+        response = request.app.state.limiter._inject_headers(response, view_rate_limit)
+    return add_cors_headers(request, response)
 
 
 app.add_middleware(
@@ -52,7 +64,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Cache-Control"],
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_error_response)
 app.add_middleware(SlowAPIMiddleware)
 
 
