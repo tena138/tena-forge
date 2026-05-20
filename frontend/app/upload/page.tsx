@@ -260,7 +260,7 @@ export default function UploadPage() {
   const sourceLabel = "";
   const [rightsNote, setRightsNote] = useState("");
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>("local");
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("cloud");
   const [batchId, setBatchId] = useState<string | null>(null);
   const [historyBatchSnapshot, setHistoryBatchSnapshot] = useState<Batch | null>(null);
   const [message, setMessage] = useState("");
@@ -533,7 +533,7 @@ export default function UploadPage() {
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="text-sm font-bold text-white">추출 처리 방식</h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              로컬 처리는 사용자의 PC에서 실행되며 기본 제공됩니다. 클라우드 처리는 서버가 대신 처리하므로 Cloud Processing 애드온 또는 상위 플랜에서만 사용할 수 있습니다.
+              클라우드 처리를 기본으로 사용합니다. 로컬 처리는 대량 작업이나 비용 절감이 필요할 때 선택할 수 있는 보조 옵션입니다.
             </p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <button
@@ -549,7 +549,7 @@ export default function UploadPage() {
                   로컬 처리
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-400">내 컴퓨터 성능으로 추출합니다. 서버 추가금이 없고 대량 처리 비용이 가장 낮습니다.</p>
-                <p className="mt-3 text-xs font-semibold text-violet-100">기본 제공</p>
+                <p className="mt-3 text-xs font-semibold text-violet-100">선택 옵션</p>
               </button>
               <button
                 type="button"
@@ -564,7 +564,7 @@ export default function UploadPage() {
                   클라우드 처리
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-400">로컬 앱을 켜지 않아도 서버에서 추출합니다. 사용량이 서버 비용에 반영됩니다.</p>
-                <p className="mt-3 text-xs font-semibold text-cyan-100">유료 애드온 필요</p>
+                <p className="mt-3 text-xs font-semibold text-cyan-100">웹앱 기본 처리</p>
               </button>
             </div>
           </div>

@@ -3,7 +3,26 @@
 Run heavy PDF extraction on your own computer while the hosted Tena Forge site keeps
 the queue, progress, and saved results.
 
-## Setup
+## Windows: easiest path
+
+From Explorer, double-click:
+
+```text
+tools/start_local_worker_windows.cmd
+```
+
+The launcher creates a dedicated `.local-worker-venv`, installs the required Python
+packages, asks for your Tena Forge email and OpenAI API key if needed, then runs the
+worker in watch mode.
+
+It does not use the repository `.venv`, so it is a realistic installation check.
+To force a clean reinstall from PowerShell:
+
+```powershell
+.\tools\start_local_worker_windows.ps1 -Clean -InstallOnly -VenvPath .local-worker-test-venv
+```
+
+## Manual setup
 
 From the repository root:
 

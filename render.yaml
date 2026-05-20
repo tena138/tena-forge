@@ -5,7 +5,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head && python scripts/ensure_admin_account.py
-    plan: starter
+    plan: standard
     healthCheckPath: /health
     disk:
       name: tena-forge-uploads
@@ -21,7 +21,7 @@ services:
       - key: STORAGE_TYPE
         value: local
       - key: BATCH_PROCESSING_MODE
-        value: local
+        value: cloud
       - key: PORT
         value: 8000
       - key: FRONTEND_URL

@@ -17,6 +17,9 @@ $dir/
 !.env.example
 !.env.production.example
 .env.local
+.local-worker.env
+.local-worker-venv/
+.local-worker-test-venv/
 *.log
 *.tsbuildinfo
 *.pdf
