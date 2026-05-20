@@ -181,18 +181,32 @@ export function ArchiveBatchHistory({
   const [batches, setBatches] = useState<Batch[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const fetchActiveBatch = useCallback(async () => {
+    if (!activeBatchId) return null;
+    try {
+      return await api<Batch>(`/api/batches/${activeBatchId}`);
+    } catch {
+      return null;
+    }
+  }, [activeBatchId]);
+
   const loadBatches = useCallback(async () => {
     try {
       const nextBatches = await api<Batch[]>("/api/batches");
-      setBatches(nextBatches);
-      if (activeBatchId) onActiveBatchSnapshot?.(nextBatches.find((batch) => batch.id === activeBatchId) || null);
-      return nextBatches;
+      const activeFromList = activeBatchId ? nextBatches.find((batch) => batch.id === activeBatchId) || null : null;
+      const activeDirect = activeBatchId && !activeFromList ? await fetchActiveBatch() : null;
+      const mergedBatches = activeDirect ? [activeDirect, ...nextBatches.filter((batch) => batch.id !== activeDirect.id)] : nextBatches;
+      setBatches(mergedBatches);
+      if (activeBatchId) onActiveBatchSnapshot?.(activeFromList || activeDirect || null);
+      return mergedBatches;
     } catch {
-      setBatches([]);
-      if (activeBatchId) onActiveBatchSnapshot?.(null);
-      return [];
+      const activeDirect = await fetchActiveBatch();
+      const fallbackBatches = activeDirect ? [activeDirect] : [];
+      setBatches(fallbackBatches);
+      if (activeBatchId) onActiveBatchSnapshot?.(activeDirect);
+      return fallbackBatches;
     }
-  }, [activeBatchId, onActiveBatchSnapshot]);
+  }, [activeBatchId, fetchActiveBatch, onActiveBatchSnapshot]);
 
   useEffect(() => {
     void loadBatches();

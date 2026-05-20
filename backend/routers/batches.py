@@ -64,6 +64,49 @@ def _parse_candidate_list(raw: str | None, max_items: int = 24) -> list[str]:
     return candidates
 
 
+def _tagged_expression():
+    return case(
+        (
+            or_(
+                Tag.subject.is_not(None),
+                Tag.unit.is_not(None),
+                Tag.difficulty.is_not(None),
+                Tag.problem_type.is_not(None),
+                Tag.source.is_not(None),
+            ),
+            1,
+        ),
+        else_=0,
+    )
+
+
+def _batch_read(db: Session, batch: Batch) -> BatchRead:
+    tagged_expression = _tagged_expression()
+    problem_count = db.scalar(select(func.count(Problem.id)).where(Problem.source_batch_id == batch.id)) or 0
+    review_count = db.scalar(
+        select(func.count(Problem.id)).where(
+            Problem.source_batch_id == batch.id,
+            Problem.needs_review.is_(True),
+        )
+    ) or 0
+    tagged_count = db.scalar(
+        select(func.coalesce(func.sum(tagged_expression), 0))
+        .select_from(Problem)
+        .outerjoin(Tag, Tag.problem_id == Problem.id)
+        .where(Problem.source_batch_id == batch.id)
+    ) or 0
+    progress = get_progress_detail(batch)
+    return BatchRead.model_validate(batch).model_copy(
+        update={
+            "problem_count": problem_count,
+            "review_count": review_count,
+            "tagged_count": tagged_count,
+            "untagged_count": max(problem_count - tagged_count, 0),
+            **progress,
+        }
+    )
+
+
 @router.post("/upload", response_model=BatchUploadResponse)
 def upload_batch(
     request: Request,
@@ -136,19 +179,7 @@ def upload_batch(
 @router.get("", response_model=list[BatchRead])
 def list_batches(request: Request, db: Session = Depends(get_db)):
     owner_id = current_owner_id(request)
-    tagged_expression = case(
-        (
-            or_(
-                Tag.subject.is_not(None),
-                Tag.unit.is_not(None),
-                Tag.difficulty.is_not(None),
-                Tag.problem_type.is_not(None),
-                Tag.source.is_not(None),
-            ),
-            1,
-        ),
-        else_=0,
-    )
+    tagged_expression = _tagged_expression()
     rows = db.execute(
         select(
             Batch,
@@ -178,6 +209,14 @@ def list_batches(request: Request, db: Session = Depends(get_db)):
             )
         )
     return result
+
+
+@router.get("/{batch_id}", response_model=BatchRead)
+def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    return _batch_read(db, batch)
 
 
 @router.get("/{batch_id}/status", response_model=BatchStatusResponse)
