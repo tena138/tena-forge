@@ -123,6 +123,7 @@ def _batch_read(
             "subject_candidates": batch.subject_candidates,
             "unit_candidates": batch.unit_candidates,
             "processing_mode": batch.processing_mode or "local",
+            "processing_task": batch.processing_task or "full",
             "created_at": batch.created_at,
             "problem_count": problem_count,
             "review_count": review_count,
@@ -175,6 +176,7 @@ def upload_batch(
         subject_candidates=_parse_candidate_list(subject_candidates),
         unit_candidates=_parse_candidate_list(unit_candidates, max_items=80),
         processing_mode=selected_processing_mode,
+        processing_task="full",
         owner_id=owner_id,
         academy_id=current_academy_id(request),
         progress_message="처리 대기 중",
@@ -245,7 +247,13 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
     progress = get_progress_detail(batch)
     raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
     status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending
-    return {"batch_id": batch.id, "status": status, "processing_mode": batch.processing_mode or "local", **progress}
+    return {
+        "batch_id": batch.id,
+        "status": status,
+        "processing_mode": batch.processing_mode or "local",
+        "processing_task": batch.processing_task or "full",
+        **progress,
+    }
 
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
@@ -263,6 +271,7 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
         db.delete(problem)
     batch.status = BatchStatus.pending
     batch.processing_mode = processing_mode
+    batch.processing_task = "full"
     batch.progress_message = "처리 대기 중"
     batch.progress_current = 0
     batch.progress_total = None
@@ -312,6 +321,7 @@ def run_batch_in_cloud(batch_id: UUID, request: Request, db: Session = Depends(g
         db.delete(problem)
     batch.status = BatchStatus.pending
     batch.processing_mode = "cloud"
+    batch.processing_task = "full"
     batch.progress_message = "클라우드 처리 대기 중"
     batch.progress_current = 0
     batch.progress_total = None
@@ -334,6 +344,64 @@ def run_batch_in_cloud(batch_id: UUID, request: Request, db: Session = Depends(g
         batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
         db.commit()
         raise HTTPException(status_code=500, detail="처리 작업을 시작하지 못했습니다.")
+    return {"batch_id": batch.id, "status": batch.status}
+
+
+@router.post("/{batch_id}/reprocess-solutions", response_model=BatchUploadResponse)
+def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id)).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    if batch.status == BatchStatus.processing:
+        raise HTTPException(status_code=400, detail="처리 중인 배치는 해설만 재처리할 수 없습니다.")
+    if not batch.solution_pdf_filename:
+        raise HTTPException(status_code=400, detail="해설 PDF가 있는 배치만 해설 재처리할 수 있습니다.")
+    problem_count = db.scalar(
+        select(func.count(Problem.id)).where(
+            Problem.source_batch_id == batch.id,
+            Problem.owner_id == owner_id,
+            Problem.deleted_at.is_(None),
+        )
+    ) or 0
+    if problem_count <= 0:
+        raise HTTPException(status_code=400, detail="기존 문항이 있어야 해설만 재처리할 수 있습니다.")
+
+    processing_mode = _normalize_processing_mode(batch.processing_mode)
+    _ensure_processing_mode_allowed(db, owner_id, processing_mode)
+    batch.status = BatchStatus.pending
+    batch.processing_mode = processing_mode
+    batch.processing_task = "solution_only"
+    batch.progress_message = "해설 재처리 대기 중"
+    batch.progress_current = 0
+    batch.progress_total = None
+    batch.progress_started_at = None
+    batch.progress_updated_at = datetime.utcnow()
+    batch.failure_stage = None
+    batch.failure_reason = None
+    batch.failure_hint = None
+    batch.failed_at = None
+    db.commit()
+    db.refresh(batch)
+
+    if not _should_launch_cloud_worker(batch.processing_mode):
+        batch.progress_message = "로컬 워커 해설 재처리 대기 중"
+        batch.progress_updated_at = datetime.utcnow()
+        db.commit()
+        return {"batch_id": batch.id, "status": batch.status}
+
+    try:
+        launch_batch_worker(batch.id)
+    except Exception as exc:
+        batch.status = BatchStatus.error
+        batch.processing_task = "full"
+        batch.progress_message = "해설 재처리 작업을 시작하지 못했습니다."
+        batch.failure_stage = "해설 재처리 시작"
+        batch.failure_reason = str(exc)
+        batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
+        batch.failed_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=500, detail="해설 재처리 작업을 시작하지 못했습니다.")
     return {"batch_id": batch.id, "status": batch.status}
 
 

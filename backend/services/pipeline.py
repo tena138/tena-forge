@@ -16,7 +16,7 @@ from uuid import UUID
 import fitz
 from openai import OpenAI, RateLimitError
 from PIL import Image
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus, Problem, Tag
@@ -57,6 +57,7 @@ When the source image visibly draws a geometric symbol over letters, encode only
 Use inline LaTeX delimiters like $f(x)=x^2$ inside Korean sentences.
 Use display LaTeX delimiters like $$\lim_{x \to 0} f(x)$$ for standalone formulas.
 Do not leave plain-text math such as x^2, f'(x), lim x->1, or a/b when it should be LaTeX.
+Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
 Return raw JSON only, no markdown, no explanation."""
 
 
@@ -81,6 +82,7 @@ For each problem return a JSON object with:
 
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 Convert mathematical expressions into LaTeX.
+Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 Return raw JSON array only, no markdown, no explanation."""
 
@@ -106,6 +108,68 @@ def _candidate_instruction(label: str, values: list[str]) -> str:
         return f"- {label}: no candidate list was provided; return null unless it is explicitly clear from the page."
     options = ", ".join(json.dumps(value, ensure_ascii=False) for value in values)
     return f"- {label}: choose exactly one of [{options}] when the page gives enough evidence; otherwise return null. Do not invent labels outside this list."
+
+
+def has_solution_content(solution: dict[str, Any] | None) -> bool:
+    if not solution:
+        return False
+    return any(str(solution.get(key) or "").strip() for key in ("answer", "solution_steps", "key_concept"))
+
+
+def _problem_match_payload(problem: Problem) -> dict[str, Any]:
+    tags = problem.tags
+    review_page_number = problem.review_page_number
+    page_index = max(int(review_page_number or 1) - 1, 0)
+    return {
+        "_problem_id": str(problem.id),
+        "problem_number": problem.problem_number,
+        "problem_text": problem.problem_text,
+        "unit": tags.unit if tags else None,
+        "subject": tags.subject if tags else None,
+        "page_index": page_index,
+    }
+
+
+def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: list[dict[str, Any]]) -> dict[str, int]:
+    problems = (
+        db.query(Problem)
+        .filter(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None))
+        .options(joinedload(Problem.tags))
+        .order_by(
+            Problem.review_page_number.is_(None).asc(),
+            Problem.review_page_number.asc(),
+            Problem.problem_number.asc(),
+            Problem.created_at.asc(),
+            Problem.id.asc(),
+        )
+        .all()
+    )
+    problem_payloads = [_problem_match_payload(problem) for problem in problems]
+    matched_payloads = match_solutions(problem_payloads, solutions)
+    matched_by_id = {str(item.get("_problem_id")): item for item in matched_payloads}
+    matched_count = 0
+    unmatched_count = 0
+    now = datetime.utcnow()
+    for problem in problems:
+        matched = matched_by_id.get(str(problem.id)) or {}
+        solution = matched.get("solution")
+        if has_solution_content(solution):
+            answer = solution.get("answer")
+            if isinstance(answer, str) and CHOICE_SYMBOL_PATTERN.search(answer.strip()):
+                answer = None
+            problem.answer = answer
+            problem.solution_steps = solution.get("solution_steps")
+            problem.key_concept = solution.get("key_concept")
+            problem.needs_review = True
+            matched_count += 1
+        else:
+            problem.answer = None
+            problem.solution_steps = None
+            problem.key_concept = None
+            problem.needs_review = True
+            unmatched_count += 1
+        problem.updated_at = now
+    return {"problem_count": len(problems), "matched_count": matched_count, "unmatched_count": unmatched_count}
 
 
 def build_extraction_prompt(subject_candidates: list[str] | None = None, unit_candidates: list[str] | None = None) -> str:
@@ -443,6 +507,7 @@ def process_batch(batch_id: UUID) -> None:
         if not batch:
             return
         batch.status = BatchStatus.processing
+        batch.processing_task = "full"
         batch.progress_message = "처리 시작"
         batch.progress_current = 0
         batch.progress_total = None
@@ -504,6 +569,8 @@ def process_batch(batch_id: UUID) -> None:
                     )
                 )
                 processed_solution_pages += chunk_len
+            if not any(has_solution_content(solution) for solution in solutions):
+                raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
 
         problem_model_pool = _ai_model_pool()
         all_extracted: list[dict[str, Any]] = []
@@ -558,6 +625,7 @@ def process_batch(batch_id: UUID) -> None:
         db.commit()
 
         batch.status = BatchStatus.done
+        batch.processing_task = "full"
         batch.progress_message = "완료"
         batch.progress_current = total_units
         batch.progress_total = total_units
@@ -572,11 +640,123 @@ def process_batch(batch_id: UUID) -> None:
         if failed:
             reason, hint = explain_failure(exc)
             failed.status = BatchStatus.error
+            failed.processing_task = "full"
             failed.progress_message = "처리에 실패했습니다."
             failed.failure_stage = last_stage or failed.progress_message or "처리 단계 확인 불가"
             failed.failure_reason = reason
             failed.failure_hint = hint
             failed.failed_at = datetime.utcnow()
+            db.commit()
+            set_progress(batch_id, failed.progress_message)
+        else:
+            set_progress(batch_id, f"오류: {exc}")
+    finally:
+        db.close()
+
+
+def process_solutions_only(batch_id: UUID) -> None:
+    db = SessionLocal()
+    try:
+        batch = db.get(Batch, batch_id)
+        if not batch:
+            return
+        if not batch.solution_pdf_filename:
+            raise RuntimeError("Solution PDF is required for solution-only reprocessing.")
+        existing_problem_count = db.query(Problem).filter(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None)).count()
+        if existing_problem_count <= 0:
+            raise RuntimeError("Existing problems are required before reprocessing solutions.")
+
+        batch.status = BatchStatus.processing
+        batch.processing_task = "solution_only"
+        batch.progress_message = "해설 재처리 시작"
+        batch.progress_current = 0
+        batch.progress_total = None
+        batch.progress_started_at = datetime.utcnow()
+        batch.progress_updated_at = batch.progress_started_at
+        batch.failure_stage = None
+        batch.failure_reason = None
+        batch.failure_hint = None
+        batch.failed_at = None
+        db.commit()
+        set_progress(batch_id, "해설 재처리 시작", 0, 0, reset=True)
+        if not get_settings().openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY is required for processing")
+
+        settings = get_settings()
+        solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
+        if solution_mode == "skip":
+            raise RuntimeError("AI solution extraction is disabled.")
+        extraction_passes = max(settings.ai_extraction_passes, 1)
+        units_per_page = 1 + extraction_passes
+        solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
+        total_units = max(solution_page_count * units_per_page, 1)
+        solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
+        set_progress(batch_id, "해설 PDF 페이지 수 확인 완료", 0, total_units)
+
+        solutions: list[dict[str, Any]] = []
+        solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
+        processed_solution_pages = 0
+        for range_group in iter_split_page_range_groups(solution_page_count, len(solution_model_pool)):
+            chunk_len = sum(end - start for start, end in range_group)
+            base = processed_solution_pages * units_per_page
+            rendered_groups: list[list[RenderedPage]] = []
+            rendered_pages = 0
+            for start, end in range_group:
+                rendered = render_pdf(
+                    batch.solution_pdf_filename,
+                    batch_id=batch_id,
+                    label="해설 PDF 렌더링 중",
+                    start_page=start,
+                    end_page=end,
+                    dpi=solution_dpi,
+                    progress_offset=base + rendered_pages,
+                    progress_total=total_units,
+                )
+                rendered_groups.append(rendered)
+                rendered_pages += end - start
+            solution_pages = interleave_rendered_page_groups(rendered_groups)
+            solutions.extend(
+                extract_solutions(
+                    solution_pages,
+                    batch_id,
+                    offset=base + chunk_len,
+                    total=total_units,
+                    display_total_pages=solution_page_count,
+                )
+            )
+            processed_solution_pages += chunk_len
+        if not any(has_solution_content(solution) for solution in solutions):
+            raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
+
+        set_progress(batch_id, "기존 문항과 해설 재매칭 중", total_units, total_units)
+        stats = apply_solutions_to_existing_problems(db, batch, solutions)
+        batch.status = BatchStatus.done
+        batch.processing_task = "full"
+        batch.progress_message = f"해설 재처리 완료: {stats['matched_count']}개 매칭, {stats['unmatched_count']}개 확인 필요"
+        batch.progress_current = total_units
+        batch.progress_total = total_units
+        batch.progress_updated_at = datetime.utcnow()
+        batch.failure_stage = None
+        batch.failure_reason = None
+        batch.failure_hint = None
+        batch.failed_at = None
+        db.commit()
+        set_progress(batch_id, batch.progress_message, total_units, total_units)
+    except Exception as exc:
+        traceback.print_exc()
+        db.rollback()
+        last_stage = progress_messages.get(str(batch_id))
+        failed = db.get(Batch, batch_id)
+        if failed:
+            reason, hint = explain_failure(exc)
+            failed.status = BatchStatus.error
+            failed.processing_task = "full"
+            failed.progress_message = "해설 재처리에 실패했습니다."
+            failed.failure_stage = last_stage or failed.progress_message or "해설 재처리 단계 확인 불가"
+            failed.failure_reason = reason
+            failed.failure_hint = hint
+            failed.failed_at = datetime.utcnow()
+            failed.progress_updated_at = failed.failed_at
             db.commit()
             set_progress(batch_id, failed.progress_message)
         else:

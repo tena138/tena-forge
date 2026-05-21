@@ -220,6 +220,7 @@ class BatchRead(BaseModel):
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
     processing_mode: str = "local"
+    processing_task: str = "full"
     created_at: datetime
     problem_count: int = 0
     review_count: int = 0
@@ -255,6 +256,11 @@ class BatchRead(BaseModel):
     def default_processing_mode_for_legacy_null(cls, value):
         return value or "local"
 
+    @field_validator("processing_task", mode="before")
+    @classmethod
+    def default_processing_task_for_legacy_null(cls, value):
+        return value or "full"
+
     @field_validator("source_type", mode="before")
     @classmethod
     def default_source_type_for_legacy_null(cls, value):
@@ -275,6 +281,7 @@ class BatchStatusResponse(BaseModel):
     batch_id: UUID
     status: BatchStatus
     processing_mode: str = "local"
+    processing_task: str = "full"
     progress_message: str
     progress_percent: int | None = None
     estimated_seconds_remaining: int | None = None

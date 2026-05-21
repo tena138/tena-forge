@@ -137,7 +137,11 @@ def cosine_similarity(left: str, right: str) -> float | None:
     return max(-1.0, min(1.0, float(np.dot(left_vec, right_vec) / denom)))
 
 
-def _score_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> tuple[float, bool, bool]:
+def _score_pair(
+    problem: dict[str, Any],
+    solution: dict[str, Any] | None,
+    allow_low_similarity: bool = False,
+) -> tuple[float, bool, bool]:
     snippet = _solution_snippet(solution)
     if not snippet:
         return 0.5, True, False
@@ -145,6 +149,8 @@ def _score_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> tup
     if similarity is None:
         return 0.5, True, False
     if similarity < 0.5:
+        if allow_low_similarity:
+            return similarity, True, False
         return similarity, True, True
     return similarity, similarity < 0.75, False
 
@@ -226,7 +232,7 @@ def _number_order_assign(problem_items: list[MatchItem], solution_items: list[Ma
         for problem, solution in zip(ordered_problems, ordered_solutions):
             if id(solution.item) in used_solution_ids:
                 continue
-            confidence, needs_review, rejected = _score_pair(problem.item, solution.item)
+            confidence, needs_review, rejected = _score_pair(problem.item, solution.item, allow_low_similarity=True)
             if rejected:
                 continue
             _attach(problem.item, solution.item, confidence, needs_review, "number_order")
@@ -351,7 +357,7 @@ def match(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> li
         solution = solutions_by_key.get(problem.key)
         if solution is None:
             continue
-        confidence, needs_review, rejected = _score_pair(problem.item, solution.item)
+        confidence, needs_review, rejected = _score_pair(problem.item, solution.item, allow_low_similarity=True)
         if rejected:
             rejected_problem_items.append(problem)
             continue

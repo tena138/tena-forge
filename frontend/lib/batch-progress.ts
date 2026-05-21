@@ -9,6 +9,7 @@ export type BatchStatusResponse = {
   batch_id: string;
   status: BatchStatus;
   processing_mode?: "local" | "cloud";
+  processing_task?: "full" | "solution_only";
   progress_message: string;
   progress_percent: number | null;
   estimated_seconds_remaining: number | null;

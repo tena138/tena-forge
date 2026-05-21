@@ -22,6 +22,7 @@ from services.pipeline import (  # noqa: E402
     extract_and_cross_check,
     extract_solutions,
     format_page_range_group,
+    has_solution_content,
     interleave_rendered_page_groups,
     iter_split_page_range_groups,
     render_pdf,
@@ -109,6 +110,8 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
 
     batch_id = str(job["id"])
     batch_name = str(job.get("name") or batch_id)
+    task_type = str(job.get("task_type") or "full")
+    solution_only = task_type == "solution_only"
     print(f"[{batch_id}] starting {batch_name}")
 
     with tempfile.TemporaryDirectory(prefix="tena-forge-worker-") as temp_dir_raw:
@@ -116,21 +119,24 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
         problem_pdf = temp_dir / "problems.pdf"
         solution_pdf = temp_dir / "solutions.pdf"
         post_progress(client, batch_id, "PDF 다운로드 중", 0, None)
-        download_file(client, f"/api/local-worker/jobs/{batch_id}/files/problem", problem_pdf)
+        if not solution_only:
+            download_file(client, f"/api/local-worker/jobs/{batch_id}/files/problem", problem_pdf)
 
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
         has_solution = bool(job.get("has_solution_pdf")) and solution_mode != "skip"
         if has_solution:
             download_file(client, f"/api/local-worker/jobs/{batch_id}/files/solution", solution_pdf)
+        if solution_only and not has_solution:
+            raise RuntimeError("Solution-only reprocessing requires a solution PDF and enabled solution extraction.")
 
         extraction_passes = max(settings.ai_extraction_passes, 1)
         units_per_page = 1 + extraction_passes
-        problem_page_count = count_pdf_pages(str(problem_pdf))
+        problem_page_count = count_pdf_pages(str(problem_pdf)) if not solution_only else 0
         solution_page_count = count_pdf_pages(str(solution_pdf)) if has_solution else 0
         solution_units = solution_page_count * units_per_page
         problem_units = problem_page_count * units_per_page
-        total_units = solution_units + problem_units
-        problem_dpi = choose_render_dpi(str(problem_pdf), problem_page_count)
+        total_units = max(solution_units + problem_units, 1)
+        problem_dpi = choose_render_dpi(str(problem_pdf), problem_page_count) if not solution_only else settings.pdf_render_dpi
         solution_dpi = (
             settings.pdf_solution_render_dpi or choose_render_dpi(str(solution_pdf), solution_page_count)
         ) if has_solution else problem_dpi
@@ -168,6 +174,18 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
                 )
                 solutions.extend(extract_solutions(solution_pages, display_total_pages=solution_page_count))
                 processed_solution_pages += chunk_len
+            if not any(has_solution_content(solution) for solution in solutions):
+                raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
+        if solution_only:
+            payload = {
+                "problems": [],
+                "solutions": solutions,
+            }
+            post_progress(client, batch_id, "해설 재매칭 저장 중", total_units, total_units)
+            response = client.post(f"/api/local-worker/jobs/{batch_id}/complete", json=payload, timeout=120)
+            response.raise_for_status()
+            print(f"[{batch_id}] done: {len(solutions)} solution items")
+            return
 
         problem_models = [model.strip() for model in settings.ai_model_pool.split(",") if model.strip()]
         if not problem_models:

@@ -264,6 +264,25 @@ export function ArchiveBatchHistory({
     }
   }
 
+  async function reprocessSolutions(batch: Batch) {
+    if (!batch.problem_count || !batch.solution_pdf_filename || batch.status === "pending" || batch.status === "processing" || busyId === batch.id) return;
+    const ok = window.confirm(`'${batch.name}' 배치의 해설 PDF만 다시 추출할까요? 기존 문항은 유지하고 정답/해설만 새로 매칭합니다.`);
+    if (!ok) return;
+    setBusyId(batch.id);
+    try {
+      const response = await api<{ batch_id: string; status: Batch["status"] }>(`/api/batches/${batch.id}/reprocess-solutions`, { method: "POST" });
+      rememberActiveBatch(response.batch_id);
+      await loadBatches();
+      if (batch.processing_mode === "local") {
+        launchLocalWorker(batch.id);
+      } else {
+        router.push("/archive/new");
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function deleteBatch(batch: Batch) {
     const ok = window.confirm(`'${batch.name}' 배치를 삭제할까요? 연결된 문항과 태그도 함께 삭제됩니다.`);
     if (!ok) return;
@@ -313,6 +332,12 @@ export function ArchiveBatchHistory({
                     <Button variant="outline" size="sm" disabled={busyId === batch.id} onClick={() => markBatchReviewNeeded(batch)}>
                       <RotateCcw className="h-4 w-4" />
                       검토 대기열로 복구
+                    </Button>
+                  ) : null}
+                  {batch.solution_pdf_filename && batch.problem_count > 0 ? (
+                    <Button variant="outline" size="sm" disabled={batch.status === "pending" || batch.status === "processing" || busyId === batch.id} onClick={() => reprocessSolutions(batch)}>
+                      <FileText className="h-4 w-4" />
+                      해설만 재처리
                     </Button>
                   ) : null}
                   <Button variant="outline" size="sm" onClick={() => router.push(`/problems?batch_id=${batch.id}`)}>

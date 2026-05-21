@@ -34,6 +34,7 @@ type ViewMode = "grid" | "list";
 type ProblemSort = "source_order" | "newest" | "oldest" | "number_asc" | "number_desc";
 
 const difficulties = ["하", "중", "상", "최상"];
+const defaultReviewFilter: ReviewFilter = "reviewed";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
 const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "all", label: "전체" },
@@ -56,7 +57,7 @@ function readPageParam(value: string | null) {
 function readReviewFilter(value: string | null): ReviewFilter {
   if (value === "true") return "needs";
   if (value === "false") return "reviewed";
-  return "all";
+  return defaultReviewFilter;
 }
 
 function readSort(value: string | null): ProblemSort {

@@ -222,7 +222,7 @@ def health_db():
             "alembic_versions": alembic_versions,
             "missing_tables": sorted({"academies", "user_roles", "batches", "problems", "problem_sets"} - tables),
             "missing_academy_columns": sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
-            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_mode"} - batch_columns),
+            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_mode", "processing_task"} - batch_columns),
         }
     except Exception as exc:
         return JSONResponse(
@@ -247,6 +247,7 @@ def _ensure_sqlite_columns():
             "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
             "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
             "processing_mode": "VARCHAR(20) DEFAULT 'local' NOT NULL",
+            "processing_task": "VARCHAR(30) DEFAULT 'full' NOT NULL",
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",
             "academy_id": "VARCHAR(64)",
             "progress_message": "VARCHAR(500)",

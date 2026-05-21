@@ -13,7 +13,7 @@ from database import get_db
 from models import Batch, BatchStatus, Problem
 from services.matcher import match as match_solutions
 from services.ownership import current_owner_id
-from services.pipeline import save_results
+from services.pipeline import apply_solutions_to_existing_problems, has_solution_content, save_results
 from services.storage import save_visual_bytes
 
 router = APIRouter(prefix="/api/local-worker", tags=["local worker"])
@@ -23,6 +23,7 @@ class LocalWorkerJob(BaseModel):
     id: UUID
     name: str
     has_solution_pdf: bool
+    task_type: str = "full"
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
 
@@ -51,7 +52,7 @@ class LocalWorkerProblem(BaseModel):
 
 
 class LocalWorkerComplete(BaseModel):
-    problems: list[LocalWorkerProblem]
+    problems: list[LocalWorkerProblem] = Field(default_factory=list)
     solutions: list[dict[str, Any]] | dict[str, dict[str, Any]] = Field(default_factory=list)
 
 
@@ -108,6 +109,21 @@ def _normalize_solutions_payload(payload: LocalWorkerComplete) -> list[dict[str,
     return normalized
 
 
+def _embedded_solutions_from_problems(problems: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    solutions: list[dict[str, Any]] = []
+    for problem in problems:
+        solution = {
+            "problem_number": str(problem.get("problem_number") or ""),
+            "answer": problem.get("answer"),
+            "solution_steps": problem.get("solution_steps"),
+            "key_concept": problem.get("key_concept"),
+            "page_idx": problem.get("page_index", 0),
+        }
+        if solution["problem_number"] and has_solution_content(solution):
+            solutions.append(solution)
+    return solutions
+
+
 @router.get("/jobs/next", response_model=LocalWorkerJob | None)
 def next_job(request: Request, db: Session = Depends(get_db)):
     owner_id = current_owner_id(request)
@@ -134,7 +150,8 @@ def next_job(request: Request, db: Session = Depends(get_db)):
     if not batch:
         return None
     batch.status = BatchStatus.processing
-    batch.progress_message = "로컬 워커에서 처리 시작"
+    task_type = str(batch.processing_task or "full")
+    batch.progress_message = "로컬 워커에서 해설 재처리 시작" if task_type == "solution_only" else "로컬 워커에서 처리 시작"
     batch.progress_current = 0
     batch.progress_total = None
     batch.progress_started_at = now
@@ -149,6 +166,7 @@ def next_job(request: Request, db: Session = Depends(get_db)):
         id=batch.id,
         name=batch.name,
         has_solution_pdf=bool(batch.solution_pdf_filename),
+        task_type=task_type,
         subject_candidates=batch.subject_candidates or [],
         unit_candidates=batch.unit_candidates or [],
     )
@@ -189,24 +207,31 @@ async def upload_visual(batch_id: UUID, request: Request, file: UploadFile = Fil
 @router.post("/jobs/{batch_id}/complete")
 def complete_job(batch_id: UUID, payload: LocalWorkerComplete, request: Request, db: Session = Depends(get_db)):
     batch = _owned_batch(db, batch_id, current_owner_id(request))
-    db.query(Problem).filter(Problem.source_batch_id == batch.id).delete(synchronize_session=False)
     problems = [problem.model_dump() for problem in payload.problems]
     solutions = _normalize_solutions_payload(payload)
     if not solutions:
-        for problem in problems:
-            if problem.get("answer") or problem.get("solution_steps") or problem.get("key_concept"):
-                solutions.append(
-                    {
-                        "problem_number": str(problem.get("problem_number") or ""),
-                        "answer": problem.get("answer"),
-                        "solution_steps": problem.get("solution_steps"),
-                        "key_concept": problem.get("key_concept"),
-                        "page_idx": problem.get("page_index", 0),
-                    }
-                )
+        solutions.extend(_embedded_solutions_from_problems(problems))
+    if batch.solution_pdf_filename and not any(has_solution_content(solution) for solution in solutions):
+        raise HTTPException(status_code=400, detail="Solution PDF was provided, but no answer or solution content was extracted.")
+    if str(batch.processing_task or "full") == "solution_only":
+        stats = apply_solutions_to_existing_problems(db, batch, solutions)
+        batch.status = BatchStatus.done
+        batch.processing_task = "full"
+        batch.progress_message = f"해설 재처리 완료: {stats['matched_count']}개 매칭, {stats['unmatched_count']}개 확인 필요"
+        batch.progress_current = batch.progress_total or stats["problem_count"] or 1
+        batch.progress_total = batch.progress_current
+        batch.progress_updated_at = datetime.utcnow()
+        batch.failure_stage = None
+        batch.failure_reason = None
+        batch.failure_hint = None
+        batch.failed_at = None
+        db.commit()
+        return {"ok": True, **stats}
+    db.query(Problem).filter(Problem.source_batch_id == batch.id).delete(synchronize_session=False)
     matched_problems = match_solutions(problems, solutions)
     save_results(db, batch, matched_problems)
     batch.status = BatchStatus.done
+    batch.processing_task = "full"
     batch.progress_message = "완료"
     batch.progress_current = batch.progress_total or len(problems) or 1
     batch.progress_total = batch.progress_current
@@ -223,6 +248,7 @@ def complete_job(batch_id: UUID, payload: LocalWorkerComplete, request: Request,
 def fail_job(batch_id: UUID, payload: LocalWorkerFail, request: Request, db: Session = Depends(get_db)):
     batch = _owned_batch(db, batch_id, current_owner_id(request))
     batch.status = BatchStatus.error
+    batch.processing_task = "full"
     batch.progress_message = "로컬 워커 처리 실패"
     batch.failure_stage = payload.stage or batch.progress_message
     batch.failure_reason = payload.reason
