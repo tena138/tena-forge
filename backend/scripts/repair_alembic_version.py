@@ -9,8 +9,8 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-PREVIOUS_REVISION = "0016_batch_subject_unit_candidates"
-HEAD_REVISION = "0017_batch_processing_mode"
+PREVIOUS_REVISION = "0017_batch_processing_mode"
+HEAD_REVISION = "0018_batch_processing_task"
 ACADEMY_REQUIRED_COLUMNS = {
     "email_verified",
     "email_verified_at",
@@ -130,14 +130,19 @@ def _ensure_batch_columns(connection, inspector) -> bool:
         ("subject_candidates", json_definition),
         ("unit_candidates", json_definition),
         ("processing_mode", "VARCHAR(20) NOT NULL DEFAULT 'local'"),
+        ("processing_task", "VARCHAR(30) NOT NULL DEFAULT 'full'"),
     ]
     for column_name, definition in specs:
         if _add_column_if_missing(connection, inspector, "batches", column_name, definition):
             changed = True
             inspector = inspect(connection)
     connection.execute(text("UPDATE batches SET processing_mode = 'local' WHERE processing_mode IS NULL OR processing_mode = ''"))
+    connection.execute(text("UPDATE batches SET processing_task = 'full' WHERE processing_task IS NULL OR processing_task = ''"))
     if "ix_batches_processing_mode" not in _index_names(inspector, "batches"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_processing_mode ON batches (processing_mode)"))
+        changed = True
+    if "ix_batches_processing_task" not in _index_names(inspector, "batches"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_processing_task ON batches (processing_task)"))
         changed = True
     return changed
 
@@ -147,7 +152,7 @@ def _schema_is_at_head(inspector) -> bool:
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
-        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_mode"})
+        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_mode", "processing_task"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
     )
 
@@ -157,13 +162,13 @@ def _schema_is_at_previous(inspector) -> bool:
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
-        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
+        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_mode"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
     )
 
 
 def _looks_physically_migrated_to_previous(inspector) -> bool:
-    return _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
+    return _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_mode"})
 
 
 def main() -> None:
