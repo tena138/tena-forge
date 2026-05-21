@@ -1,4 +1,5 @@
 import os
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -56,6 +57,15 @@ def rate_limit_error_response(request, exc):
     return add_cors_headers(request, response)
 
 
+async def unhandled_exception_response(request, exc):
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
+    response = JSONResponse(
+        {"detail": "Internal server error", "error_type": exc.__class__.__name__},
+        status_code=500,
+    )
+    return add_cors_headers(request, response)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(origin for origin in allowed_origins if origin),
@@ -65,6 +75,7 @@ app.add_middleware(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_error_response)
+app.add_exception_handler(Exception, unhandled_exception_response)
 app.add_middleware(SlowAPIMiddleware)
 
 
@@ -85,7 +96,15 @@ async def security_and_auth_middleware(request, call_next):
             return auth_error_response(request, {"code": "TOKEN_EXPIRED"})
         except JWTError:
             return auth_error_response(request, "Authentication required")
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        traceback.print_exc()
+        response = JSONResponse(
+            {"detail": "Internal server error", "error_type": exc.__class__.__name__},
+            status_code=500,
+        )
+        add_cors_headers(request, response)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"

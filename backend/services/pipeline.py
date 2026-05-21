@@ -383,6 +383,11 @@ def get_progress_message(batch: Batch) -> str:
 
 def get_progress_detail(batch: Batch) -> dict[str, Any]:
     key = str(batch.id)
+    raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
+    try:
+        status = BatchStatus(raw_status)
+    except ValueError:
+        status = BatchStatus.pending
     message = progress_messages.get(
         key,
         batch.progress_message
@@ -391,7 +396,7 @@ def get_progress_detail(batch: Batch) -> dict[str, Any]:
             BatchStatus.processing: "처리 중",
             BatchStatus.done: "완료",
             BatchStatus.error: "오류가 발생했습니다",
-        }[batch.status],
+        }.get(status, "처리 중"),
     )
     state = progress_states.get(key)
     base = {
@@ -400,9 +405,9 @@ def get_progress_detail(batch: Batch) -> dict[str, Any]:
         "failure_hint": batch.failure_hint,
         "failed_at": batch.failed_at,
     }
-    if batch.status == BatchStatus.done:
+    if status == BatchStatus.done:
         return {"progress_message": message, "progress_percent": 100, "estimated_seconds_remaining": 0, **base}
-    if batch.status == BatchStatus.error:
+    if status == BatchStatus.error:
         return {"progress_message": message, "progress_percent": None, "estimated_seconds_remaining": None, **base}
     current = int(state.get("current") or 0) if state else int(batch.progress_current or 0)
     total = int(state.get("total") or 0) if state else int(batch.progress_total or 0)

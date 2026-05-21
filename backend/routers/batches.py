@@ -243,7 +243,9 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     progress = get_progress_detail(batch)
-    return {"batch_id": batch.id, "status": batch.status, "processing_mode": batch.processing_mode, **progress}
+    raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
+    status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending
+    return {"batch_id": batch.id, "status": status, "processing_mode": batch.processing_mode or "local", **progress}
 
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
