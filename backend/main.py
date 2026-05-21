@@ -59,10 +59,10 @@ def rate_limit_error_response(request, exc):
 
 async def unhandled_exception_response(request, exc):
     traceback.print_exception(type(exc), exc, exc.__traceback__)
-    response = JSONResponse(
-        {"detail": "Internal server error", "error_type": exc.__class__.__name__},
-        status_code=500,
-    )
+    payload = {"detail": "Internal server error", "error_type": exc.__class__.__name__}
+    if isinstance(exc, NameError):
+        payload["error_message"] = str(exc)
+    response = JSONResponse(payload, status_code=500)
     return add_cors_headers(request, response)
 
 
@@ -100,10 +100,10 @@ async def security_and_auth_middleware(request, call_next):
         response = await call_next(request)
     except Exception as exc:
         traceback.print_exc()
-        response = JSONResponse(
-            {"detail": "Internal server error", "error_type": exc.__class__.__name__},
-            status_code=500,
-        )
+        payload = {"detail": "Internal server error", "error_type": exc.__class__.__name__}
+        if isinstance(exc, NameError):
+            payload["error_message"] = str(exc)
+        response = JSONResponse(payload, status_code=500)
         add_cors_headers(request, response)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
