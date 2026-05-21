@@ -162,10 +162,19 @@ def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: l
             problem.key_concept = solution.get("key_concept")
             problem.needs_review = True
             matched_count += 1
-        else:
+        elif not has_solution_content(
+            {
+                "answer": problem.answer,
+                "solution_steps": problem.solution_steps,
+                "key_concept": problem.key_concept,
+            }
+        ):
             problem.answer = None
             problem.solution_steps = None
             problem.key_concept = None
+            problem.needs_review = True
+            unmatched_count += 1
+        else:
             problem.needs_review = True
             unmatched_count += 1
         problem.updated_at = now

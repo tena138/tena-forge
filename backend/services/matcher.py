@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
@@ -31,7 +32,7 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _canonical_number(value: Any) -> str:
+def _legacy_canonical_number(value: Any) -> str:
     text = _text(value)
     text = re.sub(r"\s+", "", text)
     text = re.sub(r"(번|문항|문제)$", "", text)
@@ -52,6 +53,18 @@ def _page_idx(item: dict[str, Any]) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _canonical_number(value: Any) -> str:
+    circled_digits = str.maketrans("①②③④⑤⑥⑦⑧⑨", "123456789")
+    text = unicodedata.normalize("NFKC", _text(value)).translate(circled_digits)
+    text = re.sub(r"\s+", "", text)
+    text = re.sub(r"^(?:#|No\.?|NO\.?|문제|문항|번호)+", "", text)
+    text = re.sub(r"(?:번|문제|문항)$", "", text)
+    text = re.sub(r"^[\[\(【](\d+(?:[-~]\d+)?)[]\)】]$", r"\1", text)
+    text = re.sub(r"(?<=\d)[\.:：\)]$", "", text)
+    text = re.sub(r"^0+(\d)", r"\1", text)
+    return text
 
 
 def _stem_text(problem: dict[str, Any]) -> str:
@@ -281,6 +294,28 @@ def _hungarian_assign_by_number(problem_items: list[MatchItem], solution_items: 
     return rescued, used_solution_ids
 
 
+def _global_order_assign(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> tuple[int, set[int]]:
+    """Last-resort pairing by remaining source order.
+
+    This catches OCR number variants that canonicalization still misses. Every
+    match is review-marked and low-confidence because it is intentionally broad.
+    """
+    rescued = 0
+    used_solution_ids: set[int] = set()
+    ordered_problems = sorted(problem_items, key=lambda value: (value.page_idx, value.number_occurrence, value.problem_number))
+    ordered_solutions = sorted(solution_items, key=lambda value: (value.page_idx, value.number_occurrence, value.problem_number))
+    for problem, solution in zip(ordered_problems, ordered_solutions):
+        if id(solution.item) in used_solution_ids:
+            continue
+        probe_text = _solution_text_for_fallback(solution.item)
+        similarity = cosine_similarity(probe_text, _stem_text(problem.item))
+        confidence = similarity if similarity is not None else 0.25
+        _attach(problem.item, solution.item, confidence, True, "global_order")
+        used_solution_ids.add(id(solution.item))
+        rescued += 1
+    return rescued, used_solution_ids
+
+
 def _greedy_assignment(scores: np.ndarray) -> tuple[list[int], list[int]]:
     pairs: list[tuple[float, int, int]] = []
     for row in range(scores.shape[0]):
@@ -327,6 +362,7 @@ def _print_stats(
     section_rescued_count: int,
     number_order_count: int,
     number_hungarian_count: int,
+    global_order_count: int,
     inversion_count: int,
 ) -> None:
     total = len(problems)
@@ -340,6 +376,7 @@ def _print_stats(
         f"confidence_high={high}, confidence_mid={medium}, confidence_low={low}, "
         f"primary_matches={primary_count}, section_hungarian_rescued={section_rescued_count}, "
         f"number_order_rescued={number_order_count}, number_hungarian_rescued={number_hungarian_count}, "
+        f"global_order_rescued={global_order_count}, "
         f"inversion_warnings={inversion_count}",
         flush=True,
     )
@@ -398,10 +435,29 @@ def match(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> li
     number_hungarian_count, number_hungarian_solution_ids = _hungarian_assign_by_number(unmatched_problem_items, unmatched_solution_items)
     used_solution_ids.update(number_hungarian_solution_ids)
 
+    unmatched_problem_items = [
+        problem for problem in problem_items
+        if problem.item.get("solution") is None
+    ]
+    unmatched_solution_items = [
+        solution for solution in solution_items
+        if id(solution.item) not in used_solution_ids
+    ]
+    global_order_count, global_order_solution_ids = _global_order_assign(unmatched_problem_items, unmatched_solution_items)
+    used_solution_ids.update(global_order_solution_ids)
+
     for problem in problem_items:
         if problem.item.get("solution") is None:
             _attach(problem.item, None, 0.0, True, "unmatched")
 
     inversion_count = _apply_inversion_warnings(problems)
-    _print_stats(problems, primary_count, section_rescued_count, number_order_count, number_hungarian_count, inversion_count)
+    _print_stats(
+        problems,
+        primary_count,
+        section_rescued_count,
+        number_order_count,
+        number_hungarian_count,
+        global_order_count,
+        inversion_count,
+    )
     return problems

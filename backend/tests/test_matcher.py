@@ -8,10 +8,16 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from routers.local_worker import LocalWorkerComplete, _embedded_solutions_from_problems, _normalize_solutions_payload  # noqa: E402
-from services.matcher import match  # noqa: E402
+from services.matcher import _canonical_number, match  # noqa: E402
 
 
 class MatcherTests(unittest.TestCase):
+    def test_canonical_number_accepts_common_korean_ocr_variants(self):
+        self.assertEqual(_canonical_number("1번"), "1")
+        self.assertEqual(_canonical_number("문제 01"), "1")
+        self.assertEqual(_canonical_number("#12."), "12")
+        self.assertEqual(_canonical_number("①"), "1")
+
     def test_repeated_numbers_match_by_remaining_order_when_sections_disagree(self):
         problems = [
             {
@@ -132,6 +138,31 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(matched[0]["solution"]["answer"], "A")
         self.assertEqual(matched[1]["solution"]["answer"], "B")
         self.assertEqual(matched[1]["match_flags"]["matched_via"], "number_order")
+
+    def test_global_order_rescues_remaining_solution_number_ocr_mismatch(self):
+        problems = [
+            {
+                "problem_number": 1,
+                "problem_text": "problem one",
+                "unit": "unit A",
+                "page_index": 1,
+            }
+        ]
+        solutions = [
+            {
+                "problem_number": "I",
+                "answer": "A",
+                "solution_steps": "solution one",
+                "section_label": "unit B",
+                "page_idx": 1,
+            }
+        ]
+
+        matched = match(problems, solutions)
+
+        self.assertEqual(matched[0]["solution"]["answer"], "A")
+        self.assertTrue(matched[0]["match_flags"]["needs_review"])
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "global_order")
 
     def test_embedded_solution_fallback_ignores_empty_solution_fields(self):
         solutions = _embedded_solutions_from_problems(
