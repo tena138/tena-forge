@@ -47,6 +47,10 @@ class LocalWorkerProblem(BaseModel):
     needs_review: bool = True
     subject: str | None = None
     unit: str | None = None
+    section_label: str | None = None
+    problem_no: str | None = None
+    global_index: int | None = None
+    local_index: int | None = None
     visual_bbox: Any | None = None
     page_index: int = 0
 
@@ -114,9 +118,13 @@ def _embedded_solutions_from_problems(problems: list[dict[str, Any]]) -> list[di
     for problem in problems:
         solution = {
             "problem_number": str(problem.get("problem_number") or ""),
+            "problem_no": str(problem.get("problem_no") or problem.get("problem_number") or ""),
             "answer": problem.get("answer"),
             "solution_steps": problem.get("solution_steps"),
             "key_concept": problem.get("key_concept"),
+            "section_label": problem.get("section_label") or problem.get("unit"),
+            "global_index": problem.get("global_index"),
+            "local_index": problem.get("local_index"),
             "page_idx": problem.get("page_index", 0),
         }
         if solution["problem_number"] and has_solution_content(solution):

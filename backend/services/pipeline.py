@@ -7,6 +7,7 @@ import re
 import threading
 import time
 import traceback
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
@@ -46,7 +47,8 @@ For each problem return a JSON object with:
   "is_exercise": <true only for standalone unsolved exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
-  "unit": <unit label or null>
+  "unit": <unit label or null>,
+  "section_label": <visible section/day/chapter/unit marker such as "DAY 01", "Chapter 1", "Unit 03", "유형 01", or null>
 }
 Return a JSON array of all problems found on this page.
 If there are no valid standalone exercises, return [].
@@ -58,6 +60,7 @@ Use inline LaTeX delimiters like $f(x)=x^2$ inside Korean sentences.
 Use display LaTeX delimiters like $$\lim_{x \to 0} f(x)$$ for standalone formulas.
 Do not leave plain-text math such as x^2, f'(x), lim x->1, or a/b when it should be LaTeX.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
+Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit labels, or equivalent source text. Do not invent it.
 Return raw JSON only, no markdown, no explanation."""
 
 
@@ -77,12 +80,14 @@ For each problem return a JSON object with:
   "is_exercise": <true only for standalone exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
-  "unit": <unit label or null>
+  "unit": <unit label or null>,
+  "section_label": <visible section/day/chapter/unit marker such as "DAY 01", "Chapter 1", "Unit 03", "유형 01", or null>
 }
 
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 Convert mathematical expressions into LaTeX.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
+Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit labels, or equivalent source text. Do not invent it.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 Return raw JSON array only, no markdown, no explanation."""
 
@@ -123,8 +128,10 @@ def _problem_match_payload(problem: Problem) -> dict[str, Any]:
     return {
         "_problem_id": str(problem.id),
         "problem_number": problem.problem_number,
+        "problem_no": str(problem.problem_number),
         "problem_text": problem.problem_text,
         "unit": tags.unit if tags else None,
+        "section_label": tags.unit if tags else None,
         "subject": tags.subject if tags else None,
         "page_index": page_index,
     }
@@ -145,6 +152,9 @@ def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: l
         .all()
     )
     problem_payloads = [_problem_match_payload(problem) for problem in problems]
+    for global_index, payload in enumerate(problem_payloads, start=1):
+        payload["global_index"] = global_index
+        payload["local_index"] = global_index
     matched_payloads = match_solutions(problem_payloads, solutions)
     matched_by_id = {str(item.get("_problem_id")): item for item in matched_payloads}
     matched_count = 0
@@ -210,6 +220,7 @@ If the answer is given as a choice number (e.g. ?뺣떟: ??, resolve it to the a
 problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
 Convert every mathematical expression in answer, solution_steps, and key_concept into LaTeX.
 Use inline LaTeX delimiters like $x=2$ inside Korean sentences.
 Use display LaTeX delimiters like $$\int_0^1 f(x)\,dx$$ for standalone formulas.
@@ -252,6 +263,7 @@ Rules for matching metadata:
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 - section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+- Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 - solution_first_line must be the first visible sentence or line of the solution explanation.
 
@@ -281,6 +293,7 @@ Rules:
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 - section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+- Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
@@ -1076,25 +1089,84 @@ def _normalized_visual_bbox(value: Any) -> dict[str, float] | None:
     return {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
 
 
+def _extract_problem_number(value: Any) -> tuple[int, str] | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    normalized = re.sub(r"\s+", "", raw)
+    normalized = re.sub(r"^(?:#|No\.?|NO\.?|문제|문항|번호)+", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"(?:번|문제|문항)$", "", normalized)
+    normalized = re.sub(r"(?<=\d)[\.:：\)]$", "", normalized)
+    match = re.search(r"\d+", normalized)
+    if not match:
+        return None
+    number = int(match.group(0))
+    problem_no = re.sub(r"^0+(\d)", r"\1", normalized) or str(number)
+    return number, problem_no
+
+
+def _structure_label(item: dict[str, Any]) -> str | None:
+    for key in ("section_label", "section_id", "unit", "chapter", "day"):
+        text = str(item.get(key) or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _sort_number(value: Any) -> int:
+    match = re.search(r"\d+", str(value or ""))
+    return int(match.group(0)) if match else 10**9
+
+
+def _apply_structure_indexes(items: list[dict[str, Any]], page_key: str = "page_index") -> list[dict[str, Any]]:
+    ordered = sorted(
+        items,
+        key=lambda item: (
+            int(item.get(page_key, item.get("page_idx", 0)) or 0),
+            int(item.get("_source_order", 0) or 0),
+            _sort_number(item.get("problem_number")),
+        ),
+    )
+    last_section: str | None = None
+    local_counts: dict[str | None, int] = defaultdict(int)
+    for global_index, item in enumerate(ordered, start=1):
+        section_label = _structure_label(item)
+        if section_label:
+            last_section = section_label
+            item["section_label"] = section_label
+        elif last_section:
+            item["section_label"] = last_section
+            item["section_inferred"] = True
+            section_label = last_section
+        local_counts[section_label] += 1
+        item["global_index"] = global_index
+        item["local_index"] = local_counts[section_label]
+        item.setdefault("problem_no", str(item.get("problem_number") or ""))
+    return ordered
+
+
 def _normalize_extracted_items(
     items: list[dict[str, Any]],
     page: RenderedPage,
 ) -> list[dict[str, Any]]:
     normalized_items: list[dict[str, Any]] = []
     for item in items:
-        try:
-            number = int(item["problem_number"])
-        except (KeyError, TypeError, ValueError):
+        number_data = _extract_problem_number(item.get("problem_number"))
+        if number_data is None:
             continue
+        number, problem_no = number_data
         if not _is_exercise_candidate(item):
             continue
+        section_label = _structure_label(item)
         normalized_items.append(
             {
                 "problem_number": number,
+                "problem_no": problem_no,
                 "problem_text": normalize_geometry_notation(str(item.get("problem_text") or "").strip()),
                 "has_visual": bool(item.get("has_visual")),
                 "subject": str(item.get("subject") or "").strip() or None,
                 "unit": str(item.get("unit") or "").strip() or None,
+                "section_label": section_label,
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
                 "page_index": page.page_index,
             }
@@ -1212,20 +1284,24 @@ def extract_and_cross_check(
         longest = max(texts, key=len) if texts else ""
         visual_values = {item["has_visual"] for item in items}
         visual_boxes = [item.get("visual_bbox") for item in items if item.get("visual_bbox")]
+        section_labels = [item.get("section_label") for item in items if item.get("section_label")]
+        problem_nos = [item.get("problem_no") for item in items if item.get("problem_no")]
         merged.append(
             {
                 "problem_number": number,
+                "problem_no": _longer_text(problem_nos) or str(number),
                 "problem_text": longest,
                 "has_visual": any(visual_values),
                 "subject": _most_common_text(items, "subject", subjects),
                 "unit": _most_common_text(items, "unit", units),
+                "section_label": _longer_text(section_labels),
                 "visual_bbox": visual_boxes[0] if visual_boxes else None,
                 "visual_url": None,
                 "needs_review": True,
                 "page_index": page_index,
             }
         )
-    return sorted(merged, key=lambda item: (item["page_index"], item["problem_number"]))
+    return _apply_structure_indexes(merged)
 
 
 def attach_visuals(problems: list[dict[str, Any]], pages: list[RenderedPage], batch_id: UUID) -> None:
@@ -1319,7 +1395,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                     offset + completed,
                     total_steps,
                 )
-            for item in items:
+            for item_order, item in enumerate(items):
                 number = str(item.get("problem_number") or "").strip()
                 if not number:
                     continue
@@ -1327,40 +1403,45 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                 by_key.setdefault((page.page_index, section_label, number), []).append(
                     {
                         "problem_number": number,
+                        "problem_no": number,
                         "answer": item.get("answer"),
                         "solution_steps": item.get("solution_steps"),
                         "key_concept": item.get("key_concept"),
                         "section_label": section_label,
                         "page_idx": page.page_index,
+                        "_source_order": page.page_index * 10000 + item_order,
                         "referenced_problem_snippet": item.get("referenced_problem_snippet"),
                         "solution_first_line": item.get("solution_first_line"),
                     }
                 )
 
     solutions: list[dict[str, Any]] = []
-    for (page_idx, _section_label, number), runs in sorted(by_key.items(), key=lambda value: (value[0][0], value[0][1] or "", value[0][2])):
+    for (page_idx, _section_label, number), runs in sorted(by_key.items(), key=lambda value: min(run.get("_source_order", 0) for run in value[1])):
         solution_texts = [str(run.get("solution_steps") or "").strip() for run in runs if str(run.get("solution_steps") or "").strip()]
         answer_texts = [str(run.get("answer") or "").strip() for run in runs if str(run.get("answer") or "").strip()]
         concept_texts = [str(run.get("key_concept") or "").strip() for run in runs if str(run.get("key_concept") or "").strip()]
         snippets = [str(run.get("referenced_problem_snippet") or "").strip() for run in runs if str(run.get("referenced_problem_snippet") or "").strip()]
         first_lines = [str(run.get("solution_first_line") or "").strip() for run in runs if str(run.get("solution_first_line") or "").strip()]
         section_labels = [str(run.get("section_label") or "").strip() for run in runs if str(run.get("section_label") or "").strip()]
+        source_order = min(int(run.get("_source_order", 0) or 0) for run in runs)
         solution_steps = _longer_text(solution_texts)
         solution_first_line = _longer_text(first_lines)
         if not solution_first_line and solution_steps:
             solution_first_line = solution_steps.splitlines()[0]
         solutions.append({
             "problem_number": number,
+            "problem_no": number,
             "answer": _longer_text(answer_texts),
             "solution_steps": solution_steps,
             "key_concept": _longer_text(concept_texts),
             "section_label": _longer_text(section_labels),
             "page_idx": page_idx,
+            "_source_order": source_order,
             "referenced_problem_snippet": _longer_text(snippets),
             "solution_first_line": solution_first_line,
             "needs_review": len(runs) < extraction_passes or len(set(solution_texts)) > 1 or len(set(answer_texts)) > 1,
         })
-    return solutions
+    return _apply_structure_indexes(solutions, page_key="page_idx")
 
 
 def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> None:
@@ -1399,7 +1480,7 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
         page_number = int(item.get("page_index") or 0) + 1
         problem.tags = Tag(
             subject=str(item.get("subject") or "").strip() or None,
-            unit=str(item.get("unit") or "").strip() or None,
+            unit=str(item.get("unit") or item.get("section_label") or "").strip() or None,
             source=f"{batch_name} / p.{page_number} / {item['problem_number']}번",
         )
         db.add(problem)

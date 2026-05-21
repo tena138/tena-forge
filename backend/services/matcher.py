@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,6 +13,21 @@ MODEL_NAME = "jhgan/ko-sroberta-multitask"
 _embedding_model = None
 _embedding_cache: dict[str, np.ndarray] = {}
 
+SECTION_PATTERNS = (
+    (re.compile(r"\bDAY\s*0*(\d{1,3})\b", re.IGNORECASE), "DAY"),
+    (re.compile(r"\bCH(?:APTER)?\s*0*(\d{1,3})\b", re.IGNORECASE), "CHAPTER"),
+    (re.compile(r"\bUNIT\s*0*(\d{1,3})\b", re.IGNORECASE), "UNIT"),
+    (re.compile(r"(?:\uc720\ud615|TYPE)\s*0*(\d{1,3})", re.IGNORECASE), "\uc720\ud615"),
+    (re.compile(r"(?:\ub2e8\uc6d0|LESSON)\s*0*(\d{1,3})", re.IGNORECASE), "\ub2e8\uc6d0"),
+)
+NUMBER_PREFIX_RE = re.compile(
+    r"^(?:#|No\.?|NO\.?|Q\.?|Problem|"
+    r"\ubb38\uc81c|\ubb38\ud56d|\ubc88\ud638)+",
+    re.IGNORECASE,
+)
+NUMBER_LABEL_RE = re.compile(r"(?:\uc815\ub2f5|\ub2f5|\ud574\uc124|\ud480\uc774).*$")
+NUMBER_SUFFIX_RE = re.compile(r"(?:\ubc88|\ubb38\uc81c|\ubb38\ud56d)$")
+
 
 @dataclass
 class MatchItem:
@@ -21,6 +36,9 @@ class MatchItem:
     problem_number: str
     occurrence: int
     page_idx: int
+    source_order: int
+    global_index: int
+    local_index: int
     number_occurrence: int = 0
 
     @property
@@ -32,19 +50,27 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _legacy_canonical_number(value: Any) -> str:
-    text = _text(value)
-    text = re.sub(r"\s+", "", text)
-    text = re.sub(r"(번|문항|문제)$", "", text)
-    return text
+def _normalize_spaces(value: str) -> str:
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
+
+
+def _normalize_section_label(value: Any) -> str | None:
+    text = _normalize_spaces(_text(value))
+    if not text:
+        return None
+    for pattern, label in SECTION_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            return f"{label} {int(match.group(1)):02d}"
+    return text.upper()
 
 
 def _section_label(item: dict[str, Any]) -> str | None:
-    label = _text(item.get("section_label"))
-    if label:
-        return label
-    label = _text(item.get("unit"))
-    return label or None
+    for key in ("section_id", "section_label", "unit", "chapter", "day"):
+        label = _normalize_section_label(item.get(key))
+        if label:
+            return label
+    return None
 
 
 def _page_idx(item: dict[str, Any]) -> int:
@@ -55,16 +81,49 @@ def _page_idx(item: dict[str, Any]) -> int:
         return 0
 
 
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _source_order_key(item: dict[str, Any], fallback_index: int) -> tuple[int, int, int, str]:
+    global_index = _int_or_none(item.get("global_index"))
+    local_index = _int_or_none(item.get("local_index"))
+    return (
+        global_index if global_index is not None else 10**9,
+        _page_idx(item),
+        local_index if local_index is not None else fallback_index,
+        _text(item.get("problem_number")),
+    )
+
+
 def _canonical_number(value: Any) -> str:
-    circled_digits = str.maketrans("①②③④⑤⑥⑦⑧⑨", "123456789")
+    circled_digits = str.maketrans(
+        "\u2460\u2461\u2462\u2463\u2464\u2465\u2466\u2467\u2468",
+        "123456789",
+    )
     text = unicodedata.normalize("NFKC", _text(value)).translate(circled_digits)
     text = re.sub(r"\s+", "", text)
-    text = re.sub(r"^(?:#|No\.?|NO\.?|문제|문항|번호)+", "", text)
-    text = re.sub(r"(?:번|문제|문항)$", "", text)
+    text = NUMBER_PREFIX_RE.sub("", text)
+    text = NUMBER_LABEL_RE.sub("", text)
+    text = NUMBER_SUFFIX_RE.sub("", text)
     text = re.sub(r"^[\[\(【](\d+(?:[-~]\d+)?)[]\)】]$", r"\1", text)
     text = re.sub(r"(?<=\d)[\.:：\)]$", "", text)
     text = re.sub(r"^0+(\d)", r"\1", text)
-    return text
+    if text:
+        return text
+    fallback = re.search(r"\d+(?:[-~]\d+)?", unicodedata.normalize("NFKC", _text(value)))
+    if not fallback:
+        return ""
+    return re.sub(r"^0+(\d)", r"\1", fallback.group(0))
+
+
+def _numeric_number(value: str) -> int | None:
+    if re.fullmatch(r"\d+", value):
+        return int(value)
+    return None
 
 
 def _stem_text(problem: dict[str, Any]) -> str:
@@ -89,21 +148,43 @@ def _solution_text_for_fallback(solution: dict[str, Any] | None) -> str:
 
 
 def _annotate_occurrences(items: list[dict[str, Any]]) -> list[MatchItem]:
-    grouped: dict[tuple[str | None, str], list[dict[str, Any]]] = defaultdict(list)
+    ordered = [
+        item
+        for _index, item in sorted(
+            enumerate(items),
+            key=lambda pair: _source_order_key(pair[1], pair[0]),
+        )
+    ]
+    inherited_section: str | None = None
+    by_section_number: dict[tuple[str | None, str], list[dict[str, Any]]] = defaultdict(list)
     by_number: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for item in items:
-        number = _canonical_number(item.get("problem_number"))
-        grouped[(_section_label(item), number)].append(item)
+    section_local_counts: dict[str | None, int] = defaultdict(int)
+
+    for global_index, item in enumerate(ordered, start=1):
+        section = _section_label(item)
+        if section:
+            inherited_section = section
+        elif inherited_section:
+            section = inherited_section
+            item["section_inferred"] = True
+        number = _canonical_number(item.get("problem_no", item.get("problem_number")))
+        section_local_counts[section] += 1
+        item["section_id"] = section
+        item["problem_no"] = number
+        item["canonical_key"] = f"{section}-{number}" if section and number else None
+        item["global_index"] = _int_or_none(item.get("global_index")) or global_index
+        item["local_index"] = _int_or_none(item.get("local_index")) or section_local_counts[section]
+        by_section_number[(section, number)].append(item)
         by_number[number].append(item)
 
     number_occurrences: dict[int, int] = {}
     for number_group in by_number.values():
-        for occurrence, item in enumerate(sorted(number_group, key=lambda value: (_page_idx(value), _text(value.get("problem_number"))))):
+        for occurrence, item in enumerate(number_group):
             number_occurrences[id(item)] = occurrence
 
     annotated: list[MatchItem] = []
-    for (section_label, number), group in grouped.items():
-        for occurrence, item in enumerate(sorted(group, key=lambda value: (_page_idx(value), _text(value.get("problem_number"))))):
+    for (section_label, number), group in by_section_number.items():
+        for occurrence, item in enumerate(group):
             annotated.append(
                 MatchItem(
                     item=item,
@@ -111,10 +192,13 @@ def _annotate_occurrences(items: list[dict[str, Any]]) -> list[MatchItem]:
                     problem_number=number,
                     occurrence=occurrence,
                     page_idx=_page_idx(item),
+                    source_order=int(item.get("global_index") or 0),
+                    global_index=int(item.get("global_index") or 0),
+                    local_index=int(item.get("local_index") or 0),
                     number_occurrence=number_occurrences.get(id(item), 0),
                 )
             )
-    return annotated
+    return sorted(annotated, key=lambda value: (value.global_index, value.page_idx, value.local_index))
 
 
 def _model():
@@ -150,170 +234,183 @@ def cosine_similarity(left: str, right: str) -> float | None:
     return max(-1.0, min(1.0, float(np.dot(left_vec, right_vec) / denom)))
 
 
-def _score_pair(
-    problem: dict[str, Any],
-    solution: dict[str, Any] | None,
-    allow_low_similarity: bool = False,
-) -> tuple[float, bool, bool]:
+def _semantic_review_warnings(problem: dict[str, Any], solution: dict[str, Any] | None) -> list[str]:
     snippet = _solution_snippet(solution)
     if not snippet:
-        return 0.5, True, False
+        return []
     similarity = cosine_similarity(snippet, _stem_text(problem))
-    if similarity is None:
-        return 0.5, True, False
-    if similarity < 0.5:
-        if allow_low_similarity:
-            return similarity, True, False
-        return similarity, True, True
-    return similarity, similarity < 0.75, False
+    if similarity is not None and similarity < 0.5:
+        return ["semantic_conflict"]
+    return []
 
 
-def _attach(problem: dict[str, Any], solution: dict[str, Any] | None, confidence: float, needs_review: bool, matched_via: str) -> None:
+def _attach(
+    problem: dict[str, Any],
+    solution: dict[str, Any] | None,
+    confidence: float,
+    needs_review: bool,
+    matched_via: str,
+    warnings: list[str] | None = None,
+) -> None:
+    unique_warnings = list(dict.fromkeys(warnings or []))
     problem["solution"] = solution
     problem["match_confidence"] = max(0.0, min(1.0, float(confidence)))
     problem["match_flags"] = {
-        "needs_review": bool(needs_review),
+        "needs_review": bool(needs_review or unique_warnings or confidence < 0.7),
         "inversion_warning": False,
         "matched_via": matched_via,
+        "warnings": unique_warnings,
     }
 
 
-def _hungarian_assign(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> tuple[int, set[int]]:
-    rescued = 0
-    used_solution_indexes: set[int] = set()
-    by_section_problems: dict[str | None, list[MatchItem]] = defaultdict(list)
-    by_section_solutions: dict[str | None, list[MatchItem]] = defaultdict(list)
-    for problem in problem_items:
-        by_section_problems[problem.section_label].append(problem)
-    for solution in solution_items:
-        by_section_solutions[solution.section_label].append(solution)
+def _score_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> float:
+    probe_text = _solution_text_for_fallback(solution)
+    score = cosine_similarity(probe_text, _stem_text(problem))
+    return float(score if score is not None else 0.0)
 
+
+def _group_by_section(items: list[MatchItem]) -> dict[str | None, list[MatchItem]]:
+    grouped: dict[str | None, list[MatchItem]] = defaultdict(list)
+    for item in items:
+        grouped[item.section_label].append(item)
+    return grouped
+
+
+def _assign_section_number(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+    used_solution_ids: set[int],
+) -> int:
+    matched = 0
+    solutions_by_key: dict[tuple[str | None, str, int], MatchItem] = {
+        solution.key: solution
+        for solution in solution_items
+        if solution.section_label and solution.problem_number
+    }
+    for problem in problem_items:
+        if problem.item.get("solution") is not None:
+            continue
+        if not problem.section_label or not problem.problem_number:
+            continue
+        solution = solutions_by_key.get(problem.key)
+        if solution is None or id(solution.item) in used_solution_ids:
+            continue
+        warnings = _semantic_review_warnings(problem.item, solution.item)
+        _attach(problem.item, solution.item, 0.99, bool(warnings), "section_number", warnings)
+        used_solution_ids.add(id(solution.item))
+        matched += 1
+    return matched
+
+
+def _assign_section_order(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+    used_solution_ids: set[int],
+) -> int:
+    matched = 0
+    by_section_problems = _group_by_section(
+        [problem for problem in problem_items if problem.item.get("solution") is None and problem.section_label]
+    )
+    by_section_solutions = _group_by_section(
+        [solution for solution in solution_items if id(solution.item) not in used_solution_ids and solution.section_label]
+    )
     for section_label, section_problems in by_section_problems.items():
         section_solutions = by_section_solutions.get(section_label, [])
-        if not section_problems or not section_solutions:
+        if not section_solutions:
             continue
-        scores = np.zeros((len(section_problems), len(section_solutions)), dtype=np.float32)
-        for row, problem in enumerate(section_problems):
-            for column, solution in enumerate(section_solutions):
-                probe_text = _solution_text_for_fallback(solution.item)
-                score = cosine_similarity(probe_text, _stem_text(problem.item))
-                scores[row, column] = float(score if score is not None else 0.0)
-
-        try:
-            from scipy.optimize import linear_sum_assignment
-
-            rows, columns = linear_sum_assignment(-scores)
-        except Exception:
-            rows, columns = _greedy_assignment(scores)
-
-        for row, column in zip(rows, columns):
-            score = float(scores[row, column])
-            if score < 0.6:
-                continue
-            problem = section_problems[int(row)]
-            solution = section_solutions[int(column)]
-            _attach(problem.item, solution.item, score, score < 0.75, "hungarian")
-            used_solution_indexes.add(id(solution.item))
-            rescued += 1
-    return rescued, used_solution_indexes
-
-
-def _number_order_assign(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> tuple[int, set[int]]:
-    """Pair remaining duplicate problem numbers by source order.
-
-    Workbooks often restart numbering in every section. If the problem side and
-    solution side disagree on the section label, exact section keys miss those
-    pairs even though the nth remaining "1" still belongs to the nth remaining
-    "1" in the solution booklet. Keep these matches review-marked unless the
-    quoted snippet gives high confidence.
-    """
-    rescued = 0
-    used_solution_ids: set[int] = set()
-    by_number_problems: dict[str, list[MatchItem]] = defaultdict(list)
-    by_number_solutions: dict[str, list[MatchItem]] = defaultdict(list)
-    for problem in problem_items:
-        by_number_problems[problem.problem_number].append(problem)
-    for solution in solution_items:
-        by_number_solutions[solution.problem_number].append(solution)
-
-    for number, number_problems in by_number_problems.items():
-        number_solutions = by_number_solutions.get(number, [])
-        if not number_solutions:
-            continue
-        ordered_problems = sorted(number_problems, key=lambda value: (value.number_occurrence, value.page_idx))
-        ordered_solutions = sorted(number_solutions, key=lambda value: (value.number_occurrence, value.page_idx))
+        count_mismatch = len(section_problems) != len(section_solutions)
+        ordered_problems = sorted(section_problems, key=lambda value: (value.local_index, value.global_index))
+        ordered_solutions = sorted(section_solutions, key=lambda value: (value.local_index, value.global_index))
         for problem, solution in zip(ordered_problems, ordered_solutions):
-            if id(solution.item) in used_solution_ids:
+            if problem.item.get("solution") is not None or id(solution.item) in used_solution_ids:
                 continue
-            confidence, needs_review, rejected = _score_pair(problem.item, solution.item, allow_low_similarity=True)
-            if rejected:
-                continue
-            _attach(problem.item, solution.item, confidence, needs_review, "number_order")
+            warnings = ["section_count_mismatch"] if count_mismatch else []
+            warnings.extend(_semantic_review_warnings(problem.item, solution.item))
+            _attach(problem.item, solution.item, 0.95, bool(warnings), "section_order", warnings)
             used_solution_ids.add(id(solution.item))
-            rescued += 1
-    return rescued, used_solution_ids
+            matched += 1
+    return matched
 
 
-def _hungarian_assign_by_number(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> tuple[int, set[int]]:
-    rescued = 0
-    used_solution_ids: set[int] = set()
-    by_number_problems: dict[str, list[MatchItem]] = defaultdict(list)
-    by_number_solutions: dict[str, list[MatchItem]] = defaultdict(list)
-    for problem in problem_items:
-        by_number_problems[problem.problem_number].append(problem)
-    for solution in solution_items:
-        by_number_solutions[solution.problem_number].append(solution)
+def _assign_global_order(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+    used_solution_ids: set[int],
+) -> int:
+    unmatched_problems = [problem for problem in problem_items if problem.item.get("solution") is None]
+    unmatched_solutions = [solution for solution in solution_items if id(solution.item) not in used_solution_ids]
+    if not unmatched_problems or not unmatched_solutions:
+        return 0
+    if len(unmatched_problems) != len(unmatched_solutions):
+        return 0
+    matched = 0
+    for problem, solution in zip(
+        sorted(unmatched_problems, key=lambda value: (value.global_index, value.page_idx, value.local_index)),
+        sorted(unmatched_solutions, key=lambda value: (value.global_index, value.page_idx, value.local_index)),
+    ):
+        warnings = _semantic_review_warnings(problem.item, solution.item)
+        _attach(problem.item, solution.item, 0.90, bool(warnings), "global_order", warnings)
+        used_solution_ids.add(id(solution.item))
+        matched += 1
+    return matched
 
-    for number, number_problems in by_number_problems.items():
-        number_solutions = by_number_solutions.get(number, [])
-        if not number_problems or not number_solutions:
+
+def _semantic_assign(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+    used_solution_ids: set[int],
+    same_section_only: bool,
+    method: str,
+    threshold: float,
+) -> int:
+    unmatched_problems = [problem for problem in problem_items if problem.item.get("solution") is None]
+    unmatched_solutions = [solution for solution in solution_items if id(solution.item) not in used_solution_ids]
+    if same_section_only:
+        pairs_by_bucket: dict[str | None, tuple[list[MatchItem], list[MatchItem]]] = {}
+        problem_groups = _group_by_section(unmatched_problems)
+        solution_groups = _group_by_section(unmatched_solutions)
+        for section_label, section_problems in problem_groups.items():
+            section_solutions = solution_groups.get(section_label, [])
+            if section_label and section_solutions:
+                pairs_by_bucket[section_label] = (section_problems, section_solutions)
+    else:
+        pairs_by_bucket = {None: (unmatched_problems, unmatched_solutions)}
+
+    matched = 0
+    for _bucket, (bucket_problems, bucket_solutions) in pairs_by_bucket.items():
+        if not bucket_problems or not bucket_solutions:
             continue
-        scores = np.zeros((len(number_problems), len(number_solutions)), dtype=np.float32)
-        for row, problem in enumerate(number_problems):
-            for column, solution in enumerate(number_solutions):
-                probe_text = _solution_text_for_fallback(solution.item)
-                score = cosine_similarity(probe_text, _stem_text(problem.item))
-                scores[row, column] = float(score if score is not None else 0.0)
-
-        try:
-            from scipy.optimize import linear_sum_assignment
-
-            rows, columns = linear_sum_assignment(-scores)
-        except Exception:
-            rows, columns = _greedy_assignment(scores)
-
+        scores = np.zeros((len(bucket_problems), len(bucket_solutions)), dtype=np.float32)
+        for row, problem in enumerate(bucket_problems):
+            for column, solution in enumerate(bucket_solutions):
+                scores[row, column] = _score_pair(problem.item, solution.item)
+        rows, columns = _linear_assignment(scores)
         for row, column in zip(rows, columns):
             score = float(scores[row, column])
-            if score < 0.55:
+            if score < threshold:
                 continue
-            problem = number_problems[int(row)]
-            solution = number_solutions[int(column)]
-            _attach(problem.item, solution.item, score, score < 0.75, "number_hungarian")
+            problem = bucket_problems[int(row)]
+            solution = bucket_solutions[int(column)]
+            if problem.item.get("solution") is not None or id(solution.item) in used_solution_ids:
+                continue
+            warnings = []
+            if problem.section_label != solution.section_label:
+                warnings.append("semantic_cross_section")
+            confidence = max(0.70, min(0.89, score))
+            _attach(problem.item, solution.item, confidence, True, method, warnings)
             used_solution_ids.add(id(solution.item))
-            rescued += 1
-    return rescued, used_solution_ids
+            matched += 1
+    return matched
 
 
-def _global_order_assign(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> tuple[int, set[int]]:
-    """Last-resort pairing by remaining source order.
+def _linear_assignment(scores: np.ndarray) -> tuple[list[int], list[int]]:
+    try:
+        from scipy.optimize import linear_sum_assignment
 
-    This catches OCR number variants that canonicalization still misses. Every
-    match is review-marked and low-confidence because it is intentionally broad.
-    """
-    rescued = 0
-    used_solution_ids: set[int] = set()
-    ordered_problems = sorted(problem_items, key=lambda value: (value.page_idx, value.number_occurrence, value.problem_number))
-    ordered_solutions = sorted(solution_items, key=lambda value: (value.page_idx, value.number_occurrence, value.problem_number))
-    for problem, solution in zip(ordered_problems, ordered_solutions):
-        if id(solution.item) in used_solution_ids:
-            continue
-        probe_text = _solution_text_for_fallback(solution.item)
-        similarity = cosine_similarity(probe_text, _stem_text(problem.item))
-        confidence = similarity if similarity is not None else 0.25
-        _attach(problem.item, solution.item, confidence, True, "global_order")
-        used_solution_ids.add(id(solution.item))
-        rescued += 1
-    return rescued, used_solution_ids
+        rows, columns = linear_sum_assignment(-scores)
+        return list(rows), list(columns)
+    except Exception:
+        return _greedy_assignment(scores)
 
 
 def _greedy_assignment(scores: np.ndarray) -> tuple[list[int], list[int]]:
@@ -335,6 +432,28 @@ def _greedy_assignment(scores: np.ndarray) -> tuple[list[int], list[int]]:
     return rows, columns
 
 
+def _sequence_warning_codes(items: list[MatchItem]) -> list[str]:
+    warnings: list[str] = []
+    by_section = _group_by_section(items)
+    for section_items in by_section.values():
+        numbers = [_numeric_number(item.problem_number) for item in section_items]
+        numeric_numbers = [number for number in numbers if number is not None]
+        if not numeric_numbers:
+            continue
+        counts = Counter(numeric_numbers)
+        if any(count > 1 for count in counts.values()):
+            warnings.append("duplicate_numbers")
+        unique_sorted = sorted(counts)
+        if unique_sorted:
+            expected = list(range(unique_sorted[0], unique_sorted[-1] + 1))
+            missing = [number for number in expected if number not in counts]
+            if missing:
+                warnings.append("missing_numbers")
+        if numeric_numbers != sorted(numeric_numbers):
+            warnings.append("reordered_numbers")
+    return list(dict.fromkeys(warnings))
+
+
 def _apply_inversion_warnings(problems: list[dict[str, Any]]) -> int:
     matched = [
         problem
@@ -350,114 +469,158 @@ def _apply_inversion_warnings(problems: list[dict[str, Any]]) -> int:
             for target in (previous_problem, problem):
                 if target and target.get("match_flags"):
                     target["match_flags"]["inversion_warning"] = True
+                    warnings = target["match_flags"].setdefault("warnings", [])
+                    if "solution_order_inversion" not in warnings:
+                        warnings.append("solution_order_inversion")
             warning_count += 1
         previous_solution_page = solution_page
         previous_problem = problem
     return warning_count
 
 
+def _section_summary(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> list[dict[str, Any]]:
+    problem_counts = Counter(item.section_label or "UNSECTIONED" for item in problem_items)
+    solution_counts = Counter(item.section_label or "UNSECTIONED" for item in solution_items)
+    sections: list[dict[str, Any]] = []
+    for section_id in sorted(set(problem_counts) | set(solution_counts)):
+        problem_count = problem_counts.get(section_id, 0)
+        solution_count = solution_counts.get(section_id, 0)
+        sections.append(
+            {
+                "section_id": None if section_id == "UNSECTIONED" else section_id,
+                "problem_count": problem_count,
+                "solution_count": solution_count,
+                "status": "ok" if problem_count == solution_count else "count_mismatch",
+            }
+        )
+    return sections
+
+
+def _item_json(item: dict[str, Any], text_key: str) -> dict[str, Any]:
+    return {
+        "section_id": item.get("section_id"),
+        "problem_no": item.get("problem_no") or _canonical_number(item.get("problem_number")),
+        "global_index": item.get("global_index"),
+        "page_start": int(item.get("page_index", item.get("page_idx", 0)) or 0) + 1,
+        "page_end": int(item.get("page_end", item.get("page_index", item.get("page_idx", 0))) or 0) + 1,
+        "text": _text(item.get(text_key)),
+        "image_refs": [value for value in (item.get("visual_url"), item.get("review_page_image_url")) if value],
+    }
+
+
+def _build_match_json(problems: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for problem in problems:
+        flags = problem.get("match_flags") or {}
+        solution = problem.get("solution")
+        problem_key = problem.get("canonical_key") or f"{problem.get('section_id')}-{problem.get('problem_no')}"
+        payload.append(
+            {
+                "match_id": problem_key,
+                "problem": _item_json(problem, "problem_text"),
+                "solution": _item_json(solution, "solution_steps") if solution else None,
+                "match_method": flags.get("matched_via", "unmatched"),
+                "confidence": problem.get("match_confidence", 0.0),
+                "warnings": flags.get("warnings", []),
+            }
+        )
+    return payload
+
+
+def _build_summary(
+    problems: list[dict[str, Any]],
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+) -> dict[str, Any]:
+    matched = [problem for problem in problems if problem.get("solution") is not None]
+    used_solution_ids = {id(problem["solution"]) for problem in matched if problem.get("solution") is not None}
+    summary = {
+        "problem_count": len(problem_items),
+        "solution_count": len(solution_items),
+        "matched_count": len(matched),
+        "unmatched_problems": [
+            problem.get("canonical_key") or problem.get("global_index")
+            for problem in problems
+            if problem.get("solution") is None
+        ],
+        "unmatched_solutions": [
+            solution.item.get("canonical_key") or solution.item.get("global_index")
+            for solution in solution_items
+            if id(solution.item) not in used_solution_ids
+        ],
+        "sections": _section_summary(problem_items, solution_items),
+        "warnings": [],
+    }
+    if len(problem_items) != len(solution_items):
+        summary["warnings"].append("count_mismatch")
+    summary["warnings"].extend(f"problem_{code}" for code in _sequence_warning_codes(problem_items))
+    summary["warnings"].extend(f"solution_{code}" for code in _sequence_warning_codes(solution_items))
+    summary["warnings"] = list(dict.fromkeys(summary["warnings"]))
+    return summary
+
+
 def _print_stats(
     problems: list[dict[str, Any]],
-    primary_count: int,
-    section_rescued_count: int,
-    number_order_count: int,
-    number_hungarian_count: int,
-    global_order_count: int,
+    method_counts: dict[str, int],
     inversion_count: int,
+    summary: dict[str, Any],
 ) -> None:
     total = len(problems)
     matched = [problem for problem in problems if problem.get("solution") is not None]
-    high = sum(1 for problem in problems if float(problem.get("match_confidence") or 0.0) >= 0.75)
-    medium = sum(1 for problem in problems if 0.5 <= float(problem.get("match_confidence") or 0.0) < 0.75)
-    low = sum(1 for problem in problems if float(problem.get("match_confidence") or 0.0) < 0.5)
+    high = sum(1 for problem in problems if float(problem.get("match_confidence") or 0.0) >= 0.9)
+    medium = sum(1 for problem in problems if 0.7 <= float(problem.get("match_confidence") or 0.0) < 0.9)
+    low = sum(1 for problem in problems if float(problem.get("match_confidence") or 0.0) < 0.7)
+    method_text = ", ".join(f"{key}={value}" for key, value in sorted(method_counts.items()))
     print(
         "[matcher] "
-        f"total_problems={total}, matched={len(matched)}, unmatched={total - len(matched)}, "
+        f"total_problems={total}, total_solutions={summary['solution_count']}, "
+        f"matched={len(matched)}, unmatched={total - len(matched)}, "
         f"confidence_high={high}, confidence_mid={medium}, confidence_low={low}, "
-        f"primary_matches={primary_count}, section_hungarian_rescued={section_rescued_count}, "
-        f"number_order_rescued={number_order_count}, number_hungarian_rescued={number_hungarian_count}, "
-        f"global_order_rescued={global_order_count}, "
-        f"inversion_warnings={inversion_count}",
+        f"{method_text}, inversion_warnings={inversion_count}, "
+        f"summary_warnings={summary['warnings']}",
         flush=True,
     )
 
 
-def match(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> dict[str, Any]:
     problem_items = _annotate_occurrences(problems)
     solution_items = _annotate_occurrences(solutions)
-    solutions_by_key = {solution.key: solution for solution in solution_items}
     used_solution_ids: set[int] = set()
-    rejected_problem_items: list[MatchItem] = []
-    primary_count = 0
+    method_counts: dict[str, int] = {}
 
-    for problem in problem_items:
-        solution = solutions_by_key.get(problem.key)
-        if solution is None:
-            continue
-        confidence, needs_review, rejected = _score_pair(problem.item, solution.item, allow_low_similarity=True)
-        if rejected:
-            rejected_problem_items.append(problem)
-            continue
-        _attach(problem.item, solution.item, confidence, needs_review, "primary")
-        used_solution_ids.add(id(solution.item))
-        primary_count += 1
-
-    unmatched_problem_items = [
-        problem for problem in problem_items
-        if problem.item.get("solution") is None
-    ]
-    unmatched_solution_items = [
-        solution for solution in solution_items
-        if id(solution.item) not in used_solution_ids
-    ]
-    section_rescued_count, section_rescued_solution_ids = _hungarian_assign(unmatched_problem_items, unmatched_solution_items)
-    used_solution_ids.update(section_rescued_solution_ids)
-
-    unmatched_problem_items = [
-        problem for problem in problem_items
-        if problem.item.get("solution") is None
-    ]
-    unmatched_solution_items = [
-        solution for solution in solution_items
-        if id(solution.item) not in used_solution_ids
-    ]
-    number_order_count, number_order_solution_ids = _number_order_assign(unmatched_problem_items, unmatched_solution_items)
-    used_solution_ids.update(number_order_solution_ids)
-
-    unmatched_problem_items = [
-        problem for problem in problem_items
-        if problem.item.get("solution") is None
-    ]
-    unmatched_solution_items = [
-        solution for solution in solution_items
-        if id(solution.item) not in used_solution_ids
-    ]
-    number_hungarian_count, number_hungarian_solution_ids = _hungarian_assign_by_number(unmatched_problem_items, unmatched_solution_items)
-    used_solution_ids.update(number_hungarian_solution_ids)
-
-    unmatched_problem_items = [
-        problem for problem in problem_items
-        if problem.item.get("solution") is None
-    ]
-    unmatched_solution_items = [
-        solution for solution in solution_items
-        if id(solution.item) not in used_solution_ids
-    ]
-    global_order_count, global_order_solution_ids = _global_order_assign(unmatched_problem_items, unmatched_solution_items)
-    used_solution_ids.update(global_order_solution_ids)
+    method_counts["section_number"] = _assign_section_number(problem_items, solution_items, used_solution_ids)
+    method_counts["section_order"] = _assign_section_order(problem_items, solution_items, used_solution_ids)
+    method_counts["global_order"] = _assign_global_order(problem_items, solution_items, used_solution_ids)
+    method_counts["semantic_section"] = _semantic_assign(
+        problem_items,
+        solution_items,
+        used_solution_ids,
+        same_section_only=True,
+        method="semantic_section",
+        threshold=0.60,
+    )
+    method_counts["semantic_global"] = _semantic_assign(
+        problem_items,
+        solution_items,
+        used_solution_ids,
+        same_section_only=False,
+        method="semantic_global",
+        threshold=0.70,
+    )
 
     for problem in problem_items:
         if problem.item.get("solution") is None:
-            _attach(problem.item, None, 0.0, True, "unmatched")
+            _attach(problem.item, None, 0.0, True, "unmatched", ["unmatched_solution"])
 
     inversion_count = _apply_inversion_warnings(problems)
-    _print_stats(
-        problems,
-        primary_count,
-        section_rescued_count,
-        number_order_count,
-        number_hungarian_count,
-        global_order_count,
-        inversion_count,
-    )
-    return problems
+    summary = _build_summary(problems, problem_items, solution_items)
+    _print_stats(problems, method_counts, inversion_count, summary)
+    return {
+        "matches": _build_match_json(problems),
+        "summary": summary,
+        "problems": problems,
+    }
+
+
+def match(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return match_with_summary(problems, solutions)["problems"]
