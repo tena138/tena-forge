@@ -52,7 +52,7 @@ class LocalWorkerProblem(BaseModel):
 
 class LocalWorkerComplete(BaseModel):
     problems: list[LocalWorkerProblem]
-    solutions: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    solutions: list[dict[str, Any]] | dict[str, dict[str, Any]] = Field(default_factory=list)
 
 
 class LocalWorkerFail(BaseModel):
@@ -88,6 +88,24 @@ def _set_progress(batch: Batch, payload: LocalWorkerProgress) -> None:
     if not batch.progress_started_at:
         batch.progress_started_at = now
     batch.progress_updated_at = now
+
+
+def _normalize_solutions_payload(payload: LocalWorkerComplete) -> list[dict[str, Any]]:
+    if isinstance(payload.solutions, list):
+        normalized = []
+        for value in payload.solutions:
+            if isinstance(value, dict):
+                solution = dict(value)
+                if solution.get("problem_number"):
+                    normalized.append(solution)
+        return normalized
+
+    normalized = []
+    for key, value in payload.solutions.items():
+        solution = dict(value or {})
+        solution.setdefault("problem_number", str(key))
+        normalized.append(solution)
+    return normalized
 
 
 @router.get("/jobs/next", response_model=LocalWorkerJob | None)
@@ -173,11 +191,7 @@ def complete_job(batch_id: UUID, payload: LocalWorkerComplete, request: Request,
     batch = _owned_batch(db, batch_id, current_owner_id(request))
     db.query(Problem).filter(Problem.source_batch_id == batch.id).delete(synchronize_session=False)
     problems = [problem.model_dump() for problem in payload.problems]
-    solutions = []
-    for key, value in payload.solutions.items():
-        solution = dict(value or {})
-        solution.setdefault("problem_number", str(key))
-        solutions.append(solution)
+    solutions = _normalize_solutions_payload(payload)
     if not solutions:
         for problem in problems:
             if problem.get("answer") or problem.get("solution_steps") or problem.get("key_concept"):

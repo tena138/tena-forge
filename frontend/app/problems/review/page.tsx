@@ -675,6 +675,19 @@ function ProblemReviewClient() {
 
   const reviewReady = Boolean(selectedBatchId && current && !loadingCurrent);
   const problemTextDirty = Boolean(current && problemTextDraft !== (current.problem_text || ""));
+  const currentPageProblems = useMemo(() => {
+    const pageNumber = current?.review_page_number || currentListItem?.review_page_number;
+    if (!pageNumber) return current ? [current] : [];
+    const byId = new Map<string, Problem>();
+    problems
+      .filter((problem) => problem.review_page_number === pageNumber)
+      .forEach((problem) => byId.set(problem.id, problem));
+    if (current?.review_page_number === pageNumber) byId.set(current.id, current);
+    return Array.from(byId.values()).sort((left, right) => {
+      if (left.problem_number !== right.problem_number) return left.problem_number - right.problem_number;
+      return left.id.localeCompare(right.id);
+    });
+  }, [current, currentListItem?.review_page_number, problems]);
 
   return (
     <div className="min-w-0 space-y-4">
@@ -730,6 +743,9 @@ function ProblemReviewClient() {
           <OriginalPagePanel
             problem={current}
             loading={loadingCurrent}
+            pageProblems={currentPageProblems}
+            currentProblemId={currentId}
+            onOpenProblem={(problemId) => void openProblemById(problemId)}
             onVisualSaved={(updated) => {
               setCurrent(updated);
               setProblems((items) => items.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
@@ -937,6 +953,7 @@ function ReviewProblemSelector({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const clickProblemIdRef = useRef<string | null>(null);
   const suppressClickRef = useRef(false);
   const selectedIdsRef = useRef(selectedIds);
   const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
@@ -1027,6 +1044,7 @@ function ReviewProblemSelector({
     if (event.button !== 0 || event.pointerType === "touch") return;
     const target = event.target as HTMLElement;
     if (target.closest("[data-review-selector-control='true']")) return;
+    clickProblemIdRef.current = target.closest<HTMLElement>("[data-review-problem-card-id]")?.dataset.reviewProblemCardId || null;
     event.currentTarget.setPointerCapture(event.pointerId);
     suppressClickRef.current = false;
     dragStartRef.current = { x: event.clientX, y: event.clientY };
@@ -1040,6 +1058,7 @@ function ReviewProblemSelector({
     if (!start) return;
     const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
     if (distance < 8 && !isDragSelecting) return;
+    clickProblemIdRef.current = null;
     if (!isDragSelecting) {
       setIsDragSelecting(true);
       suppressClickRef.current = true;
@@ -1050,6 +1069,7 @@ function ReviewProblemSelector({
 
   function onPointerUp(event: PointerEvent<HTMLDivElement>) {
     if (!dragStartRef.current) return;
+    const clickProblemId = clickProblemIdRef.current;
     if (animationFrameRef.current !== null) {
       window.cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -1062,8 +1082,11 @@ function ReviewProblemSelector({
         suppressClickRef.current = false;
         setSuppressClick(false);
       }, 120);
+    } else if (clickProblemId) {
+      onOpenProblem(clickProblemId);
     }
     dragStartRef.current = null;
+    clickProblemIdRef.current = null;
     setIsDragSelecting(false);
     setDragBox(null);
   }
@@ -1111,13 +1134,19 @@ function ReviewProblemSelector({
               <article
                 key={problem.id}
                 ref={(element) => { itemRefs.current[problem.id] = element; }}
+                data-review-problem-card-id={problem.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${problem.problem_number}번 문항 검토로 이동`}
                 className={cn(
-                  "relative rounded-[7px] border bg-white/[0.04] p-2 pl-9 text-left transition-colors",
+                  "relative cursor-pointer rounded-[7px] border bg-white/[0.04] p-2 pl-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60",
                   current && "border-violet-300/60 bg-violet-400/12",
                   selected && "border-sky-300/60 bg-sky-400/12",
                   !current && !selected && "border-white/10 hover:border-white/20 hover:bg-white/[0.07]",
                 )}
-                onClick={() => {
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
                   if (suppressClick || suppressClickRef.current) return;
                   onOpenProblem(problem.id);
                 }}
@@ -1158,10 +1187,16 @@ function ReviewProblemSelector({
 function OriginalPagePanel({
   problem,
   loading,
+  pageProblems,
+  currentProblemId,
+  onOpenProblem,
   onVisualSaved,
 }: {
   problem: Problem | null;
   loading: boolean;
+  pageProblems: Problem[];
+  currentProblemId: string | null;
+  onOpenProblem: (problemId: string) => void;
   onVisualSaved: (problem: Problem) => void;
 }) {
   const [zoom, setZoom] = useState(100);
@@ -1289,7 +1324,41 @@ function OriginalPagePanel({
               draggable={false}
               onDragStart={(event) => event.preventDefault()}
             />
-            {/* TODO: Overlay extraction bounding boxes when the backend returns box coordinates. */}
+            {pageProblems.length ? (
+              <div
+                className="absolute right-3 top-3 z-10 flex max-h-[calc(100%-1.5rem)] w-48 flex-col gap-1 overflow-auto rounded-lg border border-white/15 bg-[#090912]/88 p-2 shadow-2xl backdrop-blur"
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerMove={(event) => event.stopPropagation()}
+                onPointerUp={(event) => event.stopPropagation()}
+              >
+                <div className="px-1 pb-1 text-[11px] font-semibold text-slate-400">같은 페이지 문항</div>
+                {pageProblems.map((pageProblem) => {
+                  const active = pageProblem.id === currentProblemId;
+                  const label = pageProblem.tags?.unit || pageProblem.tags?.subject || (pageProblem.needs_review ? "검토 필요" : "검토 완료");
+                  return (
+                    <button
+                      key={pageProblem.id}
+                      type="button"
+                      className={cn(
+                        "rounded-[7px] border px-2 py-1.5 text-left transition",
+                        active
+                          ? "border-violet-300/70 bg-violet-400/20 text-white"
+                          : "border-white/10 bg-white/[0.055] text-slate-200 hover:border-violet-300/45 hover:bg-violet-400/12",
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenProblem(pageProblem.id);
+                      }}
+                    >
+                      <span className="block text-xs font-bold">#{pageProblem.problem_number}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                        {label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             {selection && imageRef.current ? (
               <div
                 className="pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/15"

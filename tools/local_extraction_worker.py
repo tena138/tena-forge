@@ -136,7 +136,7 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
         ) if has_solution else problem_dpi
         post_progress(client, batch_id, "PDF 페이지 수 확인 완료", 0, total_units)
 
-        solutions: dict[int, dict[str, Any]] = {}
+        solutions: list[dict[str, Any]] = []
         if has_solution:
             solution_models = [model.strip() for model in settings.ai_solution_model_pool.split(",") if model.strip()]
             if not solution_models:
@@ -166,7 +166,7 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
                     base + chunk_len,
                     total_units,
                 )
-                solutions.update(extract_solutions(solution_pages, display_total_pages=solution_page_count))
+                solutions.extend(extract_solutions(solution_pages, display_total_pages=solution_page_count))
                 processed_solution_pages += chunk_len
 
         problem_models = [model.strip() for model in settings.ai_model_pool.split(",") if model.strip()]
@@ -223,7 +223,7 @@ def process_job(client: httpx.Client, job: dict[str, Any]) -> None:
 
         payload = {
             "problems": all_problems,
-            "solutions": {str(number): value for number, value in solutions.items()},
+            "solutions": solutions,
         }
         post_progress(client, batch_id, "문항 저장 중", total_units, total_units)
         response = client.post(f"/api/local-worker/jobs/{batch_id}/complete", json=payload, timeout=120)
