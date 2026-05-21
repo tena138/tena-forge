@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { AlertTriangle, Cloud, FileText, Loader2, MonitorCog, ShieldCheck, UploadCloud, X } from "lucide-react";
+import { FileText, Loader2, ShieldCheck, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,12 +12,10 @@ import { ColorPicker } from "@/components/editor/color-picker";
 import { Batch, BatchStatus, SourceType } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
-import { launchLocalWorker, localWorkerManualCommand, localWorkerProtocolSetupCommand } from "@/lib/local-worker-launch";
 import { cn } from "@/lib/utils";
 
 type UploadResponse = { batch_id: string; status: BatchStatus };
 type TagColorMap = Record<string, string>;
-type ProcessingMode = "local" | "cloud";
 
 const SUBJECT_TAG_COLORS_KEY = "tena-forge-upload-subject-tag-colors";
 const UNIT_TAG_COLORS_KEY = "tena-forge-upload-unit-tag-colors";
@@ -261,13 +259,9 @@ export default function UploadPage() {
   const sourceLabel = "";
   const [rightsNote, setRightsNote] = useState("");
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>("cloud");
   const [batchId, setBatchId] = useState<string | null>(null);
   const [historyBatchSnapshot, setHistoryBatchSnapshot] = useState<Batch | null>(null);
   const [message, setMessage] = useState("");
-  const [localLaunchBatchId, setLocalLaunchBatchId] = useState<string | null>(null);
-  const [localLaunchHelp, setLocalLaunchHelp] = useState("");
-  const [copiedLocalCommand, setCopiedLocalCommand] = useState("");
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -336,26 +330,6 @@ export default function UploadPage() {
     });
   }
 
-  async function copyLocalWorkerCommand(command: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopiedLocalCommand(label);
-    } catch {
-      setCopiedLocalCommand("복사 실패");
-      window.prompt("명령을 복사하세요.", command);
-    }
-  }
-
-  function openLocalWorker(targetBatchId: string) {
-    setLocalLaunchHelp("");
-    setCopiedLocalCommand("");
-    launchLocalWorker(targetBatchId, {
-      onPossiblyBlocked: () => {
-        setLocalLaunchHelp("로컬 실행기가 열리지 않으면 이 PC에 tenaforge:// 실행기 연결이 등록되지 않은 상태입니다.");
-      },
-    });
-  }
-
   function handleProblemPdfChange(file: File | null) {
     const nextAutoBatchName = file ? fileNameToBatchName(file.name) : "";
     setProblemPdf(file);
@@ -391,7 +365,6 @@ export default function UploadPage() {
     form.append("rights_note", rightsNote);
     form.append("subject_candidates", JSON.stringify(selectedSubjects));
     form.append("unit_candidates", JSON.stringify(finalUnitCandidates));
-    form.append("processing_mode", processingMode);
     if (solutionPdf) form.append("solution_pdf", solutionPdf);
     let data: UploadResponse;
     try {
@@ -415,15 +388,6 @@ export default function UploadPage() {
     setUploadPercent(null);
     setBatchId(data.batch_id);
     rememberActiveBatch(data.batch_id);
-    if (processingMode === "local") {
-      setLocalLaunchBatchId(data.batch_id);
-      setMessage("업로드 완료. 브라우저가 로컬 실행기를 열지 묻는 창을 띄우면 허용을 눌러주세요.");
-      window.setTimeout(() => openLocalWorker(data.batch_id), 150);
-      return;
-    }
-    setLocalLaunchBatchId(null);
-    setLocalLaunchHelp("");
-    setCopiedLocalCommand("");
     setMessage("업로드 완료. 아래 아카이빙 기록에서 진행률을 확인할 수 있습니다.");
   }
 
@@ -564,57 +528,6 @@ export default function UploadPage() {
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-            <h2 className="text-sm font-bold text-white">추출 처리 방식</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              클라우드 처리를 기본으로 사용합니다. 로컬 처리는 대량 작업이나 비용 절감이 필요할 때 선택할 수 있는 보조 옵션입니다.
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <button
-                type="button"
-                className={cn(
-                  "rounded-[8px] border p-4 text-left transition",
-                  processingMode === "cloud" ? "border-cyan-300/70 bg-cyan-400/12 text-white" : "border-white/10 bg-black/25 text-slate-300 hover:border-white/20"
-                )}
-                onClick={() => setProcessingMode("cloud")}
-              >
-                <div className="flex items-center gap-2 font-bold">
-                  <Cloud className="h-4 w-4 text-cyan-200" />
-                  클라우드 처리
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-400">로컬 앱을 켜지 않아도 서버에서 추출합니다. 사용량이 서버 비용에 반영됩니다.</p>
-                <p className="mt-3 text-xs font-semibold text-cyan-100">웹앱 기본 처리</p>
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "rounded-[8px] border p-4 text-left transition",
-                  processingMode === "local" ? "border-violet-300/70 bg-violet-400/12 text-white" : "border-white/10 bg-black/25 text-slate-300 hover:border-white/20"
-                )}
-                onClick={() => setProcessingMode("local")}
-              >
-                <div className="flex items-center gap-2 font-bold">
-                  <MonitorCog className="h-4 w-4 text-violet-200" />
-                  로컬 처리
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-400">내 컴퓨터 성능으로 추출합니다. 업로드 후 별도 로컬 실행기가 켜져 있어야 시작됩니다.</p>
-                <p className="mt-3 text-xs font-semibold text-violet-100">고급 사용자용</p>
-              </button>
-            </div>
-            {processingMode === "local" ? (
-              <div className="mt-4 rounded-[8px] border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
-                <div className="flex items-center gap-2 font-bold">
-                  <AlertTriangle className="h-4 w-4" />
-                  로컬 처리 선택 시 주의
-                </div>
-                <p className="mt-2 leading-6 text-amber-100/90">
-                  이 방식은 업로드만 서버에 저장하고, 실제 추출은 사용자의 PC에서 로컬 실행기를 켤 때 시작됩니다.
-                  업로드가 끝나면 브라우저가 실행기 열기 권한을 요청하므로 허용을 눌러주세요.
-                </p>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="flex items-center gap-2 text-sm font-bold text-white">
               <ShieldCheck className="h-4 w-4 text-violet-200" />
               업로드 권리 확인
@@ -649,35 +562,6 @@ export default function UploadPage() {
             </div>
           ) : null}
           {message ? <p className="text-sm text-slate-400">{message}</p> : null}
-          {localLaunchBatchId ? (
-            <div className="rounded-[8px] border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-bold">로컬 실행기 연결 대기 중</p>
-                  <p className="mt-1 leading-6 text-amber-100/90">브라우저 또는 Windows 확인 창에서 열기/허용을 누르면 로컬 추출이 시작됩니다.</p>
-                </div>
-                <Button type="button" variant="outline" onClick={() => openLocalWorker(localLaunchBatchId)}>
-                  <MonitorCog className="h-4 w-4" />
-                  로컬 실행기 다시 열기
-                </Button>
-              </div>
-            </div>
-          ) : null}
-          {localLaunchBatchId && localLaunchHelp ? (
-            <div className="rounded-[8px] border border-amber-300/25 bg-amber-300/10 p-4 text-xs leading-6 text-amber-50">
-              <p>{localLaunchHelp}</p>
-              <p className="mt-1 text-amber-100/80">프로젝트 루트에서 아래 명령을 실행하거나, 한 번만 등록한 뒤 버튼을 다시 누르세요.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => copyLocalWorkerCommand(localWorkerProtocolSetupCommand(), "등록 명령")}>
-                  등록 명령 복사
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => copyLocalWorkerCommand(localWorkerManualCommand(localLaunchBatchId), "직접 실행 명령")}>
-                  직접 실행 명령 복사
-                </Button>
-              </div>
-              {copiedLocalCommand ? <p className="mt-2 text-amber-100/80">{copiedLocalCommand}을 복사했습니다.</p> : null}
-            </div>
-          ) : null}
         </CardContent>
       </Card>
 

@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ClipboardCheck, Cloud, Eye, FileText, Info, MonitorCog, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, Batch } from "@/lib/api";
 import { rememberActiveBatch } from "@/lib/batch-progress";
-import { launchLocalWorker } from "@/lib/local-worker-launch";
 import { cn } from "@/lib/utils";
 
 function fileName(path: string | null) {
@@ -97,14 +96,10 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
         <Info className="h-4 w-4 text-violet-200" />
         처리 정보
       </div>
-      <div className="mt-3 grid gap-3 text-sm md:grid-cols-5">
+      <div className="mt-3 grid gap-3 text-sm md:grid-cols-4">
         <div>
           <p className="text-xs text-slate-500">자료 출처</p>
           <p className="mt-1 text-slate-200">{sourceLabel(batch.source_type)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500">처리 방식</p>
-          <p className="mt-1 text-slate-200">{batch.processing_mode === "cloud" ? "클라우드" : "로컬"}</p>
         </div>
         <div>
           <p className="text-xs text-slate-500">최근 단계</p>
@@ -126,40 +121,6 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
         <div>
           <p className="text-xs text-slate-500">권리 확인</p>
           <p className="mt-1 text-slate-200">{batch.rights_confirmed ? "확인됨" : "미확인"}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LocalWorkerPanel({ batch, busy, onRunCloud }: { batch: Batch; busy: boolean; onRunCloud: (batch: Batch) => void }) {
-  if (batch.processing_mode !== "local" || batch.status === "done" || batch.status === "error") return null;
-  const waiting = batch.status === "pending";
-
-  return (
-    <div className="rounded-lg border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2 font-bold">
-            <MonitorCog className="h-4 w-4" />
-            {waiting ? "로컬 실행기를 기다리는 중입니다." : "로컬 실행기에서 처리 중입니다."}
-          </div>
-          <p className="mt-2 max-w-3xl leading-6 text-amber-100/90">
-            로컬 처리는 브라우저가 PC의 Tena Forge 로컬 실행기를 여는 방식으로 시작됩니다. 확인 창이 뜨면 열기/허용을 눌러주세요.
-            실행기가 없거나 열리지 않으면 클라우드 처리로 전환할 수 있습니다.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => launchLocalWorker(batch.id)}>
-            <MonitorCog className="h-4 w-4" />
-            로컬 실행기 열기
-          </Button>
-          {waiting ? (
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => onRunCloud(batch)}>
-              <Cloud className="h-4 w-4" />
-              클라우드로 처리 시작
-            </Button>
-          ) : null}
         </div>
       </div>
     </div>
@@ -235,21 +196,6 @@ export function ArchiveBatchHistory({
     }
   }
 
-  async function runBatchInCloud(batch: Batch) {
-    if (batch.status === "processing") return;
-    const ok = window.confirm(`'${batch.name}' 배치를 클라우드 처리로 전환할까요? 서버에서 바로 추출을 시작합니다.`);
-    if (!ok) return;
-    setBusyId(batch.id);
-    try {
-      const response = await api<{ batch_id: string; status: Batch["status"] }>(`/api/batches/${batch.id}/run-cloud`, { method: "POST" });
-      rememberActiveBatch(response.batch_id);
-      await loadBatches();
-      router.push("/archive/new");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function markBatchReviewNeeded(batch: Batch) {
     if (!batch.problem_count || busyId === batch.id) return;
     const ok = window.confirm(`'${batch.name}' 배치의 문항 ${batch.problem_count}개를 다시 검토 필요 상태로 표시할까요?`);
@@ -273,11 +219,7 @@ export function ArchiveBatchHistory({
       const response = await api<{ batch_id: string; status: Batch["status"] }>(`/api/batches/${batch.id}/reprocess-solutions`, { method: "POST" });
       rememberActiveBatch(response.batch_id);
       await loadBatches();
-      if (batch.processing_mode === "local") {
-        launchLocalWorker(batch.id);
-      } else {
-        router.push("/archive/new");
-      }
+      router.push("/archive/new");
     } finally {
       setBusyId(null);
     }
@@ -357,7 +299,6 @@ export function ArchiveBatchHistory({
             </CardHeader>
             <CardContent className="space-y-4">
               <BatchErrorPanel batch={batch} />
-              <LocalWorkerPanel batch={batch} busy={busyId === batch.id} onRunCloud={runBatchInCloud} />
               <BatchInfoPanel batch={batch} />
 
               <div className="grid gap-3 md:grid-cols-2">

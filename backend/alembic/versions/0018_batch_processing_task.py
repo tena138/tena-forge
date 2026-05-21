@@ -5,7 +5,7 @@ import sqlalchemy as sa
 
 
 revision = "0018_batch_processing_task"
-down_revision = "0017_batch_processing_mode"
+down_revision = "0016_batch_subject_unit_candidates"
 branch_labels = None
 depends_on = None
 

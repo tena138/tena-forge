@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BatchStatus } from "@/lib/api";
@@ -17,7 +17,6 @@ import {
   shouldForgetActiveBatchAfterStatusError
 } from "@/lib/batch-progress";
 import { addBatchStatusNotification } from "@/lib/batch-notifications";
-import { launchLocalWorker } from "@/lib/local-worker-launch";
 
 export function GlobalBatchProgress() {
   const [batchId, setBatchId] = useState<string | null>(null);
@@ -81,18 +80,17 @@ export function GlobalBatchProgress() {
 
   const progress = statusData.progress_percent ?? 0;
   const message = friendlyProgressMessage(statusData.status as BatchStatus, statusData.progress_message);
-  const needsLocalWorker = statusData.processing_mode === "local" && statusData.status === "pending";
 
   return (
     <div className="fixed bottom-5 right-5 z-40 w-[min(92vw,420px)] rounded-lg border bg-card/95 p-4 shadow-[0_18px_45px_rgba(37,20,76,0.18)] backdrop-blur">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
-            {needsLocalWorker ? <AlertTriangle className="h-4 w-4 text-amber-300" /> : <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-            {needsLocalWorker ? "로컬 실행기가 필요합니다." : message}
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            {message}
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {needsLocalWorker ? "브라우저 확인 창에서 열기/허용을 누르면 시작됩니다." : statusData.progress_message}
+            {statusData.progress_message}
           </p>
         </div>
         <span className="shrink-0 text-sm text-muted-foreground">{progress}%</span>
@@ -103,7 +101,6 @@ export function GlobalBatchProgress() {
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>{formatRemaining(statusData.estimated_seconds_remaining)}</span>
         <div className="flex items-center gap-2">
-          {needsLocalWorker ? <Button size="sm" variant="outline" onClick={() => launchLocalWorker(batchId)}>실행기 열기</Button> : null}
           <Link href="/archive/new">
             <Button size="sm" variant="outline">상태 보기</Button>
           </Link>

@@ -476,7 +476,7 @@ function ProductStage({
   const consoleSectionRefs = useRef<Partial<Record<SceneKey, HTMLElement | null>>>({});
   const [cameraY, setCameraY] = useState(0);
   const [focusSettled, setFocusSettled] = useState(true);
-  const focusSignature = `${scene}:${specs.monthlyAiCredits}:${specs.fileStorageGb}:${specs.studentKeys}:${specs.processingMode}`;
+  const focusSignature = `${scene}:${specs.monthlyAiCredits}:${specs.fileStorageGb}:${specs.studentKeys}:${specs.processingSpeed}:${specs.concurrentJobs}`;
 
   useEffect(() => {
     setFocusSettled(false);
@@ -1226,7 +1226,7 @@ function FullPlanSummarySection({
               <SummaryLine>월 AI {specs.monthlyAiCredits.toLocaleString()} credits · 일 한도 {specs.dailyAiLimit.toLocaleString()} credits</SummaryLine>
               <SummaryLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항 · 저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SummaryLine>
               <SummaryLine>학생 키 {specs.studentKeys.toLocaleString()}개 · 처리 속도 {specs.processingSpeed}</SummaryLine>
-              <SummaryLine>추출 방식 {specs.processingMode} · {specs.cloudProcessing ? "클라우드 처리 포함" : "로컬 처리 기본"}</SummaryLine>
+              <SummaryLine>{specs.cloudProcessing === "custom" ? "맞춤 처리" : specs.cloudProcessing ? "클라우드 처리 포함" : "클라우드 처리 별도"}</SummaryLine>
               <SummaryLine>PDF 추출은 AI credits를 사용합니다.</SummaryLine>
               {plan === "basic" ? (
                 <>

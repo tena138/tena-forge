@@ -124,8 +124,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
                   <SpecLine>저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SpecLine>
                   <SpecLine>학생 키 {Number(specs.studentKeys).toLocaleString()}개</SpecLine>
                   <SpecLine>처리 속도 {specs.processingSpeed}</SpecLine>
-                  <SpecLine>추출 방식 {specs.processingMode}</SpecLine>
-                  <SpecLine>{specs.cloudProcessing ? "클라우드 처리 포함" : "로컬 처리 기본"}</SpecLine>
+                  <SpecLine>{specs.cloudProcessing ? "클라우드 처리 포함" : "클라우드 처리 별도"}</SpecLine>
                   <SpecLine>워터마크 없음</SpecLine>
                   <SpecLine>PDF 추출은 AI credits 차감</SpecLine>
                   {plan === "pro" ? <SpecLine>Marketplace included</SpecLine> : <SpecLine>Marketplace unavailable</SpecLine>}

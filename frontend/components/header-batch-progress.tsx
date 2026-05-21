@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { BatchStatus } from "@/lib/api";
 import {
@@ -80,20 +80,19 @@ export function HeaderBatchProgress() {
 
   const progress = statusData.progress_percent ?? 0;
   const message = friendlyProgressMessage(statusData.status as BatchStatus, statusData.progress_message);
-  const needsLocalWorker = statusData.processing_mode === "local" && statusData.status === "pending";
 
   return (
     <Link
       href="/archive/new"
-      title={`${needsLocalWorker ? "로컬 실행기가 필요합니다." : message} · ${progress}% · ${formatRemaining(statusData.estimated_seconds_remaining)}`}
+      title={`${message} · ${progress}% · ${formatRemaining(statusData.estimated_seconds_remaining)}`}
       className="group relative flex h-9 max-w-[92px] items-center gap-1.5 overflow-hidden rounded-[9px] bg-violet-400/12 px-2 text-xs font-semibold text-violet-50 shadow-[0_10px_28px_rgba(109,40,217,0.18)] ring-1 ring-violet-300/20 transition hover:bg-violet-400/18 hover:ring-violet-200/35 sm:max-w-[280px] sm:gap-2 sm:px-3"
       aria-label={`추출 진행 상황 ${progress}%`}
     >
       <span className="absolute inset-x-0 bottom-0 h-[2px] bg-white/10" />
       <span className="absolute bottom-0 left-0 h-[2px] bg-violet-300 transition-all duration-500" style={{ width: `${progress}%` }} />
-      {needsLocalWorker ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-200" /> : <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-violet-200" />}
-      <span className="hidden truncate lg:inline">{needsLocalWorker ? "로컬 실행기 필요" : message}</span>
-      <span className="hidden truncate sm:inline lg:hidden">{needsLocalWorker ? "대기 중" : "추출 중"}</span>
+      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-violet-200" />
+      <span className="hidden truncate lg:inline">{message}</span>
+      <span className="hidden truncate sm:inline lg:hidden">추출 중</span>
       <span className="shrink-0 text-violet-200">{progress}%</span>
     </Link>
   );

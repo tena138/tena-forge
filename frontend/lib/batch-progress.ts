@@ -8,7 +8,6 @@ export const ACTIVE_BATCH_EVENT = "tena-forge-active-batch-change";
 export type BatchStatusResponse = {
   batch_id: string;
   status: BatchStatus;
-  processing_mode?: "local" | "cloud";
   processing_task?: "full" | "solution_only";
   progress_message: string;
   progress_percent: number | null;
@@ -35,7 +34,6 @@ export function friendlyProgressMessage(status: BatchStatus | null, message: str
   if (status === "error") return message || "처리 중 오류가 발생했습니다.";
   if (!message) return "처리를 준비하고 있습니다.";
 
-  if (message.includes("로컬 워커 대기")) return "로컬 실행기가 필요합니다.";
   if (message.includes("렌더링") || message.includes("PDF")) return "PDF를 읽는 중입니다.";
   if (message.includes("문항") && message.includes("추출")) return "문항을 추출하는 중입니다.";
   if (message.includes("시각") || message.includes("캡처")) return "시각 자료를 정리하는 중입니다.";

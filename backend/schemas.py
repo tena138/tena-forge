@@ -219,7 +219,6 @@ class BatchRead(BaseModel):
     rights_note: str | None = None
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
-    processing_mode: str = "local"
     processing_task: str = "full"
     created_at: datetime
     problem_count: int = 0
@@ -251,11 +250,6 @@ class BatchRead(BaseModel):
             return [str(parsed)] if str(parsed or "").strip() else []
         return []
 
-    @field_validator("processing_mode", mode="before")
-    @classmethod
-    def default_processing_mode_for_legacy_null(cls, value):
-        return value or "local"
-
     @field_validator("processing_task", mode="before")
     @classmethod
     def default_processing_task_for_legacy_null(cls, value):
@@ -280,7 +274,6 @@ class BatchUploadResponse(BaseModel):
 class BatchStatusResponse(BaseModel):
     batch_id: UUID
     status: BatchStatus
-    processing_mode: str = "local"
     processing_task: str = "full"
     progress_message: str
     progress_percent: int | None = None

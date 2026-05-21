@@ -16,7 +16,7 @@ from database import Base, SessionLocal, engine, get_settings
 from limiter import limiter
 from models import Batch, BatchStatus
 from models import Problem, ProblemSetItem
-from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, local_worker, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
+from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
 
@@ -143,7 +143,6 @@ app.include_router(templates.router)
 app.include_router(template_hub.router)
 app.include_router(marketplace.router)
 app.include_router(licensed_library.router)
-app.include_router(local_worker.router)
 app.include_router(stores.router)
 app.include_router(export.router)
 app.include_router(assets.router)
@@ -222,7 +221,7 @@ def health_db():
             "alembic_versions": alembic_versions,
             "missing_tables": sorted({"academies", "user_roles", "batches", "problems", "problem_sets"} - tables),
             "missing_academy_columns": sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
-            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_mode", "processing_task"} - batch_columns),
+            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_task"} - batch_columns),
         }
     except Exception as exc:
         return JSONResponse(
@@ -246,7 +245,6 @@ def _ensure_sqlite_columns():
             "rights_note": "TEXT",
             "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
             "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
-            "processing_mode": "VARCHAR(20) DEFAULT 'local' NOT NULL",
             "processing_task": "VARCHAR(30) DEFAULT 'full' NOT NULL",
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",
             "academy_id": "VARCHAR(64)",
@@ -326,7 +324,6 @@ def _mark_interrupted_batches():
         )
         stale_condition = processing_condition | (
             (Batch.status == BatchStatus.pending)
-            & (Batch.processing_mode != "local")
             & (Batch.created_at < pending_stale_before)
         )
         interrupted = (

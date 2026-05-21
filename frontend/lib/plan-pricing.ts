@@ -9,7 +9,6 @@ export type PlanSpecs = {
   problemDb: number | "custom";
   fileStorageGb: number | "custom";
   studentKeys: number | "custom";
-  processingMode: "Local" | "Cloud" | "Hybrid" | "Custom";
   cloudProcessing: boolean | "custom";
   processingSpeed: "Standard" | "Fast" | "Custom";
   concurrentJobs: number | "custom";
@@ -58,8 +57,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: 100,
       fileStorageGb: 0.3,
       studentKeys: 0,
-      processingMode: "Local",
-      cloudProcessing: false,
+      cloudProcessing: true,
       processingSpeed: "Standard",
       concurrentJobs: 1,
       concurrentPdfExtractions: false,
@@ -88,8 +86,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: 5_000,
       fileStorageGb: 20,
       studentKeys: 10,
-      processingMode: "Local",
-      cloudProcessing: false,
+      cloudProcessing: true,
       processingSpeed: "Standard",
       concurrentJobs: 1,
       concurrentPdfExtractions: false,
@@ -116,8 +113,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: 30_000,
       fileStorageGb: 100,
       studentKeys: 100,
-      processingMode: "Hybrid",
-      cloudProcessing: false,
+      cloudProcessing: true,
       processingSpeed: "Fast",
       concurrentJobs: 3,
       concurrentPdfExtractions: 3,
@@ -147,7 +143,6 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: "custom",
       fileStorageGb: "custom",
       studentKeys: "custom",
-      processingMode: "Custom",
       cloudProcessing: "custom",
       processingSpeed: "Custom",
       concurrentJobs: "custom",
@@ -176,8 +171,7 @@ export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, P
       { id: "basic-student-max", group: "student", name: "Student Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { studentKeys: 50 }, description: "50 student keys" },
     ],
     processing: [
-      { id: "basic-processing-local", group: "processing", name: "Local Processing", label: "포함", monthlyPriceDelta: 0, specs: { processingMode: "Local", cloudProcessing: false, processingSpeed: "Standard", concurrentJobs: 1, concurrentPdfExtractions: false }, description: "사용자 PC에서 추출합니다. 서버 추가 비용 없이 기본 제공됩니다." },
-      { id: "basic-processing-cloud", group: "processing", name: "Cloud Processing", label: "+₩31,000 / 월", monthlyPriceDelta: 31_000, specs: { processingMode: "Cloud", cloudProcessing: true, processingSpeed: "Standard", concurrentJobs: 1, concurrentPdfExtractions: 1 }, description: "서버에서 대신 추출합니다. 로컬 앱을 켜기 싫은 사용자를 위한 유료 옵션입니다." },
+      { id: "basic-processing-cloud", group: "processing", name: "Cloud Processing", label: "포함", monthlyPriceDelta: 0, specs: { cloudProcessing: true, processingSpeed: "Standard", concurrentJobs: 1, concurrentPdfExtractions: 1 }, description: "서버에서 PDF를 추출합니다." },
     ],
   },
   pro: {
@@ -197,9 +191,8 @@ export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, P
       { id: "pro-student-max", group: "student", name: "Student Max", label: "+₩79,000 / 월", monthlyPriceDelta: 79_000, specs: { studentKeys: 500 }, description: "500 student keys" },
     ],
     processing: [
-      { id: "pro-processing-local", group: "processing", name: "Local Fast Processing", label: "포함", monthlyPriceDelta: 0, specs: { processingMode: "Local", cloudProcessing: false, processingSpeed: "Fast", concurrentJobs: 3, concurrentPdfExtractions: 3 }, description: "고성능 PC를 쓰는 사용자는 로컬에서 빠르게 추출합니다." },
-      { id: "pro-processing-cloud", group: "processing", name: "Cloud Fast Processing", label: "+₩49,000 / 월", monthlyPriceDelta: 49_000, specs: { processingMode: "Cloud", cloudProcessing: true, processingSpeed: "Fast", concurrentJobs: 3, concurrentPdfExtractions: 3 }, description: "서버에서 대신 추출합니다. 로컬 앱 없이 처리하려는 사용자용 유료 옵션입니다." },
-      { id: "pro-processing-cloud-max", group: "processing", name: "Cloud Batch Processing", label: "+₩119,000 / 월", monthlyPriceDelta: 119_000, specs: { processingMode: "Cloud", cloudProcessing: true, processingSpeed: "Fast", concurrentJobs: 8, concurrentPdfExtractions: 8 }, description: "대량 파일을 서버에서 병렬 처리하는 운영용 옵션입니다." },
+      { id: "pro-processing-cloud", group: "processing", name: "Cloud Fast Processing", label: "포함", monthlyPriceDelta: 0, specs: { cloudProcessing: true, processingSpeed: "Fast", concurrentJobs: 3, concurrentPdfExtractions: 3 }, description: "서버에서 빠르게 추출합니다." },
+      { id: "pro-processing-cloud-max", group: "processing", name: "Cloud Batch Processing", label: "+₩119,000 / 월", monthlyPriceDelta: 119_000, specs: { cloudProcessing: true, processingSpeed: "Fast", concurrentJobs: 8, concurrentPdfExtractions: 8 }, description: "대량 파일을 서버에서 병렬 처리하는 운영용 옵션입니다." },
     ],
   },
 };
