@@ -11,11 +11,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from openai import OpenAI
 from PIL import Image, ImageChops
+from pydantic import BaseModel, Field
 from sqlalchemy import String, and_, cast, delete as sa_delete, distinct, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db, get_settings
-from models import Batch, Problem, ProblemSetItem, Tag
+from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag
 from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigation, ProblemRead, ProblemStats, ProblemUpdate, ReviewUpdate, TagBase, TagRead, VisualCropUpdate
 from services.math_normalization import normalize_geometry_notation
 from services.ownership import current_owner_id
@@ -24,6 +25,14 @@ from services.private_files import sign_static_url
 from services.storage import save_visual_bytes
 
 router = APIRouter(prefix="/api/problems", tags=["problems"])
+
+
+class BulkProblemDeleteRequest(BaseModel):
+    problem_ids: list[UUID] = Field(min_length=1, max_length=500)
+
+
+class BulkProblemDeleteResponse(BaseModel):
+    deleted_count: int
 
 
 def _trim_visual_whitespace(image: Image.Image, padding: int = 16, threshold: int = 18) -> Image.Image:
@@ -542,6 +551,43 @@ def update_review(problem_id: UUID, payload: ReviewUpdate, request: Request, db:
     db.commit()
     db.refresh(problem)
     return _serialize_problem(problem)
+
+
+@router.delete("/bulk", response_model=BulkProblemDeleteResponse)
+def delete_problems_bulk(payload: BulkProblemDeleteRequest, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
+    problem_ids = list(dict.fromkeys(payload.problem_ids))
+    problems = db.scalars(
+        select(Problem).where(
+            Problem.id.in_(problem_ids),
+            Problem.owner_id == owner_id,
+            Problem.deleted_at.is_(None),
+        )
+    ).all()
+    if not problems:
+        return {"deleted_count": 0}
+
+    found_ids = [problem.id for problem in problems]
+    affected_set_ids = db.scalars(
+        select(distinct(ProblemSetItem.problem_set_id)).where(ProblemSetItem.problem_id.in_(found_ids))
+    ).all()
+    db.execute(sa_delete(ProblemSetItem).where(ProblemSetItem.problem_id.in_(found_ids)))
+
+    deleted_at = datetime.utcnow()
+    for problem in problems:
+        problem.deleted_at = deleted_at
+        problem.delete_scheduled_at = deleted_at + timedelta(days=3)
+        problem.needs_review = False
+
+    for set_id in affected_set_ids:
+        count = db.scalar(select(func.count(ProblemSetItem.id)).where(ProblemSetItem.problem_set_id == set_id)) or 0
+        db.query(ProblemSet).filter(ProblemSet.id == set_id, ProblemSet.owner_id == owner_id).update(
+            {ProblemSet.problem_count: int(count), ProblemSet.updated_at: datetime.utcnow()},
+            synchronize_session=False,
+        )
+
+    db.commit()
+    return {"deleted_count": len(problems)}
 
 
 @router.delete("/{problem_id}", status_code=204)

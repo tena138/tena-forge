@@ -14,6 +14,7 @@ import {
   List,
   Search,
   SlidersHorizontal,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -106,6 +107,7 @@ function ProblemsBrowser() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [dragBox, setDragBox] = useState<DragBox | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [suppressClick, setSuppressClick] = useState(false);
@@ -216,6 +218,32 @@ function ProblemsBrowser() {
       if (shouldSelect) return current.includes(problemId) ? current : [...current, problemId];
       return current.filter((id) => id !== problemId);
     });
+  }
+
+  async function deleteSelectedProblems() {
+    if (!selectedIds.length || deleting) return;
+    const ok = window.confirm(`선택한 문항 ${selectedIds.length}개를 삭제할까요? 문항 세트에서도 함께 빠집니다.`);
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      const response = await api<{ deleted_count: number }>("/api/problems/bulk", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problem_ids: selectedIds }),
+      });
+      const deletedIds = new Set(selectedIds);
+      setData((current) => ({
+        ...current,
+        items: current.items.filter((problem) => !deletedIds.has(problem.id)),
+        total: Math.max(0, current.total - response.deleted_count),
+      }));
+      setSelectedIds([]);
+      await loadProblems();
+    } catch {
+      window.alert("선택한 문항을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function selectCardsInBox(box: DragBox) {
@@ -549,6 +577,7 @@ function ProblemsBrowser() {
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</Button>
             <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</Button>
+            <Button size="sm" variant="destructive" disabled={deleting} onClick={deleteSelectedProblems}><Trash2 className="h-4 w-4" />삭제</Button>
             <button type="button" className="px-2 text-sm font-semibold text-slate-400 hover:text-white" onClick={() => setSelectedIds([])}>선택 해제</button>
           </div>
         </div>
