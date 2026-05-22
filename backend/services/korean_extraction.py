@@ -56,6 +56,9 @@ Rules:
 - Do not rewrite, summarize, normalize, modernize, or correct passage text.
 - Preserve line breaks in poems and line-sensitive passages.
 - Preserve reference markers such as ㉠, ㉡, ⓐ, ㄱ, ㄴ, (가), (나), (다), [A], [B].
+- Put every shared passage body only in passage_groups[].passage_text.
+- Never put passage text, passage instructions, or shared reading text inside question_stem.
+- For the first question linked to a passage, question_stem must contain only the question asked about the passage, not the passage itself.
 - Extract 보기 blocks such as <보기>, 〈보기〉, [보기], or 보기 into additional_material.
 - Extract choices ① ② ③ ④ ⑤ exactly. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
 - Link questions to a passage when the page shows a shared passage range such as [1~3], [1-3], 1~3, or an instruction such as 다음 글을 읽고 물음에 답하시오.
@@ -92,6 +95,15 @@ BOGI_RE = re.compile(r"(?:<보기>|〈보기〉|\[보기\]|^\s*보기\s*$)", re.
 PASSAGE_LABEL_RE = re.compile(r"(?:\([가-힣]\)|\[[A-Z]\])")
 UPPER_PASSAGE_REF_RE = re.compile(r"윗글|위\s+글|앞\s*글")
 OCR_CORRUPTION_RE = re.compile(r"[�□]{2,}|\?{4,}")
+PASSAGE_START_LINE_RE = re.compile(
+    r"(?m)^\s*(?:"
+    r"(?:\[|\()?0*\d{1,3}\s*[~\-∼–—]\s*0*\d{1,3}(?:\]|\))?.*|"
+    r"※?\s*다음\s+글을\s+읽고\s+물음에\s+답하시오\.?.*"
+    r")\s*$"
+)
+QUESTION_LIKE_RE = re.compile(
+    r"(?:\?|？|고르시오|찾으시오|적절|알맞|옳은|옳지|않은|설명|내용|이해|반응|의미|이유|관계)"
+)
 
 
 def _text(value: Any) -> str:
@@ -163,6 +175,103 @@ def normalize_korean_choice(raw: dict[str, Any]) -> dict[str, str]:
     label = _text(raw.get("choice_label") or raw.get("label"))
     text = _text(raw.get("choice_text") or raw.get("text"))
     return {"choice_label": label, "choice_text": text}
+
+
+def _collapse_blank_lines(value: str) -> str:
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _remove_once(text: str, needle: Any) -> str:
+    target = str(needle or "").strip()
+    if not target or target not in text:
+        return text
+    return text.replace(target, "", 1)
+
+
+def _looks_like_question_stem(value: str) -> bool:
+    text = _text(value)
+    return bool(text and len(text) <= 260 and QUESTION_LIKE_RE.search(text))
+
+
+def _split_embedded_passage_from_question_stem(stem: str) -> tuple[str, str | None, str] | None:
+    text = _collapse_blank_lines(stem)
+    if not text:
+        return None
+    match = PASSAGE_START_LINE_RE.search(text)
+    if not match or match.start() <= 0:
+        return None
+    question_text = _collapse_blank_lines(text[: match.start()])
+    if not _looks_like_question_stem(question_text):
+        return None
+
+    passage_block = _collapse_blank_lines(text[match.start() :])
+    lines = [line.rstrip() for line in passage_block.splitlines()]
+    first_content_index = next((index for index, line in enumerate(lines) if line.strip()), None)
+    if first_content_index is None:
+        return None
+    instruction = lines[first_content_index].strip()
+    body = _collapse_blank_lines("\n".join(lines[first_content_index + 1 :]))
+    if len(body) < 12:
+        return None
+    return question_text, instruction, body
+
+
+def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
+    doc = deepcopy(document)
+    passages = _as_list(doc.get("passage_groups"))
+    questions = _as_list(doc.get("questions"))
+    passages_by_id = {
+        _text(passage.get("passage_id")): passage
+        for passage in passages
+        if isinstance(passage, dict) and _text(passage.get("passage_id"))
+    }
+
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        linked_passage_id = _text(question.get("linked_passage_id"))
+        if not linked_passage_id:
+            continue
+        passage = passages_by_id.get(linked_passage_id)
+        if not passage:
+            continue
+
+        stem = str(question.get("question_stem") or "")
+        question_warnings = _as_str_list(question.get("warnings"))
+        passage_warnings = _as_str_list(passage.get("warnings"))
+        passage_text = str(passage.get("passage_text") or "")
+
+        if passage_text and passage_text in stem:
+            stem = _remove_once(stem, passage_text)
+            stem = _remove_once(stem, passage.get("passage_instruction"))
+            stem = _remove_once(stem, passage.get("passage_title"))
+            question["question_stem"] = _collapse_blank_lines(stem)
+            question_warnings.append("removed_passage_text_from_question_stem")
+
+        split = _split_embedded_passage_from_question_stem(str(question.get("question_stem") or ""))
+        if split:
+            question_text, instruction, extracted_passage_text = split
+            question["question_stem"] = question_text
+            if not _text(passage.get("passage_instruction")) and instruction:
+                passage["passage_instruction"] = instruction
+            if not _text(passage.get("passage_text")):
+                passage["passage_text"] = extracted_passage_text
+            elif extracted_passage_text not in str(passage.get("passage_text") or ""):
+                passage_warnings.append("question_stem_embedded_passage_conflict")
+            linked_ids = _as_str_list(passage.get("linked_question_ids"))
+            question_id = _text(question.get("question_id"))
+            if question_id and question_id not in linked_ids:
+                linked_ids.append(question_id)
+            passage["linked_question_ids"] = linked_ids
+            question_warnings.append("split_embedded_passage_from_question_stem")
+
+        question["warnings"] = list(dict.fromkeys(question_warnings))
+        passage["warnings"] = list(dict.fromkeys(passage_warnings))
+
+    doc["passage_groups"] = passages
+    doc["questions"] = questions
+    return doc
 
 
 def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_file: str, fallback_page: int) -> dict[str, Any]:
@@ -275,7 +384,7 @@ def merge_korean_page_payloads(document_id: str, source_file: str, page_payloads
 
 
 def validate_korean_document(document: dict[str, Any]) -> dict[str, Any]:
-    doc = deepcopy(document)
+    doc = separate_embedded_passages(document)
     global_warnings = _as_str_list(doc.get("global_warnings"))
     questions = _as_list(doc.get("questions"))
     passages = _as_list(doc.get("passage_groups"))

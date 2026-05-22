@@ -1050,13 +1050,6 @@ def _korean_question_number(value: Any, fallback: int) -> int:
 
 def _korean_problem_text(question: dict[str, Any], passage: dict[str, Any] | None) -> str:
     parts: list[str] = []
-    if passage:
-        if passage.get("passage_instruction"):
-            parts.append(str(passage["passage_instruction"]))
-        if passage.get("passage_title"):
-            parts.append(str(passage["passage_title"]))
-        if passage.get("passage_text"):
-            parts.append(str(passage["passage_text"]))
     if question.get("question_stem"):
         parts.append(str(question["question_stem"]))
     if question.get("additional_material"):

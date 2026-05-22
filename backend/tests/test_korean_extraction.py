@@ -7,6 +7,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from services.korean_extraction import map_korean_answers, merge_korean_page_payloads, validate_korean_document  # noqa: E402
+from services.pipeline import _korean_problem_text  # noqa: E402
 from services.subject_engines import subject_engine_pricing  # noqa: E402
 
 
@@ -45,6 +46,65 @@ class KoreanExtractionTests(unittest.TestCase):
 
         self.assertEqual(document["passage_groups"][0]["warnings"], [])
         self.assertEqual(document["questions"][1]["linked_passage_id"], "p1")
+
+    def test_first_question_embedded_passage_is_split(self):
+        document = validate_korean_document(
+            {
+                "document_id": "doc",
+                "subject": "korean",
+                "source_file": "reading.pdf",
+                "passage_groups": [
+                    {
+                        "passage_id": "p1",
+                        "source_pages": [1],
+                        "passage_instruction": None,
+                        "passage_title": None,
+                        "passage_text": "",
+                        "passage_type": "비문학",
+                        "linked_question_ids": [],
+                        "extraction_confidence": 0.8,
+                        "warnings": [],
+                    }
+                ],
+                "questions": [
+                    {
+                        "question_id": "q1",
+                        "source_pages": [1],
+                        "question_number": "1",
+                        "linked_passage_id": "p1",
+                        "question_stem": "윗글의 내용으로 적절한 것은?\n\n[1~2] 다음 글을 읽고 물음에 답하시오.\n첫 번째 문단이다.\n두 번째 문단이다.",
+                        "choices": [choice("①", "A"), choice("②", "B"), choice("③", "C"), choice("④", "D"), choice("⑤", "E")],
+                        "warnings": [],
+                    }
+                ],
+                "global_warnings": [],
+            }
+        )
+
+        self.assertEqual(document["questions"][0]["question_stem"], "윗글의 내용으로 적절한 것은?")
+        self.assertEqual(document["passage_groups"][0]["passage_instruction"], "[1~2] 다음 글을 읽고 물음에 답하시오.")
+        self.assertIn("첫 번째 문단이다.", document["passage_groups"][0]["passage_text"])
+        self.assertIn("split_embedded_passage_from_question_stem", document["questions"][0]["warnings"])
+
+    def test_problem_text_excludes_linked_passage(self):
+        passage = {
+            "passage_instruction": "[1~2] 다음 글을 읽고 물음에 답하시오.",
+            "passage_title": "제목",
+            "passage_text": "분리되어야 할 지문 본문",
+        }
+        question = {
+            "question_stem": "윗글의 내용으로 적절한 것은?",
+            "additional_material": "<보기>\nㄱ. 내용",
+            "choices": [choice("①", "A"), choice("②", "B")],
+        }
+
+        text = _korean_problem_text(question, passage)
+
+        self.assertIn("윗글의 내용으로 적절한 것은?", text)
+        self.assertIn("<보기>", text)
+        self.assertIn("① A", text)
+        self.assertNotIn("분리되어야 할 지문 본문", text)
+        self.assertNotIn("다음 글을 읽고", text)
 
     def test_poem_passage_preserves_line_breaks(self):
         text = "산에는 꽃 피네\n꽃이 피네\n갈 봄 여름 없이\n꽃이 피네"
