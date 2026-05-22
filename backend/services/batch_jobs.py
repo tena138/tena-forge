@@ -1,13 +1,29 @@
 import os
 import subprocess
 import sys
+import threading
+from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
-from database import get_settings
+from sqlalchemy import func, select
+
+from database import SessionLocal, get_settings
+from models import Batch, BatchStatus
 
 
-def launch_batch_worker(batch_id: UUID) -> None:
+_scheduler_lock = threading.Lock()
+_SCHEDULER_LOCK_KEY = 0x54454E4151554555
+
+
+def _try_database_scheduler_lock(db) -> bool:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return True
+    return bool(db.scalar(select(func.pg_try_advisory_xact_lock(_SCHEDULER_LOCK_KEY))))
+
+
+def _launch_batch_worker(batch_id: UUID) -> None:
     backend_dir = Path(__file__).resolve().parents[1]
     log_dir = backend_dir / "logs"
     log_dir.mkdir(exist_ok=True)
@@ -27,3 +43,66 @@ def launch_batch_worker(batch_id: UUID) -> None:
             close_fds=True,
             creationflags=creationflags,
         )
+
+
+def launch_batch_worker(batch_id: UUID) -> None:
+    _launch_batch_worker(batch_id)
+
+
+def schedule_next_batch() -> UUID | None:
+    """Start the oldest pending batch only when no batch is currently processing."""
+    with _scheduler_lock:
+        db = SessionLocal()
+        try:
+            if not _try_database_scheduler_lock(db):
+                return None
+
+            active_batch_id = db.scalar(
+                select(Batch.id)
+                .where(Batch.status == BatchStatus.processing)
+                .limit(1)
+            )
+            if active_batch_id:
+                return None
+
+            batch = db.scalars(
+                select(Batch)
+                .where(Batch.status == BatchStatus.pending)
+                .order_by(Batch.created_at.asc(), Batch.id.asc())
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            ).first()
+            if not batch:
+                return None
+
+            now = datetime.utcnow()
+            batch.status = BatchStatus.processing
+            batch.progress_message = "대기열에서 처리 시작 준비 중"
+            batch.progress_current = 0
+            batch.progress_total = None
+            batch.progress_started_at = now
+            batch.progress_updated_at = now
+            batch.failure_stage = None
+            batch.failure_reason = None
+            batch.failure_hint = None
+            batch.failed_at = None
+            db.commit()
+            batch_id = batch.id
+
+            try:
+                _launch_batch_worker(batch_id)
+            except Exception:
+                failed = db.get(Batch, batch_id)
+                if failed:
+                    failed.status = BatchStatus.error
+                    failed.progress_message = "처리 작업을 시작하지 못했습니다."
+                    failed.failure_stage = "작업 시작"
+                    failed.failure_reason = "배치 워커 프로세스를 시작하지 못했습니다."
+                    failed.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
+                    failed.failed_at = datetime.utcnow()
+                    failed.progress_updated_at = failed.failed_at
+                    db.commit()
+                raise
+            return batch_id
+        finally:
+            db.close()

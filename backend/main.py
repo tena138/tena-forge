@@ -18,6 +18,7 @@ from models import Batch, BatchStatus
 from models import Problem, ProblemSetItem
 from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
+from services.batch_jobs import schedule_next_batch
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
 
 settings = get_settings()
@@ -195,6 +196,7 @@ def repair_production_schema_and_admin():
 
     repair_alembic_version()
     ensure_admin_account()
+    _mark_interrupted_batches()
     print("Production schema repair and admin bootstrap completed.", flush=True)
 
 
@@ -328,7 +330,6 @@ def _mark_interrupted_batches():
     db = SessionLocal()
     try:
         stale_before = datetime.utcnow() - timedelta(minutes=30)
-        pending_stale_before = datetime.utcnow() - timedelta(minutes=10)
         processing_condition = (
             (Batch.status == BatchStatus.processing)
             & (
@@ -336,13 +337,9 @@ def _mark_interrupted_batches():
                 | (Batch.progress_updated_at < stale_before)
             )
         )
-        stale_condition = processing_condition | (
-            (Batch.status == BatchStatus.pending)
-            & (Batch.created_at < pending_stale_before)
-        )
         interrupted = (
             db.query(Batch)
-            .filter(stale_condition)
+            .filter(processing_condition)
             .all()
         )
         for batch in interrupted:
@@ -354,6 +351,7 @@ def _mark_interrupted_batches():
             batch.failed_at = datetime.utcnow()
         if interrupted:
             db.commit()
+        schedule_next_batch()
     finally:
         db.close()
 

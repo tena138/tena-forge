@@ -10,7 +10,7 @@ from database import get_db
 from limiter import limiter
 from models import Batch, BatchStatus, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, SOURCE_TYPES
-from services.batch_jobs import launch_batch_worker
+from services.batch_jobs import schedule_next_batch
 from services.ownership import current_academy_id, current_owner_id
 from services.pipeline import get_progress_detail
 from services.storage import save_upload
@@ -156,7 +156,7 @@ def upload_batch(
     db.refresh(batch)
 
     try:
-        launch_batch_worker(batch.id)
+        schedule_next_batch()
     except Exception as exc:
         batch.status = BatchStatus.error
         batch.progress_message = "처리 작업을 시작하지 못했습니다."
@@ -165,6 +165,7 @@ def upload_batch(
         batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
         db.commit()
         raise HTTPException(status_code=500, detail="처리 작업을 시작하지 못했습니다.")
+    db.refresh(batch)
     return {"batch_id": batch.id, "status": batch.status}
 
 
@@ -244,7 +245,7 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
     db.refresh(batch)
 
     try:
-        launch_batch_worker(batch.id)
+        schedule_next_batch()
     except Exception as exc:
         batch.status = BatchStatus.error
         batch.progress_message = "처리 작업을 시작하지 못했습니다."
@@ -253,6 +254,7 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
         batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
         db.commit()
         raise HTTPException(status_code=500, detail="처리 작업을 시작하지 못했습니다.")
+    db.refresh(batch)
     return {"batch_id": batch.id, "status": batch.status}
 
 
@@ -291,7 +293,7 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
     db.refresh(batch)
 
     try:
-        launch_batch_worker(batch.id)
+        schedule_next_batch()
     except Exception as exc:
         batch.status = BatchStatus.error
         batch.processing_task = "full"
@@ -302,6 +304,7 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
         batch.failed_at = datetime.utcnow()
         db.commit()
         raise HTTPException(status_code=500, detail="해설 재처리 작업을 시작하지 못했습니다.")
+    db.refresh(batch)
     return {"batch_id": batch.id, "status": batch.status}
 
 

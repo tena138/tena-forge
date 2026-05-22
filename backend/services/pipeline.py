@@ -674,6 +674,12 @@ def process_batch(batch_id: UUID) -> None:
             set_progress(batch_id, f"오류: {exc}")
     finally:
         db.close()
+        try:
+            from services.batch_jobs import schedule_next_batch
+
+            schedule_next_batch()
+        except Exception:
+            traceback.print_exc()
 
 
 def process_solutions_only(batch_id: UUID) -> None:
@@ -785,6 +791,12 @@ def process_solutions_only(batch_id: UUID) -> None:
             set_progress(batch_id, f"오류: {exc}")
     finally:
         db.close()
+        try:
+            from services.batch_jobs import schedule_next_batch
+
+            schedule_next_batch()
+        except Exception:
+            traceback.print_exc()
 
 
 def render_pdf(
