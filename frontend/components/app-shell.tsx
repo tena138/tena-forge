@@ -7,8 +7,6 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { HeaderAccountSummary } from "@/components/auth/header-account-summary";
 import { FloatingNav } from "@/components/floating-nav";
-import { GlobalBatchProgress } from "@/components/global-batch-progress";
-import { HeaderBatchProgress } from "@/components/header-batch-progress";
 import { HeaderNotifications } from "@/components/header-notifications";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -162,7 +160,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <HeaderBatchProgress />
             <ThemeToggle />
             <HeaderNotifications />
             <HeaderAccountSummary />
@@ -180,7 +177,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className={cn("w-full px-4 py-6 transition-[padding] duration-200 lg:pr-8", sidebarCollapsed ? "lg:pl-24" : "lg:pl-56")}>
         <div className="mx-auto w-full max-w-[1440px]">{children}</div>
       </main>
-      <GlobalBatchProgress />
     </div>
   );
 }
