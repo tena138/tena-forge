@@ -4,6 +4,8 @@ import re
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from difflib import SequenceMatcher
+from os import getenv
 from typing import Any
 
 import numpy as np
@@ -12,6 +14,7 @@ import numpy as np
 MODEL_NAME = "jhgan/ko-sroberta-multitask"
 _embedding_model = None
 _embedding_cache: dict[str, np.ndarray] = {}
+_TRUTHY_VALUES = {"1", "true", "yes", "on"}
 
 SECTION_PATTERNS = (
     (re.compile(r"\bDAY\s*0*(\d{1,3})\b", re.IGNORECASE), "DAY"),
@@ -210,6 +213,45 @@ def _model():
     return _embedding_model
 
 
+def _embedding_matching_enabled() -> bool:
+    return getenv("SEMANTIC_MATCHING_ENABLED", "").strip().lower() in _TRUTHY_VALUES
+
+
+def _compact_for_similarity(text: str, max_chars: int = 1600) -> str:
+    normalized = unicodedata.normalize("NFKC", _text(text)).lower()
+    normalized = re.sub(r"\s+", " ", normalized)
+    normalized = re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
+    return normalized[:max_chars]
+
+
+def _char_ngrams(text: str, size: int = 3) -> set[str]:
+    if len(text) <= size:
+        return {text} if text else set()
+    return {text[index : index + size] for index in range(len(text) - size + 1)}
+
+
+def _lexical_similarity(left: str, right: str) -> float | None:
+    left_norm = _compact_for_similarity(left)
+    right_norm = _compact_for_similarity(right)
+    if not left_norm or not right_norm:
+        return None
+
+    left_grams = _char_ngrams(left_norm)
+    right_grams = _char_ngrams(right_norm)
+    union = len(left_grams | right_grams)
+    jaccard = (len(left_grams & right_grams) / union) if union else 0.0
+    sequence = SequenceMatcher(None, left_norm, right_norm, autojunk=False).ratio()
+    return max(0.0, min(1.0, (jaccard * 0.7) + (sequence * 0.3)))
+
+
+def _text_similarity(left: str, right: str) -> float | None:
+    if _embedding_matching_enabled():
+        score = cosine_similarity(left, right)
+        if score is not None:
+            return score
+    return _lexical_similarity(left, right)
+
+
 def _embedding(text: str) -> np.ndarray | None:
     normalized = re.sub(r"\s+", " ", text).strip()
     if not normalized:
@@ -238,8 +280,9 @@ def _semantic_review_warnings(problem: dict[str, Any], solution: dict[str, Any] 
     snippet = _solution_snippet(solution)
     if not snippet:
         return []
-    similarity = cosine_similarity(snippet, _stem_text(problem))
-    if similarity is not None and similarity < 0.5:
+    similarity = _text_similarity(snippet, _stem_text(problem))
+    warning_threshold = 0.5 if _embedding_matching_enabled() else 0.08
+    if similarity is not None and similarity < warning_threshold:
         return ["semantic_conflict"]
     return []
 
@@ -265,7 +308,7 @@ def _attach(
 
 def _score_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> float:
     probe_text = _solution_text_for_fallback(solution)
-    score = cosine_similarity(probe_text, _stem_text(problem))
+    score = _text_similarity(probe_text, _stem_text(problem))
     return float(score if score is not None else 0.0)
 
 
@@ -363,6 +406,8 @@ def _semantic_assign(
     method: str,
     threshold: float,
 ) -> int:
+    if not _embedding_matching_enabled():
+        threshold = min(threshold, 0.16)
     unmatched_problems = [problem for problem in problem_items if problem.item.get("solution") is None]
     unmatched_solutions = [solution for solution in solution_items if id(solution.item) not in used_solution_ids]
     if same_section_only:

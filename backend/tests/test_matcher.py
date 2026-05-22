@@ -75,7 +75,7 @@ class MatcherTests(unittest.TestCase):
             }
         ]
 
-        with patch("services.matcher.cosine_similarity", return_value=0.2):
+        with patch.dict("os.environ", {"SEMANTIC_MATCHING_ENABLED": "true"}), patch("services.matcher.cosine_similarity", return_value=0.2):
             matched = match(problems, solutions)
 
         self.assertEqual(matched[0]["solution"]["answer"], "A")
@@ -116,7 +116,7 @@ class MatcherTests(unittest.TestCase):
             },
         ]
 
-        with patch("services.matcher.cosine_similarity", return_value=0.2):
+        with patch.dict("os.environ", {"SEMANTIC_MATCHING_ENABLED": "true"}), patch("services.matcher.cosine_similarity", return_value=0.2):
             matched = match(problems, solutions)
 
         self.assertEqual(matched[0]["solution"]["answer"], "A")
@@ -212,13 +212,37 @@ class MatcherTests(unittest.TestCase):
         def fake_similarity(left, right):
             return 0.95 if left.split()[0] in right else 0.2
 
-        with patch("services.matcher.cosine_similarity", side_effect=fake_similarity):
+        with patch.dict("os.environ", {"SEMANTIC_MATCHING_ENABLED": "true"}), patch("services.matcher.cosine_similarity", side_effect=fake_similarity):
             matched = match(problems, solutions)
 
         self.assertEqual(matched[0]["solution"]["answer"], "A")
         self.assertEqual(matched[1]["solution"]["answer"], "B")
         self.assertEqual(matched[0]["match_flags"]["matched_via"], "section_number")
         self.assertIn("semantic_conflict", matched[0]["match_flags"]["warnings"])
+
+    def test_structural_match_does_not_load_embedding_model_by_default(self):
+        problems = [
+            {"problem_number": "01", "problem_text": "alpha problem", "section_label": "DAY 01", "page_index": 1},
+        ]
+        solutions = [
+            {
+                "problem_number": "01",
+                "answer": "A",
+                "solution_steps": "alpha solution",
+                "section_label": "DAY 01",
+                "page_idx": 10,
+                "referenced_problem_snippet": "alpha problem",
+            },
+        ]
+
+        with patch.dict("os.environ", {"SEMANTIC_MATCHING_ENABLED": ""}, clear=False), patch(
+            "services.matcher._model",
+            side_effect=AssertionError("embedding model should not load during default batch matching"),
+        ):
+            matched = match(problems, solutions)
+
+        self.assertEqual(matched[0]["solution"]["answer"], "A")
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "section_number")
 
 if __name__ == "__main__":
     unittest.main()
