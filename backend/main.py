@@ -18,7 +18,6 @@ from models import Batch, BatchStatus
 from models import Problem, ProblemSetItem
 from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
-from services.batch_jobs import schedule_next_batch
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
 
 settings = get_settings()
@@ -351,7 +350,6 @@ def _mark_interrupted_batches():
             batch.failed_at = datetime.utcnow()
         if interrupted:
             db.commit()
-        schedule_next_batch()
     finally:
         db.close()
 

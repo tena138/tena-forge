@@ -64,8 +64,11 @@ export function readActiveBatch() {
 }
 
 export function shouldForgetActiveBatchAfterStatusError(error: unknown) {
-  const status = (error as { response?: { status?: number } })?.response?.status;
-  return status === 400 || status === 404 || status === 422;
+  const response = (error as { response?: { status?: number } })?.response;
+  if (!response) return true;
+  const status = response.status;
+  if (typeof status !== "number") return true;
+  return status === 400 || status === 404 || status === 422 || status >= 500;
 }
 
 export async function fetchBatchStatus(batchId: string) {

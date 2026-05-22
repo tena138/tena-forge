@@ -1,4 +1,5 @@
 import json
+import traceback
 from datetime import datetime
 from uuid import UUID
 
@@ -212,6 +213,15 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
     progress = get_progress_detail(batch)
     raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
     status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending
+    if status == BatchStatus.pending:
+        try:
+            schedule_next_batch()
+            db.refresh(batch)
+            raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
+            status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending
+            progress = get_progress_detail(batch)
+        except Exception:
+            traceback.print_exc()
     return {
         "batch_id": batch.id,
         "status": status,

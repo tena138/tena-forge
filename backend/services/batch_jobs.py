@@ -13,14 +13,15 @@ from models import Batch, BatchStatus
 
 
 _scheduler_lock = threading.Lock()
-_SCHEDULER_LOCK_KEY = 0x54454E4151554555
+_SCHEDULER_LOCK_NAMESPACE = 1413828161
+_SCHEDULER_LOCK_ID = 1
 
 
 def _try_database_scheduler_lock(db) -> bool:
     bind = db.get_bind()
     if bind.dialect.name != "postgresql":
         return True
-    return bool(db.scalar(select(func.pg_try_advisory_xact_lock(_SCHEDULER_LOCK_KEY))))
+    return bool(db.scalar(select(func.pg_try_advisory_xact_lock(_SCHEDULER_LOCK_NAMESPACE, _SCHEDULER_LOCK_ID))))
 
 
 def _launch_batch_worker(batch_id: UUID) -> None:
