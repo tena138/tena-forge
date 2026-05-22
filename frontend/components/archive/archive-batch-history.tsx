@@ -141,6 +141,7 @@ export function ArchiveBatchHistory({
   const router = useRouter();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchActiveBatch = useCallback(async () => {
     if (!activeBatchId) return null;
@@ -154,6 +155,7 @@ export function ArchiveBatchHistory({
   const loadBatches = useCallback(async () => {
     try {
       const nextBatches = await api<Batch[]>("/api/batches");
+      setLoadError(null);
       const activeFromList = activeBatchId ? nextBatches.find((batch) => batch.id === activeBatchId) || null : null;
       const activeDirect = activeBatchId && !activeFromList ? await fetchActiveBatch() : null;
       const mergedBatches = activeDirect ? [activeDirect, ...nextBatches.filter((batch) => batch.id !== activeDirect.id)] : nextBatches;
@@ -161,6 +163,7 @@ export function ArchiveBatchHistory({
       if (activeBatchId) onActiveBatchSnapshot?.(activeFromList || activeDirect || null);
       return mergedBatches;
     } catch {
+      setLoadError("아카이빙 기록을 불러오지 못했습니다. 잠시 후 다시 시도하거나 로그인 상태를 확인해 주세요.");
       const activeDirect = await fetchActiveBatch();
       const fallbackBatches = activeDirect ? [activeDirect] : [];
       setBatches(fallbackBatches);
@@ -252,6 +255,12 @@ export function ArchiveBatchHistory({
         ) : null}
       </div>
 
+      {loadError ? (
+        <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">
+          {loadError}
+        </div>
+      ) : null}
+
       <div className="grid gap-4">
         {batches.map((batch) => (
           <Card key={batch.id} className="border-white/10 bg-black/35">
@@ -335,7 +344,7 @@ export function ArchiveBatchHistory({
         ))}
       </div>
 
-      {!batches.length ? (
+      {!batches.length && !loadError ? (
         <div className="rounded-lg border border-white/10 bg-white/[0.035] py-14 text-center text-sm text-slate-400">
           아직 아카이빙 기록이 없습니다.
           <div className="mt-4">

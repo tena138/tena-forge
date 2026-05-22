@@ -12,7 +12,7 @@ from limiter import limiter
 from models import Batch, BatchStatus, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, SOURCE_TYPES
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
-from services.ownership import current_academy_id, current_owner_id
+from services.ownership import current_academy_id, current_owner_id, current_owner_ids
 from services.pipeline import get_progress_detail
 from services.storage import save_upload
 from services.subject_inference import infer_subject_candidates_from_text
@@ -177,7 +177,7 @@ def upload_batch(
 @router.get("", response_model=list[BatchRead])
 @limiter.exempt
 def list_batches(request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_ids = current_owner_ids(request, db)
     tagged_expression = _tagged_expression()
     rows = db.execute(
         select(
@@ -189,7 +189,7 @@ def list_batches(request: Request, db: Session = Depends(get_db)):
         .select_from(Batch)
         .outerjoin(Problem, Problem.source_batch_id == Batch.id)
         .outerjoin(Tag, Tag.problem_id == Problem.id)
-        .where(Batch.owner_id == owner_id)
+        .where(Batch.owner_id.in_(owner_ids))
         .group_by(Batch.id)
         .order_by(desc(Batch.created_at))
     ).all()
@@ -202,7 +202,7 @@ def list_batches(request: Request, db: Session = Depends(get_db)):
 @router.get("/{batch_id}", response_model=BatchRead)
 @limiter.exempt
 def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     return _batch_read(db, batch)
@@ -211,7 +211,7 @@ def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
 @router.get("/{batch_id}/status", response_model=BatchStatusResponse)
 @limiter.exempt
 def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     if mark_stale_processing_batches(db, batch_id=batch.id):
@@ -243,8 +243,7 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
 def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
-    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id)).first()
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     if batch.status == BatchStatus.processing:
@@ -281,8 +280,8 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
 
 @router.post("/{batch_id}/reprocess-solutions", response_model=BatchUploadResponse)
 def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
-    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id)).first()
+    owner_ids = current_owner_ids(request, db)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(owner_ids))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     if batch.status == BatchStatus.processing:
@@ -292,7 +291,7 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
     problem_count = db.scalar(
         select(func.count(Problem.id)).where(
             Problem.source_batch_id == batch.id,
-            Problem.owner_id == owner_id,
+            Problem.owner_id.in_(owner_ids),
             Problem.deleted_at.is_(None),
         )
     ) or 0
@@ -331,13 +330,13 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
 
 @router.post("/{batch_id}/review-needed", response_model=BatchRead)
 def mark_batch_review_needed(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
-    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id)).first()
+    owner_ids = current_owner_ids(request, db)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(owner_ids))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     db.query(Problem).filter(
         Problem.source_batch_id == batch.id,
-        Problem.owner_id == owner_id,
+        Problem.owner_id.in_(owner_ids),
         Problem.deleted_at.is_(None),
     ).update({Problem.needs_review: True}, synchronize_session=False)
     batch.progress_updated_at = datetime.utcnow()
@@ -348,7 +347,7 @@ def mark_batch_review_needed(batch_id: UUID, request: Request, db: Session = Dep
 
 @router.delete("/{batch_id}", status_code=204)
 def delete_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     db.delete(batch)

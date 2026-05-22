@@ -19,7 +19,7 @@ from database import get_db, get_settings
 from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag
 from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigation, ProblemRead, ProblemStats, ProblemUpdate, ReviewUpdate, TagBase, TagRead, VisualCropUpdate
 from services.math_normalization import normalize_geometry_notation
-from services.ownership import current_owner_id
+from services.ownership import current_owner_ids
 from services.pipeline import strip_answer_choices, vision_json
 from services.private_files import sign_static_url
 from services.storage import save_visual_bytes
@@ -175,14 +175,14 @@ Rules:
 
 @router.get("/facets", response_model=FacetsResponse)
 def facets(request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_ids = current_owner_ids(request, db)
 
     def problem_values(column):
         return [
             row[0]
             for row in db.execute(
                 select(distinct(column))
-                .where(Problem.owner_id == owner_id, Problem.deleted_at.is_(None), column.is_not(None))
+                .where(Problem.owner_id.in_(owner_ids), Problem.deleted_at.is_(None), column.is_not(None))
                 .order_by(column)
             ).all()
             if row[0]
@@ -195,7 +195,7 @@ def facets(request: Request, db: Session = Depends(get_db)):
                 select(distinct(column))
                 .select_from(Tag)
                 .join(Problem, Tag.problem_id == Problem.id)
-                .where(Problem.owner_id == owner_id, Problem.deleted_at.is_(None), column.is_not(None))
+                .where(Problem.owner_id.in_(owner_ids), Problem.deleted_at.is_(None), column.is_not(None))
                 .order_by(column)
             ).all()
             if row[0]
@@ -214,22 +214,23 @@ def facets(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/stats", response_model=ProblemStats)
 def problem_stats(request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
-    total = db.scalar(select(func.count(Problem.id)).where(Problem.owner_id == owner_id, Problem.deleted_at.is_(None))) or 0
+    owner_ids = current_owner_ids(request, db)
+    total = db.scalar(select(func.count(Problem.id)).where(Problem.owner_id.in_(owner_ids), Problem.deleted_at.is_(None))) or 0
     needs_review = db.scalar(
-        select(func.count(Problem.id)).where(Problem.owner_id == owner_id, Problem.deleted_at.is_(None), Problem.needs_review.is_(True))
+        select(func.count(Problem.id)).where(Problem.owner_id.in_(owner_ids), Problem.deleted_at.is_(None), Problem.needs_review.is_(True))
     ) or 0
     tagged_condition = or_(Tag.subject.is_not(None), Tag.unit.is_not(None), Tag.difficulty.is_not(None), Tag.problem_type.is_not(None), Tag.source.is_not(None))
     tagged = db.scalar(
         select(func.count(Problem.id))
         .join(Tag)
-        .where(Problem.owner_id == owner_id, Problem.deleted_at.is_(None), tagged_condition)
+        .where(Problem.owner_id.in_(owner_ids), Problem.deleted_at.is_(None), tagged_condition)
     ) or 0
     return {"total": total, "needs_review": needs_review, "tagged": tagged, "untagged": max(total - tagged, 0)}
 
 
 def _problem_filter_conditions(
     request: Request,
+    db: Session,
     subject: list[str] | None = None,
     unit: str | None = None,
     difficulty: list[str] | None = None,
@@ -241,7 +242,7 @@ def _problem_filter_conditions(
     search: str | None = None,
     batch_id: UUID | None = None,
 ):
-    filters = [Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None)]
+    filters = [Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None)]
     if subject:
         filters.append(Tag.subject.in_(subject))
     if unit:
@@ -307,6 +308,7 @@ def list_problems(
 ):
     filters = _problem_filter_conditions(
         request,
+        db,
         subject=subject,
         unit=unit,
         difficulty=difficulty,
@@ -352,15 +354,15 @@ def problem_navigation(
     sort: str = "source_order",
     db: Session = Depends(get_db),
 ):
-    owner_id = current_owner_id(request)
     exists = db.scalar(
-        select(Problem.id).where(Problem.id == problem_id, Problem.owner_id == owner_id, Problem.deleted_at.is_(None))
+        select(Problem.id).where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
     )
     if not exists:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
 
     filters = _problem_filter_conditions(
         request,
+        db,
         subject=subject,
         unit=unit,
         difficulty=difficulty,
@@ -394,7 +396,7 @@ def problem_navigation(
 def problem_detail(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
     problem = db.scalars(
         select(Problem)
-        .where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
         .options(joinedload(Problem.tags))
     ).first()
     if not problem:
@@ -406,7 +408,7 @@ def problem_detail(problem_id: UUID, request: Request, db: Session = Depends(get
 def update_tags(problem_id: UUID, payload: TagBase, request: Request, db: Session = Depends(get_db)):
     problem = db.scalars(
         select(Problem)
-        .where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
         .options(joinedload(Problem.tags))
     ).first()
     if not problem:
@@ -427,7 +429,7 @@ def update_tags(problem_id: UUID, payload: TagBase, request: Request, db: Sessio
 def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, db: Session = Depends(get_db)):
     problem = db.scalars(
         select(Problem)
-        .where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
         .options(joinedload(Problem.tags))
     ).first()
     if not problem:
@@ -445,7 +447,7 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
 def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
     problem = db.scalars(
         select(Problem)
-        .where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
         .options(joinedload(Problem.tags))
     ).first()
     if not problem:
@@ -485,7 +487,7 @@ def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(
 def crop_visual(problem_id: UUID, payload: VisualCropUpdate, request: Request, db: Session = Depends(get_db)):
     problem = db.scalars(
         select(Problem)
-        .where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
         .options(joinedload(Problem.tags))
     ).first()
     if not problem:
@@ -529,7 +531,7 @@ def crop_visual(problem_id: UUID, payload: VisualCropUpdate, request: Request, d
 def delete_visual(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
     problem = db.scalars(
         select(Problem)
-        .where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
         .options(joinedload(Problem.tags))
     ).first()
     if not problem:
@@ -544,7 +546,7 @@ def delete_visual(problem_id: UUID, request: Request, db: Session = Depends(get_
 
 @router.patch("/{problem_id}/review", response_model=ProblemRead)
 def update_review(problem_id: UUID, payload: ReviewUpdate, request: Request, db: Session = Depends(get_db)):
-    problem = db.scalars(select(Problem).where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))).first()
+    problem = db.scalars(select(Problem).where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
     problem.needs_review = payload.needs_review
@@ -555,12 +557,12 @@ def update_review(problem_id: UUID, payload: ReviewUpdate, request: Request, db:
 
 @router.delete("/bulk", response_model=BulkProblemDeleteResponse)
 def delete_problems_bulk(payload: BulkProblemDeleteRequest, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_ids = current_owner_ids(request, db)
     problem_ids = list(dict.fromkeys(payload.problem_ids))
     problems = db.scalars(
         select(Problem).where(
             Problem.id.in_(problem_ids),
-            Problem.owner_id == owner_id,
+            Problem.owner_id.in_(owner_ids),
             Problem.deleted_at.is_(None),
         )
     ).all()
@@ -581,7 +583,7 @@ def delete_problems_bulk(payload: BulkProblemDeleteRequest, request: Request, db
 
     for set_id in affected_set_ids:
         count = db.scalar(select(func.count(ProblemSetItem.id)).where(ProblemSetItem.problem_set_id == set_id)) or 0
-        db.query(ProblemSet).filter(ProblemSet.id == set_id, ProblemSet.owner_id == owner_id).update(
+        db.query(ProblemSet).filter(ProblemSet.id == set_id, ProblemSet.owner_id.in_(owner_ids)).update(
             {ProblemSet.problem_count: int(count), ProblemSet.updated_at: datetime.utcnow()},
             synchronize_session=False,
         )
@@ -592,7 +594,7 @@ def delete_problems_bulk(payload: BulkProblemDeleteRequest, request: Request, db
 
 @router.delete("/{problem_id}", status_code=204)
 def delete_problem(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
-    problem = db.scalars(select(Problem).where(Problem.id == problem_id, Problem.owner_id == current_owner_id(request), Problem.deleted_at.is_(None))).first()
+    problem = db.scalars(select(Problem).where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
     db.execute(sa_delete(ProblemSetItem).where(ProblemSetItem.problem_id == problem_id))
