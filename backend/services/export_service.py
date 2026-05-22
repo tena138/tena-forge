@@ -517,7 +517,7 @@ def _render_html_pdf_with_chrome(html_doc: str) -> BytesIO:
             "--no-sandbox",
             "--allow-file-access-from-files",
             "--run-all-compositor-stages-before-draw",
-            "--virtual-time-budget=1800",
+            "--virtual-time-budget=3500",
             "--no-pdf-header-footer",
             "--print-to-pdf-no-header",
             f"--print-to-pdf={pdf_path}",

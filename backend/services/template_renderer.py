@@ -196,12 +196,17 @@ def _css_px(value: Any, default: float = 0) -> str:
 
 
 def _katex_assets() -> tuple[str, str]:
-    dist = Path(__file__).resolve().parents[2] / "frontend" / "node_modules" / "katex" / "dist"
-    css_path = dist / "katex.min.css"
-    js_path = dist / "katex.min.js"
-    css = ""
-    script = ""
-    if css_path.exists():
+    service_path = Path(__file__).resolve()
+    candidates = [
+        service_path.parents[2] / "frontend" / "node_modules" / "katex" / "dist",
+        service_path.parents[1] / "node_modules" / "katex" / "dist",
+        Path("/app/node_modules/katex/dist"),
+    ]
+    for dist in candidates:
+        css_path = dist / "katex.min.css"
+        js_path = dist / "katex.min.js"
+        if not css_path.exists() or not js_path.exists():
+            continue
         css = css_path.read_text(encoding="utf-8", errors="ignore")
         fonts_dir = css_path.parent / "fonts"
         css = re.sub(
@@ -209,9 +214,9 @@ def _katex_assets() -> tuple[str, str]:
             lambda match: f'url("{(fonts_dir / match.group(2)).as_uri()}")',
             css,
         )
-    if js_path.exists():
         script = js_path.read_text(encoding="utf-8", errors="ignore")
-    return css, script
+        return css, script
+    return "", ""
 
 
 def _safe_css_value(value: Any, default: str = "transparent") -> str:

@@ -20,7 +20,11 @@ RUN apt-get update \
       libxrandr2 \
       libxrender1 \
       libxtst6 \
+      nodejs \
+      npm \
     && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --omit=dev --no-audit --no-fund --prefix /app katex@0.16.45
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
