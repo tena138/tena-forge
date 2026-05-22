@@ -21,9 +21,11 @@ import {
   formatRemaining,
   friendlyProgressMessage,
   readActiveBatch,
+  rememberActiveBatch,
   shouldForgetActiveBatchAfterStatusError,
 } from "@/lib/batch-progress";
 import type { BatchStatusResponse } from "@/lib/batch-progress";
+import { api, type Batch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function formatTime(value: string) {
@@ -75,6 +77,30 @@ function ActiveBatchPanel({ statusData }: { statusData: BatchStatusResponse }) {
       </div>
     </Link>
   );
+}
+
+function batchToStatusResponse(batch: Batch): BatchStatusResponse {
+  return {
+    batch_id: batch.id,
+    status: batch.status,
+    processing_task: batch.processing_task || "full",
+    progress_message: batch.progress_message || "",
+    progress_percent: batch.progress_percent ?? null,
+    estimated_seconds_remaining: batch.estimated_seconds_remaining ?? null,
+    failure_stage: batch.failure_stage ?? null,
+    failure_reason: batch.failure_reason ?? null,
+    failure_hint: batch.failure_hint ?? null,
+    failed_at: batch.failed_at ?? null,
+  };
+}
+
+function pickVisibleActiveBatch(batches: Batch[]) {
+  const activeBatches = batches.filter((batch) => batch.status === "processing" || batch.status === "pending");
+  const processing = activeBatches
+    .filter((batch) => batch.status === "processing")
+    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
+  if (processing) return processing;
+  return activeBatches.sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime())[0] || null;
 }
 
 export function HeaderNotifications() {
@@ -168,6 +194,32 @@ export function HeaderNotifications() {
       if (timer) window.clearInterval(timer);
     };
   }, [activeBatchId, pollVersion]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function discoverActiveBatch() {
+      if (activeBatchId || readActiveBatch()) return;
+      try {
+        const batches = await api<Batch[]>("/api/batches");
+        if (cancelled) return;
+        const activeBatch = pickVisibleActiveBatch(batches);
+        if (!activeBatch) return;
+        rememberActiveBatch(activeBatch.id);
+        setActiveBatchId(activeBatch.id);
+        setActiveStatus(batchToStatusResponse(activeBatch));
+      } catch {
+        // Header progress should be opportunistic; auth/network failures are handled by the next poll.
+      }
+    }
+
+    void discoverActiveBatch();
+    const timer = window.setInterval(() => void discoverActiveBatch(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeBatchId]);
 
   useEffect(() => {
     if (!toast) return;
