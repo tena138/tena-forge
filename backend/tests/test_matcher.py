@@ -7,7 +7,7 @@ from unittest.mock import patch
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from services.matcher import _canonical_number, match, match_with_summary  # noqa: E402
+from services.matcher import _canonical_number, _lexical_similarity, match, match_with_summary  # noqa: E402
 
 
 class MatcherTests(unittest.TestCase):
@@ -53,7 +53,7 @@ class MatcherTests(unittest.TestCase):
 
         self.assertEqual(matched[0]["solution"]["answer"], "A")
         self.assertEqual(matched[1]["solution"]["answer"], "B")
-        self.assertEqual(matched[1]["match_flags"]["matched_via"], "global_order")
+        self.assertEqual(matched[1]["match_flags"]["matched_via"], "number_order")
 
     def test_primary_match_keeps_solution_when_snippet_similarity_is_low(self):
         problems = [
@@ -82,7 +82,7 @@ class MatcherTests(unittest.TestCase):
         self.assertTrue(matched[0]["match_flags"]["needs_review"])
         self.assertEqual(matched[0]["match_flags"]["matched_via"], "section_number")
 
-    def test_number_order_match_keeps_solution_when_snippet_similarity_is_low(self):
+    def test_number_order_skips_solution_when_snippet_similarity_conflicts(self):
         problems = [
             {
                 "problem_number": 1,
@@ -119,9 +119,10 @@ class MatcherTests(unittest.TestCase):
         with patch.dict("os.environ", {"SEMANTIC_MATCHING_ENABLED": "true"}), patch("services.matcher.cosine_similarity", return_value=0.2):
             matched = match(problems, solutions)
 
-        self.assertEqual(matched[0]["solution"]["answer"], "A")
-        self.assertEqual(matched[1]["solution"]["answer"], "B")
-        self.assertEqual(matched[1]["match_flags"]["matched_via"], "global_order")
+        self.assertIsNone(matched[0]["solution"])
+        self.assertIsNone(matched[1]["solution"])
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "unmatched")
+        self.assertEqual(matched[1]["match_flags"]["matched_via"], "unmatched")
 
     def test_global_order_rescues_remaining_solution_number_ocr_mismatch(self):
         problems = [
@@ -243,6 +244,32 @@ class MatcherTests(unittest.TestCase):
 
         self.assertEqual(matched[0]["solution"]["answer"], "A")
         self.assertEqual(matched[0]["match_flags"]["matched_via"], "section_number")
+
+    def test_number_order_matches_repeated_numbers_when_total_counts_differ(self):
+        matched = match(
+            [
+                {"problem_number": "1", "problem_text": "first one", "section_label": "problem A", "page_index": 1},
+                {"problem_number": "2", "problem_text": "extra two", "section_label": "problem A", "page_index": 1},
+                {"problem_number": "1", "problem_text": "second one", "section_label": "problem B", "page_index": 2},
+            ],
+            [
+                {"problem_number": "1", "answer": "A", "solution_steps": "first solution", "section_label": "solution X", "page_idx": 10},
+                {"problem_number": "1", "answer": "B", "solution_steps": "second solution", "section_label": "solution Y", "page_idx": 11},
+            ],
+        )
+
+        self.assertEqual(matched[0]["solution"]["answer"], "A")
+        self.assertEqual(matched[2]["solution"]["answer"], "B")
+        self.assertEqual(matched[2]["match_flags"]["matched_via"], "number_order")
+        self.assertEqual(matched[1]["match_flags"]["matched_via"], "unmatched")
+
+    def test_lexical_similarity_rewards_snippet_containment(self):
+        score = _lexical_similarity("alpha beta gamma", "intro alpha beta gamma with more problem text")
+        unrelated = _lexical_similarity("theta kappa", "intro alpha beta gamma with more problem text")
+
+        self.assertIsNotNone(score)
+        self.assertGreater(score, 0.8)
+        self.assertLess(unrelated or 0.0, 0.4)
 
 if __name__ == "__main__":
     unittest.main()

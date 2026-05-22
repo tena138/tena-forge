@@ -15,6 +15,8 @@ MODEL_NAME = "jhgan/ko-sroberta-multitask"
 _embedding_model = None
 _embedding_cache: dict[str, np.ndarray] = {}
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
+_LEXICAL_MATCH_THRESHOLD = 0.60
+_LEXICAL_REVIEW_THRESHOLD = 0.32
 
 SECTION_PATTERNS = (
     (re.compile(r"\bDAY\s*0*(\d{1,3})\b", re.IGNORECASE), "DAY"),
@@ -235,13 +237,16 @@ def _lexical_similarity(left: str, right: str) -> float | None:
     right_norm = _compact_for_similarity(right)
     if not left_norm or not right_norm:
         return None
+    if left_norm in right_norm or right_norm in left_norm:
+        return 1.0
 
     left_grams = _char_ngrams(left_norm)
     right_grams = _char_ngrams(right_norm)
     union = len(left_grams | right_grams)
     jaccard = (len(left_grams & right_grams) / union) if union else 0.0
+    overlap = len(left_grams & right_grams) / max(min(len(left_grams), len(right_grams)), 1)
     sequence = SequenceMatcher(None, left_norm, right_norm, autojunk=False).ratio()
-    return max(0.0, min(1.0, (jaccard * 0.7) + (sequence * 0.3)))
+    return max(0.0, min(1.0, (overlap * 0.55) + (jaccard * 0.25) + (sequence * 0.20)))
 
 
 def _text_similarity(left: str, right: str) -> float | None:
@@ -281,10 +286,19 @@ def _semantic_review_warnings(problem: dict[str, Any], solution: dict[str, Any] 
     if not snippet:
         return []
     similarity = _text_similarity(snippet, _stem_text(problem))
-    warning_threshold = 0.5 if _embedding_matching_enabled() else 0.08
+    warning_threshold = 0.5 if _embedding_matching_enabled() else _LEXICAL_REVIEW_THRESHOLD
     if similarity is not None and similarity < warning_threshold:
         return ["semantic_conflict"]
     return []
+
+
+def _reference_supports_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> bool:
+    snippet = _solution_snippet(solution)
+    if not snippet:
+        return True
+    similarity = _text_similarity(snippet, _stem_text(problem))
+    threshold = 0.5 if _embedding_matching_enabled() else _LEXICAL_MATCH_THRESHOLD
+    return similarity is None or similarity >= threshold
 
 
 def _attach(
@@ -375,6 +389,39 @@ def _assign_section_order(
     return matched
 
 
+def _assign_number_order(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+    used_solution_ids: set[int],
+) -> int:
+    matched = 0
+    by_number_problems: dict[str, list[MatchItem]] = defaultdict(list)
+    by_number_solutions: dict[str, list[MatchItem]] = defaultdict(list)
+    for problem in problem_items:
+        if problem.item.get("solution") is None and problem.problem_number:
+            by_number_problems[problem.problem_number].append(problem)
+    for solution in solution_items:
+        if id(solution.item) not in used_solution_ids and solution.problem_number:
+            by_number_solutions[solution.problem_number].append(solution)
+
+    for number, number_problems in by_number_problems.items():
+        number_solutions = by_number_solutions.get(number, [])
+        if not number_solutions or len(number_problems) != len(number_solutions):
+            continue
+        ordered_problems = sorted(number_problems, key=lambda value: (value.global_index, value.page_idx, value.local_index))
+        ordered_solutions = sorted(number_solutions, key=lambda value: (value.global_index, value.page_idx, value.local_index))
+        for problem, solution in zip(ordered_problems, ordered_solutions):
+            if problem.item.get("solution") is not None or id(solution.item) in used_solution_ids:
+                continue
+            if not _reference_supports_pair(problem.item, solution.item):
+                continue
+            warnings = _semantic_review_warnings(problem.item, solution.item)
+            _attach(problem.item, solution.item, 0.92, bool(warnings), "number_order", warnings)
+            used_solution_ids.add(id(solution.item))
+            matched += 1
+    return matched
+
+
 def _assign_global_order(
     problem_items: list[MatchItem],
     solution_items: list[MatchItem],
@@ -391,6 +438,8 @@ def _assign_global_order(
         sorted(unmatched_problems, key=lambda value: (value.global_index, value.page_idx, value.local_index)),
         sorted(unmatched_solutions, key=lambda value: (value.global_index, value.page_idx, value.local_index)),
     ):
+        if not _reference_supports_pair(problem.item, solution.item):
+            continue
         warnings = _semantic_review_warnings(problem.item, solution.item)
         _attach(problem.item, solution.item, 0.90, bool(warnings), "global_order", warnings)
         used_solution_ids.add(id(solution.item))
@@ -407,7 +456,7 @@ def _semantic_assign(
     threshold: float,
 ) -> int:
     if not _embedding_matching_enabled():
-        threshold = min(threshold, 0.16)
+        threshold = max(threshold, _LEXICAL_MATCH_THRESHOLD)
     unmatched_problems = [problem for problem in problem_items if problem.item.get("solution") is None]
     unmatched_solutions = [solution for solution in solution_items if id(solution.item) not in used_solution_ids]
     if same_section_only:
@@ -635,6 +684,7 @@ def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str,
 
     method_counts["section_number"] = _assign_section_number(problem_items, solution_items, used_solution_ids)
     method_counts["section_order"] = _assign_section_order(problem_items, solution_items, used_solution_ids)
+    method_counts["number_order"] = _assign_number_order(problem_items, solution_items, used_solution_ids)
     method_counts["global_order"] = _assign_global_order(problem_items, solution_items, used_solution_ids)
     method_counts["semantic_section"] = _semantic_assign(
         problem_items,

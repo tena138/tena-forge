@@ -1162,7 +1162,8 @@ def _normalize_extracted_items(
     page: RenderedPage,
 ) -> list[dict[str, Any]]:
     normalized_items: list[dict[str, Any]] = []
-    for item in items:
+    occurrence_counts: dict[tuple[str | None, int], int] = defaultdict(int)
+    for item_order, item in enumerate(items):
         number_data = _extract_problem_number(item.get("problem_number"))
         if number_data is None:
             continue
@@ -1170,6 +1171,9 @@ def _normalize_extracted_items(
         if not _is_exercise_candidate(item):
             continue
         section_label = _structure_label(item)
+        occurrence_key = (section_label, number)
+        page_number_occurrence = occurrence_counts[occurrence_key]
+        occurrence_counts[occurrence_key] += 1
         normalized_items.append(
             {
                 "problem_number": number,
@@ -1181,9 +1185,20 @@ def _normalize_extracted_items(
                 "section_label": section_label,
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
                 "page_index": page.page_index,
+                "page_number_occurrence": page_number_occurrence,
+                "_source_order": page.page_index * 10000 + item_order,
             }
         )
     return normalized_items
+
+
+def _extracted_problem_merge_key(page_index: int, item: dict[str, Any]) -> tuple[int, str | None, int, int]:
+    return (
+        page_index,
+        str(item.get("section_label") or "").strip() or None,
+        int(item.get("problem_number") or 0),
+        int(item.get("page_number_occurrence") or 0),
+    )
 
 
 def _pages_for_rescue_check(pages: list[RenderedPage], extracted_page_indexes: set[int]) -> list[RenderedPage]:
@@ -1211,7 +1226,7 @@ def extract_and_cross_check(
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required for processing")
     client = OpenAI(api_key=settings.openai_api_key)
-    by_problem_key: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    by_problem_key: dict[tuple[int, str | None, int, int], list[dict[str, Any]]] = {}
     extraction_passes = max(settings.ai_extraction_passes, 1)
     total_steps = total or len(pages) * extraction_passes
     subjects = _clean_text_candidates(subject_candidates, max_items=24)
@@ -1250,10 +1265,10 @@ def extract_and_cross_check(
                 )
             for normalized in _normalize_extracted_items(items, page):
                 # Problem numbers often repeat across workbook sections. Keep page identity
-                # attached to the number so visuals can never drift to another page.
-                by_problem_key.setdefault((page.page_index, normalized["problem_number"]), []).append(normalized)
+                # and same-page occurrence attached so distinct exercises never merge.
+                by_problem_key.setdefault(_extracted_problem_merge_key(page.page_index, normalized), []).append(normalized)
 
-    extracted_page_indexes = {page_index for page_index, _number in by_problem_key}
+    extracted_page_indexes = {page_index for page_index, _section, _number, _occurrence in by_problem_key}
     rescue_pages = _pages_for_rescue_check(pages, extracted_page_indexes)
     if rescue_pages:
         if batch_id:
@@ -1288,16 +1303,17 @@ def extract_and_cross_check(
                         total_steps,
                     )
                 for normalized in _normalize_extracted_items(items, page):
-                    by_problem_key.setdefault((page.page_index, normalized["problem_number"]), []).append(normalized)
+                    by_problem_key.setdefault(_extracted_problem_merge_key(page.page_index, normalized), []).append(normalized)
 
     merged: list[dict[str, Any]] = []
-    for (page_index, number), items in by_problem_key.items():
+    for (page_index, _section_label, number, occurrence), items in by_problem_key.items():
         texts = [item["problem_text"] for item in items if item["problem_text"]]
         longest = max(texts, key=len) if texts else ""
         visual_values = {item["has_visual"] for item in items}
         visual_boxes = [item.get("visual_bbox") for item in items if item.get("visual_bbox")]
         section_labels = [item.get("section_label") for item in items if item.get("section_label")]
         problem_nos = [item.get("problem_no") for item in items if item.get("problem_no")]
+        source_order = min(int(item.get("_source_order", page_index * 10000) or 0) for item in items)
         merged.append(
             {
                 "problem_number": number,
@@ -1311,6 +1327,8 @@ def extract_and_cross_check(
                 "visual_url": None,
                 "needs_review": True,
                 "page_index": page_index,
+                "page_number_occurrence": occurrence,
+                "_source_order": source_order,
             }
         )
     return _apply_structure_indexes(merged)
@@ -1368,7 +1386,7 @@ def _longer_text(values: list[Any]) -> str | None:
 def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, offset: int = 0, total: int | None = None, display_total_pages: int | None = None) -> list[dict[str, Any]]:
     settings = get_settings()
     client = OpenAI(api_key=settings.openai_api_key)
-    by_key: dict[tuple[int, str | None, str], list[dict[str, Any]]] = {}
+    by_key: dict[tuple[int, str | None, str, int], list[dict[str, Any]]] = {}
     extraction_passes = max(settings.ai_extraction_passes, 1)
     total_steps = total or len(pages) * extraction_passes
     model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
@@ -1407,12 +1425,16 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                     offset + completed,
                     total_steps,
                 )
+            occurrence_counts: dict[tuple[str | None, str], int] = defaultdict(int)
             for item_order, item in enumerate(items):
                 number = str(item.get("problem_number") or "").strip()
                 if not number:
                     continue
                 section_label = str(item.get("section_label") or "").strip() or None
-                by_key.setdefault((page.page_index, section_label, number), []).append(
+                occurrence_key = (section_label, number)
+                page_number_occurrence = occurrence_counts[occurrence_key]
+                occurrence_counts[occurrence_key] += 1
+                by_key.setdefault((page.page_index, section_label, number, page_number_occurrence), []).append(
                     {
                         "problem_number": number,
                         "problem_no": number,
@@ -1422,13 +1444,14 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                         "section_label": section_label,
                         "page_idx": page.page_index,
                         "_source_order": page.page_index * 10000 + item_order,
+                        "page_number_occurrence": page_number_occurrence,
                         "referenced_problem_snippet": item.get("referenced_problem_snippet"),
                         "solution_first_line": item.get("solution_first_line"),
                     }
                 )
 
     solutions: list[dict[str, Any]] = []
-    for (page_idx, _section_label, number), runs in sorted(by_key.items(), key=lambda value: min(run.get("_source_order", 0) for run in value[1])):
+    for (page_idx, _section_label, number, occurrence), runs in sorted(by_key.items(), key=lambda value: min(run.get("_source_order", 0) for run in value[1])):
         solution_texts = [str(run.get("solution_steps") or "").strip() for run in runs if str(run.get("solution_steps") or "").strip()]
         answer_texts = [str(run.get("answer") or "").strip() for run in runs if str(run.get("answer") or "").strip()]
         concept_texts = [str(run.get("key_concept") or "").strip() for run in runs if str(run.get("key_concept") or "").strip()]
@@ -1449,6 +1472,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
             "section_label": _longer_text(section_labels),
             "page_idx": page_idx,
             "_source_order": source_order,
+            "page_number_occurrence": occurrence,
             "referenced_problem_snippet": _longer_text(snippets),
             "solution_first_line": solution_first_line,
             "needs_review": len(runs) < extraction_passes or len(set(solution_texts)) > 1 or len(set(answer_texts)) > 1,
