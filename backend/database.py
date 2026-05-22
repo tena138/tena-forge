@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     ai_concurrent_requests: int = 8
     ai_request_max_retries: int = 12
     ai_request_max_sleep_seconds: int = 300
+    ai_request_timeout_seconds: int = 180
+    ai_progress_heartbeat_seconds: int = 15
     ai_max_output_tokens: int = 4096
     ai_extraction_passes: int = 1
     ai_solution_mode: str = "full"

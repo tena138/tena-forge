@@ -65,16 +65,17 @@ export function readActiveBatch() {
 
 export function shouldForgetActiveBatchAfterStatusError(error: unknown) {
   const response = (error as { response?: { status?: number } })?.response;
-  if (!response) return true;
+  if (!response) return false;
   const status = response.status;
-  if (typeof status !== "number") return true;
-  return status === 400 || status === 404 || status === 422 || status >= 500;
+  if (typeof status !== "number") return false;
+  return status === 400 || status === 403 || status === 404 || status === 422;
 }
 
 export async function fetchBatchStatus(batchId: string) {
   await ensureAccessToken();
   const response = await authHttp.get<BatchStatusResponse>(`/api/batches/${batchId}/status`, {
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
+    params: { t: Date.now() },
   });
   return response.data;
 }

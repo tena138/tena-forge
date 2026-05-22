@@ -8,7 +8,7 @@ import threading
 import time
 import traceback
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -564,6 +564,35 @@ def _read_batch_artifact(batch_id: UUID, filename: str) -> Any | None:
     return json.loads(target.read_text(encoding="utf-8"))
 
 
+def _openai_client() -> OpenAI:
+    settings = get_settings()
+    timeout = max(float(settings.ai_request_timeout_seconds or 180), 30.0)
+    return OpenAI(api_key=settings.openai_api_key, timeout=timeout, max_retries=0)
+
+
+def _ai_progress_heartbeat_seconds() -> float:
+    return max(float(get_settings().ai_progress_heartbeat_seconds or 15), 5.0)
+
+
+def _completed_futures_with_heartbeat(
+    futures: dict[Any, Any],
+    *,
+    batch_id: UUID | None,
+    message_factory,
+    current_factory,
+    total: int | None,
+):
+    pending = set(futures)
+    while pending:
+        done, pending = wait(pending, timeout=_ai_progress_heartbeat_seconds(), return_when=FIRST_COMPLETED)
+        if not done:
+            if batch_id:
+                set_progress(batch_id, message_factory(), current_factory(), total)
+            continue
+        for future in done:
+            yield future, futures[future]
+
+
 def _clean_metadata_list(value: Any, max_items: int = 16) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -621,7 +650,7 @@ def extract_page_metadata(
     if not pages:
         return []
     settings = get_settings()
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _openai_client()
     model_pool = _ai_model_pool(settings.ai_solution_model_pool if doc_kind == "solution" else settings.ai_model_pool, settings.ai_model)
     total_steps = total or len(pages)
     label = "해설 구조 분석 중" if doc_kind == "solution" else "문제 구조 분석 중"
@@ -644,8 +673,13 @@ def extract_page_metadata(
             ): page
             for page in pages
         }
-        for future in as_completed(futures):
-            page = futures[future]
+        for future, page in _completed_futures_with_heartbeat(
+            futures,
+            batch_id=batch_id,
+            message_factory=lambda: f"{label} ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+            current_factory=lambda: offset + completed,
+            total=total_steps,
+        ):
             items = future.result()
             raw = items[0] if items and isinstance(items[0], dict) else {}
             metadata.append(_normalize_page_metadata(raw, page, doc_kind))
@@ -875,7 +909,7 @@ def _extract_korean_problem_document(
     total_units: int,
 ) -> dict[str, Any]:
     settings = get_settings()
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _openai_client()
     model_pool = _ai_model_pool()
     page_payloads: list[dict[str, Any]] = []
     processed_pages = 0
@@ -919,8 +953,13 @@ def _extract_korean_problem_document(
                 ): page
                 for page in pages
             }
-            for future in as_completed(futures):
-                page = futures[future]
+            for future, page in _completed_futures_with_heartbeat(
+                futures,
+                batch_id=batch_id,
+                message_factory=lambda: f"국어 지문/문항 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+                current_factory=lambda: processed_pages + chunk_len + completed,
+                total=total_units,
+            ):
                 items = future.result()
                 raw = items[0] if items and isinstance(items[0], dict) else {}
                 page_payloads.append(normalize_korean_page_payload(raw, document_id, source_file, page.page_index + 1))
@@ -944,7 +983,7 @@ def _extract_korean_solution_items(
     total_units: int,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _openai_client()
     model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
     answer_items: list[dict[str, Any]] = []
     processed_pages = 0
@@ -982,8 +1021,13 @@ def _extract_korean_solution_items(
                 ): page
                 for page in pages
             }
-            for future in as_completed(futures):
-                page = futures[future]
+            for future, page in _completed_futures_with_heartbeat(
+                futures,
+                batch_id=batch_id,
+                message_factory=lambda: f"국어 정답/해설 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+                current_factory=lambda: base + chunk_len + completed,
+                total=total_units,
+            ):
                 items = future.result()
                 completed += 1
                 set_progress(
@@ -1475,7 +1519,18 @@ def process_solutions_only(batch_id: UUID) -> None:
         units_per_page = 1 + extraction_passes
         problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
         solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
-        problem_structure_units = 2 * problem_page_count
+        stored_problem_sections = _read_batch_artifact(batch_id, "problem_sections.json")
+        reuse_problem_sections = isinstance(stored_problem_sections, list)
+        existing_pages_metadata = _read_batch_artifact(batch_id, "pages_metadata.json")
+        problem_page_metadata = [
+            item
+            for item in (existing_pages_metadata if isinstance(existing_pages_metadata, list) else [])
+            if isinstance(item, dict) and item.get("document_kind") == "problem"
+        ]
+        problem_sections: list[dict[str, Any]] = [
+            item for item in (stored_problem_sections if reuse_problem_sections else []) if isinstance(item, dict)
+        ]
+        problem_structure_units = 0 if reuse_problem_sections else 2 * problem_page_count
         solution_structure_units = 2 * solution_page_count
         structure_units = problem_structure_units + solution_structure_units
         solution_units = solution_page_count * units_per_page
@@ -1484,17 +1539,20 @@ def process_solutions_only(batch_id: UUID) -> None:
         solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
         set_progress(batch_id, "해설 PDF 페이지 수 확인 완료", 0, total_units)
 
-        problem_page_metadata = collect_page_metadata_for_pdf(
-            batch.problem_pdf_filename,
-            problem_page_count,
-            problem_dpi,
-            "problem",
-            batch_id,
-            offset=0,
-            total_units=total_units,
-        )
-        problem_sections = build_section_ranges_from_metadata(problem_page_metadata, "problem", problem_page_count)
-        _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
+        if reuse_problem_sections:
+            set_progress(batch_id, "기존 문제 섹션맵 재사용 중", 0, total_units)
+        else:
+            problem_page_metadata = collect_page_metadata_for_pdf(
+                batch.problem_pdf_filename,
+                problem_page_count,
+                problem_dpi,
+                "problem",
+                batch_id,
+                offset=0,
+                total_units=total_units,
+            )
+            problem_sections = build_section_ranges_from_metadata(problem_page_metadata, "problem", problem_page_count)
+            _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
 
         page_metadata = collect_page_metadata_for_pdf(
             batch.solution_pdf_filename,
@@ -1559,6 +1617,7 @@ def process_solutions_only(batch_id: UUID) -> None:
                 "ai_solution_image_detail": settings.ai_solution_image_detail,
                 "problem_page_count": problem_page_count,
                 "solution_page_count": solution_page_count,
+                "reused_problem_sections": reuse_problem_sections,
                 "problem_sections": problem_sections,
                 "solution_sections": solution_sections,
                 "stats": stats,
@@ -2035,7 +2094,7 @@ def extract_and_cross_check(
     settings = get_settings()
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required for processing")
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _openai_client()
     by_problem_key: dict[tuple[int, str | None, int, int], list[dict[str, Any]]] = {}
     extraction_passes = max(settings.ai_extraction_passes, 1)
     total_steps = total or len(pages) * extraction_passes
@@ -2062,8 +2121,13 @@ def extract_and_cross_check(
             ): (local_index, page, run_index)
             for task_index, (local_index, page, run_index) in enumerate(tasks)
         }
-        for future in as_completed(futures):
-            local_index, page, run_index = futures[future]
+        for future, (local_index, page, run_index) in _completed_futures_with_heartbeat(
+            futures,
+            batch_id=batch_id,
+            message_factory=lambda: f"문항 추출 중 ({completed}/{len(tasks)}요청 완료, AI 응답 대기 중)",
+            current_factory=lambda: offset + completed,
+            total=total_steps,
+        ):
             items = future.result()
             completed += 1
             if batch_id:
@@ -2101,8 +2165,13 @@ def extract_and_cross_check(
                 ): page
                 for page in rescue_pages
             }
-            for future in as_completed(futures):
-                page = futures[future]
+            for future, page in _completed_futures_with_heartbeat(
+                futures,
+                batch_id=batch_id,
+                message_factory=lambda: f"누락 의심 페이지 재검사 중 ({rescue_completed}/{len(rescue_pages)}페이지, AI 응답 대기 중)",
+                current_factory=lambda: min(offset + completed, total_steps),
+                total=total_steps,
+            ):
                 items = future.result()
                 rescue_completed += 1
                 if batch_id:
@@ -2195,7 +2264,7 @@ def _longer_text(values: list[Any]) -> str | None:
 
 def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, offset: int = 0, total: int | None = None, display_total_pages: int | None = None) -> list[dict[str, Any]]:
     settings = get_settings()
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _openai_client()
     by_key: dict[tuple[int, str | None, str, int], list[dict[str, Any]]] = {}
     extraction_passes = max(settings.ai_extraction_passes, 1)
     total_steps = total or len(pages) * extraction_passes
@@ -2224,8 +2293,13 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
             ): (local_index, page, run_index)
             for task_index, (local_index, page, run_index) in enumerate(tasks)
         }
-        for future in as_completed(futures):
-            local_index, page, run_index = futures[future]
+        for future, (local_index, page, run_index) in _completed_futures_with_heartbeat(
+            futures,
+            batch_id=batch_id,
+            message_factory=lambda: f"해설 {mode_label} 중 ({completed}/{len(tasks)}요청 완료, AI 응답 대기 중)",
+            current_factory=lambda: offset + completed,
+            total=total_steps,
+        ):
             items = future.result()
             completed += 1
             if batch_id:
