@@ -12,6 +12,7 @@ import { ColorPicker } from "@/components/editor/color-picker";
 import { Batch, BatchStatus, SourceType } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
+import { getRoles, getUsageSummary, UsageSummary } from "@/lib/saas";
 import { cn } from "@/lib/utils";
 
 type UploadResponse = { batch_id: string; status: BatchStatus };
@@ -22,6 +23,7 @@ const UNIT_TAG_COLORS_KEY = "tena-forge-upload-unit-tag-colors";
 const tagPalette = ["#8b5cf6", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ec4899", "#6366f1", "#06b6d4", "#84cc16"];
 
 const subjectOptions = [
+  { label: "국어", value: "국어" },
   { label: "공수1", value: "공통수학1" },
   { label: "공수2", value: "공통수학2" },
   { label: "수1", value: "수학Ⅰ" },
@@ -49,6 +51,7 @@ function compactSubjectText(value: string | null | undefined) {
 function inferSubjectsFromFilename(fileName: string | null | undefined) {
   const compacted = compactSubjectText(fileName);
   if (!compacted) return [];
+  if (/국어|언어와매체|화법과작문|문학|비문학|독서|KOREAN|LANGUAGE/.test(compacted)) return ["국어"];
   const withoutCommonMath = compacted.replace(commonMathPattern, "");
   const subjects: string[] = [];
   filenameSubjectRules.forEach((rule) => {
@@ -274,6 +277,9 @@ export default function UploadPage() {
   const [autoBatchName, setAutoBatchName] = useState("");
   const [problemPdf, setProblemPdf] = useState<File | null>(null);
   const [solutionPdf, setSolutionPdf] = useState<File | null>(null);
+  const [subjectEngine, setSubjectEngine] = useState<"math" | "korean">("math");
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [roles, setRoles] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [customSubject, setCustomSubject] = useState("");
   const [customSubjectColor, setCustomSubjectColor] = useState(tagPalette[0]);
@@ -298,11 +304,17 @@ export default function UploadPage() {
   }, []);
 
   useEffect(() => {
+    getUsageSummary().then(setUsageSummary).catch(() => setUsageSummary(null));
+    getRoles().then((data) => setRoles(data.roles || [])).catch(() => setRoles([]));
+  }, []);
+
+  useEffect(() => {
     setSubjectTagColors(readTagColors(SUBJECT_TAG_COLORS_KEY));
     setUnitTagColors(readTagColors(UNIT_TAG_COLORS_KEY));
   }, []);
 
   function toggleSubject(subject: string) {
+    if (subject === "국어") setSubjectEngine("korean");
     setSelectedSubjects((current) => (current.includes(subject) ? current.filter((item) => item !== subject) : [...current, subject]));
   }
 
@@ -369,6 +381,7 @@ export default function UploadPage() {
     });
     if (inferredSubjects.length) {
       setSelectedSubjects((current) => [...current, ...inferredSubjects.filter((subject) => !current.includes(subject))]);
+      if (inferredSubjects.includes("국어")) setSubjectEngine("korean");
     }
     setAutoBatchName(nextAutoBatchName);
   }
@@ -383,6 +396,10 @@ export default function UploadPage() {
       setUnitCandidates(finalUnitCandidates);
       setUnitInput("");
     }
+    if (koreanLocked) {
+      setMessage("Korean Language extraction is locked for the current plan. Enable the Korean Language subject engine in billing.");
+      return;
+    }
     if (!batchName || !problemPdf || !rightsConfirmed || !selectedSubjects.length) return;
     setSubmitting(true);
     setUploadPercent(0);
@@ -396,6 +413,7 @@ export default function UploadPage() {
     form.append("rights_note", rightsNote);
     form.append("subject_candidates", JSON.stringify(selectedSubjects));
     form.append("unit_candidates", JSON.stringify(finalUnitCandidates));
+    form.append("subject_engine", subjectEngine);
     if (solutionPdf) form.append("solution_pdf", solutionPdf);
     let data: UploadResponse;
     try {
@@ -427,7 +445,10 @@ export default function UploadPage() {
   }, []);
 
   const currentStatus = historyBatchSnapshot?.id === batchId ? historyBatchSnapshot.status : null;
-  const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting);
+  const enabledSubjectEngines = usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"];
+  const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+  const koreanLocked = !isAdmin && Boolean(usageSummary) && subjectEngine === "korean" && !enabledSubjectEngines.includes("korean");
+  const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting && !koreanLocked);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -448,6 +469,43 @@ export default function UploadPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           <Input placeholder="배치 이름" value={batchName} onChange={(event) => setBatchName(event.target.value)} />
+
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+            <h2 className="text-sm font-bold text-white">Subject Engine</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Korean Language extraction uses a separate high-precision pipeline for long passages, shared passage-question groups, and exact multiple-choice extraction.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { value: "math" as const, label: "Math" },
+                { value: "korean" as const, label: "Korean Language" },
+              ].map((engine) => {
+                const locked = !isAdmin && engine.value === "korean" && Boolean(usageSummary) && !enabledSubjectEngines.includes("korean");
+                const selected = subjectEngine === engine.value;
+                return (
+                  <button
+                    key={engine.value}
+                    type="button"
+                    disabled={locked}
+                    className={cn(
+                      "rounded-[8px] border px-3 py-2 text-sm font-semibold transition",
+                      selected ? "border-violet-300/70 bg-violet-500/20 text-violet-50" : "border-white/10 bg-black/20 text-slate-300 hover:border-white/25",
+                      locked && "cursor-not-allowed opacity-45"
+                    )}
+                    onClick={() => {
+                      setSubjectEngine(engine.value);
+                      if (engine.value === "korean" && !selectedSubjects.includes("국어")) {
+                        setSelectedSubjects((current) => [...current, "국어"]);
+                      }
+                    }}
+                  >
+                    {engine.label}{locked ? " · Locked" : ""}
+                  </button>
+                );
+              })}
+            </div>
+            {koreanLocked ? <p className="mt-3 text-xs text-amber-200">Korean Language engine is not enabled on the current plan.</p> : null}
+          </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="text-sm font-bold text-white">분류 기준</h2>

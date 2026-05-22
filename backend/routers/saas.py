@@ -10,6 +10,7 @@ from models import JobOutput, ProcessingJob, Subscription, SubscriptionEvent, Us
 from schemas import CheckoutRequest, CheckoutResponse, ProcessingJobCreate, ProcessingJobRead, SignedUrlResponse, UsageSummaryRead
 from services.ownership import current_owner_id
 from services.saas_security import audit, create_signed_url, enforce_usage_limit, ensure_default_plans, get_roles, usage_summary
+from services.subject_engines import normalize_subject_engines, subject_engine_pricing
 
 router = APIRouter(prefix="/api/saas", tags=["saas"])
 
@@ -45,16 +46,33 @@ def list_plans(db: Session = Depends(get_db)):
 def create_checkout(payload: CheckoutRequest, request: Request, db: Session = Depends(get_db)):
     user_id = current_owner_id(request)
     ensure_default_plans(db)
+    from models import Plan
+
+    plan = db.scalar(select(Plan).where(Plan.code == payload.plan_code))
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+    enabled_engines = normalize_subject_engines(payload.enabled_subject_engines)
+    pricing = subject_engine_pricing(plan.monthly_price, enabled_engines)
     subscription = Subscription(
         user_id=user_id,
         plan_code=payload.plan_code,
         status="active",
         provider="mock",
         current_period_start=datetime.utcnow(),
+        enabled_subject_engines=pricing["enabled_subject_engines"],
+        subject_engine_count=int(pricing["subject_engine_count"]),
+        subject_multiplier=float(pricing["subject_multiplier"]),
+        final_monthly_price=int(pricing["final_monthly_price"]),
+        final_annual_price=int(pricing["final_annual_price"]),
     )
     db.add(subscription)
-    db.add(SubscriptionEvent(provider="mock", provider_event_id=f"checkout-{subscription.id}", event_type="subscription.mock_checkout", payload={"plan_code": payload.plan_code}, processed_at=datetime.utcnow()))
-    audit(db, user_id, "subscription.checkout.mock", "subscription", str(subscription.id), {"plan_code": payload.plan_code})
+    event_payload = {
+        "plan_code": payload.plan_code,
+        "enabled_subject_engines": pricing["enabled_subject_engines"],
+        "final_monthly_price": pricing["final_monthly_price"],
+    }
+    db.add(SubscriptionEvent(provider="mock", provider_event_id=f"checkout-{subscription.id}", event_type="subscription.mock_checkout", payload=event_payload, processed_at=datetime.utcnow()))
+    audit(db, user_id, "subscription.checkout.mock", "subscription", str(subscription.id), event_payload)
     db.commit()
     return {"provider": "mock", "checkout_url": "/billing?mock=success", "message": "개발용 mock 결제가 완료되었습니다."}
 

@@ -240,6 +240,7 @@ class Batch(Base):
     rights_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     subject_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     unit_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    subject_engine: Mapped[str] = mapped_column(String(30), default="math", nullable=False, index=True)
     processing_task: Mapped[str] = mapped_column(String(30), default="full", nullable=False, index=True)
     owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
     academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
@@ -255,6 +256,58 @@ class Batch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     problems: Mapped[list["Problem"]] = relationship("Problem", back_populates="batch", cascade="all, delete-orphan")
+
+
+class KoreanExtractionDocument(Base):
+    __tablename__ = "korean_extraction_documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    batch_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("batches.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    document_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    subject: Mapped[str] = mapped_column(String(30), default="korean", nullable=False, index=True)
+    source_file: Mapped[str] = mapped_column(String(500), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    global_warnings: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class KoreanPassageGroup(Base):
+    __tablename__ = "korean_passage_groups"
+    __table_args__ = (UniqueConstraint("document_id", "passage_id", name="uq_korean_passage_document_passage"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("korean_extraction_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    passage_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    source_pages: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    passage_instruction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    passage_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    passage_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    passage_type: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False, index=True)
+    linked_question_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    extraction_confidence: Mapped[float] = mapped_column(Numeric(6, 4), default=0, nullable=False)
+    warnings: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class KoreanQuestion(Base):
+    __tablename__ = "korean_questions"
+    __table_args__ = (UniqueConstraint("document_id", "question_id", name="uq_korean_question_document_question"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("korean_extraction_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    source_pages: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    question_number: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    linked_passage_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    question_stem: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    additional_material: Mapped[str | None] = mapped_column(Text, nullable=True)
+    choices: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    solution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extraction_confidence: Mapped[float] = mapped_column(Numeric(6, 4), default=0, nullable=False)
+    warnings: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class Problem(Base):
@@ -520,6 +573,11 @@ class Plan(Base):
     monthly_processed_pages: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     storage_quota_mb: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     monthly_ai_tokens: Mapped[int] = mapped_column(Integer, default=100000, nullable=False)
+    enabled_subject_engines: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=lambda: ["math"], nullable=False)
+    subject_engine_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    subject_multiplier: Mapped[float] = mapped_column(Numeric(6, 2), default=1, nullable=False)
+    final_monthly_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    final_annual_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -538,6 +596,11 @@ class Subscription(Base):
     current_period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    enabled_subject_engines: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=lambda: ["math"], nullable=False)
+    subject_engine_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    subject_multiplier: Mapped[float] = mapped_column(Numeric(6, 2), default=1, nullable=False)
+    final_monthly_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    final_annual_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

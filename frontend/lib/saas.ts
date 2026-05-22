@@ -44,11 +44,24 @@ export type Plan = {
   monthly_processed_pages: number;
   storage_quota_mb: number;
   monthly_ai_tokens: number;
+  enabled_subject_engines: string[];
+  subject_engine_count: number;
+  subject_multiplier: number;
+  final_monthly_price: number;
+  final_annual_price: number;
 };
 
 export type UsageSummary = {
   plan: Plan;
-  subscription: { status: string; plan_code: string } | null;
+  subscription: {
+    status: string;
+    plan_code: string;
+    enabled_subject_engines?: string[];
+    subject_engine_count?: number;
+    subject_multiplier?: number;
+    final_monthly_price?: number;
+    final_annual_price?: number;
+  } | null;
   monthly_uploads_used: number;
   monthly_pages_used: number;
   monthly_ai_tokens_used: number;
@@ -89,11 +102,11 @@ export function listPlans() {
   return api<Plan[]>("/api/saas/plans");
 }
 
-export function mockCheckout(plan_code: string) {
+export function mockCheckout(plan_code: string, enabled_subject_engines: string[] = ["math"]) {
   return api<{ provider: string; checkout_url: string; message: string }>("/api/saas/billing/checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan_code }),
+    body: JSON.stringify({ plan_code, enabled_subject_engines }),
   });
 }
 

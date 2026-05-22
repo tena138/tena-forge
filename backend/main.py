@@ -250,9 +250,12 @@ def health_db():
                 "wrong_answer_records",
                 "student_personal_sets",
                 "student_personal_set_items",
+                "korean_extraction_documents",
+                "korean_passage_groups",
+                "korean_questions",
             } - tables),
             "missing_academy_columns": sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
-            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_task"} - batch_columns),
+            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_task", "subject_engine"} - batch_columns),
         }
     except Exception as exc:
         return JSONResponse(
@@ -276,6 +279,7 @@ def _ensure_sqlite_columns():
             "rights_note": "TEXT",
             "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
             "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
+            "subject_engine": "VARCHAR(30) DEFAULT 'math' NOT NULL",
             "processing_task": "VARCHAR(30) DEFAULT 'full' NOT NULL",
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",
             "academy_id": "VARCHAR(64)",
@@ -330,6 +334,20 @@ def _ensure_sqlite_columns():
             "source_type": "VARCHAR(40) DEFAULT 'self_created' NOT NULL",
             "rights_confirmed": "BOOLEAN DEFAULT 0 NOT NULL",
             "rights_confirmed_at": "DATETIME",
+        },
+        "plans": {
+            "enabled_subject_engines": "JSON DEFAULT '[\"math\"]' NOT NULL",
+            "subject_engine_count": "INTEGER DEFAULT 1 NOT NULL",
+            "subject_multiplier": "NUMERIC DEFAULT 1 NOT NULL",
+            "final_monthly_price": "INTEGER DEFAULT 0 NOT NULL",
+            "final_annual_price": "INTEGER DEFAULT 0 NOT NULL",
+        },
+        "subscriptions": {
+            "enabled_subject_engines": "JSON DEFAULT '[\"math\"]' NOT NULL",
+            "subject_engine_count": "INTEGER DEFAULT 1 NOT NULL",
+            "subject_multiplier": "NUMERIC DEFAULT 1 NOT NULL",
+            "final_monthly_price": "INTEGER DEFAULT 0 NOT NULL",
+            "final_annual_price": "INTEGER DEFAULT 0 NOT NULL",
         },
     }
     with engine.begin() as connection:

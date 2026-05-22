@@ -21,6 +21,7 @@ from models import (
     UserRole,
 )
 from services.ownership import current_owner_id
+from services.subject_engines import KOREAN_ENGINE, SUBJECT_ENGINES, normalize_subject_engine, normalize_subject_engines, subject_engine_pricing
 
 ADMIN_ROLES = {"admin", "super_admin"}
 CREATOR_ROLES = {"creator"}
@@ -74,7 +75,9 @@ def ensure_default_plans(db: Session) -> None:
         ("enterprise", "Enterprise", 0, 999999, 999999, 999999, 999999999),
     ]
     for code, name, price, uploads, pages, storage, tokens in defaults:
-        if not db.scalar(select(Plan).where(Plan.code == code)):
+        pricing = subject_engine_pricing(price, ["math"])
+        plan = db.scalar(select(Plan).where(Plan.code == code))
+        if not plan:
             db.add(
                 Plan(
                     code=code,
@@ -84,8 +87,21 @@ def ensure_default_plans(db: Session) -> None:
                     monthly_processed_pages=pages,
                     storage_quota_mb=storage,
                     monthly_ai_tokens=tokens,
+                    enabled_subject_engines=pricing["enabled_subject_engines"],
+                    subject_engine_count=int(pricing["subject_engine_count"]),
+                    subject_multiplier=float(pricing["subject_multiplier"]),
+                    final_monthly_price=int(pricing["final_monthly_price"]),
+                    final_annual_price=int(pricing["final_annual_price"]),
                 )
             )
+        else:
+            engines = normalize_subject_engines(getattr(plan, "enabled_subject_engines", None))
+            pricing = subject_engine_pricing(plan.monthly_price, engines)
+            plan.enabled_subject_engines = pricing["enabled_subject_engines"]
+            plan.subject_engine_count = int(pricing["subject_engine_count"])
+            plan.subject_multiplier = float(pricing["subject_multiplier"])
+            plan.final_monthly_price = int(pricing["final_monthly_price"])
+            plan.final_annual_price = int(pricing["final_annual_price"])
 
 
 def active_subscription(db: Session, user_id: str) -> Subscription | None:
@@ -105,6 +121,29 @@ def has_cloud_processing(db: Session, user_id: str) -> bool:
         return False
     plan_code = str(subscription.plan_code or "").strip().lower()
     return plan_code in CLOUD_PROCESSING_PLAN_CODES or plan_code.endswith("_cloud")
+
+
+def enabled_subject_engines_for_user(db: Session, user_id: str) -> list[str]:
+    roles = get_roles(db, user_id)
+    if roles & ADMIN_ROLES:
+        return sorted(SUBJECT_ENGINES)
+    ensure_default_plans(db)
+    subscription = active_subscription(db, user_id)
+    if subscription:
+        return normalize_subject_engines(subscription.enabled_subject_engines)
+    plan = db.scalar(select(Plan).where(Plan.code == "free"))
+    return normalize_subject_engines(plan.enabled_subject_engines if plan else ["math"])
+
+
+def ensure_subject_engine_access(db: Session, user_id: str, subject_engine: str) -> None:
+    engine = normalize_subject_engine(subject_engine)
+    if engine in enabled_subject_engines_for_user(db, user_id):
+        return
+    if engine == KOREAN_ENGINE:
+        detail = "Korean Language extraction is not enabled for this plan. Enable the Korean Language subject engine in billing."
+    else:
+        detail = "This subject extraction engine is not enabled for this plan."
+    raise HTTPException(status_code=402, detail=detail)
 
 
 def usage_summary(db: Session, user_id: str) -> tuple[Plan, Subscription | None, int, int, int, float]:

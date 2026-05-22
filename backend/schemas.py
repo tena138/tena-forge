@@ -219,6 +219,7 @@ class BatchRead(BaseModel):
     rights_note: str | None = None
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
+    subject_engine: str = "math"
     processing_task: str = "full"
     created_at: datetime
     problem_count: int = 0
@@ -255,6 +256,11 @@ class BatchRead(BaseModel):
     def default_processing_task_for_legacy_null(cls, value):
         return value or "full"
 
+    @field_validator("subject_engine", mode="before")
+    @classmethod
+    def default_subject_engine_for_legacy_null(cls, value):
+        return value or "math"
+
     @field_validator("source_type", mode="before")
     @classmethod
     def default_source_type_for_legacy_null(cls, value):
@@ -282,6 +288,46 @@ class BatchStatusResponse(BaseModel):
     failure_reason: str | None = None
     failure_hint: str | None = None
     failed_at: datetime | None = None
+
+
+class KoreanChoiceRead(BaseModel):
+    choice_label: str
+    choice_text: str
+
+
+class KoreanPassageGroupRead(BaseModel):
+    passage_id: str
+    source_pages: list[int] = Field(default_factory=list)
+    passage_instruction: str | None = None
+    passage_title: str | None = None
+    passage_text: str
+    passage_type: str = "unknown"
+    linked_question_ids: list[str] = Field(default_factory=list)
+    extraction_confidence: float = 0
+    warnings: list[str] = Field(default_factory=list)
+
+
+class KoreanQuestionRead(BaseModel):
+    question_id: str
+    source_pages: list[int] = Field(default_factory=list)
+    question_number: str | None = None
+    linked_passage_id: str | None = None
+    question_stem: str
+    additional_material: str | None = None
+    choices: list[KoreanChoiceRead] = Field(default_factory=list)
+    answer: str | None = None
+    solution: str | None = None
+    extraction_confidence: float = 0
+    warnings: list[str] = Field(default_factory=list)
+
+
+class KoreanExtractionRead(BaseModel):
+    document_id: str
+    subject: str = "korean"
+    source_file: str
+    passage_groups: list[KoreanPassageGroupRead] = Field(default_factory=list)
+    questions: list[KoreanQuestionRead] = Field(default_factory=list)
+    global_warnings: list[str] = Field(default_factory=list)
 
 
 class FacetsResponse(BaseModel):
@@ -783,6 +829,11 @@ class PlanRead(BaseModel):
     monthly_processed_pages: int
     storage_quota_mb: int
     monthly_ai_tokens: int
+    enabled_subject_engines: list[str] = Field(default_factory=lambda: ["math"])
+    subject_engine_count: int = 1
+    subject_multiplier: float = 1
+    final_monthly_price: int = 0
+    final_annual_price: int = 0
 
 
 class SubscriptionRead(BaseModel):
@@ -796,6 +847,11 @@ class SubscriptionRead(BaseModel):
     current_period_start: datetime | None = None
     current_period_end: datetime | None = None
     cancel_at_period_end: bool
+    enabled_subject_engines: list[str] = Field(default_factory=lambda: ["math"])
+    subject_engine_count: int = 1
+    subject_multiplier: float = 1
+    final_monthly_price: int = 0
+    final_annual_price: int = 0
 
 
 class UsageSummaryRead(BaseModel):
@@ -809,6 +865,7 @@ class UsageSummaryRead(BaseModel):
 
 class CheckoutRequest(BaseModel):
     plan_code: str
+    enabled_subject_engines: list[str] = Field(default_factory=lambda: ["math"])
 
 
 class CheckoutResponse(BaseModel):

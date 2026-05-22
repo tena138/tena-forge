@@ -9,8 +9,8 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-PREVIOUS_REVISION = "0018_batch_processing_task"
-HEAD_REVISION = "0019_learning_workspace"
+PREVIOUS_REVISION = "0019_learning_workspace"
+HEAD_REVISION = "0020_korean_subject_engine"
 ACADEMY_REQUIRED_COLUMNS = {
     "email_verified",
     "email_verified_at",
@@ -130,14 +130,19 @@ def _ensure_batch_columns(connection, inspector) -> bool:
         ("subject_candidates", json_definition),
         ("unit_candidates", json_definition),
         ("processing_task", "VARCHAR(30) NOT NULL DEFAULT 'full'"),
+        ("subject_engine", "VARCHAR(30) NOT NULL DEFAULT 'math'"),
     ]
     for column_name, definition in specs:
         if _add_column_if_missing(connection, inspector, "batches", column_name, definition):
             changed = True
             inspector = inspect(connection)
     connection.execute(text("UPDATE batches SET processing_task = 'full' WHERE processing_task IS NULL OR processing_task = ''"))
+    connection.execute(text("UPDATE batches SET subject_engine = 'math' WHERE subject_engine IS NULL OR subject_engine = ''"))
     if "ix_batches_processing_task" not in _index_names(inspector, "batches"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_processing_task ON batches (processing_task)"))
+        changed = True
+    if "ix_batches_subject_engine" not in _index_names(inspector, "batches"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_subject_engine ON batches (subject_engine)"))
         changed = True
     return changed
 
@@ -177,11 +182,16 @@ def _schema_is_at_head(inspector) -> bool:
         "wrong_answer_records",
         "student_personal_sets",
         "student_personal_set_items",
+        "korean_extraction_documents",
+        "korean_passage_groups",
+        "korean_questions",
     }
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
-        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task"})
+        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task", "subject_engine"})
+        and _has_columns(inspector, "plans", {"enabled_subject_engines", "subject_engine_count", "subject_multiplier", "final_monthly_price", "final_annual_price"})
+        and _has_columns(inspector, "subscriptions", {"enabled_subject_engines", "subject_engine_count", "subject_multiplier", "final_monthly_price", "final_annual_price"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
         and _has_columns(inspector, "student_academy_memberships", {"display_name_in_academy", "expires_at"})
     )
@@ -192,7 +202,7 @@ def _schema_is_at_previous(inspector) -> bool:
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
-        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates"})
+        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
     )
 

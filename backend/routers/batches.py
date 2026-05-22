@@ -9,12 +9,14 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from limiter import limiter
-from models import Batch, BatchStatus, Problem, Tag
-from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, SOURCE_TYPES
+from models import Batch, BatchStatus, KoreanExtractionDocument, Problem, Tag
+from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, KoreanExtractionRead, SOURCE_TYPES
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids
 from services.pipeline import get_progress_detail
+from services.saas_security import ensure_subject_engine_access
 from services.storage import save_upload
+from services.subject_engines import infer_subject_engine_from_subjects, normalize_subject_engine
 from services.subject_inference import infer_subject_candidates_from_text
 
 router = APIRouter(prefix="/api/batches", tags=["batches"])
@@ -100,6 +102,7 @@ def _batch_read(
             "rights_note": batch.rights_note,
             "subject_candidates": batch.subject_candidates,
             "unit_candidates": batch.unit_candidates,
+            "subject_engine": batch.subject_engine or "math",
             "processing_task": batch.processing_task or "full",
             "created_at": batch.created_at,
             "problem_count": problem_count,
@@ -123,6 +126,7 @@ def upload_batch(
     rights_note: str | None = Form(default=None),
     subject_candidates: str | None = Form(default=None),
     unit_candidates: str | None = Form(default=None),
+    subject_engine: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     if not problem_pdf.filename or not problem_pdf.filename.lower().endswith(".pdf"):
@@ -140,6 +144,8 @@ def upload_batch(
     parsed_subject_candidates = _parse_candidate_list(subject_candidates)
     if not parsed_subject_candidates:
         parsed_subject_candidates = infer_subject_candidates_from_text(problem_pdf.filename, batch_name)
+    engine = normalize_subject_engine(subject_engine or infer_subject_engine_from_subjects(parsed_subject_candidates))
+    ensure_subject_engine_access(db, owner_id, engine)
     batch = Batch(
         name=batch_name,
         problem_pdf_filename=problem_path,
@@ -151,6 +157,7 @@ def upload_batch(
         rights_note=rights_note,
         subject_candidates=parsed_subject_candidates,
         unit_candidates=_parse_candidate_list(unit_candidates, max_items=80),
+        subject_engine=engine,
         processing_task="full",
         owner_id=owner_id,
         academy_id=current_academy_id(request),
@@ -206,6 +213,23 @@ def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     return _batch_read(db, batch)
+
+
+@router.get("/{batch_id}/korean", response_model=KoreanExtractionRead)
+@limiter.exempt
+def get_korean_extraction(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    document = db.scalar(select(KoreanExtractionDocument).where(KoreanExtractionDocument.batch_id == batch.id))
+    if not document:
+        raise HTTPException(status_code=404, detail="Korean extraction result not found.")
+    payload = dict(document.payload or {})
+    payload.setdefault("document_id", document.document_id)
+    payload.setdefault("subject", document.subject)
+    payload.setdefault("source_file", document.source_file)
+    payload.setdefault("global_warnings", document.global_warnings or [])
+    return KoreanExtractionRead.model_validate(payload)
 
 
 @router.get("/{batch_id}/status", response_model=BatchStatusResponse)

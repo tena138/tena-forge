@@ -21,10 +21,18 @@ from PIL import Image
 from sqlalchemy.orm import Session, joinedload
 
 from database import SessionLocal, get_settings
-from models import Batch, BatchStatus, Problem, Tag
+from models import Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
+from services.korean_extraction import (
+    KOREAN_EXTRACTION_PROMPT,
+    KOREAN_SOLUTION_PROMPT,
+    map_korean_answers,
+    merge_korean_page_payloads,
+    normalize_korean_page_payload,
+)
 from services.matcher import match_with_summary
 from services.math_normalization import normalize_geometry_notation
 from services.storage import save_visual_bytes
+from services.subject_engines import KOREAN_ENGINE, normalize_subject_engine
 
 
 _ai_request_lock = threading.Lock()
@@ -818,6 +826,314 @@ def collect_page_metadata_for_pdf(
     return sorted(metadata, key=lambda item: int(item.get("page_index") or 0))
 
 
+def _extract_korean_problem_document(
+    path: str,
+    batch_id: UUID,
+    document_id: str,
+    source_file: str,
+    page_count: int,
+    dpi: int,
+    total_units: int,
+) -> dict[str, Any]:
+    settings = get_settings()
+    client = OpenAI(api_key=settings.openai_api_key)
+    model_pool = _ai_model_pool()
+    page_payloads: list[dict[str, Any]] = []
+    processed_pages = 0
+    for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
+        chunk_len = sum(end - start for start, end in range_group)
+        rendered_groups: list[list[RenderedPage]] = []
+        rendered_pages = 0
+        for start, end in range_group:
+            rendered = render_pdf(
+                path,
+                batch_id=batch_id,
+                label="국어 PDF 렌더링 중",
+                start_page=start,
+                end_page=end,
+                dpi=dpi,
+                progress_offset=processed_pages + rendered_pages,
+                progress_total=total_units,
+            )
+            rendered_groups.append(rendered)
+            rendered_pages += end - start
+        pages = interleave_rendered_page_groups(rendered_groups)
+        completed = 0
+        set_progress(batch_id, f"국어 지문/문항 추출 중 (0/{len(pages)}페이지)", processed_pages + chunk_len, total_units)
+        with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
+            futures = {
+                executor.submit(
+                    vision_json,
+                    client,
+                    page.base64_png,
+                    (
+                        f"{KOREAN_EXTRACTION_PROMPT}\n\n"
+                        f"Document id: {document_id}\n"
+                        f"Source file: {source_file}\n"
+                        f"Current source page: {page.page_index + 1}\n"
+                        "Use the current source page number in every source_pages array."
+                    ),
+                    _page_split_model(model_pool, page.page_index, page_count),
+                    page.ai_image_mime,
+                    max(settings.ai_max_output_tokens, settings.ai_solution_max_output_tokens),
+                    settings.ai_image_detail,
+                ): page
+                for page in pages
+            }
+            for future in as_completed(futures):
+                page = futures[future]
+                items = future.result()
+                raw = items[0] if items and isinstance(items[0], dict) else {}
+                page_payloads.append(normalize_korean_page_payload(raw, document_id, source_file, page.page_index + 1))
+                completed += 1
+                set_progress(
+                    batch_id,
+                    f"국어 지문/문항 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
+                    processed_pages + chunk_len + completed,
+                    total_units,
+                )
+        processed_pages += chunk_len
+    return merge_korean_page_payloads(document_id, source_file, page_payloads)
+
+
+def _extract_korean_solution_items(
+    path: str,
+    batch_id: UUID,
+    page_count: int,
+    dpi: int,
+    offset: int,
+    total_units: int,
+) -> list[dict[str, Any]]:
+    settings = get_settings()
+    client = OpenAI(api_key=settings.openai_api_key)
+    model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
+    answer_items: list[dict[str, Any]] = []
+    processed_pages = 0
+    for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
+        chunk_len = sum(end - start for start, end in range_group)
+        base = offset + processed_pages
+        rendered_groups: list[list[RenderedPage]] = []
+        rendered_pages = 0
+        for start, end in range_group:
+            rendered = render_pdf(
+                path,
+                batch_id=batch_id,
+                label="국어 정답/해설 PDF 렌더링 중",
+                start_page=start,
+                end_page=end,
+                dpi=dpi,
+                progress_offset=base + rendered_pages,
+                progress_total=total_units,
+            )
+            rendered_groups.append(rendered)
+            rendered_pages += end - start
+        pages = interleave_rendered_page_groups(rendered_groups)
+        completed = 0
+        with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
+            futures = {
+                executor.submit(
+                    vision_json,
+                    client,
+                    page.base64_png,
+                    f"{KOREAN_SOLUTION_PROMPT}\n\nCurrent source page: {page.page_index + 1}. Use this page number in source_pages.",
+                    _page_split_model(model_pool, page.page_index, page_count),
+                    page.ai_image_mime,
+                    settings.ai_solution_max_output_tokens,
+                    settings.ai_solution_image_detail,
+                ): page
+                for page in pages
+            }
+            for future in as_completed(futures):
+                page = futures[future]
+                items = future.result()
+                completed += 1
+                set_progress(
+                    batch_id,
+                    f"국어 정답/해설 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
+                    base + chunk_len + completed,
+                    total_units,
+                )
+                for item in items:
+                    if isinstance(item, dict) and str(item.get("question_number") or "").strip():
+                        answer_items.append(item)
+        processed_pages += chunk_len
+    return answer_items
+
+
+def _korean_question_number(value: Any, fallback: int) -> int:
+    match = re.search(r"\d+", str(value or ""))
+    return int(match.group(0)) if match else fallback
+
+
+def _korean_problem_text(question: dict[str, Any], passage: dict[str, Any] | None) -> str:
+    parts: list[str] = []
+    if passage:
+        if passage.get("passage_instruction"):
+            parts.append(str(passage["passage_instruction"]))
+        if passage.get("passage_title"):
+            parts.append(str(passage["passage_title"]))
+        if passage.get("passage_text"):
+            parts.append(str(passage["passage_text"]))
+    if question.get("question_stem"):
+        parts.append(str(question["question_stem"]))
+    if question.get("additional_material"):
+        parts.append(str(question["additional_material"]))
+    choices = question.get("choices") if isinstance(question.get("choices"), list) else []
+    choice_lines = [
+        f"{choice.get('choice_label', '')} {choice.get('choice_text', '')}".strip()
+        for choice in choices
+        if isinstance(choice, dict)
+    ]
+    if choice_lines:
+        parts.append("\n".join(choice_lines))
+    return "\n\n".join(part for part in parts if part.strip()).strip() or str(question.get("question_stem") or "")
+
+
+def _save_korean_document_results(db: Session, batch: Batch, document: dict[str, Any]) -> None:
+    existing = db.query(KoreanExtractionDocument).filter(KoreanExtractionDocument.batch_id == batch.id).first()
+    if existing:
+        db.query(KoreanQuestion).filter(KoreanQuestion.document_id == existing.id).delete(synchronize_session=False)
+        db.query(KoreanPassageGroup).filter(KoreanPassageGroup.document_id == existing.id).delete(synchronize_session=False)
+        db.delete(existing)
+        db.flush()
+
+    record = KoreanExtractionDocument(
+        batch_id=batch.id,
+        document_id=str(document.get("document_id") or batch.id),
+        subject="korean",
+        source_file=str(document.get("source_file") or batch.problem_pdf_filename),
+        payload=document,
+        global_warnings=document.get("global_warnings") or [],
+    )
+    db.add(record)
+    db.flush()
+
+    passages = document.get("passage_groups") if isinstance(document.get("passage_groups"), list) else []
+    questions = document.get("questions") if isinstance(document.get("questions"), list) else []
+    passage_by_id = {str(passage.get("passage_id")): passage for passage in passages if isinstance(passage, dict)}
+
+    for passage in passages:
+        if not isinstance(passage, dict):
+            continue
+        db.add(
+            KoreanPassageGroup(
+                document_id=record.id,
+                passage_id=str(passage.get("passage_id") or ""),
+                source_pages=passage.get("source_pages") or [],
+                passage_instruction=passage.get("passage_instruction"),
+                passage_title=passage.get("passage_title"),
+                passage_text=str(passage.get("passage_text") or ""),
+                passage_type=str(passage.get("passage_type") or "unknown"),
+                linked_question_ids=passage.get("linked_question_ids") or [],
+                extraction_confidence=float(passage.get("extraction_confidence") or 0),
+                warnings=passage.get("warnings") or [],
+            )
+        )
+
+    batch_name = (batch.name or "Korean batch").strip()
+    for index, question in enumerate(questions, start=1):
+        if not isinstance(question, dict):
+            continue
+        passage = passage_by_id.get(str(question.get("linked_passage_id") or ""))
+        db.add(
+            KoreanQuestion(
+                document_id=record.id,
+                question_id=str(question.get("question_id") or f"q{index}"),
+                source_pages=question.get("source_pages") or [],
+                question_number=str(question.get("question_number") or ""),
+                linked_passage_id=question.get("linked_passage_id"),
+                question_stem=str(question.get("question_stem") or ""),
+                additional_material=question.get("additional_material"),
+                choices=question.get("choices") or [],
+                answer=question.get("answer"),
+                solution=question.get("solution"),
+                extraction_confidence=float(question.get("extraction_confidence") or 0),
+                warnings=question.get("warnings") or [],
+            )
+        )
+
+        source_pages = question.get("source_pages") or []
+        first_page = int(source_pages[0]) if source_pages else 1
+        combined_warnings = list(document.get("global_warnings") or []) + list(question.get("warnings") or [])
+        if passage:
+            combined_warnings.extend(passage.get("warnings") or [])
+        problem = Problem(
+            problem_number=_korean_question_number(question.get("question_number"), index),
+            problem_text=_korean_problem_text(question, passage),
+            has_visual=False,
+            visual_url=None,
+            review_page_image_url=None,
+            review_page_number=first_page,
+            answer=question.get("answer"),
+            solution_steps=question.get("solution"),
+            key_concept=passage.get("passage_type") if passage else None,
+            needs_review=bool(combined_warnings),
+            source_batch_id=batch.id,
+            source_type=batch.source_type,
+            source_label=batch.source_label,
+            rights_confirmed=batch.rights_confirmed,
+            rights_confirmed_at=batch.rights_confirmed_at,
+            rights_note=batch.rights_note,
+            visibility="private",
+            origin_type="owned" if batch.source_type in {"self_created", "academy_internal"} else "licensed" if batch.source_type == "licensed" else "imported_unknown" if batch.source_type == "unknown" else "derived",
+            owner_id=batch.owner_id,
+            academy_id=batch.academy_id,
+        )
+        problem.tags = Tag(
+            subject="국어",
+            unit=(passage.get("passage_type") if passage else None) or None,
+            problem_type="객관식" if question.get("choices") else None,
+            source=f"{batch_name} / p.{first_page} / {question.get('question_number') or index}번",
+        )
+        db.add(problem)
+
+
+def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
+    settings = get_settings()
+    problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
+    solution_page_count = count_pdf_pages(batch.solution_pdf_filename) if batch.solution_pdf_filename else 0
+    total_units = max(problem_page_count * 2 + solution_page_count * 2, 1)
+    problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
+    solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)) if batch.solution_pdf_filename else problem_dpi
+    set_progress(batch_id, "국어 추출 준비 완료", 0, total_units)
+    document_id = f"korean-{batch.id}"
+
+    document = _extract_korean_problem_document(
+        batch.problem_pdf_filename,
+        batch_id,
+        document_id,
+        os.path.basename(batch.problem_pdf_filename),
+        problem_page_count,
+        problem_dpi,
+        total_units,
+    )
+    _write_batch_artifact(batch_id, "korean_extraction.json", document)
+
+    if batch.solution_pdf_filename:
+        answer_items = _extract_korean_solution_items(
+            batch.solution_pdf_filename,
+            batch_id,
+            solution_page_count,
+            solution_dpi,
+            offset=problem_page_count * 2,
+            total_units=total_units,
+        )
+        _write_batch_artifact(batch_id, "korean_answer_solution_items.json", answer_items)
+        document = map_korean_answers(document, answer_items)
+        _write_batch_artifact(batch_id, "korean_extraction_with_answers.json", document)
+
+    set_progress(batch_id, "국어 지문/문항 저장 중", total_units, total_units)
+    _save_korean_document_results(db, batch, document)
+    batch.status = BatchStatus.done
+    batch.processing_task = "full"
+    batch.progress_message = "완료"
+    batch.progress_current = total_units
+    batch.progress_total = total_units
+    batch.progress_updated_at = datetime.utcnow()
+    db.commit()
+    set_progress(batch_id, "완료", total_units, total_units)
+
+
 def get_progress_message(batch: Batch) -> str:
     return str(get_progress_detail(batch)["progress_message"])
 
@@ -899,6 +1215,10 @@ def process_batch(batch_id: UUID) -> None:
             raise RuntimeError("OPENAI_API_KEY is required for processing")
 
         settings = get_settings()
+        if normalize_subject_engine(batch.subject_engine) == KOREAN_ENGINE:
+            process_korean_batch(db, batch, batch_id)
+            return
+
         extraction_passes = max(settings.ai_extraction_passes, 1)
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
         should_extract_solutions = bool(batch.solution_pdf_filename and solution_mode != "skip")
@@ -1105,6 +1425,8 @@ def process_solutions_only(batch_id: UUID) -> None:
         set_progress(batch_id, "해설 재처리 시작", 0, 0, reset=True)
         if not get_settings().openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is required for processing")
+        if normalize_subject_engine(batch.subject_engine) == KOREAN_ENGINE:
+            raise RuntimeError("Korean Language solution-only reprocessing is not supported yet. Retry the full Korean batch to remap answers and explanations.")
 
         settings = get_settings()
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
