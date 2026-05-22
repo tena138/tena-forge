@@ -31,6 +31,33 @@ const subjectOptions = [
   { label: "기하", value: "기하" },
 ];
 
+const commonMathPattern = /공통수학[12]|공통수[12]|공수[12]/g;
+const filenameSubjectRules: Array<{ value: string; pattern: RegExp; stripCommon?: boolean }> = [
+  { value: "공통수학1", pattern: /공통수학1|공통수1|공수1/ },
+  { value: "공통수학2", pattern: /공통수학2|공통수2|공수2/ },
+  { value: "수학Ⅰ", pattern: /수학I(?!I)|수I(?!I)|수학1|수1/, stripCommon: true },
+  { value: "수학Ⅱ", pattern: /수학II|수II|수학2|수2/, stripCommon: true },
+  { value: "미적분", pattern: /미적분|미적/ },
+  { value: "확률과 통계", pattern: /확률과통계|확통/ },
+  { value: "기하", pattern: /기하|기벡/ },
+];
+
+function compactSubjectText(value: string | null | undefined) {
+  return (value || "").normalize("NFKC").replace(/\s+/g, "").toUpperCase();
+}
+
+function inferSubjectsFromFilename(fileName: string | null | undefined) {
+  const compacted = compactSubjectText(fileName);
+  if (!compacted) return [];
+  const withoutCommonMath = compacted.replace(commonMathPattern, "");
+  const subjects: string[] = [];
+  filenameSubjectRules.forEach((rule) => {
+    const target = rule.stripCommon ? withoutCommonMath : compacted;
+    if (rule.pattern.test(target) && !subjects.includes(rule.value)) subjects.push(rule.value);
+  });
+  return subjects;
+}
+
 function subjectLabel(value: string) {
   return subjectOptions.find((option) => option.value === value)?.label || value;
 }
@@ -332,6 +359,7 @@ export default function UploadPage() {
 
   function handleProblemPdfChange(file: File | null) {
     const nextAutoBatchName = file ? fileNameToBatchName(file.name) : "";
+    const inferredSubjects = inferSubjectsFromFilename(file?.name);
     setProblemPdf(file);
     setBatchName((current) => {
       const trimmed = current.trim();
@@ -339,6 +367,9 @@ export default function UploadPage() {
       if (!trimmed || trimmed === autoBatchName) return nextAutoBatchName;
       return current;
     });
+    if (inferredSubjects.length) {
+      setSelectedSubjects((current) => [...current, ...inferredSubjects.filter((subject) => !current.includes(subject))]);
+    }
     setAutoBatchName(nextAutoBatchName);
   }
 

@@ -15,6 +15,7 @@ from services.batch_jobs import schedule_next_batch
 from services.ownership import current_academy_id, current_owner_id
 from services.pipeline import get_progress_detail
 from services.storage import save_upload
+from services.subject_inference import infer_subject_candidates_from_text
 
 router = APIRouter(prefix="/api/batches", tags=["batches"])
 
@@ -136,6 +137,9 @@ def upload_batch(
     owner_id = current_owner_id(request)
     problem_path = save_upload(problem_pdf)
     solution_path = save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None
+    parsed_subject_candidates = _parse_candidate_list(subject_candidates)
+    if not parsed_subject_candidates:
+        parsed_subject_candidates = infer_subject_candidates_from_text(problem_pdf.filename, batch_name)
     batch = Batch(
         name=batch_name,
         problem_pdf_filename=problem_path,
@@ -145,7 +149,7 @@ def upload_batch(
         rights_confirmed=True,
         rights_confirmed_at=datetime.utcnow(),
         rights_note=rights_note,
-        subject_candidates=_parse_candidate_list(subject_candidates),
+        subject_candidates=parsed_subject_candidates,
         unit_candidates=_parse_candidate_list(unit_candidates, max_items=80),
         processing_task="full",
         owner_id=owner_id,
