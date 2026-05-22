@@ -219,10 +219,12 @@ def request_registration_code(payload: RegistrationCodeRequest, request: Request
     code = f"{secrets.randbelow(1_000_000):06d}"
     verification_session = _create_registration_session(email, code)
     if not existing_id:
+        if not settings.smtp_host:
+            raise HTTPException(status_code=503, detail="SMTP is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and EMAIL_FROM in Render.")
         if not send_registration_code_email(email, code):
-            raise HTTPException(status_code=503, detail="이메일 발송 설정이 완료되지 않았습니다. Render의 SMTP 환경 변수를 확인해주세요.")
+            raise HTTPException(status_code=503, detail="Registration email delivery failed. Please try again later.")
     return {
-        "message": "인증 코드를 이메일로 보냈습니다.",
+        "message": "Verification code sent by email.",
         "verification_session": verification_session,
         "expires_in_seconds": 600,
     }

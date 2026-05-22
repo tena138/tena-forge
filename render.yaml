@@ -40,6 +40,18 @@ services:
         value: none
       - key: ENCRYPTION_KEY
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: Tena Forge
       - key: BOOTSTRAP_ADMIN_EMAIL
         value: admin@tenaforge.com
       - key: BOOTSTRAP_ADMIN_PASSWORD
