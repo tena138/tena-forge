@@ -24,14 +24,28 @@ settings = get_settings()
 
 app = FastAPI(title="Tena Forge API")
 
-allowed_origins = {
+def _origin_values(*values: str) -> set[str]:
+    origins: set[str] = set()
+    for value in values:
+        for origin in str(value or "").split(","):
+            clean = origin.strip().rstrip("/")
+            if clean:
+                origins.add(clean)
+    return origins
+
+
+allowed_origins = _origin_values(
     settings.frontend_url,
     settings.cors_origin,
+    "https://tena-forge.com",
+    "https://www.tena-forge.com",
+    "https://tena-forge.vercel.app",
+    "https://tena-forge-frontend.onrender.com",
     "http://localhost:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
-}
+)
 
 
 def auth_error_response(request, detail, status_code=401):
