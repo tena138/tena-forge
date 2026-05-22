@@ -17,6 +17,7 @@ _embedding_cache: dict[str, np.ndarray] = {}
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
 _LEXICAL_MATCH_THRESHOLD = 0.60
 _LEXICAL_REVIEW_THRESHOLD = 0.32
+_MAX_UNSECTIONED_GLOBAL_ORDER = 40
 
 SECTION_PATTERNS = (
     (re.compile(r"\bDAY\s*0*(\d{1,3})\b", re.IGNORECASE), "DAY"),
@@ -49,6 +50,26 @@ class MatchItem:
     @property
     def key(self) -> tuple[str | None, str, int]:
         return (self.section_label, self.problem_number, self.occurrence)
+
+
+@dataclass
+class SectionValidation:
+    section_id: str | None
+    problem_items: list[MatchItem]
+    solution_items: list[MatchItem]
+    problem_anchor: dict[str, Any]
+    solution_anchor: dict[str, Any]
+    status: str
+    reasons: list[str]
+
+    @property
+    def allow_order_matching(self) -> bool:
+        return (
+            self.status == "ok"
+            and bool(self.section_id)
+            and len(self.problem_items) == len(self.solution_items)
+            and len(self.problem_items) > 0
+        )
 
 
 def _text(value: Any) -> str:
@@ -333,6 +354,94 @@ def _group_by_section(items: list[MatchItem]) -> dict[str | None, list[MatchItem
     return grouped
 
 
+def _ordered_items(items: list[MatchItem]) -> list[MatchItem]:
+    return sorted(items, key=lambda value: (value.local_index, value.global_index, value.page_idx))
+
+
+def _anchor_for_items(items: list[MatchItem]) -> dict[str, Any]:
+    ordered = _ordered_items(items)
+    numbers = [item.problem_number for item in ordered if item.problem_number]
+    return {
+        "first": numbers[0] if numbers else None,
+        "last": numbers[-1] if numbers else None,
+        "count": len(numbers),
+    }
+
+
+def _sequence_issue_codes(items: list[MatchItem], prefix: str) -> list[str]:
+    numeric_numbers = [_numeric_number(item.problem_number) for item in _ordered_items(items)]
+    numeric_numbers = [number for number in numeric_numbers if number is not None]
+    if not numeric_numbers:
+        return []
+
+    issues: list[str] = []
+    counts = Counter(numeric_numbers)
+    if any(count > 1 for count in counts.values()):
+        issues.append(f"duplicated_{prefix}_numbers")
+
+    unique_sorted = sorted(counts)
+    expected = list(range(unique_sorted[0], unique_sorted[-1] + 1)) if unique_sorted else []
+    if [number for number in expected if number not in counts]:
+        issues.append(f"missing_{prefix}_numbers")
+
+    if numeric_numbers != sorted(numeric_numbers):
+        issues.append(f"suspicious_{prefix}_number_jump")
+    elif any((right - left) > 1 for left, right in zip(numeric_numbers, numeric_numbers[1:])):
+        issues.append(f"suspicious_{prefix}_number_jump")
+
+    return issues
+
+
+def _build_section_validations(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+) -> dict[str | None, SectionValidation]:
+    problem_groups = _group_by_section(problem_items)
+    solution_groups = _group_by_section(solution_items)
+    validations: dict[str | None, SectionValidation] = {}
+    for section_id in sorted(set(problem_groups) | set(solution_groups), key=lambda value: value or ""):
+        section_problems = problem_groups.get(section_id, [])
+        section_solutions = solution_groups.get(section_id, [])
+        problem_anchor = _anchor_for_items(section_problems)
+        solution_anchor = _anchor_for_items(section_solutions)
+        reasons: list[str] = []
+
+        if not section_id:
+            reasons.append("section_boundary_not_detected")
+        if len(section_problems) != len(section_solutions):
+            reasons.append(f"problem_count {len(section_problems)} but solution_count {len(section_solutions)}")
+
+        reasons.extend(_sequence_issue_codes(section_problems, "problem"))
+        reasons.extend(_sequence_issue_codes(section_solutions, "solution"))
+
+        if section_problems and section_solutions:
+            if problem_anchor["first"] and solution_anchor["first"] and problem_anchor["first"] != solution_anchor["first"]:
+                reasons.append("first_anchor_mismatch")
+            if problem_anchor["last"] and solution_anchor["last"] and problem_anchor["last"] != solution_anchor["last"]:
+                reasons.append("last_anchor_mismatch")
+            if problem_anchor["count"] != solution_anchor["count"]:
+                reasons.append("count_anchor_mismatch")
+
+        inferred_problem_sections = sum(1 for item in section_problems if item.item.get("section_inferred"))
+        inferred_solution_sections = sum(1 for item in section_solutions if item.item.get("section_inferred"))
+        if section_id and (
+            inferred_problem_sections == len(section_problems) > 0
+            or inferred_solution_sections == len(section_solutions) > 0
+        ):
+            reasons.append("low_ocr_confidence_on_section_header")
+
+        validations[section_id] = SectionValidation(
+            section_id=section_id,
+            problem_items=section_problems,
+            solution_items=section_solutions,
+            problem_anchor=problem_anchor,
+            solution_anchor=solution_anchor,
+            status="needs_review" if reasons else "ok",
+            reasons=list(dict.fromkeys(reasons)),
+        )
+    return validations
+
+
 def _assign_section_number(
     problem_items: list[MatchItem],
     solution_items: list[MatchItem],
@@ -363,6 +472,7 @@ def _assign_section_order(
     problem_items: list[MatchItem],
     solution_items: list[MatchItem],
     used_solution_ids: set[int],
+    section_validations: dict[str | None, SectionValidation],
 ) -> int:
     matched = 0
     by_section_problems = _group_by_section(
@@ -372,16 +482,20 @@ def _assign_section_order(
         [solution for solution in solution_items if id(solution.item) not in used_solution_ids and solution.section_label]
     )
     for section_label, section_problems in by_section_problems.items():
+        validation = section_validations.get(section_label)
+        if validation is None or not validation.allow_order_matching:
+            continue
         section_solutions = by_section_solutions.get(section_label, [])
         if not section_solutions:
             continue
-        count_mismatch = len(section_problems) != len(section_solutions)
-        ordered_problems = sorted(section_problems, key=lambda value: (value.local_index, value.global_index))
-        ordered_solutions = sorted(section_solutions, key=lambda value: (value.local_index, value.global_index))
+        if len(section_problems) != len(section_solutions):
+            continue
+        ordered_problems = _ordered_items(section_problems)
+        ordered_solutions = _ordered_items(section_solutions)
         for problem, solution in zip(ordered_problems, ordered_solutions):
             if problem.item.get("solution") is not None or id(solution.item) in used_solution_ids:
                 continue
-            warnings = ["section_count_mismatch"] if count_mismatch else []
+            warnings: list[str] = []
             warnings.extend(_semantic_review_warnings(problem.item, solution.item))
             _attach(problem.item, solution.item, 0.95, bool(warnings), "section_order", warnings)
             used_solution_ids.add(id(solution.item))
@@ -426,7 +540,10 @@ def _assign_global_order(
     problem_items: list[MatchItem],
     solution_items: list[MatchItem],
     used_solution_ids: set[int],
+    section_validations: dict[str | None, SectionValidation],
 ) -> int:
+    if not _allow_global_order(problem_items, solution_items, section_validations):
+        return 0
     unmatched_problems = [problem for problem in problem_items if problem.item.get("solution") is None]
     unmatched_solutions = [solution for solution in solution_items if id(solution.item) not in used_solution_ids]
     if not unmatched_problems or not unmatched_solutions:
@@ -445,6 +562,26 @@ def _assign_global_order(
         used_solution_ids.add(id(solution.item))
         matched += 1
     return matched
+
+
+def _allow_global_order(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+    section_validations: dict[str | None, SectionValidation],
+) -> bool:
+    if not problem_items or not solution_items or len(problem_items) != len(solution_items):
+        return False
+    problem_sections = {item.section_label for item in problem_items}
+    solution_sections = {item.section_label for item in solution_items}
+    if problem_sections == {None} and solution_sections == {None}:
+        validation = section_validations.get(None)
+        sequence_reasons = [reason for reason in (validation.reasons if validation else []) if reason != "section_boundary_not_detected"]
+        return len(problem_items) <= _MAX_UNSECTIONED_GLOBAL_ORDER and not sequence_reasons
+    if None in problem_sections or None in solution_sections:
+        return False
+    if problem_sections != solution_sections:
+        return False
+    return all(validation.status == "ok" for validation in section_validations.values())
 
 
 def _semantic_assign(
@@ -572,19 +709,19 @@ def _apply_inversion_warnings(problems: list[dict[str, Any]]) -> int:
     return warning_count
 
 
-def _section_summary(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> list[dict[str, Any]]:
-    problem_counts = Counter(item.section_label or "UNSECTIONED" for item in problem_items)
-    solution_counts = Counter(item.section_label or "UNSECTIONED" for item in solution_items)
+def _section_summary(section_validations: dict[str | None, SectionValidation]) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
-    for section_id in sorted(set(problem_counts) | set(solution_counts)):
-        problem_count = problem_counts.get(section_id, 0)
-        solution_count = solution_counts.get(section_id, 0)
+    for section_id, validation in sorted(section_validations.items(), key=lambda pair: pair[0] or ""):
         sections.append(
             {
-                "section_id": None if section_id == "UNSECTIONED" else section_id,
-                "problem_count": problem_count,
-                "solution_count": solution_count,
-                "status": "ok" if problem_count == solution_count else "count_mismatch",
+                "section_id": section_id,
+                "problem_count": len(validation.problem_items),
+                "solution_count": len(validation.solution_items),
+                "problem_anchor": validation.problem_anchor,
+                "solution_anchor": validation.solution_anchor,
+                "status": validation.status,
+                "reason": "; ".join(validation.reasons) if validation.reasons else None,
+                "reasons": validation.reasons,
             }
         )
     return sections
@@ -621,10 +758,59 @@ def _build_match_json(problems: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return payload
 
 
+def _matches_by_section(
+    match_json: list[dict[str, Any]],
+    solution_items: list[MatchItem],
+    used_solution_ids: set[int],
+    section_validations: dict[str | None, SectionValidation],
+) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+
+    def bucket_for(section_id: Any) -> dict[str, Any]:
+        normalized = section_id or "UNSECTIONED"
+        return grouped.setdefault(
+            str(normalized),
+            {
+                "section_id": None if normalized == "UNSECTIONED" else normalized,
+                "status": "ok",
+                "safe_matches": [],
+                "unmatched_problems": [],
+                "unmatched_solutions": [],
+            },
+        )
+
+    for match in match_json:
+        problem = match.get("problem") or {}
+        solution = match.get("solution") or {}
+        section_id = problem.get("section_id") or solution.get("section_id") or "UNSECTIONED"
+        bucket = bucket_for(section_id)
+        warnings = match.get("warnings") or []
+        if warnings:
+            bucket["status"] = "needs_review"
+        if match.get("solution") is None:
+            bucket["unmatched_problems"].append(problem)
+        else:
+            bucket["safe_matches"].append(match)
+    for solution in solution_items:
+        if id(solution.item) in used_solution_ids:
+            continue
+        bucket = bucket_for(solution.section_label)
+        bucket["status"] = "needs_review"
+        bucket["unmatched_solutions"].append(_item_json(solution.item, "solution_steps"))
+    for section_id, validation in section_validations.items():
+        bucket = bucket_for(section_id)
+        if validation.status != "ok":
+            bucket["status"] = "needs_review"
+            bucket["reason"] = "; ".join(validation.reasons)
+            bucket["reasons"] = validation.reasons
+    return grouped
+
+
 def _build_summary(
     problems: list[dict[str, Any]],
     problem_items: list[MatchItem],
     solution_items: list[MatchItem],
+    section_validations: dict[str | None, SectionValidation],
 ) -> dict[str, Any]:
     matched = [problem for problem in problems if problem.get("solution") is not None]
     used_solution_ids = {id(problem["solution"]) for problem in matched if problem.get("solution") is not None}
@@ -642,7 +828,7 @@ def _build_summary(
             for solution in solution_items
             if id(solution.item) not in used_solution_ids
         ],
-        "sections": _section_summary(problem_items, solution_items),
+        "sections": _section_summary(section_validations),
         "warnings": [],
     }
     if len(problem_items) != len(solution_items):
@@ -679,13 +865,14 @@ def _print_stats(
 def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> dict[str, Any]:
     problem_items = _annotate_occurrences(problems)
     solution_items = _annotate_occurrences(solutions)
+    section_validations = _build_section_validations(problem_items, solution_items)
     used_solution_ids: set[int] = set()
     method_counts: dict[str, int] = {}
 
     method_counts["section_number"] = _assign_section_number(problem_items, solution_items, used_solution_ids)
-    method_counts["section_order"] = _assign_section_order(problem_items, solution_items, used_solution_ids)
-    method_counts["number_order"] = _assign_number_order(problem_items, solution_items, used_solution_ids)
-    method_counts["global_order"] = _assign_global_order(problem_items, solution_items, used_solution_ids)
+    method_counts["section_order"] = _assign_section_order(problem_items, solution_items, used_solution_ids, section_validations)
+    method_counts["number_order"] = 0
+    method_counts["global_order"] = _assign_global_order(problem_items, solution_items, used_solution_ids, section_validations)
     method_counts["semantic_section"] = _semantic_assign(
         problem_items,
         solution_items,
@@ -694,24 +881,30 @@ def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str,
         method="semantic_section",
         threshold=0.60,
     )
-    method_counts["semantic_global"] = _semantic_assign(
-        problem_items,
-        solution_items,
-        used_solution_ids,
-        same_section_only=False,
-        method="semantic_global",
-        threshold=0.70,
-    )
+    method_counts["semantic_global"] = 0
 
     for problem in problem_items:
         if problem.item.get("solution") is None:
             _attach(problem.item, None, 0.0, True, "unmatched", ["unmatched_solution"])
 
     inversion_count = _apply_inversion_warnings(problems)
-    summary = _build_summary(problems, problem_items, solution_items)
+    summary = _build_summary(problems, problem_items, solution_items, section_validations)
+    if not _allow_global_order(problem_items, solution_items, section_validations):
+        summary["warnings"].append("global_order_disabled")
+        summary["warnings"] = list(dict.fromkeys(summary["warnings"]))
+    matches = _build_match_json(problems)
+    matches_by_section = _matches_by_section(matches, solution_items, used_solution_ids, section_validations)
+    validation_report = {
+        "sections": summary["sections"],
+        "global_order_allowed": _allow_global_order(problem_items, solution_items, section_validations),
+        "method_counts": method_counts,
+        "warnings": summary["warnings"],
+    }
     _print_stats(problems, method_counts, inversion_count, summary)
     return {
-        "matches": _build_match_json(problems),
+        "matches": matches,
+        "matches_by_section": matches_by_section,
+        "validation_report": validation_report,
         "summary": summary,
         "problems": problems,
     }

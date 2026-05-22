@@ -11,6 +11,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus, Problem, Tag
-from services.matcher import match as match_solutions
+from services.matcher import match_with_summary
 from services.math_normalization import normalize_geometry_notation
 from services.storage import save_visual_bytes
 
@@ -155,7 +156,12 @@ def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: l
     for global_index, payload in enumerate(problem_payloads, start=1):
         payload["global_index"] = global_index
         payload["local_index"] = global_index
-    matched_payloads = match_solutions(problem_payloads, solutions)
+    matching_result = match_with_summary(problem_payloads, solutions)
+    matched_payloads = matching_result["problems"]
+    _write_batch_artifact(batch.id, "extracted_problems_by_section.json", _items_by_section(problem_payloads, "page_index"))
+    _write_batch_artifact(batch.id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
+    _write_batch_artifact(batch.id, "matches_by_section.json", matching_result.get("matches_by_section", {}))
+    _write_batch_artifact(batch.id, "validation_report.json", matching_result.get("validation_report", matching_result.get("summary", {})))
     matched_by_id = {str(item.get("_problem_id")): item for item in matched_payloads}
     matched_count = 0
     unmatched_count = 0
@@ -298,6 +304,30 @@ Rules:
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
+PAGE_STRUCTURE_PROMPT = r"""You are reading one page from a Korean problem book or solution book.
+Extract page-level structure metadata only. Do not extract full problems or full solutions.
+
+Return exactly one JSON object inside a JSON array:
+[
+  {
+    "page_number": <1-based page number supplied by the system>,
+    "detected_section_ids": ["DAY 03", "UNIT 02", "..."],
+    "detected_problem_headers": ["01", "02"],
+    "detected_solution_headers": ["01", "02"],
+    "page_type": "problem_page" | "solution_page" | "cover" | "log" | "blank" | "unknown",
+    "layout": "single_column" | "two_column" | "unknown",
+    "section_confidence": <0.0 to 1.0>
+  }
+]
+
+Rules:
+- Only report metadata visible on this page.
+- detected_section_ids must come from explicit section/day/unit/chapter/exam labels only. Do not invent missing section IDs.
+- detected_problem_headers should contain problem numbers that start problem statements.
+- detected_solution_headers should contain problem numbers that start answers or solutions.
+- For two-column solution pages, set layout to "two_column".
+- Return raw JSON only."""
+
 progress_messages: dict[str, str] = {}
 progress_states: dict[str, dict[str, float | int | str]] = {}
 PAGE_CHUNK_SIZE = 16
@@ -311,6 +341,8 @@ class RenderedPage:
     base64_png: str
     png_bytes: bytes
     ai_image_mime: str = "image/png"
+    column_index: int = 0
+    source_page_index: int | None = None
 
 
 def set_progress(batch_id: UUID, message: str, current: int | None = None, total: int | None = None, reset: bool = False) -> None:
@@ -464,6 +496,328 @@ def interleave_rendered_page_groups(groups: list[list[RenderedPage]]) -> list[Re
     return interleaved
 
 
+def _json_default(value: Any) -> str:
+    if isinstance(value, (datetime, UUID)):
+        return str(value)
+    return str(value)
+
+
+def _batch_artifact_dir(batch_id: UUID) -> Path:
+    root = Path(get_settings().uploads_dir).resolve()
+    target = root / "batch_artifacts" / str(batch_id)
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _write_batch_artifact(batch_id: UUID, filename: str, payload: Any) -> None:
+    target_dir = _batch_artifact_dir(batch_id)
+    target = (target_dir / filename).resolve()
+    if target_dir not in target.parents and target != target_dir:
+        raise ValueError("Invalid artifact path")
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default), encoding="utf-8")
+
+
+def _clean_metadata_list(value: Any, max_items: int = 16) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        cleaned.append(text)
+        seen.add(text)
+        if len(cleaned) >= max_items:
+            break
+    return cleaned
+
+
+def _normalize_page_type(value: Any, fallback: str) -> str:
+    text = str(value or "").strip().lower()
+    allowed = {"problem_page", "solution_page", "cover", "log", "blank", "unknown"}
+    return text if text in allowed else fallback
+
+
+def _normalize_layout(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in {"single_column", "two_column", "unknown"} else "unknown"
+
+
+def _normalize_page_metadata(raw: dict[str, Any], page: RenderedPage, doc_kind: str) -> dict[str, Any]:
+    fallback_type = "solution_page" if doc_kind == "solution" else "problem_page"
+    try:
+        confidence = float(raw.get("section_confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return {
+        "page_number": page.page_index + 1,
+        "page_index": page.page_index,
+        "document_kind": doc_kind,
+        "detected_section_ids": _clean_metadata_list(raw.get("detected_section_ids")),
+        "detected_problem_headers": _clean_metadata_list(raw.get("detected_problem_headers"), max_items=64),
+        "detected_solution_headers": _clean_metadata_list(raw.get("detected_solution_headers"), max_items=64),
+        "page_type": _normalize_page_type(raw.get("page_type"), fallback_type),
+        "layout": _normalize_layout(raw.get("layout")),
+        "section_confidence": max(0.0, min(1.0, confidence)),
+    }
+
+
+def extract_page_metadata(
+    pages: list[RenderedPage],
+    doc_kind: str,
+    batch_id: UUID | None = None,
+    offset: int = 0,
+    total: int | None = None,
+    display_total_pages: int | None = None,
+) -> list[dict[str, Any]]:
+    if not pages:
+        return []
+    settings = get_settings()
+    client = OpenAI(api_key=settings.openai_api_key)
+    model_pool = _ai_model_pool(settings.ai_solution_model_pool if doc_kind == "solution" else settings.ai_model_pool, settings.ai_model)
+    total_steps = total or len(pages)
+    label = "해설 구조 분석 중" if doc_kind == "solution" else "문제 구조 분석 중"
+    if batch_id:
+        set_progress(batch_id, f"{label} (0/{len(pages)}페이지)", offset, total_steps)
+
+    completed = 0
+    metadata: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
+        futures = {
+            executor.submit(
+                vision_json,
+                client,
+                page.base64_png,
+                f"{PAGE_STRUCTURE_PROMPT}\n\nDocument kind: {doc_kind}. Current page_number: {page.page_index + 1}. Return this exact page_number.",
+                _page_split_model(model_pool, page.page_index, display_total_pages),
+                page.ai_image_mime,
+                900,
+                settings.ai_solution_image_detail if doc_kind == "solution" else settings.ai_image_detail,
+            ): page
+            for page in pages
+        }
+        for future in as_completed(futures):
+            page = futures[future]
+            items = future.result()
+            raw = items[0] if items and isinstance(items[0], dict) else {}
+            metadata.append(_normalize_page_metadata(raw, page, doc_kind))
+            completed += 1
+            if batch_id:
+                set_progress(
+                    batch_id,
+                    f"{label} ({completed}/{len(pages)}페이지, {page.page_index + 1}/{display_total_pages or len(pages)}페이지)",
+                    offset + completed,
+                    total_steps,
+                )
+    return sorted(metadata, key=lambda item: int(item.get("page_index") or 0))
+
+
+def _primary_section_id(metadata: dict[str, Any]) -> str | None:
+    sections = metadata.get("detected_section_ids")
+    if isinstance(sections, list):
+        for section in sections:
+            text = str(section or "").strip()
+            if text:
+                return text
+    return None
+
+
+def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind: str, page_count: int) -> list[dict[str, Any]]:
+    relevant = sorted(
+        [item for item in metadata if item.get("document_kind") == doc_kind],
+        key=lambda item: int(item.get("page_index") or 0),
+    )
+    starts: list[tuple[str, int, float]] = []
+    seen: set[str] = set()
+    for item in relevant:
+        section = _primary_section_id(item)
+        if not section or section in seen:
+            continue
+        starts.append((section, int(item.get("page_number") or 1), float(item.get("section_confidence") or 0.0)))
+        seen.add(section)
+
+    if not starts:
+        content_pages = [
+            int(item.get("page_number") or 1)
+            for item in relevant
+            if item.get("page_type") in {"problem_page", "solution_page", "unknown"}
+        ]
+        if not content_pages and page_count > 0:
+            content_pages = list(range(1, page_count + 1))
+        if not content_pages:
+            return []
+        return [
+            {
+                "section_id": "UNSECTIONED",
+                "page_start": min(content_pages),
+                "page_end": max(content_pages),
+                "status": "needs_review",
+                "reason": "section_boundary_not_detected",
+                "section_confidence": 0.0,
+            }
+        ]
+
+    sections: list[dict[str, Any]] = []
+    for index, (section, page_start, confidence) in enumerate(starts):
+        if index + 1 < len(starts):
+            next_start = starts[index + 1][1]
+            page_end = next_start if next_start == page_start else next_start - 1
+        else:
+            following_pages = [
+                int(item.get("page_number") or 1)
+                for item in relevant
+                if int(item.get("page_number") or 1) >= page_start
+                and item.get("page_type") not in {"cover", "blank", "log"}
+            ]
+            page_end = max(following_pages) if following_pages else page_count
+        sections.append(
+            {
+                "section_id": section,
+                "page_start": max(1, page_start),
+                "page_end": max(page_start, min(page_end, page_count)),
+                "status": "ok" if confidence >= 0.55 else "needs_review",
+                "reason": None if confidence >= 0.55 else "low_ocr_confidence_on_section_header",
+                "section_confidence": confidence,
+            }
+        )
+    return sections
+
+
+def _section_for_page(page_index: int, sections: list[dict[str, Any]]) -> str | None:
+    page_number = page_index + 1
+    for section in sections:
+        start = int(section.get("page_start") or 0)
+        end = int(section.get("page_end") or 0)
+        if start <= page_number <= end:
+            section_id = str(section.get("section_id") or "").strip()
+            return section_id if section_id and section_id != "UNSECTIONED" else None
+    return None
+
+
+def _apply_section_ranges_to_items(items: list[dict[str, Any]], sections: list[dict[str, Any]], page_key: str) -> None:
+    for item in items:
+        if str(item.get("section_label") or item.get("section_id") or "").strip():
+            continue
+        page_index = int(item.get(page_key, item.get("page_idx", 0)) or 0)
+        section_id = _section_for_page(page_index, sections)
+        if section_id:
+            item["section_label"] = section_id
+            item["section_id"] = section_id
+            item["section_inferred"] = True
+
+
+def _items_by_section(items: list[dict[str, Any]], page_key: str) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in items:
+        section_id = str(item.get("section_id") or item.get("section_label") or "UNSECTIONED").strip() or "UNSECTIONED"
+        grouped[section_id].append(
+            {
+                "problem_number": item.get("problem_number"),
+                "problem_no": item.get("problem_no"),
+                "page_number": int(item.get(page_key, item.get("page_idx", 0)) or 0) + 1,
+                "local_index": item.get("local_index"),
+                "global_index": item.get("global_index"),
+            }
+        )
+    return grouped
+
+
+def _metadata_by_page(metadata: list[dict[str, Any]], doc_kind: str) -> dict[int, dict[str, Any]]:
+    return {
+        int(item.get("page_index") or 0): item
+        for item in metadata
+        if item.get("document_kind") == doc_kind
+    }
+
+
+def _encode_image_for_ai(image: Image.Image, mime: str) -> tuple[str, bytes, str]:
+    buffer = io.BytesIO()
+    if mime == "image/jpeg":
+        quality = min(max(int(get_settings().ai_image_jpeg_quality or 82), 50), 95)
+        image.convert("RGB").save(buffer, format="JPEG", quality=quality, optimize=True)
+    else:
+        image.save(buffer, format="PNG")
+        mime = "image/png"
+    data = buffer.getvalue()
+    return base64.b64encode(data).decode("ascii"), data, mime
+
+
+def split_two_column_solution_pages(pages: list[RenderedPage], page_metadata: dict[int, dict[str, Any]]) -> list[RenderedPage]:
+    expanded: list[RenderedPage] = []
+    for page in pages:
+        metadata = page_metadata.get(page.page_index) or {}
+        if metadata.get("layout") != "two_column":
+            expanded.append(page)
+            continue
+        with Image.open(io.BytesIO(page.png_bytes)) as source:
+            width, height = source.size
+            if width < 2:
+                expanded.append(page)
+                continue
+            midpoint = width // 2
+            for column_index, box in enumerate(((0, 0, midpoint, height), (midpoint, 0, width, height))):
+                cropped = source.crop(box)
+                base64_image, image_bytes, mime = _encode_image_for_ai(cropped, page.ai_image_mime)
+                expanded.append(
+                    RenderedPage(
+                        page.page_index,
+                        base64_image,
+                        image_bytes,
+                        mime,
+                        column_index=column_index,
+                        source_page_index=page.page_index,
+                    )
+                )
+    return expanded
+
+
+def collect_page_metadata_for_pdf(
+    path: str,
+    page_count: int,
+    dpi: int,
+    doc_kind: str,
+    batch_id: UUID,
+    offset: int,
+    total_units: int,
+) -> list[dict[str, Any]]:
+    model_pool = _ai_model_pool(get_settings().ai_solution_model_pool if doc_kind == "solution" else get_settings().ai_model_pool, get_settings().ai_model)
+    metadata: list[dict[str, Any]] = []
+    processed_pages = 0
+    render_label = "해설 구조 분석용 렌더링 중" if doc_kind == "solution" else "문제 구조 분석용 렌더링 중"
+    for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
+        chunk_len = sum(end - start for start, end in range_group)
+        base = offset + processed_pages * 2
+        rendered_groups: list[list[RenderedPage]] = []
+        rendered_pages = 0
+        for start, end in range_group:
+            rendered = render_pdf(
+                path,
+                batch_id=batch_id,
+                label=render_label,
+                start_page=start,
+                end_page=end,
+                dpi=dpi,
+                progress_offset=base + rendered_pages,
+                progress_total=total_units,
+            )
+            rendered_groups.append(rendered)
+            rendered_pages += end - start
+        pages = interleave_rendered_page_groups(rendered_groups)
+        metadata.extend(
+            extract_page_metadata(
+                pages,
+                doc_kind,
+                batch_id=batch_id,
+                offset=base + chunk_len,
+                total=total_units,
+                display_total_pages=page_count,
+            )
+        )
+        processed_pages += chunk_len
+    return sorted(metadata, key=lambda item: int(item.get("page_index") or 0))
+
+
 def get_progress_message(batch: Batch) -> str:
     return str(get_progress_detail(batch)["progress_message"])
 
@@ -551,12 +905,44 @@ def process_batch(batch_id: UUID) -> None:
         units_per_page = 1 + extraction_passes
         problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
         solution_page_count = count_pdf_pages(batch.solution_pdf_filename) if should_extract_solutions else 0
+        structure_units = 2 * (problem_page_count + solution_page_count)
         solution_units = solution_page_count * units_per_page
         problem_units = problem_page_count * units_per_page
-        total_units = solution_units + problem_units
+        total_units = structure_units + solution_units + problem_units
         problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
         solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)) if should_extract_solutions else problem_dpi
         set_progress(batch_id, "PDF 페이지 수 확인 완료", 0, total_units)
+
+        page_metadata: list[dict[str, Any]] = []
+        if should_extract_solutions:
+            page_metadata.extend(
+                collect_page_metadata_for_pdf(
+                    batch.solution_pdf_filename,
+                    solution_page_count,
+                    solution_dpi,
+                    "solution",
+                    batch_id,
+                    offset=0,
+                    total_units=total_units,
+                )
+            )
+        page_metadata.extend(
+            collect_page_metadata_for_pdf(
+                batch.problem_pdf_filename,
+                problem_page_count,
+                problem_dpi,
+                "problem",
+                batch_id,
+                offset=solution_page_count * 2,
+                total_units=total_units,
+            )
+        )
+        _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
+        problem_sections = build_section_ranges_from_metadata(page_metadata, "problem", problem_page_count)
+        solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count) if should_extract_solutions else []
+        _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
+        _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
+        solution_page_metadata = _metadata_by_page(page_metadata, "solution")
 
         solutions: list[dict[str, Any]] = []
         if should_extract_solutions:
@@ -564,7 +950,7 @@ def process_batch(batch_id: UUID) -> None:
             processed_solution_pages = 0
             for range_group in iter_split_page_range_groups(solution_page_count, len(solution_model_pool)):
                 chunk_len = sum(end - start for start, end in range_group)
-                base = processed_solution_pages * units_per_page
+                base = structure_units + processed_solution_pages * units_per_page
                 rendered_groups: list[list[RenderedPage]] = []
                 rendered_pages = 0
                 for start, end in range_group:
@@ -581,25 +967,28 @@ def process_batch(batch_id: UUID) -> None:
                     rendered_groups.append(rendered)
                     rendered_pages += end - start
                 solution_pages = interleave_rendered_page_groups(rendered_groups)
-                solutions.extend(
-                    extract_solutions(
-                        solution_pages,
-                        batch_id,
-                        offset=base + chunk_len,
-                        total=total_units,
-                        display_total_pages=solution_page_count,
-                    )
+                solution_pages = split_two_column_solution_pages(solution_pages, solution_page_metadata)
+                extracted_solutions = extract_solutions(
+                    solution_pages,
+                    batch_id,
+                    offset=base + chunk_len,
+                    total=total_units,
+                    display_total_pages=solution_page_count,
                 )
+                _apply_section_ranges_to_items(extracted_solutions, solution_sections, "page_idx")
+                solutions.extend(extracted_solutions)
                 processed_solution_pages += chunk_len
+            solutions = _apply_structure_indexes(solutions, page_key="page_idx")
             if not any(has_solution_content(solution) for solution in solutions):
                 raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
+        _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
 
         problem_model_pool = _ai_model_pool()
         all_extracted: list[dict[str, Any]] = []
         processed_problem_pages = 0
         for range_group in iter_split_page_range_groups(problem_page_count, len(problem_model_pool)):
             chunk_len = sum(end - start for start, end in range_group)
-            base = solution_units + processed_problem_pages * units_per_page
+            base = structure_units + solution_units + processed_problem_pages * units_per_page
             rendered_groups: list[list[RenderedPage]] = []
             rendered_pages = 0
             for start, end in range_group:
@@ -625,6 +1014,7 @@ def process_batch(batch_id: UUID) -> None:
                 subject_candidates=batch.subject_candidates,
                 unit_candidates=batch.unit_candidates,
             )
+            _apply_section_ranges_to_items(extracted, problem_sections, "page_index")
             page_range_label = format_page_range_group(range_group, problem_page_count)
 
             set_progress(batch_id, f"검토용 원본 페이지 저장 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
@@ -640,8 +1030,14 @@ def process_batch(batch_id: UUID) -> None:
             all_extracted.extend(extracted)
             processed_problem_pages += chunk_len
 
+        _apply_section_ranges_to_items(all_extracted, problem_sections, "page_index")
+        all_extracted = _apply_structure_indexes(all_extracted, page_key="page_index")
+        _write_batch_artifact(batch_id, "extracted_problems_by_section.json", _items_by_section(all_extracted, "page_index"))
         set_progress(batch_id, "문항-해설 매칭 중", total_units, total_units)
-        matched_problems = match_solutions(all_extracted, solutions)
+        matching_result = match_with_summary(all_extracted, solutions)
+        matched_problems = matching_result["problems"]
+        _write_batch_artifact(batch_id, "matches_by_section.json", matching_result.get("matches_by_section", {}))
+        _write_batch_artifact(batch_id, "validation_report.json", matching_result.get("validation_report", matching_result.get("summary", {})))
         set_progress(batch_id, "문항 저장 중", total_units, total_units)
         save_results(db, batch, matched_problems)
         db.commit()
@@ -717,16 +1113,32 @@ def process_solutions_only(batch_id: UUID) -> None:
         extraction_passes = max(settings.ai_extraction_passes, 1)
         units_per_page = 1 + extraction_passes
         solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
-        total_units = max(solution_page_count * units_per_page, 1)
+        structure_units = 2 * solution_page_count
+        solution_units = solution_page_count * units_per_page
+        total_units = max(structure_units + solution_units, 1)
         solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
         set_progress(batch_id, "해설 PDF 페이지 수 확인 완료", 0, total_units)
+
+        page_metadata = collect_page_metadata_for_pdf(
+            batch.solution_pdf_filename,
+            solution_page_count,
+            solution_dpi,
+            "solution",
+            batch_id,
+            offset=0,
+            total_units=total_units,
+        )
+        _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
+        solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count)
+        _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
+        solution_page_metadata = _metadata_by_page(page_metadata, "solution")
 
         solutions: list[dict[str, Any]] = []
         solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
         processed_solution_pages = 0
         for range_group in iter_split_page_range_groups(solution_page_count, len(solution_model_pool)):
             chunk_len = sum(end - start for start, end in range_group)
-            base = processed_solution_pages * units_per_page
+            base = structure_units + processed_solution_pages * units_per_page
             rendered_groups: list[list[RenderedPage]] = []
             rendered_pages = 0
             for start, end in range_group:
@@ -743,16 +1155,18 @@ def process_solutions_only(batch_id: UUID) -> None:
                 rendered_groups.append(rendered)
                 rendered_pages += end - start
             solution_pages = interleave_rendered_page_groups(rendered_groups)
-            solutions.extend(
-                extract_solutions(
-                    solution_pages,
-                    batch_id,
-                    offset=base + chunk_len,
-                    total=total_units,
-                    display_total_pages=solution_page_count,
-                )
+            solution_pages = split_two_column_solution_pages(solution_pages, solution_page_metadata)
+            extracted_solutions = extract_solutions(
+                solution_pages,
+                batch_id,
+                offset=base + chunk_len,
+                total=total_units,
+                display_total_pages=solution_page_count,
             )
+            _apply_section_ranges_to_items(extracted_solutions, solution_sections, "page_idx")
+            solutions.extend(extracted_solutions)
             processed_solution_pages += chunk_len
+        solutions = _apply_structure_indexes(solutions, page_key="page_idx")
         if not any(has_solution_content(solution) for solution in solutions):
             raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
 
@@ -1186,7 +1600,7 @@ def _normalize_extracted_items(
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
                 "page_index": page.page_index,
                 "page_number_occurrence": page_number_occurrence,
-                "_source_order": page.page_index * 10000 + item_order,
+                "_source_order": page.page_index * 10000 + int(getattr(page, "column_index", 0) or 0) * 1000 + item_order,
             }
         )
     return normalized_items
@@ -1443,7 +1857,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                         "key_concept": item.get("key_concept"),
                         "section_label": section_label,
                         "page_idx": page.page_index,
-                        "_source_order": page.page_index * 10000 + item_order,
+                        "_source_order": page.page_index * 10000 + int(getattr(page, "column_index", 0) or 0) * 1000 + item_order,
                         "page_number_occurrence": page_number_occurrence,
                         "referenced_problem_snippet": item.get("referenced_problem_snippet"),
                         "solution_first_line": item.get("solution_first_line"),

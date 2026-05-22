@@ -17,7 +17,7 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(_canonical_number("#12."), "12")
         self.assertEqual(_canonical_number("①"), "1")
 
-    def test_repeated_numbers_match_by_remaining_order_when_sections_disagree(self):
+    def test_repeated_numbers_do_not_cross_match_when_sections_disagree(self):
         problems = [
             {
                 "problem_number": 1,
@@ -49,11 +49,14 @@ class MatcherTests(unittest.TestCase):
             },
         ]
 
-        matched = match(problems, solutions)
+        result = match_with_summary(problems, solutions)
+        matched = result["problems"]
 
-        self.assertEqual(matched[0]["solution"]["answer"], "A")
-        self.assertEqual(matched[1]["solution"]["answer"], "B")
-        self.assertEqual(matched[1]["match_flags"]["matched_via"], "number_order")
+        self.assertIsNone(matched[0]["solution"])
+        self.assertIsNone(matched[1]["solution"])
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "unmatched")
+        self.assertEqual(matched[1]["match_flags"]["matched_via"], "unmatched")
+        self.assertIn("global_order_disabled", result["summary"]["warnings"])
 
     def test_primary_match_keeps_solution_when_snippet_similarity_is_low(self):
         problems = [
@@ -124,7 +127,7 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(matched[0]["match_flags"]["matched_via"], "unmatched")
         self.assertEqual(matched[1]["match_flags"]["matched_via"], "unmatched")
 
-    def test_global_order_rescues_remaining_solution_number_ocr_mismatch(self):
+    def test_global_order_does_not_cross_conflicting_sections(self):
         problems = [
             {
                 "problem_number": 1,
@@ -143,11 +146,38 @@ class MatcherTests(unittest.TestCase):
             }
         ]
 
-        matched = match(problems, solutions)
+        result = match_with_summary(problems, solutions)
+        matched = result["problems"]
+
+        self.assertIsNone(matched[0]["solution"])
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "unmatched")
+        self.assertFalse(result["validation_report"]["global_order_allowed"])
+
+    def test_small_unsectioned_books_can_still_use_global_order(self):
+        matched = match(
+            [
+                {"problem_number": "1", "problem_text": "problem one", "page_index": 1},
+                {"problem_number": "2", "problem_text": "problem two", "page_index": 1},
+            ],
+            [
+                {"problem_number": "1", "answer": "A", "solution_steps": "solution one", "page_idx": 10},
+                {"problem_number": "2", "answer": "B", "solution_steps": "solution two", "page_idx": 10},
+            ],
+        )
 
         self.assertEqual(matched[0]["solution"]["answer"], "A")
-        self.assertFalse(matched[0]["match_flags"]["needs_review"])
+        self.assertEqual(matched[1]["solution"]["answer"], "B")
         self.assertEqual(matched[0]["match_flags"]["matched_via"], "global_order")
+
+    def test_large_unsectioned_books_do_not_use_global_order(self):
+        result = match_with_summary(
+            [{"problem_number": str(index), "problem_text": f"problem {index}", "page_index": index} for index in range(1, 42)],
+            [{"problem_number": str(index), "answer": str(index), "solution_steps": f"solution {index}", "page_idx": index} for index in range(1, 42)],
+        )
+
+        self.assertEqual(result["summary"]["matched_count"], 0)
+        self.assertFalse(result["validation_report"]["global_order_allowed"])
+        self.assertIn("global_order_disabled", result["summary"]["warnings"])
 
     def test_section_number_match_is_confident_and_deterministic(self):
         result = match_with_summary(
@@ -169,7 +199,7 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(result["summary"]["matched_count"], 2)
         self.assertEqual(result["summary"]["sections"][0]["status"], "ok")
 
-    def test_section_order_matches_when_numbers_are_missing(self):
+    def test_missing_solution_numbers_use_review_semantic_fallback(self):
         matched = match(
             [
                 {"problem_number": "01", "problem_text": "first", "section_label": "DAY 02", "page_index": 2},
@@ -183,8 +213,8 @@ class MatcherTests(unittest.TestCase):
 
         self.assertEqual(matched[0]["solution"]["answer"], "A")
         self.assertEqual(matched[1]["solution"]["answer"], "B")
-        self.assertEqual(matched[0]["match_flags"]["matched_via"], "section_order")
-        self.assertEqual(matched[0]["match_confidence"], 0.95)
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "semantic_section")
+        self.assertTrue(matched[0]["match_flags"]["needs_review"])
 
     def test_structural_match_is_not_overridden_by_semantic_similarity(self):
         problems = [
@@ -245,7 +275,7 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(matched[0]["solution"]["answer"], "A")
         self.assertEqual(matched[0]["match_flags"]["matched_via"], "section_number")
 
-    def test_number_order_matches_repeated_numbers_when_total_counts_differ(self):
+    def test_number_order_does_not_match_repeated_numbers_when_sections_differ(self):
         matched = match(
             [
                 {"problem_number": "1", "problem_text": "first one", "section_label": "problem A", "page_index": 1},
@@ -258,9 +288,9 @@ class MatcherTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(matched[0]["solution"]["answer"], "A")
-        self.assertEqual(matched[2]["solution"]["answer"], "B")
-        self.assertEqual(matched[2]["match_flags"]["matched_via"], "number_order")
+        self.assertIsNone(matched[0]["solution"])
+        self.assertIsNone(matched[2]["solution"])
+        self.assertEqual(matched[2]["match_flags"]["matched_via"], "unmatched")
         self.assertEqual(matched[1]["match_flags"]["matched_via"], "unmatched")
 
     def test_lexical_similarity_rewards_snippet_containment(self):
