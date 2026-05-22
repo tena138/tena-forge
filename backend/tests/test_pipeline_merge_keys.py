@@ -6,10 +6,16 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from services.pipeline import RenderedPage, _extracted_problem_merge_key, _normalize_extracted_items  # noqa: E402
+from services.pipeline import RenderedPage, _extracted_problem_merge_key, _is_structural_section_label, _normalize_extracted_items  # noqa: E402
 
 
 class PipelineMergeKeyTests(unittest.TestCase):
+    def test_solution_reprocess_distinguishes_structural_section_from_unit_tag(self):
+        self.assertTrue(_is_structural_section_label("DAY 03"))
+        self.assertTrue(_is_structural_section_label("UNIT 12"))
+        self.assertFalse(_is_structural_section_label("수열"))
+        self.assertFalse(_is_structural_section_label("지수로그함수"))
+
     def test_same_page_same_number_different_sections_stay_distinct(self):
         page = RenderedPage(page_index=4, base64_png="", png_bytes=b"")
         normalized = _normalize_extracted_items(

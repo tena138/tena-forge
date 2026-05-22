@@ -130,8 +130,21 @@ def has_solution_content(solution: dict[str, Any] | None) -> bool:
     return any(str(solution.get(key) or "").strip() for key in ("answer", "solution_steps", "key_concept"))
 
 
+STRUCTURAL_SECTION_RE = re.compile(
+    r"\b(?:DAY|CHAPTER|UNIT|LESSON|TYPE)\s*\d{1,3}\b|(?:단원|유형)\s*\d{1,3}",
+    re.IGNORECASE,
+)
+
+
+def _is_structural_section_label(value: Any) -> bool:
+    text = str(value or "").strip()
+    return bool(text and STRUCTURAL_SECTION_RE.search(text))
+
+
 def _problem_match_payload(problem: Problem) -> dict[str, Any]:
     tags = problem.tags
+    unit = tags.unit if tags else None
+    section_label = unit if _is_structural_section_label(unit) else None
     review_page_number = problem.review_page_number
     page_index = max(int(review_page_number or 1) - 1, 0)
     return {
@@ -139,14 +152,19 @@ def _problem_match_payload(problem: Problem) -> dict[str, Any]:
         "problem_number": problem.problem_number,
         "problem_no": str(problem.problem_number),
         "problem_text": problem.problem_text,
-        "unit": tags.unit if tags else None,
-        "section_label": tags.unit if tags else None,
+        "unit": unit,
+        "section_label": section_label,
         "subject": tags.subject if tags else None,
         "page_index": page_index,
     }
 
 
-def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: list[dict[str, Any]]) -> dict[str, int]:
+def apply_solutions_to_existing_problems(
+    db: Session,
+    batch: Batch,
+    solutions: list[dict[str, Any]],
+    problem_sections: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     problems = (
         db.query(Problem)
         .filter(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None))
@@ -164,6 +182,9 @@ def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: l
     for global_index, payload in enumerate(problem_payloads, start=1):
         payload["global_index"] = global_index
         payload["local_index"] = global_index
+    if problem_sections:
+        _apply_section_ranges_to_items(problem_payloads, problem_sections, "page_index")
+        problem_payloads = _apply_structure_indexes(problem_payloads, page_key="page_index")
     matching_result = match_with_summary(problem_payloads, solutions)
     matched_payloads = matching_result["problems"]
     _write_batch_artifact(batch.id, "extracted_problems_by_section.json", _items_by_section(problem_payloads, "page_index"))
@@ -173,6 +194,7 @@ def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: l
     matched_by_id = {str(item.get("_problem_id")): item for item in matched_payloads}
     matched_count = 0
     unmatched_count = 0
+    cleared_stale_count = 0
     now = datetime.utcnow()
     for problem in problems:
         matched = matched_by_id.get(str(problem.id)) or {}
@@ -186,23 +208,30 @@ def apply_solutions_to_existing_problems(db: Session, batch: Batch, solutions: l
             problem.key_concept = solution.get("key_concept")
             problem.needs_review = True
             matched_count += 1
-        elif not has_solution_content(
-            {
-                "answer": problem.answer,
-                "solution_steps": problem.solution_steps,
-                "key_concept": problem.key_concept,
-            }
-        ):
+        else:
+            had_previous_solution = has_solution_content(
+                {
+                    "answer": problem.answer,
+                    "solution_steps": problem.solution_steps,
+                    "key_concept": problem.key_concept,
+                }
+            )
             problem.answer = None
             problem.solution_steps = None
             problem.key_concept = None
             problem.needs_review = True
             unmatched_count += 1
-        else:
-            problem.needs_review = True
-            unmatched_count += 1
+            if had_previous_solution:
+                cleared_stale_count += 1
         problem.updated_at = now
-    return {"problem_count": len(problems), "matched_count": matched_count, "unmatched_count": unmatched_count}
+    return {
+        "problem_count": len(problems),
+        "solution_count": len(solutions),
+        "matched_count": matched_count,
+        "unmatched_count": unmatched_count,
+        "cleared_stale_count": cleared_stale_count,
+        "matching_summary": matching_result.get("summary", {}),
+    }
 
 
 def build_extraction_prompt(subject_candidates: list[str] | None = None, unit_candidates: list[str] | None = None) -> str:
@@ -523,6 +552,16 @@ def _write_batch_artifact(batch_id: UUID, filename: str, payload: Any) -> None:
     if target_dir not in target.parents and target != target_dir:
         raise ValueError("Invalid artifact path")
     target.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default), encoding="utf-8")
+
+
+def _read_batch_artifact(batch_id: UUID, filename: str) -> Any | None:
+    target_dir = _batch_artifact_dir(batch_id)
+    target = (target_dir / filename).resolve()
+    if target_dir not in target.parents and target != target_dir:
+        raise ValueError("Invalid artifact path")
+    if not target.exists():
+        return None
+    return json.loads(target.read_text(encoding="utf-8"))
 
 
 def _clean_metadata_list(value: Any, max_items: int = 16) -> list[str]:
@@ -1434,12 +1473,28 @@ def process_solutions_only(batch_id: UUID) -> None:
             raise RuntimeError("AI solution extraction is disabled.")
         extraction_passes = max(settings.ai_extraction_passes, 1)
         units_per_page = 1 + extraction_passes
+        problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
         solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
-        structure_units = 2 * solution_page_count
+        problem_structure_units = 2 * problem_page_count
+        solution_structure_units = 2 * solution_page_count
+        structure_units = problem_structure_units + solution_structure_units
         solution_units = solution_page_count * units_per_page
         total_units = max(structure_units + solution_units, 1)
+        problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
         solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
         set_progress(batch_id, "해설 PDF 페이지 수 확인 완료", 0, total_units)
+
+        problem_page_metadata = collect_page_metadata_for_pdf(
+            batch.problem_pdf_filename,
+            problem_page_count,
+            problem_dpi,
+            "problem",
+            batch_id,
+            offset=0,
+            total_units=total_units,
+        )
+        problem_sections = build_section_ranges_from_metadata(problem_page_metadata, "problem", problem_page_count)
+        _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
 
         page_metadata = collect_page_metadata_for_pdf(
             batch.solution_pdf_filename,
@@ -1447,10 +1502,10 @@ def process_solutions_only(batch_id: UUID) -> None:
             solution_dpi,
             "solution",
             batch_id,
-            offset=0,
+            offset=problem_structure_units,
             total_units=total_units,
         )
-        _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
+        _write_batch_artifact(batch_id, "pages_metadata.json", problem_page_metadata + page_metadata)
         solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count)
         _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
         solution_page_metadata = _metadata_by_page(page_metadata, "solution")
@@ -1493,10 +1548,29 @@ def process_solutions_only(batch_id: UUID) -> None:
             raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
 
         set_progress(batch_id, "기존 문항과 해설 재매칭 중", total_units, total_units)
-        stats = apply_solutions_to_existing_problems(db, batch, solutions)
+        stats = apply_solutions_to_existing_problems(db, batch, solutions, problem_sections=problem_sections)
+        _write_batch_artifact(
+            batch_id,
+            "solution_reprocess_report.json",
+            {
+                "batch_id": str(batch_id),
+                "ai_solution_mode": solution_mode,
+                "ai_solution_model_pool": solution_model_pool,
+                "ai_solution_image_detail": settings.ai_solution_image_detail,
+                "problem_page_count": problem_page_count,
+                "solution_page_count": solution_page_count,
+                "problem_sections": problem_sections,
+                "solution_sections": solution_sections,
+                "stats": stats,
+            },
+        )
         batch.status = BatchStatus.done
-        batch.processing_task = "full"
-        batch.progress_message = f"해설 재처리 완료: {stats['matched_count']}개 매칭, {stats['unmatched_count']}개 확인 필요"
+        batch.processing_task = "solution_only"
+        batch.progress_message = (
+            f"해설 재처리 완료({solution_mode}): "
+            f"{stats['matched_count']}개 매칭, {stats['unmatched_count']}개 확인 필요, "
+            f"{stats['cleared_stale_count']}개 기존 해설 비움"
+        )
         batch.progress_current = total_units
         batch.progress_total = total_units
         batch.progress_updated_at = datetime.utcnow()
@@ -1514,7 +1588,7 @@ def process_solutions_only(batch_id: UUID) -> None:
         if failed:
             reason, hint = explain_failure(exc)
             failed.status = BatchStatus.error
-            failed.processing_task = "full"
+            failed.processing_task = "solution_only"
             failed.progress_message = "해설 재처리에 실패했습니다."
             failed.failure_stage = last_stage or failed.progress_message or "해설 재처리 단계 확인 불가"
             failed.failure_reason = reason
