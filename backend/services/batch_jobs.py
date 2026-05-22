@@ -2,11 +2,11 @@ import os
 import subprocess
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus
@@ -15,6 +15,7 @@ from models import Batch, BatchStatus
 _scheduler_lock = threading.Lock()
 _SCHEDULER_LOCK_NAMESPACE = 1413828161
 _SCHEDULER_LOCK_ID = 1
+_STALE_PROCESSING_MINUTES = 30
 
 
 def _try_database_scheduler_lock(db) -> bool:
@@ -50,6 +51,32 @@ def launch_batch_worker(batch_id: UUID) -> None:
     _launch_batch_worker(batch_id)
 
 
+def mark_stale_processing_batches(db, *, batch_id: UUID | None = None) -> int:
+    stale_before = datetime.utcnow() - timedelta(minutes=_STALE_PROCESSING_MINUTES)
+    query = db.query(Batch).filter(
+        Batch.status == BatchStatus.processing,
+        or_(
+            Batch.progress_updated_at.is_(None),
+            Batch.progress_updated_at < stale_before,
+        ),
+    )
+    if batch_id is not None:
+        query = query.filter(Batch.id == batch_id)
+
+    interrupted = query.all()
+    now = datetime.utcnow()
+    for batch in interrupted:
+        previous_stage = batch.progress_message or "처리 중"
+        batch.status = BatchStatus.error
+        batch.progress_message = "처리 작업이 중단되었습니다."
+        batch.failure_stage = previous_stage
+        batch.failure_reason = "작업 진행 상태가 30분 이상 갱신되지 않아 중단된 것으로 판단했습니다."
+        batch.failure_hint = "배치를 다시 처리해 주세요. 같은 구간에서 반복되면 원본 PDF와 해설 PDF 매칭 상태를 확인해 주세요."
+        batch.failed_at = now
+        batch.progress_updated_at = now
+    return len(interrupted)
+
+
 def schedule_next_batch() -> UUID | None:
     """Start the oldest pending batch only when no batch is currently processing."""
     with _scheduler_lock:
@@ -58,12 +85,15 @@ def schedule_next_batch() -> UUID | None:
             if not _try_database_scheduler_lock(db):
                 return None
 
+            stale_count = mark_stale_processing_batches(db)
             active_batch_id = db.scalar(
                 select(Batch.id)
                 .where(Batch.status == BatchStatus.processing)
                 .limit(1)
             )
             if active_batch_id:
+                if stale_count:
+                    db.commit()
                 return None
 
             batch = db.scalars(
@@ -74,6 +104,8 @@ def schedule_next_batch() -> UUID | None:
                 .with_for_update(skip_locked=True)
             ).first()
             if not batch:
+                if stale_count:
+                    db.commit()
                 return None
 
             now = datetime.utcnow()

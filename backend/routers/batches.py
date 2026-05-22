@@ -11,7 +11,7 @@ from database import get_db
 from limiter import limiter
 from models import Batch, BatchStatus, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, SOURCE_TYPES
-from services.batch_jobs import schedule_next_batch
+from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.ownership import current_academy_id, current_owner_id
 from services.pipeline import get_progress_detail
 from services.storage import save_upload
@@ -214,6 +214,13 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id == current_owner_id(request))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    if mark_stale_processing_batches(db, batch_id=batch.id):
+        db.commit()
+        try:
+            schedule_next_batch()
+        except Exception:
+            traceback.print_exc()
+        db.refresh(batch)
     progress = get_progress_detail(batch)
     raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
     status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending

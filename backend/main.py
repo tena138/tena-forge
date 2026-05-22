@@ -1,6 +1,6 @@
 import os
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Query
@@ -14,10 +14,10 @@ from sqlalchemy import inspect, select, text
 
 from database import Base, SessionLocal, engine, get_settings
 from limiter import limiter
-from models import Batch, BatchStatus
 from models import Problem, ProblemSetItem
 from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
+from services.batch_jobs import mark_stale_processing_batches
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
 
 settings = get_settings()
@@ -328,27 +328,7 @@ def _ensure_sqlite_columns():
 def _mark_interrupted_batches():
     db = SessionLocal()
     try:
-        stale_before = datetime.utcnow() - timedelta(minutes=30)
-        processing_condition = (
-            (Batch.status == BatchStatus.processing)
-            & (
-                (Batch.progress_updated_at.is_(None))
-                | (Batch.progress_updated_at < stale_before)
-            )
-        )
-        interrupted = (
-            db.query(Batch)
-            .filter(processing_condition)
-            .all()
-        )
-        for batch in interrupted:
-            batch.status = BatchStatus.error
-            batch.progress_message = "서버 재시작으로 처리가 중단되었습니다."
-            batch.failure_stage = batch.progress_message or "처리 중"
-            batch.failure_reason = "처리 중 서버가 재시작되거나 백그라운드 작업이 중단되어 상태를 이어받을 수 없습니다."
-            batch.failure_hint = "히스토리에서 해당 배치를 재처리하면 다시 시작할 수 있습니다."
-            batch.failed_at = datetime.utcnow()
-        if interrupted:
+        if mark_stale_processing_batches(db):
             db.commit()
     finally:
         db.close()
