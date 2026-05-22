@@ -218,3 +218,391 @@ export function exportWrongAnswers(itemIds: string[], academyId?: string | null)
   });
 }
 
+export type LearningProblem = {
+  id: string;
+  problem_number: number;
+  problem_text: string;
+  has_visual: boolean;
+  visual_url: string | null;
+  review_page_image_url?: string | null;
+  answer?: string | null;
+  solution_steps?: string | null;
+  key_concept?: string | null;
+  tags?: {
+    subject?: string | null;
+    unit?: string | null;
+    difficulty?: string | null;
+    problem_type?: string | null;
+    source?: string | null;
+  };
+};
+
+export type LearningSubmission = {
+  id: string;
+  academy_id: string;
+  student_id: string;
+  assignment_id: string | null;
+  source_context: string;
+  source_id: string | null;
+  started_at: string;
+  submitted_at: string | null;
+  status: "not_started" | "in_progress" | "submitted" | "late" | "abandoned" | string;
+  score: number | null;
+  correct_count: number;
+  wrong_count: number;
+  total_count: number;
+  time_spent_seconds: number | null;
+};
+
+export type LearningAssignment = {
+  id: string;
+  academy_id: string;
+  academy_name?: string;
+  title: string;
+  description: string | null;
+  source_type: string;
+  source_id: string;
+  content_version_id: string;
+  assigned_by: string;
+  assigned_to_type: string;
+  start_at: string | null;
+  due_at: string | null;
+  schedule_type: string;
+  grading_mode: string;
+  show_score_policy: string;
+  show_answer_policy: string;
+  show_solution_policy: string;
+  retry_policy: string;
+  time_limit_seconds: number | null;
+  shuffle_problems: boolean;
+  shuffle_choices: boolean;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  content: {
+    id: string;
+    title: string;
+    source_type: string;
+    source_id: string;
+    snapshot: {
+      title: string;
+      source_type: string;
+      source_id: string;
+      problem_count: number;
+      problems: LearningProblem[];
+    };
+  };
+  submission: LearningSubmission | null;
+};
+
+export type LearningStats = {
+  submission_count: number;
+  completion_rate: number;
+  solved_problem_count: number;
+  correct_rate: number;
+  unresolved_wrong_count: number;
+  mastered_wrong_count: number;
+  weak_units: Array<{ unit: string; total: number; wrong: number; wrong_rate: number }>;
+};
+
+export type LearningToday = {
+  academies: StudentMembership[];
+  assignments: LearningAssignment[];
+  stats: LearningStats;
+};
+
+export type LearningArchiveGrant = {
+  id: string;
+  academy_id: string;
+  academy_name?: string;
+  student_id: string | null;
+  group_id: string | null;
+  source_type: string;
+  source_id: string;
+  access_scope: string;
+  can_view_problems: boolean;
+  can_solve_freely: boolean;
+  can_save_to_my_archive: boolean;
+  can_create_custom_sets: boolean;
+  can_see_answer_immediately: boolean;
+  can_see_solution: boolean;
+  can_retry: boolean;
+  timed_only: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  title: string;
+  problem_count: number;
+  locked_reason: string | null;
+};
+
+export type LearningArchiveDetail = {
+  grant: LearningArchiveGrant;
+  academy_name: string;
+  title: string;
+  problems: LearningProblem[];
+};
+
+export type LearningWrongAnswer = {
+  id: string;
+  academy_id: string;
+  academy_name?: string;
+  student_id: string;
+  problem_id: string;
+  problem_version_id: string;
+  first_wrong_at: string;
+  latest_wrong_at: string;
+  wrong_count: number;
+  retry_count: number;
+  resolved_status: "unresolved" | "reviewing" | "resolved" | "mastered" | string;
+  source_assignment_ids: string[];
+  student_memo: string | null;
+  teacher_memo: string | null;
+  problem: LearningProblem | null;
+};
+
+export type StudentPersonalSet = {
+  id: string;
+  student_id: string;
+  title: string;
+  description: string | null;
+  visibility: "private";
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+  items: Array<{
+    id: string;
+    academy_id: string;
+    academy_name?: string;
+    problem_id: string;
+    locked_reason: string | null;
+    problem: LearningProblem | null;
+  }>;
+};
+
+export type AcademyLearningStudent = {
+  id: string;
+  student_user_id: string;
+  academy_id: string;
+  student_name: string;
+  display_name_in_academy: string | null;
+  status: string;
+  key_status: string;
+  groups: AcademyClass[];
+  recent_assignment_completion: number;
+  recent_correct_rate: number | null;
+  unresolved_wrong_answer_count: number;
+};
+
+export type LearningAssignmentReport = {
+  assignment: LearningAssignment;
+  students: Array<{ student_id: string; student_name: string; status: string; submission: LearningSubmission | null }>;
+  summary: {
+    target_count: number;
+    submitted_count: number;
+    missing_count: number;
+    completion_rate: number;
+    average_score: number | null;
+  };
+};
+
+export function activateLearningAcademyKey(keyCode: string) {
+  return api<StudentMembership>("/api/learning/student/academy-keys/activate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key_code: keyCode }),
+  });
+}
+
+export function listLearningAcademies() {
+  return api<StudentMembership[]>("/api/learning/student/academies");
+}
+
+export function getLearningToday(academyId?: string) {
+  return api<LearningToday>(`/api/learning/student/today${academyId ? `?academy_id=${academyId}` : ""}`);
+}
+
+export function listLearningAssignments(academyId?: string) {
+  return api<LearningAssignment[]>(`/api/learning/student/assignments${academyId ? `?academy_id=${academyId}` : ""}`);
+}
+
+export function readLearningAssignment(assignmentId: string) {
+  return api<LearningAssignment>(`/api/learning/student/assignments/${assignmentId}`);
+}
+
+export function startLearningAssignment(assignmentId: string) {
+  return api<LearningSubmission>(`/api/learning/student/assignments/${assignmentId}/start`, { method: "POST" });
+}
+
+export function submitLearningAssignment(assignmentId: string, answers: Array<{ problem_id: string; answer: string; time_spent_seconds?: number }>) {
+  return api<LearningSubmission>(`/api/learning/student/assignments/${assignmentId}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });
+}
+
+export function listLearningArchives(academyId?: string) {
+  return api<LearningArchiveGrant[]>(`/api/learning/student/archives${academyId ? `?academy_id=${academyId}` : ""}`);
+}
+
+export function readLearningArchive(grantId: string) {
+  return api<LearningArchiveDetail>(`/api/learning/student/archives/${grantId}/problems`);
+}
+
+export function solveLearningProblem(problemId: string, payload: { answer: string; source_access_grant_id?: string | null; time_spent_seconds?: number }) {
+  return api(`/api/learning/student/problems/${problemId}/solve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listLearningWrongAnswers(params: { academyId?: string; status?: string } = {}) {
+  const query = new URLSearchParams();
+  if (params.academyId) query.set("academy_id", params.academyId);
+  if (params.status) query.set("status", params.status);
+  const qs = query.toString();
+  return api<LearningWrongAnswer[]>(`/api/learning/student/wrong-answers${qs ? `?${qs}` : ""}`);
+}
+
+export function retryLearningWrongAnswer(recordId: string, payload: { answer: string; source_access_grant_id?: string | null }) {
+  return api(`/api/learning/student/wrong-answers/${recordId}/retry`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getLearningStats(academyId?: string) {
+  return api<LearningStats>(`/api/learning/student/stats${academyId ? `?academy_id=${academyId}` : ""}`);
+}
+
+export function listStudentPersonalSets() {
+  return api<StudentPersonalSet[]>("/api/learning/student/personal-sets");
+}
+
+export function createStudentPersonalSet(payload: { title: string; description?: string }) {
+  return api<StudentPersonalSet>("/api/learning/student/personal-sets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addStudentPersonalSetItem(setId: string, payload: { problem_id: string; source_access_grant_id?: string | null }) {
+  return api<StudentPersonalSet>(`/api/learning/student/personal-sets/${setId}/items`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removeStudentPersonalSetItem(setId: string, itemId: string) {
+  return api<{ ok: boolean }>(`/api/learning/student/personal-sets/${setId}/items/${itemId}`, { method: "DELETE" });
+}
+
+export function listAcademyLearningStudents(academyId: string) {
+  return api<AcademyLearningStudent[]>(`/api/learning/academy/${academyId}/students`);
+}
+
+export function issueLearningStudentKeys(academyId: string, payload: { count: number; display_name_prefix?: string }) {
+  return api<{ created_by: string; keys: Array<AcademySeat & { key_code: string; status: string }> }>(`/api/learning/academy/${academyId}/student-keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listAcademyLearningAssignments(academyId: string) {
+  return api<LearningAssignment[]>(`/api/learning/academy/${academyId}/assignments`);
+}
+
+export function createLearningAssignment(
+  academyId: string,
+  payload: {
+    title: string;
+    description?: string;
+    source_type: string;
+    source_id: string;
+    student_ids?: string[];
+    group_ids?: string[];
+    due_at?: string | null;
+    status?: string;
+  }
+) {
+  return api<LearningAssignment>(`/api/learning/academy/${academyId}/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateLearningAssignment(academyId: string, assignmentId: string, payload: Partial<{
+  title: string;
+  description: string | null;
+  start_at: string | null;
+  due_at: string | null;
+  schedule_type: string;
+  recurrence_rule: string | null;
+  grading_mode: string;
+  show_score_policy: string;
+  show_answer_policy: string;
+  show_solution_policy: string;
+  retry_policy: string;
+  time_limit_seconds: number | null;
+  shuffle_problems: boolean;
+  shuffle_choices: boolean;
+  status: string;
+}>) {
+  return api<LearningAssignment>(`/api/learning/academy/${academyId}/assignments/${assignmentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function publishLearningAssignment(academyId: string, assignmentId: string) {
+  return api<LearningAssignment>(`/api/learning/academy/${academyId}/assignments/${assignmentId}/publish`, { method: "POST" });
+}
+
+export function archiveLearningAssignment(academyId: string, assignmentId: string) {
+  return api<{ ok: boolean }>(`/api/learning/academy/${academyId}/assignments/${assignmentId}`, { method: "DELETE" });
+}
+
+export function readLearningAssignmentReport(academyId: string, assignmentId: string) {
+  return api<LearningAssignmentReport>(`/api/learning/academy/${academyId}/assignments/${assignmentId}/report`);
+}
+
+export function createLearningAccessGrant(
+  academyId: string,
+  payload: {
+    student_id?: string | null;
+    group_id?: string | null;
+    source_type: string;
+    source_id: string;
+    can_solve_freely?: boolean;
+    can_save_to_my_archive?: boolean;
+    can_see_answer_immediately?: boolean;
+    can_see_solution?: boolean;
+    expires_at?: string | null;
+  }
+) {
+  return api<LearningArchiveGrant>(`/api/learning/academy/${academyId}/access-grants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listLearningAccessGrants(academyId: string) {
+  return api<LearningArchiveGrant[]>(`/api/learning/academy/${academyId}/access-grants`);
+}
+
+export function revokeLearningAccessGrant(academyId: string, grantId: string) {
+  return api<LearningArchiveGrant>(`/api/learning/academy/${academyId}/access-grants/${grantId}`, { method: "DELETE" });
+}
+
+export function listAcademyLearningWrongAnswers(academyId: string) {
+  return api<LearningWrongAnswer[]>(`/api/learning/academy/${academyId}/wrong-answers`);
+}

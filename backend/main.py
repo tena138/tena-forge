@@ -15,7 +15,7 @@ from sqlalchemy import inspect, select, text
 from database import Base, SessionLocal, engine, get_settings
 from limiter import limiter
 from models import Problem, ProblemSetItem
-from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
+from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, learning_workspace, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
 from services.batch_jobs import mark_stale_processing_batches
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
@@ -143,6 +143,7 @@ def private_static_file(relative_path: str, token: str | None = Query(default=No
 
 app.include_router(auth.router)
 app.include_router(academy_student_app.router)
+app.include_router(learning_workspace.router)
 app.include_router(saas.router)
 app.include_router(creators.router)
 app.include_router(creator_products.router)
@@ -234,7 +235,22 @@ def health_db():
             "admin_exists": admin_exists,
             "bootstrap_password_configured": bool(os.getenv("BOOTSTRAP_ADMIN_PASSWORD")),
             "alembic_versions": alembic_versions,
-            "missing_tables": sorted({"academies", "user_roles", "batches", "problems", "problem_sets"} - tables),
+            "missing_tables": sorted({
+                "academies",
+                "user_roles",
+                "batches",
+                "problems",
+                "problem_sets",
+                "content_versions",
+                "archive_access_grants",
+                "learning_assignments",
+                "learning_assignment_targets",
+                "learning_submissions",
+                "problem_attempts",
+                "wrong_answer_records",
+                "student_personal_sets",
+                "student_personal_set_items",
+            } - tables),
             "missing_academy_columns": sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
             "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_task"} - batch_columns),
         }

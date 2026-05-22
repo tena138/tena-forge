@@ -954,9 +954,11 @@ class StudentAcademyMembership(Base):
     student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     academy_seat_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_seats.id"), nullable=False, index=True)
+    display_name_in_academy: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(24), default="active", nullable=False, index=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
@@ -1288,6 +1290,181 @@ class WrongAnswerExport(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     quota_units_used: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     watermark_applied: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class ContentVersion(Base):
+    __tablename__ = "content_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    version_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    snapshot: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ArchiveAccessGrant(Base):
+    __tablename__ = "archive_access_grants"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    source_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    access_scope: Mapped[str] = mapped_column(String(40), default="problemSet", nullable=False, index=True)
+    can_view_problems: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_solve_freely: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_save_to_my_archive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_create_custom_sets: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_see_answer_immediately: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_see_solution: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_retry: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    timed_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class LearningAssignment(Base):
+    __tablename__ = "learning_assignments"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    content_version_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("content_versions.id"), nullable=False, index=True)
+    assigned_by: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    assigned_to_type: Mapped[str] = mapped_column(String(24), default="mixed", nullable=False)
+    start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    schedule_type: Mapped[str] = mapped_column(String(24), default="one_time", nullable=False)
+    recurrence_rule: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    grading_mode: Mapped[str] = mapped_column(String(24), default="auto", nullable=False)
+    show_score_policy: Mapped[str] = mapped_column(String(32), default="immediately", nullable=False)
+    show_answer_policy: Mapped[str] = mapped_column(String(32), default="afterSubmit", nullable=False)
+    show_solution_policy: Mapped[str] = mapped_column(String(32), default="afterSubmit", nullable=False)
+    retry_policy: Mapped[str] = mapped_column(String(24), default="wrongOnly", nullable=False)
+    time_limit_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shuffle_problems: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    shuffle_choices: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="draft", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    content_version: Mapped[ContentVersion] = relationship("ContentVersion")
+
+
+class LearningAssignmentTarget(Base):
+    __tablename__ = "learning_assignment_targets"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("learning_assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+
+
+class LearningSubmission(Base):
+    __tablename__ = "learning_submissions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    assignment_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("learning_assignments.id"), nullable=True, index=True)
+    source_context: Mapped[str] = mapped_column(String(40), default="assignment", nullable=False, index=True)
+    source_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="in_progress", nullable=False, index=True)
+    score: Mapped[Numeric | None] = mapped_column(Numeric(8, 2), nullable=True)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ProblemAttempt(Base):
+    __tablename__ = "problem_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    submission_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("learning_submissions.id", ondelete="CASCADE"), nullable=True, index=True)
+    assignment_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("learning_assignments.id"), nullable=True, index=True)
+    problem_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problems.id"), nullable=False, index=True)
+    problem_version_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("content_versions.id"), nullable=False, index=True)
+    source_context: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    student_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_student_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correct_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_correct_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True, index=True)
+    grading_status: Mapped[str] = mapped_column(String(32), default="needs_manual_review", nullable=False, index=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class WrongAnswerRecord(Base):
+    __tablename__ = "wrong_answer_records"
+    __table_args__ = (UniqueConstraint("academy_id", "student_id", "problem_id", name="uq_wrong_answer_student_problem"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    problem_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problems.id"), nullable=False, index=True)
+    problem_version_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("content_versions.id"), nullable=False, index=True)
+    first_wrong_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    latest_wrong_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    resolved_status: Mapped[str] = mapped_column(String(24), default="unresolved", nullable=False, index=True)
+    last_attempt_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    source_assignment_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    student_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    teacher_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class StudentPersonalSet(Base):
+    __tablename__ = "student_personal_sets"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    student_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    visibility: Mapped[str] = mapped_column(String(24), default="private", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class StudentPersonalSetItem(Base):
+    __tablename__ = "student_personal_set_items"
+    __table_args__ = (UniqueConstraint("set_id", "problem_id", name="uq_student_personal_set_problem"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    set_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_personal_sets.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    problem_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problems.id"), nullable=False, index=True)
+    problem_version_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("content_versions.id"), nullable=False, index=True)
+    source_access_grant_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("archive_access_grants.id"), nullable=True, index=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class Announcement(Base):

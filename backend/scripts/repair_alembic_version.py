@@ -9,8 +9,8 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-PREVIOUS_REVISION = "0016_batch_subject_unit_candidates"
-HEAD_REVISION = "0018_batch_processing_task"
+PREVIOUS_REVISION = "0018_batch_processing_task"
+HEAD_REVISION = "0019_learning_workspace"
 ACADEMY_REQUIRED_COLUMNS = {
     "email_verified",
     "email_verified_at",
@@ -142,13 +142,48 @@ def _ensure_batch_columns(connection, inspector) -> bool:
     return changed
 
 
+def _ensure_student_membership_columns(connection, inspector) -> bool:
+    if "student_academy_memberships" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    specs = [
+        ("display_name_in_academy", "VARCHAR(120) NULL"),
+        ("expires_at", "TIMESTAMP NULL"),
+    ]
+    for column_name, definition in specs:
+        if _add_column_if_missing(connection, inspector, "student_academy_memberships", column_name, definition):
+            changed = True
+            inspector = inspect(connection)
+    if "ix_student_academy_memberships_expires_at" not in _index_names(inspector, "student_academy_memberships"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_student_academy_memberships_expires_at ON student_academy_memberships (expires_at)"))
+        changed = True
+    return changed
+
+
 def _schema_is_at_head(inspector) -> bool:
-    required_tables = {"academies", "user_roles", "batches", "problems", "problem_sets"}
+    required_tables = {
+        "academies",
+        "user_roles",
+        "batches",
+        "problems",
+        "problem_sets",
+        "content_versions",
+        "archive_access_grants",
+        "learning_assignments",
+        "learning_assignment_targets",
+        "learning_submissions",
+        "problem_attempts",
+        "wrong_answer_records",
+        "student_personal_sets",
+        "student_personal_set_items",
+    }
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
         and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
+        and _has_columns(inspector, "student_academy_memberships", {"display_name_in_academy", "expires_at"})
     )
 
 
@@ -175,6 +210,8 @@ def main() -> None:
             inspector = inspect(connection)
         if _ensure_batch_columns(connection, inspector):
             inspector = inspect(connection)
+        if _ensure_student_membership_columns(connection, inspector):
+            inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
             connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)"))
             inspector = inspect(connection)
@@ -189,6 +226,8 @@ def main() -> None:
             _create_missing_tables(connection)
             inspector = inspect(connection)
             if _ensure_academy_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_student_membership_columns(connection, inspector):
                 inspector = inspect(connection)
 
         if _schema_is_at_head(inspector):
