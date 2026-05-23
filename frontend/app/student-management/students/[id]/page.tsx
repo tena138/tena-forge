@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, FileText, Loader2, RotateCcw, UserRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { StudentCard, WrongAnswer, createReviewSet, getStudentDetail, savePaperS
 import { cn } from "@/lib/utils";
 
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
+type AutosaveState = "pending" | "saving" | "saved" | "error";
 
 type StudentDetail = StudentCard & {
   paper_session_history: Array<{
@@ -65,6 +66,19 @@ function nextProblemStatus(status?: ProblemStatus): ProblemStatus {
   return "correct";
 }
 
+function statusCounts(statuses: Record<number, ProblemStatus>, totalCount: number) {
+  let correct = 0;
+  let wrong = 0;
+  let unmarked = 0;
+  for (let number = 1; number <= totalCount; number += 1) {
+    const status = statuses[number] || "correct";
+    if (status === "correct") correct += 1;
+    else if (status === "wrong" || status === "unanswered") wrong += 1;
+    else unmarked += 1;
+  }
+  return { correct, wrong, unmarked };
+}
+
 function ResultCell({ number, status, onClick }: { number: number; status: ProblemStatus; onClick: () => void }) {
   return (
     <button
@@ -88,6 +102,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [data, setData] = useState<StudentDetail | null>(null);
   const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
   const [savingResultId, setSavingResultId] = useState("");
+  const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
+  const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [message, setMessage] = useState("");
 
   function applyStudentData(student: StudentDetail) {
@@ -101,26 +117,48 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     getStudentDetail(params.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
   }, [params.id]);
 
+  useEffect(() => {
+    return () => {
+      for (const timer of Object.values(autosaveTimers.current)) clearTimeout(timer);
+    };
+  }, []);
+
   async function makeReviewSet() {
     if (!data) return;
     const review = await createReviewSet({ title: `${data.name} 오답 복습 세트`, student_membership_id: data.id, unresolved_only: true });
     setMessage(`복습 세트를 만들었습니다: ${review.name}`);
   }
 
-  function toggleResultProblem(resultId: string, number: number) {
-    setResultStatuses((current) => {
-      const currentResult = current[resultId] || {};
+  function clearAutosaveTimer(resultId: string) {
+    const timer = autosaveTimers.current[resultId];
+    if (timer) clearTimeout(timer);
+    delete autosaveTimers.current[resultId];
+  }
+
+  function updateSavedSummary(result: StudentDetail["paper_session_history"][number], statuses: Record<number, ProblemStatus>) {
+    const count = problemCount(result);
+    const counts = statusCounts(statuses, count);
+    setData((current) => {
+      if (!current) return current;
       return {
         ...current,
-        [resultId]: {
-          ...currentResult,
-          [number]: nextProblemStatus(currentResult[number] || "correct"),
-        },
+        paper_session_history: current.paper_session_history.map((item) =>
+          item.id === result.id
+            ? {
+                ...item,
+                correct_count: counts.correct,
+                wrong_count: counts.wrong,
+                total_count: count,
+                score: count ? Math.round((counts.correct / count) * 10000) / 100 : null,
+                status: counts.unmarked === 0 ? "graded" : "pending_grading",
+              }
+            : item
+        ),
       };
     });
   }
 
-  async function saveResult(result: StudentDetail["paper_session_history"][number]) {
+  async function persistResult(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>, manual = false) {
     if (!data) return;
     const count = problemCount(result);
     if (!count) return;
@@ -128,22 +166,55 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       const problemNumber = index + 1;
       return {
         problem_number: problemNumber,
-        result_status: resultStatuses[result.id]?.[problemNumber] || "correct",
+        result_status: statusesByNumber[problemNumber] || "correct",
       };
     });
-    setSavingResultId(result.id);
+    if (manual) setSavingResultId(result.id);
+    else setAutosaveStates((current) => ({ ...current, [result.id]: "saving" }));
     try {
       await savePaperSessionGrade(result.paper_session_id, {
         student_membership_id: data.id,
         statuses,
         mark_unlisted_correct: false,
       });
-      const refreshed = await getStudentDetail(params.id);
-      applyStudentData(refreshed as StudentDetail);
-      setMessage(`${result.session?.title || "시험"} 채점 결과를 저장했습니다.`);
+      updateSavedSummary(result, statusesByNumber);
+      if (manual) {
+        const refreshed = await getStudentDetail(params.id);
+        applyStudentData(refreshed as StudentDetail);
+        setMessage(`${result.session?.title || "시험"} 채점 결과를 저장했습니다.`);
+      } else {
+        setAutosaveStates((current) => ({ ...current, [result.id]: "saved" }));
+      }
+    } catch {
+      if (!manual) setAutosaveStates((current) => ({ ...current, [result.id]: "error" }));
+      else setMessage("채점 결과 저장에 실패했습니다. 다시 시도해주세요.");
     } finally {
-      setSavingResultId("");
+      if (manual) setSavingResultId("");
     }
+  }
+
+  function scheduleAutosave(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>) {
+    clearAutosaveTimer(result.id);
+    setAutosaveStates((current) => ({ ...current, [result.id]: "pending" }));
+    autosaveTimers.current[result.id] = setTimeout(() => {
+      delete autosaveTimers.current[result.id];
+      persistResult(result, statusesByNumber, false).catch(() => undefined);
+    }, 500);
+  }
+
+  function toggleResultProblem(result: StudentDetail["paper_session_history"][number], number: number) {
+    const currentResult = resultStatuses[result.id] || buildStatuses(result);
+    const nextForResult = {
+      ...currentResult,
+      [number]: nextProblemStatus(currentResult[number] || "correct"),
+    };
+    setResultStatuses((current) => ({ ...current, [result.id]: nextForResult }));
+    scheduleAutosave(result, nextForResult);
+  }
+
+  async function saveResult(result: StudentDetail["paper_session_history"][number]) {
+    clearAutosaveTimer(result.id);
+    await persistResult(result, resultStatuses[result.id] || buildStatuses(result), true);
   }
 
   if (!data) return <main className="min-h-screen bg-[#07080d] p-8 text-slate-400">학생 정보를 불러오는 중입니다.</main>;
@@ -191,6 +262,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 const statuses = resultStatuses[result.id] || buildStatuses(result);
                 const orangeCount = Object.values(statuses).filter((status) => status === "wrong").length;
                 const redCount = Object.values(statuses).filter((status) => status === "unanswered").length;
+                const autosaveState = autosaveStates[result.id];
                 return (
                   <div key={result.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -201,6 +273,18 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
+                        {autosaveState ? (
+                          <span
+                            className={cn(
+                              "rounded-md border px-2 py-1 text-xs",
+                              autosaveState === "saved" && "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
+                              autosaveState === "error" && "border-rose-400/20 bg-rose-500/10 text-rose-100",
+                              autosaveState !== "saved" && autosaveState !== "error" && "border-violet-300/20 bg-violet-500/10 text-violet-100"
+                            )}
+                          >
+                            {autosaveState === "pending" ? "자동 저장 대기" : autosaveState === "saving" ? "자동 저장 중" : autosaveState === "saved" ? "저장됨" : "저장 실패"}
+                          </span>
+                        ) : null}
                         <Badge className={cn("border", tone(result.status))}>{result.status}</Badge>
                         <Button size="sm" onClick={() => saveResult(result)} disabled={!count || savingResultId === result.id}>
                           {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -217,7 +301,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                               key={number}
                               number={number}
                               status={statuses[number] || "correct"}
-                              onClick={() => toggleResultProblem(result.id, number)}
+                              onClick={() => toggleResultProblem(result, number)}
                             />
                           );
                         })}
