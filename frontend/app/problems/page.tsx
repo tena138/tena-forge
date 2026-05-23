@@ -591,7 +591,7 @@ function ProblemsBrowser() {
       <section className="space-y-4">
         <div
           ref={listRef}
-          className={cn("relative select-none", viewMode === "grid" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2")}
+          className="relative select-none lg:-ml-24 lg:pl-24"
           onPointerDown={startDragSelection}
           onPointerMove={moveDragSelection}
           onPointerUp={endDragSelection}
@@ -603,7 +603,9 @@ function ProblemsBrowser() {
               style={{ left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height }}
             />
           )}
-          {data.items.map((problem) => viewMode === "grid" ? renderProblemCard(problem) : renderProblemRow(problem))}
+          <div className={cn(viewMode === "grid" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2")}>
+            {data.items.map((problem) => viewMode === "grid" ? renderProblemCard(problem) : renderProblemRow(problem))}
+          </div>
         </div>
 
         {!data.items.length && (
