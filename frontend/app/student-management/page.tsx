@@ -1,22 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import type { ComponentType } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
-  CalendarDays,
   Check,
-  ChevronDown,
-  ChevronRight,
-  ClipboardCheck,
-  FileText,
   Loader2,
   Plus,
   RotateCcw,
-  Search,
-  Trash2,
-  Users,
   X,
 } from "lucide-react";
 
@@ -37,29 +28,17 @@ import {
   createPaperSession,
   createReviewSet,
   createStudent,
-  deleteClass,
   getPaperSessionDetail,
   getStudentManagementDashboard,
   listPaperSessions,
   listWrongAnswers,
   savePaperSessionGrade,
-  updateClass,
 } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 type TabKey = "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
-
-const tabs: Array<{ key: TabKey; label: string; icon: ComponentType<{ className?: string }> }> = [
-  { key: "classes", label: "Class Dashboard", icon: Users },
-  { key: "students", label: "Students", icon: Search },
-  { key: "sessions", label: "Paper Sessions", icon: FileText },
-  { key: "grading", label: "Fast Grading", icon: ClipboardCheck },
-  { key: "wrong", label: "Wrong Answers", icon: RotateCcw },
-  { key: "calendar", label: "Calendar", icon: CalendarDays },
-  { key: "analytics", label: "Analytics", icon: BarChart3 },
-];
 
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
@@ -76,6 +55,16 @@ function statusTone(status?: string) {
 function formatDate(value?: string | null) {
   if (!value) return "-";
   return value.slice(0, 10);
+}
+
+function average(values: Array<number | null | undefined>) {
+  const scores = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!scores.length) return null;
+  return scores.reduce((total, value) => total + value, 0) / scores.length;
+}
+
+function scoreLabel(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}점` : "-";
 }
 
 function errorMessage(error: unknown, fallback: string) {
@@ -107,6 +96,139 @@ function ClassStudentCard({ student }: { student: StudentCard }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+function ScoreBar({
+  score,
+  classAverage,
+  overallAverage,
+  showOverallAverage,
+}: {
+  score: number | null;
+  classAverage: number | null;
+  overallAverage: number | null;
+  showOverallAverage: boolean;
+}) {
+  const width = Math.max(0, Math.min(100, score ?? 0));
+  const classLine = classAverage == null ? null : Math.max(0, Math.min(100, classAverage));
+  const overallLine = overallAverage == null ? null : Math.max(0, Math.min(100, overallAverage));
+  return (
+    <div className="relative h-8 overflow-hidden rounded-md border border-white/[0.06] bg-white/[0.035]">
+      {score == null ? null : <div className="absolute inset-y-0 left-0 rounded-md bg-violet-400/45" style={{ width: `${width}%` }} />}
+      {classLine == null ? null : <span className="absolute inset-y-0 w-px bg-cyan-200/80" style={{ left: `${classLine}%` }} title={`반 평균 ${scoreLabel(classAverage)}`} />}
+      {showOverallAverage && overallLine != null ? <span className="absolute inset-y-0 w-px bg-amber-200/80" style={{ left: `${overallLine}%` }} title={`전체 평균 ${scoreLabel(overallAverage)}`} /> : null}
+      <span className="absolute inset-0 flex items-center justify-end px-2 text-xs font-black text-white">{score == null ? "미채점" : scoreLabel(score)}</span>
+    </div>
+  );
+}
+
+function ClassStatsPanel({
+  classRow,
+  details,
+  loading,
+}: {
+  classRow: ClassCard;
+  details: PaperSessionDetail[];
+  loading: boolean;
+}) {
+  const classStudentIds = new Set(classRow.students.map((student) => student.id));
+  const sessionStats = details.map((detail) => {
+    const classStudents = detail.students.filter((student) => classStudentIds.has(student.id));
+    const gradedClassStudents = classStudents.filter((student) => typeof student.result.score === "number" && student.result.status === "graded");
+    const classAverage = average(gradedClassStudents.map((student) => student.result.score));
+    const overallAverage = average(detail.students.filter((student) => student.result.status === "graded").map((student) => student.result.score));
+    const topScore = gradedClassStudents.length ? Math.max(...gradedClassStudents.map((student) => student.result.score ?? 0)) : null;
+    const ungradedCount = classStudents.filter((student) => student.result.status !== "graded").length;
+    const missed = new Map<number, number>();
+    for (const student of classStudents) {
+      for (const result of student.problem_results || []) {
+        if (result.result_status === "wrong" || result.result_status === "unanswered") {
+          missed.set(result.problem_number, (missed.get(result.problem_number) || 0) + 1);
+        }
+      }
+    }
+    const missedProblems = Array.from(missed.entries())
+      .sort((left, right) => right[1] - left[1] || left[0] - right[0])
+      .slice(0, 6);
+    return {
+      detail,
+      classStudents,
+      classAverage,
+      overallAverage,
+      topScore,
+      ungradedCount,
+      missedProblems,
+      showOverallAverage: detail.class_ids.length > 1,
+    };
+  });
+
+  return (
+    <div className="border-t border-white/10 px-4 pb-4">
+      <div className="rounded-lg border border-violet-300/15 bg-violet-500/[0.06] p-4">
+        {loading ? (
+          <div className="flex min-h-36 items-center justify-center text-sm text-slate-400">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            통계 계산 중
+          </div>
+        ) : null}
+        {!loading && !sessionStats.length ? (
+          <div className="rounded-md border border-dashed border-white/10 p-6 text-center text-sm text-slate-500">아직 이 반에 연결된 시험 기록이 없습니다.</div>
+        ) : null}
+        {!loading && sessionStats.length ? (
+          <div className="space-y-4">
+            {sessionStats.map(({ detail, classStudents, classAverage, overallAverage, topScore, ungradedCount, missedProblems, showOverallAverage }) => (
+              <div key={detail.id} className="rounded-md border border-white/10 bg-black/20 p-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-white">{detail.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatDate(detail.scheduled_at)} · {detail.problem_count}문항 · {detail.graded_count}/{detail.assigned_count}명 채점</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
+                      <p className="text-slate-500">반 평균</p>
+                      <p className="mt-1 font-black text-cyan-100">{scoreLabel(classAverage)}</p>
+                    </div>
+                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
+                      <p className="text-slate-500">최고점</p>
+                      <p className="mt-1 font-black text-white">{scoreLabel(topScore)}</p>
+                    </div>
+                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
+                      <p className="text-slate-500">미채점</p>
+                      <p className="mt-1 font-black text-slate-200">{ungradedCount}</p>
+                    </div>
+                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
+                      <p className="text-slate-500">전체 평균</p>
+                      <p className="mt-1 font-black text-amber-100">{showOverallAverage ? scoreLabel(overallAverage) : "-"}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {classRow.students.map((student) => {
+                    const row = classStudents.find((item) => item.id === student.id);
+                    const score = typeof row?.result.score === "number" && row.result.status === "graded" ? row.result.score : null;
+                    return (
+                      <div key={student.id} className="grid items-center gap-2 md:grid-cols-[150px_minmax(0,1fr)_84px]">
+                        <Link href={`/student-management/students/${student.id}`} className="truncate text-sm font-semibold text-slate-200 hover:text-white">{student.name}</Link>
+                        <ScoreBar score={score} classAverage={classAverage} overallAverage={overallAverage} showOverallAverage={showOverallAverage} />
+                        <Badge className={cn("justify-center border", statusTone(row?.result.status || "not_started"))}>{row?.result.status || "not_started"}</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded bg-cyan-500/15 px-2 py-1 text-cyan-100">반 평균선</span>
+                  {showOverallAverage ? <span className="rounded bg-amber-500/15 px-2 py-1 text-amber-100">전체 평균선</span> : null}
+                  {missedProblems.length ? missedProblems.map(([number, count]) => (
+                    <span key={number} className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">{number}번 {count}명</span>
+                  )) : <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">집중 오답 없음</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -143,7 +265,9 @@ export default function StudentManagementPage() {
   const [classes, setClasses] = useState<ClassCard[]>([]);
   const [sessions, setSessions] = useState<PaperSessionSummary[]>([]);
   const [summary, setSummary] = useState({ class_count: 0, student_count: 0, active_session_count: 0, unresolved_wrong_count: 0 });
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [statsOpen, setStatsOpen] = useState<Record<string, boolean>>({});
+  const [classStatsDetails, setClassStatsDetails] = useState<Record<string, PaperSessionDetail[]>>({});
+  const [classStatsLoading, setClassStatsLoading] = useState<Record<string, boolean>>({});
   const [problemSets, setProblemSets] = useState<ProblemSetListItem[]>([]);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
@@ -153,16 +277,12 @@ export default function StudentManagementPage() {
   const [wrongInput, setWrongInput] = useState("");
   const [classSaving, setClassSaving] = useState(false);
   const [showClassCreator, setShowClassCreator] = useState(false);
-  const [editingClassId, setEditingClassId] = useState("");
-  const [classEditSavingId, setClassEditSavingId] = useState("");
-  const [classDeletingId, setClassDeletingId] = useState("");
   const [addingStudentClassId, setAddingStudentClassId] = useState("");
   const [classStudentSavingId, setClassStudentSavingId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   const [classForm, setClassForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
-  const [classEditForm, setClassEditForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
   const [studentForm, setStudentForm] = useState(emptyStudentForm);
   const [classStudentForm, setClassStudentForm] = useState(emptyStudentForm);
   const [sessionForm, setSessionForm] = useState({
@@ -240,7 +360,6 @@ export default function StudentManagementPage() {
     try {
       const created = await createClass(classForm);
       setClasses((current) => [created, ...current.filter((item) => item.id !== created.id)]);
-      setExpanded((current) => ({ ...current, [created.id]: true }));
       setClassForm({ name: "", description: "", subject: "", grade_level: "" });
       setShowClassCreator(false);
       setMessage("클래스를 만들었습니다.");
@@ -249,60 +368,6 @@ export default function StudentManagementPage() {
       setMessage(errorMessage(error, "클래스 생성에 실패했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
       setClassSaving(false);
-    }
-  }
-
-  function startEditClass(classRow: ClassCard) {
-    setEditingClassId(classRow.id);
-    setClassEditForm({
-      name: classRow.name || "",
-      description: classRow.description || "",
-      subject: classRow.subject || "",
-      grade_level: classRow.grade_level || "",
-    });
-  }
-
-  async function submitClassEdit(classId: string) {
-    if (!classEditForm.name.trim()) return;
-    setClassEditSavingId(classId);
-    try {
-      const updated = await updateClass(classId, {
-        name: classEditForm.name.trim(),
-        description: classEditForm.description.trim() || null,
-        subject: classEditForm.subject.trim() || null,
-        grade_level: classEditForm.grade_level.trim() || null,
-      });
-      setClasses((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setEditingClassId("");
-      setMessage("클래스 정보를 수정했습니다.");
-      await refresh().catch(() => undefined);
-    } catch (error) {
-      setMessage(errorMessage(error, "클래스 수정에 실패했습니다. 잠시 후 다시 시도해주세요."));
-    } finally {
-      setClassEditSavingId("");
-    }
-  }
-
-  async function removeClass(classRow: ClassCard) {
-    const ok = window.confirm(
-      `'${classRow.name}' 클래스를 삭제할까요?\n학생 계정과 기존 채점 기록은 삭제되지 않지만, 이 클래스의 학생 연결과 일정은 제거됩니다.`
-    );
-    if (!ok) return;
-    setClassDeletingId(classRow.id);
-    try {
-      await deleteClass(classRow.id);
-      setClasses((current) => current.filter((item) => item.id !== classRow.id));
-      setExpanded((current) => {
-        const next = { ...current };
-        delete next[classRow.id];
-        return next;
-      });
-      setMessage(`'${classRow.name}' 클래스를 삭제했습니다.`);
-      await refresh().catch(() => undefined);
-    } catch (error) {
-      setMessage(errorMessage(error, "클래스 삭제에 실패했습니다. 잠시 후 다시 시도해주세요."));
-    } finally {
-      setClassDeletingId("");
     }
   }
 
@@ -322,7 +387,6 @@ export default function StudentManagementPage() {
 
   function startClassStudentAdd(classRow: ClassCard) {
     setAddingStudentClassId(classRow.id);
-    setExpanded((current) => ({ ...current, [classRow.id]: true }));
     setClassStudentForm({
       name: "",
       school: "",
@@ -443,6 +507,28 @@ export default function StudentManagementPage() {
     return sessions.filter((session) => session.class_ids.includes(classId)).length;
   }
 
+  async function loadClassStats(classId: string) {
+    const targetSessions = sessions.filter((session) => session.class_ids.includes(classId));
+    setClassStatsLoading((current) => ({ ...current, [classId]: true }));
+    try {
+      const details = await Promise.all(targetSessions.map((session) => getPaperSessionDetail(session.id)));
+      setClassStatsDetails((current) => ({ ...current, [classId]: details }));
+    } catch (error) {
+      setMessage(errorMessage(error, "클래스 통계를 불러오지 못했습니다."));
+      setClassStatsDetails((current) => ({ ...current, [classId]: [] }));
+    } finally {
+      setClassStatsLoading((current) => ({ ...current, [classId]: false }));
+    }
+  }
+
+  function toggleClassStats(classRow: ClassCard) {
+    const nextOpen = !statsOpen[classRow.id];
+    setStatsOpen((current) => ({ ...current, [classRow.id]: nextOpen }));
+    if (nextOpen && !classStatsDetails[classRow.id] && !classStatsLoading[classRow.id]) {
+      void loadClassStats(classRow.id);
+    }
+  }
+
   const selectedStudent = sessionDetail?.students.find((student) => student.id === selectedStudentId);
 
   return (
@@ -495,34 +581,20 @@ export default function StudentManagementPage() {
                         <p className="text-xs text-slate-500">학생</p>
                         <p className="mt-3 truncate text-xs text-slate-500">{[classRow.subject, classRow.grade_level].filter(Boolean).join(" · ") || classRow.description || "클래스 정보 없음"}</p>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <Link href={`/student-management/classes/${classRow.id}`}>
-                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs">상세</Button>
-                        </Link>
-                        <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => startEditClass(classRow)}>
-                          수정
-                        </Button>
-                        <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => startClassStudentAdd(classRow)}>
-                          학생
-                        </Button>
-                      </div>
+                      <button
+                        type="button"
+                        aria-label={`${classRow.name} 통계`}
+                        title={`${classRow.name} 통계`}
+                        onClick={() => toggleClassStats(classRow)}
+                        className={cn(
+                          "flex h-10 w-10 items-center justify-center rounded-md border transition",
+                          statsOpen[classRow.id] ? "border-violet-300/50 bg-violet-500/20 text-violet-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40 hover:text-white"
+                        )}
+                      >
+                        <BarChart3 className="h-5 w-5" />
+                      </button>
                     </aside>
                     <div className="min-w-0 space-y-3 p-4">
-                      {editingClassId === classRow.id ? (
-                        <div className="grid gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 md:grid-cols-2 xl:grid-cols-4">
-                          <Input placeholder="클래스 이름" value={classEditForm.name} onChange={(event) => setClassEditForm((current) => ({ ...current, name: event.target.value }))} />
-                          <Input placeholder="레벨/설명" value={classEditForm.description} onChange={(event) => setClassEditForm((current) => ({ ...current, description: event.target.value }))} />
-                          <Input placeholder="과목" value={classEditForm.subject} onChange={(event) => setClassEditForm((current) => ({ ...current, subject: event.target.value }))} />
-                          <Input placeholder="학년" value={classEditForm.grade_level} onChange={(event) => setClassEditForm((current) => ({ ...current, grade_level: event.target.value }))} />
-                          <div className="flex gap-2 md:col-span-2 xl:col-span-4">
-                            <Button type="button" size="sm" onClick={() => submitClassEdit(classRow.id)} disabled={classEditSavingId === classRow.id || !classEditForm.name.trim()}>
-                              {classEditSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                              저장
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingClassId("")}>취소</Button>
-                          </div>
-                        </div>
-                      ) : null}
                       {addingStudentClassId === classRow.id ? (
                         <form
                           className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3"
@@ -559,6 +631,13 @@ export default function StudentManagementPage() {
                       )}
                     </div>
                   </div>
+                  {statsOpen[classRow.id] ? (
+                    <ClassStatsPanel
+                      classRow={classRow}
+                      details={classStatsDetails[classRow.id] || []}
+                      loading={Boolean(classStatsLoading[classRow.id])}
+                    />
+                  ) : null}
                 </CardContent>
               </Card>
             ))}
