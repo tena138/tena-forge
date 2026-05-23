@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 
 type TabKey = "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ProblemStatus = "correct" | "wrong" | "unmarked";
+const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
 
 const tabs: Array<{ key: TabKey; label: string; icon: ComponentType<{ className?: string }> }> = [
   { key: "classes", label: "Class Dashboard", icon: Users },
@@ -156,12 +157,15 @@ export default function StudentManagementPage() {
   const [editingClassId, setEditingClassId] = useState("");
   const [classEditSavingId, setClassEditSavingId] = useState("");
   const [classDeletingId, setClassDeletingId] = useState("");
+  const [addingStudentClassId, setAddingStudentClassId] = useState("");
+  const [classStudentSavingId, setClassStudentSavingId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   const [classForm, setClassForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
   const [classEditForm, setClassEditForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
-  const [studentForm, setStudentForm] = useState({ name: "", school: "", grade_level: "", memo: "", class_id: "" });
+  const [studentForm, setStudentForm] = useState(emptyStudentForm);
+  const [classStudentForm, setClassStudentForm] = useState(emptyStudentForm);
   const [sessionForm, setSessionForm] = useState({
     title: "",
     source_problem_set_id: "",
@@ -311,9 +315,43 @@ export default function StudentManagementPage() {
       memo: studentForm.memo,
       class_ids: studentForm.class_id ? [studentForm.class_id] : [],
     });
-    setStudentForm({ name: "", school: "", grade_level: "", memo: "", class_id: "" });
+    setStudentForm(emptyStudentForm);
     setMessage(created.invite_code ? `학생을 추가했습니다. 연결 키: ${created.invite_code}` : "학생을 추가했습니다.");
     await refresh();
+  }
+
+  function startClassStudentAdd(classRow: ClassCard) {
+    setAddingStudentClassId(classRow.id);
+    setExpanded((current) => ({ ...current, [classRow.id]: true }));
+    setClassStudentForm({
+      name: "",
+      school: "",
+      grade_level: classRow.grade_level || "",
+      memo: "",
+      class_id: classRow.id,
+    });
+  }
+
+  async function submitClassStudent(classRow: ClassCard) {
+    if (!classStudentForm.name.trim()) return;
+    setClassStudentSavingId(classRow.id);
+    try {
+      const created = await createStudent({
+        name: classStudentForm.name.trim(),
+        school: classStudentForm.school.trim(),
+        grade_level: (classStudentForm.grade_level || classRow.grade_level || "").trim(),
+        memo: classStudentForm.memo.trim(),
+        class_ids: [classRow.id],
+      });
+      setAddingStudentClassId("");
+      setClassStudentForm(emptyStudentForm);
+      setMessage(created.invite_code ? `${classRow.name}에 학생을 추가했습니다. 연결 키: ${created.invite_code}` : `${classRow.name}에 학생을 추가했습니다.`);
+      await refresh();
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 추가에 실패했습니다. 잠시 후 다시 시도해주세요."));
+    } finally {
+      setClassStudentSavingId("");
+    }
   }
 
   async function submitSession() {
@@ -546,8 +584,8 @@ export default function StudentManagementPage() {
                         <Button size="sm" variant="outline" onClick={() => { setSessionForm((current) => ({ ...current, class_id: classRow.id })); setActiveTab("sessions"); }}>
                           Assign paper set
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setStudentForm((current) => ({ ...current, class_id: classRow.id })); setActiveTab("students"); }}>
-                          Add student
+                        <Button size="sm" variant="outline" onClick={() => startClassStudentAdd(classRow)}>
+                          학생 추가
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => makeReviewSet({ class_id: classRow.id })}>
                           Review set
@@ -559,7 +597,42 @@ export default function StudentManagementPage() {
                       </div>
                     </CardHeader>
                     {open ? (
-                      <CardContent className="pt-5">
+                      <CardContent className="space-y-4 pt-5">
+                        {addingStudentClassId === classRow.id ? (
+                          <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3">
+                            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                              <Input
+                                placeholder="학생 이름"
+                                value={classStudentForm.name}
+                                onChange={(event) => setClassStudentForm((current) => ({ ...current, name: event.target.value }))}
+                              />
+                              <Input
+                                placeholder="학교"
+                                value={classStudentForm.school}
+                                onChange={(event) => setClassStudentForm((current) => ({ ...current, school: event.target.value }))}
+                              />
+                              <Input
+                                placeholder="학년"
+                                value={classStudentForm.grade_level}
+                                onChange={(event) => setClassStudentForm((current) => ({ ...current, grade_level: event.target.value }))}
+                              />
+                              <Input
+                                placeholder="메모"
+                                value={classStudentForm.memo}
+                                onChange={(event) => setClassStudentForm((current) => ({ ...current, memo: event.target.value }))}
+                              />
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button type="button" size="sm" onClick={() => submitClassStudent(classRow)} disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
+                                {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                저장
+                              </Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => { setAddingStudentClassId(""); setClassStudentForm(emptyStudentForm); }}>
+                                취소
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
                         {classRow.students.length ? (
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                             {classRow.students.map((student) => (
