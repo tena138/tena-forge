@@ -80,6 +80,7 @@ function errorMessage(error: unknown, fallback: string) {
   const detail = candidate.response?.data?.detail;
   if (typeof detail === "string") return detail;
   if (detail && typeof detail === "object") return JSON.stringify(detail);
+  if (candidate.message === "Network Error") return fallback;
   return candidate.message || fallback;
 }
 

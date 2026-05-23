@@ -52,6 +52,13 @@ def _decimal_float(value) -> float | None:
     return value
 
 
+def _clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
 def _schedule_event_payload(row: ClassScheduleEvent) -> dict:
     return {
         "id": str(row.id),
@@ -640,12 +647,15 @@ def list_classes(request: Request, db: Session = Depends(get_db)):
 @router.post("/classes")
 def create_class(payload: ClassPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Class name is required.")
     row = AcademyClass(
         academy_id=academy_id,
-        name=payload.name.strip(),
-        description=payload.description,
-        subject=payload.subject,
-        grade_level=payload.grade_level,
+        name=name,
+        description=_clean_optional_text(payload.description),
+        subject=_clean_optional_text(payload.subject),
+        grade_level=_clean_optional_text(payload.grade_level),
     )
     db.add(row)
     db.commit()

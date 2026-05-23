@@ -155,9 +155,16 @@ export function createClass(payload: {
   subject?: string;
   grade_level?: string;
 }) {
+  const normalized = {
+    name: payload.name.trim(),
+    description: payload.description?.trim() || null,
+    subject: payload.subject?.trim() || null,
+    grade_level: payload.grade_level?.trim() || null,
+  };
   return api<ClassCard>("/api/student-management/classes", {
     method: "POST",
-    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(normalized),
   });
 }
 
