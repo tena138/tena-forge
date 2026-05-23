@@ -7,7 +7,11 @@ import {
   Archive,
   ArrowRight,
   BookOpenCheck,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
+  Clock,
   KeyRound,
   Landmark,
   LineChart,
@@ -16,6 +20,7 @@ import {
   RefreshCcw,
   ScanText,
   ShieldCheck,
+  Trash2,
   UserMinus,
   Users,
   type LucideIcon,
@@ -51,6 +56,14 @@ import {
   releaseAcademySeat,
   rotateAcademySeatCode,
 } from "@/lib/academyStudent";
+import {
+  ClassCard,
+  ScheduleEvent,
+  createScheduleEvent,
+  deleteScheduleEvent,
+  getStudentManagementDashboard,
+  listScheduleEvents,
+} from "@/lib/studentManagement";
 
 type ProblemPage = { items: unknown[]; total: number; page: number; limit: number; pages: number };
 type ProblemStats = { total: number; needs_review: number; tagged: number; untagged: number };
@@ -750,10 +763,357 @@ function AcademyOperationsPanel() {
   );
 }
 
+function academyDateKey(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number: number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function academyAddDays(value: Date, days: number) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate() + days);
+}
+
+function academyStartOfWeek(value: Date) {
+  const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  date.setDate(date.getDate() - date.getDay());
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function academyWeekTitle(value: Date) {
+  const end = academyAddDays(value, 6);
+  const format = new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric" });
+  return `${format.format(value)} - ${format.format(end)}`;
+}
+
+function academyTimeLabel(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function academyEventTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    class: "수업",
+    homework: "과제",
+    test: "시험",
+    review: "복습",
+    mock_exam: "모의고사",
+    other: "기타",
+  };
+  return labels[value] || value;
+}
+
+function AcademySchedulePanel() {
+  const [profile, setProfile] = useState<AcademyProfile | null>(null);
+  const [classes, setClasses] = useState<ClassCard[]>([]);
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [weekStart, setWeekStart] = useState(() => academyStartOfWeek(new Date()));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    class_id: "",
+    title: "",
+    event_type: "class",
+    date: academyDateKey(new Date()),
+    starts_at: "16:00",
+    ends_at: "18:00",
+    repeat_weeks: "1",
+    description: "",
+  });
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [dashboard, schedule] = await Promise.all([getStudentManagementDashboard(), listScheduleEvents()]);
+      setClasses(dashboard.classes);
+      setEvents(schedule);
+      setForm((current) => ({ ...current, class_id: current.class_id || dashboard.classes[0]?.id || "" }));
+      setError("");
+    } catch {
+      setError("시간표를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    setProfile(readStoredAuthProfile<AcademyProfile>());
+    void load();
+  }, []);
+
+  const classById = useMemo(() => new Map(classes.map((classRow) => [classRow.id, classRow])), [classes]);
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => academyAddDays(weekStart, index)), [weekStart]);
+  const weekEvents = useMemo(() => {
+    const start = weekStart.getTime();
+    const end = academyAddDays(weekStart, 7).getTime();
+    return events
+      .filter((event) => {
+        const time = new Date(event.starts_at).getTime();
+        return time >= start && time < end;
+      })
+      .sort((left, right) => new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime());
+  }, [events, weekStart]);
+  const eventsByDate = useMemo(() => {
+    const grouped: Record<string, ScheduleEvent[]> = {};
+    for (const event of weekEvents) {
+      const key = academyDateKey(event.starts_at);
+      grouped[key] = [...(grouped[key] || []), event];
+    }
+    return grouped;
+  }, [weekEvents]);
+  const upcomingEvents = useMemo(
+    () => [...events].filter((event) => new Date(event.starts_at).getTime() >= Date.now()).sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()).slice(0, 8),
+    [events]
+  );
+
+  if (profile?.account_type === "student") {
+    return (
+      <div className="mx-auto max-w-xl rounded-[14px] border border-sky-300/20 bg-sky-300/[0.045] p-6 text-center">
+        <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다.</h1>
+        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
+          Student App
+        </a>
+      </div>
+    );
+  }
+
+  async function submitSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form.class_id || !form.title.trim() || !form.date || !form.starts_at) return;
+    setSaving(true);
+    setNotice("");
+    setError("");
+    try {
+      const repeatWeeks = Math.max(1, Math.min(52, Number(form.repeat_weeks) || 1));
+      for (let index = 0; index < repeatWeeks; index += 1) {
+        const eventDate = academyDateKey(academyAddDays(new Date(`${form.date}T00:00:00`), index * 7));
+        await createScheduleEvent({
+          class_id: form.class_id,
+          title: form.title.trim(),
+          description: form.description.trim() || null,
+          event_type: form.event_type,
+          starts_at: `${eventDate}T${form.starts_at}:00`,
+          ends_at: form.ends_at ? `${eventDate}T${form.ends_at}:00` : null,
+        });
+      }
+      setNotice("저장됨");
+      setForm((current) => ({ ...current, title: "", description: "" }));
+      await load();
+    } catch {
+      setError("일정을 저장하지 못했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeEvent(eventId: string) {
+    setError("");
+    try {
+      await deleteScheduleEvent(eventId);
+      setEvents((current) => current.filter((event) => event.id !== eventId));
+    } catch {
+      setError("일정을 삭제하지 못했습니다.");
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="grid gap-3 md:grid-cols-3">
+        <Card className="border-white/10 bg-white/[0.035]">
+          <CardContent className="p-4">
+            <p className="text-xs text-slate-500">클래스</p>
+            <p className="mt-1 text-2xl font-black text-white">{classes.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-white/10 bg-white/[0.035]">
+          <CardContent className="p-4">
+            <p className="text-xs text-slate-500">학생</p>
+            <p className="mt-1 text-2xl font-black text-white">{classes.reduce((sum, classRow) => sum + classRow.student_count, 0)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-white/10 bg-white/[0.035]">
+          <CardContent className="p-4">
+            <p className="text-xs text-slate-500">이번 주 일정</p>
+            <p className="mt-1 text-2xl font-black text-violet-100">{weekEvents.length}</p>
+          </CardContent>
+        </Card>
+      </section>
+
+      {(notice || error) ? (
+        <div className="rounded-[10px] border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm">
+          {notice ? <span className="text-violet-100">{notice}</span> : null}
+          {error ? <span className="text-red-300">{error}</span> : null}
+        </div>
+      ) : null}
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <Card className="border-white/10 bg-white/[0.035]">
+          <CardHeader>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="flex items-center gap-2 text-white">
+                <CalendarDays className="h-5 w-5 text-violet-200" />
+                클래스 시간표
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="icon" variant="outline" onClick={() => setWeekStart((current) => academyAddDays(current, -7))} aria-label="이전 주">
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="min-w-36 text-center text-sm font-black text-white">{academyWeekTitle(weekStart)}</div>
+                <Button type="button" size="icon" variant="outline" onClick={() => setWeekStart((current) => academyAddDays(current, 7))} aria-label="다음 주">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex min-h-[320px] items-center justify-center text-slate-500">불러오는 중</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div className="grid min-w-[980px] grid-cols-7 border-l border-t border-white/10">
+                  {weekDays.map((day) => {
+                    const key = academyDateKey(day);
+                    const dayEvents = eventsByDate[key] || [];
+                    return (
+                      <div key={key} className="min-h-[520px] border-b border-r border-white/10 bg-black/10">
+                        <div className="sticky top-0 z-10 border-b border-white/10 bg-[#11121a]/95 px-3 py-2">
+                          <p className="text-xs text-slate-500">{new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(day)}</p>
+                          <p className="text-sm font-black text-white">{new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(day)}</p>
+                        </div>
+                        <div className="space-y-2 p-2">
+                          {dayEvents.map((event) => {
+                            const classRow = classById.get(event.class_id);
+                            return (
+                              <div key={event.id} className="rounded-md border border-violet-300/20 bg-violet-500/15 p-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-black text-white">{event.title}</p>
+                                    <p className="mt-1 text-[11px] text-violet-100">{academyTimeLabel(event.starts_at)}{event.ends_at ? ` - ${academyTimeLabel(event.ends_at)}` : ""}</p>
+                                  </div>
+                                  <button type="button" onClick={() => removeEvent(event.id)} className="rounded p-1 text-slate-500 hover:bg-white/10 hover:text-red-200" aria-label="삭제">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-1">
+                                  <Badge className="border border-white/10 bg-white/[0.06] text-[10px] text-slate-200">{classRow?.name || "클래스"}</Badge>
+                                  <Badge className="border border-white/10 bg-black/20 text-[10px] text-slate-300">{academyEventTypeLabel(event.event_type)}</Badge>
+                                  {classRow ? <span className="text-[10px] text-slate-500">{classRow.student_count}명</span> : null}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-5">
+          <Card className="border-white/10 bg-white/[0.035]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Plus className="h-5 w-5 text-violet-200" />
+                일정 추가
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={submitSchedule}>
+                <select className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.class_id} onChange={(event) => setForm((current) => ({ ...current, class_id: event.target.value }))}>
+                  <option value="">클래스</option>
+                  {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
+                </select>
+                <Input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="일정명" />
+                <select className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.event_type} onChange={(event) => setForm((current) => ({ ...current, event_type: event.target.value }))}>
+                  <option value="class">수업</option>
+                  <option value="homework">과제</option>
+                  <option value="test">시험</option>
+                  <option value="review">복습</option>
+                  <option value="mock_exam">모의고사</option>
+                  <option value="other">기타</option>
+                </select>
+                <Input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="time" value={form.starts_at} onChange={(event) => setForm((current) => ({ ...current, starts_at: event.target.value }))} />
+                  <Input type="time" value={form.ends_at} onChange={(event) => setForm((current) => ({ ...current, ends_at: event.target.value }))} />
+                </div>
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <Input type="number" min="1" max="52" value={form.repeat_weeks} onChange={(event) => setForm((current) => ({ ...current, repeat_weeks: event.target.value }))} />
+                  <div className="flex items-center rounded-[8px] border border-white/10 bg-white/[0.035] px-3 text-sm text-slate-400">주 반복</div>
+                </div>
+                <textarea
+                  value={form.description}
+                  onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="메모"
+                  className="min-h-24 w-full resize-none rounded-[8px] border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-violet-300/50"
+                />
+                <Button type="submit" className="w-full" disabled={saving || !form.class_id || !form.title.trim()}>
+                  {saving ? "저장 중" : "저장"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-white/[0.035]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Clock className="h-5 w-5 text-violet-200" />
+                예정 일정
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {upcomingEvents.map((event) => {
+                const classRow = classById.get(event.class_id);
+                return (
+                  <div key={event.id} className="rounded-[8px] border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{event.title}</p>
+                        <p className="mt-1 text-xs text-slate-500">{compactDate(event.starts_at)} · {classRow?.name || "클래스"}</p>
+                      </div>
+                      <Badge className="border border-white/10 bg-white/[0.06] text-slate-200">{academyEventTypeLabel(event.event_type)}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+              {!upcomingEvents.length ? <div className="rounded-[8px] border border-dashed border-white/10 p-4 text-sm text-slate-500">예정 일정 없음</div> : null}
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-white/[0.035]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Users className="h-5 w-5 text-violet-200" />
+                클래스
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {classes.map((classRow) => (
+                <div key={classRow.id} className="flex items-center justify-between rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
+                  <span className="font-semibold text-white">{classRow.name}</span>
+                  <span className="text-slate-500">{classRow.student_count}명</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function AcademyPageContent() {
   const searchParams = useSearchParams();
   const panel = searchParams.get("panel");
-  if (panel === "operations" || panel === "seats" || panel === "classes") return <AcademyOperationsPanel />;
+  if (panel === "operations" || panel === "seats" || panel === "classes") return <AcademySchedulePanel />;
   return <AcademyConsoleHome />;
 }
 

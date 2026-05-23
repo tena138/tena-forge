@@ -272,7 +272,21 @@ export function createScheduleEvent(payload: {
 }) {
   return api<ScheduleEvent>("/api/student-management/schedule-events", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export function listScheduleEvents(params?: { class_id?: string }) {
+  const search = new URLSearchParams();
+  if (params?.class_id) search.set("class_id", params.class_id);
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return api<ScheduleEvent[]>(`/api/student-management/schedule-events${suffix}`);
+}
+
+export function deleteScheduleEvent(id: string) {
+  return api<void>(`/api/student-management/schedule-events/${id}`, {
+    method: "DELETE",
   });
 }
 

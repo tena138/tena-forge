@@ -1410,3 +1410,14 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
     db.add(row)
     db.commit()
     return _schedule_event_payload(row)
+
+
+@router.delete("/schedule-events/{event_id}", status_code=204)
+def delete_schedule_event(event_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    row = db.get(ClassScheduleEvent, event_id)
+    if not row or row.academy_id != academy_id:
+        raise HTTPException(status_code=404, detail="Schedule event not found.")
+    db.delete(row)
+    db.commit()
+    return Response(status_code=204)
