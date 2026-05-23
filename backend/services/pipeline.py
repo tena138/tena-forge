@@ -188,6 +188,8 @@ def apply_solutions_to_existing_problems(
     batch: Batch,
     solutions: list[dict[str, Any]],
     problem_sections: list[dict[str, Any]] | None = None,
+    solution_sections: list[dict[str, Any]] | None = None,
+    page_metadata: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     problems = (
         db.query(Problem)
@@ -210,11 +212,20 @@ def apply_solutions_to_existing_problems(
         _apply_section_ranges_to_items(problem_payloads, problem_sections, "page_index")
         problem_payloads = _apply_structure_indexes(problem_payloads, page_key="page_index")
     matching_result = match_with_summary(problem_payloads, solutions)
+    structure_report = build_structure_validation_report(
+        page_metadata or [],
+        problem_sections or [],
+        solution_sections or [],
+        problem_payloads,
+        solutions,
+    )
+    _mark_section_validation_warnings(problem_payloads, structure_report)
     matched_payloads = matching_result["problems"]
     _write_batch_artifact(batch.id, "extracted_problems_by_section.json", _items_by_section(problem_payloads, "page_index"))
     _write_batch_artifact(batch.id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
     _write_batch_artifact(batch.id, "matches_by_section.json", matching_result.get("matches_by_section", {}))
-    _write_batch_artifact(batch.id, "validation_report.json", matching_result.get("validation_report", matching_result.get("summary", {})))
+    _write_batch_artifact(batch.id, "structure_validation_report.json", structure_report)
+    _write_batch_artifact(batch.id, "validation_report.json", _validation_with_structure(matching_result, structure_report))
     matched_by_id = {str(item.get("_problem_id")): item for item in matched_payloads}
     matched_count = 0
     unmatched_count = 0
@@ -373,8 +384,8 @@ Return exactly one JSON object inside a JSON array:
     "detected_subjects": ["수학Ⅰ", "수학Ⅱ", "..."],
     "detected_units": ["지수함수와 로그함수", "수열", "..."],
     "toc_entries": [
-      {"section_id": "DAY 01", "subject": null, "unit": null, "page_number": 12},
-      {"section_id": "수학Ⅰ / 지수함수와 로그함수", "subject": "수학Ⅰ", "unit": "지수함수와 로그함수", "page_number": 24}
+      {"section_id": "DAY 01", "subject": null, "unit": null, "page_number": 12, "problem_number_start": "01", "problem_number_end": "10", "problem_count": 10},
+      {"section_id": "수학Ⅰ / 지수함수와 로그함수", "subject": "수학Ⅰ", "unit": "지수함수와 로그함수", "page_number": 24, "problem_number_start": null, "problem_number_end": null, "problem_count": null}
     ],
     "section_pattern": "subject_unit" | "day" | "mixed" | "unknown",
     "detected_problem_headers": ["01", "02"],
@@ -397,6 +408,7 @@ Rules:
 - detected_problem_headers should contain problem numbers that start problem statements.
 - detected_solution_headers should contain problem numbers that start answers or solutions.
 - toc_entries.page_number should be the printed page number or visible destination page number in the table of contents. If no page number is visible, use null.
+- If a table of contents row shows a problem range/count for a section, fill problem_number_start, problem_number_end, and problem_count. If not visible, use null.
 - For two-column solution pages, set layout to "two_column".
 - Return raw JSON only."""
 
@@ -661,6 +673,35 @@ def _int_or_none(value: Any) -> int | None:
     return int(match.group(0)) if match else None
 
 
+def _toc_problem_bounds(raw: dict[str, Any] | str) -> tuple[int | None, int | None, int | None]:
+    if isinstance(raw, dict):
+        start = _int_or_none(
+            raw.get("problem_number_start")
+            or raw.get("problem_start")
+            or raw.get("first_problem_number")
+            or raw.get("first_problem")
+        )
+        end = _int_or_none(
+            raw.get("problem_number_end")
+            or raw.get("problem_end")
+            or raw.get("last_problem_number")
+            or raw.get("last_problem")
+        )
+        count = _int_or_none(raw.get("problem_count") or raw.get("question_count") or raw.get("count"))
+        range_text = str(raw.get("problem_range") or raw.get("question_range") or "").strip()
+    else:
+        start = end = count = None
+        range_text = str(raw or "")
+    if range_text:
+        range_match = re.search(r"(\d{1,3})\s*(?:~|-|–|—|至|부터)\s*(\d{1,3})", range_text)
+        if range_match:
+            start = start or int(range_match.group(1))
+            end = end or int(range_match.group(2))
+    if start is not None and end is not None and count is None and end >= start:
+        count = end - start + 1
+    return start, end, count
+
+
 def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -690,6 +731,7 @@ def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
             subject = None
             unit = None
             section_id = _normalize_section_id(section_text)
+        problem_start, problem_end, problem_count = _toc_problem_bounds(raw)
         if not section_id:
             continue
         key = (section_id, page_number)
@@ -702,6 +744,9 @@ def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
                 "subject": subject,
                 "unit": unit,
                 "page_number": page_number,
+                "problem_number_start": problem_start,
+                "problem_number_end": problem_end,
+                "problem_count": problem_count,
             }
         )
         if len(entries) >= 80:
@@ -840,7 +885,15 @@ def _toc_section_starts(relevant: list[dict[str, Any]], page_count: int) -> list
             if key in seen_entries:
                 continue
             seen_entries.add(key)
-            entries.append({"section_id": section_id, "page_number": page_number})
+            entries.append(
+                {
+                    "section_id": section_id,
+                    "page_number": page_number,
+                    "problem_number_start": entry.get("problem_number_start"),
+                    "problem_number_end": entry.get("problem_number_end"),
+                    "problem_count": entry.get("problem_count"),
+                }
+            )
     if not entries:
         return []
 
@@ -879,6 +932,9 @@ def _toc_section_starts(relevant: list[dict[str, Any]], page_count: int) -> list
                     "page_start": page_start,
                     "section_confidence": 0.68,
                     "source": "toc",
+                    "expected_problem_start": entry.get("problem_number_start"),
+                    "expected_problem_end": entry.get("problem_number_end"),
+                    "expected_problem_count": entry.get("problem_count"),
                 }
             )
             seen_sections.add(section_id)
@@ -913,7 +969,7 @@ def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind:
         seen.add(section)
 
     toc_starts = _toc_section_starts(relevant, page_count)
-    if toc_starts and (not starts or (len(starts) <= 1 and len(toc_starts) > len(starts))):
+    if toc_starts and (len(toc_starts) >= 2 or not starts or (len(starts) <= 1 and len(toc_starts) > len(starts))):
         starts = toc_starts
 
     if not starts:
@@ -956,6 +1012,9 @@ def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind:
                 "reason": None if confidence >= 0.55 else "low_ocr_confidence_on_section_header",
                 "section_confidence": confidence,
                 "source": start.get("source"),
+                "expected_problem_start": start.get("expected_problem_start"),
+                "expected_problem_end": start.get("expected_problem_end"),
+                "expected_problem_count": start.get("expected_problem_count"),
             }
         )
     return sections
@@ -998,6 +1057,181 @@ def _items_by_section(items: list[dict[str, Any]], page_key: str) -> dict[str, l
             }
         )
     return grouped
+
+
+def _numbers_from_values(values: list[Any]) -> list[int]:
+    numbers: list[int] = []
+    for value in values:
+        match = re.search(r"\d+", str(value or ""))
+        if match:
+            numbers.append(int(match.group(0)))
+    return numbers
+
+
+def _number_anchor(numbers: list[int]) -> dict[str, Any]:
+    ordered = sorted(numbers)
+    duplicates = sorted({number for number in ordered if ordered.count(number) > 1})
+    missing: list[int] = []
+    if ordered:
+        unique = sorted(set(ordered))
+        missing = [number for number in range(unique[0], unique[-1] + 1) if number not in unique]
+    return {
+        "first": ordered[0] if ordered else None,
+        "last": ordered[-1] if ordered else None,
+        "count": len(numbers),
+        "unique_count": len(set(numbers)),
+        "missing": missing[:40],
+        "duplicates": duplicates[:40],
+    }
+
+
+def _section_header_anchors(metadata: list[dict[str, Any]], doc_kind: str, sections: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    anchors: dict[str, dict[str, Any]] = {}
+    header_key = "detected_solution_headers" if doc_kind == "solution" else "detected_problem_headers"
+    relevant = [item for item in metadata if item.get("document_kind") == doc_kind]
+    for section in sections:
+        section_id = str(section.get("section_id") or "UNSECTIONED").strip() or "UNSECTIONED"
+        page_start = int(section.get("page_start") or 1)
+        page_end = int(section.get("page_end") or page_start)
+        headers: list[Any] = []
+        pages: list[int] = []
+        for item in relevant:
+            page_number = int(item.get("page_number") or 1)
+            if page_start <= page_number <= page_end:
+                headers.extend(item.get(header_key) or [])
+                pages.append(page_number)
+        anchor = _number_anchor(_numbers_from_values(headers))
+        anchor["pages"] = sorted(set(pages))
+        anchors[section_id] = anchor
+    return anchors
+
+
+def _item_section_id(item: dict[str, Any]) -> str:
+    section_id = str(item.get("section_id") or item.get("section_label") or "UNSECTIONED").strip()
+    return section_id or "UNSECTIONED"
+
+
+def _extracted_section_anchors(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[int]] = defaultdict(list)
+    for item in items:
+        number = _int_or_none(item.get("problem_number") or item.get("problem_no"))
+        if number is not None:
+            grouped[_item_section_id(item)].append(number)
+    return {section_id: _number_anchor(numbers) for section_id, numbers in grouped.items()}
+
+
+def build_structure_validation_report(
+    metadata: list[dict[str, Any]],
+    problem_sections: list[dict[str, Any]],
+    solution_sections: list[dict[str, Any]],
+    problems: list[dict[str, Any]],
+    solutions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    problem_headers = _section_header_anchors(metadata, "problem", problem_sections)
+    solution_headers = _section_header_anchors(metadata, "solution", solution_sections) if solution_sections else {}
+    extracted_problem_anchors = _extracted_section_anchors(problems)
+    extracted_solution_anchors = _extracted_section_anchors(solutions)
+
+    section_by_id = {str(section.get("section_id") or "UNSECTIONED").strip() or "UNSECTIONED": section for section in problem_sections}
+    if solution_sections:
+        for section in solution_sections:
+            section_by_id.setdefault(str(section.get("section_id") or "UNSECTIONED").strip() or "UNSECTIONED", section)
+
+    section_ids = sorted(
+        set(section_by_id)
+        | set(problem_headers)
+        | set(solution_headers)
+        | set(extracted_problem_anchors)
+        | set(extracted_solution_anchors)
+    )
+    sections: list[dict[str, Any]] = []
+    global_warnings: list[str] = []
+    for section_id in section_ids:
+        section = section_by_id.get(section_id, {})
+        expected_count = _int_or_none(section.get("expected_problem_count"))
+        expected_start = _int_or_none(section.get("expected_problem_start"))
+        expected_end = _int_or_none(section.get("expected_problem_end"))
+        if expected_count is None and expected_start is not None and expected_end is not None and expected_end >= expected_start:
+            expected_count = expected_end - expected_start + 1
+
+        problem_anchor = extracted_problem_anchors.get(section_id, _number_anchor([]))
+        solution_anchor = extracted_solution_anchors.get(section_id, _number_anchor([]))
+        problem_header_anchor = problem_headers.get(section_id, _number_anchor([]))
+        solution_header_anchor = solution_headers.get(section_id, _number_anchor([]))
+
+        reasons: list[str] = []
+        if expected_count is not None and problem_anchor["count"] and problem_anchor["count"] != expected_count:
+            reasons.append(f"toc_expected_problem_count {expected_count} but extracted_problem_count {problem_anchor['count']}")
+        if problem_header_anchor["count"] and problem_anchor["count"] and problem_header_anchor["count"] != problem_anchor["count"]:
+            reasons.append(f"page_header_problem_count {problem_header_anchor['count']} but extracted_problem_count {problem_anchor['count']}")
+        if solution_anchor["count"] and problem_anchor["count"] and solution_anchor["count"] != problem_anchor["count"]:
+            reasons.append(f"problem_count {problem_anchor['count']} but solution_count {solution_anchor['count']}")
+        if problem_header_anchor["missing"]:
+            reasons.append("missing_problem_headers")
+        if problem_header_anchor["duplicates"]:
+            reasons.append("duplicated_problem_headers")
+        if solution_header_anchor["duplicates"]:
+            reasons.append("duplicated_solution_headers")
+        if section.get("status") == "needs_review" and section.get("reason"):
+            reasons.append(str(section.get("reason")))
+
+        status = "needs_review" if reasons else "ok"
+        if status == "needs_review":
+            global_warnings.append(f"{section_id}: {'; '.join(reasons)}")
+        sections.append(
+            {
+                "section_id": None if section_id == "UNSECTIONED" else section_id,
+                "source": section.get("source"),
+                "page_start": section.get("page_start"),
+                "page_end": section.get("page_end"),
+                "expected_problem_anchor": {
+                    "first": expected_start,
+                    "last": expected_end,
+                    "count": expected_count,
+                },
+                "page_metadata_problem_anchor": problem_header_anchor,
+                "page_metadata_solution_anchor": solution_header_anchor,
+                "extracted_problem_anchor": problem_anchor,
+                "extracted_solution_anchor": solution_anchor,
+                "status": status,
+                "reasons": reasons,
+            }
+        )
+    return {
+        "status": "needs_review" if global_warnings else "ok",
+        "toc_section_count": len([section for section in problem_sections if section.get("source") == "toc"]),
+        "page_header_section_count": len([section for section in problem_sections if section.get("source") == "page_header"]),
+        "sections": sections,
+        "warnings": global_warnings,
+    }
+
+
+def _mark_section_validation_warnings(items: list[dict[str, Any]], structure_report: dict[str, Any]) -> None:
+    needs_review = {
+        str(section.get("section_id") or "UNSECTIONED")
+        for section in structure_report.get("sections", [])
+        if section.get("status") == "needs_review"
+    }
+    if not needs_review:
+        return
+    for item in items:
+        section_id = _item_section_id(item)
+        if section_id in needs_review:
+            item["needs_review"] = True
+            warnings = list(item.get("structure_warnings") or [])
+            if "section_structure_needs_review" not in warnings:
+                warnings.append("section_structure_needs_review")
+            item["structure_warnings"] = warnings
+
+
+def _validation_with_structure(matching_result: dict[str, Any], structure_report: dict[str, Any]) -> dict[str, Any]:
+    validation = dict(matching_result.get("validation_report") or matching_result.get("summary") or {})
+    validation["structure"] = structure_report
+    warnings = list(validation.get("warnings") or [])
+    for warning in structure_report.get("warnings") or []:
+        warnings.append(f"structure:{warning}")
+    validation["warnings"] = list(dict.fromkeys(warnings))
+    return validation
 
 
 def _metadata_by_page(metadata: list[dict[str, Any]], doc_kind: str) -> dict[int, dict[str, Any]]:
@@ -1625,11 +1859,14 @@ def process_batch(batch_id: UUID) -> None:
         _apply_section_ranges_to_items(all_extracted, problem_sections, "page_index")
         all_extracted = _apply_structure_indexes(all_extracted, page_key="page_index")
         _write_batch_artifact(batch_id, "extracted_problems_by_section.json", _items_by_section(all_extracted, "page_index"))
+        structure_report = build_structure_validation_report(page_metadata, problem_sections, solution_sections, all_extracted, solutions)
+        _mark_section_validation_warnings(all_extracted, structure_report)
+        _write_batch_artifact(batch_id, "structure_validation_report.json", structure_report)
         set_progress(batch_id, "문항-해설 매칭 중", total_units, total_units)
         matching_result = match_with_summary(all_extracted, solutions)
         matched_problems = matching_result["problems"]
         _write_batch_artifact(batch_id, "matches_by_section.json", matching_result.get("matches_by_section", {}))
-        _write_batch_artifact(batch_id, "validation_report.json", matching_result.get("validation_report", matching_result.get("summary", {})))
+        _write_batch_artifact(batch_id, "validation_report.json", _validation_with_structure(matching_result, structure_report))
         set_progress(batch_id, "문항 저장 중", total_units, total_units)
         save_results(db, batch, matched_problems)
         db.commit()
@@ -1795,7 +2032,14 @@ def process_solutions_only(batch_id: UUID) -> None:
             raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
 
         set_progress(batch_id, "기존 문항과 해설 재매칭 중", total_units, total_units)
-        stats = apply_solutions_to_existing_problems(db, batch, solutions, problem_sections=problem_sections)
+        stats = apply_solutions_to_existing_problems(
+            db,
+            batch,
+            solutions,
+            problem_sections=problem_sections,
+            solution_sections=solution_sections,
+            page_metadata=problem_page_metadata + page_metadata,
+        )
         _write_batch_artifact(
             batch_id,
             "solution_reprocess_report.json",

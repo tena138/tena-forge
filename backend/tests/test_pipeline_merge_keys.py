@@ -13,6 +13,7 @@ from services.pipeline import (  # noqa: E402
     _normalize_extracted_items,
     _normalize_page_metadata,
     build_section_ranges_from_metadata,
+    build_structure_validation_report,
     clean_solution_answer,
 )
 
@@ -47,6 +48,30 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertEqual(normalized["toc_entries"][0]["section_id"], "DAY 02")
         self.assertEqual(normalized["toc_entries"][0]["page_number"], 7)
         self.assertEqual(normalized["page_type"], "toc")
+
+    def test_toc_entries_keep_problem_count_scaffold(self):
+        page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
+        normalized = _normalize_page_metadata(
+            {
+                "toc_entries": [
+                    {
+                        "section_id": "DAY 03",
+                        "page_number": "11",
+                        "problem_number_start": "01",
+                        "problem_number_end": "08",
+                    }
+                ],
+                "page_type": "toc",
+            },
+            page,
+            "problem",
+        )
+
+        entry = normalized["toc_entries"][0]
+        self.assertEqual(entry["section_id"], "DAY 03")
+        self.assertEqual(entry["problem_number_start"], 1)
+        self.assertEqual(entry["problem_number_end"], 8)
+        self.assertEqual(entry["problem_count"], 8)
 
     def test_build_section_ranges_uses_toc_when_headers_are_missing(self):
         metadata = [
@@ -128,6 +153,48 @@ class PipelineMergeKeyTests(unittest.TestCase):
             [(item["section_id"], item["page_start"], item["page_end"]) for item in sections],
             [("수학Ⅰ / 지수함수와 로그함수", 3, 6), ("수학Ⅰ / 수열", 7, 7)],
         )
+
+    def test_structure_validation_flags_toc_extraction_count_mismatch(self):
+        metadata = [
+            {
+                "document_kind": "problem",
+                "page_number": 1,
+                "page_index": 0,
+                "page_type": "toc",
+                "toc_entries": [
+                    {
+                        "section_id": "DAY 01",
+                        "page_number": 2,
+                        "problem_number_start": 1,
+                        "problem_number_end": 3,
+                        "problem_count": 3,
+                    }
+                ],
+            },
+            {
+                "document_kind": "problem",
+                "page_number": 2,
+                "page_index": 1,
+                "page_type": "problem_page",
+                "detected_problem_headers": ["01", "02", "03"],
+            },
+        ]
+        sections = build_section_ranges_from_metadata(metadata, "problem", 2)
+        report = build_structure_validation_report(
+            metadata,
+            sections,
+            [],
+            [
+                {"section_id": "DAY 01", "problem_number": 1},
+                {"section_id": "DAY 01", "problem_number": 2},
+            ],
+            [],
+        )
+
+        self.assertEqual(report["status"], "needs_review")
+        self.assertEqual(report["sections"][0]["expected_problem_anchor"]["count"], 3)
+        self.assertIn("toc_expected_problem_count 3 but extracted_problem_count 2", report["sections"][0]["reasons"])
+        self.assertIn("page_header_problem_count 3 but extracted_problem_count 2", report["sections"][0]["reasons"])
 
     def test_same_page_same_number_different_sections_stay_distinct(self):
         page = RenderedPage(page_index=4, base64_png="", png_bytes=b"")
