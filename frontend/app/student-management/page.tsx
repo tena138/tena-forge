@@ -8,6 +8,7 @@ import {
   Loader2,
   Plus,
   RotateCcw,
+  UserPlus,
   X,
 } from "lucide-react";
 
@@ -718,18 +719,32 @@ export default function StudentManagementPage() {
                         <p className="text-xs text-slate-500">학생</p>
                         <p className="mt-3 truncate text-xs text-slate-500">{[classRow.subject, classRow.grade_level].filter(Boolean).join(" · ") || classRow.description || "클래스 정보 없음"}</p>
                       </div>
-                      <button
-                        type="button"
-                        aria-label={`${classRow.name} 통계`}
-                        title={`${classRow.name} 통계`}
-                        onClick={() => toggleClassStats(classRow)}
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-md border transition",
-                          statsOpen[classRow.id] ? "border-violet-300/50 bg-violet-500/20 text-violet-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40 hover:text-white"
-                        )}
-                      >
-                        <BarChart3 className="h-5 w-5" />
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          aria-label={`${classRow.name} 통계`}
+                          title={`${classRow.name} 통계`}
+                          onClick={() => toggleClassStats(classRow)}
+                          className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-md border transition",
+                            statsOpen[classRow.id] ? "border-violet-300/50 bg-violet-500/20 text-violet-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40 hover:text-white"
+                          )}
+                        >
+                          <BarChart3 className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${classRow.name} 인원 추가`}
+                          title={`${classRow.name} 인원 추가`}
+                          onClick={() => startClassStudentAdd(classRow)}
+                          className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-md border transition",
+                            addingStudentClassId === classRow.id ? "border-emerald-300/50 bg-emerald-500/15 text-emerald-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-emerald-300/40 hover:text-white"
+                          )}
+                        >
+                          <UserPlus className="h-5 w-5" />
+                        </button>
+                      </div>
                     </aside>
                     <div className="min-w-0 space-y-3 p-4">
                       {addingStudentClassId === classRow.id ? (

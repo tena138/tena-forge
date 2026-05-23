@@ -198,9 +198,18 @@ export function createStudent(payload: {
   status?: string;
   class_ids?: string[];
 }) {
+  const normalized = {
+    name: payload.name.trim(),
+    grade_level: payload.grade_level?.trim() || null,
+    school: payload.school?.trim() || null,
+    memo: payload.memo?.trim() || null,
+    status: payload.status || "active",
+    class_ids: payload.class_ids || [],
+  };
   return api<StudentCard>("/api/student-management/students", {
     method: "POST",
-    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(normalized),
   });
 }
 

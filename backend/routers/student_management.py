@@ -756,14 +756,21 @@ def list_students(request: Request, db: Session = Depends(get_db)):
 def create_student(payload: StudentPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
     actor_id = current_owner_id(request)
-    seat, invite_code = create_seat(db, academy_id, payload.name.strip())
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Student name is required.")
+    seat, invite_code = create_seat(db, academy_id, name)
     student_user_id = f"manual-{uuid.uuid4().hex[:24]}"
-    metadata = {"grade_level": payload.grade_level, "school": payload.school, "memo": payload.memo}
+    metadata = {
+        "grade_level": _clean_optional_text(payload.grade_level),
+        "school": _clean_optional_text(payload.school),
+        "memo": _clean_optional_text(payload.memo),
+    }
     membership = StudentAcademyMembership(
         student_user_id=student_user_id,
         academy_id=academy_id,
         academy_seat_id=seat.id,
-        display_name_in_academy=payload.name.strip(),
+        display_name_in_academy=name,
         status=payload.status,
         created_by=actor_id,
         metadata_json=metadata,
