@@ -599,7 +599,13 @@ export default function StudentManagementPage() {
                     {open ? (
                       <CardContent className="space-y-4 pt-5">
                         {addingStudentClassId === classRow.id ? (
-                          <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3">
+                          <form
+                            className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              submitClassStudent(classRow);
+                            }}
+                          >
                             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                               <Input
                                 placeholder="학생 이름"
@@ -623,7 +629,7 @@ export default function StudentManagementPage() {
                               />
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
-                              <Button type="button" size="sm" onClick={() => submitClassStudent(classRow)} disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
+                              <Button type="submit" size="sm" disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
                                 {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                                 저장
                               </Button>
@@ -631,7 +637,7 @@ export default function StudentManagementPage() {
                                 취소
                               </Button>
                             </div>
-                          </div>
+                          </form>
                         ) : null}
                         {classRow.students.length ? (
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -692,16 +698,24 @@ export default function StudentManagementPage() {
               <CardHeader>
                 <CardTitle className="text-white">학생 추가</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Input placeholder="학생 이름" value={studentForm.name} onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))} />
-                <Input placeholder="학교" value={studentForm.school} onChange={(event) => setStudentForm((current) => ({ ...current, school: event.target.value }))} />
-                <Input placeholder="학년" value={studentForm.grade_level} onChange={(event) => setStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
-                <Select value={studentForm.class_id} onChange={(event) => setStudentForm((current) => ({ ...current, class_id: event.target.value }))}>
-                  <option value="">클래스 선택 안 함</option>
-                  {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
-                </Select>
-                <Input placeholder="메모" value={studentForm.memo} onChange={(event) => setStudentForm((current) => ({ ...current, memo: event.target.value }))} />
-                <Button className="w-full" onClick={submitStudent}>학생 추가</Button>
+              <CardContent>
+                <form
+                  className="space-y-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    submitStudent();
+                  }}
+                >
+                  <Input placeholder="학생 이름" value={studentForm.name} onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))} />
+                  <Input placeholder="학교" value={studentForm.school} onChange={(event) => setStudentForm((current) => ({ ...current, school: event.target.value }))} />
+                  <Input placeholder="학년" value={studentForm.grade_level} onChange={(event) => setStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                  <Select value={studentForm.class_id} onChange={(event) => setStudentForm((current) => ({ ...current, class_id: event.target.value }))}>
+                    <option value="">클래스 선택 안 함</option>
+                    {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
+                  </Select>
+                  <Input placeholder="메모" value={studentForm.memo} onChange={(event) => setStudentForm((current) => ({ ...current, memo: event.target.value }))} />
+                  <Button type="submit" className="w-full" disabled={!studentForm.name.trim()}>학생 추가</Button>
+                </form>
               </CardContent>
             </Card>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
