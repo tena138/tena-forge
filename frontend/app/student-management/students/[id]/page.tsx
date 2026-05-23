@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarDays, Check, Download, FileText, Loader2, MessageSquareText, RotateCcw, UserRound } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Download, FileText, Loader2, MessageSquareText, RotateCcw, UserRound } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,14 @@ import { cn } from "@/lib/utils";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type AutosaveState = "pending" | "saving" | "saved" | "error";
 type StudentTab = "calendar" | "wrong" | "counseling";
+type StudentCalendarItem = {
+  id: string;
+  date: string;
+  title: string;
+  meta: string;
+  description: string;
+  kind: "수업" | "시험";
+};
 
 type StudentDetail = StudentCard & {
   paper_session_history: Array<{
@@ -78,12 +86,72 @@ function shortDate(value?: string | null) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
+function dateKey(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number: number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function monthTitle(value: Date) {
+  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long" }).format(value);
+}
+
+function moveMonth(value: Date, offset: number) {
+  return new Date(value.getFullYear(), value.getMonth() + offset, 1);
+}
+
+function buildMonthDays(value: Date) {
+  const firstDay = new Date(value.getFullYear(), value.getMonth(), 1);
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - firstDay.getDay());
+  return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+}
+
 function problemCount(result: StudentDetail["paper_session_history"][number]) {
   return (
     result.total_count ||
     result.session?.problem_count ||
     Math.max(0, ...result.problem_results.map((item) => item.problem_number))
   );
+}
+
+function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
+  const eventItems = (student.schedule_events || []).map((event) => ({
+    id: `event-${event.id}`,
+    date: event.starts_at,
+    title: event.title,
+    meta: event.event_type,
+    description: event.description || "",
+    kind: "수업" as const,
+  }));
+  const sessionItems = student.paper_session_history
+    .filter((result) => result.session?.scheduled_at)
+    .map((result) => ({
+      id: `session-${result.id}`,
+      date: result.session?.scheduled_at || "",
+      title: result.session?.title || "Paper Session",
+      meta: result.status,
+      description: `${result.score == null ? "-" : `${Math.round(result.score)}점`} · ${problemCount(result)}문항`,
+      kind: "시험" as const,
+    }));
+  return [...eventItems, ...sessionItems]
+    .filter((item) => dateKey(item.date))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+function closestCalendarItem(items: StudentCalendarItem[]) {
+  if (!items.length) return null;
+  const now = new Date();
+  const upcoming = items.filter((item) => new Date(item.date).getTime() >= now.getTime()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+  return upcoming || [...items].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+}
+
+function calendarBlockClass(item: StudentCalendarItem) {
+  if (item.kind === "시험") return "border-orange-300/30 bg-orange-500/20 text-orange-50 hover:bg-orange-500/30";
+  if (item.meta === "homework") return "border-sky-300/30 bg-sky-500/20 text-sky-50 hover:bg-sky-500/30";
+  if (item.meta === "review") return "border-emerald-300/30 bg-emerald-500/20 text-emerald-50 hover:bg-emerald-500/30";
+  return "border-violet-300/30 bg-violet-500/20 text-violet-50 hover:bg-violet-500/30";
 }
 
 function buildStatuses(result: StudentDetail["paper_session_history"][number]) {
@@ -135,10 +203,13 @@ function ResultCell({ number, status, onClick }: { number: number; status: Probl
 export default function StudentManagementStudentPage({ params }: { params: { id: string } }) {
   const [data, setData] = useState<StudentDetail | null>(null);
   const [activeTab, setActiveTab] = useState<StudentTab>("calendar");
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => dateKey(new Date()));
   const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
   const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const calendarInitializedRef = useRef(false);
   const [message, setMessage] = useState("");
   const [counselingSaving, setCounselingSaving] = useState(false);
   const [counselingForm, setCounselingForm] = useState({
@@ -149,37 +220,37 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     next_plan: "",
   });
 
-  const calendarItems = useMemo(() => {
-    if (!data) return [];
-    const eventItems = (data.schedule_events || []).map((event) => ({
-      id: `event-${event.id}`,
-      date: event.starts_at,
-      title: event.title,
-      meta: event.event_type,
-      description: event.description || "",
-      kind: "수업",
-    }));
-    const sessionItems = data.paper_session_history
-      .filter((result) => result.session?.scheduled_at)
-      .map((result) => ({
-        id: `session-${result.id}`,
-        date: result.session?.scheduled_at || "",
-        title: result.session?.title || "Paper Session",
-        meta: result.status,
-        description: `${result.score == null ? "-" : `${Math.round(result.score)}점`} · ${problemCount(result)}문항`,
-        kind: "시험",
-      }));
-    return [...eventItems, ...sessionItems].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [data]);
+  const calendarItems = useMemo(() => (data ? studentCalendarItems(data) : []), [data]);
+  const calendarDays = useMemo(() => buildMonthDays(calendarMonth), [calendarMonth]);
+  const calendarItemsByDate = useMemo(() => {
+    const grouped: Record<string, StudentCalendarItem[]> = {};
+    for (const item of calendarItems) {
+      const key = dateKey(item.date);
+      if (!key) continue;
+      grouped[key] = [...(grouped[key] || []), item].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
+    }
+    return grouped;
+  }, [calendarItems]);
+  const selectedCalendarItems = calendarItemsByDate[selectedCalendarDate] || [];
 
   function applyStudentData(student: StudentDetail) {
     setData(student);
     const next: Record<string, Record<number, ProblemStatus>> = {};
     for (const result of student.paper_session_history) next[result.id] = buildStatuses(result);
     setResultStatuses(next);
+    if (!calendarInitializedRef.current) {
+      const target = closestCalendarItem(studentCalendarItems(student));
+      if (target) {
+        const targetDate = new Date(target.date);
+        setCalendarMonth(new Date(targetDate.getFullYear(), targetDate.getMonth(), 1));
+        setSelectedCalendarDate(dateKey(target.date));
+      }
+      calendarInitializedRef.current = true;
+    }
   }
 
   useEffect(() => {
+    calendarInitializedRef.current = false;
     getStudentDetail(params.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
   }, [params.id]);
 
@@ -398,27 +469,118 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         </div>
 
         {activeTab === "calendar" ? (
-          <Card className="border-white/10 bg-white/[0.035]">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><CalendarDays className="h-5 w-5" />캘린더</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {calendarItems.map((item) => (
-                <div key={item.id} className="rounded-lg border border-white/10 bg-black/20 p-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-violet-200">{dateLabel(item.date)}</p>
-                      <p className="mt-1 text-lg font-black text-white">{item.title}</p>
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle className="flex items-center gap-2 text-white"><CalendarDays className="h-5 w-5" />캘린더</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" size="icon" variant="outline" onClick={() => setCalendarMonth((current) => moveMonth(current, -1))} aria-label="이전 달">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-32 text-center text-sm font-black text-white">{monthTitle(calendarMonth)}</div>
+                    <Button type="button" size="icon" variant="outline" onClick={() => setCalendarMonth((current) => moveMonth(current, 1))} aria-label="다음 달">
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[840px]">
+                    <div className="grid grid-cols-7 border-y border-white/10 bg-white/[0.025] text-center text-xs font-semibold text-slate-500">
+                      {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+                        <div key={day} className="px-2 py-2">{day}</div>
+                      ))}
                     </div>
-                    <div className="flex gap-2">
-                      <Badge className="border border-white/10 bg-white/[0.06] text-slate-200">{item.kind}</Badge>
-                      <Badge className={cn("border", tone(item.meta))}>{item.meta}</Badge>
+                    <div className="grid grid-cols-7 border-l border-white/10">
+                      {calendarDays.map((day) => {
+                        const key = dateKey(day);
+                        const items = calendarItemsByDate[key] || [];
+                        const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                        const isToday = key === dateKey(new Date());
+                        const isSelected = key === selectedCalendarDate;
+                        return (
+                          <div
+                            key={key}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedCalendarDate(key)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") setSelectedCalendarDate(key);
+                            }}
+                            className={cn(
+                              "min-h-[138px] border-b border-r border-white/10 p-2 text-left outline-none transition",
+                              isCurrentMonth ? "bg-black/15" : "bg-black/35 text-slate-600",
+                              isSelected && "bg-violet-500/10 ring-1 ring-inset ring-violet-300/50",
+                              "hover:bg-white/[0.04]"
+                            )}
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <span
+                                className={cn(
+                                  "flex h-6 w-6 items-center justify-center rounded-full text-xs font-black",
+                                  isCurrentMonth ? "text-slate-200" : "text-slate-600",
+                                  isToday && "bg-violet-500 text-white"
+                                )}
+                              >
+                                {day.getDate()}
+                              </span>
+                              {items.length ? <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-400">{items.length}</span> : null}
+                            </div>
+                            <div className="space-y-1">
+                              {items.slice(0, 4).map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedCalendarDate(key);
+                                  }}
+                                  className={cn(
+                                    "block w-full truncate rounded border px-2 py-1 text-left text-[11px] font-semibold leading-4 transition",
+                                    calendarBlockClass(item)
+                                  )}
+                                  title={`${item.title} · ${dateLabel(item.date)}`}
+                                >
+                                  {item.title}
+                                </button>
+                              ))}
+                              {items.length > 4 ? <div className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-400">+{items.length - 4}개 더</div> : null}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                  {item.description ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{item.description}</p> : null}
                 </div>
-              ))}
-              {!calendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">아직 이 학생에게 표시할 수업 일정이나 시험 일정이 없습니다.</p> : null}
-            </CardContent>
-          </Card>
+                {!calendarItems.length ? <p className="mt-4 rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">아직 이 학생에게 표시할 수업 일정이나 시험 일정이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader>
+                <CardTitle className="text-white">{shortDate(`${selectedCalendarDate}T00:00:00`)}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedCalendarItems.map((item) => (
+                  <div key={item.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-violet-200">{dateLabel(item.date)}</p>
+                        <p className="mt-1 font-black text-white">{item.title}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Badge className="border border-white/10 bg-white/[0.06] text-slate-200">{item.kind}</Badge>
+                        <Badge className={cn("border", tone(item.meta))}>{item.meta}</Badge>
+                      </div>
+                    </div>
+                    {item.description ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{item.description}</p> : null}
+                  </div>
+                ))}
+                {!selectedCalendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">선택한 날짜에 등록된 일정이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+          </section>
         ) : null}
 
         {activeTab === "wrong" ? (
