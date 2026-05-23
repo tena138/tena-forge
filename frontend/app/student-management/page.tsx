@@ -87,15 +87,15 @@ function errorMessage(error: unknown, fallback: string) {
 
 function ClassStudentCard({ student }: { student: StudentCard }) {
   return (
-    <Link href={`/student-management/students/${student.id}`} className="block rounded-lg border border-white/10 bg-black/20 p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
-      <div className="flex items-start justify-between gap-3">
+    <Link href={`/student-management/students/${student.id}`} className="block w-[210px] shrink-0 rounded-lg border border-white/10 bg-black/20 p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{student.name}</p>
           <p className="mt-1 truncate text-xs text-slate-400">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 미입력"}</p>
         </div>
         <Badge className={cn("shrink-0 border", statusTone(student.status_chip))}>{student.status_chip}</Badge>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+      <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
         <div className="rounded-md bg-white/[0.04] p-2">
           <p className="text-slate-500">최근 점수</p>
           <p className="mt-1 font-semibold text-white">{student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
@@ -103,10 +103,6 @@ function ClassStudentCard({ student }: { student: StudentCard }) {
         <div className="rounded-md bg-white/[0.04] p-2">
           <p className="text-slate-500">오답</p>
           <p className="mt-1 font-semibold text-rose-100">{student.unresolved_wrong_count}</p>
-        </div>
-        <div className="rounded-md bg-white/[0.04] p-2">
-          <p className="text-slate-500">상태</p>
-          <p className="mt-1 truncate font-semibold text-slate-100">{student.recent_completion_status || "-"}</p>
         </div>
       </div>
     </Link>
@@ -155,6 +151,7 @@ export default function StudentManagementPage() {
   const [gridStatuses, setGridStatuses] = useState<Record<number, ProblemStatus>>({});
   const [wrongInput, setWrongInput] = useState("");
   const [classSaving, setClassSaving] = useState(false);
+  const [showClassCreator, setShowClassCreator] = useState(false);
   const [editingClassId, setEditingClassId] = useState("");
   const [classEditSavingId, setClassEditSavingId] = useState("");
   const [classDeletingId, setClassDeletingId] = useState("");
@@ -244,6 +241,7 @@ export default function StudentManagementPage() {
       setClasses((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setExpanded((current) => ({ ...current, [created.id]: true }));
       setClassForm({ name: "", description: "", subject: "", grade_level: "" });
+      setShowClassCreator(false);
       setMessage("클래스를 만들었습니다.");
       await refresh().catch(() => undefined);
     } catch (error) {
@@ -458,8 +456,6 @@ export default function StudentManagementPage() {
             {[
               ["클래스", summary.class_count],
               ["학생", summary.student_count],
-              ["진행 세션", summary.active_session_count],
-              ["미해결 오답", summary.unresolved_wrong_count],
             ].map(([label, value]) => (
               <div key={label} className="flex min-w-[92px] items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
                 <p className="text-xs text-slate-500">{label}</p>
@@ -478,27 +474,6 @@ export default function StudentManagementPage() {
           </div>
         ) : null}
 
-        <div className="flex gap-2 overflow-x-auto rounded-lg border border-white/10 bg-black/25 p-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={cn(
-                  "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
-                  active ? "bg-violet-500 text-white shadow-[0_8px_24px_rgba(124,58,237,0.22)]" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
         {loading ? (
           <div className="flex min-h-[360px] items-center justify-center text-slate-400">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -506,191 +481,89 @@ export default function StudentManagementPage() {
           </div>
         ) : null}
 
-        {!loading && activeTab === "classes" ? (
-          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="space-y-4">
-              {classes.map((classRow) => {
-                const open = expanded[classRow.id] ?? true;
-                return (
-                  <Card key={classRow.id} className="overflow-hidden border-white/10 bg-white/[0.035]">
-                    <CardHeader className="border-b border-white/10 bg-white/[0.025]">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <button type="button" onClick={() => setExpanded((current) => ({ ...current, [classRow.id]: !open }))} className="flex min-w-0 items-start gap-3 text-left">
-                          <span className="mt-1 rounded-md border border-violet-300/20 bg-violet-500/15 p-2 text-violet-100">
-                            {open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                          </span>
-                          <span className="min-w-0">
-                            <CardTitle className="text-xl text-white">{classRow.name}</CardTitle>
-                            <span className="mt-1 block text-sm text-slate-400">{classRow.description || [classRow.subject, classRow.grade_level].filter(Boolean).join(" · ") || "클래스 설명 없음"}</span>
-                          </span>
-                        </button>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[520px]">
-                          <div className="rounded-md bg-black/20 p-2 text-center">
-                            <p className="text-[11px] text-slate-500">학생</p>
-                            <p className="font-bold text-white">{classRow.student_count}</p>
-                          </div>
-                          <div className="rounded-md bg-black/20 p-2 text-center">
-                            <p className="text-[11px] text-slate-500">예정</p>
-                            <p className="font-bold text-violet-100">{classRow.upcoming_count}</p>
-                          </div>
-                          <div className="rounded-md bg-black/20 p-2 text-center">
-                            <p className="text-[11px] text-slate-500">세션</p>
-                            <p className="font-bold text-emerald-100">{classSessionCount(classRow.id)}</p>
-                          </div>
-                          <div className="rounded-md bg-black/20 p-2 text-center">
-                            <p className="text-[11px] text-slate-500">오답</p>
-                            <p className="font-bold text-rose-100">{classRow.unresolved_wrong_count}</p>
-                          </div>
-                        </div>
+        {!loading ? (
+          <section className="space-y-3">
+            {classes.map((classRow) => (
+              <Card key={classRow.id} className="overflow-hidden border-white/10 bg-white/[0.035]">
+                <CardContent className="p-0">
+                  <div className="grid min-h-[168px] lg:grid-cols-[180px_minmax(0,1fr)]">
+                    <aside className="flex flex-col justify-between gap-4 border-b border-white/10 bg-black/20 p-4 lg:border-b-0 lg:border-r">
+                      <div>
+                        <p className="text-3xl font-black tracking-normal text-white">{classRow.name}</p>
+                        <p className="mt-2 text-2xl font-black text-slate-200">{classRow.student_count}</p>
+                        <p className="text-xs text-slate-500">학생</p>
+                        <p className="mt-3 truncate text-xs text-slate-500">{[classRow.subject, classRow.grade_level].filter(Boolean).join(" · ") || classRow.description || "클래스 정보 없음"}</p>
                       </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Link href={`/student-management/classes/${classRow.id}`}>
+                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs">상세</Button>
+                        </Link>
+                        <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => startEditClass(classRow)}>
+                          수정
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => startClassStudentAdd(classRow)}>
+                          학생
+                        </Button>
+                      </div>
+                    </aside>
+                    <div className="min-w-0 space-y-3 p-4">
                       {editingClassId === classRow.id ? (
                         <div className="grid gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 md:grid-cols-2 xl:grid-cols-4">
-                          <Input
-                            placeholder="클래스 이름"
-                            value={classEditForm.name}
-                            onChange={(event) => setClassEditForm((current) => ({ ...current, name: event.target.value }))}
-                          />
-                          <Input
-                            placeholder="레벨/설명"
-                            value={classEditForm.description}
-                            onChange={(event) => setClassEditForm((current) => ({ ...current, description: event.target.value }))}
-                          />
-                          <Input
-                            placeholder="과목"
-                            value={classEditForm.subject}
-                            onChange={(event) => setClassEditForm((current) => ({ ...current, subject: event.target.value }))}
-                          />
-                          <Input
-                            placeholder="학년"
-                            value={classEditForm.grade_level}
-                            onChange={(event) => setClassEditForm((current) => ({ ...current, grade_level: event.target.value }))}
-                          />
+                          <Input placeholder="클래스 이름" value={classEditForm.name} onChange={(event) => setClassEditForm((current) => ({ ...current, name: event.target.value }))} />
+                          <Input placeholder="레벨/설명" value={classEditForm.description} onChange={(event) => setClassEditForm((current) => ({ ...current, description: event.target.value }))} />
+                          <Input placeholder="과목" value={classEditForm.subject} onChange={(event) => setClassEditForm((current) => ({ ...current, subject: event.target.value }))} />
+                          <Input placeholder="학년" value={classEditForm.grade_level} onChange={(event) => setClassEditForm((current) => ({ ...current, grade_level: event.target.value }))} />
                           <div className="flex gap-2 md:col-span-2 xl:col-span-4">
                             <Button type="button" size="sm" onClick={() => submitClassEdit(classRow.id)} disabled={classEditSavingId === classRow.id || !classEditForm.name.trim()}>
                               {classEditSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                               저장
                             </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingClassId("")}>
-                              취소
-                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingClassId("")}>취소</Button>
                           </div>
                         </div>
                       ) : null}
-                      <div className="flex flex-wrap gap-2">
-                        <Link href={`/student-management/classes/${classRow.id}`}>
-                          <Button size="sm">Open class</Button>
-                        </Link>
-                        <Button size="sm" variant="outline" onClick={() => startEditClass(classRow)}>
-                          Edit class
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setSessionForm((current) => ({ ...current, class_id: classRow.id })); setActiveTab("sessions"); }}>
-                          Assign paper set
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => startClassStudentAdd(classRow)}>
-                          학생 추가
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => makeReviewSet({ class_id: classRow.id })}>
-                          Review set
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => removeClass(classRow)} disabled={classDeletingId === classRow.id}>
-                          {classDeletingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                          Delete class
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    {open ? (
-                      <CardContent className="space-y-4 pt-5">
-                        {addingStudentClassId === classRow.id ? (
-                          <form
-                            className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              submitClassStudent(classRow);
-                            }}
-                          >
-                            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                              <Input
-                                placeholder="학생 이름"
-                                value={classStudentForm.name}
-                                onChange={(event) => setClassStudentForm((current) => ({ ...current, name: event.target.value }))}
-                              />
-                              <Input
-                                placeholder="학교"
-                                value={classStudentForm.school}
-                                onChange={(event) => setClassStudentForm((current) => ({ ...current, school: event.target.value }))}
-                              />
-                              <Input
-                                placeholder="학년"
-                                value={classStudentForm.grade_level}
-                                onChange={(event) => setClassStudentForm((current) => ({ ...current, grade_level: event.target.value }))}
-                              />
-                              <Input
-                                placeholder="메모"
-                                value={classStudentForm.memo}
-                                onChange={(event) => setClassStudentForm((current) => ({ ...current, memo: event.target.value }))}
-                              />
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <Button type="submit" size="sm" disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
-                                {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                                저장
-                              </Button>
-                              <Button type="button" size="sm" variant="outline" onClick={() => { setAddingStudentClassId(""); setClassStudentForm(emptyStudentForm); }}>
-                                취소
-                              </Button>
-                            </div>
-                          </form>
-                        ) : null}
-                        {classRow.students.length ? (
-                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {classRow.students.map((student) => (
-                              <ClassStudentCard key={student.id} student={student} />
-                            ))}
+                      {addingStudentClassId === classRow.id ? (
+                        <form
+                          className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            submitClassStudent(classRow);
+                          }}
+                        >
+                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                            <Input placeholder="학생 이름" value={classStudentForm.name} onChange={(event) => setClassStudentForm((current) => ({ ...current, name: event.target.value }))} />
+                            <Input placeholder="학교" value={classStudentForm.school} onChange={(event) => setClassStudentForm((current) => ({ ...current, school: event.target.value }))} />
+                            <Input placeholder="학년" value={classStudentForm.grade_level} onChange={(event) => setClassStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                            <Input placeholder="메모" value={classStudentForm.memo} onChange={(event) => setClassStudentForm((current) => ({ ...current, memo: event.target.value }))} />
                           </div>
-                        ) : (
-                          <div className="rounded-lg border border-dashed border-white/10 p-6 text-center text-sm text-slate-500">아직 학생이 없습니다.</div>
-                        )}
-                      </CardContent>
-                    ) : null}
-                  </Card>
-                );
-              })}
-            </div>
-            <aside className="space-y-4">
-              <Card className="border-white/10 bg-white/[0.035]">
-                <CardHeader>
-                  <CardTitle className="text-white">클래스 만들기</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Input placeholder="클래스 이름" value={classForm.name} onChange={(event) => setClassForm((current) => ({ ...current, name: event.target.value }))} />
-                  <Input placeholder="레벨/설명" value={classForm.description} onChange={(event) => setClassForm((current) => ({ ...current, description: event.target.value }))} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
-                    <Input placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button type="submit" size="sm" disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
+                              {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                              저장
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => { setAddingStudentClassId(""); setClassStudentForm(emptyStudentForm); }}>취소</Button>
+                          </div>
+                        </form>
+                      ) : null}
+                      {classRow.students.length ? (
+                        <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+                          {classRow.students.map((student) => (
+                            <ClassStudentCard key={student.id} student={student} />
+                          ))}
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => startClassStudentAdd(classRow)} className="flex h-full min-h-[116px] w-full items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-slate-500 hover:border-violet-300/30 hover:text-violet-100">
+                          학생 추가
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
-                    {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    클래스 추가
-                  </Button>
                 </CardContent>
               </Card>
-              <Card className="border-white/10 bg-white/[0.035]">
-                <CardHeader>
-                  <CardTitle className="text-white">최근 세션</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {sessions.slice(0, 5).map((session) => (
-                    <button key={session.id} type="button" onClick={() => { setSelectedSessionId(session.id); setActiveTab("grading"); }} className="w-full rounded-lg border border-white/10 bg-black/20 p-3 text-left hover:border-violet-300/40">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="truncate text-sm font-semibold text-white">{session.title}</p>
-                        <Badge className={cn("border", statusTone(session.status))}>{session.status}</Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">{session.graded_count}/{session.assigned_count}명 채점 · {session.problem_count}문항</p>
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
-            </aside>
+            ))}
+            {!classes.length ? (
+              <div className="rounded-lg border border-dashed border-white/10 p-10 text-center text-sm text-slate-500">아직 클래스가 없습니다. 오른쪽 아래 + 버튼으로 클래스를 만들 수 있습니다.</div>
+            ) : null}
           </section>
         ) : null}
 
@@ -973,6 +846,36 @@ export default function StudentManagementPage() {
             </Card>
           </section>
         ) : null}
+        {showClassCreator ? (
+          <div className="fixed bottom-24 right-6 z-40 w-[min(360px,calc(100vw-48px))] rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/50">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="font-semibold text-white">클래스 만들기</p>
+              <button type="button" onClick={() => setShowClassCreator(false)} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              <Input placeholder="클래스 이름" value={classForm.name} onChange={(event) => setClassForm((current) => ({ ...current, name: event.target.value }))} />
+              <Input placeholder="레벨/설명" value={classForm.description} onChange={(event) => setClassForm((current) => ({ ...current, description: event.target.value }))} />
+              <div className="grid grid-cols-2 gap-2">
+                <Input placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
+                <Input placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
+              </div>
+              <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
+                {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                클래스 추가
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        <Button
+          type="button"
+          onClick={() => setShowClassCreator((current) => !current)}
+          className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-violet-950/40"
+          aria-label="클래스 만들기"
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
       </div>
     </main>
   );
