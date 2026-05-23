@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, ClipboardCheck, Loader2, RotateCcw, Users } from "lucide-react";
+import { ArrowLeft, Check, ClipboardCheck, Loader2, RotateCcw, Trash2, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ClassCard, createReviewSet, getClassDetail, updateClass } from "@/lib/studentManagement";
+import { ClassCard, createReviewSet, deleteClass, getClassDetail, updateClass } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 function tone(status?: string) {
@@ -18,10 +19,12 @@ function tone(status?: string) {
 }
 
 export default function StudentManagementClassPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
   const [data, setData] = useState<ClassCard | null>(null);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
 
   useEffect(() => {
@@ -65,6 +68,22 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
     }
   }
 
+  async function removeClass() {
+    if (!data) return;
+    const ok = window.confirm(
+      `'${data.name}' 클래스를 삭제할까요?\n학생 계정과 기존 채점 기록은 삭제되지 않지만, 이 클래스의 학생 연결과 일정은 제거됩니다.`
+    );
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await deleteClass(data.id);
+      router.replace("/student-management");
+    } catch {
+      setMessage("클래스 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      setDeleting(false);
+    }
+  }
+
   if (!data) return <main className="min-h-screen bg-[#07080d] p-8 text-slate-400">클래스를 불러오는 중입니다.</main>;
 
   return (
@@ -92,6 +111,10 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
               <Link href="/student-management">
                 <Button variant="outline">채점 입력으로</Button>
               </Link>
+              <Button variant="destructive" onClick={removeClass} disabled={deleting}>
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                클래스 삭제
+              </Button>
             </div>
           </div>
           {editing ? (

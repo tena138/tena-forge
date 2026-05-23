@@ -165,6 +165,12 @@ export function updateClass(
   });
 }
 
+export function deleteClass(id: string) {
+  return api<void>(`/api/student-management/classes/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export function createStudent(payload: {
   name: string;
   grade_level?: string;

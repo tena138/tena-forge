@@ -15,6 +15,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import {
   createPaperSession,
   createReviewSet,
   createStudent,
+  deleteClass,
   getPaperSessionDetail,
   getStudentManagementDashboard,
   listPaperSessions,
@@ -153,6 +155,7 @@ export default function StudentManagementPage() {
   const [classSaving, setClassSaving] = useState(false);
   const [editingClassId, setEditingClassId] = useState("");
   const [classEditSavingId, setClassEditSavingId] = useState("");
+  const [classDeletingId, setClassDeletingId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -273,6 +276,29 @@ export default function StudentManagementPage() {
       setMessage(errorMessage(error, "클래스 수정에 실패했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
       setClassEditSavingId("");
+    }
+  }
+
+  async function removeClass(classRow: ClassCard) {
+    const ok = window.confirm(
+      `'${classRow.name}' 클래스를 삭제할까요?\n학생 계정과 기존 채점 기록은 삭제되지 않지만, 이 클래스의 학생 연결과 일정은 제거됩니다.`
+    );
+    if (!ok) return;
+    setClassDeletingId(classRow.id);
+    try {
+      await deleteClass(classRow.id);
+      setClasses((current) => current.filter((item) => item.id !== classRow.id));
+      setExpanded((current) => {
+        const next = { ...current };
+        delete next[classRow.id];
+        return next;
+      });
+      setMessage(`'${classRow.name}' 클래스를 삭제했습니다.`);
+      await refresh().catch(() => undefined);
+    } catch (error) {
+      setMessage(errorMessage(error, "클래스 삭제에 실패했습니다. 잠시 후 다시 시도해주세요."));
+    } finally {
+      setClassDeletingId("");
     }
   }
 
@@ -525,6 +551,10 @@ export default function StudentManagementPage() {
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => makeReviewSet({ class_id: classRow.id })}>
                           Review set
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => removeClass(classRow)} disabled={classDeletingId === classRow.id}>
+                          {classDeletingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          Delete class
                         </Button>
                       </div>
                     </CardHeader>
