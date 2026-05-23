@@ -13,6 +13,7 @@ from database import get_db
 from models import (
     AcademyClass,
     AcademySeat,
+    AcademyStudentSubscription,
     ClassScheduleEvent,
     ClassStudent,
     ContentVersion,
@@ -26,10 +27,11 @@ from models import (
     StudentAcademyMembership,
     WrongAnswerRecord,
 )
-from services.academy_student_access import create_seat
+from services.academy_student_access import create_seat, ensure_academy_subscription
 from services.ownership import current_owner_id
 
 router = APIRouter(prefix="/api/student-management", tags=["student management"])
+CLASS_ORDER_METADATA_KEY = "student_management_class_order"
 
 
 def _academy_id(request: Request) -> str:
@@ -57,6 +59,43 @@ def _clean_optional_text(value: str | None) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _stored_class_order(db: Session, academy_id: str) -> list[str]:
+    subscription = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == academy_id))
+    if not subscription:
+        return []
+    metadata = subscription.billing_metadata or {}
+    class_ids = metadata.get(CLASS_ORDER_METADATA_KEY)
+    if not isinstance(class_ids, list):
+        return []
+    return [str(value) for value in class_ids if value]
+
+
+def _save_class_order(db: Session, academy_id: str, class_ids: list[str]) -> None:
+    subscription = ensure_academy_subscription(db, academy_id)
+    metadata = dict(subscription.billing_metadata or {})
+    metadata[CLASS_ORDER_METADATA_KEY] = class_ids
+    subscription.billing_metadata = metadata
+
+
+def _sort_class_rows(rows: list[AcademyClass], class_order: list[str]) -> list[AcademyClass]:
+    order_index = {class_id: index for index, class_id in enumerate(class_order)}
+    fallback_index = len(order_index)
+    return sorted(
+        rows,
+        key=lambda row: (
+            0 if row.is_active else 1,
+            0 if str(row.id) in order_index else 1,
+            order_index.get(str(row.id), fallback_index),
+            row.name.lower(),
+        ),
+    )
+
+
+def _ordered_classes(db: Session, academy_id: str) -> list[AcademyClass]:
+    rows = db.scalars(select(AcademyClass).where(AcademyClass.academy_id == academy_id)).all()
+    return _sort_class_rows(rows, _stored_class_order(db, academy_id))
 
 
 def _schedule_event_payload(row: ClassScheduleEvent) -> dict:
@@ -524,6 +563,10 @@ class ClassUpdatePayload(BaseModel):
     is_active: bool | None = None
 
 
+class ClassOrderPayload(BaseModel):
+    class_ids: list[UUID]
+
+
 class StudentPayload(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     grade_level: str | None = None
@@ -603,9 +646,7 @@ class ReviewSetPayload(BaseModel):
 @router.get("/dashboard")
 def dashboard(request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
-    classes = db.scalars(
-        select(AcademyClass).where(AcademyClass.academy_id == academy_id).order_by(AcademyClass.is_active.desc(), AcademyClass.name)
-    ).all()
+    classes = _ordered_classes(db, academy_id)
     sessions = db.scalars(
         select(PaperSession)
         .where(PaperSession.academy_id == academy_id)
@@ -640,7 +681,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 @router.get("/classes")
 def list_classes(request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
-    rows = db.scalars(select(AcademyClass).where(AcademyClass.academy_id == academy_id).order_by(AcademyClass.name)).all()
+    rows = _ordered_classes(db, academy_id)
     return [_class_payload(db, academy_id, row, include_students=True) for row in rows]
 
 
@@ -658,9 +699,29 @@ def create_class(payload: ClassPayload, request: Request, db: Session = Depends(
         grade_level=_clean_optional_text(payload.grade_level),
     )
     db.add(row)
+    db.flush()
+    existing_order = [class_id for class_id in _stored_class_order(db, academy_id) if class_id != str(row.id)]
+    _save_class_order(db, academy_id, [str(row.id), *existing_order])
     db.commit()
     db.refresh(row)
     return _class_payload(db, academy_id, row, include_students=True)
+
+
+@router.put("/classes/order")
+def update_class_order(payload: ClassOrderPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    requested_ids = _uuid_list(payload.class_ids)
+    rows = db.scalars(select(AcademyClass).where(AcademyClass.academy_id == academy_id)).all()
+    valid_ids = {str(row.id) for row in rows}
+    invalid_ids = [class_id for class_id in requested_ids if class_id not in valid_ids]
+    if invalid_ids:
+        raise HTTPException(status_code=400, detail="Class order contains classes outside this academy.")
+    remaining_ids = [str(row.id) for row in _sort_class_rows(rows, requested_ids) if str(row.id) not in requested_ids]
+    stored_order = [*requested_ids, *remaining_ids]
+    _save_class_order(db, academy_id, stored_order)
+    db.commit()
+    ordered_rows = _sort_class_rows(rows, stored_order)
+    return [_class_payload(db, academy_id, row, include_students=True) for row in ordered_rows]
 
 
 @router.get("/classes/{class_id}")

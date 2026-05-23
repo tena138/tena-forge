@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Check,
+  GripVertical,
   Loader2,
   Plus,
   RotateCcw,
@@ -34,6 +35,7 @@ import {
   listPaperSessions,
   listWrongAnswers,
   savePaperSessionGrade,
+  updateClassOrder,
 } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
@@ -406,6 +408,7 @@ export default function StudentManagementPage() {
   const [statsOpen, setStatsOpen] = useState<Record<string, boolean>>({});
   const [classStatsDetails, setClassStatsDetails] = useState<Record<string, PaperSessionDetail[]>>({});
   const [classStatsLoading, setClassStatsLoading] = useState<Record<string, boolean>>({});
+  const [draggingClassId, setDraggingClassId] = useState("");
   const [problemSets, setProblemSets] = useState<ProblemSetListItem[]>([]);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
@@ -432,6 +435,7 @@ export default function StudentManagementPage() {
     due_at: "",
   });
   const [sessionStudentIds, setSessionStudentIds] = useState<string[]>([]);
+  const classOrderRef = useRef<ClassCard[]>([]);
 
   const allStudents = useMemo(() => {
     const map = new Map<string, StudentCard>();
@@ -439,6 +443,10 @@ export default function StudentManagementPage() {
       for (const student of classRow.students || []) map.set(student.id, student);
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [classes]);
+
+  useEffect(() => {
+    classOrderRef.current = classes;
   }, [classes]);
 
   async function refresh() {
@@ -667,6 +675,32 @@ export default function StudentManagementPage() {
     }
   }
 
+  function moveClassRow(sourceId: string, targetId: string) {
+    if (!sourceId || sourceId === targetId) return;
+    setClasses((current) => {
+      const sourceIndex = current.findIndex((classRow) => classRow.id === sourceId);
+      const targetIndex = current.findIndex((classRow) => classRow.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return current;
+      const next = [...current];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      classOrderRef.current = next;
+      return next;
+    });
+  }
+
+  async function persistClassOrder() {
+    const orderedIds = classOrderRef.current.map((classRow) => classRow.id);
+    if (!orderedIds.length) return;
+    try {
+      const ordered = await updateClassOrder(orderedIds);
+      setClasses(ordered);
+    } catch (error) {
+      setMessage(errorMessage(error, "클래스 순서를 저장하지 못했습니다."));
+      await refresh().catch(() => undefined);
+    }
+  }
+
   const selectedStudent = sessionDetail?.students.find((student) => student.id === selectedStudentId);
 
   return (
@@ -709,9 +743,45 @@ export default function StudentManagementPage() {
         {!loading ? (
           <section className="space-y-3">
             {classes.map((classRow) => (
-              <Card key={classRow.id} className="overflow-visible rounded-none border-0 border-t border-white/10 bg-transparent shadow-none">
+              <Card
+                key={classRow.id}
+                onDragOver={(event) => event.preventDefault()}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  moveClassRow(draggingClassId, classRow.id);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDraggingClassId("");
+                }}
+                className={cn(
+                  "overflow-visible rounded-none border-0 border-t border-white/10 bg-transparent shadow-none transition",
+                  draggingClassId === classRow.id && "bg-violet-500/[0.04]"
+                )}
+              >
                 <CardContent className="p-0">
-                  <div className="grid min-h-[168px] lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div className="grid min-h-[168px] grid-cols-[28px_minmax(0,1fr)] lg:grid-cols-[28px_180px_minmax(0,1fr)]">
+                    <button
+                      type="button"
+                      draggable
+                      aria-label={`${classRow.name} 순서 이동`}
+                      title={`${classRow.name} 순서 이동`}
+                      onDragStart={(event) => {
+                        setDraggingClassId(classRow.id);
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", classRow.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingClassId("");
+                        void persistClassOrder();
+                      }}
+                      className={cn(
+                        "row-span-2 flex h-full min-h-[168px] cursor-grab items-center justify-center border-r border-white/10 text-slate-600 transition hover:bg-white/[0.035] hover:text-violet-100 active:cursor-grabbing lg:row-span-1",
+                        draggingClassId === classRow.id && "text-violet-200"
+                      )}
+                    >
+                      <GripVertical className="h-5 w-5" />
+                    </button>
                     <aside className="flex flex-col justify-between gap-4 border-b border-white/10 bg-transparent p-4 lg:border-b-0 lg:border-r">
                       <div>
                         <p className="text-3xl font-black tracking-normal text-white">{classRow.name}</p>
@@ -746,7 +816,7 @@ export default function StudentManagementPage() {
                         </button>
                       </div>
                     </aside>
-                    <div className="min-w-0 space-y-3 p-4">
+                    <div className="col-start-2 min-w-0 space-y-3 p-4 lg:col-start-auto">
                       {addingStudentClassId === classRow.id ? (
                         <form
                           className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3"

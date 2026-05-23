@@ -168,6 +168,14 @@ export function createClass(payload: {
   });
 }
 
+export function updateClassOrder(classIds: string[]) {
+  return api<ClassCard[]>("/api/student-management/classes/order", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ class_ids: classIds }),
+  });
+}
+
 export function updateClass(
   id: string,
   payload: {
