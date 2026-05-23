@@ -210,6 +210,10 @@ def _schema_is_at_head(inspector) -> bool:
     )
 
 
+def _schema_has_problem_choices(inspector) -> bool:
+    return _has_columns(inspector, "problems", {"choices"})
+
+
 def _schema_is_at_previous(inspector) -> bool:
     required_tables = {"academies", "user_roles", "batches", "problems", "problem_sets"}
     tables = set(inspector.get_table_names())
@@ -257,7 +261,7 @@ def main() -> None:
             if _ensure_problem_columns(connection, inspector):
                 inspector = inspect(connection)
 
-        if _schema_is_at_head(inspector):
+        if _schema_is_at_head(inspector) or (_schema_is_at_previous(inspector) and _schema_has_problem_choices(inspector)):
             target_revision = HEAD_REVISION
         elif _schema_is_at_previous(inspector):
             target_revision = PREVIOUS_REVISION
