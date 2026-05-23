@@ -354,6 +354,24 @@ def _group_by_section(items: list[MatchItem]) -> dict[str | None, list[MatchItem
     return grouped
 
 
+def _section_order(items: list[MatchItem]) -> list[str | None]:
+    seen: set[str | None] = set()
+    ordered: list[str | None] = []
+    for item in sorted(items, key=lambda value: (value.global_index, value.page_idx, value.local_index)):
+        if item.section_label in seen:
+            continue
+        seen.add(item.section_label)
+        ordered.append(item.section_label)
+    return ordered
+
+
+def _section_label_has_anchor(value: str | None) -> bool:
+    if not value:
+        return False
+    text = unicodedata.normalize("NFKC", str(value))
+    return bool(re.search(r"\d", text))
+
+
 def _ordered_items(items: list[MatchItem]) -> list[MatchItem]:
     return sorted(items, key=lambda value: (value.local_index, value.global_index, value.page_idx))
 
@@ -442,6 +460,92 @@ def _build_section_validations(
     return validations
 
 
+def _anchors_are_compatible(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> bool:
+    if len(problem_items) != len(solution_items):
+        return False
+    if not problem_items:
+        return False
+    problem_anchor = _anchor_for_items(problem_items)
+    solution_anchor = _anchor_for_items(solution_items)
+    for key in ("first", "last"):
+        if problem_anchor.get(key) and solution_anchor.get(key) and problem_anchor[key] != solution_anchor[key]:
+            return False
+    problem_numbers = [item.problem_number for item in _ordered_items(problem_items) if item.problem_number]
+    solution_numbers = [item.problem_number for item in _ordered_items(solution_items) if item.problem_number]
+    if problem_numbers and solution_numbers and problem_numbers != solution_numbers:
+        return False
+    return True
+
+
+def _relabel_solution_section(solution: MatchItem, target_section: str | None, warnings: list[str]) -> None:
+    if solution.section_label == target_section:
+        return
+    original = solution.section_label
+    solution.section_label = target_section
+    solution.item["section_label"] = target_section
+    solution.item["section_id"] = target_section
+    solution.item["canonical_key"] = f"{target_section}-{solution.problem_number}" if target_section and solution.problem_number else None
+    solution.item["section_aligned_from"] = original
+    if original:
+        solution.item["original_section_label"] = original
+    if warnings:
+        item_warnings = list(solution.item.get("matching_warnings") or [])
+        for warning in warnings:
+            if warning not in item_warnings:
+                item_warnings.append(warning)
+        solution.item["matching_warnings"] = item_warnings
+
+
+def _align_solution_sections_by_anchors(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> list[str]:
+    """Align OCR-noisy solution section labels to problem sections when anchors agree.
+
+    This is intentionally deterministic and conservative: section relabeling only happens
+    when per-section counts and visible problem-number anchors are compatible.
+    """
+    warnings: list[str] = []
+    problem_groups = _group_by_section(problem_items)
+    solution_groups = _group_by_section(solution_items)
+    problem_sections = [section for section in _section_order(problem_items) if section is not None]
+    solution_sections = [section for section in _section_order(solution_items) if section is not None]
+
+    if problem_sections and solution_sections and set(problem_sections) != set(solution_sections):
+        if len(problem_sections) == len(solution_sections):
+            pairs = [
+                (problem_section, solution_section)
+                for problem_section, solution_section in zip(problem_sections, solution_sections)
+                if problem_section != solution_section
+            ]
+            if pairs and all(_section_label_has_anchor(left) or _section_label_has_anchor(right) for left, right in pairs) and all(
+                _anchors_are_compatible(problem_groups.get(problem_section, []), solution_groups.get(solution_section, []))
+                for problem_section, solution_section in zip(problem_sections, solution_sections)
+            ):
+                for problem_section, solution_section in pairs:
+                    for solution in solution_groups.get(solution_section, []):
+                        _relabel_solution_section(solution, problem_section, ["section_label_aligned"])
+                warnings.append("solution_sections_aligned_by_anchor")
+
+    problem_groups = _group_by_section(problem_items)
+    solution_groups = _group_by_section(solution_items)
+    problem_sections = [section for section in _section_order(problem_items) if section is not None]
+    unsectioned_solutions = solution_groups.get(None, [])
+    if problem_sections and unsectioned_solutions and not [section for section in _section_order(solution_items) if section is not None]:
+        ordered_solutions = sorted(unsectioned_solutions, key=lambda value: (value.global_index, value.page_idx, value.local_index))
+        cursor = 0
+        candidate_groups: list[tuple[str, list[MatchItem], list[MatchItem]]] = []
+        for problem_section in problem_sections:
+            section_problems = _ordered_items(problem_groups.get(problem_section, []))
+            section_solutions = ordered_solutions[cursor : cursor + len(section_problems)]
+            cursor += len(section_problems)
+            candidate_groups.append((problem_section, section_problems, section_solutions))
+        if cursor == len(ordered_solutions) and all(_anchors_are_compatible(problems, solutions) for _section, problems, solutions in candidate_groups):
+            for problem_section, _problems, section_solutions in candidate_groups:
+                for solution in section_solutions:
+                    _relabel_solution_section(solution, problem_section, ["section_inferred_from_problem_anchor"])
+            warnings.append("unsectioned_solutions_partitioned_by_problem_sections")
+
+    return warnings
+
+
 def _assign_section_number(
     problem_items: list[MatchItem],
     solution_items: list[MatchItem],
@@ -461,7 +565,8 @@ def _assign_section_number(
         solution = solutions_by_key.get(problem.key)
         if solution is None or id(solution.item) in used_solution_ids:
             continue
-        warnings = _semantic_review_warnings(problem.item, solution.item)
+        warnings = list(solution.item.get("matching_warnings") or [])
+        warnings.extend(_semantic_review_warnings(problem.item, solution.item))
         _attach(problem.item, solution.item, 0.99, bool(warnings), "section_number", warnings)
         used_solution_ids.add(id(solution.item))
         matched += 1
@@ -495,11 +600,44 @@ def _assign_section_order(
         for problem, solution in zip(ordered_problems, ordered_solutions):
             if problem.item.get("solution") is not None or id(solution.item) in used_solution_ids:
                 continue
-            warnings: list[str] = []
+            warnings: list[str] = list(solution.item.get("matching_warnings") or [])
             warnings.extend(_semantic_review_warnings(problem.item, solution.item))
             _attach(problem.item, solution.item, 0.95, bool(warnings), "section_order", warnings)
             used_solution_ids.add(id(solution.item))
             matched += 1
+    return matched
+
+
+def _assign_unique_number(
+    problem_items: list[MatchItem],
+    solution_items: list[MatchItem],
+    used_solution_ids: set[int],
+) -> int:
+    by_number_problems: dict[str, list[MatchItem]] = defaultdict(list)
+    by_number_solutions: dict[str, list[MatchItem]] = defaultdict(list)
+    for problem in problem_items:
+        if problem.item.get("solution") is None and problem.problem_number:
+            by_number_problems[problem.problem_number].append(problem)
+    for solution in solution_items:
+        if id(solution.item) not in used_solution_ids and solution.problem_number:
+            by_number_solutions[solution.problem_number].append(solution)
+
+    matched = 0
+    for number, number_problems in by_number_problems.items():
+        number_solutions = by_number_solutions.get(number, [])
+        if len(number_problems) != 1 or len(number_solutions) != 1:
+            continue
+        problem = number_problems[0]
+        solution = number_solutions[0]
+        if not _reference_supports_pair(problem.item, solution.item):
+            continue
+        warnings = list(solution.item.get("matching_warnings") or [])
+        if problem.section_label and solution.section_label and problem.section_label != solution.section_label:
+            warnings.append("section_label_mismatch")
+        warnings.extend(_semantic_review_warnings(problem.item, solution.item))
+        _attach(problem.item, solution.item, 0.93, bool(warnings), "unique_number", warnings)
+        used_solution_ids.add(id(solution.item))
+        matched += 1
     return matched
 
 
@@ -529,7 +667,8 @@ def _assign_number_order(
                 continue
             if not _reference_supports_pair(problem.item, solution.item):
                 continue
-            warnings = _semantic_review_warnings(problem.item, solution.item)
+            warnings = list(solution.item.get("matching_warnings") or [])
+            warnings.extend(_semantic_review_warnings(problem.item, solution.item))
             _attach(problem.item, solution.item, 0.92, bool(warnings), "number_order", warnings)
             used_solution_ids.add(id(solution.item))
             matched += 1
@@ -557,7 +696,8 @@ def _assign_global_order(
     ):
         if not _reference_supports_pair(problem.item, solution.item):
             continue
-        warnings = _semantic_review_warnings(problem.item, solution.item)
+        warnings = list(solution.item.get("matching_warnings") or [])
+        warnings.extend(_semantic_review_warnings(problem.item, solution.item))
         _attach(problem.item, solution.item, 0.90, bool(warnings), "global_order", warnings)
         used_solution_ids.add(id(solution.item))
         matched += 1
@@ -811,6 +951,7 @@ def _build_summary(
     problem_items: list[MatchItem],
     solution_items: list[MatchItem],
     section_validations: dict[str | None, SectionValidation],
+    extra_warnings: list[str] | None = None,
 ) -> dict[str, Any]:
     matched = [problem for problem in problems if problem.get("solution") is not None]
     used_solution_ids = {id(problem["solution"]) for problem in matched if problem.get("solution") is not None}
@@ -833,6 +974,7 @@ def _build_summary(
     }
     if len(problem_items) != len(solution_items):
         summary["warnings"].append("count_mismatch")
+    summary["warnings"].extend(extra_warnings or [])
     summary["warnings"].extend(f"problem_{code}" for code in _sequence_warning_codes(problem_items))
     summary["warnings"].extend(f"solution_{code}" for code in _sequence_warning_codes(solution_items))
     summary["warnings"] = list(dict.fromkeys(summary["warnings"]))
@@ -865,6 +1007,7 @@ def _print_stats(
 def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> dict[str, Any]:
     problem_items = _annotate_occurrences(problems)
     solution_items = _annotate_occurrences(solutions)
+    alignment_warnings = _align_solution_sections_by_anchors(problem_items, solution_items)
     section_validations = _build_section_validations(problem_items, solution_items)
     used_solution_ids: set[int] = set()
     method_counts: dict[str, int] = {}
@@ -873,6 +1016,7 @@ def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str,
     method_counts["section_order"] = _assign_section_order(problem_items, solution_items, used_solution_ids, section_validations)
     method_counts["number_order"] = 0
     method_counts["global_order"] = _assign_global_order(problem_items, solution_items, used_solution_ids, section_validations)
+    method_counts["unique_number"] = _assign_unique_number(problem_items, solution_items, used_solution_ids)
     method_counts["semantic_section"] = _semantic_assign(
         problem_items,
         solution_items,
@@ -888,7 +1032,7 @@ def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str,
             _attach(problem.item, None, 0.0, True, "unmatched", ["unmatched_solution"])
 
     inversion_count = _apply_inversion_warnings(problems)
-    summary = _build_summary(problems, problem_items, solution_items, section_validations)
+    summary = _build_summary(problems, problem_items, solution_items, section_validations, alignment_warnings)
     if not _allow_global_order(problem_items, solution_items, section_validations):
         summary["warnings"].append("global_order_disabled")
         summary["warnings"] = list(dict.fromkeys(summary["warnings"]))

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ExamTemplate, api, downloadExport } from "@/lib/api";
+import { ClassCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
 import { collectVisualTemplateManualVariables, createDynamicPreviewPages } from "@/lib/visualTemplateEngine";
 import { PAGE_SIZES, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplate, listMyTemplates, listPublicTemplates } from "@/lib/templateHub";
@@ -153,12 +154,20 @@ export function ExportModal({
   const [examEndTime, setExamEndTime] = useState("");
   const [customVariables, setCustomVariables] = useState<Record<string, string>>({});
   const [includeSolution, setIncludeSolution] = useState(false);
+  const [assignEnabled, setAssignEnabled] = useState(false);
+  const [classes, setClasses] = useState<ClassCard[]>([]);
+  const [assignClassId, setAssignClassId] = useState("");
+  const [assignType, setAssignType] = useState("test");
   const [loading, setLoading] = useState(false);
   const examTime = timeLabel(examStartTime, examEndTime);
   const examDateTime = dateTimeLabel(date, examStartTime, examEndTime);
 
   useEffect(() => {
     if (!open) return;
+
+    setAssignEnabled(false);
+    setAssignClassId("");
+    setAssignType("test");
 
     api<ExamTemplate[]>("/api/templates")
       .then((data) => {
@@ -179,6 +188,12 @@ export function ExportModal({
         listMyTemplates().catch(() => [] as HubTemplate[]),
         listPublicTemplates({ sort: "most_used" }).catch(() => [] as HubTemplate[]),
       ]).then(([mine, publicItems]) => setHubTemplates(dedupeHubTemplates([...mine, ...publicItems])));
+    }
+
+    if (source === "set" && problemSetId) {
+      getStudentManagementDashboard()
+        .then((dashboard) => setClasses(dashboard.classes))
+        .catch(() => setClasses([]));
     }
   }, [open, initialTemplateId, hideTemplateSelection]);
 
@@ -272,6 +287,17 @@ export function ExportModal({
         custom_variables: customVariables,
         include_solution: includeSolution,
       });
+      if (assignEnabled && source === "set" && problemSetId && assignClassId) {
+        await createPaperSession({
+          title: examTitle.trim(),
+          source_problem_set_id: problemSetId,
+          session_type: assignType,
+          class_ids: [assignClassId],
+          scheduled_at: date ? `${date}T00:00:00` : null,
+          status: "exported",
+          create_calendar_events: true,
+        });
+      }
       onOpenChange(false);
     } finally {
       setLoading(false);
@@ -326,6 +352,42 @@ export function ExportModal({
               해설 포함
               <input type="checkbox" checked={includeSolution} onChange={(event) => setIncludeSolution(event.target.checked)} />
             </label>
+            {source === "set" && problemSetId ? (
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
+                  학생/클래스에 배정
+                  <input type="checkbox" checked={assignEnabled} onChange={(event) => setAssignEnabled(event.target.checked)} />
+                </label>
+                {assignEnabled ? (
+                  <div className="mt-3 grid gap-2">
+                    <select
+                      className="h-10 rounded-md border border-white/10 bg-[#10131b] px-3 text-sm text-slate-100 outline-none"
+                      value={assignClassId}
+                      onChange={(event) => setAssignClassId(event.target.value)}
+                    >
+                      <option value="">클래스 선택</option>
+                      {classes.map((classRow) => (
+                        <option key={classRow.id} value={classRow.id}>
+                          {classRow.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="h-10 rounded-md border border-white/10 bg-[#10131b] px-3 text-sm text-slate-100 outline-none"
+                      value={assignType}
+                      onChange={(event) => setAssignType(event.target.value)}
+                    >
+                      <option value="test">시험</option>
+                      <option value="homework">숙제</option>
+                      <option value="review">복습</option>
+                      <option value="mock_exam">모의고사</option>
+                      <option value="practice">연습</option>
+                    </select>
+                    <p className="text-xs leading-5 text-slate-500">PDF 생성 후 Student Management에 PaperSession이 생성되고 바로 수기 채점 입력에서 볼 수 있습니다.</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 text-sm">
               <p className="font-medium text-violet-100">출력 요약</p>
               <p className="mt-2 text-slate-300">
@@ -333,7 +395,7 @@ export function ExportModal({
               </p>
               {!count ? <p className="mt-2 text-xs text-slate-500">문항을 먼저 선택해야 내보내기를 실행할 수 있습니다.</p> : null}
             </div>
-            <Button className="w-full" disabled={!selected || loading || !count} onClick={submit}>
+            <Button className="w-full" disabled={!selected || loading || !count || (assignEnabled && !assignClassId)} onClick={submit}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
               {selected?.kind === "html" ? "템플릿 HTML 생성" : "PDF 생성"}
             </Button>

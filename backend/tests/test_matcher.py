@@ -175,9 +175,25 @@ class MatcherTests(unittest.TestCase):
             [{"problem_number": str(index), "answer": str(index), "solution_steps": f"solution {index}", "page_idx": index} for index in range(1, 42)],
         )
 
-        self.assertEqual(result["summary"]["matched_count"], 0)
+        self.assertEqual(result["summary"]["matched_count"], 41)
         self.assertFalse(result["validation_report"]["global_order_allowed"])
         self.assertIn("global_order_disabled", result["summary"]["warnings"])
+        self.assertEqual(result["validation_report"]["method_counts"]["unique_number"], 41)
+
+    def test_large_unsectioned_repeated_numbers_still_do_not_guess(self):
+        result = match_with_summary(
+            [
+                {"problem_number": "1", "problem_text": "day one first", "page_index": 1},
+                {"problem_number": "1", "problem_text": "day two first", "page_index": 10},
+            ],
+            [
+                {"problem_number": "1", "answer": "A", "solution_steps": "first solution", "page_idx": 20},
+                {"problem_number": "1", "answer": "B", "solution_steps": "second solution", "page_idx": 21},
+            ],
+        )
+
+        self.assertEqual(result["summary"]["matched_count"], 0)
+        self.assertEqual(result["validation_report"]["method_counts"]["unique_number"], 0)
 
     def test_section_number_match_is_confident_and_deterministic(self):
         result = match_with_summary(
@@ -198,6 +214,45 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(matched[0]["match_confidence"], 0.99)
         self.assertEqual(result["summary"]["matched_count"], 2)
         self.assertEqual(result["summary"]["sections"][0]["status"], "ok")
+
+    def test_solution_sections_with_ocr_different_labels_align_by_anchors(self):
+        result = match_with_summary(
+            [
+                {"problem_number": "01", "problem_text": "day one first", "section_label": "DAY 01", "page_index": 1},
+                {"problem_number": "02", "problem_text": "day one second", "section_label": "DAY 01", "page_index": 1},
+                {"problem_number": "01", "problem_text": "day two first", "section_label": "DAY 02", "page_index": 2},
+                {"problem_number": "02", "problem_text": "day two second", "section_label": "DAY 02", "page_index": 2},
+            ],
+            [
+                {"problem_number": "01", "answer": "A", "solution_steps": "first solution", "section_label": "LESSON 1", "page_idx": 10},
+                {"problem_number": "02", "answer": "B", "solution_steps": "second solution", "section_label": "LESSON 1", "page_idx": 10},
+                {"problem_number": "01", "answer": "C", "solution_steps": "third solution", "section_label": "LESSON 2", "page_idx": 11},
+                {"problem_number": "02", "answer": "D", "solution_steps": "fourth solution", "section_label": "LESSON 2", "page_idx": 11},
+            ],
+        )
+
+        matched = result["problems"]
+        self.assertEqual([item["solution"]["answer"] for item in matched], ["A", "B", "C", "D"])
+        self.assertIn("solution_sections_aligned_by_anchor", result["summary"]["warnings"])
+
+    def test_unsectioned_solutions_partition_by_problem_section_anchors(self):
+        result = match_with_summary(
+            [
+                {"problem_number": "01", "problem_text": "day one first", "section_label": "DAY 01", "page_index": 1},
+                {"problem_number": "02", "problem_text": "day one second", "section_label": "DAY 01", "page_index": 1},
+                {"problem_number": "01", "problem_text": "day two first", "section_label": "DAY 02", "page_index": 2},
+                {"problem_number": "02", "problem_text": "day two second", "section_label": "DAY 02", "page_index": 2},
+            ],
+            [
+                {"problem_number": "01", "answer": "A", "solution_steps": "first solution", "page_idx": 10},
+                {"problem_number": "02", "answer": "B", "solution_steps": "second solution", "page_idx": 10},
+                {"problem_number": "01", "answer": "C", "solution_steps": "third solution", "page_idx": 11},
+                {"problem_number": "02", "answer": "D", "solution_steps": "fourth solution", "page_idx": 11},
+            ],
+        )
+
+        self.assertEqual([item["solution"]["answer"] for item in result["problems"]], ["A", "B", "C", "D"])
+        self.assertIn("unsectioned_solutions_partitioned_by_problem_sections", result["summary"]["warnings"])
 
     def test_missing_solution_numbers_use_review_semantic_fallback(self):
         matched = match(

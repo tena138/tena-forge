@@ -15,7 +15,7 @@ from sqlalchemy import inspect, select, text
 from database import Base, SessionLocal, engine, get_settings
 from limiter import limiter
 from models import Problem, ProblemSetItem
-from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, learning_workspace, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, template_hub, templates
+from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, learning_workspace, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, student_management, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
 from services.batch_jobs import mark_stale_processing_batches
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
@@ -144,6 +144,7 @@ def private_static_file(relative_path: str, token: str | None = Query(default=No
 app.include_router(auth.router)
 app.include_router(academy_student_app.router)
 app.include_router(learning_workspace.router)
+app.include_router(student_management.router)
 app.include_router(saas.router)
 app.include_router(creators.router)
 app.include_router(creator_products.router)
@@ -250,6 +251,10 @@ def health_db():
                 "wrong_answer_records",
                 "student_personal_sets",
                 "student_personal_set_items",
+                "paper_sessions",
+                "paper_session_results",
+                "problem_results",
+                "class_schedule_events",
                 "korean_extraction_documents",
                 "korean_passage_groups",
                 "korean_questions",

@@ -35,17 +35,6 @@ function statusLabel(status: Batch["status"]) {
   }[status];
 }
 
-function sourceLabel(value?: string | null) {
-  return {
-    self_created: "직접 제작한 자료",
-    academy_internal: "학원 내부 자료",
-    licensed: "이용 허락을 받은 자료",
-    public_domain_or_open: "공개 이용 가능 자료",
-    personal_study_only: "개인 학습용 자료",
-    unknown: "출처 확인 필요",
-  }[value || ""] || "출처 확인 필요";
-}
-
 function statusClass(status: Batch["status"]) {
   return {
     pending: "border-white/10 bg-white/[0.06] text-slate-300",
@@ -91,39 +80,32 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
   const progress = batch.status === "done" ? 100 : batch.progress_percent ?? null;
   const isActive = batch.status === "pending" || batch.status === "processing";
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-        <Info className="h-4 w-4 text-violet-200" />
-        처리 정보
+    <>
+      <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
+          <Info className="h-4 w-4 text-violet-200" />
+          처리 정보
+        </div>
+        <p className="mt-2 text-xs text-slate-500">최근 단계</p>
+        <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-200">{batch.progress_message || "기록 없음"}</p>
       </div>
-      <div className="mt-3 grid gap-3 text-sm md:grid-cols-4">
-        <div>
-          <p className="text-xs text-slate-500">자료 출처</p>
-          <p className="mt-1 text-slate-200">{sourceLabel(batch.source_type)}</p>
+      <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
+          <Info className="h-4 w-4 text-violet-200" />
+          진행률
         </div>
-        <div>
-          <p className="text-xs text-slate-500">최근 단계</p>
-          <p className="mt-1 text-slate-200">{batch.progress_message || "기록 없음"}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500">진행률</p>
-          {isActive ? (
-            <>
-              <p className="mt-1 text-lg font-bold text-violet-100">{progress == null ? "계산 중" : `${progress}%`}</p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-violet-400 transition-all duration-500" style={{ width: `${progress ?? 0}%` }} />
-              </div>
-            </>
-          ) : (
-            <p className="mt-1 text-slate-200">{batch.status === "done" ? "완료" : progress == null ? "중단됨" : `${progress}%에서 중단`}</p>
-          )}
-        </div>
-        <div>
-          <p className="text-xs text-slate-500">권리 확인</p>
-          <p className="mt-1 text-slate-200">{batch.rights_confirmed ? "확인됨" : "미확인"}</p>
-        </div>
+        {isActive ? (
+          <>
+            <p className="mt-2 text-lg font-bold leading-none text-violet-100">{progress == null ? "계산 중" : `${progress}%`}</p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-violet-400 transition-all duration-500" style={{ width: `${progress ?? 0}%` }} />
+            </div>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-slate-200">{batch.status === "done" ? "완료" : progress == null ? "중단됨" : `${progress}%에서 중단`}</p>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -308,9 +290,9 @@ export function ArchiveBatchHistory({
             </CardHeader>
             <CardContent className="space-y-4">
               <BatchErrorPanel batch={batch} />
-              <BatchInfoPanel batch={batch} />
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <BatchInfoPanel batch={batch} />
                 <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
                   <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-violet-200" />문항 PDF</div>
                   <p className="mt-1 break-all text-sm text-slate-500">{fileName(batch.problem_pdf_filename)}</p>

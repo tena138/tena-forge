@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { HeaderAccountSummary } from "@/components/auth/header-account-summary";
 import { FloatingNav } from "@/components/floating-nav";
@@ -13,11 +12,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, clearAuthState, ensureAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
-import { cn } from "@/lib/utils";
 
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
 const marketingRoutes = ["/", "/plan", "/checkout", "/pricing", "/terms", "/privacy", "/copyright-policy"];
-const SIDEBAR_COLLAPSED_KEY = "tena-sidebar-collapsed";
 
 function isAuthFailure(error: unknown) {
   const status = (error as { response?: { status?: number } })?.response?.status;
@@ -27,19 +24,10 @@ function isAuthFailure(error: unknown) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [homeHref, setHomeHref] = useState("/academy");
   const [sessionReady, setSessionReady] = useState(false);
   const isAuthRoute = authRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isMarketingRoute = marketingRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
-
-  useEffect(() => {
-    try {
-      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
-    } catch {
-      setSidebarCollapsed(false);
-    }
-  }, []);
 
   useEffect(() => {
     function syncHomeHref() {
@@ -54,21 +42,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       window.removeEventListener("focus", syncHomeHref);
     };
   }, []);
-
-  function updateSidebarCollapsed(next: boolean) {
-    setSidebarCollapsed(next);
-    try {
-      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
-    } catch {
-      // Local storage is optional; the current session can still collapse.
-    }
-  }
-
-  useEffect(() => {
-    if (pathname.startsWith("/problems/review")) {
-      setSidebarCollapsed(true);
-    }
-  }, [pathname]);
 
   useEffect(() => {
     if (isAuthRoute || isMarketingRoute) {
@@ -146,15 +119,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href={homeHref} className="inline-flex shrink-0 items-center" aria-label="Tena Forge">
               <SiteLogo />
             </Link>
-            <button
-              type="button"
-              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-transparent text-slate-400 transition hover:bg-white/[0.08] hover:text-white lg:inline-flex"
-              aria-label={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
-              title={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
-              onClick={() => updateSidebarCollapsed(!sidebarCollapsed)}
-            >
-              {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            </button>
             <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">
               가장 강력한 교육 콘텐츠 인프라
             </span>
@@ -171,10 +135,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <Suspense fallback={null}>
-        <FloatingNav collapsed={sidebarCollapsed} />
+        <FloatingNav collapsed hoverExpand />
       </Suspense>
 
-      <main className={cn("w-full px-4 py-6 transition-[padding] duration-200 lg:pr-8", sidebarCollapsed ? "lg:pl-24" : "lg:pl-56")}>
+      <main className="w-full px-4 py-6 transition-[padding] duration-200 lg:pl-24 lg:pr-8">
         <div className="mx-auto w-full max-w-[1440px]">{children}</div>
       </main>
     </div>

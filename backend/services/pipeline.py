@@ -200,10 +200,7 @@ def apply_solutions_to_existing_problems(
         matched = matched_by_id.get(str(problem.id)) or {}
         solution = matched.get("solution")
         if has_solution_content(solution):
-            answer = solution.get("answer")
-            if isinstance(answer, str) and CHOICE_SYMBOL_PATTERN.search(answer.strip()):
-                answer = None
-            problem.answer = answer
+            problem.answer = clean_solution_answer(solution.get("answer"))
             problem.solution_steps = solution.get("solution_steps")
             problem.key_concept = solution.get("key_concept")
             problem.needs_review = True
@@ -2241,6 +2238,15 @@ CHOICE_PATTERN = re.compile(
     re.MULTILINE,
 )
 CHOICE_SYMBOL_PATTERN = re.compile(r"^(정답|답)\s*[:：]?\s*[①②③④⑤1-5]$")
+ANSWER_PREFIX_PATTERN = re.compile(r"^(?:정답|답)\s*[:：]?\s*", re.IGNORECASE)
+
+
+def clean_solution_answer(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = ANSWER_PREFIX_PATTERN.sub("", text).strip()
+    return text or None
 
 
 def strip_answer_choices(text: str) -> tuple[str, bool]:
@@ -2365,9 +2371,6 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
             "solution_steps": item.get("solution_steps"),
             "key_concept": item.get("key_concept"),
         }
-        answer = solution.get("answer")
-        if isinstance(answer, str) and CHOICE_SYMBOL_PATTERN.search(answer.strip()):
-            answer = None
         problem = Problem(
             problem_number=item["problem_number"],
             problem_text=item["problem_text"],
@@ -2375,7 +2378,7 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
             visual_url=item.get("visual_url"),
             review_page_image_url=item.get("review_page_image_url"),
             review_page_number=item.get("review_page_number"),
-            answer=answer,
+            answer=clean_solution_answer(solution.get("answer")),
             solution_steps=solution.get("solution_steps"),
             key_concept=solution.get("key_concept"),
             needs_review=True,

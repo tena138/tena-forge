@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   BookOpen,
@@ -86,6 +86,7 @@ const sections = [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
       { href: "/academy?panel=seats", label: "좌석 / 키", icon: KeyRound },
       { href: "/academy?panel=classes", label: "클래스 / 과제", icon: ClipboardList },
+      { href: "/student-management", label: "학생 관리", icon: NotebookPen },
     ],
   },
   {
@@ -134,14 +135,19 @@ function isActive(pathname: string, href: string, searchParams?: URLSearchParams
 export function FloatingNav({
   mobile = false,
   collapsed = false,
+  hoverExpand = false,
 }: {
   mobile?: boolean;
   collapsed?: boolean;
+  hoverExpand?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const navRef = useRef<HTMLElement | null>(null);
   const [canManageAnnouncements, setCanManageAnnouncements] = useState(false);
   const [accountType, setAccountType] = useState<AccountType>("academy");
+  const [autoExpanded, setAutoExpanded] = useState(false);
+  const isCollapsed = collapsed && !(hoverExpand && autoExpanded);
 
   const visibleSections = useMemo(
     () =>
@@ -189,29 +195,40 @@ export function FloatingNav({
 
   return (
     <nav
+      ref={navRef}
       className={cn(
         "scrollbar-thin-dark fixed bottom-0 left-0 top-[65px] z-10 hidden flex-col overflow-y-auto border-r border-white/10 bg-black/45 py-4 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-[width,padding] duration-200 lg:flex",
-        collapsed ? "w-16 px-1.5" : "w-48 px-2"
+        isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
       )}
+      onMouseEnter={() => hoverExpand && setAutoExpanded(true)}
+      onMouseLeave={() => hoverExpand && setAutoExpanded(false)}
+      onFocusCapture={() => hoverExpand && setAutoExpanded(true)}
+      onBlurCapture={(event) => {
+        if (!hoverExpand) return;
+        const next = event.relatedTarget;
+        if (!(next instanceof Node) || !navRef.current?.contains(next)) {
+          setAutoExpanded(false);
+        }
+      }}
       aria-label="주요 메뉴"
     >
       <div className="space-y-3">
         {visibleSections.map((section) => (
           <section key={section.title} className={cn("overflow-hidden rounded-[12px] border shadow-[0_12px_30px_rgba(0,0,0,0.14)]", section.panel)}>
-            <div className={cn("flex items-center border-b border-white/10", collapsed ? "justify-center px-1 py-2" : "gap-2 px-2.5 py-2.5")}>
-              <span className={cn("rounded-full", section.accent, collapsed ? "h-1.5 w-8" : "h-8 w-1")} />
-              {!collapsed && (
+            <div className={cn("flex items-center border-b border-white/10", isCollapsed ? "justify-center px-1 py-2" : "gap-2 px-2.5 py-2.5")}>
+              <span className={cn("rounded-full", section.accent, isCollapsed ? "h-1.5 w-8" : "h-8 w-1")} />
+              {!isCollapsed && (
                 <div className="min-w-0">
                   <h2 className={cn("text-[12px] font-bold tracking-[0.02em]", section.header)}>{section.title}</h2>
                   <p className="mt-0.5 truncate text-[11px] text-slate-500">{section.description}</p>
                 </div>
               )}
-              {collapsed && <span className="sr-only">{section.title}</span>}
+              {isCollapsed && <span className="sr-only">{section.title}</span>}
             </div>
             <div className="space-y-0.5 p-1">
               {section.items.map((item, index) => {
                 const active = isActive(pathname, item.href, searchParams);
-                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} collapsed={collapsed} />;
+                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} collapsed={isCollapsed} />;
               })}
             </div>
           </section>

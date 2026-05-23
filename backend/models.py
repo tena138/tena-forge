@@ -1369,6 +1369,85 @@ class ContentVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class PaperSession(Base):
+    __tablename__ = "paper_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_problem_set_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("problem_sets.id"), nullable=True, index=True)
+    source_archive_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    content_version_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("content_versions.id"), nullable=False, index=True)
+    session_type: Mapped[str] = mapped_column(String(32), default="test", nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(24), default="class", nullable=False, index=True)
+    class_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    student_membership_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="draft", nullable=False, index=True)
+    exported_file_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    content_version: Mapped[ContentVersion] = relationship("ContentVersion")
+
+
+class PaperSessionResult(Base):
+    __tablename__ = "paper_session_results"
+    __table_args__ = (UniqueConstraint("paper_session_id", "student_membership_id", name="uq_paper_session_student_result"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    paper_session_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("paper_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id"), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending_grading", nullable=False, index=True)
+    score: Mapped[Numeric | None] = mapped_column(Numeric(8, 2), nullable=True)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    graded_by: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    graded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ProblemResult(Base):
+    __tablename__ = "problem_results"
+    __table_args__ = (UniqueConstraint("paper_session_result_id", "problem_id", name="uq_problem_result_student_problem"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    paper_session_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("paper_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    paper_session_result_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("paper_session_results.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id"), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    problem_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problems.id"), nullable=False, index=True)
+    problem_version_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("content_versions.id"), nullable=False, index=True)
+    problem_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    result_status: Mapped[str] = mapped_column(String(24), default="unmarked", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ClassScheduleEvent(Base):
+    __tablename__ = "class_schedule_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    class_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(32), default="class", nullable=False, index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    linked_paper_session_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("paper_sessions.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class ArchiveAccessGrant(Base):
     __tablename__ = "archive_access_grants"
 

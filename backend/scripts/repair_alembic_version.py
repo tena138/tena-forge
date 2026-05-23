@@ -9,8 +9,8 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-PREVIOUS_REVISION = "0019_learning_workspace"
-HEAD_REVISION = "0020_korean_subject_engine"
+PREVIOUS_REVISION = "0020_korean_subject_engine"
+HEAD_REVISION = "0021_paper_sessions"
 ACADEMY_REQUIRED_COLUMNS = {
     "email_verified",
     "email_verified_at",
@@ -182,6 +182,10 @@ def _schema_is_at_head(inspector) -> bool:
         "wrong_answer_records",
         "student_personal_sets",
         "student_personal_set_items",
+        "paper_sessions",
+        "paper_session_results",
+        "problem_results",
+        "class_schedule_events",
         "korean_extraction_documents",
         "korean_passage_groups",
         "korean_questions",
