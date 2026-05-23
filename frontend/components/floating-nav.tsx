@@ -49,6 +49,21 @@ const sections = [
     ],
   },
   {
+    title: "Academy OS",
+    shortTitle: "AO",
+    description: "Seats, classes, assignments",
+    accountTypes: ["academy"],
+    accent: "bg-sky-300",
+    panel: "border-sky-300/20 bg-sky-300/[0.045]",
+    header: "text-sky-100",
+    items: [
+      { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
+      { href: "/academy?panel=seats", label: "좌석 / 키", icon: KeyRound },
+      { href: "/academy?panel=classes", label: "클래스 / 과제", icon: ClipboardList },
+      { href: "/student-management", label: "학생 관리", icon: NotebookPen },
+    ],
+  },
+  {
     title: "Licensed Library",
     shortTitle: "LL",
     description: "구독 및 구매 콘텐츠",
@@ -72,21 +87,6 @@ const sections = [
       { href: "/marketplace/books", label: "교재 마켓", icon: BookOpen },
       { href: "/stores", label: "학원 스토어", icon: GraduationCap },
       { href: "/stores", label: "강사 스토어", icon: UserCircle },
-    ],
-  },
-  {
-    title: "Academy OS",
-    shortTitle: "AO",
-    description: "Seats, classes, assignments",
-    accountTypes: ["academy"],
-    accent: "bg-sky-300",
-    panel: "border-sky-300/20 bg-sky-300/[0.045]",
-    header: "text-sky-100",
-    items: [
-      { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
-      { href: "/academy?panel=seats", label: "좌석 / 키", icon: KeyRound },
-      { href: "/academy?panel=classes", label: "클래스 / 과제", icon: ClipboardList },
-      { href: "/student-management", label: "학생 관리", icon: NotebookPen },
     ],
   },
   {

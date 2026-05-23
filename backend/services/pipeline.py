@@ -131,7 +131,7 @@ def has_solution_content(solution: dict[str, Any] | None) -> bool:
 
 
 STRUCTURAL_SECTION_RE = re.compile(
-    r"\b(?:DAY|CHAPTER|UNIT|LESSON|TYPE)\s*\d{1,3}\b|(?:단원|유형)\s*\d{1,3}|[/＞>]",
+    r"\b(?:DAY|CHAPTER|UNIT|LESSON|TYPE)\s*\d{1,3}\b|(?:단원|유형)\s*\d{1,3}|[/＞>›]",
     re.IGNORECASE,
 )
 SECTION_ID_PATTERNS = (
@@ -678,8 +678,15 @@ def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
             page_number = _int_or_none(raw.get("page_number", raw.get("start_page", raw.get("page"))))
         else:
             text = str(raw or "").strip()
-            page_number = _int_or_none(text)
-            section_text = re.sub(r"\s*\d+\s*$", "", text).strip()
+            trailing_page = re.search(r"(\d{1,4})\s*$", text)
+            section_text = text
+            page_number = None
+            if trailing_page:
+                candidate = text[: trailing_page.start()].strip()
+                bare_heading = re.fullmatch(r"(?:DAY|CHAPTER|UNIT|LESSON|TYPE|단원|유형)", candidate, re.IGNORECASE)
+                if candidate and not bare_heading:
+                    page_number = int(trailing_page.group(1))
+                    section_text = candidate
             subject = None
             unit = None
             section_id = _normalize_section_id(section_text)
@@ -765,7 +772,7 @@ def extract_page_metadata(
                 f"{PAGE_STRUCTURE_PROMPT}\n\nDocument kind: {doc_kind}. Current page_number: {page.page_index + 1}. Return this exact page_number.",
                 _page_split_model(model_pool, page.page_index, display_total_pages),
                 page.ai_image_mime,
-                900,
+                1800,
                 settings.ai_solution_image_detail if doc_kind == "solution" else settings.ai_image_detail,
             ): page
             for page in pages
@@ -798,7 +805,88 @@ def _primary_section_id(metadata: dict[str, Any]) -> str | None:
             text = str(section or "").strip()
             if text:
                 return text
+    subjects = metadata.get("detected_subjects")
+    units = metadata.get("detected_units")
+    subject = str(subjects[0]).strip() if isinstance(subjects, list) and subjects else ""
+    unit = str(units[0]).strip() if isinstance(units, list) and units else ""
+    if subject and unit:
+        return _normalize_section_id(f"{subject} / {unit}")
     return None
+
+
+def _metadata_content_page_numbers(relevant: list[dict[str, Any]], page_count: int) -> list[int]:
+    content_pages = [
+        int(item.get("page_number") or 1)
+        for item in relevant
+        if item.get("page_type") in {"problem_page", "solution_page", "unknown"}
+    ]
+    if not content_pages and page_count > 0:
+        return list(range(1, page_count + 1))
+    return content_pages
+
+
+def _toc_section_starts(relevant: list[dict[str, Any]], page_count: int) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen_entries: set[tuple[str, int]] = set()
+    for item in relevant:
+        if item.get("page_type") != "toc" and not item.get("toc_entries"):
+            continue
+        for entry in item.get("toc_entries") or []:
+            section_id = str(entry.get("section_id") or "").strip()
+            page_number = _int_or_none(entry.get("page_number"))
+            if not section_id or page_number is None:
+                continue
+            key = (section_id, page_number)
+            if key in seen_entries:
+                continue
+            seen_entries.add(key)
+            entries.append({"section_id": section_id, "page_number": page_number})
+    if not entries:
+        return []
+
+    content_pages = _metadata_content_page_numbers(relevant, page_count)
+    min_content_page = min(content_pages) if content_pages else 1
+    first_entry_page = min(int(entry["page_number"]) for entry in entries)
+    offsets = [0]
+    inferred_offset = min_content_page - first_entry_page
+    if inferred_offset and inferred_offset not in offsets:
+        offsets.append(inferred_offset)
+
+    best: list[dict[str, Any]] = []
+    best_score = -1
+    for offset in offsets:
+        starts: list[dict[str, Any]] = []
+        seen_sections: set[str] = set()
+        last_page = 0
+        score = 0
+        for entry in entries:
+            section_id = str(entry["section_id"])
+            if section_id in seen_sections:
+                continue
+            page_start = int(entry["page_number"]) + offset
+            if page_start < 1 or page_start > page_count:
+                continue
+            if content_pages and page_start < min_content_page:
+                continue
+            if page_start >= last_page:
+                score += 2
+            else:
+                score -= 3
+            last_page = max(last_page, page_start)
+            starts.append(
+                {
+                    "section_id": section_id,
+                    "page_start": page_start,
+                    "section_confidence": 0.68,
+                    "source": "toc",
+                }
+            )
+            seen_sections.add(section_id)
+        score += len(starts)
+        if score > best_score:
+            best_score = score
+            best = starts
+    return best
 
 
 def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind: str, page_count: int) -> list[dict[str, Any]]:
@@ -806,23 +894,30 @@ def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind:
         [item for item in metadata if item.get("document_kind") == doc_kind],
         key=lambda item: int(item.get("page_index") or 0),
     )
-    starts: list[tuple[str, int, float]] = []
+    starts: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in relevant:
+        if item.get("page_type") in {"toc", "cover", "blank", "log"}:
+            continue
         section = _primary_section_id(item)
         if not section or section in seen:
             continue
-        starts.append((section, int(item.get("page_number") or 1), float(item.get("section_confidence") or 0.0)))
+        starts.append(
+            {
+                "section_id": section,
+                "page_start": int(item.get("page_number") or 1),
+                "section_confidence": float(item.get("section_confidence") or 0.0),
+                "source": "page_header",
+            }
+        )
         seen.add(section)
 
+    toc_starts = _toc_section_starts(relevant, page_count)
+    if toc_starts and (not starts or (len(starts) <= 1 and len(toc_starts) > len(starts))):
+        starts = toc_starts
+
     if not starts:
-        content_pages = [
-            int(item.get("page_number") or 1)
-            for item in relevant
-            if item.get("page_type") in {"problem_page", "solution_page", "unknown"}
-        ]
-        if not content_pages and page_count > 0:
-            content_pages = list(range(1, page_count + 1))
+        content_pages = _metadata_content_page_numbers(relevant, page_count)
         if not content_pages:
             return []
         return [
@@ -837,16 +932,19 @@ def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind:
         ]
 
     sections: list[dict[str, Any]] = []
-    for index, (section, page_start, confidence) in enumerate(starts):
+    for index, start in enumerate(starts):
+        section = str(start.get("section_id") or "").strip()
+        page_start = int(start.get("page_start") or 1)
+        confidence = float(start.get("section_confidence") or 0.0)
         if index + 1 < len(starts):
-            next_start = starts[index + 1][1]
+            next_start = int(starts[index + 1].get("page_start") or page_start)
             page_end = next_start if next_start == page_start else next_start - 1
         else:
             following_pages = [
                 int(item.get("page_number") or 1)
                 for item in relevant
                 if int(item.get("page_number") or 1) >= page_start
-                and item.get("page_type") not in {"cover", "blank", "log"}
+                and item.get("page_type") not in {"cover", "blank", "log", "toc"}
             ]
             page_end = max(following_pages) if following_pages else page_count
         sections.append(
@@ -857,6 +955,7 @@ def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind:
                 "status": "ok" if confidence >= 0.55 else "needs_review",
                 "reason": None if confidence >= 0.55 else "low_ocr_confidence_on_section_header",
                 "section_confidence": confidence,
+                "source": start.get("source"),
             }
         )
     return sections
@@ -2496,7 +2595,7 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
         page_number = int(item.get("page_index") or 0) + 1
         problem.tags = Tag(
             subject=str(item.get("subject") or "").strip() or None,
-            unit=str(item.get("unit") or item.get("section_label") or "").strip() or None,
+            unit=str(item.get("section_label") or item.get("unit") or "").strip() or None,
             source=f"{batch_name} / p.{page_number} / {item['problem_number']}번",
         )
         db.add(problem)
