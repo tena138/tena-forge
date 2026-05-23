@@ -79,3 +79,12 @@ export async function fetchBatchStatus(batchId: string) {
   });
   return response.data;
 }
+
+export async function fetchActiveBatchStatus() {
+  await ensureAccessToken();
+  const response = await authHttp.get<BatchStatusResponse | null>("/api/batches/active", {
+    headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
+    params: { t: Date.now() },
+  });
+  return response.data;
+}

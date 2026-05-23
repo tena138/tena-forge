@@ -16,6 +16,7 @@ import type { BatchNotification } from "@/lib/batch-notifications";
 import {
   ACTIVE_BATCH_EVENT,
   ACTIVE_BATCH_STORAGE_KEY,
+  fetchActiveBatchStatus,
   fetchBatchStatus,
   forgetActiveBatch,
   formatRemaining,
@@ -25,7 +26,6 @@ import {
   shouldForgetActiveBatchAfterStatusError,
 } from "@/lib/batch-progress";
 import type { BatchStatusResponse } from "@/lib/batch-progress";
-import { api, type Batch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function formatTime(value: string) {
@@ -77,30 +77,6 @@ function ActiveBatchPanel({ statusData }: { statusData: BatchStatusResponse }) {
       </div>
     </Link>
   );
-}
-
-function batchToStatusResponse(batch: Batch): BatchStatusResponse {
-  return {
-    batch_id: batch.id,
-    status: batch.status,
-    processing_task: batch.processing_task || "full",
-    progress_message: batch.progress_message || "",
-    progress_percent: batch.progress_percent ?? null,
-    estimated_seconds_remaining: batch.estimated_seconds_remaining ?? null,
-    failure_stage: batch.failure_stage ?? null,
-    failure_reason: batch.failure_reason ?? null,
-    failure_hint: batch.failure_hint ?? null,
-    failed_at: batch.failed_at ?? null,
-  };
-}
-
-function pickVisibleActiveBatch(batches: Batch[]) {
-  const activeBatches = batches.filter((batch) => batch.status === "processing" || batch.status === "pending");
-  const processing = activeBatches
-    .filter((batch) => batch.status === "processing")
-    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
-  if (processing) return processing;
-  return activeBatches.sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime())[0] || null;
 }
 
 export function HeaderNotifications() {
@@ -183,6 +159,16 @@ export function HeaderNotifications() {
             setActiveStatus(null);
           }
           if (timer) window.clearInterval(timer);
+          return;
+        }
+        try {
+          const activeBatch = await fetchActiveBatchStatus();
+          if (cancelled || !activeBatch) return;
+          rememberActiveBatch(activeBatch.batch_id);
+          setActiveBatchId(activeBatch.batch_id);
+          setActiveStatus(activeBatch);
+        } catch {
+          // Keep the current active id and retry on the next interval.
         }
       }
     }
@@ -201,13 +187,12 @@ export function HeaderNotifications() {
     async function discoverActiveBatch() {
       if (activeBatchId || readActiveBatch()) return;
       try {
-        const batches = await api<Batch[]>("/api/batches");
+        const activeBatch = await fetchActiveBatchStatus();
         if (cancelled) return;
-        const activeBatch = pickVisibleActiveBatch(batches);
         if (!activeBatch) return;
-        rememberActiveBatch(activeBatch.id);
-        setActiveBatchId(activeBatch.id);
-        setActiveStatus(batchToStatusResponse(activeBatch));
+        rememberActiveBatch(activeBatch.batch_id);
+        setActiveBatchId(activeBatch.batch_id);
+        setActiveStatus(activeBatch);
       } catch {
         // Header progress should be opportunistic; auth/network failures are handled by the next poll.
       }

@@ -114,6 +114,18 @@ def _batch_read(
     )
 
 
+def _batch_status_payload(batch: Batch) -> dict:
+    progress = get_progress_detail(batch)
+    raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
+    status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending
+    return {
+        "batch_id": batch.id,
+        "status": status,
+        "processing_task": batch.processing_task or "full",
+        **progress,
+    }
+
+
 @router.post("/upload", response_model=BatchUploadResponse)
 def upload_batch(
     request: Request,
@@ -206,6 +218,36 @@ def list_batches(request: Request, db: Session = Depends(get_db)):
     return result
 
 
+@router.get("/active", response_model=BatchStatusResponse | None)
+@limiter.exempt
+def active_batch_status(request: Request, db: Session = Depends(get_db)):
+    owner_ids = current_owner_ids(request, db)
+    if mark_stale_processing_batches(db):
+        db.commit()
+    try:
+        schedule_next_batch()
+    except Exception:
+        traceback.print_exc()
+    db.expire_all()
+
+    batch = db.scalars(
+        select(Batch)
+        .where(Batch.owner_id.in_(owner_ids), Batch.status == BatchStatus.processing)
+        .order_by(desc(Batch.progress_updated_at), desc(Batch.created_at), desc(Batch.id))
+        .limit(1)
+    ).first()
+    if not batch:
+        batch = db.scalars(
+            select(Batch)
+            .where(Batch.owner_id.in_(owner_ids), Batch.status == BatchStatus.pending)
+            .order_by(Batch.created_at.asc(), Batch.id.asc())
+            .limit(1)
+        ).first()
+    if not batch:
+        return None
+    return _batch_status_payload(batch)
+
+
 @router.get("/{batch_id}", response_model=BatchRead)
 @limiter.exempt
 def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
@@ -245,7 +287,6 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
         except Exception:
             traceback.print_exc()
         db.refresh(batch)
-    progress = get_progress_detail(batch)
     raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
     status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending
     if status == BatchStatus.pending:
@@ -254,15 +295,9 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
             db.refresh(batch)
             raw_status = batch.status.value if isinstance(batch.status, BatchStatus) else str(batch.status or BatchStatus.pending.value)
             status = BatchStatus(raw_status) if raw_status in {item.value for item in BatchStatus} else BatchStatus.pending
-            progress = get_progress_detail(batch)
         except Exception:
             traceback.print_exc()
-    return {
-        "batch_id": batch.id,
-        "status": status,
-        "processing_task": batch.processing_task or "full",
-        **progress,
-    }
+    return _batch_status_payload(batch)
 
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
