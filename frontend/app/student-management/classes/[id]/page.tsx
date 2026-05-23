@@ -2,20 +2,53 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { ArrowLeft, Check, ClipboardCheck, Loader2, RotateCcw, Trash2, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, CalendarDays, Check, ClipboardCheck, Clock, Loader2, Plus, RotateCcw, Trash2, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ClassCard, createReviewSet, deleteClass, getClassDetail, updateClass } from "@/lib/studentManagement";
+import { ClassCard, ScheduleEvent, createReviewSet, createScheduleEvent, deleteClass, getClassDetail, updateClass } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
+
+type ClassTab = "students" | "calendar";
 
 function tone(status?: string) {
   if (status === "completed" || status === "graded" || status === "Active") return "bg-emerald-500/15 text-emerald-100 border-emerald-400/20";
-  if (status === "grading" || status === "scheduled") return "bg-violet-500/15 text-violet-100 border-violet-300/20";
+  if (status === "grading" || status === "scheduled" || status === "class") return "bg-violet-500/15 text-violet-100 border-violet-300/20";
   return "bg-slate-500/15 text-slate-200 border-slate-400/20";
+}
+
+function dateLabel(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function localInputValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return localInputValue(date);
+}
+
+function composeScheduleDescription(lessonPlan: string, assignmentNote: string) {
+  return [
+    lessonPlan.trim() ? `수업 지도\n${lessonPlan.trim()}` : "",
+    assignmentNote.trim() ? `과제\n${assignmentNote.trim()}` : "",
+  ].filter(Boolean).join("\n\n") || null;
 }
 
 export default function StudentManagementClassPage({ params }: { params: { id: string } }) {
@@ -25,11 +58,33 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<ClassTab>("students");
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [recurrence, setRecurrence] = useState<"none" | "weekly">("none");
+  const [repeatUntil, setRepeatUntil] = useState("");
   const [editForm, setEditForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
+  const [scheduleForm, setScheduleForm] = useState({
+    title: "",
+    event_type: "class",
+    starts_at: "",
+    ends_at: "",
+    lesson_plan: "",
+    assignment_note: "",
+  });
 
   useEffect(() => {
     getClassDetail(params.id).then(setData).catch(() => setData(null));
   }, [params.id]);
+
+  const events = useMemo(() => data?.schedule_events || [], [data]);
+  const selectedEvent = events.find((event) => event.id === selectedEventId) || events[0] || null;
+
+  async function refresh() {
+    const next = await getClassDetail(params.id);
+    setData(next);
+    return next;
+  }
 
   async function makeReviewSet() {
     if (!data) return;
@@ -68,6 +123,46 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
     }
   }
 
+  async function createSchedules() {
+    if (!data || !scheduleForm.title.trim() || !scheduleForm.starts_at) return;
+    const starts: string[] = [scheduleForm.starts_at];
+    if (recurrence === "weekly" && repeatUntil) {
+      const limit = new Date(`${repeatUntil}T23:59:59`);
+      let nextStart = addDays(scheduleForm.starts_at, 7);
+      let guard = 0;
+      while (new Date(nextStart) <= limit && guard < 80) {
+        starts.push(nextStart);
+        nextStart = addDays(nextStart, 7);
+        guard += 1;
+      }
+    }
+    const endOffset = scheduleForm.ends_at ? new Date(scheduleForm.ends_at).getTime() - new Date(scheduleForm.starts_at).getTime() : null;
+    setScheduleSaving(true);
+    try {
+      for (const start of starts) {
+        const end = endOffset && endOffset > 0 ? localInputValue(new Date(new Date(start).getTime() + endOffset)) : null;
+        await createScheduleEvent({
+          class_id: data.id,
+          title: scheduleForm.title.trim(),
+          description: composeScheduleDescription(scheduleForm.lesson_plan, scheduleForm.assignment_note),
+          event_type: scheduleForm.event_type,
+          starts_at: start,
+          ends_at: end,
+        });
+      }
+      const next = await refresh();
+      setSelectedEventId(next.schedule_events?.[0]?.id || "");
+      setScheduleForm({ title: "", event_type: "class", starts_at: "", ends_at: "", lesson_plan: "", assignment_note: "" });
+      setRecurrence("none");
+      setRepeatUntil("");
+      setMessage(starts.length > 1 ? `${starts.length}개의 반복 일정을 등록했습니다.` : "일정을 등록했습니다.");
+    } catch {
+      setMessage("일정 등록에 실패했습니다. 입력값을 확인해주세요.");
+    } finally {
+      setScheduleSaving(false);
+    }
+  }
+
   async function removeClass() {
     if (!data) return;
     const ok = window.confirm(
@@ -99,6 +194,11 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-300">Class Profile</p>
               <h1 className="mt-2 text-3xl font-black text-white">{data.name}</h1>
               <p className="mt-2 text-sm text-slate-400">{data.description || [data.subject, data.grade_level].filter(Boolean).join(" · ") || "클래스 설명 없음"}</p>
+              <div className="mt-4 flex flex-wrap gap-2 text-sm">
+                <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-300">학생 {data.student_count}명</span>
+                <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-300">진행 세션 {data.upcoming_count}개</span>
+                <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-300">미해결 오답 {data.unresolved_wrong_count}개</span>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={startEdit}>
@@ -108,37 +208,18 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
                 <RotateCcw className="h-4 w-4" />
                 오답 복습 세트
               </Button>
-              <Link href="/student-management">
-                <Button variant="outline">채점 입력으로</Button>
-              </Link>
               <Button variant="destructive" onClick={removeClass} disabled={deleting}>
                 {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                클래스 삭제
+                삭제
               </Button>
             </div>
           </div>
           {editing ? (
             <div className="mt-4 grid gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 md:grid-cols-2 xl:grid-cols-4">
-              <Input
-                placeholder="클래스 이름"
-                value={editForm.name}
-                onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
-              />
-              <Input
-                placeholder="레벨/설명"
-                value={editForm.description}
-                onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))}
-              />
-              <Input
-                placeholder="과목"
-                value={editForm.subject}
-                onChange={(event) => setEditForm((current) => ({ ...current, subject: event.target.value }))}
-              />
-              <Input
-                placeholder="학년"
-                value={editForm.grade_level}
-                onChange={(event) => setEditForm((current) => ({ ...current, grade_level: event.target.value }))}
-              />
+              <Input placeholder="클래스 이름" value={editForm.name} onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))} />
+              <Input placeholder="레벨/설명" value={editForm.description} onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))} />
+              <Input placeholder="과목" value={editForm.subject} onChange={(event) => setEditForm((current) => ({ ...current, subject: event.target.value }))} />
+              <Input placeholder="학년" value={editForm.grade_level} onChange={(event) => setEditForm((current) => ({ ...current, grade_level: event.target.value }))} />
               <div className="flex gap-2 md:col-span-2 xl:col-span-4">
                 <Button type="button" size="sm" onClick={saveEdit} disabled={saving || !editForm.name.trim()}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -153,47 +234,164 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
           {message ? <div className="mt-4 rounded-lg border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-sm text-violet-100">{message}</div> : null}
         </header>
 
-        <section className="grid gap-4 md:grid-cols-4">
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">학생</p><p className="mt-1 text-2xl font-black text-white">{data.student_count}</p></CardContent></Card>
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">예정 세션</p><p className="mt-1 text-2xl font-black text-violet-100">{data.upcoming_count}</p></CardContent></Card>
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">평균 점수</p><p className="mt-1 text-2xl font-black text-emerald-100">{data.average_recent_score == null ? "-" : `${Math.round(data.average_recent_score)}점`}</p></CardContent></Card>
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">미해결 오답</p><p className="mt-1 text-2xl font-black text-rose-100">{data.unresolved_wrong_count}</p></CardContent></Card>
-        </section>
+        <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+          {[
+            { id: "students", label: "학생", icon: Users },
+            { id: "calendar", label: "캘린더", icon: CalendarDays },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as ClassTab)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
+                  activeTab === tab.id ? "bg-violet-500 text-white shadow-lg shadow-violet-950/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <Card className="border-white/10 bg-white/[0.035]">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><Users className="h-5 w-5" />학생</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              {data.students.map((student) => (
-                <Link key={student.id} href={`/student-management/students/${student.id}`} className="rounded-lg border border-white/10 bg-black/20 p-3 hover:border-violet-300/40">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-white">{student.name}</p>
-                      <p className="mt-1 text-xs text-slate-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
+        {activeTab === "students" ? (
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><Users className="h-5 w-5" />학생</CardTitle></CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                {data.students.map((student) => (
+                  <Link key={student.id} href={`/student-management/students/${student.id}`} className="rounded-lg border border-white/10 bg-black/20 p-3 hover:border-violet-300/40">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-white">{student.name}</p>
+                        <p className="mt-1 text-xs text-slate-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
+                      </div>
+                      <Badge className={cn("border", tone(student.status_chip))}>{student.status_chip}</Badge>
                     </div>
-                    <Badge className={cn("border", tone(student.status_chip))}>{student.status_chip}</Badge>
+                    <p className="mt-3 text-sm text-slate-400">오답 {student.unresolved_wrong_count}개 · 최근 {student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
+                  </Link>
+                ))}
+                {!data.students.length ? <p className="text-sm text-slate-500">아직 이 클래스에 연결된 학생이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><ClipboardCheck className="h-5 w-5" />Paper Sessions</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {(data.paper_sessions || []).map((session) => (
+                  <div key={session.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-white">{session.title}</p>
+                      <Badge className={cn("border", tone(session.status))}>{session.status}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{session.graded_count}/{session.assigned_count}명 채점 · {session.problem_count}문항</p>
                   </div>
-                  <p className="mt-3 text-sm text-slate-400">오답 {student.unresolved_wrong_count}개 · 최근 {student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
-          <Card className="border-white/10 bg-white/[0.035]">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><ClipboardCheck className="h-5 w-5" />Paper Sessions</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {(data.paper_sessions || []).map((session) => (
-                <div key={session.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-white">{session.title}</p>
-                    <Badge className={cn("border", tone(session.status))}>{session.status}</Badge>
+                ))}
+                {!(data.paper_sessions || []).length ? <p className="text-sm text-slate-500">아직 연결된 세션이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
+
+        {activeTab === "calendar" ? (
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><CalendarDays className="h-5 w-5" />캘린더</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {events.map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => setSelectedEventId(event.id)}
+                    className={cn(
+                      "w-full rounded-lg border p-3 text-left transition",
+                      selectedEvent?.id === event.id ? "border-violet-300/50 bg-violet-500/15" : "border-white/10 bg-black/20 hover:border-violet-300/30"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-white">{event.title}</p>
+                        <p className="mt-1 flex items-center gap-1 text-xs text-slate-500"><Clock className="h-3.5 w-3.5" />{dateLabel(event.starts_at)}</p>
+                      </div>
+                      <Badge className={cn("border", tone(event.event_type))}>{event.event_type}</Badge>
+                    </div>
+                    {event.description ? <p className="mt-2 line-clamp-2 whitespace-pre-line text-sm text-slate-400">{event.description}</p> : null}
+                  </button>
+                ))}
+                {!events.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">등록된 수업 일정이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+            <div className="space-y-5">
+              <Card className="border-white/10 bg-white/[0.035]">
+                <CardHeader><CardTitle className="flex items-center gap-2 text-white"><Plus className="h-5 w-5" />수업 일정 등록</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <Input placeholder="일정 제목" value={scheduleForm.title} onChange={(event) => setScheduleForm((current) => ({ ...current, title: event.target.value }))} />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select
+                      className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
+                      value={scheduleForm.event_type}
+                      onChange={(event) => setScheduleForm((current) => ({ ...current, event_type: event.target.value }))}
+                    >
+                      <option value="class">정규 수업</option>
+                      <option value="homework">과제</option>
+                      <option value="test">테스트</option>
+                      <option value="review">복습</option>
+                      <option value="mock_exam">모의고사</option>
+                      <option value="other">기타</option>
+                    </select>
+                    <select className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white" value={recurrence} onChange={(event) => setRecurrence(event.target.value as "none" | "weekly")}>
+                      <option value="none">한 번만</option>
+                      <option value="weekly">매주 반복</option>
+                    </select>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">{session.graded_count}/{session.assigned_count}명 채점 · {session.problem_count}문항</p>
-                </div>
-              ))}
-              {!(data.paper_sessions || []).length ? <p className="text-sm text-slate-500">아직 연결된 세션이 없습니다.</p> : null}
-            </CardContent>
-          </Card>
-        </section>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input type="datetime-local" value={scheduleForm.starts_at} onChange={(event) => setScheduleForm((current) => ({ ...current, starts_at: event.target.value }))} />
+                    <Input type="datetime-local" value={scheduleForm.ends_at} onChange={(event) => setScheduleForm((current) => ({ ...current, ends_at: event.target.value }))} />
+                  </div>
+                  {recurrence === "weekly" ? (
+                    <Input type="date" value={repeatUntil} onChange={(event) => setRepeatUntil(event.target.value)} />
+                  ) : null}
+                  <textarea
+                    className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                    placeholder="수업 지도 내용"
+                    value={scheduleForm.lesson_plan}
+                    onChange={(event) => setScheduleForm((current) => ({ ...current, lesson_plan: event.target.value }))}
+                  />
+                  <textarea
+                    className="min-h-20 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                    placeholder="과제 / 준비물 / 전달사항"
+                    value={scheduleForm.assignment_note}
+                    onChange={(event) => setScheduleForm((current) => ({ ...current, assignment_note: event.target.value }))}
+                  />
+                  <Button className="w-full" onClick={createSchedules} disabled={scheduleSaving || !scheduleForm.title.trim() || !scheduleForm.starts_at}>
+                    {scheduleSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    일정 등록
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card className="border-white/10 bg-white/[0.035]">
+                <CardHeader><CardTitle className="text-white">일정 상세</CardTitle></CardHeader>
+                <CardContent>
+                  {selectedEvent ? (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-lg font-black text-white">{selectedEvent.title}</p>
+                        <p className="mt-1 text-sm text-slate-400">{dateLabel(selectedEvent.starts_at)}{selectedEvent.ends_at ? ` - ${dateLabel(selectedEvent.ends_at)}` : ""}</p>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                        <p className="whitespace-pre-line text-sm leading-6 text-slate-300">{selectedEvent.description || "등록된 수업 지도/과제 내용이 없습니다."}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">일정을 선택하면 수업 지도 내용과 과제를 확인할 수 있습니다.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        ) : null}
       </div>
     </main>
   );

@@ -122,6 +122,18 @@ export type ScheduleEvent = {
   linked_paper_session_id?: string | null;
 };
 
+export type CounselingLog = {
+  id: string;
+  student_membership_id: string;
+  title: string;
+  counseling_date: string;
+  notes?: string | null;
+  weekly_report?: string | null;
+  next_plan?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export type StudentManagementDashboard = {
   summary: {
     class_count: number;
@@ -190,9 +202,15 @@ export function getClassDetail(id: string) {
 }
 
 export function getStudentDetail(id: string) {
-  return api<StudentCard & { paper_session_history: unknown[]; wrong_answers: WrongAnswer[]; analytics: Record<string, unknown> }>(
-    `/api/student-management/students/${id}`
-  );
+  return api<
+    StudentCard & {
+      paper_session_history: unknown[];
+      wrong_answers: WrongAnswer[];
+      schedule_events: ScheduleEvent[];
+      counseling_logs: CounselingLog[];
+      analytics: Record<string, unknown>;
+    }
+  >(`/api/student-management/students/${id}`);
 }
 
 export function listPaperSessions() {
@@ -212,6 +230,37 @@ export function createPaperSession(payload: {
   create_calendar_events?: boolean;
 }) {
   return api<PaperSessionSummary>("/api/student-management/paper-sessions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createScheduleEvent(payload: {
+  class_id: string;
+  title: string;
+  description?: string | null;
+  event_type?: string;
+  starts_at: string;
+  ends_at?: string | null;
+  linked_paper_session_id?: string | null;
+}) {
+  return api<ScheduleEvent>("/api/student-management/schedule-events", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createCounselingLog(
+  studentId: string,
+  payload: {
+    counseling_date?: string | null;
+    title: string;
+    notes?: string | null;
+    weekly_report?: string | null;
+    next_plan?: string | null;
+  }
+) {
+  return api<CounselingLog>(`/api/student-management/students/${studentId}/counseling-logs`, {
     method: "POST",
     body: JSON.stringify(payload),
   });

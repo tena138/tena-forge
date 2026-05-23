@@ -52,6 +52,27 @@ def _decimal_float(value) -> float | None:
     return value
 
 
+def _schedule_event_payload(row: ClassScheduleEvent) -> dict:
+    return {
+        "id": str(row.id),
+        "class_id": str(row.class_id),
+        "title": row.title,
+        "description": row.description,
+        "event_type": row.event_type,
+        "starts_at": row.starts_at.isoformat(),
+        "ends_at": row.ends_at.isoformat() if row.ends_at else None,
+        "linked_paper_session_id": str(row.linked_paper_session_id) if row.linked_paper_session_id else None,
+    }
+
+
+def _counseling_logs(membership: StudentAcademyMembership) -> list[dict]:
+    logs = (membership.metadata_json or {}).get("counseling_logs") or []
+    if not isinstance(logs, list):
+        return []
+    rows = [row for row in logs if isinstance(row, dict)]
+    return sorted(rows, key=lambda row: str(row.get("counseling_date") or row.get("created_at") or ""), reverse=True)
+
+
 def _student_name(membership: StudentAcademyMembership) -> str:
     metadata = membership.metadata_json or {}
     return membership.display_name_in_academy or metadata.get("name") or metadata.get("display_name") or "Unnamed student"
@@ -484,6 +505,14 @@ class ScheduleEventPayload(BaseModel):
     linked_paper_session_id: UUID | None = None
 
 
+class CounselingLogPayload(BaseModel):
+    counseling_date: datetime | None = None
+    title: str = Field(default="학습 상담", max_length=255)
+    notes: str | None = None
+    weekly_report: str | None = None
+    next_plan: str | None = None
+
+
 class ReviewSetPayload(BaseModel):
     title: str = "오답 복습 세트"
     wrong_answer_ids: list[UUID] = []
@@ -570,18 +599,7 @@ def get_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
     ).all()
     payload = _class_payload(db, academy_id, row, include_students=True)
     payload["paper_sessions"] = [_session_summary(db, academy_id, session) for session in sessions if str(class_id) in (session.class_ids or [])]
-    payload["schedule_events"] = [
-        {
-            "id": str(event.id),
-            "title": event.title,
-            "description": event.description,
-            "event_type": event.event_type,
-            "starts_at": event.starts_at.isoformat(),
-            "ends_at": event.ends_at.isoformat() if event.ends_at else None,
-            "linked_paper_session_id": str(event.linked_paper_session_id) if event.linked_paper_session_id else None,
-        }
-        for event in events
-    ]
+    payload["schedule_events"] = [_schedule_event_payload(event) for event in events]
     return payload
 
 
@@ -730,6 +748,18 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
             )
         for item in data["paper_session_history"]:
             item["problem_results"] = by_result.get(item["id"], [])
+    class_ids = [UUID(value) for value in data.get("class_ids", [])]
+    if class_ids:
+        events = db.scalars(
+            select(ClassScheduleEvent)
+            .where(ClassScheduleEvent.academy_id == academy_id, ClassScheduleEvent.class_id.in_(class_ids))
+            .order_by(ClassScheduleEvent.starts_at.desc())
+            .limit(120)
+        ).all()
+        data["schedule_events"] = [_schedule_event_payload(event) for event in events]
+    else:
+        data["schedule_events"] = []
+    data["counseling_logs"] = _counseling_logs(membership)
     data["wrong_answers"] = wrongs
     data["analytics"] = {
         "graded_count": len([result for result in results if result.status == "graded"]),
@@ -741,6 +771,32 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         "unresolved_wrong_count": len([row for row in wrongs if row["resolved_status"] in {"unresolved", "reviewing"}]),
     }
     return data
+
+
+@router.post("/students/{student_id}/counseling-logs")
+def create_counseling_log(student_id: UUID, payload: CounselingLogPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    membership = _get_membership(db, academy_id, student_id)
+    title = payload.title.strip() or "학습 상담"
+    now = _now()
+    row = {
+        "id": str(uuid.uuid4()),
+        "student_membership_id": str(membership.id),
+        "title": title,
+        "counseling_date": (payload.counseling_date or now).isoformat(),
+        "notes": payload.notes or "",
+        "weekly_report": payload.weekly_report or "",
+        "next_plan": payload.next_plan or "",
+        "created_by": current_owner_id(request),
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+    }
+    metadata = dict(membership.metadata_json or {})
+    logs = _counseling_logs(membership)
+    metadata["counseling_logs"] = [row, *logs][:200]
+    membership.metadata_json = metadata
+    db.commit()
+    return row
 
 
 @router.patch("/students/{student_id}")
@@ -1177,19 +1233,7 @@ def list_schedule_events(request: Request, class_id: UUID | None = None, db: Ses
         _get_class(db, academy_id, class_id)
         stmt = stmt.where(ClassScheduleEvent.class_id == class_id)
     rows = db.scalars(stmt.order_by(ClassScheduleEvent.starts_at.desc()).limit(100)).all()
-    return [
-        {
-            "id": str(row.id),
-            "class_id": str(row.class_id),
-            "title": row.title,
-            "description": row.description,
-            "event_type": row.event_type,
-            "starts_at": row.starts_at.isoformat(),
-            "ends_at": row.ends_at.isoformat() if row.ends_at else None,
-            "linked_paper_session_id": str(row.linked_paper_session_id) if row.linked_paper_session_id else None,
-        }
-        for row in rows
-    ]
+    return [_schedule_event_payload(row) for row in rows]
 
 
 @router.post("/schedule-events")
@@ -1210,13 +1254,4 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
     )
     db.add(row)
     db.commit()
-    return {
-        "id": str(row.id),
-        "class_id": str(row.class_id),
-        "title": row.title,
-        "description": row.description,
-        "event_type": row.event_type,
-        "starts_at": row.starts_at.isoformat(),
-        "ends_at": row.ends_at.isoformat() if row.ends_at else None,
-        "linked_paper_session_id": str(row.linked_paper_session_id) if row.linked_paper_session_id else None,
-    }
+    return _schedule_event_payload(row)

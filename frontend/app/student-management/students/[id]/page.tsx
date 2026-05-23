@@ -1,18 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, FileText, Loader2, RotateCcw, UserRound } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, CalendarDays, Check, Download, FileText, Loader2, MessageSquareText, RotateCcw, UserRound } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StudentCard, WrongAnswer, createReviewSet, getStudentDetail, savePaperSessionGrade } from "@/lib/studentManagement";
+import { Input } from "@/components/ui/input";
+import {
+  CounselingLog,
+  ScheduleEvent,
+  StudentCard,
+  WrongAnswer,
+  createCounselingLog,
+  createReviewSet,
+  getStudentDetail,
+  savePaperSessionGrade,
+} from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type AutosaveState = "pending" | "saving" | "saved" | "error";
+type StudentTab = "calendar" | "wrong" | "counseling";
 
 type StudentDetail = StudentCard & {
   paper_session_history: Array<{
@@ -32,6 +43,8 @@ type StudentDetail = StudentCard & {
     }>;
   }>;
   wrong_answers: WrongAnswer[];
+  schedule_events: ScheduleEvent[];
+  counseling_logs: CounselingLog[];
   analytics: {
     graded_count?: number;
     average_score?: number | null;
@@ -40,9 +53,29 @@ type StudentDetail = StudentCard & {
 };
 
 function tone(status?: string) {
-  if (["graded", "completed", "resolved", "mastered", "Active"].includes(status || "")) return "bg-emerald-500/15 text-emerald-100 border-emerald-400/20";
+  if (["graded", "completed", "resolved", "mastered", "Active", "class"].includes(status || "")) return "bg-emerald-500/15 text-emerald-100 border-emerald-400/20";
   if (["unresolved", "Needs Review", "wrong"].includes(status || "")) return "bg-rose-500/15 text-rose-100 border-rose-400/20";
   return "bg-violet-500/15 text-violet-100 border-violet-300/20";
+}
+
+function dateLabel(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function shortDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
 function problemCount(result: StudentDetail["paper_session_history"][number]) {
@@ -101,11 +134,43 @@ function ResultCell({ number, status, onClick }: { number: number; status: Probl
 
 export default function StudentManagementStudentPage({ params }: { params: { id: string } }) {
   const [data, setData] = useState<StudentDetail | null>(null);
+  const [activeTab, setActiveTab] = useState<StudentTab>("calendar");
   const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
   const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [message, setMessage] = useState("");
+  const [counselingSaving, setCounselingSaving] = useState(false);
+  const [counselingForm, setCounselingForm] = useState({
+    counseling_date: new Date().toISOString().slice(0, 10),
+    title: "학습 상담",
+    notes: "",
+    weekly_report: "",
+    next_plan: "",
+  });
+
+  const calendarItems = useMemo(() => {
+    if (!data) return [];
+    const eventItems = (data.schedule_events || []).map((event) => ({
+      id: `event-${event.id}`,
+      date: event.starts_at,
+      title: event.title,
+      meta: event.event_type,
+      description: event.description || "",
+      kind: "수업",
+    }));
+    const sessionItems = data.paper_session_history
+      .filter((result) => result.session?.scheduled_at)
+      .map((result) => ({
+        id: `session-${result.id}`,
+        date: result.session?.scheduled_at || "",
+        title: result.session?.title || "Paper Session",
+        meta: result.status,
+        description: `${result.score == null ? "-" : `${Math.round(result.score)}점`} · ${problemCount(result)}문항`,
+        kind: "시험",
+      }));
+    return [...eventItems, ...sessionItems].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [data]);
 
   function applyStudentData(student: StudentDetail) {
     setData(student);
@@ -123,6 +188,11 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       for (const timer of Object.values(autosaveTimers.current)) clearTimeout(timer);
     };
   }, []);
+
+  async function refreshStudent() {
+    const refreshed = await getStudentDetail(params.id);
+    applyStudentData(refreshed as StudentDetail);
+  }
 
   async function makeReviewSet() {
     if (!data) return;
@@ -180,8 +250,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       });
       updateSavedSummary(result, statusesByNumber);
       if (manual) {
-        const refreshed = await getStudentDetail(params.id);
-        applyStudentData(refreshed as StudentDetail);
+        await refreshStudent();
         setMessage(`${result.session?.title || "시험"} 채점 결과를 저장했습니다.`);
       } else {
         setAutosaveStates((current) => ({ ...current, [result.id]: "saved" }));
@@ -216,6 +285,56 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   async function saveResult(result: StudentDetail["paper_session_history"][number]) {
     clearAutosaveTimer(result.id);
     await persistResult(result, resultStatuses[result.id] || buildStatuses(result), true);
+  }
+
+  async function saveCounselingLog() {
+    if (!data || !counselingForm.title.trim()) return;
+    setCounselingSaving(true);
+    try {
+      await createCounselingLog(data.id, {
+        counseling_date: counselingForm.counseling_date ? `${counselingForm.counseling_date}T00:00:00` : null,
+        title: counselingForm.title.trim(),
+        notes: counselingForm.notes,
+        weekly_report: counselingForm.weekly_report,
+        next_plan: counselingForm.next_plan,
+      });
+      await refreshStudent();
+      setCounselingForm((current) => ({ ...current, notes: "", weekly_report: "", next_plan: "" }));
+      setMessage("상담일지를 저장했습니다.");
+    } catch {
+      setMessage("상담일지 저장에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setCounselingSaving(false);
+    }
+  }
+
+  function exportCounselingLogs() {
+    if (!data) return;
+    const content = [
+      `${data.name} 학습 상담 기록`,
+      `소속: ${data.class_names.join(", ") || "-"}`,
+      "",
+      ...(data.counseling_logs || []).flatMap((log) => [
+        `## ${shortDate(log.counseling_date)} ${log.title}`,
+        "",
+        `[상담 내용]`,
+        log.notes || "-",
+        "",
+        `[주간 리포트]`,
+        log.weekly_report || "-",
+        "",
+        `[다음 지도 계획]`,
+        log.next_plan || "-",
+        "",
+      ]),
+    ].join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${data.name}_학습상담기록.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   if (!data) return <main className="min-h-screen bg-[#07080d] p-8 text-slate-400">학생 정보를 불러오는 중입니다.</main>;
@@ -254,91 +373,197 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
           <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">미해결 오답</p><p className="mt-1 text-2xl font-black text-rose-100">{data.analytics.unresolved_wrong_count || 0}</p></CardContent></Card>
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+          {[
+            { id: "calendar", label: "캘린더", icon: CalendarDays },
+            { id: "wrong", label: "오답", icon: RotateCcw },
+            { id: "counseling", label: "학습 상담", icon: MessageSquareText },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as StudentTab)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
+                  activeTab === tab.id ? "bg-violet-500 text-white shadow-lg shadow-violet-950/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {activeTab === "calendar" ? (
           <Card className="border-white/10 bg-white/[0.035]">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><FileText className="h-5 w-5" />Paper Session History</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><CalendarDays className="h-5 w-5" />캘린더</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {data.paper_session_history.map((result) => {
-                const count = problemCount(result);
-                const statuses = resultStatuses[result.id] || buildStatuses(result);
-                const orangeCount = Object.values(statuses).filter((status) => status === "wrong").length;
-                const redCount = Object.values(statuses).filter((status) => status === "unanswered").length;
-                const autosaveState = autosaveStates[result.id];
-                return (
-                  <div key={result.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-white">{result.session?.title || "Paper Session"}</p>
-                        <p className="mt-1 text-sm text-slate-400">
-                          {result.score == null ? "-" : `${Math.round(result.score)}점`} · 정답 {result.correct_count} · 오답/못 풂 {result.wrong_count} · {count}문항
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {autosaveState ? (
-                          <span
-                            className={cn(
-                              "rounded-md border px-2 py-1 text-xs",
-                              autosaveState === "saved" && "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
-                              autosaveState === "error" && "border-rose-400/20 bg-rose-500/10 text-rose-100",
-                              autosaveState !== "saved" && autosaveState !== "error" && "border-violet-300/20 bg-violet-500/10 text-violet-100"
-                            )}
-                          >
-                            {autosaveState === "pending" ? "자동 저장 대기" : autosaveState === "saving" ? "자동 저장 중" : autosaveState === "saved" ? "저장됨" : "저장 실패"}
-                          </span>
-                        ) : null}
-                        <Badge className={cn("border", tone(result.status))}>{result.status}</Badge>
-                        <Button size="sm" onClick={() => saveResult(result)} disabled={!count || savingResultId === result.id}>
-                          {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                          저장
-                        </Button>
-                      </div>
+              {calendarItems.map((item) => (
+                <div key={item.id} className="rounded-lg border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-violet-200">{dateLabel(item.date)}</p>
+                      <p className="mt-1 text-lg font-black text-white">{item.title}</p>
                     </div>
-                    {count ? (
-                      <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
-                        {Array.from({ length: count }, (_, index) => {
-                          const number = index + 1;
-                          return (
-                            <ResultCell
-                              key={number}
-                              number={number}
-                              status={statuses[number] || "correct"}
-                              onClick={() => toggleResultProblem(result, number)}
-                            />
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="mt-3 rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">이 시험의 문항 수 정보가 없습니다.</p>
-                    )}
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                      <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
-                      <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답 {orangeCount}</span>
-                      <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂 {redCount}</span>
-                      <span className="text-slate-500">클릭할 때마다 초록 → 오렌지 → 빨강 순서로 바뀝니다.</span>
+                    <div className="flex gap-2">
+                      <Badge className="border border-white/10 bg-white/[0.06] text-slate-200">{item.kind}</Badge>
+                      <Badge className={cn("border", tone(item.meta))}>{item.meta}</Badge>
                     </div>
                   </div>
-                );
-              })}
-              {!data.paper_session_history.length ? <p className="text-sm text-slate-500">아직 기록된 세션이 없습니다.</p> : null}
-            </CardContent>
-          </Card>
-          <Card className="border-white/10 bg-white/[0.035]">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><RotateCcw className="h-5 w-5" />Wrong Answer Archive</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {data.wrong_answers.map((wrong) => (
-                <div key={wrong.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-white">{wrong.problem_number}번</p>
-                    <Badge className={cn("border", tone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
-                  </div>
-                  <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300" value={wrong.problem_text} />
-                  <p className="mt-2 text-xs text-slate-500">오답 {wrong.wrong_count}회 · {wrong.unit || "단원 정보 없음"}</p>
+                  {item.description ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{item.description}</p> : null}
                 </div>
               ))}
-              {!data.wrong_answers.length ? <p className="text-sm text-slate-500">아직 오답 기록이 없습니다.</p> : null}
+              {!calendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">아직 이 학생에게 표시할 수업 일정이나 시험 일정이 없습니다.</p> : null}
             </CardContent>
           </Card>
-        </section>
+        ) : null}
+
+        {activeTab === "wrong" ? (
+          <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><FileText className="h-5 w-5" />오답 체크</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {data.paper_session_history.map((result) => {
+                  const count = problemCount(result);
+                  const statuses = resultStatuses[result.id] || buildStatuses(result);
+                  const orangeCount = Object.values(statuses).filter((status) => status === "wrong").length;
+                  const redCount = Object.values(statuses).filter((status) => status === "unanswered").length;
+                  const autosaveState = autosaveStates[result.id];
+                  return (
+                    <div key={result.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-white">{result.session?.title || "Paper Session"}</p>
+                          <p className="mt-1 text-sm text-slate-400">
+                            {result.score == null ? "-" : `${Math.round(result.score)}점`} · 정답 {result.correct_count} · 오답/못 풂 {result.wrong_count} · {count}문항
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {autosaveState ? (
+                            <span
+                              className={cn(
+                                "rounded-md border px-2 py-1 text-xs",
+                                autosaveState === "saved" && "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
+                                autosaveState === "error" && "border-rose-400/20 bg-rose-500/10 text-rose-100",
+                                autosaveState !== "saved" && autosaveState !== "error" && "border-violet-300/20 bg-violet-500/10 text-violet-100"
+                              )}
+                            >
+                              {autosaveState === "pending" ? "자동 저장 대기" : autosaveState === "saving" ? "자동 저장 중" : autosaveState === "saved" ? "저장됨" : "저장 실패"}
+                            </span>
+                          ) : null}
+                          <Badge className={cn("border", tone(result.status))}>{result.status}</Badge>
+                          <Button size="sm" onClick={() => saveResult(result)} disabled={!count || savingResultId === result.id}>
+                            {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            저장
+                          </Button>
+                        </div>
+                      </div>
+                      {count ? (
+                        <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
+                          {Array.from({ length: count }, (_, index) => {
+                            const number = index + 1;
+                            return <ResultCell key={number} number={number} status={statuses[number] || "correct"} onClick={() => toggleResultProblem(result, number)} />;
+                          })}
+                        </div>
+                      ) : (
+                        <p className="mt-3 rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">이 시험의 문항 수 정보가 없습니다.</p>
+                      )}
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
+                        <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답 {orangeCount}</span>
+                        <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂 {redCount}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!data.paper_session_history.length ? <p className="text-sm text-slate-500">아직 기록된 세션이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><RotateCcw className="h-5 w-5" />Wrong Answer Archive</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {data.wrong_answers.map((wrong) => (
+                  <div key={wrong.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-white">{wrong.problem_number}번</p>
+                      <Badge className={cn("border", tone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
+                    </div>
+                    <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300" value={wrong.problem_text} />
+                    <p className="mt-2 text-xs text-slate-500">오답 {wrong.wrong_count}회 · {wrong.unit || "단원 정보 없음"}</p>
+                  </div>
+                ))}
+                {!data.wrong_answers.length ? <p className="text-sm text-slate-500">아직 오답 기록이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
+
+        {activeTab === "counseling" ? (
+          <section className="grid gap-5 lg:grid-cols-[420px_minmax(0,1fr)]">
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><MessageSquareText className="h-5 w-5" />상담일지 작성</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <Input type="date" value={counselingForm.counseling_date} onChange={(event) => setCounselingForm((current) => ({ ...current, counseling_date: event.target.value }))} />
+                <Input placeholder="상담 제목" value={counselingForm.title} onChange={(event) => setCounselingForm((current) => ({ ...current, title: event.target.value }))} />
+                <textarea
+                  className="min-h-32 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                  placeholder="상담하면서 기록할 내용"
+                  value={counselingForm.notes}
+                  onChange={(event) => setCounselingForm((current) => ({ ...current, notes: event.target.value }))}
+                />
+                <textarea
+                  className="min-h-28 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                  placeholder="주간 리포트 초안"
+                  value={counselingForm.weekly_report}
+                  onChange={(event) => setCounselingForm((current) => ({ ...current, weekly_report: event.target.value }))}
+                />
+                <textarea
+                  className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                  placeholder="다음 지도 계획 / 과제 제안"
+                  value={counselingForm.next_plan}
+                  onChange={(event) => setCounselingForm((current) => ({ ...current, next_plan: event.target.value }))}
+                />
+                <Button className="w-full" onClick={saveCounselingLog} disabled={counselingSaving || !counselingForm.title.trim()}>
+                  {counselingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  상담일지 저장
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-white/10 bg-white/[0.035]">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-white">상담 기록</CardTitle>
+                  <Button size="sm" variant="outline" onClick={exportCounselingLogs} disabled={!data.counseling_logs.length}>
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {data.counseling_logs.map((log) => (
+                  <div key={log.id} className="rounded-lg border border-white/10 bg-black/20 p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm text-violet-200">{shortDate(log.counseling_date)}</p>
+                        <p className="mt-1 text-lg font-black text-white">{log.title}</p>
+                      </div>
+                      <Badge className="border border-violet-300/20 bg-violet-500/15 text-violet-100">상담</Badge>
+                    </div>
+                    <div className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
+                      <p className="whitespace-pre-line">{log.notes || "상담 내용 없음"}</p>
+                      {log.weekly_report ? <p className="whitespace-pre-line rounded-lg border border-white/10 bg-white/[0.03] p-3"><span className="font-semibold text-white">주간 리포트</span><br />{log.weekly_report}</p> : null}
+                      {log.next_plan ? <p className="whitespace-pre-line rounded-lg border border-white/10 bg-white/[0.03] p-3"><span className="font-semibold text-white">다음 지도 계획</span><br />{log.next_plan}</p> : null}
+                    </div>
+                  </div>
+                ))}
+                {!data.counseling_logs.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">아직 상담 기록이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
       </div>
     </main>
   );
