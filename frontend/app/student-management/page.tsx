@@ -440,29 +440,30 @@ export default function StudentManagementPage() {
     setMessage(`복습 세트를 만들었습니다: ${review.name}`);
   }
 
+  function classSessionCount(classId: string) {
+    return sessions.filter((session) => session.class_ids.includes(classId)).length;
+  }
+
   const selectedStudent = sessionDetail?.students.find((student) => student.id === selectedStudentId);
 
   return (
     <main className="min-h-screen bg-[#07080d] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-300">Student Management</p>
-            <h1 className="mt-2 text-3xl font-black tracking-normal text-white">클래스와 종이 시험 채점 흐름</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-              문제 세트 내보내기 이후 클래스에 배정하고, 오프라인 채점 결과를 빠르게 입력해 학생별 오답 아카이브로 누적합니다.
-            </p>
+        <header className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-300">Student Management</p>
+            <p className="text-sm text-slate-500">Class Dashboard</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="flex flex-wrap gap-2">
             {[
               ["클래스", summary.class_count],
               ["학생", summary.student_count],
               ["진행 세션", summary.active_session_count],
               ["미해결 오답", summary.unresolved_wrong_count],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-white/10 bg-white/[0.045] px-4 py-3 text-center">
+              <div key={label} className="flex min-w-[92px] items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
                 <p className="text-xs text-slate-500">{label}</p>
-                <p className="mt-1 text-xl font-black text-white">{value}</p>
+                <p className="text-base font-black text-white">{value}</p>
               </div>
             ))}
           </div>
@@ -533,8 +534,8 @@ export default function StudentManagementPage() {
                             <p className="font-bold text-violet-100">{classRow.upcoming_count}</p>
                           </div>
                           <div className="rounded-md bg-black/20 p-2 text-center">
-                            <p className="text-[11px] text-slate-500">평균</p>
-                            <p className="font-bold text-emerald-100">{classRow.average_recent_score == null ? "-" : `${Math.round(classRow.average_recent_score)}점`}</p>
+                            <p className="text-[11px] text-slate-500">세션</p>
+                            <p className="font-bold text-emerald-100">{classSessionCount(classRow.id)}</p>
                           </div>
                           <div className="rounded-md bg-black/20 p-2 text-center">
                             <p className="text-[11px] text-slate-500">오답</p>
@@ -965,7 +966,7 @@ export default function StudentManagementPage() {
                       <p className="font-semibold text-white">{classRow.name}</p>
                       <span className="text-rose-100">{classRow.unresolved_wrong_count}</span>
                     </div>
-                    <p className="mt-2 text-sm text-slate-500">{classRow.student_count}명 · 평균 {classRow.average_recent_score == null ? "-" : `${Math.round(classRow.average_recent_score)}점`}</p>
+                    <p className="mt-2 text-sm text-slate-500">{classRow.student_count}명 · 세션 {classSessionCount(classRow.id)}개</p>
                   </div>
                 ))}
               </CardContent>
