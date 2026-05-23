@@ -39,6 +39,9 @@ const sections = [
     accent: "bg-violet-400",
     panel: "border-violet-400/20 bg-violet-400/[0.055]",
     header: "text-violet-100",
+    activeItem: "border-violet-400/25 bg-violet-400/10 text-violet-50 hover:bg-violet-400/10 hover:text-violet-50 shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
+    activeIndicator: "bg-violet-400",
+    activeIcon: "text-violet-300 group-hover:text-violet-300",
     items: [
       { href: "/academy", label: "제작 콘솔", icon: LayoutDashboard },
       { href: "/archive/new", label: "추출", icon: FileUp },
@@ -56,6 +59,9 @@ const sections = [
     accent: "bg-sky-300",
     panel: "border-sky-300/20 bg-sky-300/[0.045]",
     header: "text-sky-100",
+    activeItem: "border-sky-300/25 bg-sky-300/10 text-sky-50 hover:bg-sky-300/10 hover:text-sky-50 shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
+    activeIndicator: "bg-sky-300",
+    activeIcon: "text-sky-200 group-hover:text-sky-200",
     items: [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
       { href: "/academy?panel=seats", label: "좌석 / 키", icon: KeyRound },
@@ -70,6 +76,9 @@ const sections = [
     accent: "bg-cyan-300",
     panel: "border-cyan-300/20 bg-cyan-300/[0.045]",
     header: "text-cyan-100",
+    activeItem: "border-cyan-300/25 bg-cyan-300/10 text-cyan-50 hover:bg-cyan-300/10 hover:text-cyan-50 shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
+    activeIndicator: "bg-cyan-300",
+    activeIcon: "text-cyan-200 group-hover:text-cyan-200",
     items: [
       { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
     ],
@@ -81,6 +90,9 @@ const sections = [
     accent: "bg-emerald-300",
     panel: "border-emerald-300/20 bg-emerald-300/[0.045]",
     header: "text-emerald-100",
+    activeItem: "border-emerald-300/25 bg-emerald-300/10 text-emerald-50 hover:bg-emerald-300/10 hover:text-emerald-50 shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
+    activeIndicator: "bg-emerald-300",
+    activeIcon: "text-emerald-200 group-hover:text-emerald-200",
     items: [
       { href: "/templates", label: "템플릿 허브", icon: LayoutTemplate },
       { href: "/marketplace/problem-sets", label: "문항 세트 마켓", icon: Store },
@@ -97,6 +109,9 @@ const sections = [
     accent: "bg-sky-300",
     panel: "border-sky-300/20 bg-sky-300/[0.045]",
     header: "text-sky-100",
+    activeItem: "border-sky-300/25 bg-sky-300/10 text-sky-50 hover:bg-sky-300/10 hover:text-sky-50 shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
+    activeIndicator: "bg-sky-300",
+    activeIcon: "text-sky-200 group-hover:text-sky-200",
     items: [
       { href: "/student", label: "학생 홈", icon: GraduationCap },
       { href: "/student", label: "학원 키 등록", icon: KeyRound },
@@ -111,6 +126,9 @@ const sections = [
     accent: "bg-slate-300",
     panel: "border-white/12 bg-white/[0.035]",
     header: "text-slate-200",
+    activeItem: "border-slate-300/20 bg-white/[0.08] text-white hover:bg-white/[0.08] hover:text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
+    activeIndicator: "bg-slate-300",
+    activeIcon: "text-slate-200 group-hover:text-slate-200",
     items: [
       { href: "/account/profile", label: "프로필", icon: UserCircle },
       { href: "/admin/announcements", label: "소식 관리", icon: Megaphone, adminOnly: true },
@@ -160,7 +178,14 @@ export function FloatingNav({
         .filter((section) => section.items.length > 0),
     [accountType, canManageAnnouncements]
   );
-  const mobileItems = visibleSections.flatMap((section) => section.items);
+  const mobileItems = visibleSections.flatMap((section) =>
+    section.items.map((item) => ({
+      ...item,
+      activeItem: section.activeItem,
+      activeIndicator: section.activeIndicator,
+      activeIcon: section.activeIcon,
+    }))
+  );
 
   useEffect(() => {
     getDashboardAnnouncementAccess()
@@ -187,7 +212,7 @@ export function FloatingNav({
       <nav className="flex gap-1 overflow-x-auto border-t border-white/10 bg-black/50 px-4 py-2 lg:hidden" aria-label="주요 메뉴">
         {mobileItems.map((item, index) => {
           const active = isActive(pathname, item.href, searchParams);
-          return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} mobile />;
+          return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} mobile />;
         })}
       </nav>
     );
@@ -227,7 +252,7 @@ export function FloatingNav({
             <div className="space-y-0.5 p-1">
               {section.items.map((item, index) => {
                 const active = isActive(pathname, item.href, searchParams);
-                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} collapsed={isCollapsed} />;
+                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={section.activeItem} activeIndicatorClassName={section.activeIndicator} activeIconClassName={section.activeIcon} collapsed={isCollapsed} />;
               })}
             </div>
           </section>
