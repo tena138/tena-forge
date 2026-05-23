@@ -17,9 +17,6 @@ export default function StoresPage() {
     <div className="space-y-6">
       <section className="rounded-[12px] border border-white/10 bg-black/45 p-6">
         <h1 className="text-3xl font-bold text-white">학원 · 강사 스토어</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-          공식 파트너, 학원, 강사가 직접 등록한 템플릿과 문항 세트를 탐색하세요.
-        </p>
       </section>
 
       {stores.length ? (

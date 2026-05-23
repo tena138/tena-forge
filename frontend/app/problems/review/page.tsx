@@ -1096,7 +1096,6 @@ function ReviewProblemSelector({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold text-white">문항 선택</h2>
-          <p className="mt-1 text-xs text-slate-500">드래그로 여러 문항을 한 번에 선택할 수 있습니다.</p>
         </div>
         {selectedIds.length ? (
           <div className="flex flex-wrap items-center gap-2 rounded-[7px] border border-violet-300/25 bg-violet-400/10 px-3 py-2 text-sm text-violet-100">
@@ -1286,7 +1285,6 @@ function OriginalPagePanel({
       <div className="flex h-14 items-center justify-between gap-3 border-b border-white/10 px-4">
         <div>
           <h2 className="text-sm font-bold text-white">원본 페이지 p.{problem?.review_page_number || "-"}</h2>
-          <p className="text-xs text-slate-500">드래그하면 부분 재추출 UI가 표시됩니다.</p>
         </div>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="outline" aria-label="축소" onClick={() => setZoom((value) => Math.max(50, value - 10))}>
@@ -1697,7 +1695,6 @@ function MetadataInput({
 
 function EmptyState({
   title,
-  description,
   loading,
   actionHref,
   actionLabel,
@@ -1713,7 +1710,6 @@ function EmptyState({
       <div className="max-w-md">
         {loading ? <Loader2 className="mx-auto mb-4 h-6 w-6 animate-spin text-violet-200" /> : <CheckCircle2 className="mx-auto mb-4 h-7 w-7 text-violet-200" />}
         <h2 className="text-xl font-bold text-white">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
         {actionHref && actionLabel ? (
           <Link href={actionHref} className="mt-5 inline-flex">
             <Button>{actionLabel}</Button>
@@ -1741,7 +1737,6 @@ function HotkeyHelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       <DialogContent className="max-w-2xl">
         <div className="pr-8">
           <h2 className="text-lg font-bold text-white">검토 단축키</h2>
-          <p className="mt-1 text-sm text-slate-400">입력창에 포커스가 있거나 Cmd/Ctrl 조합을 누른 상태에서는 단축키가 동작하지 않습니다.</p>
         </div>
         <div className="mt-5 overflow-hidden rounded-lg border border-white/10">
           {rows.map(([key, description]) => (

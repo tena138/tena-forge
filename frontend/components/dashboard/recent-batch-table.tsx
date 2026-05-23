@@ -159,7 +159,6 @@ export function RecentBatchTable({ batches }: { batches: Batch[] }) {
                     </div>
                     <div>
                       <div className="font-semibold text-white">아직 배치가 없습니다.</div>
-                      <div className="mt-1 text-sm">PDF를 업로드하면 처리 기록이 여기에 쌓입니다.</div>
                     </div>
                     <Link
                       href="/archive/new"

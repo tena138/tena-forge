@@ -2030,7 +2030,6 @@ function VisualTemplateStudioPageContent() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-white">동적 콘텐츠 미리보기</h2>
-              <p className="text-sm text-slate-400">문항이 넘치면 같은 Template Set의 적절한 페이지가 자동으로 이어집니다.</p>
             </div>
             <Button variant="outline" onClick={() => setPreview(false)}>닫기</Button>
           </div>

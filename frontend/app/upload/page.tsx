@@ -458,9 +458,6 @@ export default function UploadPage() {
           권리 보유 자료 문항화
         </div>
         <h1 className="mt-4 text-3xl font-bold text-white">내 자료 아카이빙</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-          직접 제작했거나 이용 권한을 보유한 자료를 문항 단위로 정리하세요. Tena Forge는 권리 있는 교육 자료를 문항 아카이브와 완성된 학습 자료로 재구성하는 작업 공간입니다.
-        </p>
       </section>
 
       <Card>
@@ -472,9 +469,6 @@ export default function UploadPage() {
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="text-sm font-bold text-white">Subject Engine</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Korean Language extraction uses a separate high-precision pipeline for long passages, shared passage-question groups, and exact multiple-choice extraction.
-            </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {[
                 { value: "math" as const, label: "Math" },
@@ -509,9 +503,6 @@ export default function UploadPage() {
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="text-sm font-bold text-white">분류 기준</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              추출 전에 이 배치에 들어있는 과목과 단원 후보를 먼저 넣어주세요. 한 파일에 여러 과목이 섞여 있다면 수학Ⅰ, 수학Ⅱ처럼 해당 과목을 모두 선택하면 AI가 문항별로 자동 분류합니다.
-            </p>
 
             <div className="mt-4 space-y-3">
               <div>

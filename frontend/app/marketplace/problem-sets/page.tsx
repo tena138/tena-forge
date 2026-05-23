@@ -29,7 +29,6 @@ export default function ProblemSetMarketPage() {
     <div className="space-y-6">
       <section className="rounded-[12px] border border-white/10 bg-black/45 p-6">
         <h1 className="text-3xl font-bold text-white">문항 세트 마켓</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">강사와 학원이 공식 등록한 문항 세트를 라이선스로 이용하세요.</p>
       </section>
 
       <section className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.045] p-4 md:grid-cols-[1fr_180px]">

@@ -193,7 +193,6 @@ export default function StudentAppPage() {
     return (
       <div className="mx-auto max-w-xl rounded-[14px] border border-sky-300/20 bg-sky-300/[0.045] p-6 text-center">
         <h1 className="text-xl font-bold text-white">학생 계정 전용 학습 공간입니다</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-400">학원 계정에서는 Academy OS를 사용하세요.</p>
         <a href="/academy" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
           Academy OS로 이동
         </a>
@@ -208,7 +207,6 @@ export default function StudentAppPage() {
           <div>
             <p className="text-sm font-semibold text-violet-200">Student Learning Workspace</p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">모든 학원의 과제와 학습 기록을 한 곳에서</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">학생 계정 하나에 여러 학원 키를 연결하고, 학원별 권한이 있는 문제만 풀고 저장합니다.</p>
           </div>
           <select
             className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"

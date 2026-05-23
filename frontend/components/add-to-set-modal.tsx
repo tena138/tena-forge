@@ -66,7 +66,6 @@ export function AddToSetModal({
         <div className="space-y-5">
           <div>
             <h2 className="text-xl font-semibold">세트에 추가</h2>
-            <p className="mt-1 text-sm text-muted-foreground">선택한 {problemIds.length}개 문항을 기존 세트에 추가하거나 새 세트로 저장합니다.</p>
           </div>
           <div className="flex items-center gap-2 rounded-md border bg-card/80 px-2">
             <Search className="h-4 w-4 text-primary" />

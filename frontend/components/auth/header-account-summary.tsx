@@ -234,7 +234,6 @@ export function HeaderAccountSummary() {
         <form onSubmit={saveProfile}>
           <div className="border-b px-5 py-4">
             <h2 className="text-lg font-bold">프로필</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Tena 통합 계정 정보와 구독 상태를 확인할 수 있습니다.</p>
           </div>
 
           <div className="space-y-4 px-5 py-4">

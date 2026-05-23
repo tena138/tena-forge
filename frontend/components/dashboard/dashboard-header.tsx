@@ -21,9 +21,6 @@ export function DashboardHeader() {
             <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-[-0.01em] text-white sm:text-4xl">
               AI 콘텐츠 제작소
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              PDF 문항을 추출하고, 검토하고, 태깅하여 문제 세트로 완성합니다.
-            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -47,7 +44,6 @@ export function DashboardHeader() {
           <div className="mb-3 flex items-center justify-between px-1">
             <div>
               <div className="text-xs font-bold text-white">Production Pipeline</div>
-              <div className="mt-0.5 text-[11px] text-slate-400">원재료에서 완성품까지</div>
             </div>
             <ArrowRight className="h-4 w-4 text-violet-300" />
           </div>
@@ -59,7 +55,6 @@ export function DashboardHeader() {
                   <span className="text-[10px] font-semibold text-slate-500">{String(index + 1).padStart(2, "0")}</span>
                 </div>
                 <div className="mt-2 text-xs font-bold text-white">{step.label}</div>
-                <div className="mt-0.5 text-[11px] text-slate-400">{step.detail}</div>
               </div>
             ))}
           </div>

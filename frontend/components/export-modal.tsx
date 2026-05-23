@@ -338,7 +338,6 @@ export function ExportModal({
           <section className="space-y-4 rounded-xl border border-white/10 bg-white/[0.035] p-4">
             <div>
               <h2 className="text-lg font-semibold text-white">내보내기 설정</h2>
-              <p className="mt-1 text-sm text-slate-400">선택한 문항을 템플릿에 배치해 출력합니다.</p>
             </div>
             <Input placeholder="시험지명" value={examTitle} onChange={(event) => setExamTitle(event.target.value)} />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -352,9 +351,6 @@ export function ExportModal({
                 <Input type="time" value={examStartTime} onChange={(event) => setExamStartTime(event.target.value)} aria-label="시험 시작 시간" />
                 <Input type="time" value={examEndTime} onChange={(event) => setExamEndTime(event.target.value)} aria-label="시험 종료 시간" />
               </div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-                템플릿의 {"{{exam_datetime}}"}, {"{{exam_time}}"}, {"{{exam_start_time}}"} 필드에 출력됩니다.
-              </p>
               <div className="mt-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-slate-300">
                 {examDateTime || "시험 일시 미입력"}
               </div>
@@ -426,7 +422,6 @@ export function ExportModal({
                       <option value="mock_exam">모의고사</option>
                       <option value="practice">연습</option>
                     </select>
-                    <p className="text-xs leading-5 text-slate-500">PDF 생성 후 Student Management에 PaperSession이 생성되고 바로 수기 채점 입력에서 볼 수 있습니다.</p>
                   </div>
                 ) : null}
               </div>
@@ -436,7 +431,6 @@ export function ExportModal({
               <p className="mt-2 text-slate-300">
                 {count}문항 · {selected?.title || "템플릿 미선택"} · {outputLabel(selected?.kind)}
               </p>
-              {!count ? <p className="mt-2 text-xs text-slate-500">문항을 먼저 선택해야 내보내기를 실행할 수 있습니다.</p> : null}
             </div>
             <Button className="w-full" disabled={!selected || loading || !count || (assignEnabled && assignTargetCount === 0)} onClick={submit}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
@@ -448,7 +442,6 @@ export function ExportModal({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-white">템플릿 선택</h2>
-                <p className="mt-1 text-sm text-slate-400">Visual Template Studio에서 만든 템플릿을 우선 사용합니다.</p>
               </div>
               {!hideTemplateSelection ? (
                 <Link className="rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/[0.06]" href="/templates/new">
@@ -490,7 +483,7 @@ export function ExportModal({
             ) : (
               !hideTemplateSelection && (
                 <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] p-5 text-sm text-slate-400">
-                  아직 Visual Template Studio 템플릿이 없습니다. 새 템플릿을 만들면 여기에서 바로 선택할 수 있습니다.
+                  템플릿 없음
                 </div>
               )
             )}

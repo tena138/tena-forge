@@ -454,7 +454,6 @@ function AcademyOperationsPanel() {
     return (
       <div className="mx-auto max-w-xl rounded-[14px] border border-sky-300/20 bg-sky-300/[0.045] p-6 text-center">
         <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-400">Academy OS는 학원 계정 전용 관리 화면입니다.</p>
         <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
           Student App으로 이동
         </a>
@@ -571,9 +570,6 @@ function AcademyOperationsPanel() {
           <div>
             <p className="text-sm font-semibold text-violet-200">Academy Operations</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">학생 좌석, 과제, 클래스 운영</h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              좌석은 학원이 소유하는 재사용 가능한 접근 단위이고, 초대 코드는 학생이 좌석을 claim하는 자격 증명입니다. 학생이 퇴원하면 좌석을 해제하고 코드를 회전해 다시 사용할 수 있습니다.
-            </p>
           </div>
           <Button onClick={addSeats}>
             <Plus className="h-4 w-4" /> 좌석 추가
@@ -620,7 +616,6 @@ function AcademyOperationsPanel() {
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> 좌석 / 키 관리</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {seats.length === 0 && <p className="text-sm text-muted-foreground">아직 좌석이 없습니다. 좌석을 만들면 학생용 초대 코드가 한 번 표시됩니다.</p>}
             {seats.map((seat) => (
               <div key={seat.id} className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[1fr_auto] md:items-center">
                 <div>

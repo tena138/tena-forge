@@ -286,7 +286,6 @@ export function HeaderNotifications() {
           <div className="flex items-center justify-between gap-2 px-2 py-1.5">
             <div>
               <div className="font-bold text-white">알림</div>
-              <div className="text-xs text-slate-500">진행 중인 추출과 완료/실패 상태를 확인합니다.</div>
             </div>
             {notifications.length ? (
               <button type="button" className="rounded-[7px] p-1 text-slate-500 hover:bg-white/[0.07] hover:text-white" aria-label="알림 비우기" onClick={clearAll}>

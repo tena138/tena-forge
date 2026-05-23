@@ -434,9 +434,6 @@ function ProblemDetailContent() {
                   <Eye className="h-5 w-5 text-violet-200" />
                   문항 미리보기
                 </CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  실제 출력 화면에 가깝게 렌더링된 읽기 전용 미리보기입니다. 수정은 아래 문항 수정 영역에서 진행합니다.
-                </p>
               </div>
               <Badge variant="secondary">읽기 전용</Badge>
             </div>
@@ -451,10 +448,6 @@ function ProblemDetailContent() {
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-base font-semibold text-slate-100">원본 페이지 비교</h2>
-                    <p className="mt-1 text-sm text-slate-400">
-                      추출 당시 저장된 원본 {problem.review_page_number ? `${problem.review_page_number}페이지` : "페이지"}입니다.
-                      검토 화면에서만 표시되며 문제 세트 출력에는 포함되지 않습니다.
-                    </p>
                   </div>
                   <Badge variant="warning">검토용</Badge>
                 </div>
@@ -479,9 +472,6 @@ function ProblemDetailContent() {
                   <Code2 className="h-5 w-5 text-sky-200" />
                   문항 수정
                 </CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  추출된 문항 텍스트를 직접 수정하는 작업 영역입니다. 위 미리보기와 분리되어 저장 전 변경 내용을 확인할 수 있습니다.
-                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {draftText !== problem.problem_text && <Badge variant="warning">수정 중</Badge>}
@@ -522,9 +512,6 @@ function ProblemDetailContent() {
                 <Crop className="h-5 w-5 text-violet-200" />
                 시각 자료 편집
               </CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                문항에 포함될 그림 영역을 조정합니다. 이 이미지는 출력에 포함될 수 있습니다.
-              </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -568,7 +555,6 @@ function ProblemDetailContent() {
                   {cropMode && <div className="absolute inset-0 bg-black/20" />}
                   {selection && <div className="absolute border-2 border-primary bg-primary/15" style={{ left: selection.x, top: selection.y, width: selection.width, height: selection.height }} />}
                 </div>
-                <p className="text-xs text-muted-foreground">영역 자르기를 켠 뒤 이미지 위에서 드래그해 필요한 부분만 선택하세요.</p>
 
                 <Dialog>
                   <DialogTrigger asChild>
@@ -640,9 +626,7 @@ function ProblemDetailContent() {
             </TabsTrigger>
             <TabsTrigger className="flex-1" value="answer">정답 보기</TabsTrigger>
           </TabsList>
-          <TabsContent value="hidden" className="mt-3 rounded-lg border bg-card/80 p-5 text-sm text-muted-foreground">
-            정답과 해설은 탭을 누르면 표시됩니다.
-          </TabsContent>
+          <TabsContent value="hidden" className="mt-3" />
           <TabsContent value="answer" className="mt-3">
             <Card>
               <CardHeader>

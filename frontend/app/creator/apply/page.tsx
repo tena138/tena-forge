@@ -51,7 +51,6 @@ export default function CreatorApplyPage() {
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Creator Onboarding</p>
         <h1 className="mt-2 text-3xl font-bold text-white">크리에이터 신청</h1>
-        <p className="mt-2 text-sm text-slate-400">승인된 크리에이터만 마켓플레이스에 상품을 등록하고 판매할 수 있습니다.</p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <Input name="legal_name" placeholder="실명 / 법인명" required />

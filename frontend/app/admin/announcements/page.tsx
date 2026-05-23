@@ -279,9 +279,6 @@ export default function AdminAnnouncementsPage() {
               Operations News
             </div>
             <h1 className="mt-4 text-3xl font-bold text-white">소식 관리</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              운영 화면에 표시할 업데이트, 제품 소식, 이벤트, 공지와 이미지/영상 미디어를 관리합니다.
-            </p>
           </div>
           <Button type="button" variant="outline" onClick={startNew}>
             <Plus className="h-4 w-4" />

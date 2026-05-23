@@ -25,7 +25,6 @@ export default function LegacyNewTemplatePage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-3xl font-bold text-white">레거시 코드 템플릿</h1>
-        <p className="mt-2 text-sm text-slate-400">HTML/CSS를 직접 작성해야 하는 고급 모드입니다. 일반 제작은 Visual Template Studio를 사용하세요.</p>
       </div>
       <TemplateEditorForm saving={saving} onSubmit={submit} />
     </div>

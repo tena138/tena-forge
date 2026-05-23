@@ -226,7 +226,6 @@ export function TextSidebarPanel() {
 
       <section>
         <h3 className="text-xs font-bold text-slate-600">동적 필드</h3>
-        <p className="mt-1 text-xs leading-5 text-slate-500">내보내기 시 실제 값으로 자동 교체됩니다</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {dynamicFieldPresets.map((field) => <FieldChip key={field.key} field={field} onInsert={insertDynamicField} />)}
         </div>

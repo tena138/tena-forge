@@ -924,7 +924,7 @@ export default function StudentManagementPage() {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <CardTitle className="text-white">{sessionDetail?.title || "세션을 선택하세요"}</CardTitle>
-                    <p className="mt-1 text-sm text-slate-400">{selectedStudent ? `${selectedStudent.name} · ${sessionDetail?.problem_count || 0}문항` : "학생을 선택하면 문제 번호 그리드가 표시됩니다."}</p>
+                    {selectedStudent ? <p className="mt-1 text-sm text-slate-400">{`${selectedStudent.name} · ${sessionDetail?.problem_count || 0}문항`}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => markAll("correct")}>전체 정답</Button>

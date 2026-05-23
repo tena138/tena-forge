@@ -13,7 +13,6 @@ export default function PurchasesPage() {
       <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Library</p>
         <h1 className="mt-2 text-3xl font-bold text-white">구매한 자료</h1>
-        <p className="mt-2 text-sm text-slate-400">구매한 제품과 라이선스 조건을 확인합니다. 다운로드는 만료되는 서명 URL로만 제공됩니다.</p>
       </section>
       {licenses.length ? (
         <div className="grid gap-3">

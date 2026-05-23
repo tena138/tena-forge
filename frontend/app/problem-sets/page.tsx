@@ -80,7 +80,6 @@ export default function ProblemSetsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="forge-section-title">내 자료 세트</h1>
-          <p className="forge-subtitle">아카이브된 문항을 묶어 시험지, 워크북, 단원별 문제 세트를 만들어보세요.</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}><FolderPlus className="h-4 w-4" />새 세트 만들기</Button>
       </div>

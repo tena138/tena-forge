@@ -120,7 +120,6 @@ export default function MyTemplatesPage() {
             My Template Library
           </div>
           <h1 className="mt-4 text-3xl font-bold text-white">내 템플릿</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">저장해둔 템플릿을 미리보기와 기본 정보로 빠르게 확인하고 관리합니다.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
@@ -215,7 +214,6 @@ export default function MyTemplatesPage() {
       ) : (
         <section className="rounded-[10px] border border-dashed border-white/15 bg-white/[0.035] p-10 text-center">
           <h2 className="text-lg font-bold text-white">저장된 템플릿이 없습니다</h2>
-          <p className="mt-2 text-sm text-slate-400">Visual Template Studio에서 첫 템플릿을 만들면 이곳에 미리보기 카드로 표시됩니다.</p>
           <Link href="/templates/new" className="mt-5 inline-flex">
             <Button>
               <Plus className="h-4 w-4" />

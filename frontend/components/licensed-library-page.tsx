@@ -58,9 +58,6 @@ export function LicensedLibraryPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white">라이선스 보관함</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              구독, 구매, 만료된 자료를 한 화면에서 상태별로 관리합니다.
-            </p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex">
             {filters.map((item) => (

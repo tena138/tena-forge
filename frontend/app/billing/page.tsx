@@ -52,7 +52,6 @@ export default function BillingPage() {
       <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Billing</p>
         <h1 className="mt-2 text-3xl font-bold text-white">구독 및 사용량</h1>
-        <p className="mt-2 text-sm text-slate-400">AI credits, 처리 예산, 업로드 용량, 과목 엔진을 한 곳에서 확인합니다.</p>
       </section>
 
       {summary && (
@@ -74,9 +73,6 @@ export default function BillingPage() {
 
       <section className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5">
         <h2 className="text-lg font-bold text-white">Subject Engines</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-400">
-          Korean Language extraction uses a separate high-precision pipeline for long passages, shared passage-question groups, and exact multiple-choice extraction.
-        </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {subjectEngineOptions.map((engine) => (
             <button
@@ -93,24 +89,17 @@ export default function BillingPage() {
             </button>
           ))}
         </div>
-        <p className="mt-3 text-sm text-slate-400">
-          Subject multiplier: x{Math.max(selectedEngines.length, 1)}. Base plan includes one subject engine; additional engines add the same base subject price.
-        </p>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {plans.map((plan) => {
           const multiplier = Math.max(selectedEngines.length, 1);
-          const monthlyCredits = plan.monthly_ai_tokens.toLocaleString("ko-KR");
           return (
             <div key={plan.code} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5">
               <h2 className="text-lg font-bold text-white">{plan.name}</h2>
               <p className="mt-2 text-2xl font-bold text-violet-200">{won(plan.monthly_price * multiplier)}</p>
               <p className="mt-1 text-xs text-slate-500">
                 Base {won(plan.monthly_price)} x {multiplier} engine{multiplier > 1 ? "s" : ""}
-              </p>
-              <p className="mt-3 text-sm text-slate-400">
-                월 {monthlyCredits} AI credits / 저장소 {plan.storage_quota_mb.toLocaleString("ko-KR")}MB
               </p>
               <Button className="mt-5 w-full" onClick={() => checkout(plan.code)}>mock 업그레이드</Button>
             </div>

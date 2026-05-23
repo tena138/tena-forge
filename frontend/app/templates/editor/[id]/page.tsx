@@ -56,7 +56,6 @@ export default function HubTemplateEditorPage({ params }: { params: { id: string
     return (
       <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-8">
         <h1 className="text-xl font-bold text-white">편집 권한이 없습니다</h1>
-        <p className="mt-2 text-sm text-slate-400">공개 템플릿은 복제한 뒤 편집할 수 있습니다.</p>
         <Link href={`/templates/${template.id}`}><Button className="mt-4">상세로 돌아가기</Button></Link>
       </div>
     );
@@ -67,7 +66,6 @@ export default function HubTemplateEditorPage({ params }: { params: { id: string
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">템플릿 편집</h1>
-          <p className="mt-2 text-sm text-slate-400">{template.title}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={togglePublish}>{template.visibility === "public" ? "게시 취소" : "게시하기"}</Button>

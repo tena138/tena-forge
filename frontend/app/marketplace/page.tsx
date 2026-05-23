@@ -41,9 +41,6 @@ export default function MarketplacePage() {
       <section className="rounded-[14px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.24),transparent_34%),rgba(0,0,0,0.46)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Marketplace</p>
         <h1 className="mt-3 text-3xl font-bold text-white">마켓플레이스</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-          검증된 교육 콘텐츠를 구독하고, 내 수업 자료로 재구성하세요. 강사, 학원, 출판사가 직접 등록한 문항 세트·교재·템플릿을 라이선스로 이용할 수 있습니다.
-        </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Link href="/marketplace/problem-sets"><Button>문항 세트 마켓</Button></Link>
           <Link href="/templates"><Button variant="outline">인기 템플릿</Button></Link>
@@ -75,7 +72,7 @@ export default function MarketplacePage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{listings.slice(0, 6).map((listing) => <ListingCard key={listing.id} listing={listing} />)}</div>
         ) : (
           <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-10 text-center text-sm text-slate-400">
-            아직 공개된 콘텐츠가 없습니다. 내 자료 세트에서 마켓 등록 준비를 시작할 수 있습니다.
+            콘텐츠 없음
           </div>
         )}
       </section>

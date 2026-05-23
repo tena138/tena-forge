@@ -27,10 +27,6 @@ export default function NewTemplatePage() {
               Visual Template Studio
             </div>
             <h1 className="mt-5 text-3xl font-bold text-white">코드 없이 템플릿 세트를 디자인하세요</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-              시험지, 교재, 해설지, 답안지, 리포트까지 여러 페이지 역할을 하나의 Template Set으로 구성합니다.
-              문항 영역은 내보내기 단계에서 자동으로 채워지고, 내용이 넘치면 적절한 다음 페이지가 이어집니다.
-            </p>
           </div>
           <Link href="/templates/studio?type=exam">
             <Button className="h-11">
@@ -69,7 +65,6 @@ export default function NewTemplatePage() {
                 <Layers3 className="h-4 w-4 text-violet-300" />
                 <h2 className="text-lg font-bold text-white">{category.label}</h2>
               </div>
-              <p className="mt-2 min-h-10 text-sm leading-5 text-slate-400">{category.description}</p>
               <div className="mt-4 flex items-center text-sm font-semibold text-violet-200">
                 이 프리셋으로 시작 <ArrowRight className="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" />
               </div>
@@ -83,7 +78,6 @@ export default function NewTemplatePage() {
           <FileText className="mt-0.5 h-5 w-5 text-slate-400" />
           <div>
             <h3 className="text-sm font-bold text-white">레거시 코드 템플릿</h3>
-            <p className="mt-1 text-sm text-slate-400">HTML/CSS를 직접 다루는 고급 모드는 유지하지만 기본 제작 흐름에서는 숨겼습니다.</p>
           </div>
         </div>
         <Link href="/templates/legacy/new">

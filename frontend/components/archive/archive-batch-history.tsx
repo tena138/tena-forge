@@ -227,7 +227,6 @@ export function ArchiveBatchHistory({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className={compact ? "text-xl font-bold text-white" : "forge-section-title"}>아카이빙 기록</h2>
-          <p className="mt-1 text-sm text-slate-400">업로드한 배치의 처리 상태, 생성 문항 수, 실패 원인을 확인합니다.</p>
         </div>
         {!compact ? (
           <Button onClick={() => router.push("/archive/new")}>

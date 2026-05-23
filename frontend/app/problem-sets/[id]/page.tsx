@@ -376,7 +376,6 @@ export default function ProblemSetDetailPage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="forge-section-title">문항 세트 편집</h1>
-          <p className="forge-subtitle">{problemSet.items.length}개 문항을 순서대로 관리합니다.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setAddOpen(true)}>

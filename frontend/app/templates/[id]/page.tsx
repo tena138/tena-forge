@@ -95,7 +95,6 @@ export default function TemplateDetailPage({ params }: { params: { id: string } 
             <code key={key} className="rounded border border-white/10 bg-black/30 px-2 py-1 text-violet-100">{`{{ ${key} }}`}</code>
           ))}
         </div>
-        <p className="text-sm leading-6 text-slate-400">복제하면 내 템플릿으로 저장되고 HTML/CSS를 자유롭게 수정할 수 있습니다.</p>
       </aside>
     </div>
   );

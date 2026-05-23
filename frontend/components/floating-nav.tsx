@@ -220,7 +220,6 @@ export function FloatingNav({
               {!isCollapsed && (
                 <div className="min-w-0">
                   <h2 className={cn("text-[12px] font-bold tracking-[0.02em]", section.header)}>{section.title}</h2>
-                  <p className="mt-0.5 truncate text-[11px] text-slate-500">{section.description}</p>
                 </div>
               )}
               {isCollapsed && <span className="sr-only">{section.title}</span>}

@@ -43,7 +43,6 @@ export default function CreatorProductsPage() {
       <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Creator Products</p>
         <h1 className="mt-2 text-3xl font-bold text-white">크리에이터 상품 관리</h1>
-        <p className="mt-2 text-sm text-slate-400">초안 생성 후 라이선스 티어와 파일을 붙이고 관리자 심사를 거쳐 게시합니다.</p>
       </section>
       {error ? (
         <div className="rounded-[10px] border border-red-400/20 bg-red-500/10 p-5 text-sm text-red-100">{error}</div>

@@ -113,9 +113,6 @@ export default function TemplateHubPage() {
               Visual Hub
             </div>
             <h1 className="mt-4 text-3xl font-bold text-white">템플릿 허브</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              시험지, 교재, 워크북, 해설지, 리포트 템플릿을 시각적으로 만들고 복제해 문제 세트 내보내기에 사용할 수 있습니다.
-            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/templates/mine">
