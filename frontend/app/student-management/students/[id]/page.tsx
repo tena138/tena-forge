@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, FileText, Loader2, RotateCcw, UserRound } from "lucide-react";
 
+import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -330,7 +331,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                     <p className="font-semibold text-white">{wrong.problem_number}번</p>
                     <Badge className={cn("border", tone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
                   </div>
-                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{wrong.problem_text}</p>
+                  <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300" value={wrong.problem_text} />
                   <p className="mt-2 text-xs text-slate-500">오답 {wrong.wrong_count}회 · {wrong.unit || "단원 정보 없음"}</p>
                 </div>
               ))}

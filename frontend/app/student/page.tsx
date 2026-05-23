@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Archive, BarChart3, BookOpenCheck, CheckCircle2, KeyRound, Lock, NotebookTabs, Plus, RotateCcw, UserRound } from "lucide-react";
 
+import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -336,7 +337,7 @@ export default function StudentAppPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-white">{item.problem?.problem_number || "-"}번 · {item.academy_name}</div>
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{item.problem?.problem_text || "원문 접근 권한이 없습니다."}</p>
+                    <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300" value={item.problem?.problem_text || "원문 접근 권한이 없습니다."} />
                   </div>
                   <StatusChip tone={item.resolved_status === "mastered" ? "good" : "warn"}>{item.resolved_status}</StatusChip>
                 </div>

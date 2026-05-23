@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 
+import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -772,7 +773,7 @@ export default function StudentManagementPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <p className="line-clamp-3 text-sm leading-6 text-slate-300">{wrong.problem_text}</p>
+                    <MathText className="line-clamp-3 text-sm leading-6 text-slate-300" value={wrong.problem_text} />
                     <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
                       <span>오답 {wrong.wrong_count}회</span>
                       <span>{formatDate(wrong.latest_wrong_at)}</span>
