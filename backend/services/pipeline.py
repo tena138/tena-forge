@@ -131,14 +131,38 @@ def has_solution_content(solution: dict[str, Any] | None) -> bool:
 
 
 STRUCTURAL_SECTION_RE = re.compile(
-    r"\b(?:DAY|CHAPTER|UNIT|LESSON|TYPE)\s*\d{1,3}\b|(?:단원|유형)\s*\d{1,3}",
+    r"\b(?:DAY|CHAPTER|UNIT|LESSON|TYPE)\s*\d{1,3}\b|(?:단원|유형)\s*\d{1,3}|[/＞>]",
     re.IGNORECASE,
+)
+SECTION_ID_PATTERNS = (
+    (re.compile(r"\bDAY\s*0*(\d{1,3})\b", re.IGNORECASE), "DAY"),
+    (re.compile(r"\bCH(?:APTER)?\s*0*(\d{1,3})\b", re.IGNORECASE), "CHAPTER"),
+    (re.compile(r"\bUNIT\s*0*(\d{1,3})\b", re.IGNORECASE), "UNIT"),
+    (re.compile(r"\bLESSON\s*0*(\d{1,3})\b", re.IGNORECASE), "LESSON"),
+    (re.compile(r"\bTYPE\s*0*(\d{1,3})\b", re.IGNORECASE), "TYPE"),
+    (re.compile(r"(단원|유형)\s*0*(\d{1,3})", re.IGNORECASE), None),
 )
 
 
 def _is_structural_section_label(value: Any) -> bool:
     text = str(value or "").strip()
     return bool(text and STRUCTURAL_SECTION_RE.search(text))
+
+
+def _normalize_section_id(value: Any) -> str | None:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if not text:
+        return None
+    normalized = text.replace("＞", ">")
+    for pattern, label in SECTION_ID_PATTERNS:
+        match = pattern.search(normalized)
+        if not match:
+            continue
+        if label:
+            return f"{label} {int(match.group(1)):02d}"
+        return f"{match.group(1)} {int(match.group(2)):02d}"
+    normalized = re.sub(r"\s*[/>\-]\s*", " / ", normalized)
+    return normalized
 
 
 def _problem_match_payload(problem: Problem) -> dict[str, Any]:
@@ -346,9 +370,16 @@ Return exactly one JSON object inside a JSON array:
   {
     "page_number": <1-based page number supplied by the system>,
     "detected_section_ids": ["DAY 03", "UNIT 02", "..."],
+    "detected_subjects": ["수학Ⅰ", "수학Ⅱ", "..."],
+    "detected_units": ["지수함수와 로그함수", "수열", "..."],
+    "toc_entries": [
+      {"section_id": "DAY 01", "subject": null, "unit": null, "page_number": 12},
+      {"section_id": "수학Ⅰ / 지수함수와 로그함수", "subject": "수학Ⅰ", "unit": "지수함수와 로그함수", "page_number": 24}
+    ],
+    "section_pattern": "subject_unit" | "day" | "mixed" | "unknown",
     "detected_problem_headers": ["01", "02"],
     "detected_solution_headers": ["01", "02"],
-    "page_type": "problem_page" | "solution_page" | "cover" | "log" | "blank" | "unknown",
+    "page_type": "problem_page" | "solution_page" | "toc" | "cover" | "log" | "blank" | "unknown",
     "layout": "single_column" | "two_column" | "unknown",
     "section_confidence": <0.0 to 1.0>
   }
@@ -356,9 +387,16 @@ Return exactly one JSON object inside a JSON array:
 
 Rules:
 - Only report metadata visible on this page.
+- If this page is a table of contents / 목차 / 차례, set page_type to "toc" and extract toc_entries.
+- Common structures are:
+  1. subject + unit sections, e.g. "수학Ⅰ / 지수함수와 로그함수", "수학Ⅱ / 수열".
+  2. DAY-based sections, e.g. "DAY 1", "Day 02", "DAY 03".
+- Normalize DAY labels to "DAY 01", "DAY 02", etc.
 - detected_section_ids must come from explicit section/day/unit/chapter/exam labels only. Do not invent missing section IDs.
+- For subject + unit pages, detected_section_ids should prefer "subject / unit" when both are visible.
 - detected_problem_headers should contain problem numbers that start problem statements.
 - detected_solution_headers should contain problem numbers that start answers or solutions.
+- toc_entries.page_number should be the printed page number or visible destination page number in the table of contents. If no page number is visible, use null.
 - For two-column solution pages, set layout to "two_column".
 - Return raw JSON only."""
 
@@ -606,9 +644,67 @@ def _clean_metadata_list(value: Any, max_items: int = 16) -> list[str]:
     return cleaned
 
 
+def _normalize_detected_sections(value: Any) -> list[str]:
+    sections: list[str] = []
+    seen: set[str] = set()
+    for item in _clean_metadata_list(value, max_items=32):
+        section = _normalize_section_id(item)
+        if not section or section in seen:
+            continue
+        sections.append(section)
+        seen.add(section)
+    return sections
+
+
+def _int_or_none(value: Any) -> int | None:
+    match = re.search(r"\d+", str(value or ""))
+    return int(match.group(0)) if match else None
+
+
+def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, int | None]] = set()
+    for raw in value:
+        if isinstance(raw, dict):
+            subject = str(raw.get("subject") or "").strip() or None
+            unit = str(raw.get("unit") or "").strip() or None
+            title = str(raw.get("section_id") or raw.get("title") or raw.get("label") or "").strip()
+            if subject and unit:
+                section_id = _normalize_section_id(f"{subject} / {unit}")
+            else:
+                section_id = _normalize_section_id(title or unit or subject)
+            page_number = _int_or_none(raw.get("page_number", raw.get("start_page", raw.get("page"))))
+        else:
+            text = str(raw or "").strip()
+            page_number = _int_or_none(text)
+            section_text = re.sub(r"\s*\d+\s*$", "", text).strip()
+            subject = None
+            unit = None
+            section_id = _normalize_section_id(section_text)
+        if not section_id:
+            continue
+        key = (section_id, page_number)
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(
+            {
+                "section_id": section_id,
+                "subject": subject,
+                "unit": unit,
+                "page_number": page_number,
+            }
+        )
+        if len(entries) >= 80:
+            break
+    return entries
+
+
 def _normalize_page_type(value: Any, fallback: str) -> str:
     text = str(value or "").strip().lower()
-    allowed = {"problem_page", "solution_page", "cover", "log", "blank", "unknown"}
+    allowed = {"problem_page", "solution_page", "toc", "cover", "log", "blank", "unknown"}
     return text if text in allowed else fallback
 
 
@@ -627,7 +723,11 @@ def _normalize_page_metadata(raw: dict[str, Any], page: RenderedPage, doc_kind: 
         "page_number": page.page_index + 1,
         "page_index": page.page_index,
         "document_kind": doc_kind,
-        "detected_section_ids": _clean_metadata_list(raw.get("detected_section_ids")),
+        "detected_section_ids": _normalize_detected_sections(raw.get("detected_section_ids")),
+        "detected_subjects": _clean_metadata_list(raw.get("detected_subjects")),
+        "detected_units": _clean_metadata_list(raw.get("detected_units")),
+        "toc_entries": _normalize_toc_entries(raw.get("toc_entries")),
+        "section_pattern": str(raw.get("section_pattern") or "unknown").strip() or "unknown",
         "detected_problem_headers": _clean_metadata_list(raw.get("detected_problem_headers"), max_items=64),
         "detected_solution_headers": _clean_metadata_list(raw.get("detected_solution_headers"), max_items=64),
         "page_type": _normalize_page_type(raw.get("page_type"), fallback_type),
