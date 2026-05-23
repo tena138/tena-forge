@@ -1324,7 +1324,7 @@ function OriginalPagePanel({
               draggable={false}
               onDragStart={(event) => event.preventDefault()}
             />
-            {pageProblems.length ? (
+            {pageProblems.length > 1 ? (
               <div
                 className="absolute right-3 top-3 z-10 flex max-h-[calc(100%-1.5rem)] w-48 flex-col gap-1 overflow-auto rounded-lg border border-white/15 bg-[#090912]/88 p-2 shadow-2xl backdrop-blur"
                 onPointerDown={(event) => event.stopPropagation()}
