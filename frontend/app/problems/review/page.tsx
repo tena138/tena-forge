@@ -176,7 +176,7 @@ function ProblemReviewClient() {
   const [savingProblemText, setSavingProblemText] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [batchMenuOpen, setBatchMenuOpen] = useState(false);
-  const [solutionOpen, setSolutionOpen] = useState(false);
+  const [solutionOpen, setSolutionOpen] = useState(true);
   const [rawOpen, setRawOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<"review" | "reextract" | "trash" | null>(null);
@@ -382,7 +382,7 @@ function ProblemReviewClient() {
         setCurrent(problem);
         setMetadata(metadataFromProblem(problem, selectedBatch));
         setProblemTextDraft(problem.problem_text || "");
-        setSolutionOpen(false);
+        setSolutionOpen(true);
         setRawOpen(false);
         setSaveState("idle");
         setSavedVisualUrl(null);
