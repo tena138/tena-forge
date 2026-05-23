@@ -2,23 +2,32 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, FileText, RotateCcw, UserRound } from "lucide-react";
+import { ArrowLeft, Check, FileText, Loader2, RotateCcw, UserRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StudentCard, WrongAnswer, createReviewSet, getStudentDetail } from "@/lib/studentManagement";
+import { StudentCard, WrongAnswer, createReviewSet, getStudentDetail, savePaperSessionGrade } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
+
+type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 
 type StudentDetail = StudentCard & {
   paper_session_history: Array<{
     id: string;
+    paper_session_id: string;
     status: string;
     score?: number | null;
     correct_count: number;
     wrong_count: number;
     total_count: number;
-    session?: { title?: string; session_type?: string; scheduled_at?: string | null } | null;
+    session?: { title?: string; session_type?: string; scheduled_at?: string | null; problem_count?: number } | null;
+    problem_results: Array<{
+      id: string;
+      problem_id: string;
+      problem_number: number;
+      result_status: ProblemStatus;
+    }>;
   }>;
   wrong_answers: WrongAnswer[];
   analytics: {
@@ -34,18 +43,107 @@ function tone(status?: string) {
   return "bg-violet-500/15 text-violet-100 border-violet-300/20";
 }
 
+function problemCount(result: StudentDetail["paper_session_history"][number]) {
+  return (
+    result.total_count ||
+    result.session?.problem_count ||
+    Math.max(0, ...result.problem_results.map((item) => item.problem_number))
+  );
+}
+
+function buildStatuses(result: StudentDetail["paper_session_history"][number]) {
+  const count = problemCount(result);
+  const next: Record<number, ProblemStatus> = {};
+  for (let number = 1; number <= count; number += 1) next[number] = "correct";
+  for (const item of result.problem_results) next[item.problem_number] = item.result_status;
+  return next;
+}
+
+function nextProblemStatus(status?: ProblemStatus): ProblemStatus {
+  if (!status || status === "correct") return "wrong";
+  if (status === "wrong") return "unanswered";
+  return "correct";
+}
+
+function ResultCell({ number, status, onClick }: { number: number; status: ProblemStatus; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex aspect-square min-h-9 items-center justify-center rounded-md border text-xs font-black transition sm:text-sm",
+        status === "correct" && "border-emerald-300/50 bg-emerald-500/25 text-emerald-50 hover:bg-emerald-500/35",
+        status === "wrong" && "border-orange-300/60 bg-orange-500/25 text-orange-50 hover:bg-orange-500/35",
+        status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-50 hover:bg-rose-500/35",
+        status === "unmarked" && "border-white/10 bg-white/[0.04] text-slate-300 hover:border-violet-300/40"
+      )}
+      title={`${number}번 ${status}`}
+    >
+      {number}
+    </button>
+  );
+}
+
 export default function StudentManagementStudentPage({ params }: { params: { id: string } }) {
   const [data, setData] = useState<StudentDetail | null>(null);
+  const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
+  const [savingResultId, setSavingResultId] = useState("");
   const [message, setMessage] = useState("");
 
+  function applyStudentData(student: StudentDetail) {
+    setData(student);
+    const next: Record<string, Record<number, ProblemStatus>> = {};
+    for (const result of student.paper_session_history) next[result.id] = buildStatuses(result);
+    setResultStatuses(next);
+  }
+
   useEffect(() => {
-    getStudentDetail(params.id).then((student) => setData(student as StudentDetail)).catch(() => setData(null));
+    getStudentDetail(params.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
   }, [params.id]);
 
   async function makeReviewSet() {
     if (!data) return;
     const review = await createReviewSet({ title: `${data.name} 오답 복습 세트`, student_membership_id: data.id, unresolved_only: true });
     setMessage(`복습 세트를 만들었습니다: ${review.name}`);
+  }
+
+  function toggleResultProblem(resultId: string, number: number) {
+    setResultStatuses((current) => {
+      const currentResult = current[resultId] || {};
+      return {
+        ...current,
+        [resultId]: {
+          ...currentResult,
+          [number]: nextProblemStatus(currentResult[number] || "correct"),
+        },
+      };
+    });
+  }
+
+  async function saveResult(result: StudentDetail["paper_session_history"][number]) {
+    if (!data) return;
+    const count = problemCount(result);
+    if (!count) return;
+    const statuses = Array.from({ length: count }, (_, index) => {
+      const problemNumber = index + 1;
+      return {
+        problem_number: problemNumber,
+        result_status: resultStatuses[result.id]?.[problemNumber] || "correct",
+      };
+    });
+    setSavingResultId(result.id);
+    try {
+      await savePaperSessionGrade(result.paper_session_id, {
+        student_membership_id: data.id,
+        statuses,
+        mark_unlisted_correct: false,
+      });
+      const refreshed = await getStudentDetail(params.id);
+      applyStudentData(refreshed as StudentDetail);
+      setMessage(`${result.session?.title || "시험"} 채점 결과를 저장했습니다.`);
+    } finally {
+      setSavingResultId("");
+    }
   }
 
   if (!data) return <main className="min-h-screen bg-[#07080d] p-8 text-slate-400">학생 정보를 불러오는 중입니다.</main>;
@@ -88,15 +186,54 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
           <Card className="border-white/10 bg-white/[0.035]">
             <CardHeader><CardTitle className="flex items-center gap-2 text-white"><FileText className="h-5 w-5" />Paper Session History</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {data.paper_session_history.map((result) => (
-                <div key={result.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-white">{result.session?.title || "Paper Session"}</p>
-                    <Badge className={cn("border", tone(result.status))}>{result.status}</Badge>
+              {data.paper_session_history.map((result) => {
+                const count = problemCount(result);
+                const statuses = resultStatuses[result.id] || buildStatuses(result);
+                const orangeCount = Object.values(statuses).filter((status) => status === "wrong").length;
+                const redCount = Object.values(statuses).filter((status) => status === "unanswered").length;
+                return (
+                  <div key={result.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-semibold text-white">{result.session?.title || "Paper Session"}</p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {result.score == null ? "-" : `${Math.round(result.score)}점`} · 정답 {result.correct_count} · 오답/못 풂 {result.wrong_count} · {count}문항
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge className={cn("border", tone(result.status))}>{result.status}</Badge>
+                        <Button size="sm" onClick={() => saveResult(result)} disabled={!count || savingResultId === result.id}>
+                          {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                          저장
+                        </Button>
+                      </div>
+                    </div>
+                    {count ? (
+                      <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
+                        {Array.from({ length: count }, (_, index) => {
+                          const number = index + 1;
+                          return (
+                            <ResultCell
+                              key={number}
+                              number={number}
+                              status={statuses[number] || "correct"}
+                              onClick={() => toggleResultProblem(result.id, number)}
+                            />
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">이 시험의 문항 수 정보가 없습니다.</p>
+                    )}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
+                      <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답 {orangeCount}</span>
+                      <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂 {redCount}</span>
+                      <span className="text-slate-500">클릭할 때마다 초록 → 오렌지 → 빨강 순서로 바뀝니다.</span>
+                    </div>
                   </div>
-                  <p className="mt-1 text-sm text-slate-400">{result.score == null ? "-" : `${Math.round(result.score)}점`} · 정답 {result.correct_count} · 오답 {result.wrong_count}</p>
-                </div>
-              ))}
+                );
+              })}
               {!data.paper_session_history.length ? <p className="text-sm text-slate-500">아직 기록된 세션이 없습니다.</p> : null}
             </CardContent>
           </Card>

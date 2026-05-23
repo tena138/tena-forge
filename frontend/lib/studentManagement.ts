@@ -83,7 +83,7 @@ export type PaperSessionStudent = StudentCard & {
     id: string;
     problem_id: string;
     problem_number: number;
-    result_status: "correct" | "wrong" | "unmarked";
+    result_status: "correct" | "wrong" | "unanswered" | "unmarked";
   }>;
 };
 
@@ -225,7 +225,7 @@ export function savePaperSessionGrade(
   id: string,
   payload: {
     student_membership_id: string;
-    statuses?: Array<{ problem_id?: string; problem_number: number; result_status: "correct" | "wrong" | "unmarked" }>;
+    statuses?: Array<{ problem_id?: string; problem_number: number; result_status: "correct" | "wrong" | "unanswered" | "unmarked" }>;
     wrong_numbers?: string | null;
     mark_unlisted_correct?: boolean;
   }

@@ -47,7 +47,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type TabKey = "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
-type ProblemStatus = "correct" | "wrong" | "unmarked";
+type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
 
 const tabs: Array<{ key: TabKey; label: string; icon: ComponentType<{ className?: string }> }> = [
@@ -129,7 +129,8 @@ function ProblemCell({
       className={cn(
         "flex aspect-square min-h-10 items-center justify-center rounded-md border text-sm font-bold transition",
         status === "correct" && "border-emerald-300/50 bg-emerald-500/20 text-emerald-100",
-        status === "wrong" && "border-rose-300/50 bg-rose-500/20 text-rose-100",
+        status === "wrong" && "border-orange-300/60 bg-orange-500/25 text-orange-100",
+        status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-100",
         status === "unmarked" && "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40"
       )}
       title={`${number}번 ${status}`}
@@ -229,7 +230,7 @@ export default function StudentManagementPage() {
     }
     const student = sessionDetail.students.find((item) => item.id === selectedStudentId);
     const next: Record<number, ProblemStatus> = {};
-    for (const problem of sessionDetail.problems) next[problem.problem_number] = "unmarked";
+    for (const problem of sessionDetail.problems) next[problem.problem_number] = "correct";
     for (const result of student?.problem_results || []) next[result.problem_number] = result.result_status;
     setGridStatuses(next);
     setWrongInput((student?.problem_results || []).filter((item) => item.result_status === "wrong").map((item) => item.problem_number).join(", "));
@@ -377,8 +378,8 @@ export default function StudentManagementPage() {
 
   function toggleProblem(number: number) {
     setGridStatuses((current) => {
-      const currentStatus = current[number] || "unmarked";
-      const nextStatus = currentStatus === "unmarked" ? "wrong" : currentStatus === "wrong" ? "correct" : "unmarked";
+      const currentStatus = current[number] || "correct";
+      const nextStatus = currentStatus === "correct" ? "wrong" : currentStatus === "wrong" ? "unanswered" : "correct";
       return { ...current, [number]: nextStatus };
     });
   }
@@ -856,7 +857,7 @@ export default function StudentManagementPage() {
                       <ProblemCell
                         key={problem.problem_id}
                         number={problem.problem_number}
-                        status={gridStatuses[problem.problem_number] || "unmarked"}
+                        status={gridStatuses[problem.problem_number] || "correct"}
                         onClick={() => toggleProblem(problem.problem_number)}
                       />
                     ))}
@@ -866,8 +867,9 @@ export default function StudentManagementPage() {
                 )}
                 <div className="flex flex-wrap gap-2 text-xs text-slate-400">
                   <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
-                  <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 오답</span>
-                  <span className="rounded bg-white/[0.06] px-2 py-1">회색: 미표시</span>
+                  <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답</span>
+                  <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
+                  <span className="rounded bg-white/[0.06] px-2 py-1">회색: 미채점</span>
                 </div>
               </CardContent>
             </Card>

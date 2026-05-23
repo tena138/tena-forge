@@ -354,6 +354,10 @@ def _parse_wrong_numbers(value: str | None) -> set[int]:
     return numbers
 
 
+def _is_wrong_result_status(status: str | None) -> bool:
+    return status in {"wrong", "unanswered"}
+
+
 def _sync_wrong_answer(
     db: Session,
     *,
@@ -700,9 +704,32 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         {
             **_result_payload(result),
             "session": _session_summary(db, academy_id, sessions.get(result.paper_session_id)),
+            "problem_results": [],
         }
         for result in results
     ]
+    result_ids = [result.id for result in results]
+    if result_ids:
+        problem_results = db.scalars(
+            select(ProblemResult)
+            .where(
+                ProblemResult.academy_id == academy_id,
+                ProblemResult.paper_session_result_id.in_(result_ids),
+            )
+            .order_by(ProblemResult.problem_number)
+        ).all()
+        by_result: dict[str, list[dict]] = {}
+        for row in problem_results:
+            by_result.setdefault(str(row.paper_session_result_id), []).append(
+                {
+                    "id": str(row.id),
+                    "problem_id": str(row.problem_id),
+                    "problem_number": row.problem_number,
+                    "result_status": row.result_status,
+                }
+            )
+        for item in data["paper_session_history"]:
+            item["problem_results"] = by_result.get(item["id"], [])
     data["wrong_answers"] = wrongs
     data["analytics"] = {
         "graded_count": len([result for result in results if result.status == "graded"]),
@@ -946,8 +973,8 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
         status_by_number = {number: ("wrong" if number in wrong_numbers else "correct") for number in valid_numbers}
     for item in payload.statuses:
         status = item.result_status
-        if status not in {"correct", "wrong", "unmarked"}:
-            raise HTTPException(status_code=400, detail="Result status must be correct, wrong, or unmarked.")
+        if status not in {"correct", "wrong", "unanswered", "unmarked"}:
+            raise HTTPException(status_code=400, detail="Result status must be correct, wrong, unanswered, or unmarked.")
         status_by_number[item.problem_number] = status
     existing = {
         row.problem_id: row
@@ -966,7 +993,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
         if status is None:
             status = "correct" if payload.mark_unlisted_correct else "unmarked"
         row = existing.get(problem_id)
-        was_wrong = bool(row and row.result_status == "wrong")
+        was_wrong = bool(row and _is_wrong_result_status(row.result_status))
         if not row:
             row = ProblemResult(
                 academy_id=academy_id,
@@ -987,7 +1014,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
             row.updated_at = _now()
         if status == "correct":
             correct_count += 1
-        elif status == "wrong":
+        elif _is_wrong_result_status(status):
             wrong_count += 1
         else:
             unmarked_count += 1
@@ -999,7 +1026,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
             problem_version_id=session.content_version_id,
             paper_session_id=session.id,
             was_wrong=was_wrong,
-            is_wrong=status == "wrong",
+            is_wrong=_is_wrong_result_status(status),
             is_review_correct=session.session_type == "review" and status == "correct",
         )
     total_count = len(problems)
