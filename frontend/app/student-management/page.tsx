@@ -63,6 +63,14 @@ function average(values: Array<number | null | undefined>) {
   return scores.reduce((total, value) => total + value, 0) / scores.length;
 }
 
+function standardDeviation(values: Array<number | null | undefined>) {
+  const scores = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (scores.length < 2) return null;
+  const mean = average(scores) || 0;
+  const variance = scores.reduce((total, value) => total + (value - mean) ** 2, 0) / scores.length;
+  return Math.sqrt(variance);
+}
+
 function scoreLabel(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}점` : "-";
 }
@@ -99,30 +107,6 @@ function ClassStudentCard({ student }: { student: StudentCard }) {
   );
 }
 
-function ScoreBar({
-  score,
-  classAverage,
-  overallAverage,
-  showOverallAverage,
-}: {
-  score: number | null;
-  classAverage: number | null;
-  overallAverage: number | null;
-  showOverallAverage: boolean;
-}) {
-  const width = Math.max(0, Math.min(100, score ?? 0));
-  const classLine = classAverage == null ? null : Math.max(0, Math.min(100, classAverage));
-  const overallLine = overallAverage == null ? null : Math.max(0, Math.min(100, overallAverage));
-  return (
-    <div className="relative h-8 overflow-hidden rounded-md border border-white/[0.06] bg-white/[0.035]">
-      {score == null ? null : <div className="absolute inset-y-0 left-0 rounded-md bg-violet-400/45" style={{ width: `${width}%` }} />}
-      {classLine == null ? null : <span className="absolute inset-y-0 w-px bg-cyan-200/80" style={{ left: `${classLine}%` }} title={`반 평균 ${scoreLabel(classAverage)}`} />}
-      {showOverallAverage && overallLine != null ? <span className="absolute inset-y-0 w-px bg-amber-200/80" style={{ left: `${overallLine}%` }} title={`전체 평균 ${scoreLabel(overallAverage)}`} /> : null}
-      <span className="absolute inset-0 flex items-center justify-end px-2 text-xs font-black text-white">{score == null ? "미채점" : scoreLabel(score)}</span>
-    </div>
-  );
-}
-
 function ClassStatsPanel({
   classRow,
   details,
@@ -132,36 +116,85 @@ function ClassStatsPanel({
   details: PaperSessionDetail[];
   loading: boolean;
 }) {
-  const classStudentIds = new Set(classRow.students.map((student) => student.id));
-  const sessionStats = details.map((detail) => {
-    const classStudents = detail.students.filter((student) => classStudentIds.has(student.id));
-    const gradedClassStudents = classStudents.filter((student) => typeof student.result.score === "number" && student.result.status === "graded");
-    const classAverage = average(gradedClassStudents.map((student) => student.result.score));
-    const overallAverage = average(detail.students.filter((student) => student.result.status === "graded").map((student) => student.result.score));
-    const topScore = gradedClassStudents.length ? Math.max(...gradedClassStudents.map((student) => student.result.score ?? 0)) : null;
-    const ungradedCount = classStudents.filter((student) => student.result.status !== "graded").length;
-    const missed = new Map<number, number>();
-    for (const student of classStudents) {
-      for (const result of student.problem_results || []) {
-        if (result.result_status === "wrong" || result.result_status === "unanswered") {
-          missed.set(result.problem_number, (missed.get(result.problem_number) || 0) + 1);
-        }
-      }
+  const [selectedStudentId, setSelectedStudentId] = useState(classRow.students[0]?.id || "");
+
+  useEffect(() => {
+    if (!classRow.students.length) {
+      setSelectedStudentId("");
+      return;
     }
-    const missedProblems = Array.from(missed.entries())
-      .sort((left, right) => right[1] - left[1] || left[0] - right[0])
-      .slice(0, 6);
-    return {
-      detail,
-      classStudents,
-      classAverage,
-      overallAverage,
-      topScore,
-      ungradedCount,
-      missedProblems,
-      showOverallAverage: detail.class_ids.length > 1,
-    };
-  });
+    if (!selectedStudentId || !classRow.students.some((student) => student.id === selectedStudentId)) {
+      setSelectedStudentId(classRow.students[0].id);
+    }
+  }, [classRow.id, classRow.students, selectedStudentId]);
+
+  const selectedStudent = classRow.students.find((student) => student.id === selectedStudentId) || classRow.students[0] || null;
+  const classStudentIds = useMemo(() => new Set(classRow.students.map((student) => student.id)), [classRow.students]);
+  const sessionStats = useMemo(() => {
+    return [...details]
+      .sort((left, right) => {
+        const leftDate = left.scheduled_at || left.created_at || "";
+        const rightDate = right.scheduled_at || right.created_at || "";
+        return leftDate.localeCompare(rightDate) || left.title.localeCompare(right.title);
+      })
+      .map((detail) => {
+        const classStudents = detail.students.filter((student) => classStudentIds.has(student.id));
+        const gradedClassStudents = classStudents.filter((student) => typeof student.result.score === "number" && student.result.status === "graded");
+        const gradedOverallStudents = detail.students.filter((student) => typeof student.result.score === "number" && student.result.status === "graded");
+        const classScores = gradedClassStudents.map((student) => student.result.score);
+        const overallScores = gradedOverallStudents.map((student) => student.result.score);
+        const selectedRow = selectedStudent ? classStudents.find((student) => student.id === selectedStudent.id) : null;
+        const selectedScore = typeof selectedRow?.result.score === "number" && selectedRow.result.status === "graded" ? selectedRow.result.score : null;
+        const classAverage = average(classScores);
+        const overallAverage = average(overallScores);
+        const classStdDev = standardDeviation(classScores);
+        const overallStdDev = standardDeviation(overallScores);
+        const rank = selectedScore == null ? null : classScores.filter((score) => typeof score === "number" && score > selectedScore).length + 1;
+        const percentile = selectedScore == null || classScores.length < 2 || rank == null ? null : Math.round(((classScores.length - rank) / (classScores.length - 1)) * 100);
+        const selectedMissed = (selectedRow?.problem_results || [])
+          .filter((result) => result.result_status === "wrong" || result.result_status === "unanswered")
+          .map((result) => result.problem_number)
+          .sort((left, right) => left - right)
+          .slice(0, 12);
+        const classMissed = new Map<number, number>();
+        for (const student of classStudents) {
+          for (const result of student.problem_results || []) {
+            if (result.result_status === "wrong" || result.result_status === "unanswered") {
+              classMissed.set(result.problem_number, (classMissed.get(result.problem_number) || 0) + 1);
+            }
+          }
+        }
+        const commonMissed = Array.from(classMissed.entries()).sort((left, right) => right[1] - left[1] || left[0] - right[0]).slice(0, 5);
+        return {
+          detail,
+          selectedScore,
+          selectedStatus: selectedRow?.result.status || "not_started",
+          classAverage,
+          overallAverage,
+          classStdDev,
+          overallStdDev,
+          rank,
+          percentile,
+          classGradedCount: classScores.length,
+          overallGradedCount: overallScores.length,
+          selectedMissed,
+          commonMissed,
+          showOverallAverage: detail.class_ids.length > 1,
+        };
+      });
+  }, [classStudentIds, details, selectedStudent]);
+
+  const selectedScores = sessionStats.map((item) => item.selectedScore);
+  const selectedAverage = average(selectedScores);
+  const selectedStdDev = standardDeviation(selectedScores);
+  const classAverageAcross = average(sessionStats.map((item) => item.classAverage));
+  const overallAverageAcross = average(sessionStats.map((item) => item.showOverallAverage ? item.overallAverage : null));
+  const scoredStats = sessionStats.filter((item) => item.selectedScore != null);
+  const firstScore = scoredStats[0]?.selectedScore ?? null;
+  const latestScore = scoredStats[scoredStats.length - 1]?.selectedScore ?? null;
+  const trend = firstScore != null && latestScore != null && scoredStats.length >= 2 ? latestScore - firstScore : null;
+  const averageClassDelta = average(sessionStats.map((item) => item.selectedScore != null && item.classAverage != null ? item.selectedScore - item.classAverage : null));
+  const bestExam = scoredStats.length ? scoredStats.reduce((best, item) => (item.selectedScore || 0) > (best.selectedScore || 0) ? item : best, scoredStats[0]) : null;
 
   return (
     <div className="border-t border-white/10 px-4 pb-4">
@@ -177,54 +210,157 @@ function ClassStatsPanel({
         ) : null}
         {!loading && sessionStats.length ? (
           <div className="space-y-4">
-            {sessionStats.map(({ detail, classStudents, classAverage, overallAverage, topScore, ungradedCount, missedProblems, showOverallAverage }) => (
-              <div key={detail.id} className="rounded-md border border-white/10 bg-black/20 p-4">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-white">{detail.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDate(detail.scheduled_at)} · {detail.problem_count}문항 · {detail.graded_count}/{detail.assigned_count}명 채점</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
-                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
-                      <p className="text-slate-500">반 평균</p>
-                      <p className="mt-1 font-black text-cyan-100">{scoreLabel(classAverage)}</p>
-                    </div>
-                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
-                      <p className="text-slate-500">최고점</p>
-                      <p className="mt-1 font-black text-white">{scoreLabel(topScore)}</p>
-                    </div>
-                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
-                      <p className="text-slate-500">미채점</p>
-                      <p className="mt-1 font-black text-slate-200">{ungradedCount}</p>
-                    </div>
-                    <div className="rounded-md bg-white/[0.045] px-3 py-2">
-                      <p className="text-slate-500">전체 평균</p>
-                      <p className="mt-1 font-black text-amber-100">{showOverallAverage ? scoreLabel(overallAverage) : "-"}</p>
-                    </div>
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <p className="text-sm font-black text-white">{classRow.name} 성적 통계</p>
+                <p className="mt-1 text-xs text-slate-500">학생을 선택하면 시험별 점수 추이와 평균, 표준편차, 석차를 함께 표시합니다.</p>
+              </div>
+              <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                {classRow.students.map((student) => (
+                  <button
+                    key={student.id}
+                    type="button"
+                    onClick={() => setSelectedStudentId(student.id)}
+                    className={cn(
+                      "shrink-0 rounded-md border px-3 py-2 text-xs font-bold transition",
+                      selectedStudent?.id === student.id ? "border-violet-300/50 bg-violet-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-400 hover:text-white"
+                    )}
+                  >
+                    {student.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+              <div className="rounded-md bg-white/[0.045] p-3">
+                <p className="text-xs text-slate-500">학생 평균</p>
+                <p className="mt-1 text-lg font-black text-white">{scoreLabel(selectedAverage)}</p>
+              </div>
+              <div className="rounded-md bg-white/[0.045] p-3">
+                <p className="text-xs text-slate-500">반 평균</p>
+                <p className="mt-1 text-lg font-black text-cyan-100">{scoreLabel(classAverageAcross)}</p>
+              </div>
+              <div className="rounded-md bg-white/[0.045] p-3">
+                <p className="text-xs text-slate-500">전체 평균</p>
+                <p className="mt-1 text-lg font-black text-amber-100">{scoreLabel(overallAverageAcross)}</p>
+              </div>
+              <div className="rounded-md bg-white/[0.045] p-3">
+                <p className="text-xs text-slate-500">점수 표준편차</p>
+                <p className="mt-1 text-lg font-black text-slate-100">{selectedStdDev == null ? "-" : selectedStdDev.toFixed(1)}</p>
+              </div>
+              <div className="rounded-md bg-white/[0.045] p-3">
+                <p className="text-xs text-slate-500">반 평균 대비</p>
+                <p className={cn("mt-1 text-lg font-black", (averageClassDelta || 0) >= 0 ? "text-emerald-100" : "text-rose-100")}>{averageClassDelta == null ? "-" : `${averageClassDelta >= 0 ? "+" : ""}${averageClassDelta.toFixed(1)}`}</p>
+              </div>
+              <div className="rounded-md bg-white/[0.045] p-3">
+                <p className="text-xs text-slate-500">추세</p>
+                <p className={cn("mt-1 text-lg font-black", (trend || 0) >= 0 ? "text-emerald-100" : "text-rose-100")}>{trend == null ? "-" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}`}</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/20 p-4 [scrollbar-width:thin]">
+              <div className="min-w-[860px]">
+                <div className="mb-2 grid grid-cols-[42px_minmax(0,1fr)] gap-3 text-xs text-slate-500">
+                  <span>점수</span>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-violet-400" />학생 점수</span>
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-cyan-300" />반 평균</span>
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-amber-300" />전체 평균</span>
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-amber-200/20 ring-1 ring-amber-100/20" />±표준편차</span>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-2">
-                  {classRow.students.map((student) => {
-                    const row = classStudents.find((item) => item.id === student.id);
-                    const score = typeof row?.result.score === "number" && row.result.status === "graded" ? row.result.score : null;
-                    return (
-                      <div key={student.id} className="grid items-center gap-2 md:grid-cols-[150px_minmax(0,1fr)_84px]">
-                        <Link href={`/student-management/students/${student.id}`} className="truncate text-sm font-semibold text-slate-200 hover:text-white">{student.name}</Link>
-                        <ScoreBar score={score} classAverage={classAverage} overallAverage={overallAverage} showOverallAverage={showOverallAverage} />
-                        <Badge className={cn("justify-center border", statusTone(row?.result.status || "not_started"))}>{row?.result.status || "not_started"}</Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded bg-cyan-500/15 px-2 py-1 text-cyan-100">반 평균선</span>
-                  {showOverallAverage ? <span className="rounded bg-amber-500/15 px-2 py-1 text-amber-100">전체 평균선</span> : null}
-                  {missedProblems.length ? missedProblems.map(([number, count]) => (
-                    <span key={number} className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">{number}번 {count}명</span>
-                  )) : <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">집중 오답 없음</span>}
+                <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-3">
+                  <div className="relative h-72 text-right text-[11px] text-slate-500">
+                    {[100, 75, 50, 25, 0].map((tick) => (
+                      <span key={tick} className="absolute right-0 -translate-y-1/2" style={{ top: `${100 - tick}%` }}>{tick}</span>
+                    ))}
+                  </div>
+                  <div className="relative h-72 border-l border-b border-white/10">
+                    {[100, 75, 50, 25].map((tick) => (
+                      <span key={tick} className="absolute left-0 right-0 border-t border-white/[0.06]" style={{ top: `${100 - tick}%` }} />
+                    ))}
+                    <div className="absolute inset-0 flex items-end gap-4 px-4 pb-11">
+                      {sessionStats.map((item) => {
+                        const bandAverage = item.showOverallAverage ? item.overallAverage : item.classAverage;
+                        const bandStdDev = item.showOverallAverage ? item.overallStdDev : item.classStdDev;
+                        const low = bandAverage == null || bandStdDev == null ? null : Math.max(0, bandAverage - bandStdDev);
+                        const high = bandAverage == null || bandStdDev == null ? null : Math.min(100, bandAverage + bandStdDev);
+                        const bars = [
+                          { key: "student", value: item.selectedScore, color: "bg-violet-400", label: "학생" },
+                          { key: "class", value: item.classAverage, color: "bg-cyan-300", label: "반 평균" },
+                          { key: "overall", value: item.showOverallAverage ? item.overallAverage : null, color: "bg-amber-300", label: "전체 평균" },
+                        ];
+                        return (
+                          <div key={item.detail.id} className="relative flex h-full w-28 shrink-0 items-end justify-center gap-1">
+                            {low != null && high != null ? (
+                              <span
+                                className="absolute left-1 right-1 rounded bg-amber-200/10 ring-1 ring-amber-100/15"
+                                style={{ bottom: `${low}%`, height: `${Math.max(2, high - low)}%` }}
+                                title={`표준편차 범위 ${scoreLabel(low)} - ${scoreLabel(high)}`}
+                              />
+                            ) : null}
+                            {bars.map((bar) => {
+                              const height = bar.value == null ? 0 : Math.max(2, Math.min(100, bar.value));
+                              return (
+                                <span key={bar.key} className="relative flex h-full w-6 items-end justify-center">
+                                  <i
+                                    className={cn("w-full rounded-t-sm", bar.value == null ? "h-px bg-white/10" : bar.color)}
+                                    style={{ height: bar.value == null ? undefined : `${height}%` }}
+                                    title={`${item.detail.title} ${bar.label}: ${scoreLabel(bar.value)}`}
+                                  />
+                                </span>
+                              );
+                            })}
+                            <div className="absolute -bottom-10 left-1/2 w-28 -translate-x-1/2 text-center">
+                              <p className="truncate text-[11px] font-bold text-slate-300" title={item.detail.title}>{item.detail.title}</p>
+                              <p className="mt-0.5 text-[10px] text-slate-500">{formatDate(item.detail.scheduled_at)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="grid gap-3 xl:grid-cols-2">
+              {sessionStats.map((item) => (
+                <div key={item.detail.id} className="rounded-md border border-white/10 bg-black/20 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-white">{item.detail.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {selectedStudent?.name || "학생"} {scoreLabel(item.selectedScore)} · 반 평균 {scoreLabel(item.classAverage)}
+                        {item.showOverallAverage ? ` · 전체 평균 ${scoreLabel(item.overallAverage)}` : ""}
+                      </p>
+                    </div>
+                    <Badge className={cn("shrink-0 border", statusTone(item.selectedStatus))}>{item.selectedStatus}</Badge>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">석차 {item.rank == null ? "-" : `${item.rank}/${item.classGradedCount}`}</span>
+                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">백분위 {item.percentile == null ? "-" : `${item.percentile}`}</span>
+                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">반 σ {item.classStdDev == null ? "-" : item.classStdDev.toFixed(1)}</span>
+                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">전체 n {item.overallGradedCount}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+                    {item.selectedMissed.length ? item.selectedMissed.map((number) => (
+                      <span key={number} className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">{number}번</span>
+                    )) : <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">학생 오답 없음</span>}
+                    {item.commonMissed.slice(0, 3).map(([number, count]) => (
+                      <span key={`common-${number}`} className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">반 다빈도 {number}번 {count}명</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {bestExam ? (
+              <div className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-xs text-slate-400">
+                {selectedStudent?.name || "선택 학생"} 최고 기록은 <span className="font-black text-white">{bestExam.detail.title}</span>의 <span className="font-black text-violet-100">{scoreLabel(bestExam.selectedScore)}</span>입니다.
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
