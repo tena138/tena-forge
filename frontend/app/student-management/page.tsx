@@ -73,6 +73,14 @@ function formatDate(value?: string | null) {
   return value.slice(0, 10);
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  const candidate = error as { response?: { data?: { detail?: unknown } }; message?: string };
+  const detail = candidate.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object") return JSON.stringify(detail);
+  return candidate.message || fallback;
+}
+
 function ClassStudentCard({ student }: { student: StudentCard }) {
   return (
     <Link href={`/student-management/students/${student.id}`} className="block rounded-lg border border-white/10 bg-black/20 p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
@@ -141,6 +149,7 @@ export default function StudentManagementPage() {
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [gridStatuses, setGridStatuses] = useState<Record<number, ProblemStatus>>({});
   const [wrongInput, setWrongInput] = useState("");
+  const [classSaving, setClassSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -217,10 +226,19 @@ export default function StudentManagementPage() {
 
   async function submitClass() {
     if (!classForm.name.trim()) return;
-    await createClass(classForm);
-    setClassForm({ name: "", description: "", subject: "", grade_level: "" });
-    setMessage("클래스를 만들었습니다.");
-    await refresh();
+    setClassSaving(true);
+    try {
+      const created = await createClass(classForm);
+      setClasses((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      setExpanded((current) => ({ ...current, [created.id]: true }));
+      setClassForm({ name: "", description: "", subject: "", grade_level: "" });
+      setMessage("클래스를 만들었습니다.");
+      await refresh().catch(() => undefined);
+    } catch (error) {
+      setMessage(errorMessage(error, "클래스 생성에 실패했습니다. 잠시 후 다시 시도해주세요."));
+    } finally {
+      setClassSaving(false);
+    }
   }
 
   async function submitStudent() {
@@ -468,8 +486,8 @@ export default function StudentManagementPage() {
                     <Input placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
                     <Input placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
                   </div>
-                  <Button className="w-full" onClick={submitClass}>
-                    <Plus className="h-4 w-4" />
+                  <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
+                    {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                     클래스 추가
                   </Button>
                 </CardContent>
