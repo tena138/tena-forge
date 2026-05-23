@@ -87,7 +87,7 @@ function errorMessage(error: unknown, fallback: string) {
 
 function ClassStudentCard({ student }: { student: StudentCard }) {
   return (
-    <Link href={`/student-management/students/${student.id}`} className="block w-[210px] shrink-0 rounded-lg border border-white/10 bg-black/20 p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
+    <Link href={`/student-management/students/${student.id}`} className="block w-[210px] shrink-0 rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{student.name}</p>
@@ -445,9 +445,9 @@ export default function StudentManagementPage() {
   const selectedStudent = sessionDetail?.students.find((student) => student.id === selectedStudentId);
 
   return (
-    <main className="min-h-screen bg-[#07080d] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-300">Student Management</p>
             <p className="text-sm text-slate-500">Class Dashboard</p>
@@ -457,7 +457,7 @@ export default function StudentManagementPage() {
               ["클래스", summary.class_count],
               ["학생", summary.student_count],
             ].map(([label, value]) => (
-              <div key={label} className="flex min-w-[92px] items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
+              <div key={label} className="flex min-w-[92px] items-center justify-between gap-3 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-2">
                 <p className="text-xs text-slate-500">{label}</p>
                 <p className="text-base font-black text-white">{value}</p>
               </div>
@@ -484,10 +484,10 @@ export default function StudentManagementPage() {
         {!loading ? (
           <section className="space-y-3">
             {classes.map((classRow) => (
-              <Card key={classRow.id} className="overflow-hidden border-white/10 bg-white/[0.035]">
+              <Card key={classRow.id} className="overflow-visible rounded-none border-0 border-t border-white/10 bg-transparent shadow-none">
                 <CardContent className="p-0">
                   <div className="grid min-h-[168px] lg:grid-cols-[180px_minmax(0,1fr)]">
-                    <aside className="flex flex-col justify-between gap-4 border-b border-white/10 bg-black/20 p-4 lg:border-b-0 lg:border-r">
+                    <aside className="flex flex-col justify-between gap-4 border-b border-white/10 bg-transparent p-4 lg:border-b-0 lg:border-r">
                       <div>
                         <p className="text-3xl font-black tracking-normal text-white">{classRow.name}</p>
                         <p className="mt-2 text-2xl font-black text-slate-200">{classRow.student_count}</p>
