@@ -22,7 +22,11 @@ class PipelineMergeKeyTests(unittest.TestCase):
     def test_solution_reprocess_distinguishes_structural_section_from_unit_tag(self):
         self.assertTrue(_is_structural_section_label("DAY 03"))
         self.assertTrue(_is_structural_section_label("UNIT 12"))
+        self.assertTrue(_is_structural_section_label("제1회"))
+        self.assertTrue(_is_structural_section_label("1회"))
         self.assertTrue(_is_structural_section_label("수학Ⅰ / 지수함수와 로그함수"))
+        self.assertFalse(_is_structural_section_label("singleconnection 수학 1"))
+        self.assertFalse(_is_structural_section_label("수학Ⅰ / singleconnection 수학 1"))
         self.assertFalse(_is_structural_section_label("수열"))
         self.assertFalse(_is_structural_section_label("지수로그함수"))
 
@@ -48,6 +52,43 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertEqual(normalized["toc_entries"][0]["section_id"], "DAY 02")
         self.assertEqual(normalized["toc_entries"][0]["page_number"], 7)
         self.assertEqual(normalized["page_type"], "toc")
+
+    def test_page_metadata_prefers_exam_round_over_single_connection_title(self):
+        page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
+        normalized = _normalize_page_metadata(
+            {
+                "detected_section_ids": ["2026 singleconnection 수학 1 제1회", "singleconnection 수학 1"],
+                "detected_subjects": ["수학Ⅰ"],
+                "detected_units": ["singleconnection 수학 1"],
+                "page_type": "problem_page",
+                "section_confidence": 0.9,
+            },
+            page,
+            "problem",
+        )
+
+        self.assertEqual(normalized["detected_section_ids"], ["회차 01"])
+        sections = build_section_ranges_from_metadata([normalized], "problem", 3)
+        self.assertEqual(sections[0]["section_id"], "회차 01")
+
+    def test_page_metadata_does_not_promote_single_connection_subject_as_unit(self):
+        page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
+        normalized = _normalize_page_metadata(
+            {
+                "detected_section_ids": ["singleconnection 수학 1"],
+                "detected_subjects": ["수학Ⅰ"],
+                "detected_units": ["singleconnection 수학 1"],
+                "page_type": "problem_page",
+                "section_confidence": 0.9,
+            },
+            page,
+            "problem",
+        )
+
+        self.assertEqual(normalized["detected_section_ids"], [])
+        sections = build_section_ranges_from_metadata([normalized], "problem", 3)
+        self.assertEqual(sections[0]["section_id"], "UNSECTIONED")
+        self.assertEqual(sections[0]["status"], "needs_review")
 
     def test_toc_entries_keep_problem_count_scaffold(self):
         page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
@@ -227,6 +268,18 @@ class PipelineMergeKeyTests(unittest.TestCase):
 
         self.assertEqual([item["page_number_occurrence"] for item in normalized], [0, 1])
         self.assertNotEqual(keys[0], keys[1])
+
+    def test_source_title_unit_does_not_become_section_label(self):
+        page = RenderedPage(page_index=2, base64_png="", png_bytes=b"")
+        normalized = _normalize_extracted_items(
+            [
+                {"problem_number": "1", "problem_text": "first problem", "unit": "singleconnection 수학 1"},
+            ],
+            page,
+        )
+
+        self.assertEqual(normalized[0]["unit"], None)
+        self.assertEqual(normalized[0]["section_label"], None)
 
     def test_choice_answer_is_preserved_when_value_is_not_resolved(self):
         self.assertEqual(clean_solution_answer("정답: ③"), "③")

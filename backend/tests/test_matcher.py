@@ -7,7 +7,7 @@ from unittest.mock import patch
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from services.matcher import _canonical_number, _lexical_similarity, match, match_with_summary  # noqa: E402
+from services.matcher import _canonical_number, _lexical_similarity, _normalize_section_label, match, match_with_summary  # noqa: E402
 
 
 class MatcherTests(unittest.TestCase):
@@ -16,6 +16,12 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(_canonical_number("문제 01"), "1")
         self.assertEqual(_canonical_number("#12."), "12")
         self.assertEqual(_canonical_number("①"), "1")
+
+    def test_section_label_normalizes_round_and_ignores_source_title(self):
+        self.assertEqual(_normalize_section_label("제1회"), "회차 01")
+        self.assertEqual(_normalize_section_label("2026 싱글 커넥션 수1 2회"), "회차 02")
+        self.assertIsNone(_normalize_section_label("singleconnection 수학 1"))
+        self.assertIsNone(_normalize_section_label("수학Ⅰ"))
 
     def test_repeated_numbers_do_not_cross_match_when_sections_disagree(self):
         problems = [

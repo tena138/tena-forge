@@ -7,6 +7,7 @@ import re
 import threading
 import time
 import traceback
+import unicodedata
 from collections import defaultdict
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
@@ -69,7 +70,7 @@ Use inline LaTeX delimiters like $f(x)=x^2$ inside Korean sentences.
 Use display LaTeX delimiters like $$\lim_{x \to 0} f(x)$$ for standalone formulas.
 Do not leave plain-text math such as x^2, f'(x), lim x->1, or a/b when it should be LaTeX.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
-Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit labels, or equivalent source text. Do not invent it.
+Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit/exam-round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 Return raw JSON only, no markdown, no explanation."""
 
 
@@ -96,7 +97,7 @@ For each problem return a JSON object with:
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 Convert mathematical expressions into LaTeX.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
-Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit labels, or equivalent source text. Do not invent it.
+Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit/exam-round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 Return raw JSON array only, no markdown, no explanation."""
 
@@ -131,7 +132,7 @@ def has_solution_content(solution: dict[str, Any] | None) -> bool:
 
 
 STRUCTURAL_SECTION_RE = re.compile(
-    r"\b(?:DAY|CHAPTER|UNIT|LESSON|TYPE)\s*\d{1,3}\b|(?:단원|유형)\s*\d{1,3}|[/＞>›]",
+    r"\b(?:DAY|CHAPTER|UNIT|LESSON|TYPE|ROUND)\s*\d{1,3}\b|(?:단원|유형|회차)\s*\d{1,3}|(?:제\s*)?\d{1,3}\s*회(?:차)?|[/＞>›]",
     re.IGNORECASE,
 )
 SECTION_ID_PATTERNS = (
@@ -140,17 +141,51 @@ SECTION_ID_PATTERNS = (
     (re.compile(r"\bUNIT\s*0*(\d{1,3})\b", re.IGNORECASE), "UNIT"),
     (re.compile(r"\bLESSON\s*0*(\d{1,3})\b", re.IGNORECASE), "LESSON"),
     (re.compile(r"\bTYPE\s*0*(\d{1,3})\b", re.IGNORECASE), "TYPE"),
+    (re.compile(r"\bROUND\s*0*(\d{1,3})\b", re.IGNORECASE), "회차"),
+    (re.compile(r"회차\s*0*(\d{1,3})", re.IGNORECASE), "회차"),
+    (re.compile(r"(?:제\s*)?0*(\d{1,3})\s*회(?:차)?", re.IGNORECASE), "회차"),
     (re.compile(r"(단원|유형)\s*0*(\d{1,3})", re.IGNORECASE), None),
+)
+SOURCE_TITLE_RE = re.compile(r"(?:single\s*connection|singleconnection|싱글\s*커넥션)", re.IGNORECASE)
+MATH_SUBJECT_ONLY_RE = re.compile(
+    r"^(?:수학\s*[ⅠⅡⅢIVX0-9]+|수\s*[12ⅠⅡ]|수[12]|미적분?|확률과\s*통계|확통|기하|공통수학\s*[12]?)$",
+    re.IGNORECASE,
+)
+MATH_CURRICULUM_UNIT_RE = re.compile(
+    r"(?:지수|로그|삼각|수열|극한|연속|미분|적분|도함수|다항식|방정식|부등식|함수|확률|통계|경우의\s*수|도형|벡터|행렬)",
+    re.IGNORECASE,
 )
 
 
+def _normalized_label_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def _is_source_or_subject_label(value: Any) -> bool:
+    text = _normalized_label_text(value)
+    if not text:
+        return False
+    if SOURCE_TITLE_RE.search(text):
+        return True
+    normalized = unicodedata.normalize("NFKC", text)
+    compact = re.sub(r"[\s/_>\-]+", "", normalized)
+    return bool(MATH_SUBJECT_ONLY_RE.fullmatch(text) or MATH_SUBJECT_ONLY_RE.fullmatch(normalized) or MATH_SUBJECT_ONLY_RE.fullmatch(compact))
+
+
+def _is_curriculum_unit_label(value: Any) -> bool:
+    text = _normalized_label_text(value)
+    return bool(text and not _is_source_or_subject_label(text) and MATH_CURRICULUM_UNIT_RE.search(text))
+
+
 def _is_structural_section_label(value: Any) -> bool:
-    text = str(value or "").strip()
+    text = _normalized_label_text(value)
+    if _is_source_or_subject_label(text):
+        return False
     return bool(text and STRUCTURAL_SECTION_RE.search(text))
 
 
 def _normalize_section_id(value: Any) -> str | None:
-    text = re.sub(r"\s+", " ", str(value or "").strip())
+    text = _normalized_label_text(value)
     if not text:
         return None
     normalized = text.replace("＞", ">")
@@ -165,10 +200,51 @@ def _normalize_section_id(value: Any) -> str | None:
     return normalized
 
 
+def _usable_section_id(value: Any, *, allow_plain_title: bool = False) -> str | None:
+    section_id = _normalize_section_id(value)
+    if not section_id or _is_source_or_subject_label(section_id):
+        return None
+    if _is_structural_section_label(section_id):
+        return section_id
+    if "/" in section_id:
+        unit_part = section_id.split("/")[-1].strip()
+        if _is_curriculum_unit_label(unit_part):
+            return section_id
+    if allow_plain_title and _is_curriculum_unit_label(section_id):
+        return section_id
+    return None
+
+
+def _clean_unit_label(value: Any) -> str | None:
+    text = _normalized_label_text(value)
+    if not text or _is_source_or_subject_label(text):
+        return None
+    if _is_structural_section_label(text):
+        return None
+    return text
+
+
+def _tag_unit_label(section_label: Any, unit: Any) -> str | None:
+    section = _usable_section_id(section_label, allow_plain_title=True)
+    if section:
+        return section
+    return _clean_unit_label(unit)
+
+
+def _section_ranges_are_usable(sections: list[dict[str, Any]]) -> bool:
+    for section in sections:
+        section_id = str(section.get("section_id") or "").strip()
+        if not section_id or section_id == "UNSECTIONED":
+            continue
+        if not _usable_section_id(section_id, allow_plain_title=True):
+            return False
+    return True
+
+
 def _problem_match_payload(problem: Problem) -> dict[str, Any]:
     tags = problem.tags
-    unit = tags.unit if tags else None
-    section_label = unit if _is_structural_section_label(unit) else None
+    unit = _clean_unit_label(tags.unit if tags else None)
+    section_label = _usable_section_id(tags.unit if tags else None, allow_plain_title=True)
     review_page_number = problem.review_page_number
     page_index = max(int(review_page_number or 1) - 1, 0)
     return {
@@ -268,7 +344,7 @@ def apply_solutions_to_existing_problems(
 
 def build_extraction_prompt(subject_candidates: list[str] | None = None, unit_candidates: list[str] | None = None) -> str:
     subjects = _clean_text_candidates(subject_candidates, max_items=24)
-    units = _clean_text_candidates(unit_candidates, max_items=80)
+    units = [unit for unit in _clean_text_candidates(unit_candidates, max_items=80) if _clean_unit_label(unit)]
     return (
         EXTRACTION_PROMPT
         + "\n\nClassify each extracted problem while extracting it.\n"
@@ -277,6 +353,7 @@ def build_extraction_prompt(subject_candidates: list[str] | None = None, unit_ca
         + "\n"
         + _candidate_instruction("unit", units)
         + "\nIf the selected subjects include multiple courses such as 수학Ⅰ and 수학Ⅱ, use the visible concept, title, page context, and problem content to choose the best subject for each problem."
+        + "\nDo not classify source/book titles such as Single Connection/싱글 커넥션 or subject-only labels such as 수학Ⅰ/수1 as units."
     )
 
 SOLUTION_PROMPT = r"""You are extracting answers and solutions from a Korean exam solution booklet.
@@ -294,7 +371,7 @@ For each problem on this page return:
 If the answer is given as a choice number (e.g. ?뺣떟: ??, resolve it to the actual value from the solution text. If unresolvable, set answer to null.
 problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
-section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
 Convert every mathematical expression in answer, solution_steps, and key_concept into LaTeX.
 Use inline LaTeX delimiters like $x=2$ inside Korean sentences.
@@ -337,7 +414,7 @@ Rules for answer:
 Rules for matching metadata:
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
-- section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+- section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 - Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 - solution_first_line must be the first visible sentence or line of the solution explanation.
@@ -367,7 +444,7 @@ Rules:
 - If the actual answer cannot be resolved from the visible page, set answer to null.
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
-- section_label must come only from page headers, footers, visible section titles, unit names, exam round labels, or equivalent source text. Do not invent it.
+- section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 - Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 
@@ -387,7 +464,7 @@ Return exactly one JSON object inside a JSON array:
       {"section_id": "DAY 01", "subject": null, "unit": null, "page_number": 12, "problem_number_start": "01", "problem_number_end": "10", "problem_count": 10},
       {"section_id": "수학Ⅰ / 지수함수와 로그함수", "subject": "수학Ⅰ", "unit": "지수함수와 로그함수", "page_number": 24, "problem_number_start": null, "problem_number_end": null, "problem_count": null}
     ],
-    "section_pattern": "subject_unit" | "day" | "mixed" | "unknown",
+    "section_pattern": "subject_unit" | "day" | "round" | "mixed" | "unknown",
     "detected_problem_headers": ["01", "02"],
     "detected_solution_headers": ["01", "02"],
     "page_type": "problem_page" | "solution_page" | "toc" | "cover" | "log" | "blank" | "unknown",
@@ -402,9 +479,14 @@ Rules:
 - Common structures are:
   1. subject + unit sections, e.g. "수학Ⅰ / 지수함수와 로그함수", "수학Ⅱ / 수열".
   2. DAY-based sections, e.g. "DAY 1", "Day 02", "DAY 03".
+  3. exam-round / 회차 sections, e.g. "제1회", "1회", "01회", "실전 모의고사 2회".
 - Normalize DAY labels to "DAY 01", "DAY 02", etc.
+- Normalize exam-round labels to "회차 01", "회차 02", etc.
 - detected_section_ids must come from explicit section/day/unit/chapter/exam labels only. Do not invent missing section IDs.
 - For subject + unit pages, detected_section_ids should prefer "subject / unit" when both are visible.
+- For 회차형 books, detected_section_ids must prefer the visible 회차 label over subject/book-title text.
+- Treat "Single Connection", "singleconnection", "싱글 커넥션", and similar book/source titles as source titles, not units and not section IDs.
+- Treat "수학Ⅰ", "수1", "수학 1", "수학Ⅱ", "수2" as subjects only unless a real curriculum unit or 회차 label is also visible.
 - detected_problem_headers should contain problem numbers that start problem statements.
 - detected_solution_headers should contain problem numbers that start answers or solutions.
 - toc_entries.page_number should be the printed page number or visible destination page number in the table of contents. If no page number is visible, use null.
@@ -660,7 +742,7 @@ def _normalize_detected_sections(value: Any) -> list[str]:
     sections: list[str] = []
     seen: set[str] = set()
     for item in _clean_metadata_list(value, max_items=32):
-        section = _normalize_section_id(item)
+        section = _usable_section_id(item, allow_plain_title=True)
         if not section or section in seen:
             continue
         sections.append(section)
@@ -712,10 +794,13 @@ def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
             subject = str(raw.get("subject") or "").strip() or None
             unit = str(raw.get("unit") or "").strip() or None
             title = str(raw.get("section_id") or raw.get("title") or raw.get("label") or "").strip()
-            if subject and unit:
+            title_section = _usable_section_id(title, allow_plain_title=True)
+            if title_section:
+                section_id = title_section
+            elif subject and unit and _is_curriculum_unit_label(unit):
                 section_id = _normalize_section_id(f"{subject} / {unit}")
             else:
-                section_id = _normalize_section_id(title or unit or subject)
+                section_id = _usable_section_id(title or unit or subject, allow_plain_title=True)
             page_number = _int_or_none(raw.get("page_number", raw.get("start_page", raw.get("page"))))
         else:
             text = str(raw or "").strip()
@@ -730,7 +815,7 @@ def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
                     section_text = candidate
             subject = None
             unit = None
-            section_id = _normalize_section_id(section_text)
+            section_id = _usable_section_id(section_text, allow_plain_title=True)
         problem_start, problem_end, problem_count = _toc_problem_bounds(raw)
         if not section_id:
             continue
@@ -847,14 +932,14 @@ def _primary_section_id(metadata: dict[str, Any]) -> str | None:
     sections = metadata.get("detected_section_ids")
     if isinstance(sections, list):
         for section in sections:
-            text = str(section or "").strip()
+            text = _usable_section_id(section, allow_plain_title=True)
             if text:
                 return text
     subjects = metadata.get("detected_subjects")
     units = metadata.get("detected_units")
     subject = str(subjects[0]).strip() if isinstance(subjects, list) and subjects else ""
     unit = str(units[0]).strip() if isinstance(units, list) and units else ""
-    if subject and unit:
+    if subject and unit and _is_curriculum_unit_label(unit):
         return _normalize_section_id(f"{subject} / {unit}")
     return None
 
@@ -1946,7 +2031,6 @@ def process_solutions_only(batch_id: UUID) -> None:
         problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
         solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
         stored_problem_sections = _read_batch_artifact(batch_id, "problem_sections.json")
-        reuse_problem_sections = isinstance(stored_problem_sections, list)
         existing_pages_metadata = _read_batch_artifact(batch_id, "pages_metadata.json")
         problem_page_metadata = [
             item
@@ -1954,8 +2038,9 @@ def process_solutions_only(batch_id: UUID) -> None:
             if isinstance(item, dict) and item.get("document_kind") == "problem"
         ]
         problem_sections: list[dict[str, Any]] = [
-            item for item in (stored_problem_sections if reuse_problem_sections else []) if isinstance(item, dict)
+            item for item in (stored_problem_sections if isinstance(stored_problem_sections, list) else []) if isinstance(item, dict)
         ]
+        reuse_problem_sections = bool(problem_sections) and _section_ranges_are_usable(problem_sections)
         problem_structure_units = 0 if reuse_problem_sections else 2 * problem_page_count
         solution_structure_units = 2 * solution_page_count
         structure_units = problem_structure_units + solution_structure_units
@@ -2420,10 +2505,17 @@ def _extract_problem_number(value: Any) -> tuple[int, str] | None:
 
 
 def _structure_label(item: dict[str, Any]) -> str | None:
-    for key in ("section_label", "section_id", "unit", "chapter", "day"):
+    for key in ("section_label", "section_id", "chapter", "day"):
         text = str(item.get(key) or "").strip()
-        if text:
-            return text
+        section_id = _usable_section_id(text, allow_plain_title=True)
+        if section_id:
+            return section_id
+        if text and not _is_source_or_subject_label(text):
+            return _normalize_section_id(text)
+    unit = item.get("unit")
+    section_id = _usable_section_id(unit, allow_plain_title=True)
+    if section_id:
+        return section_id
     return None
 
 
@@ -2483,7 +2575,7 @@ def _normalize_extracted_items(
                 "problem_text": normalize_geometry_notation(str(item.get("problem_text") or "").strip()),
                 "has_visual": bool(item.get("has_visual")),
                 "subject": str(item.get("subject") or "").strip() or None,
-                "unit": str(item.get("unit") or "").strip() or None,
+                "unit": _clean_unit_label(item.get("unit")),
                 "section_label": section_label,
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
                 "page_index": page.page_index,
@@ -2839,7 +2931,7 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
         page_number = int(item.get("page_index") or 0) + 1
         problem.tags = Tag(
             subject=str(item.get("subject") or "").strip() or None,
-            unit=str(item.get("section_label") or item.get("unit") or "").strip() or None,
+            unit=_tag_unit_label(item.get("section_label"), item.get("unit")),
             source=f"{batch_name} / p.{page_number} / {item['problem_number']}번",
         )
         db.add(problem)

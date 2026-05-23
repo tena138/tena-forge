@@ -23,8 +23,16 @@ SECTION_PATTERNS = (
     (re.compile(r"\bDAY\s*0*(\d{1,3})\b", re.IGNORECASE), "DAY"),
     (re.compile(r"\bCH(?:APTER)?\s*0*(\d{1,3})\b", re.IGNORECASE), "CHAPTER"),
     (re.compile(r"\bUNIT\s*0*(\d{1,3})\b", re.IGNORECASE), "UNIT"),
+    (re.compile(r"\bROUND\s*0*(\d{1,3})\b", re.IGNORECASE), "\ud68c\ucc28"),
+    (re.compile(r"\ud68c\ucc28\s*0*(\d{1,3})", re.IGNORECASE), "\ud68c\ucc28"),
+    (re.compile(r"(?:\uc81c\s*)?0*(\d{1,3})\s*\ud68c(?:\ucc28)?", re.IGNORECASE), "\ud68c\ucc28"),
     (re.compile(r"(?:\uc720\ud615|TYPE)\s*0*(\d{1,3})", re.IGNORECASE), "\uc720\ud615"),
     (re.compile(r"(?:\ub2e8\uc6d0|LESSON)\s*0*(\d{1,3})", re.IGNORECASE), "\ub2e8\uc6d0"),
+)
+SOURCE_TITLE_RE = re.compile(r"(?:single\s*connection|singleconnection|\uc2f1\uae00\s*\ucee4\ub125\uc158)", re.IGNORECASE)
+MATH_SUBJECT_ONLY_RE = re.compile(
+    r"^(?:\uc218\ud559\s*[\u2160\u2161\u2162IVX0-9]+|\uc218\s*[12\u2160\u2161]|\uc218[12]|\ubbf8\uc801\ubd84?|\ud655\ub960\uacfc\s*\ud1b5\uacc4|\ud655\ud1b5|\uae30\ud558|\uacf5\ud1b5\uc218\ud559\s*[12]?)$",
+    re.IGNORECASE,
 )
 NUMBER_PREFIX_RE = re.compile(
     r"^(?:#|No\.?|NO\.?|Q\.?|Problem|"
@@ -88,6 +96,11 @@ def _normalize_section_label(value: Any) -> str | None:
         match = pattern.search(text)
         if match:
             return f"{label} {int(match.group(1)):02d}"
+    if SOURCE_TITLE_RE.search(text):
+        return None
+    compact = re.sub(r"[\s/_>\-]+", "", text)
+    if MATH_SUBJECT_ONLY_RE.fullmatch(text) or MATH_SUBJECT_ONLY_RE.fullmatch(compact):
+        return None
     return text.upper()
 
 
