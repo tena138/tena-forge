@@ -184,6 +184,7 @@ def create_sqlite_tables_for_local_dev():
                 connection.execute(text("UPDATE exam_templates SET updated_at = created_at WHERE updated_at IS NULL"))
         _ensure_sqlite_columns()
         _seed_saas_foundation()
+        _seed_admin_templates()
         _mark_interrupted_batches()
         _purge_expired_trashed_problems()
 
@@ -193,12 +194,14 @@ def repair_production_schema_and_admin():
     if settings.database_url.startswith("sqlite"):
         return
     from scripts.ensure_admin_account import main as ensure_admin_account
+    from scripts.ensure_admin_templates import main as ensure_admin_templates
     from scripts.repair_alembic_version import main as repair_alembic_version
 
     repair_alembic_version()
     ensure_admin_account()
+    ensure_admin_templates()
     _mark_interrupted_batches()
-    print("Production schema repair and admin bootstrap completed.", flush=True)
+    print("Production schema repair, admin bootstrap, and template seed completed.", flush=True)
 
 
 @app.get("/health")
@@ -387,6 +390,12 @@ def _purge_expired_trashed_problems():
             db.commit()
     finally:
         db.close()
+
+
+def _seed_admin_templates():
+    from scripts.ensure_admin_templates import main as ensure_admin_templates
+
+    ensure_admin_templates()
 
 
 def _seed_saas_foundation():
