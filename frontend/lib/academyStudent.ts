@@ -46,6 +46,7 @@ export type AcademyBilling = {
     monthly_price: number;
     additional_seat_price: number;
   } | null;
+  unlimited_seats?: boolean;
   included_seats: number;
   purchased_additional_seats: number;
   active_seats: number;

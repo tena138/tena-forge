@@ -45,6 +45,7 @@ from services.academy_student_access import (
     ensure_academy_subscription,
     ensure_default_academy_plans,
     get_academy_name,
+    has_unlimited_seats,
     real_ip,
     release_seat,
     require_manage_billing,
@@ -226,12 +227,14 @@ def academy_billing(academy_id: str, request: Request, db: Session = Depends(get
     plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == sub.plan_code))
     active_seats = db.scalar(select(func.count(AcademySeat.id)).where(AcademySeat.academy_id == academy_id, AcademySeat.is_active.is_(True))) or 0
     assigned = db.scalar(select(func.count(AcademySeat.id)).where(AcademySeat.academy_id == academy_id, AcademySeat.current_student_membership_id.is_not(None), AcademySeat.is_active.is_(True))) or 0
-    included = plan.included_seats if plan else 0
-    billable_extra = max(int(active_seats) - included, 0)
+    unlimited_seats = has_unlimited_seats(db, academy_id)
+    included = max(int(active_seats), plan.included_seats if plan else 0) if unlimited_seats else plan.included_seats if plan else 0
+    billable_extra = 0 if unlimited_seats else max(int(active_seats) - included, 0)
     estimated_bill = (plan.monthly_price if plan else 0) + billable_extra * (plan.additional_seat_price if plan else 0)
     return {
         "subscription": serialize(sub),
         "plan": serialize(plan) if plan else None,
+        "unlimited_seats": unlimited_seats,
         "included_seats": included,
         "purchased_additional_seats": sub.purchased_additional_seats,
         "active_seats": int(active_seats),
@@ -781,4 +784,3 @@ def academy_usage_report(academy_id: str, request: Request, db: Session = Depend
         "today_extractions": sum(row.extraction_count for row in usage),
         "today_exports": sum(row.export_count for row in usage),
     }
-

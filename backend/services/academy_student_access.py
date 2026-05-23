@@ -7,6 +7,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from database import get_settings
 from models import (
     AbuseSignal,
     Academy,
@@ -39,6 +40,20 @@ def generate_invite_code() -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     chunks = ["".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3)]
     return "-".join(chunks)
+
+
+def _admin_email_set() -> set[str]:
+    return {email.strip().lower() for email in get_settings().admin_emails.split(",") if email.strip()}
+
+
+def has_unlimited_seats(db: Session, academy_id: str) -> bool:
+    if academy_id == "local_user":
+        return True
+    try:
+        academy = db.get(Academy, UUID(academy_id))
+    except ValueError:
+        return False
+    return bool(academy and academy.email.strip().lower() in _admin_email_set())
 
 
 def real_ip(request: Request) -> str:
@@ -169,7 +184,7 @@ def create_seat(db: Session, academy_id: str, display_name: str | None = None) -
     plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == subscription.plan_code))
     entitled = (plan.included_seats if plan else 0) + subscription.purchased_additional_seats
     active_seats = db.scalar(select(func.count(AcademySeat.id)).where(AcademySeat.academy_id == academy_id, AcademySeat.is_active.is_(True))) or 0
-    if subscription.overage_policy == "BLOCK_AT_LIMIT" and active_seats >= entitled:
+    if not has_unlimited_seats(db, academy_id) and subscription.overage_policy == "BLOCK_AT_LIMIT" and active_seats >= entitled:
         raise HTTPException(status_code=402, detail="Purchased seat limit reached. Increase seats or change overage policy.")
     code = generate_invite_code()
     seat = AcademySeat(
@@ -370,4 +385,3 @@ def create_watermark_export_record(
     )
     db.add(record)
     return record
-
