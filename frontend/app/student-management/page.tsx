@@ -40,6 +40,7 @@ import {
   listPaperSessions,
   listWrongAnswers,
   savePaperSessionGrade,
+  updateClass,
 } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
@@ -150,10 +151,13 @@ export default function StudentManagementPage() {
   const [gridStatuses, setGridStatuses] = useState<Record<number, ProblemStatus>>({});
   const [wrongInput, setWrongInput] = useState("");
   const [classSaving, setClassSaving] = useState(false);
+  const [editingClassId, setEditingClassId] = useState("");
+  const [classEditSavingId, setClassEditSavingId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   const [classForm, setClassForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
+  const [classEditForm, setClassEditForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
   const [studentForm, setStudentForm] = useState({ name: "", school: "", grade_level: "", memo: "", class_id: "" });
   const [sessionForm, setSessionForm] = useState({
     title: "",
@@ -238,6 +242,37 @@ export default function StudentManagementPage() {
       setMessage(errorMessage(error, "클래스 생성에 실패했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
       setClassSaving(false);
+    }
+  }
+
+  function startEditClass(classRow: ClassCard) {
+    setEditingClassId(classRow.id);
+    setClassEditForm({
+      name: classRow.name || "",
+      description: classRow.description || "",
+      subject: classRow.subject || "",
+      grade_level: classRow.grade_level || "",
+    });
+  }
+
+  async function submitClassEdit(classId: string) {
+    if (!classEditForm.name.trim()) return;
+    setClassEditSavingId(classId);
+    try {
+      const updated = await updateClass(classId, {
+        name: classEditForm.name.trim(),
+        description: classEditForm.description.trim() || null,
+        subject: classEditForm.subject.trim() || null,
+        grade_level: classEditForm.grade_level.trim() || null,
+      });
+      setClasses((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingClassId("");
+      setMessage("클래스 정보를 수정했습니다.");
+      await refresh().catch(() => undefined);
+    } catch (error) {
+      setMessage(errorMessage(error, "클래스 수정에 실패했습니다. 잠시 후 다시 시도해주세요."));
+    } finally {
+      setClassEditSavingId("");
     }
   }
 
@@ -442,10 +477,46 @@ export default function StudentManagementPage() {
                           </div>
                         </div>
                       </div>
+                      {editingClassId === classRow.id ? (
+                        <div className="grid gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 md:grid-cols-2 xl:grid-cols-4">
+                          <Input
+                            placeholder="클래스 이름"
+                            value={classEditForm.name}
+                            onChange={(event) => setClassEditForm((current) => ({ ...current, name: event.target.value }))}
+                          />
+                          <Input
+                            placeholder="레벨/설명"
+                            value={classEditForm.description}
+                            onChange={(event) => setClassEditForm((current) => ({ ...current, description: event.target.value }))}
+                          />
+                          <Input
+                            placeholder="과목"
+                            value={classEditForm.subject}
+                            onChange={(event) => setClassEditForm((current) => ({ ...current, subject: event.target.value }))}
+                          />
+                          <Input
+                            placeholder="학년"
+                            value={classEditForm.grade_level}
+                            onChange={(event) => setClassEditForm((current) => ({ ...current, grade_level: event.target.value }))}
+                          />
+                          <div className="flex gap-2 md:col-span-2 xl:col-span-4">
+                            <Button type="button" size="sm" onClick={() => submitClassEdit(classRow.id)} disabled={classEditSavingId === classRow.id || !classEditForm.name.trim()}>
+                              {classEditSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                              저장
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingClassId("")}>
+                              취소
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap gap-2">
                         <Link href={`/student-management/classes/${classRow.id}`}>
                           <Button size="sm">Open class</Button>
                         </Link>
+                        <Button size="sm" variant="outline" onClick={() => startEditClass(classRow)}>
+                          Edit class
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => { setSessionForm((current) => ({ ...current, class_id: classRow.id })); setActiveTab("sessions"); }}>
                           Assign paper set
                         </Button>

@@ -149,6 +149,22 @@ export function createClass(payload: {
   });
 }
 
+export function updateClass(
+  id: string,
+  payload: {
+    name?: string;
+    description?: string | null;
+    subject?: string | null;
+    grade_level?: string | null;
+    is_active?: boolean;
+  }
+) {
+  return api<ClassCard>(`/api/student-management/classes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function createStudent(payload: {
   name: string;
   grade_level?: string;
