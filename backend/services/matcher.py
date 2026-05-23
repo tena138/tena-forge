@@ -291,6 +291,106 @@ def _text_similarity(left: str, right: str) -> float | None:
     return _lexical_similarity(left, right)
 
 
+CHOICE_LABELS = ("①", "②", "③", "④", "⑤")
+
+
+def _choice_label(value: Any) -> str | None:
+    raw = _text(value)
+    if raw in CHOICE_LABELS:
+        return raw
+    normalized = unicodedata.normalize("NFKC", raw)
+    match = re.fullmatch(r"(?:정답|답)?\s*[:：]?\s*([①②③④⑤]|[1-5])", raw) or re.fullmatch(
+        r"(?:정답|답)?\s*[:：]?\s*([1-5])",
+        normalized,
+    )
+    if not match:
+        return None
+    token = match.group(1)
+    if token in CHOICE_LABELS:
+        return token
+    return CHOICE_LABELS[int(token) - 1] if token.isdigit() and 1 <= int(token) <= len(CHOICE_LABELS) else None
+
+
+def _choice_entries(problem: dict[str, Any]) -> list[dict[str, str]]:
+    raw_choices = problem.get("choices")
+    if not isinstance(raw_choices, list):
+        return []
+    entries: list[dict[str, str]] = []
+    for index, raw in enumerate(raw_choices):
+        if isinstance(raw, dict):
+            label = _text(raw.get("label") or raw.get("choice_label"))
+            text = _text(raw.get("text") or raw.get("choice_text") or raw.get("value"))
+        else:
+            label = CHOICE_LABELS[index] if index < len(CHOICE_LABELS) else ""
+            text = _text(raw)
+        if label or text:
+            entries.append({"label": label, "text": text})
+    return entries
+
+
+def _answer_text(solution: dict[str, Any] | None) -> str:
+    if not solution:
+        return ""
+    answer = _text(solution.get("answer"))
+    return re.sub(r"^(?:정답|답)\s*[:：]?\s*", "", answer, flags=re.IGNORECASE).strip()
+
+
+def _is_explicit_choice_symbol(answer: str) -> bool:
+    stripped = re.sub(r"^(?:정답|답)\s*[:：]?\s*", "", _text(answer), flags=re.IGNORECASE).strip()
+    return bool(re.fullmatch(r"[①②③④⑤]", stripped))
+
+
+def _choice_text_overlap(answer: str, choice_text: str) -> float:
+    answer_norm = _compact_for_similarity(answer)
+    choice_norm = _compact_for_similarity(choice_text)
+    if not answer_norm or not choice_norm:
+        return 0.0
+    if answer_norm == choice_norm or answer_norm in choice_norm or choice_norm in answer_norm:
+        return 1.0
+    return float(_lexical_similarity(answer, choice_text) or 0.0)
+
+
+def _choice_answer_evidence(problem: dict[str, Any], solution: dict[str, Any] | None) -> str:
+    entries = _choice_entries(problem)
+    if not entries:
+        return "not_applicable"
+    answer = _answer_text(solution)
+    if not answer:
+        return "missing_answer"
+
+    answer_label = _choice_label(answer)
+    if not _is_explicit_choice_symbol(answer):
+        for entry in entries:
+            choice_text = entry.get("text") or ""
+            if choice_text and _choice_text_overlap(answer, choice_text) >= 0.72:
+                return "text_overlap"
+    if answer_label and any(_choice_label(entry.get("label")) == answer_label for entry in entries):
+        return "label_only"
+    return "mismatch"
+
+
+def _choice_answer_warnings(problem: dict[str, Any], solution: dict[str, Any] | None) -> list[str]:
+    evidence = _choice_answer_evidence(problem, solution)
+    if evidence == "mismatch":
+        return ["choice_answer_mismatch"]
+    if evidence == "label_only":
+        return ["choice_answer_label_only"]
+    if evidence == "missing_answer":
+        return ["choice_answer_missing"]
+    return []
+
+
+def _choice_adjusted_confidence(confidence: float, warnings: list[str]) -> float:
+    adjusted = confidence
+    if "choice_answer_mismatch" in warnings:
+        adjusted = min(adjusted, 0.69)
+    elif "choice_answer_missing" in warnings:
+        adjusted = min(adjusted, 0.82)
+    elif "choice_answer_label_only" in warnings:
+        adjusted = min(adjusted, 0.88)
+    return adjusted
+
+
 def _embedding(text: str) -> np.ndarray | None:
     normalized = re.sub(r"\s+", " ", text).strip()
     if not normalized:
@@ -316,17 +416,20 @@ def cosine_similarity(left: str, right: str) -> float | None:
 
 
 def _semantic_review_warnings(problem: dict[str, Any], solution: dict[str, Any] | None) -> list[str]:
+    warnings = _choice_answer_warnings(problem, solution)
     snippet = _solution_snippet(solution)
     if not snippet:
-        return []
+        return warnings
     similarity = _text_similarity(snippet, _stem_text(problem))
     warning_threshold = 0.5 if _embedding_matching_enabled() else _LEXICAL_REVIEW_THRESHOLD
     if similarity is not None and similarity < warning_threshold:
-        return ["semantic_conflict"]
-    return []
+        warnings.append("semantic_conflict")
+    return list(dict.fromkeys(warnings))
 
 
 def _reference_supports_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> bool:
+    if _choice_answer_evidence(problem, solution) == "mismatch":
+        return False
     snippet = _solution_snippet(solution)
     if not snippet:
         return True
@@ -343,11 +446,12 @@ def _attach(
     matched_via: str,
     warnings: list[str] | None = None,
 ) -> None:
-    unique_warnings = list(dict.fromkeys(warnings or []))
+    unique_warnings = list(dict.fromkeys((warnings or []) + _choice_answer_warnings(problem, solution)))
+    adjusted_confidence = _choice_adjusted_confidence(float(confidence), unique_warnings)
     problem["solution"] = solution
-    problem["match_confidence"] = max(0.0, min(1.0, float(confidence)))
+    problem["match_confidence"] = max(0.0, min(1.0, adjusted_confidence))
     problem["match_flags"] = {
-        "needs_review": bool(needs_review or unique_warnings or confidence < 0.7),
+        "needs_review": bool(needs_review or unique_warnings or adjusted_confidence < 0.7),
         "inversion_warning": False,
         "matched_via": matched_via,
         "warnings": unique_warnings,
@@ -777,9 +881,12 @@ def _semantic_assign(
             solution = bucket_solutions[int(column)]
             if problem.item.get("solution") is not None or id(solution.item) in used_solution_ids:
                 continue
+            if not _reference_supports_pair(problem.item, solution.item):
+                continue
             warnings = []
             if problem.section_label != solution.section_label:
                 warnings.append("semantic_cross_section")
+            warnings.extend(_choice_answer_warnings(problem.item, solution.item))
             confidence = max(0.70, min(0.89, score))
             _attach(problem.item, solution.item, confidence, True, method, warnings)
             used_solution_ids.add(id(solution.item))

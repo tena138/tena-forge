@@ -269,6 +269,35 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertEqual([item["page_number_occurrence"] for item in normalized], [0, 1])
         self.assertNotEqual(keys[0], keys[1])
 
+    def test_extracted_choices_are_preserved_for_matching(self):
+        page = RenderedPage(page_index=1, base64_png="", png_bytes=b"")
+        normalized = _normalize_extracted_items(
+            [
+                {
+                    "problem_number": "1",
+                    "problem_text": "다음 중 옳은 것을 고르시오.\n① $x=1$\n② $x=2$",
+                    "choices": [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}],
+                }
+            ],
+            page,
+        )
+
+        self.assertEqual(normalized[0]["choices"], [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}])
+
+    def test_inline_choices_are_recovered_when_model_omits_choices(self):
+        page = RenderedPage(page_index=1, base64_png="", png_bytes=b"")
+        normalized = _normalize_extracted_items(
+            [
+                {
+                    "problem_number": "1",
+                    "problem_text": "다음 중 옳은 것을 고르시오.\n① $x=1$\n② $x=2$",
+                }
+            ],
+            page,
+        )
+
+        self.assertEqual(normalized[0]["choices"], [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}])
+
     def test_source_title_unit_does_not_become_section_label(self):
         page = RenderedPage(page_index=2, base64_png="", png_bytes=b"")
         normalized = _normalize_extracted_items(

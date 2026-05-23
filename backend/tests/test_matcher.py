@@ -336,6 +336,84 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(matched[0]["solution"]["answer"], "A")
         self.assertEqual(matched[0]["match_flags"]["matched_via"], "section_number")
 
+    def test_choice_answer_overlap_keeps_objective_match_confident(self):
+        matched = match(
+            [
+                {
+                    "problem_number": "01",
+                    "problem_text": "다음 중 옳은 것을 고르시오.",
+                    "section_label": "DAY 01",
+                    "choices": [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}],
+                    "page_index": 1,
+                },
+            ],
+            [
+                {
+                    "problem_number": "01",
+                    "answer": "$x=2$",
+                    "solution_steps": "$x=2$가 조건을 만족한다.",
+                    "section_label": "DAY 01",
+                    "page_idx": 10,
+                },
+            ],
+        )
+
+        self.assertEqual(matched[0]["solution"]["answer"], "$x=2$")
+        self.assertEqual(matched[0]["match_confidence"], 0.99)
+        self.assertNotIn("choice_answer_mismatch", matched[0]["match_flags"]["warnings"])
+
+    def test_choice_answer_mismatch_marks_objective_match_for_review(self):
+        matched = match(
+            [
+                {
+                    "problem_number": "01",
+                    "problem_text": "다음 중 옳은 것을 고르시오.",
+                    "section_label": "DAY 01",
+                    "choices": [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}],
+                    "page_index": 1,
+                },
+            ],
+            [
+                {
+                    "problem_number": "01",
+                    "answer": "$x=7$",
+                    "solution_steps": "$x=7$",
+                    "section_label": "DAY 01",
+                    "page_idx": 10,
+                },
+            ],
+        )
+
+        self.assertEqual(matched[0]["solution"]["answer"], "$x=7$")
+        self.assertLess(matched[0]["match_confidence"], 0.7)
+        self.assertTrue(matched[0]["match_flags"]["needs_review"])
+        self.assertIn("choice_answer_mismatch", matched[0]["match_flags"]["warnings"])
+
+    def test_choice_label_only_answer_is_less_confident(self):
+        matched = match(
+            [
+                {
+                    "problem_number": "01",
+                    "problem_text": "다음 중 옳은 것을 고르시오.",
+                    "section_label": "DAY 01",
+                    "choices": [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}],
+                    "page_index": 1,
+                },
+            ],
+            [
+                {
+                    "problem_number": "01",
+                    "answer": "②",
+                    "solution_steps": "정답은 ②이다.",
+                    "section_label": "DAY 01",
+                    "page_idx": 10,
+                },
+            ],
+        )
+
+        self.assertEqual(matched[0]["match_confidence"], 0.88)
+        self.assertIn("choice_answer_label_only", matched[0]["match_flags"]["warnings"])
+
     def test_number_order_does_not_match_repeated_numbers_when_sections_differ(self):
         matched = match(
             [

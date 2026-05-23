@@ -29,6 +29,7 @@ class ProblemRead(BaseModel):
     id: UUID
     problem_number: int
     problem_text: str
+    choices: list[dict] = Field(default_factory=list)
     has_visual: bool
     visual_url: str | None
     review_page_image_url: str | None = None
@@ -60,6 +61,7 @@ class ProblemListItem(BaseModel):
     id: UUID
     problem_number: int
     problem_text: str
+    choices: list[dict] = Field(default_factory=list)
     has_visual: bool
     visual_url: str | None
     review_page_image_url: str | None = None

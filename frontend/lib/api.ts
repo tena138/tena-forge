@@ -19,6 +19,7 @@ export type Problem = {
   id: string;
   problem_number: number;
   problem_text: string;
+  choices?: Array<{ label?: string; choice_label?: string; text?: string; choice_text?: string }>;
   has_visual: boolean;
   visual_url: string | null;
   review_page_image_url?: string | null;

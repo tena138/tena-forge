@@ -316,6 +316,7 @@ class Problem(Base):
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     problem_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     problem_text: Mapped[str] = mapped_column(Text, nullable=False)
+    choices: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     has_visual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     visual_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     review_page_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)

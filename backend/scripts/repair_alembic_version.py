@@ -9,8 +9,8 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-PREVIOUS_REVISION = "0020_korean_subject_engine"
-HEAD_REVISION = "0021_paper_sessions"
+PREVIOUS_REVISION = "0021_paper_sessions"
+HEAD_REVISION = "0022_problem_choices"
 ACADEMY_REQUIRED_COLUMNS = {
     "email_verified",
     "email_verified_at",
@@ -166,6 +166,14 @@ def _ensure_student_membership_columns(connection, inspector) -> bool:
     return changed
 
 
+def _ensure_problem_columns(connection, inspector) -> bool:
+    if "problems" not in inspector.get_table_names():
+        return False
+
+    json_definition = "JSONB NOT NULL DEFAULT '[]'::jsonb" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '[]'"
+    return _add_column_if_missing(connection, inspector, "problems", "choices", json_definition)
+
+
 def _schema_is_at_head(inspector) -> bool:
     required_tables = {
         "academies",
@@ -198,6 +206,7 @@ def _schema_is_at_head(inspector) -> bool:
         and _has_columns(inspector, "subscriptions", {"enabled_subject_engines", "subject_engine_count", "subject_multiplier", "final_monthly_price", "final_annual_price"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
         and _has_columns(inspector, "student_academy_memberships", {"display_name_in_academy", "expires_at"})
+        and _has_columns(inspector, "problems", {"choices"})
     )
 
 
@@ -226,6 +235,8 @@ def main() -> None:
             inspector = inspect(connection)
         if _ensure_student_membership_columns(connection, inspector):
             inspector = inspect(connection)
+        if _ensure_problem_columns(connection, inspector):
+            inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
             connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)"))
             inspector = inspect(connection)
@@ -242,6 +253,8 @@ def main() -> None:
             if _ensure_academy_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_student_membership_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_problem_columns(connection, inspector):
                 inspector = inspect(connection)
 
         if _schema_is_at_head(inspector):

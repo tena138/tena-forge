@@ -314,6 +314,7 @@ def _ensure_sqlite_columns():
             "updated_at": "DATETIME",
             "review_page_image_url": "VARCHAR(1000)",
             "review_page_number": "INTEGER",
+            "choices": "JSON DEFAULT '[]' NOT NULL",
             "deleted_at": "DATETIME",
             "delete_scheduled_at": "DATETIME",
         },

@@ -53,6 +53,7 @@ For each problem return a JSON object with:
 {
   "problem_number": <integer>,
   "problem_text": "<question stem only in Korean, absolutely no answer choices>",
+  "choices": [{"label": "①", "text": "<visible choice text only>"}],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "is_exercise": <true only for standalone unsolved exercises>,
   "skip_reason": null,
@@ -63,7 +64,7 @@ For each problem return a JSON object with:
 Return a JSON array of all problems found on this page.
 If there are no valid standalone exercises, return [].
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
-Remove all answer choices (?졻몼?™몿??or ?긱꽩??options) from problem_text.
+Extract visible answer choices into choices, preserving labels such as ①, ②, ③, ④, ⑤. Remove all answer choices from problem_text.
 Convert every mathematical expression, function, interval, limit, summation, fraction, root, exponent, coordinate, and equation into LaTeX.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 Use inline LaTeX delimiters like $f(x)=x^2$ inside Korean sentences.
@@ -86,6 +87,7 @@ For each problem return a JSON object with:
 {
   "problem_number": <integer>,
   "problem_text": "<question stem only in Korean, no answer choices>",
+  "choices": [{"label": "①", "text": "<visible choice text only>"}],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "is_exercise": <true only for standalone exercises>,
   "skip_reason": null,
@@ -95,6 +97,7 @@ For each problem return a JSON object with:
 }
 
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
+Extract visible answer choices into choices, preserving labels such as ①, ②, ③, ④, ⑤. Remove all answer choices from problem_text.
 Convert mathematical expressions into LaTeX.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
 Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit/exam-round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
@@ -252,6 +255,7 @@ def _problem_match_payload(problem: Problem) -> dict[str, Any]:
         "problem_number": problem.problem_number,
         "problem_no": str(problem.problem_number),
         "problem_text": problem.problem_text,
+        "choices": problem.choices or [],
         "unit": unit,
         "section_label": section_label,
         "subject": tags.subject if tags else None,
@@ -1651,6 +1655,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
         problem = Problem(
             problem_number=_korean_question_number(question.get("question_number"), index),
             problem_text=_korean_problem_text(question, passage),
+            choices=_normalize_problem_choices(question.get("choices")),
             has_visual=False,
             visual_url=None,
             review_page_image_url=None,
@@ -2551,6 +2556,68 @@ def _apply_structure_indexes(items: list[dict[str, Any]], page_key: str = "page_
     return ordered
 
 
+INLINE_CHOICE_RE = re.compile(r"(?:^|\n)\s*([①②③④⑤]|[1-5][\).])\s*([^\n]+)")
+CHOICE_LABELS = ("①", "②", "③", "④", "⑤")
+
+
+def _choice_label_from_value(value: Any, fallback_index: int | None = None) -> str | None:
+    raw = str(value or "").strip()
+    if raw in CHOICE_LABELS:
+        return raw
+    match = re.search(r"[①②③④⑤]|[1-5]", unicodedata.normalize("NFKC", raw))
+    if match:
+        digit = match.group(0)
+        if digit in CHOICE_LABELS:
+            return digit
+        if digit.isdigit() and 1 <= int(digit) <= len(CHOICE_LABELS):
+            return CHOICE_LABELS[int(digit) - 1]
+    if fallback_index is not None and 0 <= fallback_index < len(CHOICE_LABELS):
+        return CHOICE_LABELS[fallback_index]
+    return None
+
+
+def _inline_choices_from_text(text: Any) -> list[dict[str, str]]:
+    choices: list[dict[str, str]] = []
+    for match in INLINE_CHOICE_RE.finditer(str(text or "")):
+        label = _choice_label_from_value(match.group(1), len(choices))
+        choice_text = match.group(2).strip()
+        if label and choice_text:
+            choices.append({"label": label, "text": choice_text})
+    return choices
+
+
+def _normalize_problem_choices(value: Any, fallback_text: Any = None) -> list[dict[str, str]]:
+    raw_items = value if isinstance(value, list) else []
+    choices: list[dict[str, str]] = []
+    for index, raw in enumerate(raw_items):
+        if isinstance(raw, dict):
+            label = _choice_label_from_value(raw.get("label") or raw.get("choice_label"), index)
+            text = str(raw.get("text") or raw.get("choice_text") or raw.get("value") or "").strip()
+        else:
+            raw_text = str(raw or "").strip()
+            match = re.match(r"^\s*([①②③④⑤]|[1-5][\).])\s*(.*)$", raw_text)
+            label = _choice_label_from_value(match.group(1), index) if match else _choice_label_from_value(None, index)
+            text = (match.group(2) if match else raw_text).strip()
+        if label or text:
+            choices.append({"label": label or "", "text": text})
+    if not choices:
+        choices = _inline_choices_from_text(fallback_text)
+
+    normalized: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for choice in choices:
+        label = str(choice.get("label") or "").strip()
+        text = normalize_geometry_notation(str(choice.get("text") or "").strip())
+        key = (label, re.sub(r"\s+", " ", text))
+        if not (label or text) or key in seen:
+            continue
+        seen.add(key)
+        normalized.append({"label": label, "text": text})
+        if len(normalized) >= 10:
+            break
+    return normalized
+
+
 def _normalize_extracted_items(
     items: list[dict[str, Any]],
     page: RenderedPage,
@@ -2573,6 +2640,7 @@ def _normalize_extracted_items(
                 "problem_number": number,
                 "problem_no": problem_no,
                 "problem_text": normalize_geometry_notation(str(item.get("problem_text") or "").strip()),
+                "choices": _normalize_problem_choices(item.get("choices"), item.get("problem_text")),
                 "has_visual": bool(item.get("has_visual")),
                 "subject": str(item.get("subject") or "").strip() or None,
                 "unit": _clean_unit_label(item.get("unit")),
@@ -2717,12 +2785,15 @@ def extract_and_cross_check(
         visual_boxes = [item.get("visual_bbox") for item in items if item.get("visual_bbox")]
         section_labels = [item.get("section_label") for item in items if item.get("section_label")]
         problem_nos = [item.get("problem_no") for item in items if item.get("problem_no")]
+        choice_sets = [item.get("choices") for item in items if isinstance(item.get("choices"), list) and item.get("choices")]
+        choices = max(choice_sets, key=lambda values: (len(values), sum(len(str(choice.get("text") or "")) for choice in values))) if choice_sets else []
         source_order = min(int(item.get("_source_order", page_index * 10000) or 0) for item in items)
         merged.append(
             {
                 "problem_number": number,
                 "problem_no": _longer_text(problem_nos) or str(number),
                 "problem_text": longest,
+                "choices": choices,
                 "has_visual": any(visual_values),
                 "subject": _most_common_text(items, "subject", subjects),
                 "unit": _most_common_text(items, "unit", units),
@@ -2909,6 +2980,7 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
         problem = Problem(
             problem_number=item["problem_number"],
             problem_text=item["problem_text"],
+            choices=item.get("choices") or [],
             has_visual=item["has_visual"],
             visual_url=item.get("visual_url"),
             review_page_image_url=item.get("review_page_image_url"),
