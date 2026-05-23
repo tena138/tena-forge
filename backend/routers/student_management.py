@@ -270,6 +270,75 @@ def _problem_set_snapshot(db: Session, owner_id: str, academy_id: str, problem_s
     return version
 
 
+def _snapshot_problem_rows(problems: list[Problem]) -> list[dict]:
+    rows = []
+    for index, problem in enumerate(problems, start=1):
+        tags = problem.tags
+        rows.append(
+            {
+                "problem_id": str(problem.id),
+                "problem_number": index,
+                "original_problem_number": problem.problem_number,
+                "problem_text": problem.problem_text,
+                "answer": problem.answer,
+                "solution_steps": problem.solution_steps,
+                "source_label": problem.source_label,
+                "subject": tags.subject if tags else None,
+                "unit": tags.unit if tags else None,
+                "difficulty": tags.difficulty if tags else None,
+            }
+        )
+    return rows
+
+
+def _problem_selection_snapshot(
+    db: Session,
+    owner_id: str,
+    academy_id: str,
+    problem_ids: list[UUID],
+    title: str,
+    created_by: str | None,
+) -> ContentVersion:
+    unique_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for problem_id in problem_ids:
+        if problem_id not in seen:
+            unique_ids.append(problem_id)
+            seen.add(problem_id)
+    if not unique_ids:
+        raise HTTPException(status_code=400, detail="PaperSession requires at least one problem.")
+    rows = db.scalars(
+        select(Problem)
+        .where(Problem.id.in_(unique_ids), Problem.owner_id == owner_id, Problem.deleted_at.is_(None))
+        .options(joinedload(Problem.tags))
+    ).unique().all()
+    by_id = {problem.id: problem for problem in rows}
+    missing = [str(problem_id) for problem_id in unique_ids if problem_id not in by_id]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Problems not found: {', '.join(missing)}")
+    ordered = [by_id[problem_id] for problem_id in unique_ids]
+    problems = _snapshot_problem_rows(ordered)
+    source_id = f"selection-{uuid.uuid4().hex}"
+    version = ContentVersion(
+        academy_id=academy_id,
+        source_type="paper_session_selection",
+        source_id=source_id,
+        title=title,
+        version_label=f"paper-session-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+        snapshot={
+            "source_type": "selection",
+            "problem_ids": [str(problem_id) for problem_id in unique_ids],
+            "title": title,
+            "problem_count": len(problems),
+            "problems": problems,
+        },
+        created_by=created_by,
+    )
+    db.add(version)
+    db.flush()
+    return version
+
+
 def _session_problems(session: PaperSession) -> list[dict]:
     snapshot = session.content_version.snapshot if session.content_version else {}
     return list((snapshot or {}).get("problems") or [])
@@ -341,19 +410,21 @@ def _target_memberships(db: Session, academy_id: str, class_ids: list[UUID], stu
         ).all():
             rows[membership.id] = membership
     if student_ids:
-        for membership in db.scalars(
+        direct_rows = db.scalars(
             select(StudentAcademyMembership).where(
                 StudentAcademyMembership.academy_id == academy_id,
+                StudentAcademyMembership.status == "active",
                 StudentAcademyMembership.id.in_(student_ids),
             )
-        ).all():
+        ).all()
+        direct_found: set[UUID] = set()
+        for membership in direct_rows:
             rows[membership.id] = membership
-        if len(rows) < len(set(student_ids)):
-            missing = [str(student_id) for student_id in student_ids if student_id not in rows]
-            if missing:
-                raise HTTPException(status_code=404, detail=f"Students not found: {', '.join(missing)}")
+            direct_found.add(membership.id)
+        missing = [str(student_id) for student_id in set(student_ids) if student_id not in direct_found]
+        if missing:
+            raise HTTPException(status_code=404, detail=f"Students not found: {', '.join(missing)}")
     return sorted(rows.values(), key=_student_name)
-
 
 def _parse_wrong_numbers(value: str | None) -> set[int]:
     if not value:
@@ -471,9 +542,10 @@ class ClassStudentPayload(BaseModel):
 class PaperSessionPayload(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
-    source_problem_set_id: UUID
+    source_problem_set_id: UUID | None = None
+    problem_ids: list[UUID] = []
     session_type: str = "test"
-    target_type: str = "class"
+    target_type: str | None = None
     class_ids: list[UUID] = []
     student_membership_ids: list[UUID] = []
     scheduled_at: datetime | None = None
@@ -857,7 +929,12 @@ def list_paper_sessions(request: Request, db: Session = Depends(get_db)):
 def create_paper_session(payload: PaperSessionPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
     owner_id = current_owner_id(request)
-    version = _problem_set_snapshot(db, owner_id, academy_id, payload.source_problem_set_id, owner_id)
+    if payload.source_problem_set_id:
+        version = _problem_set_snapshot(db, owner_id, academy_id, payload.source_problem_set_id, owner_id)
+    elif payload.problem_ids:
+        version = _problem_selection_snapshot(db, owner_id, academy_id, payload.problem_ids, payload.title.strip(), owner_id)
+    else:
+        raise HTTPException(status_code=400, detail="Select a problem set or at least one problem.")
     targets = _target_memberships(db, academy_id, payload.class_ids, payload.student_membership_ids)
     if not targets:
         raise HTTPException(status_code=400, detail="Select at least one class or student with active students.")

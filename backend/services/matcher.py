@@ -613,6 +613,15 @@ def _relabel_solution_section(solution: MatchItem, target_section: str | None, w
         solution.item["matching_warnings"] = item_warnings
 
 
+def _renumber_occurrences(items: list[MatchItem]) -> None:
+    counts: dict[tuple[str | None, str], int] = defaultdict(int)
+    for item in sorted(items, key=lambda value: (value.global_index, value.page_idx, value.local_index)):
+        occurrence_key = (item.section_label, item.problem_number)
+        item.occurrence = counts[occurrence_key]
+        counts[occurrence_key] += 1
+        item.item["canonical_key"] = f"{item.section_label}-{item.problem_number}" if item.section_label and item.problem_number else None
+
+
 def _align_solution_sections_by_anchors(problem_items: list[MatchItem], solution_items: list[MatchItem]) -> list[str]:
     """Align OCR-noisy solution section labels to problem sections when anchors agree.
 
@@ -644,6 +653,41 @@ def _align_solution_sections_by_anchors(problem_items: list[MatchItem], solution
     problem_groups = _group_by_section(problem_items)
     solution_groups = _group_by_section(solution_items)
     problem_sections = [section for section in _section_order(problem_items) if section is not None]
+    if problem_sections and len(problem_sections) > 1 and len(problem_items) == len(solution_items):
+        ordered_solutions = sorted(solution_items, key=lambda value: (value.global_index, value.page_idx, value.local_index))
+        cursor = 0
+        candidate_groups: list[tuple[str, list[MatchItem], list[MatchItem]]] = []
+        for problem_section in problem_sections:
+            section_problems = _ordered_items(problem_groups.get(problem_section, []))
+            section_solutions = ordered_solutions[cursor : cursor + len(section_problems)]
+            cursor += len(section_problems)
+            candidate_groups.append((problem_section, section_problems, section_solutions))
+        stale_inferred_chunks = [
+            (problem_section, section_solutions)
+            for problem_section, _section_problems, section_solutions in candidate_groups
+            if section_solutions
+            and any(solution.item.get("section_inferred") for solution in section_solutions)
+            and any(solution.section_label != problem_section for solution in section_solutions)
+        ]
+        if (
+            stale_inferred_chunks
+            and cursor == len(ordered_solutions)
+            and all(_anchors_are_compatible(problems, solutions) for _section, problems, solutions in candidate_groups)
+            and all(
+                solution.item.get("section_inferred") or solution.section_label in {None, problem_section}
+                for problem_section, _section_problems, section_solutions in candidate_groups
+                for solution in section_solutions
+            )
+        ):
+            for problem_section, _section_problems, section_solutions in candidate_groups:
+                for solution in section_solutions:
+                    if solution.section_label != problem_section:
+                        _relabel_solution_section(solution, problem_section, ["section_inferred_repartitioned_by_anchor"])
+            warnings.append("inferred_solution_sections_repartitioned_by_problem_anchors")
+
+    problem_groups = _group_by_section(problem_items)
+    solution_groups = _group_by_section(solution_items)
+    problem_sections = [section for section in _section_order(problem_items) if section is not None]
     unsectioned_solutions = solution_groups.get(None, [])
     if problem_sections and unsectioned_solutions and not [section for section in _section_order(solution_items) if section is not None]:
         ordered_solutions = sorted(unsectioned_solutions, key=lambda value: (value.global_index, value.page_idx, value.local_index))
@@ -659,6 +703,9 @@ def _align_solution_sections_by_anchors(problem_items: list[MatchItem], solution
                 for solution in section_solutions:
                     _relabel_solution_section(solution, problem_section, ["section_inferred_from_problem_anchor"])
             warnings.append("unsectioned_solutions_partitioned_by_problem_sections")
+
+    if warnings:
+        _renumber_occurrences(solution_items)
 
     return warnings
 

@@ -13,12 +13,14 @@ import {
   Grid3X3,
   List,
   Search,
+  Send,
   SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
+import { ExportModal } from "@/components/export-modal";
 import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -107,6 +109,7 @@ function ProblemsBrowser() {
   const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [quickExportOpen, setQuickExportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dragBox, setDragBox] = useState<DragBox | null>(null);
@@ -570,13 +573,14 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="sticky top-3 z-30 flex items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur">
+        <div className="sticky top-3 z-20 flex items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur">
           <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
             <CheckSquare className="h-4 w-4 text-[#7F77DD]" />
             {selectedIds.length}개 선택됨
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</Button>
+            <Button size="sm" variant="outline" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</Button>
             <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</Button>
             <Button size="sm" variant="destructive" disabled={deleting} onClick={deleteSelectedProblems}><Trash2 className="h-4 w-4" />삭제</Button>
             <button type="button" className="px-2 text-sm font-semibold text-slate-400 hover:text-white" onClick={() => setSelectedIds([])}>선택 해제</button>
@@ -621,6 +625,13 @@ function ProblemsBrowser() {
       </section>
 
       <AddToSetModal open={addModalOpen} onOpenChange={setAddModalOpen} problemIds={selectedIds} />
+      <ExportModal
+        open={quickExportOpen}
+        onOpenChange={setQuickExportOpen}
+        source="selection"
+        problemIds={selectedIds}
+        count={selectedIds.length}
+      />
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl bg-[#0b0d12] text-slate-100">
           <div>

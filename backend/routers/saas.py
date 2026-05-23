@@ -6,10 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import JobOutput, ProcessingJob, Subscription, SubscriptionEvent, UsageLog
+from models import JobOutput, ProcessingJob, Subscription, SubscriptionEvent
 from schemas import CheckoutRequest, CheckoutResponse, ProcessingJobCreate, ProcessingJobRead, SignedUrlResponse, UsageSummaryRead
 from services.ownership import current_owner_id
-from services.saas_security import audit, create_signed_url, enforce_usage_limit, ensure_default_plans, get_roles, usage_summary
+from services.saas_security import audit, create_signed_url, enforce_usage_limit, ensure_default_plans, get_roles, usage_cost_summary, usage_summary
+from services.usage_cost_policy import enforce_extraction_preflight, estimate_extraction, record_usage_event
 from services.subject_engines import normalize_subject_engines, subject_engine_pricing
 
 router = APIRouter(prefix="/api/saas", tags=["saas"])
@@ -22,7 +23,8 @@ def roles(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/billing/summary", response_model=UsageSummaryRead)
 def billing_summary(request: Request, db: Session = Depends(get_db)):
-    plan, subscription, uploads, pages, tokens, storage = usage_summary(db, current_owner_id(request))
+    user_id = current_owner_id(request)
+    plan, subscription, uploads, pages, tokens, storage = usage_summary(db, user_id)
     return {
         "plan": plan,
         "subscription": subscription,
@@ -30,6 +32,7 @@ def billing_summary(request: Request, db: Session = Depends(get_db)):
         "monthly_pages_used": pages,
         "monthly_ai_tokens_used": tokens,
         "storage_mb_used": storage,
+        **usage_cost_summary(db, user_id),
     }
 
 
@@ -81,6 +84,15 @@ def create_checkout(payload: CheckoutRequest, request: Request, db: Session = De
 def create_job(payload: ProcessingJobCreate, request: Request, db: Session = Depends(get_db)):
     user_id = current_owner_id(request)
     enforce_usage_limit(db, user_id, pages_to_add=payload.page_count, upload_count=1)
+    file_size_mb = round((payload.file_size or 0) / 1024 / 1024, 3)
+    estimate = estimate_extraction(
+        subject_engine=str((payload.options or {}).get("subject_engine") or "math"),
+        problem_pages=payload.page_count,
+        solution_pages=0,
+        problem_file_mb=file_size_mb,
+        usage_type="job_extraction_estimate",
+    )
+    enforce_extraction_preflight(db, user_id, estimate, file_size_mb=file_size_mb, page_count=payload.page_count)
     job = ProcessingJob(
         user_id=user_id,
         status="queued",
@@ -92,7 +104,7 @@ def create_job(payload: ProcessingJobCreate, request: Request, db: Session = Dep
     )
     db.add(job)
     db.flush()
-    db.add(UsageLog(job_id=job.id, user_id=user_id, usage_type="upload", pages_count=payload.page_count, storage_mb=round(payload.file_size / 1024 / 1024, 3)))
+    record_usage_event(db, user_id, estimate, job_id=job.id, storage_mb=file_size_mb)
     audit(db, user_id, "job.created", "job", str(job.id), {"source_filename": payload.source_filename})
     db.commit()
     db.refresh(job)

@@ -19,10 +19,11 @@ from database import get_db, get_settings
 from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag
 from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigation, ProblemRead, ProblemStats, ProblemUpdate, ReviewUpdate, TagBase, TagRead, VisualCropUpdate
 from services.math_normalization import normalize_geometry_notation
-from services.ownership import current_owner_ids
+from services.ownership import current_owner_id, current_owner_ids
 from services.pipeline import strip_answer_choices, vision_json
 from services.private_files import sign_static_url
 from services.storage import save_visual_bytes
+from services.usage_cost_policy import enforce_extraction_preflight, estimate_single_reextract, record_usage_event
 
 router = APIRouter(prefix="/api/problems", tags=["problems"])
 
@@ -445,6 +446,7 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
 
 @router.post("/{problem_id}/reextract", response_model=ProblemRead)
 def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
@@ -455,6 +457,9 @@ def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(
     settings = get_settings()
     if not settings.openai_api_key:
         raise HTTPException(status_code=503, detail="AI 재추출을 위한 OPENAI_API_KEY가 설정되어 있지 않습니다.")
+
+    estimate = estimate_single_reextract()
+    enforce_extraction_preflight(db, owner_id, estimate, file_size_mb=0, page_count=1, upload_mb_to_add=0)
 
     image_bytes = _read_review_page_image(problem)
     base64_image = base64.b64encode(image_bytes).decode("ascii")
@@ -478,6 +483,7 @@ def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(
     problem.problem_text = normalize_geometry_notation(cleaned)
     problem.has_visual = bool(selected.get("has_visual", problem.has_visual))
     problem.needs_review = True if suspicious else problem.needs_review
+    record_usage_event(db, owner_id, estimate, job_id=problem.source_batch_id)
     db.commit()
     db.refresh(problem)
     return _serialize_problem(problem)

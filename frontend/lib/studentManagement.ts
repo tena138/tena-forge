@@ -220,8 +220,10 @@ export function listPaperSessions() {
 export function createPaperSession(payload: {
   title: string;
   description?: string;
-  source_problem_set_id: string;
+  source_problem_set_id?: string | null;
+  problem_ids?: string[];
   session_type: string;
+  target_type?: string | null;
   class_ids?: string[];
   student_membership_ids?: string[];
   scheduled_at?: string | null;

@@ -113,7 +113,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen" data-app-shell>
       <OAuthFragmentCapture />
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/55 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-black/55 backdrop-blur-xl">
         <div className="flex h-16 w-full items-center justify-between gap-3 px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <Link href={homeHref} className="inline-flex shrink-0 items-center" aria-label="Tena Forge">

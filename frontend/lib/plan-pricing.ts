@@ -52,7 +52,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
     baseMonthlyPrice: 0,
     cta: "무료로 시작하기",
     specs: {
-      monthlyAiCredits: 20,
+      monthlyAiCredits: 30,
       dailyAiLimit: 5,
       problemDb: 100,
       fileStorageGb: 0.3,
@@ -65,7 +65,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
     },
     cardSpecs: [
       "학생 키 0개",
-      "월 AI 20 credits",
+      "월 AI 30 credits",
       "일 AI 한도 5 credits",
       "문제 DB 100문항",
       "파일 저장공간 300MB",
@@ -81,7 +81,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
     baseMonthlyPrice: 48_000,
     cta: "Basic 구성하기",
     specs: {
-      monthlyAiCredits: 500,
+      monthlyAiCredits: 400,
       dailyAiLimit: 50,
       problemDb: 5_000,
       fileStorageGb: 20,
@@ -108,8 +108,8 @@ export const PLANS: Record<PlanType, PlanConfig> = {
     baseMonthlyPrice: 108_000,
     cta: "Pro 구성하기",
     specs: {
-      monthlyAiCredits: 3_000,
-      dailyAiLimit: 300,
+      monthlyAiCredits: 923,
+      dailyAiLimit: 150,
       problemDb: 30_000,
       fileStorageGb: 100,
       studentKeys: 100,
@@ -156,9 +156,9 @@ export const PLANS: Record<PlanType, PlanConfig> = {
 export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, PackageOption[]>>> = {
   basic: {
     ai: [
-      { id: "basic-ai", group: "ai", name: "Basic AI", label: "포함", monthlyPriceDelta: 0, specs: { monthlyAiCredits: 500, dailyAiLimit: 50 }, description: "500 monthly AI credits, 50 daily AI limit" },
-      { id: "basic-ai-plus", group: "ai", name: "AI Plus", label: "+₩12,000 / 월", monthlyPriceDelta: 12_000, specs: { monthlyAiCredits: 1_000, dailyAiLimit: 70 }, description: "1,000 monthly AI credits, 70 daily AI limit" },
-      { id: "basic-ai-max", group: "ai", name: "AI Max", label: "+₩29,000 / 월", monthlyPriceDelta: 29_000, specs: { monthlyAiCredits: 2_000, dailyAiLimit: 100 }, description: "2,000 monthly AI credits, 100 daily AI limit" },
+      { id: "basic-ai", group: "ai", name: "Basic AI", label: "포함", monthlyPriceDelta: 0, specs: { monthlyAiCredits: 400, dailyAiLimit: 50 }, description: "400 monthly AI credits, 50 daily AI limit" },
+      { id: "basic-ai-plus", group: "ai", name: "AI Plus", label: "+₩12,000 / 월", monthlyPriceDelta: 12_000, specs: { monthlyAiCredits: 700, dailyAiLimit: 70 }, description: "700 monthly AI credits, 70 daily AI limit" },
+      { id: "basic-ai-max", group: "ai", name: "AI Max", label: "+₩29,000 / 월", monthlyPriceDelta: 29_000, specs: { monthlyAiCredits: 1_000, dailyAiLimit: 100 }, description: "1,000 monthly AI credits, 100 daily AI limit" },
     ],
     storage: [
       { id: "basic-storage", group: "storage", name: "Basic Storage", label: "포함", monthlyPriceDelta: 0, specs: { problemDb: 5_000, fileStorageGb: 20 }, description: "5,000 questions, 20GB file storage" },
@@ -176,9 +176,9 @@ export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, P
   },
   pro: {
     ai: [
-      { id: "pro-ai", group: "ai", name: "Pro AI", label: "포함", monthlyPriceDelta: 0, specs: { monthlyAiCredits: 3_000, dailyAiLimit: 300 }, description: "3,000 monthly AI credits, 300 daily AI limit" },
-      { id: "pro-ai-plus", group: "ai", name: "Pro AI Plus", label: "+₩39,000 / 월", monthlyPriceDelta: 39_000, specs: { monthlyAiCredits: 5_000, dailyAiLimit: 500 }, description: "5,000 monthly AI credits, 500 daily AI limit" },
-      { id: "pro-ai-max", group: "ai", name: "Pro AI Max", label: "+₩89,000 / 월", monthlyPriceDelta: 89_000, specs: { monthlyAiCredits: 10_000, dailyAiLimit: 1_000 }, description: "10,000 monthly AI credits, 1,000 daily AI limit" },
+      { id: "pro-ai", group: "ai", name: "Pro AI", label: "포함", monthlyPriceDelta: 0, specs: { monthlyAiCredits: 923, dailyAiLimit: 150 }, description: "923 monthly AI credits, 150 daily AI limit" },
+      { id: "pro-ai-plus", group: "ai", name: "Pro AI Plus", label: "+₩39,000 / 월", monthlyPriceDelta: 39_000, specs: { monthlyAiCredits: 1_500, dailyAiLimit: 250 }, description: "1,500 monthly AI credits, 250 daily AI limit" },
+      { id: "pro-ai-max", group: "ai", name: "Pro AI Max", label: "+₩89,000 / 월", monthlyPriceDelta: 89_000, specs: { monthlyAiCredits: 3_000, dailyAiLimit: 500 }, description: "3,000 monthly AI credits, 500 daily AI limit" },
     ],
     storage: [
       { id: "pro-storage", group: "storage", name: "Pro Storage", label: "포함", monthlyPriceDelta: 0, specs: { problemDb: 30_000, fileStorageGb: 100 }, description: "30,000 questions, 100GB file storage" },

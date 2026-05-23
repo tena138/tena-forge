@@ -1122,11 +1122,14 @@ def _section_for_page(page_index: int, sections: list[dict[str, Any]]) -> str | 
 
 def _apply_section_ranges_to_items(items: list[dict[str, Any]], sections: list[dict[str, Any]], page_key: str) -> None:
     for item in items:
-        if str(item.get("section_label") or item.get("section_id") or "").strip():
+        existing_section = str(item.get("section_label") or item.get("section_id") or "").strip()
+        if existing_section and not item.get("section_inferred"):
             continue
         page_index = int(item.get(page_key, item.get("page_idx", 0)) or 0)
         section_id = _section_for_page(page_index, sections)
         if section_id:
+            if existing_section and existing_section != section_id:
+                item["section_overridden_from"] = existing_section
             item["section_label"] = section_id
             item["section_id"] = section_id
             item["section_inferred"] = True

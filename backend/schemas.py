@@ -863,6 +863,18 @@ class UsageSummaryRead(BaseModel):
     monthly_pages_used: int
     monthly_ai_tokens_used: int
     storage_mb_used: float
+    monthly_cost_cap_krw: int = 0
+    estimated_cost_used_krw: int = 0
+    available_cost_krw: int = 0
+    monthly_credit_limit: int = 0
+    extraction_credits_used: float = 0
+    extraction_credits_remaining: float = 0
+    monthly_upload_mb_limit: int = 0
+    uploaded_mb_this_month: float = 0
+    max_file_size_mb: int = 0
+    max_pages_per_job: int = 0
+    max_jobs_per_day: int = 0
+    max_concurrent_jobs: int = 0
 
 
 class CheckoutRequest(BaseModel):

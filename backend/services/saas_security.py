@@ -22,6 +22,7 @@ from models import (
 )
 from services.ownership import current_owner_id
 from services.subject_engines import KOREAN_ENGINE, SUBJECT_ENGINES, normalize_subject_engine, normalize_subject_engines, subject_engine_pricing
+from services.usage_cost_policy import active_plan_for_user, monthly_usage_totals, plan_cost_policy
 
 ADMIN_ROLES = {"admin", "super_admin"}
 CREATOR_ROLES = {"creator"}
@@ -67,6 +68,7 @@ def require_creator(request: Request, db: Session) -> str:
 def ensure_default_plans(db: Session) -> None:
     defaults = [
         ("free", "Free", 0, 3, 30, 100, 100_000),
+        ("basic", "Basic", 48000, 100, 1000, 20480, 5_000_000),
         ("basic_local", "Basic Local", 48000, 100, 1000, 20480, 5_000_000),
         ("basic_cloud", "Basic Cloud", 79000, 100, 1000, 20480, 5_000_000),
         ("pro", "Pro", 29000, 100, 1000, 5120, 5_000_000),
@@ -76,6 +78,7 @@ def ensure_default_plans(db: Session) -> None:
     ]
     for code, name, price, uploads, pages, storage, tokens in defaults:
         pricing = subject_engine_pricing(price, ["math"])
+        policy = plan_cost_policy(db, code)
         plan = db.scalar(select(Plan).where(Plan.code == code))
         if not plan:
             db.add(
@@ -83,10 +86,10 @@ def ensure_default_plans(db: Session) -> None:
                     code=code,
                     name=name,
                     monthly_price=price,
-                    monthly_upload_count=uploads,
-                    monthly_processed_pages=pages,
-                    storage_quota_mb=storage,
-                    monthly_ai_tokens=tokens,
+                    monthly_upload_count=policy.max_jobs_per_day * 31,
+                    monthly_processed_pages=policy.monthly_processed_pages_limit,
+                    storage_quota_mb=policy.storage_quota_mb,
+                    monthly_ai_tokens=policy.monthly_credit_limit,
                     enabled_subject_engines=pricing["enabled_subject_engines"],
                     subject_engine_count=int(pricing["subject_engine_count"]),
                     subject_multiplier=float(pricing["subject_multiplier"]),
@@ -97,6 +100,10 @@ def ensure_default_plans(db: Session) -> None:
         else:
             engines = normalize_subject_engines(getattr(plan, "enabled_subject_engines", None))
             pricing = subject_engine_pricing(plan.monthly_price, engines)
+            plan.monthly_upload_count = policy.max_jobs_per_day * 31
+            plan.monthly_processed_pages = policy.monthly_processed_pages_limit
+            plan.storage_quota_mb = policy.storage_quota_mb
+            plan.monthly_ai_tokens = policy.monthly_credit_limit
             plan.enabled_subject_engines = pricing["enabled_subject_engines"]
             plan.subject_engine_count = int(pricing["subject_engine_count"])
             plan.subject_multiplier = float(pricing["subject_multiplier"])
@@ -148,14 +155,14 @@ def ensure_subject_engine_access(db: Session, user_id: str, subject_engine: str)
 
 def usage_summary(db: Session, user_id: str) -> tuple[Plan, Subscription | None, int, int, int, float]:
     ensure_default_plans(db)
-    subscription = active_subscription(db, user_id)
-    plan_code = subscription.plan_code if subscription else "free"
-    plan = db.scalar(select(Plan).where(Plan.code == plan_code)) or db.scalar(select(Plan).where(Plan.code == "free"))
+    plan, subscription, _ = active_plan_for_user(db, user_id)
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    uploads = db.scalar(select(func.count(UsageLog.id)).where(UsageLog.user_id == user_id, UsageLog.usage_type == "upload", UsageLog.created_at >= month_start)) or 0
+    upload_event_types = ("upload", "batch_extraction_estimate", "job_extraction_estimate")
+    uploads = db.scalar(select(func.count(UsageLog.id)).where(UsageLog.user_id == user_id, UsageLog.usage_type.in_(upload_event_types), UsageLog.created_at >= month_start)) or 0
     pages = db.scalar(select(func.coalesce(func.sum(UsageLog.pages_count), 0)).where(UsageLog.user_id == user_id, UsageLog.created_at >= month_start)) or 0
-    tokens = db.scalar(select(func.coalesce(func.sum(UsageLog.tokens_used), 0)).where(UsageLog.user_id == user_id, UsageLog.created_at >= month_start)) or 0
+    credit_milli = db.scalar(select(func.coalesce(func.sum(UsageLog.tokens_used), 0)).where(UsageLog.user_id == user_id, UsageLog.created_at >= month_start)) or 0
     storage = db.scalar(select(func.coalesce(func.sum(UsageLog.storage_mb), 0)).where(UsageLog.user_id == user_id)) or 0
+    tokens = round(int(credit_milli or 0) / 1000)
     return plan, subscription, int(uploads), int(pages), int(tokens), float(storage)
 
 
@@ -165,6 +172,27 @@ def enforce_usage_limit(db: Session, user_id: str, pages_to_add: int = 0, upload
         raise HTTPException(status_code=402, detail="이번 달 업로드 한도를 초과했습니다. 플랜을 업그레이드하세요.")
     if pages + pages_to_add > plan.monthly_processed_pages:
         raise HTTPException(status_code=402, detail="이번 달 처리 페이지 한도를 초과했습니다. 플랜을 업그레이드하세요.")
+
+
+def usage_cost_summary(db: Session, user_id: str) -> dict:
+    _, _, policy = active_plan_for_user(db, user_id)
+    totals = monthly_usage_totals(db, user_id)
+    used_cost = round(totals["estimated_cost_krw"])
+    used_credits = round(totals["credits"], 3)
+    return {
+        "monthly_cost_cap_krw": policy.monthly_cost_cap_krw,
+        "estimated_cost_used_krw": used_cost,
+        "available_cost_krw": max(policy.monthly_cost_cap_krw - used_cost, 0),
+        "monthly_credit_limit": policy.monthly_credit_limit,
+        "extraction_credits_used": used_credits,
+        "extraction_credits_remaining": max(round(policy.monthly_credit_limit - used_credits, 3), 0),
+        "monthly_upload_mb_limit": policy.monthly_upload_mb_limit,
+        "uploaded_mb_this_month": round(totals["uploaded_mb"], 3),
+        "max_file_size_mb": policy.max_file_size_mb,
+        "max_pages_per_job": policy.max_pages_per_job,
+        "max_jobs_per_day": policy.max_jobs_per_day,
+        "max_concurrent_jobs": policy.max_concurrent_jobs,
+    }
 
 
 def platform_commission_rate(db: Session, creator_id: str | None = None) -> float:

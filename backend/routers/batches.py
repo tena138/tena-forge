@@ -1,6 +1,8 @@
 import json
+import os
 import traceback
 from datetime import datetime
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
@@ -13,11 +15,12 @@ from models import Batch, BatchStatus, KoreanExtractionDocument, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, KoreanExtractionRead, SOURCE_TYPES
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids
-from services.pipeline import get_progress_detail
+from services.pipeline import count_pdf_pages, get_progress_detail
 from services.saas_security import ensure_subject_engine_access
 from services.storage import save_upload
 from services.subject_engines import infer_subject_engine_from_subjects, normalize_subject_engine
 from services.subject_inference import infer_subject_candidates_from_text
+from services.usage_cost_policy import enforce_extraction_preflight, estimate_extraction, record_usage_event
 
 router = APIRouter(prefix="/api/batches", tags=["batches"])
 
@@ -43,6 +46,26 @@ def _parse_candidate_list(raw: str | None, max_items: int = 24) -> list[str]:
         if len(candidates) >= max_items:
             break
     return candidates
+
+
+def _safe_unlink(path: str | None) -> None:
+    if not path:
+        return
+    try:
+        target = Path(path)
+        if target.exists() and target.is_file():
+            target.unlink()
+    except OSError:
+        pass
+
+
+def _file_size_mb(path: str | None) -> float:
+    if not path:
+        return 0.0
+    try:
+        return os.path.getsize(path) / (1024 * 1024)
+    except OSError:
+        return 0.0
 
 
 def _tagged_expression():
@@ -151,13 +174,34 @@ def upload_batch(
         raise HTTPException(status_code=400, detail="자료 업로드 및 아카이빙 권리 확인이 필요합니다.")
 
     owner_id = current_owner_id(request)
-    problem_path = save_upload(problem_pdf)
-    solution_path = save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None
     parsed_subject_candidates = _parse_candidate_list(subject_candidates)
     if not parsed_subject_candidates:
         parsed_subject_candidates = infer_subject_candidates_from_text(problem_pdf.filename, batch_name)
     engine = normalize_subject_engine(subject_engine or infer_subject_engine_from_subjects(parsed_subject_candidates))
     ensure_subject_engine_access(db, owner_id, engine)
+    problem_path = save_upload(problem_pdf)
+    solution_path = save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None
+    try:
+        problem_pages = count_pdf_pages(problem_path)
+        solution_pages = count_pdf_pages(solution_path) if solution_path else 0
+        total_pages = problem_pages + solution_pages
+        total_upload_mb = _file_size_mb(problem_path) + _file_size_mb(solution_path)
+        estimate = estimate_extraction(
+            subject_engine=engine,
+            problem_pages=problem_pages,
+            solution_pages=solution_pages,
+            problem_file_mb=_file_size_mb(problem_path),
+            solution_file_mb=_file_size_mb(solution_path),
+        )
+        enforce_extraction_preflight(db, owner_id, estimate, file_size_mb=total_upload_mb, page_count=total_pages)
+    except HTTPException:
+        _safe_unlink(problem_path)
+        _safe_unlink(solution_path)
+        raise
+    except Exception as exc:
+        _safe_unlink(problem_path)
+        _safe_unlink(solution_path)
+        raise HTTPException(status_code=400, detail=f"PDF 페이지 수를 확인하지 못했습니다: {exc}")
     batch = Batch(
         name=batch_name,
         problem_pdf_filename=problem_path,
@@ -176,6 +220,8 @@ def upload_batch(
         progress_message="처리 대기 중",
     )
     db.add(batch)
+    db.flush()
+    record_usage_event(db, owner_id, estimate, job_id=batch.id, storage_mb=total_upload_mb)
     db.commit()
     db.refresh(batch)
 
@@ -302,11 +348,24 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
 def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     if batch.status == BatchStatus.processing:
         raise HTTPException(status_code=400, detail="처리 중인 배치는 다시 처리할 수 없습니다.")
+    problem_pages = count_pdf_pages(batch.problem_pdf_filename)
+    solution_pages = count_pdf_pages(batch.solution_pdf_filename) if batch.solution_pdf_filename else 0
+    total_upload_mb = _file_size_mb(batch.problem_pdf_filename) + _file_size_mb(batch.solution_pdf_filename)
+    estimate = estimate_extraction(
+        subject_engine=batch.subject_engine or "math",
+        problem_pages=problem_pages,
+        solution_pages=solution_pages,
+        problem_file_mb=_file_size_mb(batch.problem_pdf_filename),
+        solution_file_mb=_file_size_mb(batch.solution_pdf_filename),
+        usage_type="batch_retry_estimate",
+    )
+    enforce_extraction_preflight(db, owner_id, estimate, file_size_mb=total_upload_mb, page_count=problem_pages + solution_pages, upload_mb_to_add=0)
     for problem in list(batch.problems):
         db.delete(problem)
     batch.status = BatchStatus.pending
@@ -320,6 +379,7 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
     batch.failure_reason = None
     batch.failure_hint = None
     batch.failed_at = None
+    record_usage_event(db, owner_id, estimate, job_id=batch.id)
     db.commit()
     db.refresh(batch)
 
@@ -339,6 +399,7 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
 
 @router.post("/{batch_id}/reprocess-solutions", response_model=BatchUploadResponse)
 def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
     owner_ids = current_owner_ids(request, db)
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(owner_ids))).first()
     if not batch:
@@ -357,6 +418,17 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
     if problem_count <= 0:
         raise HTTPException(status_code=400, detail="기존 문항이 있어야 해설만 재처리할 수 있습니다.")
 
+    solution_pages = count_pdf_pages(batch.solution_pdf_filename)
+    solution_file_mb = _file_size_mb(batch.solution_pdf_filename)
+    estimate = estimate_extraction(
+        subject_engine=batch.subject_engine or "math",
+        problem_pages=0,
+        solution_pages=solution_pages,
+        solution_file_mb=solution_file_mb,
+        usage_type="solution_reprocess_estimate",
+    )
+    enforce_extraction_preflight(db, owner_id, estimate, file_size_mb=solution_file_mb, page_count=solution_pages, upload_mb_to_add=0)
+
     batch.status = BatchStatus.pending
     batch.processing_task = "solution_only"
     batch.progress_message = "해설 재처리 대기 중"
@@ -368,6 +440,7 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
     batch.failure_reason = None
     batch.failure_hint = None
     batch.failed_at = None
+    record_usage_event(db, owner_id, estimate, job_id=batch.id)
     db.commit()
     db.refresh(batch)
 

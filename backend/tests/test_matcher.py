@@ -260,6 +260,40 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual([item["solution"]["answer"] for item in result["problems"]], ["A", "B", "C", "D"])
         self.assertIn("unsectioned_solutions_partitioned_by_problem_sections", result["summary"]["warnings"])
 
+    def test_inferred_solution_section_does_not_swallow_next_chapter(self):
+        result = match_with_summary(
+            [
+                {"problem_number": "01", "problem_text": "chapter one first", "section_label": "CHAPTER 01", "page_index": 1},
+                {"problem_number": "02", "problem_text": "chapter one second", "section_label": "CHAPTER 01", "page_index": 1},
+                {"problem_number": "01", "problem_text": "chapter two first", "section_label": "CHAPTER 02", "page_index": 2},
+                {"problem_number": "02", "problem_text": "chapter two second", "section_label": "CHAPTER 02", "page_index": 2},
+            ],
+            [
+                {"problem_number": "01", "answer": "A", "solution_steps": "chapter one solution one", "section_label": "CHAPTER 01", "page_idx": 10},
+                {"problem_number": "02", "answer": "B", "solution_steps": "chapter one solution two", "section_label": "CHAPTER 01", "page_idx": 10},
+                {
+                    "problem_number": "01",
+                    "answer": "C",
+                    "solution_steps": "chapter two solution one",
+                    "section_label": "CHAPTER 01",
+                    "section_inferred": True,
+                    "page_idx": 11,
+                },
+                {
+                    "problem_number": "02",
+                    "answer": "D",
+                    "solution_steps": "chapter two solution two",
+                    "section_label": "CHAPTER 01",
+                    "section_inferred": True,
+                    "page_idx": 11,
+                },
+            ],
+        )
+
+        self.assertEqual([item["solution"]["answer"] for item in result["problems"]], ["A", "B", "C", "D"])
+        self.assertEqual(result["validation_report"]["method_counts"]["section_number"], 4)
+        self.assertIn("inferred_solution_sections_repartitioned_by_problem_anchors", result["summary"]["warnings"])
+
     def test_missing_solution_numbers_use_review_semantic_fallback(self):
         matched = match(
             [

@@ -8,6 +8,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from services.pipeline import (  # noqa: E402
     RenderedPage,
+    _apply_section_ranges_to_items,
     _extracted_problem_merge_key,
     _is_structural_section_label,
     _normalize_extracted_items,
@@ -309,6 +310,21 @@ class PipelineMergeKeyTests(unittest.TestCase):
 
         self.assertEqual(normalized[0]["unit"], None)
         self.assertEqual(normalized[0]["section_label"], None)
+
+    def test_section_ranges_correct_stale_inferred_solution_section(self):
+        items = [
+            {"problem_number": "1", "section_label": "CHAPTER 01", "section_inferred": True, "page_idx": 4},
+            {"problem_number": "2", "section_label": "CHAPTER 01", "section_inferred": True, "page_idx": 4},
+        ]
+        sections = [
+            {"section_id": "CHAPTER 01", "page_start": 1, "page_end": 3},
+            {"section_id": "CHAPTER 02", "page_start": 4, "page_end": 6},
+        ]
+
+        _apply_section_ranges_to_items(items, sections, "page_idx")
+
+        self.assertEqual([item["section_label"] for item in items], ["CHAPTER 02", "CHAPTER 02"])
+        self.assertEqual([item["section_overridden_from"] for item in items], ["CHAPTER 01", "CHAPTER 01"])
 
     def test_choice_answer_is_preserved_when_value_is_not_resolved(self):
         self.assertEqual(clean_solution_answer("정답: ③"), "③")

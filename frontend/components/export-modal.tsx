@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ExamTemplate, api, downloadExport } from "@/lib/api";
-import { ClassCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
+import { ClassCard, StudentCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
 import { collectVisualTemplateManualVariables, createDynamicPreviewPages } from "@/lib/visualTemplateEngine";
 import { PAGE_SIZES, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplate, listMyTemplates, listPublicTemplates } from "@/lib/templateHub";
@@ -157,6 +157,7 @@ export function ExportModal({
   const [assignEnabled, setAssignEnabled] = useState(false);
   const [classes, setClasses] = useState<ClassCard[]>([]);
   const [assignClassId, setAssignClassId] = useState("");
+  const [assignStudentIds, setAssignStudentIds] = useState<string[]>([]);
   const [assignType, setAssignType] = useState("test");
   const [loading, setLoading] = useState(false);
   const examTime = timeLabel(examStartTime, examEndTime);
@@ -167,6 +168,7 @@ export function ExportModal({
 
     setAssignEnabled(false);
     setAssignClassId("");
+    setAssignStudentIds([]);
     setAssignType("test");
 
     api<ExamTemplate[]>("/api/templates")
@@ -190,11 +192,9 @@ export function ExportModal({
       ]).then(([mine, publicItems]) => setHubTemplates(dedupeHubTemplates([...mine, ...publicItems])));
     }
 
-    if (source === "set" && problemSetId) {
-      getStudentManagementDashboard()
-        .then((dashboard) => setClasses(dashboard.classes))
-        .catch(() => setClasses([]));
-    }
+    getStudentManagementDashboard()
+      .then((dashboard) => setClasses(dashboard.classes))
+      .catch(() => setClasses([]));
   }, [open, initialTemplateId, hideTemplateSelection]);
 
   const options = useMemo<ExportTemplateOption[]>(() => {
@@ -251,6 +251,17 @@ export function ExportModal({
   const legacyOptions = options.filter((option) => option.kind === "legacy");
   const htmlOptions = options.filter((option) => option.kind === "html");
   const manualVariables = useMemo(() => collectVisualTemplateManualVariables(selected?.templateSet), [selected?.templateSet]);
+  const assignClass = classes.find((classRow) => classRow.id === assignClassId) || null;
+  const assignableStudents = useMemo<StudentCard[]>(() => {
+    const pool = assignClass ? assignClass.students : classes.flatMap((classRow) => classRow.students);
+    const seen = new Set<string>();
+    return pool.filter((student) => {
+      if (seen.has(student.id)) return false;
+      seen.add(student.id);
+      return true;
+    });
+  }, [assignClass, classes]);
+  const assignTargetCount = assignStudentIds.length || (assignClassId ? 1 : 0);
 
   useEffect(() => {
     setCustomVariables((current) => {
@@ -264,6 +275,20 @@ export function ExportModal({
     setSelectedKind(option.kind);
     setSelectedId(option.id);
     if (option.legacy) setIncludeSolution(option.legacy.include_solution);
+  }
+
+  function changeAssignClass(classId: string) {
+    setAssignClassId(classId);
+    setAssignStudentIds([]);
+    const classRow = classes.find((row) => row.id === classId);
+    if (classRow && !className.trim()) setClassName(classRow.name);
+  }
+
+  function toggleAssignStudent(student: StudentCard) {
+    const exists = assignStudentIds.includes(student.id);
+    const next = exists ? assignStudentIds.filter((id) => id !== student.id) : [...assignStudentIds, student.id];
+    setAssignStudentIds(next);
+    if (!exists && next.length === 1 && !studentName.trim()) setStudentName(student.name);
   }
 
   async function submit() {
@@ -287,12 +312,14 @@ export function ExportModal({
         custom_variables: customVariables,
         include_solution: includeSolution,
       });
-      if (assignEnabled && source === "set" && problemSetId && assignClassId) {
+      if (assignEnabled && assignTargetCount > 0) {
         await createPaperSession({
           title: examTitle.trim(),
-          source_problem_set_id: problemSetId,
+          source_problem_set_id: source === "set" ? problemSetId || null : null,
+          problem_ids: source === "selection" ? problemIds || [] : undefined,
           session_type: assignType,
-          class_ids: [assignClassId],
+          class_ids: assignClassId && !assignStudentIds.length ? [assignClassId] : [],
+          student_membership_ids: assignStudentIds,
           scheduled_at: date ? `${date}T00:00:00` : null,
           status: "exported",
           create_calendar_events: true,
@@ -352,7 +379,7 @@ export function ExportModal({
               해설 포함
               <input type="checkbox" checked={includeSolution} onChange={(event) => setIncludeSolution(event.target.checked)} />
             </label>
-            {source === "set" && problemSetId ? (
+            {(source === "selection" || problemSetId) ? (
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
                 <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
                   학생/클래스에 배정
@@ -363,15 +390,31 @@ export function ExportModal({
                     <select
                       className="h-10 rounded-md border border-white/10 bg-[#10131b] px-3 text-sm text-slate-100 outline-none"
                       value={assignClassId}
-                      onChange={(event) => setAssignClassId(event.target.value)}
+                      onChange={(event) => changeAssignClass(event.target.value)}
                     >
                       <option value="">클래스 선택</option>
                       {classes.map((classRow) => (
                         <option key={classRow.id} value={classRow.id}>
-                          {classRow.name}
+                          {classRow.name} ({classRow.student_count})
                         </option>
                       ))}
                     </select>
+                    {assignableStudents.length ? (
+                      <div className="max-h-36 space-y-1 overflow-auto rounded-md border border-white/10 bg-white/[0.035] p-2">
+                        {assignableStudents.map((student) => (
+                          <label key={student.id} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs text-slate-300 hover:bg-white/[0.06]">
+                            <span className="min-w-0 truncate">{student.name}</span>
+                            <input
+                              type="checkbox"
+                              checked={assignStudentIds.includes(student.id)}
+                              onChange={() => toggleAssignStudent(student)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-slate-500">학생이 없습니다.</p>
+                    )}
                     <select
                       className="h-10 rounded-md border border-white/10 bg-[#10131b] px-3 text-sm text-slate-100 outline-none"
                       value={assignType}
@@ -395,7 +438,7 @@ export function ExportModal({
               </p>
               {!count ? <p className="mt-2 text-xs text-slate-500">문항을 먼저 선택해야 내보내기를 실행할 수 있습니다.</p> : null}
             </div>
-            <Button className="w-full" disabled={!selected || loading || !count || (assignEnabled && !assignClassId)} onClick={submit}>
+            <Button className="w-full" disabled={!selected || loading || !count || (assignEnabled && assignTargetCount === 0)} onClick={submit}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
               {selected?.kind === "html" ? "템플릿 HTML 생성" : "PDF 생성"}
             </Button>

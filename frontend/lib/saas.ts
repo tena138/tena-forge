@@ -66,6 +66,18 @@ export type UsageSummary = {
   monthly_pages_used: number;
   monthly_ai_tokens_used: number;
   storage_mb_used: number;
+  monthly_cost_cap_krw: number;
+  estimated_cost_used_krw: number;
+  available_cost_krw: number;
+  monthly_credit_limit: number;
+  extraction_credits_used: number;
+  extraction_credits_remaining: number;
+  monthly_upload_mb_limit: number;
+  uploaded_mb_this_month: number;
+  max_file_size_mb: number;
+  max_pages_per_job: number;
+  max_jobs_per_day: number;
+  max_concurrent_jobs: number;
 };
 
 export type Order = {
