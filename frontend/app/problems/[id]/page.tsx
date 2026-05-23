@@ -447,10 +447,10 @@ function ProblemDetailContent() {
             </div>
 
             {problem.review_page_image_url && (
-              <div className="space-y-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.055] p-4">
+              <div className="space-y-3 rounded-lg border border-violet-300/20 bg-white/[0.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="text-base font-semibold text-amber-100">원본 페이지 비교</h2>
+                    <h2 className="text-base font-semibold text-slate-100">원본 페이지 비교</h2>
                     <p className="mt-1 text-sm text-slate-400">
                       추출 당시 저장된 원본 {problem.review_page_number ? `${problem.review_page_number}페이지` : "페이지"}입니다.
                       검토 화면에서만 표시되며 문제 세트 출력에는 포함되지 않습니다.
