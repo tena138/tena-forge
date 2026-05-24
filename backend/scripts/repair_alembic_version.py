@@ -9,8 +9,15 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-PREVIOUS_REVISION = "0021_paper_sessions"
-HEAD_REVISION = "0022_problem_choices"
+PREVIOUS_REVISION = "0022_problem_choices"
+HEAD_REVISION = "0023_portone_billing"
+SUBJECT_ENGINE_COLUMNS = {
+    "enabled_subject_engines",
+    "subject_engine_count",
+    "subject_multiplier",
+    "final_monthly_price",
+    "final_annual_price",
+}
 ACADEMY_REQUIRED_COLUMNS = {
     "email_verified",
     "email_verified_at",
@@ -174,6 +181,50 @@ def _ensure_problem_columns(connection, inspector) -> bool:
     return _add_column_if_missing(connection, inspector, "problems", "choices", json_definition)
 
 
+def _ensure_subject_engine_columns(connection, inspector) -> bool:
+    changed = False
+    json_definition = "JSONB NOT NULL DEFAULT '[\"math\"]'::jsonb" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '[\"math\"]'"
+    json_default = "'[\"math\"]'::jsonb" if connection.dialect.name == "postgresql" else "'[\"math\"]'"
+    specs = [
+        ("enabled_subject_engines", json_definition),
+        ("subject_engine_count", "INTEGER NOT NULL DEFAULT 1"),
+        ("subject_multiplier", "NUMERIC(6, 2) NOT NULL DEFAULT 1"),
+        ("final_monthly_price", "INTEGER NOT NULL DEFAULT 0"),
+        ("final_annual_price", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    for table_name in ("plans", "subscriptions"):
+        if table_name not in inspector.get_table_names():
+            continue
+        for column_name, definition in specs:
+            if _add_column_if_missing(connection, inspector, table_name, column_name, definition):
+                changed = True
+                inspector = inspect(connection)
+
+        connection.execute(text(f"UPDATE {table_name} SET enabled_subject_engines = {json_default} WHERE enabled_subject_engines IS NULL"))
+        connection.execute(text(f"UPDATE {table_name} SET subject_engine_count = 1 WHERE subject_engine_count IS NULL OR subject_engine_count < 1"))
+        connection.execute(text(f"UPDATE {table_name} SET subject_multiplier = 1 WHERE subject_multiplier IS NULL OR subject_multiplier <= 0"))
+
+    tables = set(inspector.get_table_names())
+    if "plans" in tables and _has_columns(inspector, "plans", {"monthly_price", "final_monthly_price", "final_annual_price"}):
+        connection.execute(text("UPDATE plans SET final_monthly_price = monthly_price WHERE (final_monthly_price IS NULL OR final_monthly_price = 0) AND monthly_price IS NOT NULL"))
+        connection.execute(text("UPDATE plans SET final_annual_price = final_monthly_price * 12 WHERE final_annual_price IS NULL OR final_annual_price = 0"))
+    if (
+        "plans" in tables
+        and "subscriptions" in tables
+        and _has_columns(inspector, "plans", {"code", "monthly_price"})
+        and _has_columns(inspector, "subscriptions", {"plan_code", "final_monthly_price", "final_annual_price"})
+    ):
+        connection.execute(
+            text(
+                "UPDATE subscriptions SET final_monthly_price = "
+                "COALESCE((SELECT monthly_price FROM plans WHERE plans.code = subscriptions.plan_code), 0) "
+                "WHERE final_monthly_price IS NULL OR final_monthly_price = 0"
+            )
+        )
+        connection.execute(text("UPDATE subscriptions SET final_annual_price = final_monthly_price * 12 WHERE final_annual_price IS NULL OR final_annual_price = 0"))
+    return changed
+
+
 def _schema_is_at_head(inspector) -> bool:
     required_tables = {
         "academies",
@@ -197,13 +248,16 @@ def _schema_is_at_head(inspector) -> bool:
         "korean_extraction_documents",
         "korean_passage_groups",
         "korean_questions",
+        "subscription_orders",
+        "subscription_billing_keys",
+        "subscription_payment_attempts",
     }
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
         and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task", "subject_engine"})
-        and _has_columns(inspector, "plans", {"enabled_subject_engines", "subject_engine_count", "subject_multiplier", "final_monthly_price", "final_annual_price"})
-        and _has_columns(inspector, "subscriptions", {"enabled_subject_engines", "subject_engine_count", "subject_multiplier", "final_monthly_price", "final_annual_price"})
+        and _has_columns(inspector, "plans", SUBJECT_ENGINE_COLUMNS)
+        and _has_columns(inspector, "subscriptions", SUBJECT_ENGINE_COLUMNS)
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
         and _has_columns(inspector, "student_academy_memberships", {"display_name_in_academy", "expires_at"})
         and _has_columns(inspector, "problems", {"choices"})
@@ -241,6 +295,8 @@ def main() -> None:
             inspector = inspect(connection)
         if _ensure_problem_columns(connection, inspector):
             inspector = inspect(connection)
+        if _ensure_subject_engine_columns(connection, inspector):
+            inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
             connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)"))
             inspector = inspect(connection)
@@ -259,6 +315,8 @@ def main() -> None:
             if _ensure_student_membership_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_problem_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_subject_engine_columns(connection, inspector):
                 inspector = inspect(connection)
 
         if _schema_is_at_head(inspector) or (_schema_is_at_previous(inspector) and _schema_has_problem_choices(inspector)):

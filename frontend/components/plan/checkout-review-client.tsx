@@ -21,7 +21,7 @@ import {
   resolveSelectedPackages,
   stringifySelectedPackageIds,
 } from "@/lib/plan-pricing";
-import { ensureAccessToken } from "@/lib/auth-client";
+import { authHttp, ensureAccessToken } from "@/lib/auth-client";
 
 export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: PaidPlanType; billingCycle: BillingCycle; packages: string }) {
   const router = useRouter();
@@ -47,42 +47,45 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
         router.push(`/login?redirect=${encodeURIComponent(current)}`);
         return;
       }
-      const checkoutResponse = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, billingCycle, selectedPackageIds }),
+      const billingCheckoutResponse = await authHttp.post("/api/saas/billing/checkout", {
+        plan_code: plan,
+        billing_cycle: billingCycle,
+        selected_package_ids: selectedPackageIds,
       });
-      const checkout = await checkoutResponse.json();
-      if (!checkoutResponse.ok) throw new Error(checkout.message || "체크아웃을 준비하지 못했습니다.");
-      if (!checkout.portone?.storeId || !checkout.portone?.channelKey) {
-        throw new Error("PortOne Store ID 또는 Toss 채널 키가 설정되어 있지 않습니다.");
+      const billingCheckout = billingCheckoutResponse.data;
+      if (!billingCheckout.portone?.store_id || !billingCheckout.portone?.channel_key) {
+        throw new Error("PortOne Store ID or channel key is not configured.");
       }
 
-      const PortOne = await import("@portone/browser-sdk/v2");
-      const payment = await (PortOne.requestPayment as any)({
-        storeId: checkout.portone.storeId,
-        channelKey: checkout.portone.channelKey,
-        paymentId: checkout.paymentId,
-        orderName: checkout.orderName,
-        totalAmount: checkout.amount,
-        currency: "CURRENCY_KRW",
-        payMethod: checkout.portone.payMethod || "CARD",
+      const PortOneSdk = await import("@portone/browser-sdk/v2");
+      const issue = await (PortOneSdk.requestIssueBillingKey as any)({
+        storeId: billingCheckout.portone.store_id,
+        channelKey: billingCheckout.portone.channel_key,
+        billingKeyMethod: billingCheckout.portone.billing_key_method || "CARD",
+        issueId: billingCheckout.issue_id,
+        issueName: billingCheckout.issue_name,
+        customerId: billingCheckout.customer_id,
+        customer: { id: billingCheckout.customer_id },
+        displayAmount: billingCheckout.amount,
+        currency: "KRW",
+        locale: "KO_KR",
+        redirectUrl: `${window.location.origin}/checkout/billing-return?issueId=${encodeURIComponent(billingCheckout.issue_id)}`,
       });
 
-      if (!payment || "code" in payment) {
-        const message = payment && "message" in payment ? payment.message : "결제가 취소되었거나 실패했습니다.";
+      if (!issue || "code" in issue) {
+        const message = issue && "message" in issue ? issue.message : "Billing key issue failed.";
         router.push(`/checkout/fail?message=${encodeURIComponent(String(message))}`);
         return;
       }
+      const billingKey = issue.billingKey || issue.billing_key;
+      if (!billingKey) throw new Error("PortOne did not return a billingKey.");
 
-      const verifyResponse = await fetch("/api/billing/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ paymentId: checkout.paymentId }),
+      const confirmResponse = await authHttp.post("/api/saas/billing/confirm-billing-key", {
+        issue_id: billingCheckout.issue_id,
+        billing_key: billingKey,
       });
-      const verify = await verifyResponse.json();
-      if (!verifyResponse.ok) throw new Error(verify.message || "결제 검증에 실패했습니다.");
-      router.push(`/checkout/success?paymentId=${encodeURIComponent(checkout.paymentId)}`);
+      router.push(`/checkout/success?paymentId=${encodeURIComponent(confirmResponse.data.payment_id || billingCheckout.payment_id)}`);
+      return;
     } catch (error: any) {
       setError(error?.message || "결제 처리 중 문제가 발생했습니다.");
     } finally {
@@ -163,7 +166,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
             {error && <p className="mt-4 rounded-[12px] bg-rose-500/14 px-4 py-3 text-sm font-bold text-rose-100">{error}</p>}
             <p className="mt-5 flex gap-2 text-xs leading-5 text-slate-400">
               <ShieldCheck className="h-4 w-4 shrink-0" />
-              서버가 가격과 패키지를 다시 검증한 뒤 PortOne V2 + Toss Payments 채널로 결제를 요청합니다.
+              서버가 가격과 패키지를 다시 검증한 뒤 PortOne V2 빌링키로 정기결제를 처리합니다.
             </p>
           </aside>
         </div>

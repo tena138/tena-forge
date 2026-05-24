@@ -1,27 +1,54 @@
+import uuid
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Academy, AcademyPlan, JobOutput, ProcessingJob, Subscription, SubscriptionEvent
-from schemas import CheckoutRequest, CheckoutResponse, ProcessingJobCreate, ProcessingJobRead, SignedUrlResponse, UsageSummaryRead
+from models import Academy, AcademyPlan, JobOutput, ProcessingJob, Subscription, SubscriptionBillingKey, SubscriptionEvent, SubscriptionOrder, SubscriptionPaymentAttempt
+from schemas import ProcessingJobCreate, ProcessingJobRead, SignedUrlResponse, UsageSummaryRead
+from services.auth_security import decrypt_secret, encrypt_secret, sha256_token
 from services.ownership import current_owner_id
+from services.portone_billing import get_payment, pay_with_billing_key, payment_amount, payment_currency, payment_status, portone_public_config, read_verified_webhook, schedule_billing_key_payment
 from services.saas_security import audit, create_signed_url, enforce_usage_limit, ensure_default_plans, get_roles, usage_cost_summary, usage_summary
-from services.usage_cost_policy import enforce_extraction_preflight, estimate_extraction, record_usage_event
+from services.subscription_pricing import calculate_subscription_price
 from services.subject_engines import normalize_subject_engines, subject_engine_pricing
+from services.usage_cost_policy import enforce_extraction_preflight, estimate_extraction, record_usage_event
 
 router = APIRouter(prefix="/api/saas", tags=["saas"])
 
 
-class BillingActivationRequest(BaseModel):
+class BillingCheckoutRequest(BaseModel):
     plan_code: str
     billing_cycle: str = "monthly"
+    selected_package_ids: dict[str, str] = Field(default_factory=dict)
     enabled_subject_engines: list[str] | None = None
-    payment_id: str | None = None
+
+
+class BillingKeyConfirmRequest(BaseModel):
+    issue_id: str
+    billing_key: str
+
+
+def _portone_id(prefix: str, plan_code: str | None = None) -> str:
+    parts = [prefix]
+    if plan_code:
+        parts.append(str(plan_code).replace("_", "-")[:12])
+    parts.append(str(int(datetime.utcnow().timestamp())))
+    parts.append(uuid.uuid4().hex[:12])
+    return "-".join(parts)[:64]
+
+
+def _period_delta(billing_cycle: str) -> timedelta:
+    return timedelta(days=365 if billing_cycle == "annual" else 31)
+
+
+def _provider_event_id(prefix: str, identifier: str) -> str:
+    return f"{prefix}-{identifier}"[:255]
 
 
 def _activate_subscription(
@@ -33,6 +60,8 @@ def _activate_subscription(
     enabled_subject_engines: list[str] | None = None,
     provider: str = "mock",
     provider_subscription_id: str | None = None,
+    monthly_price_krw: int | None = None,
+    period_amount_krw: int | None = None,
 ) -> Subscription:
     from models import Plan
 
@@ -40,9 +69,19 @@ def _activate_subscription(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found.")
     now = datetime.utcnow()
-    period_days = 365 if billing_cycle == "annual" else 31
+    for existing in db.scalars(
+        select(Subscription).where(
+            Subscription.user_id == user_id,
+            Subscription.status.in_(["trialing", "active"]),
+        )
+    ).all():
+        existing.status = "canceled"
+        existing.cancel_at_period_end = True
+
     enabled_engines = normalize_subject_engines(enabled_subject_engines or getattr(plan, "enabled_subject_engines", None) or ["math"])
     pricing = subject_engine_pricing(plan.monthly_price, enabled_engines)
+    final_monthly_price = int(monthly_price_krw if monthly_price_krw is not None else pricing["final_monthly_price"])
+    final_annual_price = int(period_amount_krw if billing_cycle == "annual" and period_amount_krw is not None else final_monthly_price * 12)
     subscription = Subscription(
         user_id=user_id,
         plan_code=plan_code,
@@ -50,12 +89,12 @@ def _activate_subscription(
         provider=provider,
         provider_subscription_id=provider_subscription_id,
         current_period_start=now,
-        current_period_end=now + timedelta(days=period_days),
+        current_period_end=now + _period_delta(billing_cycle),
         enabled_subject_engines=pricing["enabled_subject_engines"],
         subject_engine_count=int(pricing["subject_engine_count"]),
         subject_multiplier=float(pricing["subject_multiplier"]),
-        final_monthly_price=int(pricing["final_monthly_price"]),
-        final_annual_price=int(pricing["final_annual_price"]),
+        final_monthly_price=final_monthly_price,
+        final_annual_price=final_annual_price,
     )
     db.add(subscription)
     academy = db.get(Academy, user_id)
@@ -64,6 +103,55 @@ def _activate_subscription(
         academy.plan = AcademyPlan.pro if canonical == "pro" else AcademyPlan.basic
         academy.plan_expires_at = None
     return subscription
+
+
+def _schedule_next_subscription_payment(db: Session, subscription: Subscription, billing_key: str, billing_cycle: str, order_id: UUID | None = None) -> tuple[SubscriptionPaymentAttempt, str | None]:
+    scheduled_at = subscription.current_period_end or (datetime.utcnow() + _period_delta(billing_cycle))
+    amount_krw = int(subscription.final_annual_price if billing_cycle == "annual" else subscription.final_monthly_price)
+    payment_id = _portone_id("tf-renew", subscription.plan_code)
+    attempt = SubscriptionPaymentAttempt(
+        user_id=subscription.user_id,
+        subscription_id=subscription.id,
+        order_id=order_id,
+        provider="portone",
+        provider_payment_id=payment_id,
+        billing_cycle=billing_cycle,
+        amount_krw=amount_krw,
+        currency="KRW",
+        status="scheduled",
+        scheduled_at=scheduled_at,
+    )
+    db.add(attempt)
+    try:
+        payload = schedule_billing_key_payment(
+            payment_id=payment_id,
+            billing_key=billing_key,
+            order_name=f"Tena Forge {subscription.plan_code} renewal",
+            amount_krw=amount_krw,
+            user_id=subscription.user_id,
+            time_to_pay=scheduled_at,
+        )
+        attempt.raw_payload = payload
+        return attempt, None
+    except Exception as exc:
+        attempt.status = "schedule_failed"
+        attempt.failure_reason = str(exc)
+        return attempt, str(exc)
+
+
+def _mark_attempt_from_payment(attempt: SubscriptionPaymentAttempt, payment: dict[str, Any]) -> None:
+    status = payment_status(payment)
+    attempt.raw_payload = payment
+    if status == "PAID":
+        attempt.status = "paid"
+        attempt.paid_at = datetime.utcnow()
+        attempt.failure_reason = None
+    elif status in {"FAILED", "CANCELED", "CANCELLED"}:
+        attempt.status = "canceled" if status in {"CANCELED", "CANCELLED"} else "failed"
+        attempt.failed_at = datetime.utcnow()
+        attempt.failure_reason = str(payment.get("failure") or payment.get("message") or status)
+    else:
+        attempt.status = status.lower() or attempt.status
 
 
 @router.get("/roles")
@@ -95,53 +183,247 @@ def list_plans(db: Session = Depends(get_db)):
     return db.scalars(select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.monthly_price)).all()
 
 
-@router.post("/billing/checkout", response_model=CheckoutResponse)
-def create_checkout(payload: CheckoutRequest, request: Request, db: Session = Depends(get_db)):
+@router.post("/billing/checkout")
+def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Session = Depends(get_db)):
     user_id = current_owner_id(request)
     ensure_default_plans(db)
+    config = portone_public_config()
+    pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids)
+    enabled_engines = normalize_subject_engines(payload.enabled_subject_engines or ["math"])
+    issue_id = _portone_id("tf-bill", payload.plan_code)
+    payment_id = _portone_id("tf-pay", payload.plan_code)
+    order_name = f"Tena Forge {payload.plan_code.title()} {'annual' if pricing['billing_cycle'] == 'annual' else 'monthly'} subscription"
+    now = datetime.utcnow()
+
+    order = SubscriptionOrder(
+        user_id=user_id,
+        plan_code=payload.plan_code,
+        billing_cycle=pricing["billing_cycle"],
+        selected_packages=pricing["selected_packages"],
+        enabled_subject_engines=enabled_engines,
+        monthly_price_krw=int(pricing["monthly_price_krw"]),
+        amount_krw=int(pricing["amount_krw"]),
+        currency="KRW",
+        status="ready",
+        provider="portone",
+        provider_payment_id=payment_id,
+        provider_issue_id=issue_id,
+        order_name=order_name,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(order)
+    audit(db, user_id, "subscription.checkout.created", "subscription_order", str(order.id), {"provider_payment_id": payment_id, "amount_krw": order.amount_krw})
+    db.commit()
+    return {
+        "provider": "portone",
+        "issue_id": issue_id,
+        "issue_name": order_name,
+        "payment_id": payment_id,
+        "order_name": order_name,
+        "amount": order.amount_krw,
+        "currency": "KRW",
+        "customer_id": user_id,
+        "billing_cycle": order.billing_cycle,
+        "selected_packages": order.selected_packages,
+        "portone": {
+            "store_id": config["store_id"],
+            "channel_key": config["channel_key"],
+            "billing_key_method": "CARD",
+        },
+    }
+
+
+@router.post("/billing/confirm-billing-key")
+def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db: Session = Depends(get_db)):
+    user_id = current_owner_id(request)
+    ensure_default_plans(db)
+    order = db.scalar(
+        select(SubscriptionOrder).where(
+            SubscriptionOrder.user_id == user_id,
+            SubscriptionOrder.provider == "portone",
+            SubscriptionOrder.provider_issue_id == payload.issue_id,
+        )
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Subscription order not found.")
+    if order.status == "paid" and order.subscription_id:
+        return {"ok": True, "subscription_id": str(order.subscription_id), "payment_id": order.provider_payment_id, "idempotent": True}
+    if order.status not in {"ready", "failed"}:
+        raise HTTPException(status_code=409, detail=f"Subscription order is not payable: {order.status}")
+    if order.status == "failed":
+        order.provider_payment_id = _portone_id("tf-pay", order.plan_code)
+        order.status = "ready"
+        order.failure_reason = None
+
+    billing_key = payload.billing_key.strip()
+    if not billing_key:
+        raise HTTPException(status_code=400, detail="billing_key is required.")
+
+    key_record = SubscriptionBillingKey(
+        user_id=user_id,
+        provider="portone",
+        provider_billing_key_hash=sha256_token(billing_key),
+        billing_key_encrypted=encrypt_secret(billing_key) or "",
+        status="active",
+        issued_at=datetime.utcnow(),
+    )
+    db.add(key_record)
+    db.flush()
+
+    attempt = SubscriptionPaymentAttempt(
+        user_id=user_id,
+        order_id=order.id,
+        provider="portone",
+        provider_payment_id=order.provider_payment_id or _portone_id("tf-pay", order.plan_code),
+        billing_cycle=order.billing_cycle,
+        amount_krw=order.amount_krw,
+        currency=order.currency,
+        status="ready",
+    )
+    db.add(attempt)
+    db.flush()
+
+    try:
+        payment = pay_with_billing_key(
+            payment_id=attempt.provider_payment_id,
+            billing_key=billing_key,
+            order_name=order.order_name,
+            amount_krw=order.amount_krw,
+            user_id=user_id,
+        )
+    except Exception as exc:
+        order.status = "failed"
+        order.failure_reason = str(exc)
+        order.billing_key_id = key_record.id
+        attempt.status = "failed"
+        attempt.failed_at = datetime.utcnow()
+        attempt.failure_reason = str(exc)
+        db.commit()
+        raise
+
+    status = payment_status(payment)
+    paid_amount = payment_amount(payment)
+    currency = payment_currency(payment)
+    if status != "PAID" or paid_amount != order.amount_krw or currency not in {"KRW", "CURRENCY_KRW"}:
+        order.status = "failed"
+        order.failure_reason = f"Unexpected PortOne payment state: status={status}, amount={paid_amount}, currency={currency}"
+        order.payment_snapshot = payment
+        attempt.raw_payload = payment
+        attempt.status = "failed"
+        attempt.failed_at = datetime.utcnow()
+        attempt.failure_reason = order.failure_reason
+        db.commit()
+        raise HTTPException(status_code=400, detail=order.failure_reason)
 
     subscription = _activate_subscription(
         db,
         user_id,
-        plan_code=payload.plan_code,
-        provider="mock",
-        enabled_subject_engines=payload.enabled_subject_engines,
+        plan_code=order.plan_code,
+        billing_cycle=order.billing_cycle,
+        enabled_subject_engines=order.enabled_subject_engines,
+        provider="portone",
+        provider_subscription_id=attempt.provider_payment_id,
+        monthly_price_krw=order.monthly_price_krw,
+        period_amount_krw=order.amount_krw,
     )
+    db.flush()
+
+    key_record.subscription_id = subscription.id
+    order.status = "paid"
+    order.subscription_id = subscription.id
+    order.billing_key_id = key_record.id
+    order.payment_snapshot = payment
+    order.failure_reason = None
+    attempt.subscription_id = subscription.id
+    _mark_attempt_from_payment(attempt, payment)
+    next_attempt, schedule_error = _schedule_next_subscription_payment(db, subscription, billing_key, order.billing_cycle, order.id)
+
     event_payload = {
-        "plan_code": payload.plan_code,
+        "plan_code": order.plan_code,
+        "billing_cycle": order.billing_cycle,
+        "payment_id": attempt.provider_payment_id,
+        "next_payment_id": next_attempt.provider_payment_id,
+        "schedule_error": schedule_error,
         "enabled_subject_engines": subscription.enabled_subject_engines,
         "final_monthly_price": subscription.final_monthly_price,
+        "final_annual_price": subscription.final_annual_price,
     }
-    db.add(SubscriptionEvent(provider="mock", provider_event_id=f"checkout-{subscription.id}", event_type="subscription.mock_checkout", payload=event_payload, processed_at=datetime.utcnow()))
-    audit(db, user_id, "subscription.checkout.mock", "subscription", str(subscription.id), event_payload)
+    db.add(SubscriptionEvent(provider="portone", provider_event_id=_provider_event_id("activate", attempt.provider_payment_id), event_type="subscription.activated", payload=event_payload, processed_at=datetime.utcnow()))
+    audit(db, user_id, "subscription.activated", "subscription", str(subscription.id), event_payload)
     db.commit()
-    return {"provider": "mock", "checkout_url": "/billing?mock=success", "message": "개발용 mock 결제가 완료되었습니다."}
+    return {
+        "ok": True,
+        "subscription_id": str(subscription.id),
+        "plan_code": subscription.plan_code,
+        "payment_id": attempt.provider_payment_id,
+        "next_payment_id": next_attempt.provider_payment_id,
+        "schedule_error": schedule_error,
+    }
+
+
+@router.post("/billing/webhook")
+async def portone_billing_webhook(request: Request, db: Session = Depends(get_db)):
+    event = await read_verified_webhook(request)
+    event_type = str(event.get("type") or "")
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    payment_id = data.get("paymentId") or event.get("paymentId")
+    if not payment_id:
+        return {"received": True, "ignored": "missing paymentId"}
+
+    payment = get_payment(str(payment_id))
+    if not payment:
+        return {"received": True, "ignored": "payment not found"}
+
+    attempt = db.scalar(select(SubscriptionPaymentAttempt).where(SubscriptionPaymentAttempt.provider == "portone", SubscriptionPaymentAttempt.provider_payment_id == str(payment_id)))
+    if not attempt:
+        return {"received": True, "ignored": "unknown paymentId"}
+
+    previous_status = attempt.status
+    _mark_attempt_from_payment(attempt, payment)
+    if attempt.status == "paid" and previous_status == "scheduled" and attempt.subscription_id:
+        subscription = db.get(Subscription, attempt.subscription_id)
+        if subscription:
+            now = datetime.utcnow()
+            base = subscription.current_period_end if subscription.current_period_end and subscription.current_period_end > now else now
+            subscription.current_period_start = now
+            subscription.current_period_end = base + _period_delta(attempt.billing_cycle)
+            subscription.status = "active"
+            key_record = db.scalar(
+                select(SubscriptionBillingKey)
+                .where(
+                    SubscriptionBillingKey.subscription_id == subscription.id,
+                    SubscriptionBillingKey.status == "active",
+                )
+                .order_by(SubscriptionBillingKey.created_at.desc())
+            )
+            if key_record:
+                billing_key = decrypt_secret(key_record.billing_key_encrypted)
+                if billing_key:
+                    _schedule_next_subscription_payment(db, subscription, billing_key, attempt.billing_cycle)
+    elif attempt.status in {"failed", "canceled"} and attempt.subscription_id:
+        subscription = db.get(Subscription, attempt.subscription_id)
+        if subscription:
+            subscription.status = "past_due" if attempt.status == "failed" else "canceled"
+
+    webhook_event_id = _provider_event_id("webhook", f"{event_type}-{payment_id}")
+    if not db.scalar(select(SubscriptionEvent).where(SubscriptionEvent.provider == "portone", SubscriptionEvent.provider_event_id == webhook_event_id)):
+        db.add(
+            SubscriptionEvent(
+                provider="portone",
+                provider_event_id=webhook_event_id,
+                event_type=event_type or "portone.webhook",
+                payload={"event": event, "payment": payment},
+                processed_at=datetime.utcnow(),
+            )
+        )
+    db.commit()
+    return {"received": True}
 
 
 @router.post("/billing/activate")
-def activate_paid_subscription(payload: BillingActivationRequest, request: Request, db: Session = Depends(get_db)):
-    user_id = current_owner_id(request)
-    ensure_default_plans(db)
-    subscription = _activate_subscription(
-        db,
-        user_id,
-        plan_code=payload.plan_code,
-        billing_cycle=payload.billing_cycle,
-        enabled_subject_engines=payload.enabled_subject_engines,
-        provider="portone",
-        provider_subscription_id=payload.payment_id,
-    )
-    event_payload = {
-        "plan_code": payload.plan_code,
-        "billing_cycle": payload.billing_cycle,
-        "payment_id": payload.payment_id,
-        "enabled_subject_engines": subscription.enabled_subject_engines,
-        "final_monthly_price": subscription.final_monthly_price,
-    }
-    db.add(SubscriptionEvent(provider="portone", provider_event_id=f"activate-{payload.payment_id or subscription.id}", event_type="subscription.activated", payload=event_payload, processed_at=datetime.utcnow()))
-    audit(db, user_id, "subscription.activated", "subscription", str(subscription.id), event_payload)
-    db.commit()
-    return {"ok": True, "subscription_id": str(subscription.id), "plan_code": subscription.plan_code}
+def activate_paid_subscription():
+    raise HTTPException(status_code=410, detail="Use /api/saas/billing/confirm-billing-key for PortOne billing-key subscriptions.")
 
 
 @router.post("/jobs", response_model=ProcessingJobRead)

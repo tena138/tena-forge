@@ -74,7 +74,7 @@ export function shouldForgetActiveBatchAfterStatusError(error: unknown) {
 export async function fetchBatchStatus(batchId: string) {
   await ensureAccessToken();
   const response = await authHttp.get<BatchStatusResponse>(`/api/batches/${batchId}/status`, {
-    headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
+    headers: { "Cache-Control": "no-store" },
     params: { t: Date.now() },
   });
   return response.data;
@@ -83,7 +83,7 @@ export async function fetchBatchStatus(batchId: string) {
 export async function fetchActiveBatchStatus() {
   await ensureAccessToken();
   const response = await authHttp.get<BatchStatusResponse | null>("/api/batches/active", {
-    headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
+    headers: { "Cache-Control": "no-store" },
     params: { t: Date.now() },
   });
   return response.data;

@@ -184,24 +184,29 @@ def upload_batch(
     try:
         problem_pages = count_pdf_pages(problem_path)
         solution_pages = count_pdf_pages(solution_path) if solution_path else 0
-        total_pages = problem_pages + solution_pages
-        total_upload_mb = _file_size_mb(problem_path) + _file_size_mb(solution_path)
-        estimate = estimate_extraction(
-            subject_engine=engine,
-            problem_pages=problem_pages,
-            solution_pages=solution_pages,
-            problem_file_mb=_file_size_mb(problem_path),
-            solution_file_mb=_file_size_mb(solution_path),
-        )
+    except Exception as exc:
+        _safe_unlink(problem_path)
+        _safe_unlink(solution_path)
+        raise HTTPException(status_code=400, detail=f"PDF 페이지 수를 확인하지 못했습니다: {exc}")
+    total_pages = problem_pages + solution_pages
+    total_upload_mb = _file_size_mb(problem_path) + _file_size_mb(solution_path)
+    estimate = estimate_extraction(
+        subject_engine=engine,
+        problem_pages=problem_pages,
+        solution_pages=solution_pages,
+        problem_file_mb=_file_size_mb(problem_path),
+        solution_file_mb=_file_size_mb(solution_path),
+    )
+    try:
         enforce_extraction_preflight(db, owner_id, estimate, file_size_mb=total_upload_mb, page_count=total_pages)
     except HTTPException:
         _safe_unlink(problem_path)
         _safe_unlink(solution_path)
         raise
-    except Exception as exc:
+    except Exception:
         _safe_unlink(problem_path)
         _safe_unlink(solution_path)
-        raise HTTPException(status_code=400, detail=f"PDF 페이지 수를 확인하지 못했습니다: {exc}")
+        raise
     batch = Batch(
         name=batch_name,
         problem_pdf_filename=problem_path,

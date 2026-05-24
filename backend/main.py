@@ -94,7 +94,7 @@ app.add_middleware(
     allow_origins=sorted(origin for origin in allowed_origins if origin),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Cache-Control"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Cache-Control", "Pragma"],
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_error_response)
@@ -105,7 +105,8 @@ app.add_middleware(SlowAPIMiddleware)
 @app.middleware("http")
 async def security_and_auth_middleware(request, call_next):
     path = request.url.path
-    if request.method != "OPTIONS" and path.startswith("/api/") and not path.startswith("/api/auth/"):
+    public_api_paths = {"/api/saas/billing/webhook"}
+    if request.method != "OPTIONS" and path.startswith("/api/") and not path.startswith("/api/auth/") and path not in public_api_paths:
         authorization = request.headers.get("authorization", "")
         if not authorization.lower().startswith("bearer "):
             return auth_error_response(request, "Authentication required")
@@ -222,13 +223,49 @@ def health():
 def health_db():
     try:
         from scripts.ensure_admin_account import ADMIN_EMAIL
-        from scripts.repair_alembic_version import ACADEMY_REQUIRED_COLUMNS
+        from scripts.repair_alembic_version import ACADEMY_REQUIRED_COLUMNS, SUBJECT_ENGINE_COLUMNS
 
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
+        required_tables = {
+            "academies",
+            "plans",
+            "subscriptions",
+            "user_roles",
+            "batches",
+            "problems",
+            "problem_sets",
+            "content_versions",
+            "archive_access_grants",
+            "learning_assignments",
+            "learning_assignment_targets",
+            "learning_submissions",
+            "problem_attempts",
+            "wrong_answer_records",
+            "student_personal_sets",
+            "student_personal_set_items",
+            "paper_sessions",
+            "paper_session_results",
+            "problem_results",
+            "class_schedule_events",
+            "korean_extraction_documents",
+            "korean_passage_groups",
+            "korean_questions",
+            "subscription_orders",
+            "subscription_billing_keys",
+            "subscription_payment_attempts",
+        }
         academy_columns = {column["name"] for column in inspector.get_columns("academies")} if "academies" in tables else set()
         batch_columns = {column["name"] for column in inspector.get_columns("batches")} if "batches" in tables else set()
         problem_columns = {column["name"] for column in inspector.get_columns("problems")} if "problems" in tables else set()
+        plan_columns = {column["name"] for column in inspector.get_columns("plans")} if "plans" in tables else set()
+        subscription_columns = {column["name"] for column in inspector.get_columns("subscriptions")} if "subscriptions" in tables else set()
+        missing_tables = sorted(required_tables - tables)
+        missing_academy_columns = sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns)
+        missing_batch_columns = sorted({"subject_candidates", "unit_candidates", "processing_task", "subject_engine"} - batch_columns)
+        missing_problem_columns = sorted({"choices"} - problem_columns)
+        missing_plan_columns = sorted(SUBJECT_ENGINE_COLUMNS - plan_columns)
+        missing_subscription_columns = sorted(SUBJECT_ENGINE_COLUMNS - subscription_columns)
         alembic_versions = []
         admin_exists = None
         if "alembic_version" in tables:
@@ -243,38 +280,27 @@ def health_db():
                     ).first()
                 )
         return {
-            "ok": not sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
+            "ok": not any(
+                [
+                    missing_tables,
+                    missing_academy_columns,
+                    missing_batch_columns,
+                    missing_problem_columns,
+                    missing_plan_columns,
+                    missing_subscription_columns,
+                ]
+            ),
             "commit": (os.getenv("RENDER_GIT_COMMIT") or "unknown")[:7],
             "admin_email": ADMIN_EMAIL,
             "admin_exists": admin_exists,
             "bootstrap_password_configured": bool(os.getenv("BOOTSTRAP_ADMIN_PASSWORD")),
             "alembic_versions": alembic_versions,
-            "missing_tables": sorted({
-                "academies",
-                "user_roles",
-                "batches",
-                "problems",
-                "problem_sets",
-                "content_versions",
-                "archive_access_grants",
-                "learning_assignments",
-                "learning_assignment_targets",
-                "learning_submissions",
-                "problem_attempts",
-                "wrong_answer_records",
-                "student_personal_sets",
-                "student_personal_set_items",
-                "paper_sessions",
-                "paper_session_results",
-                "problem_results",
-                "class_schedule_events",
-                "korean_extraction_documents",
-                "korean_passage_groups",
-                "korean_questions",
-            } - tables),
-            "missing_academy_columns": sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns),
-            "missing_batch_columns": sorted({"subject_candidates", "unit_candidates", "processing_task", "subject_engine"} - batch_columns),
-            "missing_problem_columns": sorted({"choices"} - problem_columns),
+            "missing_tables": missing_tables,
+            "missing_academy_columns": missing_academy_columns,
+            "missing_batch_columns": missing_batch_columns,
+            "missing_problem_columns": missing_problem_columns,
+            "missing_plan_columns": missing_plan_columns,
+            "missing_subscription_columns": missing_subscription_columns,
         }
     except Exception as exc:
         return JSONResponse(

@@ -627,6 +627,74 @@ class SubscriptionEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class SubscriptionOrder(Base):
+    __tablename__ = "subscription_orders"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_payment_id", name="uq_subscription_order_provider_payment"),
+        UniqueConstraint("provider", "provider_issue_id", name="uq_subscription_order_provider_issue"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    subscription_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("subscriptions.id"), nullable=True, index=True)
+    billing_key_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("subscription_billing_keys.id"), nullable=True, index=True)
+    plan_code: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    billing_cycle: Mapped[str] = mapped_column(String(20), default="monthly", nullable=False, index=True)
+    selected_packages: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    enabled_subject_engines: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=lambda: ["math"], nullable=False)
+    monthly_price_krw: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    amount_krw: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="ready", nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="portone", nullable=False, index=True)
+    provider_payment_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    provider_issue_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    order_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    payment_snapshot: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class SubscriptionBillingKey(Base):
+    __tablename__ = "subscription_billing_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    subscription_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("subscriptions.id"), nullable=True, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="portone", nullable=False, index=True)
+    provider_billing_key_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    billing_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False, index=True)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class SubscriptionPaymentAttempt(Base):
+    __tablename__ = "subscription_payment_attempts"
+    __table_args__ = (UniqueConstraint("provider", "provider_payment_id", name="uq_subscription_payment_attempt_provider_payment"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    subscription_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("subscriptions.id"), nullable=True, index=True)
+    order_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("subscription_orders.id"), nullable=True, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="portone", nullable=False, index=True)
+    provider_payment_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    billing_cycle: Mapped[str] = mapped_column(String(20), default="monthly", nullable=False)
+    amount_krw: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW", nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="ready", nullable=False, index=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    raw_payload: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class UsageLog(Base):
     __tablename__ = "usage_logs"
 

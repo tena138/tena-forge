@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     cors_origin: str = "http://localhost:3000"
     frontend_url: str = "http://localhost:3001"
     public_api_url: str = ""
+    portone_store_id: str = ""
+    portone_channel_key: str = ""
+    portone_api_secret: str = ""
+    portone_webhook_secret: str = ""
     secret_key: str = "dev-secret-key-change-me-dev-secret-key-change-me-dev-secret-key-change-me-64"
     refresh_secret_key: str = "dev-refresh-secret-change-me-dev-refresh-secret-change-me-dev-refresh-secret-64"
     access_token_expire_minutes: int = 15
