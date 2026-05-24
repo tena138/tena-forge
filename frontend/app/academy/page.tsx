@@ -232,15 +232,19 @@ function UsageRing({ label, used, total, value, sub }: { label: string; used: nu
   );
 }
 
-function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary | null; loading: boolean; updatedAt: string | null }) {
+function UsageOverview({ summary, profile, loading, updatedAt }: { summary: UsageSummary | null; profile: AcademyProfile | null; loading: boolean; updatedAt: string | null }) {
   const planName = summary?.plan?.name || "Plan";
   const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
   const subscription = summary?.subscription;
-  const periodEnd = subscription?.current_period_end || null;
+  const periodEnd = subscription?.current_period_end || profile?.trial_ends_at || profile?.plan_expires_at || null;
   const remainingDays = daysUntil(periodEnd);
-  const isTrial = subscription?.status === "trialing";
+  const isTrial = subscription?.status === "trialing" || Boolean(profile?.plan_expires_at && profile?.plan === "basic");
   const planStatus = isTrial ? "무료 체험" : subscription?.status === "active" ? "사용 중" : "플랜 미등록";
-  const periodLabel = periodEnd ? `${compactDateOnly(periodEnd)}${remainingDays !== null ? ` · D-${Math.max(remainingDays, 0)}` : ""}` : "결제 수단 등록 필요";
+  const periodLabel = isTrial && remainingDays !== null
+    ? `무료 체험 ${Math.max(remainingDays, 0)}일 남음 · ${compactDateOnly(periodEnd)}`
+    : periodEnd
+      ? `${compactDateOnly(periodEnd)}${remainingDays !== null ? ` · D-${Math.max(remainingDays, 0)}` : ""}`
+      : "결제 수단 등록 필요";
   const creditsUsed = summary?.extraction_credits_used ?? 0;
   const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;
   const costUsed = summary?.estimated_cost_used_krw ?? 0;
@@ -288,6 +292,7 @@ function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary 
 }
 
 function AcademyConsoleHome() {
+  const [profile, setProfile] = useState<AcademyProfile | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [problemStats, setProblemStats] = useState<ProblemStats>({ total: 0, needs_review: 0, tagged: 0, untagged: 0 });
   const [subjectCounts, setSubjectCounts] = useState<SubjectCount[]>([]);
@@ -299,6 +304,7 @@ function AcademyConsoleHome() {
 
   useEffect(() => {
     let cancelled = false;
+    setProfile(readStoredAuthProfile<AcademyProfile>());
 
     async function loadBatches() {
       try {
@@ -385,7 +391,7 @@ function AcademyConsoleHome() {
 
   return (
     <div className="space-y-5">
-      <UsageOverview summary={usageSummary} loading={loading} updatedAt={lastUpdatedAt} />
+      <UsageOverview summary={usageSummary} profile={profile} loading={loading} updatedAt={lastUpdatedAt} />
       {dataError ? <p className="rounded-[8px] border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">{dataError}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-4">
