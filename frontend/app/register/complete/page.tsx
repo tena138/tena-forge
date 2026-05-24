@@ -4,12 +4,12 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Eye, EyeOff, GraduationCap } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { AuthCard, FieldError, FullWidthButton } from "@/components/auth/auth-ui";
 import { Input } from "@/components/ui/input";
-import { completeSocialSignup, updateMe } from "@/lib/auth-api";
+import { checkLoginIdAvailability, completeSocialSignup, updateMe } from "@/lib/auth-api";
 import { workspaceHome } from "@/lib/auth-redirect";
 
 const schema = z
@@ -31,6 +31,8 @@ const schema = z
 
 type CompleteForm = z.infer<typeof schema>;
 type AccountType = "academy" | "student";
+type LoginIdStatus = "idle" | "checking" | "available" | "taken" | "error";
+const loginIdPattern = /^[a-z0-9][a-z0-9_.-]{2,31}$/;
 
 function RegisterCompleteContent() {
   const router = useRouter();
@@ -38,10 +40,12 @@ function RegisterCompleteContent() {
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [readyForSetup, setReadyForSetup] = useState(false);
+  const [loginIdStatus, setLoginIdStatus] = useState<LoginIdStatus>("idle");
   const form = useForm<CompleteForm>({
     resolver: zodResolver(schema),
     defaultValues: { login_id: "", nickname: "", password: "", confirmPassword: "" },
   });
+  const loginId = useWatch({ control: form.control, name: "login_id" });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.slice(1));
@@ -52,8 +56,38 @@ function RegisterCompleteContent() {
     window.history.replaceState(null, "", window.location.pathname);
   }, [form]);
 
+  useEffect(() => {
+    const normalized = (loginId || "").trim().toLowerCase();
+    if (!normalized || !loginIdPattern.test(normalized)) {
+      setLoginIdStatus("idle");
+      return;
+    }
+    setLoginIdStatus("checking");
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await checkLoginIdAvailability(normalized);
+        if (!cancelled) setLoginIdStatus(result.valid && result.available ? "available" : "taken");
+      } catch {
+        if (!cancelled) setLoginIdStatus("error");
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [loginId]);
+
   async function submit(values: CompleteForm) {
     setServerError("");
+    if (loginIdStatus === "taken") {
+      setServerError("이미 사용 중인 아이디입니다.");
+      return;
+    }
+    if (loginIdStatus === "checking") {
+      setServerError("아이디 중복 확인 중입니다.");
+      return;
+    }
     if (!signupToken) {
       setServerError("소셜 인증이 만료되었습니다. 회원가입을 다시 시작해주세요.");
       return;
@@ -86,6 +120,7 @@ function RegisterCompleteContent() {
             아이디
             <Input autoComplete="username" className="mt-1.5 h-11" {...form.register("login_id")} />
             <FieldError message={form.formState.errors.login_id?.message} />
+            <LoginIdStatusMessage status={loginIdStatus} />
           </label>
           <label className="block text-sm font-semibold text-slate-200">
             닉네임
@@ -108,7 +143,9 @@ function RegisterCompleteContent() {
             <FieldError message={form.formState.errors.confirmPassword?.message} />
           </label>
           {serverError ? <p className="whitespace-pre-line rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p> : null}
-          <FullWidthButton loading={form.formState.isSubmitting}>회원가입 완료</FullWidthButton>
+          <FullWidthButton loading={form.formState.isSubmitting} disabled={loginIdStatus === "checking" || loginIdStatus === "taken"}>
+            회원가입 완료
+          </FullWidthButton>
         </form>
       </AuthCard>
 
@@ -125,6 +162,25 @@ function RegisterCompleteContent() {
       ) : null}
     </>
   );
+}
+
+function LoginIdStatusMessage({ status }: { status: LoginIdStatus }) {
+  if (status === "idle") return null;
+  const styles: Record<LoginIdStatus, string> = {
+    idle: "",
+    checking: "text-slate-400",
+    available: "text-emerald-300",
+    taken: "text-red-300",
+    error: "text-amber-300",
+  };
+  const messages: Record<LoginIdStatus, string> = {
+    idle: "",
+    checking: "확인 중...",
+    available: "사용 가능한 아이디입니다.",
+    taken: "이미 사용 중인 아이디입니다.",
+    error: "중복 확인에 실패했습니다.",
+  };
+  return <p className={`mt-1.5 text-xs font-semibold ${styles[status]}`}>{messages[status]}</p>;
 }
 
 function SetupButton({ icon, title, detail, onClick }: { icon: React.ReactNode; title: string; detail: string; onClick: () => void }) {

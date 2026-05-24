@@ -44,6 +44,11 @@ export async function completeSocialSignup(payload: { signup_token: string; logi
   return data;
 }
 
+export async function checkLoginIdAvailability(loginId: string) {
+  const response = await authHttp.get("/api/auth/login-id/availability", { params: { login_id: loginId } });
+  return response.data as { login_id: string; valid: boolean; available: boolean };
+}
+
 export async function requestRegistrationCode(email: string) {
   const response = await authHttp.post("/api/auth/register/code", { email });
   return response.data as { message: string; verification_session: string; expires_in_seconds: number };

@@ -151,9 +151,9 @@ export function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-export function FullWidthButton({ loading, children }: { loading?: boolean; children: React.ReactNode }) {
+export function FullWidthButton({ loading, disabled, children }: { loading?: boolean; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <Button type="submit" className="h-11 w-full" disabled={loading}>
+    <Button type="submit" className="h-11 w-full" disabled={loading || disabled}>
       {loading ? "처리 중..." : children}
     </Button>
   );

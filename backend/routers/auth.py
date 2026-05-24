@@ -3,6 +3,7 @@ import time
 import secrets
 import hashlib
 import hmac
+import re
 from datetime import timedelta
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -97,6 +98,7 @@ from services.subject_engines import subject_engine_pricing
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 oauth = OAuth()
+LOGIN_ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{2,31}")
 
 if settings.google_client_id and settings.google_client_secret:
     oauth.register(
@@ -178,7 +180,7 @@ def _oauth_internal_email(provider: str, provider_account_id: str) -> str:
 
 
 def _login_internal_email(login_id: str) -> str:
-    return f"{login_id.strip().lower()}@login.tena-forge.com"
+    return f"{_normalize_login_id(login_id)}@login.tena-forge.com"
 
 
 def _login_lookup_email(identifier: str) -> str:
@@ -186,6 +188,14 @@ def _login_lookup_email(identifier: str) -> str:
     if "@" in value:
         return value
     return _login_internal_email(value)
+
+
+def _normalize_login_id(login_id: str) -> str:
+    return login_id.strip().lower()
+
+
+def _valid_login_id(login_id: str) -> bool:
+    return bool(LOGIN_ID_RE.fullmatch(_normalize_login_id(login_id)))
 
 
 def _create_social_signup_token(provider: str, provider_account_id: str, nickname: str) -> str:
@@ -452,6 +462,21 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     _start_basic_trial(db, academy)
     db.commit()
     return {"message": "회원가입이 완료되었습니다.", "email": academy.email}
+
+
+@router.get("/login-id/availability")
+@limiter.limit("30/minute")
+def check_login_id_availability(request: Request, login_id: str = Query(..., min_length=1, max_length=64), db: Session = Depends(get_db)):
+    normalized = _normalize_login_id(login_id)
+    valid = _valid_login_id(normalized)
+    available = False
+    if valid:
+        available = db.scalar(select(Academy.id).where(Academy.email == _login_internal_email(normalized))) is None
+    return {
+        "login_id": normalized,
+        "valid": valid,
+        "available": bool(valid and available),
+    }
 
 
 @router.post("/register/social-complete", response_model=TokenResponse)
