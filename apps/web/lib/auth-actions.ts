@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
+import { LEGAL_VERSIONS } from "@/lib/legal";
+
 function authClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -22,14 +24,14 @@ function setSessionCookies(accessToken: string, refreshToken: string) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30
+    maxAge: 60 * 60 * 24 * 30,
   });
   cookieStore.set("sb-refresh-token", refreshToken, {
     httpOnly: false,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30
+    maxAge: 60 * 60 * 24 * 30,
   });
 }
 
@@ -67,11 +69,38 @@ export async function signupAction(formData: FormData) {
   const email = String(formData.get("email") || "");
   const password = String(formData.get("password") || "");
   const name = String(formData.get("name") || "");
+  const termsAgreed = String(formData.get("termsAgreed") || "") === "true";
+  const privacyAgreed = String(formData.get("privacyAgreed") || "") === "true";
+  const ageConfirmed = String(formData.get("ageConfirmed") || "") === "true";
+  const agreedAtInput = String(formData.get("agreedAt") || "");
+  const termsVersion = String(formData.get("termsVersion") || "");
+  const privacyVersion = String(formData.get("privacyVersion") || "");
+  const agreedAt = new Date(agreedAtInput);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3002";
+
+  if (
+    !termsAgreed ||
+    !privacyAgreed ||
+    !ageConfirmed ||
+    termsVersion !== LEGAL_VERSIONS.terms ||
+    privacyVersion !== LEGAL_VERSIONS.privacy ||
+    Number.isNaN(agreedAt.getTime())
+  ) {
+    redirect(`/signup?message=${encodeURIComponent("필수 약관 동의가 필요합니다.")}`);
+  }
+
+  const agreementPayload = {
+    termsAgreed,
+    privacyAgreed,
+    ageConfirmed,
+    agreedAt: agreedAt.toISOString(),
+    termsVersion,
+    privacyVersion,
+  };
 
   if (!supabase) {
     if (isDevFallbackAllowed()) {
-      redirect(`/login?message=${encodeURIComponent("Supabase가 연결되지 않아 개발 모드 로그인을 사용합니다. 아무 이메일과 비밀번호로 로그인하세요.")}`);
+      redirect(`/login?message=${encodeURIComponent("Supabase가 연결되지 않아 개발 모드 로그인을 사용할 수 있습니다. 아무 이메일과 비밀번호로 로그인해 주세요.")}`);
     }
     redirect("/signup?message=missing_env");
   }
@@ -79,11 +108,11 @@ export async function signupAction(formData: FormData) {
   const { error } = await supabase.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: `${appUrl}/dashboard`, data: { full_name: name } }
+    options: { emailRedirectTo: `${appUrl}/dashboard`, data: { full_name: name, ...agreementPayload } },
   });
 
   if (error) redirect(`/signup?message=${encodeURIComponent(error.message)}`);
-  redirect(`/signup?message=${encodeURIComponent("가입 확인 이메일을 발송했습니다. 메일함을 확인해주세요.")}`);
+  redirect(`/signup?message=${encodeURIComponent("가입 확인 이메일을 발송했습니다. 메일함을 확인해 주세요.")}`);
 }
 
 export async function forgotPasswordAction(formData: FormData) {
@@ -95,5 +124,5 @@ export async function forgotPasswordAction(formData: FormData) {
     await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${appUrl}/settings/security` });
   }
 
-  redirect(`/forgot-password?message=${encodeURIComponent("재설정 안내 메일을 발송했습니다. 계정 존재 여부와 관계없이 동일하게 안내됩니다.")}`);
+  redirect(`/forgot-password?message=${encodeURIComponent("비밀번호 재설정 안내 메일을 발송했습니다. 계정 존재 여부와 관계없이 동일하게 안내합니다.")}`);
 }
