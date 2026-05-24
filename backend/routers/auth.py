@@ -45,6 +45,7 @@ from schemas import (
     ResetPasswordRequest,
     ResetPasswordValidateResponse,
     SessionRead,
+    SocialSignupCompleteRequest,
     TokenResponse,
     TotpDisableRequest,
     TotpEnableRequest,
@@ -168,6 +169,40 @@ def _default_academy_name(email: str) -> str:
 def _oauth_internal_email(provider: str, provider_account_id: str) -> str:
     digest = hashlib.sha256(f"{provider}:{provider_account_id}".encode("utf-8")).hexdigest()[:24]
     return f"{provider}-{digest}@oauth.tena-forge.com"
+
+
+def _login_internal_email(login_id: str) -> str:
+    return f"{login_id.strip().lower()}@login.tena-forge.com"
+
+
+def _login_lookup_email(identifier: str) -> str:
+    value = identifier.strip().lower()
+    if "@" in value:
+        return value
+    return _login_internal_email(value)
+
+
+def _create_social_signup_token(provider: str, provider_account_id: str, nickname: str) -> str:
+    now = int(time.time())
+    payload = {
+        "type": "social_signup",
+        "provider": provider,
+        "provider_account_id": provider_account_id,
+        "nickname": nickname,
+        "iat": now,
+        "exp": now + 900,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
+def _decode_social_signup_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="소셜 인증이 만료되었습니다. 다시 회원가입을 시작해주세요.")
+    if payload.get("type") != "social_signup" or payload.get("provider") not in {"kakao", "naver", "google"} or not payload.get("provider_account_id"):
+        raise HTTPException(status_code=400, detail="소셜 인증 정보가 올바르지 않습니다.")
+    return payload
 
 
 def _safe_redirect(value: str | None) -> str | None:
@@ -340,6 +375,58 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     return {"message": "회원가입이 완료되었습니다.", "email": academy.email}
 
 
+@router.post("/register/social-complete", response_model=TokenResponse)
+@limiter.limit("5/hour")
+def complete_social_signup(payload: SocialSignupCompleteRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    social = _decode_social_signup_token(payload.signup_token)
+    provider = str(social["provider"])
+    provider_account_id = str(social["provider_account_id"])
+    existing_oauth = db.scalar(
+        select(OAuthAccount).where(
+            OAuthAccount.provider == OAuthProvider(provider),
+            OAuthAccount.provider_account_id == provider_account_id,
+        )
+    )
+    if existing_oauth:
+        raise HTTPException(status_code=409, detail="이미 가입된 소셜 계정입니다. 로그인 화면에서 계속해주세요.")
+
+    login_email = _login_internal_email(payload.login_id)
+    if db.scalar(select(Academy.id).where(Academy.email == login_email)):
+        raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다.")
+
+    nickname = payload.nickname.strip()
+    validate_password_policy(payload.password, login_email, nickname)
+    academy = Academy(
+        email=login_email,
+        password_hash=hash_password(payload.password),
+        academy_name=nickname,
+        account_type="academy",
+        plan=AcademyPlan.free,
+        email_verified=True,
+        email_verified_at=now_utc(),
+        is_active=True,
+    )
+    db.add(academy)
+    db.flush()
+    db.add(
+        OAuthAccount(
+            academy_id=academy.id,
+            provider=OAuthProvider(provider),
+            provider_account_id=provider_account_id,
+            provider_email=None,
+            access_token="",
+            refresh_token=None,
+            token_expires_at=None,
+        )
+    )
+    academy.last_login_at = now_utc()
+    academy.last_login_ip = get_real_ip(request)
+    record_login_history(db, request, academy, True, provider=provider)
+    result = _issue_token_response(db, request, response, academy)
+    db.commit()
+    return result
+
+
 @router.post("/verify-email", response_model=TokenResponse)
 def verify_email(payload: VerifyEmailRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     token_hash = sha256_token(payload.token)
@@ -379,8 +466,8 @@ def resend_verification(payload: ResendVerificationRequest, request: Request, db
 @router.post("/login", response_model=TokenResponse | TotpRequiredResponse)
 @limiter.limit("5 per 15 minutes")
 def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
-    academy = db.scalar(select(Academy).where(Academy.email == payload.email.lower()))
-    generic = "이메일 또는 비밀번호가 올바르지 않습니다"
+    academy = db.scalar(select(Academy).where(Academy.email == _login_lookup_email(payload.email)))
+    generic = "아이디 또는 비밀번호가 올바르지 않습니다"
     if not academy:
         timing_attack_delay()
         record_login_history(db, request, None, False, failure_reason="not_found")
@@ -657,6 +744,21 @@ def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_curr
         value = getattr(payload, field)
         if value is not None:
             setattr(academy, field, value)
+    if payload.account_type == "student":
+        academy.plan = AcademyPlan.free
+        academy.plan_expires_at = None
+        for subscription in db.scalars(select(Subscription).where(Subscription.user_id == str(academy.id), Subscription.status == "trialing")).all():
+            subscription.status = "canceled"
+    elif payload.account_type == "academy" and not academy.plan_expires_at:
+        active_sub = db.scalar(
+            select(Subscription).where(
+                Subscription.user_id == str(academy.id),
+                Subscription.status.in_(["trialing", "active"]),
+                ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > now_utc())),
+            )
+        )
+        if not active_sub:
+            _start_basic_trial(db, academy)
     db.commit()
     db.refresh(academy)
     return academy
@@ -755,8 +857,6 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
     intent = intent or {}
     mode = _safe_oauth_mode(intent.get("mode"))
     requested_account_type = _safe_account_type(intent.get("account_type")) if intent.get("account_type") else None
-    if mode == "signup" and not requested_account_type:
-        return _oauth_error_redirect("account_type_required", mode=mode)
     oauth_account = db.scalar(
         select(OAuthAccount).where(
             OAuthAccount.provider == OAuthProvider(provider),
@@ -769,6 +869,10 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
             return _oauth_error_redirect("account_type_conflict", mode=mode)
     else:
         academy = None
+        if mode == "signup":
+            signup_token = _create_social_signup_token(provider, provider_account_id, name)
+            fragment = urlencode({"signup_token": signup_token, "nickname": name})
+            return RedirectResponse(f"{settings.frontend_url}/register/complete#{fragment}", status_code=302)
         if not academy and mode == "login":
             return _oauth_error_redirect("signup_required", mode=mode)
         if not academy:

@@ -36,6 +36,14 @@ export async function registerAcademy(payload: unknown) {
   return response.data as { message: string; email: string };
 }
 
+export async function completeSocialSignup(payload: { signup_token: string; login_id: string; nickname: string; password: string }) {
+  const response = await authHttp.post("/api/auth/register/social-complete", payload);
+  const data = response.data as LoginResult;
+  if (data.access_token) setAccessToken(data.access_token);
+  if (data.academy) storeAuthProfile(data.academy);
+  return data;
+}
+
 export async function requestRegistrationCode(email: string) {
   const response = await authHttp.post("/api/auth/register/code", { email });
   return response.data as { message: string; verification_session: string; expires_in_seconds: number };

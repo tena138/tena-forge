@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from typing import Generic, TypeVar
 from uuid import UUID
@@ -1233,10 +1234,25 @@ class ResendVerificationRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=120)
     password: str
     totp_code: str | None = None
     remember: bool = True
+
+
+class SocialSignupCompleteRequest(BaseModel):
+    signup_token: str = Field(min_length=16)
+    login_id: str = Field(min_length=3, max_length=32)
+    nickname: str = Field(min_length=2, max_length=80)
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("login_id")
+    @classmethod
+    def valid_login_id(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{2,31}", normalized):
+            raise ValueError("아이디는 영문 소문자, 숫자, ., _, - 조합 3~32자로 입력해주세요.")
+        return normalized
 
 
 class TokenResponse(BaseModel):

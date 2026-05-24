@@ -1,10 +1,25 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, EyeOff } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
-import { AuthCard, SocialButtons } from "@/components/auth/auth-ui";
+import { AuthCard, DividerText, FieldError, FullWidthButton, SocialButtons } from "@/components/auth/auth-ui";
+import { Input } from "@/components/ui/input";
+import { loginAcademy } from "@/lib/auth-api";
+import { AccountType, resolvePostLoginRedirect } from "@/lib/auth-redirect";
+
+const schema = z.object({
+  email: z.string().min(3, "아이디를 입력해주세요."),
+  password: z.string().min(1, "비밀번호를 입력해주세요."),
+  remember: z.boolean(),
+});
+
+type LoginForm = z.infer<typeof schema>;
 
 const oauthErrorMessages: Record<string, string> = {
   signup_required: "가입되지 않은 소셜 계정입니다. 먼저 회원가입을 진행해주세요.",
@@ -13,20 +28,72 @@ const oauthErrorMessages: Record<string, string> = {
 };
 
 function LoginPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
   const oauthError = searchParams.get("oauth_error");
+  const [showPassword, setShowPassword] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const form = useForm<LoginForm>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: "", password: "", remember: true },
+  });
+
+  function finishLogin(accountType?: AccountType) {
+    router.replace(resolvePostLoginRedirect(redirect, accountType));
+  }
+
+  async function submit(values: LoginForm) {
+    setServerError("");
+    try {
+      const result = await loginAcademy(values);
+      if (result.requires_totp) {
+        setServerError("2단계 인증 계정은 보안 설정 화면에서 소셜 로그인으로 계속해주세요.");
+        return;
+      }
+      finishLogin(result.academy?.account_type);
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      setServerError(typeof detail === "string" ? detail : "로그인에 실패했습니다.");
+    }
+  }
 
   return (
-    <AuthCard title="Tena 로그인" subtitle="카카오 또는 네이버 계정으로 계속합니다.">
-      <div className="space-y-4">
+    <AuthCard title="Tena 로그인">
+      <div className="space-y-5">
         {oauthError ? (
           <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">
             {oauthErrorMessages[oauthError] || "소셜 로그인에 실패했습니다."}
           </p>
         ) : null}
+
+        <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
+          <label className="block text-sm font-semibold text-slate-200">
+            아이디
+            <Input autoComplete="username" className="mt-1.5 h-11" {...form.register("email")} />
+            <FieldError message={form.formState.errors.email?.message} />
+          </label>
+          <label className="block text-sm font-semibold text-slate-200">
+            비밀번호
+            <div className="relative mt-1.5">
+              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" className="h-11 pr-11" {...form.register("password")} />
+              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-white" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <FieldError message={form.formState.errors.password?.message} />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-400">
+            <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-white/[0.04] accent-primary" {...form.register("remember")} />
+            로그인 상태 유지
+          </label>
+          {serverError ? <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p> : null}
+          <FullWidthButton loading={form.formState.isSubmitting}>로그인</FullWidthButton>
+        </form>
+
+        <DividerText />
         <SocialButtons mode="login" redirect={redirect} />
-        <p className="pt-2 text-center text-sm text-slate-400">
+        <p className="pt-1 text-center text-sm text-slate-400">
           계정이 없으신가요?{" "}
           <Link href="/register" className="font-semibold text-primary hover:underline">
             회원가입
