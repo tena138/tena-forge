@@ -6,6 +6,7 @@ import hmac
 from datetime import timedelta
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
+import httpx
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -265,6 +266,66 @@ def _log_oauth_error(provider: str, exc: Exception) -> None:
     error = getattr(exc, "error", "")
     description = getattr(exc, "description", "") or str(exc)
     print(f"{provider} OAuth failed: {error} {description}", flush=True)
+
+
+async def _oauth_state_redirect_uri(request: Request, provider: str, callback_name: str) -> tuple[str | None, str | None]:
+    state = request.query_params.get("state")
+    if not state:
+        return None, "oauth_state_expired"
+    state_data = await _oauth_client(provider).framework.get_state_data(request.session, state)
+    await _oauth_client(provider).framework.clear_state_data(request.session, state)
+    if not state_data:
+        return None, "oauth_state_expired"
+    return state_data.get("redirect_uri") or _oauth_callback_url(request, callback_name), None
+
+
+async def _exchange_kakao_token(request: Request) -> tuple[dict | None, str | None]:
+    if request.query_params.get("error"):
+        print(
+            f"kakao OAuth authorize failed: {request.query_params.get('error')} {request.query_params.get('error_description', '')}",
+            flush=True,
+        )
+        return None, "oauth_token_failed"
+    code = request.query_params.get("code")
+    if not code:
+        return None, "oauth_token_failed"
+    redirect_uri, error_code = await _oauth_state_redirect_uri(request, "kakao", "kakao_callback")
+    if error_code:
+        return None, error_code
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": settings.kakao_client_id,
+        "redirect_uri": redirect_uri,
+        "code": code,
+    }
+    if settings.kakao_client_secret:
+        payload["client_secret"] = settings.kakao_client_secret
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(
+            "https://kauth.kakao.com/oauth/token",
+            data=payload,
+            headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
+        )
+    if response.status_code >= 400:
+        print(f"kakao OAuth token failed: {response.status_code} {response.text[:1000]}", flush=True)
+        return None, "oauth_token_failed"
+    token = response.json()
+    if token.get("error") or not token.get("access_token"):
+        print(f"kakao OAuth token invalid: {token}", flush=True)
+        return None, "oauth_token_failed"
+    return token, None
+
+
+async def _fetch_kakao_profile(token: dict) -> tuple[dict | None, str | None]:
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.get(
+            "https://kapi.kakao.com/v2/user/me",
+            headers={"Authorization": f"Bearer {token.get('access_token')}", "Accept": "application/json"},
+        )
+    if response.status_code >= 400:
+        print(f"kakao OAuth profile failed: {response.status_code} {response.text[:1000]}", flush=True)
+        return None, "oauth_profile_failed"
+    return response.json(), None
 
 
 def _start_basic_trial(db: Session, academy: Academy) -> None:
@@ -865,16 +926,12 @@ async def kakao_login(request: Request, mode: str = "login", account_type: str |
 @router.get("/kakao/callback", name="kakao_callback")
 async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     intent = _consume_oauth_intent(request)
-    try:
-        token = await _oauth_client("kakao").authorize_access_token(request)
-        response = await _oauth_client("kakao").get("https://kapi.kakao.com/v2/user/me", token=token)
-    except OAuthError as exc:
-        _log_oauth_error("kakao", exc)
-        return _oauth_error_redirect(_oauth_error_code(exc), mode=intent.get("mode", "login"))
-    if response.status_code >= 400:
-        print(f"kakao OAuth profile failed: {response.status_code} {response.text[:500]}", flush=True)
-        return _oauth_error_redirect("oauth_profile_failed", mode=intent.get("mode", "login"))
-    data = response.json()
+    token, error_code = await _exchange_kakao_token(request)
+    if error_code or not token:
+        return _oauth_error_redirect(error_code or "oauth_token_failed", mode=intent.get("mode", "login"))
+    data, error_code = await _fetch_kakao_profile(token)
+    if error_code or not data:
+        return _oauth_error_redirect(error_code or "oauth_profile_failed", mode=intent.get("mode", "login"))
     account = data.get("kakao_account", {})
     profile = account.get("profile", {})
     return _oauth_finalize(db, request, "kakao", str(data["id"]), profile.get("nickname") or "Kakao Academy", token, intent)
