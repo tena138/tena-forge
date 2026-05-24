@@ -1156,7 +1156,7 @@ function VisualTemplateStudioPageContent() {
     } else if (!selectedIds.includes(element.id)) {
       setSelectedIds([element.id]);
     }
-    setEditingTextElementId(!event.shiftKey && element.type === "text" ? element.id : null);
+    setEditingTextElementId(!event.shiftKey && event.detail > 1 && element.type === "text" ? element.id : null);
     setAlignmentGuides([]);
 
     const ids = event.shiftKey ? Array.from(new Set([...selectedIds, element.id])) : selectedIds.includes(element.id) ? selectedIds : [element.id];

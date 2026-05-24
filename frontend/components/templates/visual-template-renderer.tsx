@@ -442,10 +442,12 @@ export function TemplatePageView({
           <div
             key={element.id}
             data-element-id={element.id}
-            className={selected ? "ring-2 ring-violet-500" : interactive ? "hover:ring-1 hover:ring-violet-300" : ""}
+            className={`${selected ? "ring-2 ring-violet-500" : interactive ? "hover:ring-1 hover:ring-violet-300" : ""} outline-none`}
+            tabIndex={interactive ? -1 : undefined}
             style={{ ...elementStyle(element, selected), overflow: interactive && selected ? "visible" : "hidden" }}
             onPointerDown={(event) => {
               if (!interactive || element.locked) return;
+              event.currentTarget.focus({ preventScroll: true });
               onElementPointerDown?.(event, element);
             }}
           >
