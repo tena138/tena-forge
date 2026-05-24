@@ -205,6 +205,13 @@ function planNameFallback(plan?: string | null) {
   return labels[String(plan || "").toLowerCase()] || "Plan";
 }
 
+function defaultStudentSeatLimit(plan?: string | null) {
+  const key = String(plan || "").toLowerCase();
+  if (key === "basic") return 3;
+  if (key === "pro") return 10;
+  return 0;
+}
+
 function compactDateOnly(value?: string | null) {
   if (!value) return "";
   return new Date(value).toLocaleDateString("ko-KR", {
@@ -242,7 +249,19 @@ function UsageRing({ label, used, total, value, sub }: { label: string; used: nu
   );
 }
 
-function UsageOverview({ summary, profile, loading, updatedAt }: { summary: UsageSummary | null; profile: AcademyProfile | null; loading: boolean; updatedAt: string | null }) {
+function UsageOverview({
+  summary,
+  profile,
+  billing,
+  loading,
+  updatedAt,
+}: {
+  summary: UsageSummary | null;
+  profile: AcademyProfile | null;
+  billing: AcademyBilling | null;
+  loading: boolean;
+  updatedAt: string | null;
+}) {
   const planName = summary?.plan?.name || planNameFallback(profile?.plan);
   const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
   const subscription = summary?.subscription;
@@ -257,8 +276,17 @@ function UsageOverview({ summary, profile, loading, updatedAt }: { summary: Usag
       : "결제 수단 등록 필요";
   const creditsUsed = summary?.extraction_credits_used ?? 0;
   const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;
-  const costUsed = summary?.estimated_cost_used_krw ?? 0;
-  const costLimit = summary?.monthly_cost_cap_krw || 0;
+  const activeSeats = billing?.active_seats ?? 0;
+  const assignedSeats = billing?.assigned_seats ?? 0;
+  const seatLimit = billing?.unlimited_seats
+    ? Math.max(activeSeats, assignedSeats, 1)
+    : billing?.included_seats ?? defaultStudentSeatLimit(profile?.plan);
+  const seatValue = billing?.unlimited_seats
+    ? `${formatUsageNumber(activeSeats)}명 / 무제한`
+    : `${formatUsageNumber(activeSeats)}명 / ${formatUsageNumber(seatLimit)}명`;
+  const seatSub = billing?.unlimited_seats
+    ? `${formatUsageNumber(assignedSeats)}명 배정됨`
+    : `${formatUsageNumber(Math.max(seatLimit - activeSeats, 0))}명 추가 가능`;
   const uploadCountUsed = summary?.monthly_uploads_used ?? 0;
   const uploadCountLimit = summary?.plan?.monthly_upload_count || 0;
   const pageUsed = summary?.monthly_pages_used ?? 0;
@@ -290,7 +318,7 @@ function UsageOverview({ summary, profile, loading, updatedAt }: { summary: Usag
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsUsed)} / ${formatUsageNumber(creditsLimit)}`} sub={`${formatUsageNumber(Math.max(creditsLimit - creditsUsed, 0))} 남음`} />
-          <UsageRing label="처리 예산" used={costUsed} total={costLimit} value={`${money(costUsed)}원 / ${money(costLimit)}원`} sub={`${money(Math.max(costLimit - costUsed, 0))}원 남음`} />
+          <UsageRing label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"} used={activeSeats} total={seatLimit} value={seatValue} sub={seatSub} />
           <UsageRing label="처리 페이지" used={pageUsed} total={pageLimit} value={`${formatUsageNumber(pageUsed, "p")} / ${formatUsageNumber(pageLimit, "p")}`} sub={`${formatUsageNumber(Math.max(pageLimit - pageUsed, 0), "p")} 남음`} />
           <UsageRing label="업로드 횟수" used={uploadCountUsed} total={uploadCountLimit} value={`${formatUsageNumber(uploadCountUsed)} / ${formatUsageNumber(uploadCountLimit)}`} sub={`${formatUsageNumber(Math.max(uploadCountLimit - uploadCountUsed, 0))}회 남음`} />
           <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} value={`${formatUsageNumber(uploadMbUsed, "MB")} / ${formatUsageNumber(uploadMbLimit, "MB")}`} sub={`${formatUsageNumber(Math.max(uploadMbLimit - uploadMbUsed, 0), "MB")} 남음`} />
@@ -308,6 +336,7 @@ function AcademyConsoleHome() {
   const [subjectCounts, setSubjectCounts] = useState<SubjectCount[]>([]);
   const [sets, setSets] = useState<ProblemSetListItem[]>([]);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [billingSummary, setBillingSummary] = useState<AcademyBilling | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataError, setDataError] = useState("");
@@ -317,12 +346,27 @@ function AcademyConsoleHome() {
     const storedProfile = readStoredAuthProfile<AcademyProfile>();
     setProfile(storedProfile);
 
+    async function loadBilling(profileId?: string | null) {
+      if (!profileId) {
+        if (!cancelled) setBillingSummary(null);
+        return;
+      }
+      try {
+        const billingData = await getAcademyBilling(profileId);
+        if (!cancelled) setBillingSummary(billingData);
+      } catch {
+        if (!cancelled) setBillingSummary(null);
+      }
+    }
+
     async function loadProfile() {
       try {
         const freshProfile = await fetchMe();
         if (!cancelled) setProfile(freshProfile);
+        await loadBilling(freshProfile.id);
       } catch {
         if (!cancelled && !storedProfile) setProfile(null);
+        await loadBilling(storedProfile?.id);
       }
     }
 
@@ -412,7 +456,7 @@ function AcademyConsoleHome() {
 
   return (
     <div className="space-y-5">
-      <UsageOverview summary={usageSummary} profile={profile} loading={loading} updatedAt={lastUpdatedAt} />
+      <UsageOverview summary={usageSummary} profile={profile} billing={billingSummary} loading={loading} updatedAt={lastUpdatedAt} />
       {dataError ? <p className="rounded-[8px] border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">{dataError}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-4">
