@@ -512,6 +512,8 @@ def complete_social_signup(payload: SocialSignupCompleteRequest, request: Reques
     )
     db.add(academy)
     db.flush()
+    _start_basic_trial(db, academy)
+    db.flush()
     db.add(
         OAuthAccount(
             academy_id=academy.id,

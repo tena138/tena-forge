@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Eye, EyeOff, GraduationCap } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
@@ -35,12 +34,13 @@ type LoginIdStatus = "idle" | "checking" | "available" | "taken" | "error";
 const loginIdPattern = /^[a-z0-9][a-z0-9_.-]{2,31}$/;
 
 function RegisterCompleteContent() {
-  const router = useRouter();
   const [signupToken, setSignupToken] = useState("");
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [readyForSetup, setReadyForSetup] = useState(false);
   const [loginIdStatus, setLoginIdStatus] = useState<LoginIdStatus>("idle");
+  const [setupSaving, setSetupSaving] = useState<AccountType | null>(null);
+  const [setupError, setSetupError] = useState("");
   const form = useForm<CompleteForm>({
     resolver: zodResolver(schema),
     defaultValues: { login_id: "", nickname: "", password: "", confirmPassword: "" },
@@ -108,8 +108,19 @@ function RegisterCompleteContent() {
   }
 
   async function finishSetup(accountType: AccountType) {
-    const profile = await updateMe({ account_type: accountType });
-    router.replace(workspaceHome(profile.account_type));
+    if (setupSaving) return;
+    setSetupSaving(accountType);
+    setSetupError("");
+    try {
+      const profile = await updateMe({ account_type: accountType });
+      const destination = workspaceHome(profile.account_type || accountType);
+      window.location.assign(destination);
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      const message = typeof detail === "string" ? detail : "시작 공간을 저장하지 못했습니다. 다시 선택해주세요.";
+      setSetupError(message);
+      setSetupSaving(null);
+    }
   }
 
   return (
@@ -154,9 +165,22 @@ function RegisterCompleteContent() {
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#090b12] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
             <h2 className="text-xl font-bold">시작할 공간을 선택하세요</h2>
             <div className="mt-5 grid gap-2">
-              <SetupButton icon={<Building2 className="h-4 w-4" />} title="학원 / 연구실 / 과외 교습자" detail="Basic 7일 무료 체험 시작" onClick={() => finishSetup("academy")} />
-              <SetupButton icon={<GraduationCap className="h-4 w-4" />} title="학생 / 학부모" detail="학생용 학습 공간으로 이동" onClick={() => finishSetup("student")} />
+              <SetupButton
+                icon={<Building2 className="h-4 w-4" />}
+                title="학원 / 연구실 / 과외 교습자"
+                detail={setupSaving === "academy" ? "저장 중..." : "Basic 7일 무료 체험 시작"}
+                disabled={Boolean(setupSaving)}
+                onClick={() => finishSetup("academy")}
+              />
+              <SetupButton
+                icon={<GraduationCap className="h-4 w-4" />}
+                title="학생 / 학부모"
+                detail={setupSaving === "student" ? "저장 중..." : "학생용 학습 공간으로 이동"}
+                disabled={Boolean(setupSaving)}
+                onClick={() => finishSetup("student")}
+              />
             </div>
+            {setupError ? <p className="mt-4 rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-semibold text-red-200">{setupError}</p> : null}
           </div>
         </div>
       ) : null}
@@ -183,9 +207,14 @@ function LoginIdStatusMessage({ status }: { status: LoginIdStatus }) {
   return <p className={`mt-1.5 text-xs font-semibold ${styles[status]}`}>{messages[status]}</p>;
 }
 
-function SetupButton({ icon, title, detail, onClick }: { icon: React.ReactNode; title: string; detail: string; onClick: () => void }) {
+function SetupButton({ icon, title, detail, disabled, onClick }: { icon: React.ReactNode; title: string; detail: string; disabled?: boolean; onClick: () => void }) {
   return (
-    <button type="button" className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.045] p-3 text-left transition hover:border-violet-300/50 hover:bg-violet-500/12" onClick={onClick}>
+    <button
+      type="button"
+      className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.045] p-3 text-left transition hover:border-violet-300/50 hover:bg-violet-500/12 disabled:cursor-wait disabled:opacity-60"
+      disabled={disabled}
+      onClick={onClick}
+    >
       <span className="flex h-9 w-9 items-center justify-center rounded-md bg-violet-400 text-white">{icon}</span>
       <span>
         <span className="block text-sm font-bold">{title}</span>
