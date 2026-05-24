@@ -1867,32 +1867,34 @@ function VisualTemplateStudioPageContent() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[56px_248px_minmax(0,1fr)_300px]">
-        <nav className="flex min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#080a0f] px-1.5 py-2">
-          {panelTabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = leftPanel === tab.key;
-            return (
-              <button
-                key={tab.key}
-                className={cls(
-                  "group relative flex h-11 w-11 items-center justify-center rounded-[11px] transition",
-                  active ? "bg-violet-500/18 text-violet-100 ring-1 ring-violet-300/25" : "text-slate-500 hover:bg-white/[0.06] hover:text-slate-200"
-                )}
-                onClick={() => setLeftPanel(tab.key)}
-                title={tab.label}
-              >
-                {active ? <span className="absolute -left-2 h-6 w-0.5 rounded-full bg-violet-300" /> : null}
-                <Icon className="h-5 w-5" />
-                <span className="pointer-events-none absolute left-[50px] z-20 hidden rounded-md border border-white/10 bg-[#11141c] px-2 py-1 text-xs font-semibold text-white shadow-xl group-hover:block">{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+      <div className="grid min-h-0 flex-1 grid-cols-[56px_minmax(0,1fr)_300px]">
+        <div className="group/left-panel relative z-40 min-h-0">
+          <nav className="relative z-20 flex min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#080a0f] px-1.5 py-2">
+            {panelTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = leftPanel === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  className={cls(
+                    "group relative flex h-11 w-11 items-center justify-center rounded-[11px] transition",
+                    active ? "bg-violet-500/18 text-violet-100 ring-1 ring-violet-300/25" : "text-slate-500 hover:bg-white/[0.06] hover:text-slate-200"
+                  )}
+                  onClick={() => setLeftPanel(tab.key)}
+                  title={tab.label}
+                >
+                  {active ? <span className="absolute -left-2 h-6 w-0.5 rounded-full bg-violet-300" /> : null}
+                  <Icon className="h-5 w-5" />
+                  <span className="pointer-events-none absolute left-[50px] z-20 hidden rounded-md border border-white/10 bg-[#11141c] px-2 py-1 text-xs font-semibold text-white shadow-xl group-hover:block">{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
 
-        <aside className="min-h-0 border-r border-white/10 bg-[#090b10]">
-          <div className="h-full overflow-y-auto p-3 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">{renderLeftPanel()}</div>
-        </aside>
+          <aside className="pointer-events-none absolute inset-y-0 left-full z-10 w-[280px] -translate-x-3 border-r border-white/10 bg-[#090b10]/98 opacity-0 shadow-[22px_0_70px_rgba(0,0,0,0.42)] backdrop-blur transition duration-200 ease-out group-hover/left-panel:pointer-events-auto group-hover/left-panel:translate-x-0 group-hover/left-panel:opacity-100 group-focus-within/left-panel:pointer-events-auto group-focus-within/left-panel:translate-x-0 group-focus-within/left-panel:opacity-100">
+            <div className="h-full overflow-y-auto p-3 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">{renderLeftPanel()}</div>
+          </aside>
+        </div>
 
         <main className="min-h-0 overflow-auto bg-[radial-gradient(circle_at_top,#1c2130_0,#0b0e15_42%,#07080b_100%)] [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
           <div className="mx-auto flex w-fit flex-col gap-7 p-5 pb-20">
