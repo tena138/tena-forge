@@ -262,6 +262,8 @@ def _consume_oauth_intent(request: Request) -> dict:
 
 def _oauth_error_redirect(code: str, *, mode: str = "login") -> RedirectResponse:
     target = "/register" if mode == "signup" else "/login"
+    if code == "oauth_state_expired":
+        return RedirectResponse(f"{settings.frontend_url}{target}", status_code=302)
     return RedirectResponse(f"{settings.frontend_url}{target}?{urlencode({'oauth_error': code})}", status_code=302)
 
 

@@ -10,14 +10,15 @@ const oauthErrorMessages: Record<string, string> = {
   account_type_conflict: "이미 다른 계정 유형으로 가입된 소셜 계정입니다.",
   account_type_required: "회원가입을 다시 시작해주세요.",
   signup_required: "회원가입을 먼저 진행해주세요.",
-  oauth_state_expired: "소셜 인증 세션이 만료되었습니다. 다시 시도해주세요.",
   oauth_token_failed: "소셜 인증에 실패했습니다. 앱 설정을 확인해주세요.",
   oauth_profile_failed: "소셜 프로필을 불러오지 못했습니다. 다시 시도해주세요.",
 };
+const hiddenOAuthErrors = new Set(["oauth_state_expired"]);
 
 function RegisterPageContent() {
   const searchParams = useSearchParams();
   const oauthError = searchParams.get("oauth_error");
+  const visibleOauthError = oauthError && !hiddenOAuthErrors.has(oauthError) ? oauthError : null;
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const disabled = !agreeTerms || !agreePrivacy;
@@ -25,9 +26,9 @@ function RegisterPageContent() {
   return (
     <AuthCard title="Tena 회원가입" subtitle="카카오 또는 네이버 인증 후 아이디와 비밀번호를 설정합니다.">
       <div className="space-y-5">
-        {oauthError ? (
+        {visibleOauthError ? (
           <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">
-            {oauthErrorMessages[oauthError] || "소셜 회원가입에 실패했습니다."}
+            {oauthErrorMessages[visibleOauthError] || "소셜 회원가입에 실패했습니다."}
           </p>
         ) : null}
 
