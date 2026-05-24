@@ -6,6 +6,7 @@ import hmac
 from datetime import timedelta
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
+from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -112,7 +113,10 @@ if settings.kakao_client_id:
         client_secret=settings.kakao_client_secret or None,
         authorize_url="https://kauth.kakao.com/oauth/authorize",
         access_token_url="https://kauth.kakao.com/oauth/token",
-        client_kwargs={"scope": "profile_nickname"},
+        client_kwargs={
+            "scope": "profile_nickname",
+            "token_endpoint_auth_method": "client_secret_post" if settings.kakao_client_secret else "none",
+        },
     )
 
 if settings.naver_client_id and settings.naver_client_secret:
@@ -122,6 +126,7 @@ if settings.naver_client_id and settings.naver_client_secret:
         client_secret=settings.naver_client_secret,
         authorize_url="https://nid.naver.com/oauth2.0/authorize",
         access_token_url="https://nid.naver.com/oauth2.0/token",
+        client_kwargs={"token_endpoint_auth_method": "client_secret_post"},
     )
 
 
@@ -247,6 +252,19 @@ def _consume_oauth_intent(request: Request) -> dict:
 def _oauth_error_redirect(code: str, *, mode: str = "login") -> RedirectResponse:
     target = "/register" if mode == "signup" else "/login"
     return RedirectResponse(f"{settings.frontend_url}{target}?{urlencode({'oauth_error': code})}", status_code=302)
+
+
+def _oauth_error_code(exc: OAuthError) -> str:
+    error = getattr(exc, "error", "") or ""
+    if error in {"mismatching_state", "missing_state"}:
+        return "oauth_state_expired"
+    return "oauth_token_failed"
+
+
+def _log_oauth_error(provider: str, exc: Exception) -> None:
+    error = getattr(exc, "error", "")
+    description = getattr(exc, "description", "") or str(exc)
+    print(f"{provider} OAuth failed: {error} {description}", flush=True)
 
 
 def _start_basic_trial(db: Session, academy: Academy) -> None:
@@ -828,7 +846,11 @@ async def google_login(request: Request, mode: str = "login", account_type: str 
 @router.get("/google/callback", name="google_callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
     intent = _consume_oauth_intent(request)
-    token = await _oauth_client("google").authorize_access_token(request)
+    try:
+        token = await _oauth_client("google").authorize_access_token(request)
+    except OAuthError as exc:
+        _log_oauth_error("google", exc)
+        return _oauth_error_redirect(_oauth_error_code(exc), mode=intent.get("mode", "login"))
     info = token.get("userinfo") or await _oauth_client("google").parse_id_token(request, token)
     return _oauth_finalize(db, request, "google", str(info["sub"]), info.get("name") or "Google Academy", token, intent)
 
@@ -843,8 +865,15 @@ async def kakao_login(request: Request, mode: str = "login", account_type: str |
 @router.get("/kakao/callback", name="kakao_callback")
 async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     intent = _consume_oauth_intent(request)
-    token = await _oauth_client("kakao").authorize_access_token(request)
-    response = await _oauth_client("kakao").get("https://kapi.kakao.com/v2/user/me", token=token)
+    try:
+        token = await _oauth_client("kakao").authorize_access_token(request)
+        response = await _oauth_client("kakao").get("https://kapi.kakao.com/v2/user/me", token=token)
+    except OAuthError as exc:
+        _log_oauth_error("kakao", exc)
+        return _oauth_error_redirect(_oauth_error_code(exc), mode=intent.get("mode", "login"))
+    if response.status_code >= 400:
+        print(f"kakao OAuth profile failed: {response.status_code} {response.text[:500]}", flush=True)
+        return _oauth_error_redirect("oauth_profile_failed", mode=intent.get("mode", "login"))
     data = response.json()
     account = data.get("kakao_account", {})
     profile = account.get("profile", {})
@@ -861,8 +890,15 @@ async def naver_login(request: Request, mode: str = "login", account_type: str |
 @router.get("/naver/callback", name="naver_callback")
 async def naver_callback(request: Request, db: Session = Depends(get_db)):
     intent = _consume_oauth_intent(request)
-    token = await _oauth_client("naver").authorize_access_token(request)
-    response = await _oauth_client("naver").get("https://openapi.naver.com/v1/nid/me", token=token)
+    try:
+        token = await _oauth_client("naver").authorize_access_token(request)
+        response = await _oauth_client("naver").get("https://openapi.naver.com/v1/nid/me", token=token)
+    except OAuthError as exc:
+        _log_oauth_error("naver", exc)
+        return _oauth_error_redirect(_oauth_error_code(exc), mode=intent.get("mode", "login"))
+    if response.status_code >= 400:
+        print(f"naver OAuth profile failed: {response.status_code} {response.text[:500]}", flush=True)
+        return _oauth_error_redirect("oauth_profile_failed", mode=intent.get("mode", "login"))
     data = response.json().get("response", {})
     return _oauth_finalize(db, request, "naver", str(data["id"]), data.get("nickname") or "Naver 사용자", token, intent)
 
