@@ -54,8 +54,14 @@ export type Plan = {
 export type UsageSummary = {
   plan: Plan;
   subscription: {
+    id?: string;
+    user_id?: string;
     status: string;
     plan_code: string;
+    provider?: string;
+    current_period_start?: string | null;
+    current_period_end?: string | null;
+    cancel_at_period_end?: boolean;
     enabled_subject_engines?: string[];
     subject_engine_count?: number;
     subject_multiplier?: number;

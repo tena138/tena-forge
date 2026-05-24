@@ -195,6 +195,21 @@ function subjectEngineLabel(code: string) {
   return labels[code] || code;
 }
 
+function compactDateOnly(value?: string | null) {
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function daysUntil(value?: string | null) {
+  if (!value) return null;
+  const diff = new Date(value).getTime() - Date.now();
+  return Math.ceil(diff / 86_400_000);
+}
+
 function UsageRing({ label, used, total, value, sub }: { label: string; used: number; total: number; value: string; sub: string }) {
   const percent = ratioPercent(used, total);
   const tone = usageTone(percent);
@@ -220,6 +235,12 @@ function UsageRing({ label, used, total, value, sub }: { label: string; used: nu
 function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary | null; loading: boolean; updatedAt: string | null }) {
   const planName = summary?.plan?.name || "Plan";
   const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
+  const subscription = summary?.subscription;
+  const periodEnd = subscription?.current_period_end || null;
+  const remainingDays = daysUntil(periodEnd);
+  const isTrial = subscription?.status === "trialing";
+  const planStatus = isTrial ? "무료 체험" : subscription?.status === "active" ? "사용 중" : "플랜 미등록";
+  const periodLabel = periodEnd ? `${compactDateOnly(periodEnd)}${remainingDays !== null ? ` · D-${Math.max(remainingDays, 0)}` : ""}` : "결제 수단 등록 필요";
   const creditsUsed = summary?.extraction_credits_used ?? 0;
   const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;
   const costUsed = summary?.estimated_cost_used_krw ?? 0;
@@ -239,6 +260,8 @@ function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary 
         <div className="rounded-[10px] border border-violet-300/15 bg-violet-500/[0.08] p-4">
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-violet-200">이번 달 사용량</div>
           <div className="mt-2 text-2xl font-black text-white">{planName}</div>
+          <div className="mt-2 inline-flex rounded-full border border-violet-300/20 bg-black/20 px-2 py-1 text-[11px] font-black text-violet-100">{planStatus}</div>
+          <div className="mt-2 text-xs font-semibold text-slate-300">{periodLabel}</div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
               <span key={engine} className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-semibold text-slate-200">
@@ -246,7 +269,10 @@ function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary 
               </span>
             ))}
           </div>
-          <div className="mt-6 text-[11px] text-slate-500">{loading ? "불러오는 중" : updatedAt ? compactTime(updatedAt) : ""}</div>
+          <Link href="/billing" className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[7px] border border-violet-300/30 bg-violet-500/20 px-3 text-xs font-black text-violet-50 transition hover:border-violet-200/50 hover:bg-violet-500/30">
+            플랜 등록
+          </Link>
+          <div className="mt-3 text-[11px] text-slate-500">{loading ? "불러오는 중" : updatedAt ? compactTime(updatedAt) : ""}</div>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsUsed)} / ${formatUsageNumber(creditsLimit)}`} sub={`${formatUsageNumber(Math.max(creditsLimit - creditsUsed, 0))} 남음`} />
