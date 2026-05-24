@@ -101,7 +101,7 @@ if settings.google_client_id and settings.google_client_secret:
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
         server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-        client_kwargs={"scope": "openid email profile"},
+        client_kwargs={"scope": "openid profile"},
     )
 
 if settings.kakao_client_id:
@@ -111,7 +111,7 @@ if settings.kakao_client_id:
         client_secret=settings.kakao_client_secret or None,
         authorize_url="https://kauth.kakao.com/oauth/authorize",
         access_token_url="https://kauth.kakao.com/oauth/token",
-        client_kwargs={"scope": "account_email profile_nickname"},
+        client_kwargs={"scope": "profile_nickname"},
     )
 
 if settings.naver_client_id and settings.naver_client_secret:
@@ -163,6 +163,11 @@ def _create_password_reset(db: Session, academy: Academy, ip_address: str) -> st
 def _default_academy_name(email: str) -> str:
     local_part = email.split("@", 1)[0].strip()
     return (local_part[:64] or "Tena 사용자")
+
+
+def _oauth_internal_email(provider: str, provider_account_id: str) -> str:
+    digest = hashlib.sha256(f"{provider}:{provider_account_id}".encode("utf-8")).hexdigest()[:24]
+    return f"{provider}-{digest}@oauth.tena-forge.com"
 
 
 def _safe_redirect(value: str | None) -> str | None:
@@ -709,7 +714,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     intent = _consume_oauth_intent(request)
     token = await _oauth_client("google").authorize_access_token(request)
     info = token.get("userinfo") or await _oauth_client("google").parse_id_token(request, token)
-    return _oauth_finalize(db, request, "google", str(info["sub"]), info.get("email"), info.get("name") or "Google Academy", token, intent)
+    return _oauth_finalize(db, request, "google", str(info["sub"]), info.get("name") or "Google Academy", token, intent)
 
 
 @router.get("/kakao")
@@ -727,7 +732,7 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     data = response.json()
     account = data.get("kakao_account", {})
     profile = account.get("profile", {})
-    return _oauth_finalize(db, request, "kakao", str(data["id"]), account.get("email"), profile.get("nickname") or "Kakao Academy", token, intent)
+    return _oauth_finalize(db, request, "kakao", str(data["id"]), profile.get("nickname") or "Kakao Academy", token, intent)
 
 
 @router.get("/naver")
@@ -743,10 +748,10 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
     token = await _oauth_client("naver").authorize_access_token(request)
     response = await _oauth_client("naver").get("https://openapi.naver.com/v1/nid/me", token=token)
     data = response.json().get("response", {})
-    return _oauth_finalize(db, request, "naver", str(data["id"]), data.get("email"), data.get("name") or data.get("nickname") or "Naver Academy", token, intent)
+    return _oauth_finalize(db, request, "naver", str(data["id"]), data.get("nickname") or "Naver 사용자", token, intent)
 
 
-def _oauth_finalize(db: Session, request: Request, provider: str, provider_account_id: str, email: str | None, name: str, token: dict, intent: dict | None = None):
+def _oauth_finalize(db: Session, request: Request, provider: str, provider_account_id: str, name: str, token: dict, intent: dict | None = None):
     intent = intent or {}
     mode = _safe_oauth_mode(intent.get("mode"))
     requested_account_type = _safe_account_type(intent.get("account_type")) if intent.get("account_type") else None
@@ -763,14 +768,12 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
         if mode == "signup" and requested_account_type and academy.account_type != requested_account_type:
             return _oauth_error_redirect("account_type_conflict", mode=mode)
     else:
-        academy = db.scalar(select(Academy).where(Academy.email == email.lower())) if email else None
-        if academy and mode == "signup" and requested_account_type and academy.account_type != requested_account_type:
-            return _oauth_error_redirect("account_type_conflict", mode=mode)
+        academy = None
         if not academy and mode == "login":
             return _oauth_error_redirect("signup_required", mode=mode)
         if not academy:
             academy = Academy(
-                email=(email or f"{provider_account_id}@{provider}.oauth").lower(),
+                email=_oauth_internal_email(provider, provider_account_id),
                 academy_name=name,
                 account_type=requested_account_type or "academy",
                 email_verified=True,
@@ -786,7 +789,7 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
             academy_id=academy.id,
             provider=OAuthProvider(provider),
             provider_account_id=provider_account_id,
-            provider_email=email,
+            provider_email=None,
             access_token=encrypt_secret(token.get("access_token")) or "",
             refresh_token=encrypt_secret(token.get("refresh_token")),
             token_expires_at=now_utc() + timedelta(seconds=int(token.get("expires_in", 0))) if token.get("expires_in") else None,

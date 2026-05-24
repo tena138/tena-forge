@@ -133,19 +133,22 @@ export default function AccountSecurityPage() {
       <Card>
         <CardHeader><CardTitle>연결된 소셜 계정</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
-          {["카카오", "네이버"].map((provider) => (
-            <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+          {["카카오", "네이버"].map((provider) => {
+            const connected = oauthAccounts.some((item) => providerName(item.provider) === provider);
+            return (
+              <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <div>
                 <div className="font-semibold">{provider}</div>
-                <div className="text-xs text-slate-400">{oauthAccounts.find((item) => providerName(item.provider) === provider)?.provider_email || "연결되지 않음"}</div>
+                <div className="text-xs text-slate-400">{connected ? "연결됨" : "연결되지 않음"}</div>
               </div>
-              {oauthAccounts.some((item) => providerName(item.provider) === provider) ? (
+              {connected ? (
                 <Button variant="outline" size="sm" onClick={() => unlinkOAuthAccount(providerKey(provider)).then(load)}>해제</Button>
               ) : (
                 <a className="inline-flex h-8 items-center rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]" href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/auth/${providerKey(provider)}`}>연결</a>
               )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
 
