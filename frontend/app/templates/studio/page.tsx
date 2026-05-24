@@ -46,7 +46,7 @@ import { AlignmentGuide, ResizeHandleDirection, TemplatePageView } from "@/compo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget, readFileAsDataUrl } from "@/lib/clipboardImages";
-import { ClipboardDesignImage, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
+import { ClipboardDesignImage, createClipboardEditableElements, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createElement, createProblemRegion, createTemplateSet, pageRoleLabels, visualTemplateCategories } from "@/lib/visualTemplatePresets";
 import { ElementStyle, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
@@ -1257,6 +1257,27 @@ function VisualTemplateStudioPageContent() {
     setNotice("PowerPoint 디자인을 원본에 가까운 이미지로 붙여넣었습니다.");
   }
 
+  async function addClipboardEditableContent(data: DataTransfer | null, pageId = selectedPage?.id, x = 120, y = 140) {
+    if (!pageId || !data) return false;
+    const pageForSizing = templateSet.pages.find((item) => item.id === pageId);
+    if (!pageForSizing) return false;
+    const maxZ = Math.max(0, ...pageForSizing.elements.map((item) => item.zIndex || 0));
+    const { elements, assets } = await createClipboardEditableElements(data, pageForSizing, x, y, maxZ);
+    if (!elements.length) return false;
+
+    updateTemplateSet((draft) => {
+      const page = draft.pages.find((item) => item.id === pageId);
+      if (!page) return;
+      draft.assets.push(...assets);
+      page.elements.push(...elements);
+    });
+    setSelectedPageId(pageId);
+    setSelectedIds(elements.map((element) => element.id));
+    setEditingTextElementId(elements.length === 1 && elements[0].type === "text" ? elements[0].id : null);
+    setNotice(`PowerPoint 내용을 ${elements.length}개의 편집 가능한 요소로 붙여넣었습니다.`);
+    return true;
+  }
+
   function addClipboardElement(element: TemplateElement | null, pageId = selectedPage?.id, message = "클립보드 내용을 붙여넣었습니다.") {
     if (!pageId || !element) return false;
     updateTemplateSet((draft) => {
@@ -1306,18 +1327,39 @@ function VisualTemplateStudioPageContent() {
     function onPaste(event: ClipboardEvent) {
       if (isEditableClipboardTarget(event.target)) return;
 
+      const x = selectedElement ? selectedElement.x + 24 : 120;
+      const y = selectedElement ? selectedElement.y + 24 : 140;
       const imageFiles = getClipboardImageFiles(event.clipboardData);
+      const clipboardImages = getClipboardDesignImages(event.clipboardData);
+      const plainText = getClipboardPlainText(event.clipboardData);
+      const hasHtml = Boolean(event.clipboardData?.getData("text/html"));
+
+      if (hasHtml && selectedPage) {
+        event.preventDefault();
+        void addClipboardEditableContent(event.clipboardData, selectedPage.id, x, y).then((handled) => {
+          if (handled) return;
+          if (clipboardImages.length) {
+            void addClipboardDesignImages(clipboardImages, selectedPage.id, x, y);
+            return;
+          }
+          if (imageFiles.length) {
+            void addImageFiles(imageFiles, selectedPage.id, x, y);
+            return;
+          }
+          const maxZ = Math.max(0, ...selectedPage.elements.map((item) => item.zIndex || 0));
+          const richTextHtml = getClipboardRichTextHtml(event.clipboardData);
+          if (richTextHtml && addClipboardElement(createClipboardRichTextElement(richTextHtml, selectedPage, x, y, maxZ + 1), selectedPage.id, "PowerPoint 텍스트 스타일을 리치 텍스트로 붙여넣었습니다.")) return;
+          if (plainText) addClipboardElement(createClipboardTextElement(plainText, selectedPage, x, y, maxZ + 1), selectedPage.id);
+        });
+        return;
+      }
+
       if (imageFiles.length) {
         event.preventDefault();
-        const x = selectedElement ? selectedElement.x + 24 : 120;
-        const y = selectedElement ? selectedElement.y + 24 : 140;
         void addImageFiles(imageFiles, selectedPage?.id, x, y);
         return;
       }
 
-      const x = selectedElement ? selectedElement.x + 24 : 120;
-      const y = selectedElement ? selectedElement.y + 24 : 140;
-      const clipboardImages = getClipboardDesignImages(event.clipboardData);
       if (clipboardImages.length) {
         event.preventDefault();
         void addClipboardDesignImages(clipboardImages, selectedPage?.id, x, y);
@@ -1341,7 +1383,6 @@ function VisualTemplateStudioPageContent() {
 
       if (selectedPage) {
         const maxZ = Math.max(0, ...selectedPage.elements.map((item) => item.zIndex || 0));
-        const plainText = getClipboardPlainText(event.clipboardData);
         if (plainText) {
           event.preventDefault();
           if (addClipboardElement(createClipboardTextElement(plainText, selectedPage, x, y, maxZ + 1), selectedPage.id)) return;

@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { createElement } from "@/lib/visualTemplatePresets";
-import { PAGE_SIZES, TemplateAsset, TemplateElement, TemplatePage } from "@/lib/visualTemplateTypes";
+import { ElementStyle, PAGE_SIZES, TemplateAsset, TemplateElement, TemplatePage } from "@/lib/visualTemplateTypes";
 
 export type ClipboardDesignImage = {
   name: string;
@@ -9,6 +9,49 @@ export type ClipboardDesignImage = {
   width?: number;
   height?: number;
 };
+
+type ClipboardEditableItem =
+  | {
+      kind: "text";
+      text: string;
+      name: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      style: ElementStyle;
+      explicitPosition: boolean;
+    }
+  | {
+      kind: "shape";
+      name: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      style: ElementStyle;
+      explicitPosition: boolean;
+    }
+  | {
+      kind: "image";
+      source: ClipboardDesignImage;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      explicitPosition: boolean;
+    }
+  | {
+      kind: "table";
+      name: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rows: Array<Array<{ text: string; colSpan: number; rowSpan: number; style: ElementStyle }>>;
+      style: ElementStyle;
+      explicitPosition: boolean;
+    };
 
 const allowedHtmlTags = new Set([
   "a",
@@ -145,6 +188,370 @@ function uniqueImages(images: ClipboardDesignImage[]) {
   });
 }
 
+function cssDeclaration(element: Element, property: string) {
+  const htmlElement = element as HTMLElement;
+  const fromStyle = htmlElement.style?.getPropertyValue(property);
+  if (fromStyle) return fromStyle;
+  const style = element.getAttribute("style") || "";
+  const pattern = new RegExp(`(?:^|;)\\s*${property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*([^;]+)`, "i");
+  return pattern.exec(style)?.[1]?.trim() || "";
+}
+
+function cssLength(value: string | null | undefined) {
+  if (!value) return undefined;
+  const trimmed = String(value).trim();
+  if (!trimmed || trimmed === "auto") return undefined;
+  const match = /^(-?\d+(?:\.\d+)?)(px|pt|in|cm|mm|pc)?$/i.exec(trimmed);
+  if (!match) return undefined;
+  const amount = Number(match[1]);
+  const unit = (match[2] || "px").toLowerCase();
+  if (!Number.isFinite(amount)) return undefined;
+  if (unit === "pt") return amount * (96 / 72);
+  if (unit === "in") return amount * 96;
+  if (unit === "cm") return amount * 37.7952755906;
+  if (unit === "mm") return amount * 3.7795275591;
+  if (unit === "pc") return amount * 16;
+  return amount;
+}
+
+function cssNumber(value: string | null | undefined) {
+  const parsed = cssLength(value);
+  return typeof parsed === "number" ? parsed : undefined;
+}
+
+function cssColor(value: string | null | undefined) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "transparent" || trimmed === "none" || trimmed === "initial") return undefined;
+  return trimmed;
+}
+
+function borderWidth(element: Element) {
+  return (
+    cssNumber(cssDeclaration(element, "border-width")) ??
+    cssNumber(cssDeclaration(element, "border-left-width")) ??
+    cssNumber(cssDeclaration(element, "border-top-width")) ??
+    (cssDeclaration(element, "border") ? 1 : 0)
+  );
+}
+
+function borderColor(element: Element) {
+  return (
+    cssColor(cssDeclaration(element, "border-color")) ||
+    cssColor(cssDeclaration(element, "border-left-color")) ||
+    cssColor(cssDeclaration(element, "border-top-color")) ||
+    cssColor(element.getAttribute("strokecolor"))
+  );
+}
+
+function backgroundColor(element: Element) {
+  return cssColor(cssDeclaration(element, "background-color")) || cssColor(cssDeclaration(element, "background")) || cssColor(element.getAttribute("fillcolor"));
+}
+
+function elementGeometry(element: Element, fallbackIndex: number) {
+  const x =
+    cssNumber(cssDeclaration(element, "left")) ??
+    cssNumber(cssDeclaration(element, "margin-left")) ??
+    cssNumber(cssDeclaration(element, "mso-position-horizontal")) ??
+    0;
+  const y =
+    cssNumber(cssDeclaration(element, "top")) ??
+    cssNumber(cssDeclaration(element, "margin-top")) ??
+    cssNumber(cssDeclaration(element, "mso-position-vertical")) ??
+    fallbackIndex * 28;
+  const width = cssNumber(cssDeclaration(element, "width")) ?? cssNumber(element.getAttribute("width")) ?? 260;
+  const height = cssNumber(cssDeclaration(element, "height")) ?? cssNumber(element.getAttribute("height")) ?? 0;
+  const explicitPosition = Boolean(
+    cssDeclaration(element, "left") ||
+      cssDeclaration(element, "top") ||
+      cssDeclaration(element, "margin-left") ||
+      cssDeclaration(element, "margin-top") ||
+      cssDeclaration(element, "position") === "absolute"
+  );
+  return { x, y, width, height, explicitPosition };
+}
+
+function textStyleFromElement(element: Element): ElementStyle {
+  const fontWeightValue = cssDeclaration(element, "font-weight").toLowerCase();
+  const fontStyleValue = cssDeclaration(element, "font-style").toLowerCase();
+  const textAlignValue = cssDeclaration(element, "text-align").toLowerCase();
+  const strokeWidth = borderWidth(element);
+  const style: ElementStyle = {
+    fill: backgroundColor(element) || "transparent",
+    stroke: borderColor(element) || "transparent",
+    strokeWidth,
+    borderStyle: strokeWidth > 0 ? "solid" : "none",
+    color: cssColor(cssDeclaration(element, "color")) || "#111827",
+    fontFamily: cssDeclaration(element, "font-family") || "Pretendard, Noto Sans KR, sans-serif",
+    fontSize: cssNumber(cssDeclaration(element, "font-size")) || 14,
+    fontWeight: fontWeightValue === "bold" || Number(fontWeightValue) >= 600 ? "bold" : "normal",
+    fontStyle: fontStyleValue === "italic" ? "italic" : "normal",
+    textAlign: ["left", "center", "right", "justify"].includes(textAlignValue) ? (textAlignValue as ElementStyle["textAlign"]) : "left",
+    lineHeight: Number(cssDeclaration(element, "line-height")) || 1.35,
+    letterSpacing: cssNumber(cssDeclaration(element, "letter-spacing")) || 0,
+    radius: cssNumber(cssDeclaration(element, "border-radius")) || 0,
+  };
+  return style;
+}
+
+function visualStyleFromElement(element: Element): ElementStyle {
+  const strokeWidth = borderWidth(element);
+  return {
+    fill: backgroundColor(element) || "transparent",
+    stroke: borderColor(element) || "transparent",
+    strokeWidth,
+    borderStyle: strokeWidth > 0 ? "solid" : "none",
+    radius: cssNumber(cssDeclaration(element, "border-radius")) || 0,
+  };
+}
+
+function collapsedText(element: Element) {
+  return (element.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t\f\v]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
+}
+
+function lineCount(text: string) {
+  return Math.max(1, text.split(/\r\n|\r|\n/).length);
+}
+
+function hasMeaningfulBox(element: Element) {
+  return Boolean(
+    cssDeclaration(element, "left") ||
+      cssDeclaration(element, "top") ||
+      cssDeclaration(element, "width") ||
+      cssDeclaration(element, "height") ||
+      backgroundColor(element) ||
+      borderWidth(element) > 0 ||
+      element.getAttribute("fillcolor") ||
+      element.getAttribute("strokecolor")
+  );
+}
+
+function descendantsProcessed(element: Element, processed: Set<Element>) {
+  return Array.from(processed).some((item) => element !== item && element.contains(item));
+}
+
+function markProcessed(element: Element, processed: Set<Element>) {
+  processed.add(element);
+  element.querySelectorAll("*").forEach((child) => processed.add(child));
+}
+
+function isInsideProcessed(element: Element, processed: Set<Element>) {
+  let current: Element | null = element;
+  while (current) {
+    if (processed.has(current)) return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+function htmlFragment(html: string) {
+  const fragmentMatch = /<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/i.exec(html);
+  return fragmentMatch?.[1] || html;
+}
+
+function textHeight(text: string, style: ElementStyle, fallback = 48) {
+  const fontSize = style.fontSize || 14;
+  const lineHeight = typeof style.lineHeight === "number" && style.lineHeight > 0 ? style.lineHeight : 1.35;
+  return Math.max(fallback, Math.round(lineCount(text) * fontSize * lineHeight + 16));
+}
+
+function createTextItem(element: Element, fallbackIndex: number, name = "PowerPoint 텍스트"): ClipboardEditableItem | null {
+  const text = collapsedText(element);
+  if (!text) return null;
+  const geometry = elementGeometry(element, fallbackIndex);
+  const style = textStyleFromElement(element);
+  return {
+    kind: "text",
+    name,
+    text,
+    x: geometry.x,
+    y: geometry.y,
+    width: Math.max(48, geometry.width),
+    height: Math.max(24, geometry.height || textHeight(text, style)),
+    style,
+    explicitPosition: geometry.explicitPosition,
+  };
+}
+
+function parseTableItem(table: HTMLTableElement, fallbackIndex: number): ClipboardEditableItem | null {
+  const rows = Array.from(table.querySelectorAll("tr")).map((row) =>
+    Array.from(row.children)
+      .filter((cell) => ["td", "th"].includes(cell.tagName.toLowerCase()))
+      .map((cell) => ({
+        text: collapsedText(cell),
+        colSpan: Number((cell as HTMLTableCellElement).colSpan || cell.getAttribute("colspan") || 1),
+        rowSpan: Number((cell as HTMLTableCellElement).rowSpan || cell.getAttribute("rowspan") || 1),
+        style: textStyleFromElement(cell),
+      }))
+  );
+  if (!rows.length) return null;
+  const columnCount = Math.max(1, ...rows.map((row) => row.reduce((sum, cell) => sum + Math.max(1, cell.colSpan || 1), 0)));
+  const geometry = elementGeometry(table, fallbackIndex);
+  const width = Math.max(180, geometry.width);
+  const height = Math.max(48, geometry.height || rows.length * 36);
+  return {
+    kind: "table",
+    name: "PowerPoint 표",
+    x: geometry.x,
+    y: geometry.y,
+    width,
+    height,
+    rows,
+    style: visualStyleFromElement(table),
+    explicitPosition: geometry.explicitPosition,
+  };
+}
+
+function parseSvgItem(svg: SVGElement, fallbackIndex: number): ClipboardEditableItem | null {
+  const svgText = new XMLSerializer().serializeToString(svg);
+  const size = svgSize(svgText);
+  const geometry = elementGeometry(svg, fallbackIndex);
+  const width = geometry.width || size.width || 240;
+  const height = geometry.height || size.height || 160;
+  return {
+    kind: "image",
+    source: { name: "powerpoint-vector.svg", src: svgDataUrl(svgText), width, height },
+    x: geometry.x,
+    y: geometry.y,
+    width,
+    height,
+    explicitPosition: geometry.explicitPosition,
+  };
+}
+
+function parseImageItem(image: HTMLImageElement, fallbackIndex: number): ClipboardEditableItem | null {
+  const src = image.getAttribute("src") || "";
+  if (!src.startsWith("data:image/")) return null;
+  const geometry = elementGeometry(image, fallbackIndex);
+  const width = geometry.width || Number(image.naturalWidth) || 240;
+  const height = geometry.height || Number(image.naturalHeight) || 160;
+  return {
+    kind: "image",
+    source: {
+      name: image.getAttribute("alt") || "powerpoint-image.png",
+      src,
+      width,
+      height,
+    },
+    x: geometry.x,
+    y: geometry.y,
+    width,
+    height,
+    explicitPosition: geometry.explicitPosition,
+  };
+}
+
+function parseShapeItems(element: Element, fallbackIndex: number): ClipboardEditableItem[] {
+  const geometry = elementGeometry(element, fallbackIndex);
+  const style = visualStyleFromElement(element);
+  const text = collapsedText(element);
+  const hasVisibleShape = Boolean(style.fill !== "transparent" || (style.strokeWidth || 0) > 0);
+  const items: ClipboardEditableItem[] = [];
+  if (hasVisibleShape && geometry.width > 8 && (geometry.height || 0) > 8) {
+    items.push({
+      kind: "shape",
+      name: text ? "PowerPoint 도형" : "PowerPoint 배경 도형",
+      x: geometry.x,
+      y: geometry.y,
+      width: Math.max(16, geometry.width),
+      height: Math.max(16, geometry.height || 48),
+      style,
+      explicitPosition: geometry.explicitPosition,
+    });
+  }
+  if (text) {
+    items.push({
+      kind: "text",
+      name: "PowerPoint 텍스트",
+      text,
+      x: geometry.x + 8,
+      y: geometry.y + 6,
+      width: Math.max(48, geometry.width - 16),
+      height: Math.max(24, (geometry.height || textHeight(text, textStyleFromElement(element))) - 12),
+      style: { ...textStyleFromElement(element), fill: "transparent", stroke: "transparent", strokeWidth: 0, borderStyle: "none" },
+      explicitPosition: geometry.explicitPosition,
+    });
+  }
+  return items;
+}
+
+function clipboardEditableItemsFromHtml(html: string): ClipboardEditableItem[] {
+  if (!html.trim() || typeof DOMParser === "undefined") return [];
+  const doc = new DOMParser().parseFromString(htmlFragment(html), "text/html");
+  doc.querySelectorAll("script, style, meta, link, xml").forEach((node) => node.remove());
+
+  const processed = new Set<Element>();
+  const items: ClipboardEditableItem[] = [];
+
+  Array.from(doc.querySelectorAll("table")).forEach((table, index) => {
+    const item = parseTableItem(table as HTMLTableElement, index);
+    if (!item) return;
+    items.push(item);
+    markProcessed(table, processed);
+  });
+
+  Array.from(doc.querySelectorAll("img")).forEach((image, index) => {
+    if (isInsideProcessed(image, processed)) return;
+    const item = parseImageItem(image as HTMLImageElement, index);
+    if (!item) return;
+    items.push(item);
+    markProcessed(image, processed);
+  });
+
+  Array.from(doc.querySelectorAll("svg")).forEach((svg, index) => {
+    if (isInsideProcessed(svg, processed)) return;
+    const item = parseSvgItem(svg as unknown as SVGElement, index);
+    if (!item) return;
+    items.push(item);
+    markProcessed(svg, processed);
+  });
+
+  Array.from(doc.body.querySelectorAll("*")).forEach((element, index) => {
+    if (isInsideProcessed(element, processed)) return;
+    const tag = element.tagName.toLowerCase();
+    if (tag.includes(":shape") || tag.includes(":rect") || tag.includes(":roundrect") || tag.includes(":textbox")) {
+      const shapeItems = parseShapeItems(element, index);
+      if (shapeItems.length) {
+        items.push(...shapeItems);
+        markProcessed(element, processed);
+      }
+    }
+  });
+
+  Array.from(doc.body.querySelectorAll("div,p,section,article,h1,h2,h3,h4,h5,h6")).forEach((element, index) => {
+    if (isInsideProcessed(element, processed) || descendantsProcessed(element, processed)) return;
+    const text = collapsedText(element);
+    if (!text) {
+      if (hasMeaningfulBox(element)) {
+        const shapeItems = parseShapeItems(element, index);
+        if (shapeItems.length) {
+          items.push(...shapeItems);
+          markProcessed(element, processed);
+        }
+      }
+      return;
+    }
+    const childBlocks = Array.from(element.children).filter((child) => /^(div|p|section|article|h[1-6]|table)$/i.test(child.tagName));
+    if (childBlocks.some((child) => collapsedText(child))) return;
+    const item = createTextItem(element, index);
+    if (!item) return;
+    items.push(item);
+    markProcessed(element, processed);
+  });
+
+  if (!items.some((item) => item.kind === "text")) {
+    Array.from(doc.body.querySelectorAll("span")).forEach((element, index) => {
+      if (isInsideProcessed(element, processed) || !hasMeaningfulBox(element)) return;
+      const item = createTextItem(element, index);
+      if (!item) return;
+      items.push(item);
+      markProcessed(element, processed);
+    });
+  }
+
+  return items;
+}
+
 export function getClipboardDesignImages(data: DataTransfer | null) {
   if (!data || typeof DOMParser === "undefined") return [];
   const images: ClipboardDesignImage[] = [];
@@ -250,6 +657,165 @@ export async function createClipboardImageElements(
       zIndex: maxZ + index + 1,
     });
   });
+  return { elements, assets };
+}
+
+function itemColumnCount(item: Extract<ClipboardEditableItem, { kind: "table" }>) {
+  return Math.max(1, ...item.rows.map((row) => row.reduce((sum, cell) => sum + Math.max(1, cell.colSpan || 1), 0)));
+}
+
+function itemBounds(item: ClipboardEditableItem) {
+  return {
+    left: item.x,
+    top: item.y,
+    right: item.x + item.width,
+    bottom: item.y + item.height,
+  };
+}
+
+function scaleStyle(style: ElementStyle, scale: number): ElementStyle {
+  return {
+    ...style,
+    fontSize: typeof style.fontSize === "number" ? Math.max(6, Math.round(style.fontSize * scale * 10) / 10) : style.fontSize,
+    strokeWidth: typeof style.strokeWidth === "number" ? Math.max(0, Math.round(style.strokeWidth * scale * 10) / 10) : style.strokeWidth,
+    radius: typeof style.radius === "number" ? Math.max(0, Math.round(style.radius * scale * 10) / 10) : style.radius,
+    letterSpacing: typeof style.letterSpacing === "number" ? Math.round(style.letterSpacing * scale * 10) / 10 : style.letterSpacing,
+  };
+}
+
+function normalizedItemFrame(item: ClipboardEditableItem, minX: number, minY: number, pasteX: number, pasteY: number, scale: number) {
+  return {
+    x: Math.round(pasteX + (item.x - minX) * scale),
+    y: Math.round(pasteY + (item.y - minY) * scale),
+    width: Math.max(8, Math.round(item.width * scale)),
+    height: Math.max(8, Math.round(item.height * scale)),
+  };
+}
+
+function editableGroupScale(items: ClipboardEditableItem[], page: TemplatePage, pasteX: number, pasteY: number) {
+  const bounds = items.map(itemBounds);
+  const minX = Math.min(...bounds.map((bound) => bound.left));
+  const minY = Math.min(...bounds.map((bound) => bound.top));
+  const maxX = Math.max(...bounds.map((bound) => bound.right));
+  const maxY = Math.max(...bounds.map((bound) => bound.bottom));
+  const groupWidth = Math.max(1, maxX - minX);
+  const groupHeight = Math.max(1, maxY - minY);
+  const { size, safeArea } = pageBounds(page);
+  const maxWidth = Math.max(80, Math.min(safeArea.width, size.width - pasteX - 48));
+  const maxHeight = Math.max(80, Math.min(safeArea.height, size.height - pasteY - 48));
+  const scale = Math.min(1, maxWidth / groupWidth, maxHeight / groupHeight);
+  return { minX, minY, scale };
+}
+
+export async function createClipboardEditableElements(data: DataTransfer | null, page: TemplatePage, x: number, y: number, maxZ: number) {
+  const items = clipboardEditableItemsFromHtml(data?.getData("text/html") || "");
+  if (!items.length) return { elements: [] as TemplateElement[], assets: [] as TemplateAsset[] };
+
+  const { minX, minY, scale } = editableGroupScale(items, page, x, y);
+  const elements: TemplateElement[] = [];
+  const assets: TemplateAsset[] = [];
+  const groupId = nanoid();
+  let zIndex = maxZ;
+
+  for (const item of items) {
+    const frame = normalizedItemFrame(item, minX, minY, x, y, scale);
+    if (item.kind === "shape") {
+      const base = createElement("shape", frame.x, frame.y);
+      if (base.type !== "shape") continue;
+      elements.push({
+        ...base,
+        ...frame,
+        id: nanoid(),
+        name: item.name,
+        shape: (item.style.radius || 0) > 0 ? "roundRect" : "rect",
+        style: scaleStyle(item.style, scale),
+        zIndex: ++zIndex,
+        groupId,
+      });
+      continue;
+    }
+
+    if (item.kind === "text") {
+      const base = createElement("text", frame.x, frame.y);
+      if (base.type !== "text") continue;
+      elements.push({
+        ...base,
+        ...frame,
+        id: nanoid(),
+        name: item.name,
+        text: item.text,
+        style: scaleStyle(item.style, scale),
+        zIndex: ++zIndex,
+        groupId,
+      });
+      continue;
+    }
+
+    if (item.kind === "image") {
+      const base = createElement("image", frame.x, frame.y);
+      if (base.type !== "image") continue;
+      const assetId = nanoid();
+      assets.push({ id: assetId, type: "image", name: item.source.name, url: item.source.src });
+      elements.push({
+        ...base,
+        ...frame,
+        id: nanoid(),
+        name: item.source.name.replace(/\.[^.]+$/, "") || "PowerPoint 이미지",
+        src: item.source.src,
+        objectFit: "contain",
+        zIndex: ++zIndex,
+        groupId,
+      });
+      continue;
+    }
+
+    const columns = itemColumnCount(item);
+    const tableBase = createElement("table", frame.x, frame.y);
+    if (tableBase.type !== "table") continue;
+    const tableId = nanoid();
+    elements.push({
+      ...tableBase,
+      ...frame,
+      id: tableId,
+      name: item.name,
+      rows: Math.max(1, item.rows.length),
+      columns,
+      headerRow: false,
+      style: scaleStyle({ fill: "#ffffff", stroke: "#d8dee9", strokeWidth: 1, borderStyle: "solid", ...item.style }, scale),
+      zIndex: ++zIndex,
+      groupId,
+    });
+
+    const cellWidth = frame.width / columns;
+    const cellHeight = frame.height / Math.max(1, item.rows.length);
+    item.rows.forEach((row, rowIndex) => {
+      let columnIndex = 0;
+      row.forEach((cell) => {
+        const colSpan = Math.max(1, cell.colSpan || 1);
+        const rowSpan = Math.max(1, cell.rowSpan || 1);
+        if (cell.text) {
+          const textBase = createElement("text", frame.x + columnIndex * cellWidth + 4, frame.y + rowIndex * cellHeight + 4);
+          if (textBase.type === "text") {
+            elements.push({
+              ...textBase,
+              id: nanoid(),
+              name: "표 셀 텍스트",
+              x: Math.round(frame.x + columnIndex * cellWidth + 4),
+              y: Math.round(frame.y + rowIndex * cellHeight + 4),
+              width: Math.max(16, Math.round(cellWidth * colSpan - 8)),
+              height: Math.max(14, Math.round(cellHeight * rowSpan - 8)),
+              text: cell.text,
+              style: scaleStyle({ ...cell.style, fill: "transparent", stroke: "transparent", strokeWidth: 0, borderStyle: "none" }, scale),
+              zIndex: ++zIndex,
+              groupId,
+            });
+          }
+        }
+        columnIndex += colSpan;
+      });
+    });
+  }
+
   return { elements, assets };
 }
 
