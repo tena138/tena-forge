@@ -224,16 +224,21 @@ function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary 
   const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;
   const costUsed = summary?.estimated_cost_used_krw ?? 0;
   const costLimit = summary?.monthly_cost_cap_krw || 0;
-  const uploadUsed = summary?.uploaded_mb_this_month ?? 0;
-  const uploadLimit = summary?.monthly_upload_mb_limit || 0;
+  const uploadCountUsed = summary?.monthly_uploads_used ?? 0;
+  const uploadCountLimit = summary?.plan?.monthly_upload_count || 0;
+  const pageUsed = summary?.monthly_pages_used ?? 0;
+  const pageLimit = summary?.plan?.monthly_processed_pages || 0;
+  const uploadMbUsed = summary?.uploaded_mb_this_month ?? 0;
+  const uploadMbLimit = summary?.monthly_upload_mb_limit || 0;
   const storageUsed = summary?.storage_mb_used ?? 0;
   const storageLimit = summary?.plan?.storage_quota_mb || 0;
 
   return (
     <section className="rounded-[12px] border border-white/10 bg-white/[0.035] p-4">
-      <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid gap-4 2xl:grid-cols-[240px_minmax(0,1fr)]">
         <div className="rounded-[10px] border border-violet-300/15 bg-violet-500/[0.08] p-4">
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-violet-200">{planName}</div>
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-violet-200">이번 달 사용량</div>
+          <div className="mt-2 text-2xl font-black text-white">{planName}</div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
               <span key={engine} className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-semibold text-slate-200">
@@ -241,23 +246,15 @@ function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary 
               </span>
             ))}
           </div>
-          <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">
-              <div className="text-slate-500">작업당</div>
-              <div className="mt-1 font-black text-white">{summary ? `${summary.max_pages_per_job}p` : "-"}</div>
-            </div>
-            <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">
-              <div className="text-slate-500">동시</div>
-              <div className="mt-1 font-black text-white">{summary ? `${summary.max_concurrent_jobs}` : "-"}</div>
-            </div>
-          </div>
-          <div className="mt-3 text-[11px] text-slate-500">{loading ? "불러오는 중" : updatedAt ? compactTime(updatedAt) : ""}</div>
+          <div className="mt-6 text-[11px] text-slate-500">{loading ? "불러오는 중" : updatedAt ? compactTime(updatedAt) : ""}</div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsUsed)} / ${formatUsageNumber(creditsLimit)}`} sub={`${formatUsageNumber(Math.max(creditsLimit - creditsUsed, 0))} 남음`} />
           <UsageRing label="처리 예산" used={costUsed} total={costLimit} value={`${money(costUsed)}원 / ${money(costLimit)}원`} sub={`${money(Math.max(costLimit - costUsed, 0))}원 남음`} />
-          <UsageRing label="업로드" used={uploadUsed} total={uploadLimit} value={`${formatUsageNumber(uploadUsed, "MB")} / ${formatUsageNumber(uploadLimit, "MB")}`} sub={`파일 ${formatUsageNumber(summary?.max_file_size_mb || 0, "MB")}`} />
-          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} value={`${formatUsageNumber(storageUsed, "MB")} / ${formatUsageNumber(storageLimit, "MB")}`} sub={`${formatUsageNumber(summary?.monthly_pages_used || 0, "p")} 처리`} />
+          <UsageRing label="처리 페이지" used={pageUsed} total={pageLimit} value={`${formatUsageNumber(pageUsed, "p")} / ${formatUsageNumber(pageLimit, "p")}`} sub={`${formatUsageNumber(Math.max(pageLimit - pageUsed, 0), "p")} 남음`} />
+          <UsageRing label="업로드 횟수" used={uploadCountUsed} total={uploadCountLimit} value={`${formatUsageNumber(uploadCountUsed)} / ${formatUsageNumber(uploadCountLimit)}`} sub={`${formatUsageNumber(Math.max(uploadCountLimit - uploadCountUsed, 0))}회 남음`} />
+          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} value={`${formatUsageNumber(uploadMbUsed, "MB")} / ${formatUsageNumber(uploadMbLimit, "MB")}`} sub={`${formatUsageNumber(Math.max(uploadMbLimit - uploadMbUsed, 0), "MB")} 남음`} />
+          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} value={`${formatUsageNumber(storageUsed, "MB")} / ${formatUsageNumber(storageLimit, "MB")}`} sub={`${formatUsageNumber(Math.max(storageLimit - storageUsed, 0), "MB")} 남음`} />
         </div>
       </div>
     </section>
