@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Archive,
-  ArrowRight,
   BookOpenCheck,
   CalendarDays,
   ChevronLeft,
@@ -33,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { AcademyProfile } from "@/lib/auth-api";
 import { readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
+import { getUsageSummary, UsageSummary } from "@/lib/saas";
 import {
   AcademyBilling,
   AcademyClass,
@@ -69,14 +69,6 @@ type ProblemPage = { items: unknown[]; total: number; page: number; limit: numbe
 type ProblemStats = { total: number; needs_review: number; tagged: number; untagged: number };
 type ProblemFacets = { subjects: string[] };
 type SubjectCount = { subject: string; count: number };
-type FlowStep = { label: string; href: string; icon: LucideIcon };
-
-const flowSteps: FlowStep[] = [
-  { label: "추출", href: "/archive/new", icon: ScanText },
-  { label: "검토", href: "/problems/review", icon: ClipboardCheck },
-  { label: "보관", href: "/problems", icon: Archive },
-  { label: "세트 제작", href: "/problem-sets", icon: PackageCheck },
-];
 
 function money(value?: number) {
   return new Intl.NumberFormat("ko-KR").format(value || 0);
@@ -181,11 +173,103 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="rounded-[8px] border border-dashed border-white/10 px-3 py-4 text-sm text-slate-500">{children}</div>;
 }
 
+function ratioPercent(used: number, total: number) {
+  if (!total || total <= 0) return 0;
+  return Math.min(100, Math.max(0, (used / total) * 100));
+}
+
+function usageTone(percent: number) {
+  if (percent >= 90) return "#f87171";
+  if (percent >= 75) return "#fbbf24";
+  return "#8b5cf6";
+}
+
+function formatUsageNumber(value: number, suffix = "") {
+  const safe = Number.isFinite(value) ? value : 0;
+  const rounded = safe >= 100 ? Math.round(safe) : Math.round(safe * 10) / 10;
+  return `${rounded.toLocaleString("ko-KR")}${suffix}`;
+}
+
+function subjectEngineLabel(code: string) {
+  const labels: Record<string, string> = { math: "수학", korean: "국어" };
+  return labels[code] || code;
+}
+
+function UsageRing({ label, used, total, value, sub }: { label: string; used: number; total: number; value: string; sub: string }) {
+  const percent = ratioPercent(used, total);
+  const tone = usageTone(percent);
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3">
+      <div
+        className="grid h-14 w-14 shrink-0 place-items-center rounded-full"
+        style={{
+          background: `conic-gradient(${tone} ${percent * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+        }}
+      >
+        <div className="grid h-10 w-10 place-items-center rounded-full bg-[#111018] text-[11px] font-black text-white">{Math.round(percent)}%</div>
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs font-semibold text-slate-500">{label}</div>
+        <div className="mt-1 truncate text-sm font-black text-white">{value}</div>
+        <div className="mt-0.5 truncate text-[11px] text-slate-500">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+function UsageOverview({ summary, loading, updatedAt }: { summary: UsageSummary | null; loading: boolean; updatedAt: string | null }) {
+  const planName = summary?.plan?.name || "Plan";
+  const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
+  const creditsUsed = summary?.extraction_credits_used ?? 0;
+  const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;
+  const costUsed = summary?.estimated_cost_used_krw ?? 0;
+  const costLimit = summary?.monthly_cost_cap_krw || 0;
+  const uploadUsed = summary?.uploaded_mb_this_month ?? 0;
+  const uploadLimit = summary?.monthly_upload_mb_limit || 0;
+  const storageUsed = summary?.storage_mb_used ?? 0;
+  const storageLimit = summary?.plan?.storage_quota_mb || 0;
+
+  return (
+    <section className="rounded-[12px] border border-white/10 bg-white/[0.035] p-4">
+      <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="rounded-[10px] border border-violet-300/15 bg-violet-500/[0.08] p-4">
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-violet-200">{planName}</div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {engines.map((engine) => (
+              <span key={engine} className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-semibold text-slate-200">
+                {subjectEngineLabel(engine)}
+              </span>
+            ))}
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">
+              <div className="text-slate-500">작업당</div>
+              <div className="mt-1 font-black text-white">{summary ? `${summary.max_pages_per_job}p` : "-"}</div>
+            </div>
+            <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">
+              <div className="text-slate-500">동시</div>
+              <div className="mt-1 font-black text-white">{summary ? `${summary.max_concurrent_jobs}` : "-"}</div>
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-slate-500">{loading ? "불러오는 중" : updatedAt ? compactTime(updatedAt) : ""}</div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsUsed)} / ${formatUsageNumber(creditsLimit)}`} sub={`${formatUsageNumber(Math.max(creditsLimit - creditsUsed, 0))} 남음`} />
+          <UsageRing label="처리 예산" used={costUsed} total={costLimit} value={`${money(costUsed)}원 / ${money(costLimit)}원`} sub={`${money(Math.max(costLimit - costUsed, 0))}원 남음`} />
+          <UsageRing label="업로드" used={uploadUsed} total={uploadLimit} value={`${formatUsageNumber(uploadUsed, "MB")} / ${formatUsageNumber(uploadLimit, "MB")}`} sub={`파일 ${formatUsageNumber(summary?.max_file_size_mb || 0, "MB")}`} />
+          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} value={`${formatUsageNumber(storageUsed, "MB")} / ${formatUsageNumber(storageLimit, "MB")}`} sub={`${formatUsageNumber(summary?.monthly_pages_used || 0, "p")} 처리`} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function AcademyConsoleHome() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [problemStats, setProblemStats] = useState<ProblemStats>({ total: 0, needs_review: 0, tagged: 0, untagged: 0 });
   const [subjectCounts, setSubjectCounts] = useState<SubjectCount[]>([]);
   const [sets, setSets] = useState<ProblemSetListItem[]>([]);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataError, setDataError] = useState("");
@@ -239,15 +323,27 @@ function AcademyConsoleHome() {
       }
     }
 
+    async function loadUsage() {
+      try {
+        const summary = await getUsageSummary();
+        if (!cancelled) setUsageSummary(summary);
+      } catch {
+        if (!cancelled) setUsageSummary(null);
+      }
+    }
+
     async function loadConsole() {
       setLoading(true);
-      await Promise.all([loadBatches(), loadArchiveAndSets()]);
+      await Promise.all([loadBatches(), loadArchiveAndSets(), loadUsage()]);
       if (!cancelled) setLoading(false);
     }
 
     void loadConsole();
     const batchTimer = window.setInterval(() => void loadBatches(), 4000);
-    const archiveTimer = window.setInterval(() => void loadArchiveAndSets(), 30000);
+    const archiveTimer = window.setInterval(() => {
+      void loadArchiveAndSets();
+      void loadUsage();
+    }, 30000);
 
     return () => {
       cancelled = true;
@@ -266,27 +362,8 @@ function AcademyConsoleHome() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[12px] border border-white/10 bg-white/[0.035] p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-xl font-semibold text-white">제작 콘솔</h1>
-          <div className="text-xs text-slate-500">{loading ? "불러오는 중" : lastUpdatedAt ? `실시간 갱신 ${compactTime(lastUpdatedAt)}` : ""}</div>
-        </div>
-        <nav className="mt-4 flex flex-wrap items-center gap-2" aria-label="제작 흐름">
-          {flowSteps.map((step, index) => (
-            <div key={step.label} className="flex items-center gap-2">
-              <Link
-                href={step.href}
-                className="inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/10 bg-black/20 px-3 text-sm font-semibold text-slate-100 transition hover:border-violet-300/35 hover:bg-violet-400/[0.08]"
-              >
-                <step.icon className="h-4 w-4 text-violet-200" />
-                {step.label}
-              </Link>
-              {index < flowSteps.length - 1 ? <ArrowRight className="h-4 w-4 text-slate-600" /> : null}
-            </div>
-          ))}
-        </nav>
-        {dataError ? <p className="mt-3 text-sm text-red-300">{dataError}</p> : null}
-      </section>
+      <UsageOverview summary={usageSummary} loading={loading} updatedAt={lastUpdatedAt} />
+      {dataError ? <p className="rounded-[8px] border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">{dataError}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-4">
         <StageCard title="추출" icon={ScanText} action={{ href: "/archive/new", label: "새 추출" }}>
