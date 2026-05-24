@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { FileText, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
 
 import { LEGAL_DOCUMENTS, type LegalBlock, type LegalDocument, type LegalDocumentKey } from "@/lib/legal";
@@ -9,13 +8,17 @@ import { LEGAL_DOCUMENTS, type LegalBlock, type LegalDocument, type LegalDocumen
 export function LegalDocumentDialog({
   activeKey,
   onActiveKeyChange,
+  onAgree,
   onClose,
 }: {
   activeKey: LegalDocumentKey;
   onActiveKeyChange: (key: LegalDocumentKey) => void;
+  onAgree: (key: LegalDocumentKey) => void;
   onClose: () => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [canAgree, setCanAgree] = useState(false);
   const activeDocument = LEGAL_DOCUMENTS[activeKey];
 
   useEffect(() => {
@@ -35,6 +38,28 @@ export function LegalDocumentDialog({
     };
   }, [activeKey, onClose]);
 
+  useEffect(() => {
+    setCanAgree(false);
+    const scrollArea = scrollAreaRef.current;
+    scrollArea?.scrollTo({ top: 0 });
+
+    const frameId = window.requestAnimationFrame(() => {
+      if (!scrollArea) return;
+      if (scrollArea.scrollHeight <= scrollArea.clientHeight + 8) {
+        setCanAgree(true);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeKey]);
+
+  function handleScroll() {
+    const scrollArea = scrollAreaRef.current;
+    if (!scrollArea || canAgree) return;
+    const reachedBottom = scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 8;
+    if (reachedBottom) setCanAgree(true);
+  }
+
   return (
     <div
       className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6"
@@ -52,8 +77,7 @@ export function LegalDocumentDialog({
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/10 p-4 sm:p-5">
           <div className="min-w-0">
-            <p id="legal-dialog-description" className="flex items-center gap-2 text-xs font-bold text-violet-200">
-              <FileText className="h-4 w-4" aria-hidden="true" />
+            <p id="legal-dialog-description" className="text-xs font-bold text-violet-200">
               약관 전문
             </p>
             <h2 id="legal-dialog-title" className="mt-1 text-xl font-bold text-white">
@@ -64,10 +88,10 @@ export function LegalDocumentDialog({
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.055] text-slate-100 transition hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.055] px-3 text-sm font-bold text-slate-100 transition hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
             aria-label="약관 전문 닫기"
           >
-            <X className="h-4 w-4" aria-hidden="true" />
+            닫기
           </button>
         </div>
 
@@ -91,8 +115,22 @@ export function LegalDocumentDialog({
           ))}
         </div>
 
-        <div className="scrollbar-thin-dark min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <div ref={scrollAreaRef} onScroll={handleScroll} className="scrollbar-thin-dark min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <LegalDocumentView document={activeDocument} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <p className="text-xs leading-5 text-slate-400">
+            {canAgree ? "문서 끝까지 확인했습니다." : "문서 끝까지 스크롤하면 동의함 버튼이 활성화됩니다."}
+          </p>
+          <button
+            type="button"
+            disabled={!canAgree}
+            onClick={() => onAgree(activeKey)}
+            className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+          >
+            동의함
+          </button>
         </div>
       </section>
     </div>
