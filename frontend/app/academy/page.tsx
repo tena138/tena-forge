@@ -173,14 +173,14 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="rounded-[8px] border border-dashed border-white/10 px-3 py-4 text-sm text-slate-500">{children}</div>;
 }
 
-function ratioPercent(used: number, total: number) {
+function remainingPercent(used: number, total: number) {
   if (!total || total <= 0) return 0;
-  return Math.min(100, Math.max(0, (used / total) * 100));
+  return Math.min(100, Math.max(0, ((total - used) / total) * 100));
 }
 
-function usageTone(percent: number) {
-  if (percent >= 90) return "#f87171";
-  if (percent >= 75) return "#fbbf24";
+function remainingTone(percent: number) {
+  if (percent <= 10) return "#f87171";
+  if (percent <= 25) return "#fbbf24";
   return "#8b5cf6";
 }
 
@@ -228,8 +228,8 @@ function daysUntil(value?: string | null) {
 }
 
 function UsageRing({ label, used, total, value, sub }: { label: string; used: number; total: number; value: string; sub: string }) {
-  const percent = ratioPercent(used, total);
-  const tone = usageTone(percent);
+  const percent = remainingPercent(used, total);
+  const tone = remainingTone(percent);
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3">
       <div
