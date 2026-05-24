@@ -46,6 +46,7 @@ import { AlignmentGuide, ResizeHandleDirection, TemplatePageView } from "@/compo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget, readFileAsDataUrl } from "@/lib/clipboardImages";
+import { ClipboardDesignImage, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createElement, createProblemRegion, createTemplateSet, pageRoleLabels, visualTemplateCategories } from "@/lib/visualTemplatePresets";
 import { ElementStyle, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
@@ -1218,38 +1219,56 @@ function VisualTemplateStudioPageContent() {
     }
 
     const loaded = await Promise.all(validFiles.map(async (file) => ({ file, src: await readImageFile(file) })));
-    const insertedIds: string[] = [];
+    const pageForSizing = templateSet.pages.find((item) => item.id === pageId);
+    if (!pageForSizing) return;
+    const maxZ = Math.max(0, ...pageForSizing.elements.map((item) => item.zIndex || 0));
+    const sources: ClipboardDesignImage[] = loaded.map(({ file, src }, index) => ({ name: imageFileDisplayName(file, index), src }));
+    const { elements, assets } = await createClipboardImageElements(sources, pageForSizing, x, y, maxZ);
+    const insertedIds = elements.map((element) => element.id);
 
     updateTemplateSet((draft) => {
       const page = draft.pages.find((item) => item.id === pageId);
       if (!page) return;
-      const maxZ = Math.max(0, ...page.elements.map((item) => item.zIndex || 0));
-
-      loaded.forEach(({ file, src }, index) => {
-        const fileName = imageFileDisplayName(file, index);
-        const assetId = nanoid();
-        const element = createElement("image", x + index * 18, y + index * 18);
-        if (element.type !== "image") return;
-        const inserted = {
-          ...element,
-          id: nanoid(),
-          name: file.name.replace(/\.[^.]+$/, "") || "이미지",
-          width: 220,
-          height: 150,
-          src,
-          objectFit: "contain" as const,
-          zIndex: maxZ + index + 1,
-        };
-        draft.assets.push({ id: assetId, type: "image", name: file.name, url: src });
-        draft.assets[draft.assets.length - 1].name = fileName;
-        page.elements.push(inserted);
-        insertedIds.push(inserted.id);
-      });
+      draft.assets.push(...assets);
+      page.elements.push(...elements);
     });
 
     setSelectedPageId(pageId);
     setSelectedIds(insertedIds);
     setNotice(`${loaded.length}개 이미지를 추가했습니다.`);
+  }
+
+  async function addClipboardDesignImages(sources: ClipboardDesignImage[], pageId = selectedPage?.id, x = 120, y = 140) {
+    if (!pageId || !sources.length) return;
+    const pageForSizing = templateSet.pages.find((item) => item.id === pageId);
+    if (!pageForSizing) return;
+    const maxZ = Math.max(0, ...pageForSizing.elements.map((item) => item.zIndex || 0));
+    const { elements, assets } = await createClipboardImageElements(sources, pageForSizing, x, y, maxZ);
+    if (!elements.length) return;
+
+    updateTemplateSet((draft) => {
+      const page = draft.pages.find((item) => item.id === pageId);
+      if (!page) return;
+      draft.assets.push(...assets);
+      page.elements.push(...elements);
+    });
+    setSelectedPageId(pageId);
+    setSelectedIds(elements.map((element) => element.id));
+    setNotice("PowerPoint 디자인을 원본에 가까운 이미지로 붙여넣었습니다.");
+  }
+
+  function addClipboardElement(element: TemplateElement | null, pageId = selectedPage?.id, message = "클립보드 내용을 붙여넣었습니다.") {
+    if (!pageId || !element) return false;
+    updateTemplateSet((draft) => {
+      const page = draft.pages.find((item) => item.id === pageId);
+      if (!page) return;
+      page.elements.push(element);
+    });
+    setSelectedPageId(pageId);
+    setSelectedIds([element.id]);
+    setEditingTextElementId(element.type === "text" ? element.id : null);
+    setNotice(message);
+    return true;
   }
 
   function insertImageAsset(assetId: string, pageId = selectedPage?.id, x = 120, y = 140) {
@@ -1296,9 +1315,37 @@ function VisualTemplateStudioPageContent() {
         return;
       }
 
+      const x = selectedElement ? selectedElement.x + 24 : 120;
+      const y = selectedElement ? selectedElement.y + 24 : 140;
+      const clipboardImages = getClipboardDesignImages(event.clipboardData);
+      if (clipboardImages.length) {
+        event.preventDefault();
+        void addClipboardDesignImages(clipboardImages, selectedPage?.id, x, y);
+        return;
+      }
+
+      if (selectedPage) {
+        const maxZ = Math.max(0, ...selectedPage.elements.map((item) => item.zIndex || 0));
+        const richTextHtml = getClipboardRichTextHtml(event.clipboardData);
+        if (richTextHtml) {
+          event.preventDefault();
+          if (addClipboardElement(createClipboardRichTextElement(richTextHtml, selectedPage, x, y, maxZ + 1), selectedPage.id, "PowerPoint 텍스트 스타일을 리치 텍스트로 붙여넣었습니다.")) return;
+        }
+      }
+
       if (clipboardRef.current.length) {
         event.preventDefault();
         pasteElements();
+        return;
+      }
+
+      if (selectedPage) {
+        const maxZ = Math.max(0, ...selectedPage.elements.map((item) => item.zIndex || 0));
+        const plainText = getClipboardPlainText(event.clipboardData);
+        if (plainText) {
+          event.preventDefault();
+          if (addClipboardElement(createClipboardTextElement(plainText, selectedPage, x, y, maxZ + 1), selectedPage.id)) return;
+        }
       }
     }
 
