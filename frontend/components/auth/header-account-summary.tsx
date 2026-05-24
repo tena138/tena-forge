@@ -11,19 +11,23 @@ import { Input } from "@/components/ui/input";
 import { AcademyProfile, fetchMe, logout, updateMe } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, authHttp, getAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 
-const planLabels: Record<string, "plus" | "pro" | "business"> = {
-  free: "plus",
-  basic: "plus",
-  plus: "plus",
-  pro: "pro",
-  enterprise: "business",
-  business: "business",
+type PlanTone = "trial" | "free" | "basic" | "pro" | "enterprise";
+
+const planStyles: Record<PlanTone, string> = {
+  trial: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  free: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+  basic: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
+  pro: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
+  enterprise: "bg-slate-950 text-white ring-1 ring-slate-700",
 };
 
-const planStyles: Record<"plus" | "pro" | "business", string> = {
-  plus: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
-  pro: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
-  business: "bg-slate-950 text-white ring-1 ring-slate-700",
+const planNames: Record<string, { label: string; tone: PlanTone }> = {
+  free: { label: "Free", tone: "free" },
+  basic: { label: "Basic", tone: "basic" },
+  plus: { label: "Basic", tone: "basic" },
+  pro: { label: "Pro", tone: "pro" },
+  enterprise: { label: "Enterprise", tone: "enterprise" },
+  business: { label: "Enterprise", tone: "enterprise" },
 };
 
 type ProfileDraft = {
@@ -57,6 +61,26 @@ function formatDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function isFutureDate(value?: string | null) {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getTime() > Date.now();
+}
+
+function displayPlan(profile: AcademyProfile) {
+  const trialEndsAt = profile.trial_ends_at || profile.plan_expires_at;
+  const isTrial = profile.account_type !== "student" && !profile.requires_payment && isFutureDate(trialEndsAt);
+  if (isTrial) {
+    return { label: "Trial", tone: "trial" as PlanTone, status: "체험 중", statusClass: "text-emerald-500" };
+  }
+  if (profile.requires_payment) {
+    return { label: "Trial Expired", tone: "free" as PlanTone, status: "결제 필요", statusClass: "text-amber-500" };
+  }
+  const normalizedPlan = String(profile.plan || "free").toLowerCase();
+  const plan = planNames[normalizedPlan] || { label: normalizedPlan || "Free", tone: "free" as PlanTone };
+  return { ...plan, status: profile.is_active ? "활성" : "비활성", statusClass: profile.is_active ? "text-emerald-600" : "text-rose-600" };
 }
 
 export function HeaderAccountSummary() {
@@ -117,7 +141,7 @@ export function HeaderAccountSummary() {
   }
 
   const currentProfile = profile;
-  const plan = planLabels[currentProfile.plan] || "plus";
+  const plan = displayPlan(currentProfile);
   const initials = (currentProfile.academy_name || currentProfile.email).slice(0, 1).toUpperCase();
 
   function openProfileEditor() {
@@ -187,7 +211,7 @@ export function HeaderAccountSummary() {
           <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{currentProfile.academy_name}</span>
           <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{currentProfile.email}</span>
         </span>
-        <Badge className={`uppercase ${planStyles[plan]}`}>{plan}</Badge>
+        <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
       </button>
 
       {open && (
@@ -198,13 +222,13 @@ export function HeaderAccountSummary() {
                 <div className="truncate font-semibold">{currentProfile.academy_name}</div>
                 <div className="truncate text-xs text-muted-foreground">{currentProfile.email}</div>
               </div>
-              <Badge className={`uppercase ${planStyles[plan]}`}>{plan}</Badge>
+              <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
             </div>
             <div className="mt-3 rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">
               <div className="text-[11px] font-semibold uppercase text-muted-foreground">구독 플랜</div>
               <div className="mt-1 flex items-center justify-between">
-                <span className="text-sm font-bold uppercase">{plan}</span>
-                <span className="text-xs font-semibold text-emerald-600">활성</span>
+                <span className="text-sm font-bold">{plan.label}</span>
+                <span className={`text-xs font-semibold ${plan.statusClass}`}>{plan.status}</span>
               </div>
             </div>
             <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -243,16 +267,16 @@ export function HeaderAccountSummary() {
                   <div className="truncate text-sm font-semibold">{currentProfile.email}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{currentProfile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}</div>
                 </div>
-                <Badge className={`uppercase ${planStyles[plan]}`}>{plan}</Badge>
+                <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-md border bg-card/80 px-3 py-2">
                   <div className="font-semibold text-muted-foreground">가입 플랜</div>
-                  <div className="mt-1 font-bold uppercase">{plan}</div>
+                  <div className="mt-1 font-bold">{plan.label}</div>
                 </div>
                 <div className="rounded-md border bg-card/80 px-3 py-2">
                   <div className="font-semibold text-muted-foreground">계정 상태</div>
-                  <div className="mt-1 font-bold text-emerald-600">{currentProfile.is_active ? "활성" : "비활성"}</div>
+                  <div className={`mt-1 font-bold ${plan.statusClass}`}>{plan.status}</div>
                 </div>
               </div>
             </div>
