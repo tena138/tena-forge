@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { FileDown, Loader2, Sparkles } from "lucide-react";
+import { FileDown, Loader2 } from "lucide-react";
 
 import { TemplatePageView } from "@/components/templates/visual-template-renderer";
 import { Badge } from "@/components/ui/badge";
@@ -451,10 +451,7 @@ export function ExportModal({
             </div>
 
             {visualOptions.length ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
-                  <Sparkles className="h-4 w-4" /> Visual Template Studio
-                </div>
+              <div>
                 <div className="grid max-h-[620px] gap-4 overflow-auto pr-1 xl:grid-cols-2">
                   {visualOptions.map((option) => (
                     <button
@@ -474,7 +471,6 @@ export function ExportModal({
                           <span className="line-clamp-1 font-semibold text-white">{option.title}</span>
                           <Badge variant="secondary">{option.badge}</Badge>
                         </div>
-                        {option.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-400">{option.description}</p> : null}
                       </div>
                     </button>
                   ))}
