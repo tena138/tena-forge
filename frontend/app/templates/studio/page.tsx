@@ -47,6 +47,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget, readFileAsDataUrl } from "@/lib/clipboardImages";
 import { ClipboardDesignImage, createClipboardEditableElements, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
+import { importPowerPointFile } from "@/lib/powerpointPptxImport";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createElement, createProblemRegion, createTemplateSet, pageRoleLabels, visualTemplateCategories } from "@/lib/visualTemplatePresets";
 import { ElementStyle, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
@@ -819,6 +820,7 @@ function VisualTemplateStudioPageContent() {
   const clipboardRef = useRef<TemplateElement[]>([]);
   const dragRef = useRef<DragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const pptxInputRef = useRef<HTMLInputElement | null>(null);
   const persistedTemplateIdRef = useRef<string | null>(requestedId);
   const lastServerSavedSnapshotRef = useRef(templateSnapshot(templateSet));
   const saveInFlightRef = useRef(false);
@@ -1323,6 +1325,42 @@ function VisualTemplateStudioPageContent() {
     event.target.value = "";
   }
 
+  async function importPptxFile(file: File, pageId = selectedPage?.id) {
+    if (!pageId || !file) return;
+    if (!file.name.toLowerCase().endsWith(".pptx")) {
+      setNotice("PPTX 파일만 가져올 수 있습니다.");
+      return;
+    }
+    const pageForImport = templateSet.pages.find((item) => item.id === pageId);
+    if (!pageForImport) return;
+
+    try {
+      const imported = await importPowerPointFile(file, pageForImport);
+      if (!imported.elements.length) {
+        setNotice("첫 번째 슬라이드에서 편집 가능한 요소를 찾지 못했습니다.");
+        return;
+      }
+      updateTemplateSet((draft) => {
+        const page = draft.pages.find((item) => item.id === pageId);
+        if (!page) return;
+        draft.assets.push(...imported.assets);
+        page.elements.push(...imported.elements);
+      });
+      setSelectedPageId(pageId);
+      setSelectedIds(imported.elements.map((element) => element.id));
+      setEditingTextElementId(imported.elements.length === 1 && imported.elements[0].type === "text" ? imported.elements[0].id : null);
+      setNotice(`${imported.slideName} 첫 슬라이드를 ${imported.elements.length}개의 편집 가능한 요소로 가져왔습니다.`);
+    } catch (error: any) {
+      setNotice(error?.message || "PPTX를 가져오지 못했습니다.");
+    }
+  }
+
+  function handlePptxInput(event: ReactChangeEvent<HTMLInputElement>) {
+    const file = Array.from(event.target.files || [])[0];
+    if (file) void importPptxFile(file);
+    event.target.value = "";
+  }
+
   useEffect(() => {
     function onPaste(event: ClipboardEvent) {
       if (isEditableClipboardTarget(event.target)) return;
@@ -1339,11 +1377,15 @@ function VisualTemplateStudioPageContent() {
         void addClipboardEditableContent(event.clipboardData, selectedPage.id, x, y).then((handled) => {
           if (handled) return;
           if (clipboardImages.length) {
-            void addClipboardDesignImages(clipboardImages, selectedPage.id, x, y);
+            void addClipboardDesignImages(clipboardImages, selectedPage.id, x, y).then(() => {
+              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. PPTX 가져오기를 사용하면 더 안정적으로 요소화할 수 있습니다.");
+            });
             return;
           }
           if (imageFiles.length) {
-            void addImageFiles(imageFiles, selectedPage.id, x, y);
+            void addImageFiles(imageFiles, selectedPage.id, x, y).then(() => {
+              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. PPTX 가져오기를 사용하면 더 안정적으로 요소화할 수 있습니다.");
+            });
             return;
           }
           const maxZ = Math.max(0, ...selectedPage.elements.map((item) => item.zIndex || 0));
@@ -1356,13 +1398,17 @@ function VisualTemplateStudioPageContent() {
 
       if (imageFiles.length) {
         event.preventDefault();
-        void addImageFiles(imageFiles, selectedPage?.id, x, y);
+        void addImageFiles(imageFiles, selectedPage?.id, x, y).then(() => {
+          setNotice("PowerPoint가 클립보드에는 이미지만 제공했습니다. 요소 편집이 필요하면 PPTX 가져오기를 사용하세요.");
+        });
         return;
       }
 
       if (clipboardImages.length) {
         event.preventDefault();
-        void addClipboardDesignImages(clipboardImages, selectedPage?.id, x, y);
+        void addClipboardDesignImages(clipboardImages, selectedPage?.id, x, y).then(() => {
+          setNotice("PowerPoint가 클립보드에는 이미지만 제공했습니다. 요소 편집이 필요하면 PPTX 가져오기를 사용하세요.");
+        });
         return;
       }
 
@@ -1600,6 +1646,7 @@ function VisualTemplateStudioPageContent() {
 
           <div className="rounded-[14px] border border-dashed border-violet-300/35 bg-violet-500/[0.08] p-3">
             <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml" multiple className="hidden" onChange={handleImageInput} />
+            <input ref={pptxInputRef} type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={handlePptxInput} />
             <button
               type="button"
               className="flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-violet-300/45 hover:bg-violet-400/10"
@@ -1609,6 +1656,19 @@ function VisualTemplateStudioPageContent() {
                 <ImageIcon className="h-5 w-5" />
               </span>
               <span className="block text-sm font-bold text-white">이미지 업로드</span>
+            </button>
+            <button
+              type="button"
+              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-cyan-300/45 hover:bg-cyan-400/10"
+              onClick={() => pptxInputRef.current?.click()}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-cyan-400/15 text-cyan-100 ring-1 ring-cyan-300/20">
+                <FileStack className="h-5 w-5" />
+              </span>
+              <span className="block min-w-0">
+                <span className="block text-sm font-bold text-white">PPTX 가져오기</span>
+                <span className="mt-0.5 block text-xs text-slate-400">첫 슬라이드를 편집 가능한 요소로 변환</span>
+              </span>
             </button>
             {imageAssets.length ? (
               <div className="mt-3 grid grid-cols-3 gap-2">
