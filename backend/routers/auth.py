@@ -23,7 +23,9 @@ from models import (
     OAuthAccount,
     OAuthProvider,
     PasswordResetToken,
+    Plan,
     RefreshToken,
+    Subscription,
     TotpSecret,
 )
 from schemas import (
@@ -87,6 +89,7 @@ from services.auth_security import (
     verify_refresh_record,
     verify_totp,
 )
+from services.subject_engines import subject_engine_pricing
 
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -160,6 +163,78 @@ def _create_password_reset(db: Session, academy: Academy, ip_address: str) -> st
 def _default_academy_name(email: str) -> str:
     local_part = email.split("@", 1)[0].strip()
     return (local_part[:64] or "Tena 사용자")
+
+
+def _safe_redirect(value: str | None) -> str | None:
+    if not value:
+        return None
+    clean = value.strip()
+    if not clean.startswith("/") or clean.startswith("//"):
+        return None
+    return clean[:500]
+
+
+def _safe_account_type(value: str | None) -> str:
+    return value if value in {"academy", "student"} else "academy"
+
+
+def _safe_oauth_mode(value: str | None) -> str:
+    return "signup" if value == "signup" else "login"
+
+
+def _store_oauth_intent(request: Request, *, mode: str, account_type: str | None, redirect: str | None) -> None:
+    request.session["oauth_intent"] = {
+        "mode": _safe_oauth_mode(mode),
+        "account_type": _safe_account_type(account_type) if account_type else None,
+        "redirect": _safe_redirect(redirect),
+    }
+
+
+def _consume_oauth_intent(request: Request) -> dict:
+    try:
+        data = request.session.pop("oauth_intent", {})
+    except AssertionError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    return {
+        "mode": _safe_oauth_mode(data.get("mode")),
+        "account_type": _safe_account_type(data.get("account_type")) if data.get("account_type") else None,
+        "redirect": _safe_redirect(data.get("redirect")),
+    }
+
+
+def _oauth_error_redirect(code: str, *, mode: str = "login") -> RedirectResponse:
+    target = "/register" if mode == "signup" else "/login"
+    return RedirectResponse(f"{settings.frontend_url}{target}?{urlencode({'oauth_error': code})}", status_code=302)
+
+
+def _start_basic_trial(db: Session, academy: Academy) -> None:
+    if academy.account_type != "academy":
+        academy.plan = AcademyPlan.free
+        academy.plan_expires_at = None
+        return
+    now = now_utc()
+    trial_end = now + timedelta(days=7)
+    academy.plan = AcademyPlan.basic
+    academy.plan_expires_at = trial_end
+    plan_price = db.scalar(select(Plan.monthly_price).where(Plan.code == "basic")) or 48_000
+    pricing = subject_engine_pricing(int(plan_price), ["math"])
+    db.add(
+        Subscription(
+            user_id=str(academy.id),
+            plan_code="basic",
+            status="trialing",
+            provider="trial",
+            current_period_start=now,
+            current_period_end=trial_end,
+            enabled_subject_engines=pricing["enabled_subject_engines"],
+            subject_engine_count=int(pricing["subject_engine_count"]),
+            subject_multiplier=float(pricing["subject_multiplier"]),
+            final_monthly_price=int(pricing["final_monthly_price"]),
+            final_annual_price=int(pricing["final_annual_price"]),
+        )
+    )
 
 
 def _registration_code_proof(email: str, code: str, nonce: str, expires_at: int) -> str:
@@ -254,6 +329,8 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         email_verified_at=now_utc(),
     )
     db.add(academy)
+    db.flush()
+    _start_basic_trial(db, academy)
     db.commit()
     return {"message": "회원가입이 완료되었습니다.", "email": academy.email}
 
@@ -621,49 +698,60 @@ def _oauth_client(name: str):
 
 
 @router.get("/google")
-async def google_login(request: Request):
+async def google_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
+    _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
     redirect_uri = str(request.url_for("google_callback"))
     return await _oauth_client("google").authorize_redirect(request, redirect_uri)
 
 
 @router.get("/google/callback", name="google_callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
+    intent = _consume_oauth_intent(request)
     token = await _oauth_client("google").authorize_access_token(request)
     info = token.get("userinfo") or await _oauth_client("google").parse_id_token(request, token)
-    return _oauth_finalize(db, request, "google", str(info["sub"]), info.get("email"), info.get("name") or "Google Academy", token)
+    return _oauth_finalize(db, request, "google", str(info["sub"]), info.get("email"), info.get("name") or "Google Academy", token, intent)
 
 
 @router.get("/kakao")
-async def kakao_login(request: Request):
+async def kakao_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
+    _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
     redirect_uri = str(request.url_for("kakao_callback"))
     return await _oauth_client("kakao").authorize_redirect(request, redirect_uri)
 
 
 @router.get("/kakao/callback", name="kakao_callback")
 async def kakao_callback(request: Request, db: Session = Depends(get_db)):
+    intent = _consume_oauth_intent(request)
     token = await _oauth_client("kakao").authorize_access_token(request)
     response = await _oauth_client("kakao").get("https://kapi.kakao.com/v2/user/me", token=token)
     data = response.json()
     account = data.get("kakao_account", {})
     profile = account.get("profile", {})
-    return _oauth_finalize(db, request, "kakao", str(data["id"]), account.get("email"), profile.get("nickname") or "Kakao Academy", token)
+    return _oauth_finalize(db, request, "kakao", str(data["id"]), account.get("email"), profile.get("nickname") or "Kakao Academy", token, intent)
 
 
 @router.get("/naver")
-async def naver_login(request: Request):
+async def naver_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
+    _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
     redirect_uri = str(request.url_for("naver_callback"))
     return await _oauth_client("naver").authorize_redirect(request, redirect_uri)
 
 
 @router.get("/naver/callback", name="naver_callback")
 async def naver_callback(request: Request, db: Session = Depends(get_db)):
+    intent = _consume_oauth_intent(request)
     token = await _oauth_client("naver").authorize_access_token(request)
     response = await _oauth_client("naver").get("https://openapi.naver.com/v1/nid/me", token=token)
     data = response.json().get("response", {})
-    return _oauth_finalize(db, request, "naver", str(data["id"]), data.get("email"), data.get("name") or data.get("nickname") or "Naver Academy", token)
+    return _oauth_finalize(db, request, "naver", str(data["id"]), data.get("email"), data.get("name") or data.get("nickname") or "Naver Academy", token, intent)
 
 
-def _oauth_finalize(db: Session, request: Request, provider: str, provider_account_id: str, email: str | None, name: str, token: dict):
+def _oauth_finalize(db: Session, request: Request, provider: str, provider_account_id: str, email: str | None, name: str, token: dict, intent: dict | None = None):
+    intent = intent or {}
+    mode = _safe_oauth_mode(intent.get("mode"))
+    requested_account_type = _safe_account_type(intent.get("account_type")) if intent.get("account_type") else None
+    if mode == "signup" and not requested_account_type:
+        return _oauth_error_redirect("account_type_required", mode=mode)
     oauth_account = db.scalar(
         select(OAuthAccount).where(
             OAuthAccount.provider == OAuthProvider(provider),
@@ -672,18 +760,27 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
     )
     if oauth_account:
         academy = oauth_account.academy
+        if mode == "signup" and requested_account_type and academy.account_type != requested_account_type:
+            return _oauth_error_redirect("account_type_conflict", mode=mode)
     else:
         academy = db.scalar(select(Academy).where(Academy.email == email.lower())) if email else None
+        if academy and mode == "signup" and requested_account_type and academy.account_type != requested_account_type:
+            return _oauth_error_redirect("account_type_conflict", mode=mode)
+        if not academy and mode == "login":
+            return _oauth_error_redirect("signup_required", mode=mode)
         if not academy:
             academy = Academy(
                 email=(email or f"{provider_account_id}@{provider}.oauth").lower(),
                 academy_name=name,
+                account_type=requested_account_type or "academy",
                 email_verified=True,
                 email_verified_at=now_utc(),
                 is_active=True,
                 password_hash=None,
             )
             db.add(academy)
+            db.flush()
+            _start_basic_trial(db, academy)
             db.flush()
         oauth_account = OAuthAccount(
             academy_id=academy.id,
@@ -706,7 +803,13 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
     access_token, _, _ = create_access_token(academy)
     refresh_token, _ = issue_refresh_token(db, request, academy, remember=True)
     db.commit()
-    query = urlencode({"provider": provider})
-    redirect = RedirectResponse(f"{settings.frontend_url}/#access_token={access_token}&{query}", status_code=302)
+    fragment = urlencode(
+        {
+            "access_token": access_token,
+            "provider": provider,
+            "redirect": intent.get("redirect") or "",
+        }
+    )
+    redirect = RedirectResponse(f"{settings.frontend_url}/#{fragment}", status_code=302)
     set_refresh_cookie(redirect, refresh_token, remember=True)
     return redirect

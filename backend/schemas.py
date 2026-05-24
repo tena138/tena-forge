@@ -1173,6 +1173,8 @@ class AcademyProfile(BaseModel):
     address: str | None = None
     plan: str
     plan_expires_at: datetime | None = None
+    trial_ends_at: datetime | None = None
+    requires_payment: bool = False
     is_active: bool
     is_suspended: bool
     suspension_reason: str | None = None

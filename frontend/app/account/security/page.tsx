@@ -132,8 +132,8 @@ export default function AccountSecurityPage() {
 
       <Card>
         <CardHeader><CardTitle>연결된 소셜 계정</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          {["Google", "카카오", "네이버"].map((provider) => (
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {["카카오", "네이버"].map((provider) => (
             <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <div>
                 <div className="font-semibold">{provider}</div>
@@ -259,9 +259,9 @@ function downloadBackupCodes(codes: string[]) {
 }
 
 function providerName(provider: string) {
-  return provider === "google" ? "Google" : provider === "kakao" ? "카카오" : "네이버";
+  return provider === "kakao" ? "카카오" : "네이버";
 }
 
 function providerKey(name: string) {
-  return name === "Google" ? "google" : name === "카카오" ? "kakao" : "naver";
+  return name === "카카오" ? "kakao" : "naver";
 }

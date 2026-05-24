@@ -21,6 +21,7 @@ import {
   resolveSelectedPackages,
   stringifySelectedPackageIds,
 } from "@/lib/plan-pricing";
+import { ensureAccessToken } from "@/lib/auth-client";
 
 export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: PaidPlanType; billingCycle: BillingCycle; packages: string }) {
   const router = useRouter();
@@ -40,6 +41,12 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
     setError("");
     setLoading(true);
     try {
+      const token = await ensureAccessToken();
+      if (!token) {
+        const current = `${window.location.pathname}${window.location.search}`;
+        router.push(`/login?redirect=${encodeURIComponent(current)}`);
+        return;
+      }
       const checkoutResponse = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,7 +77,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
 
       const verifyResponse = await fetch("/api/billing/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ paymentId: checkout.paymentId }),
       });
       const verify = await verifyResponse.json();

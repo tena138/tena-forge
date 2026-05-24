@@ -15,6 +15,7 @@ import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
 const marketingRoutes = ["/", "/plan", "/checkout", "/pricing", "/terms", "/privacy", "/copyright-policy"];
+const billingAllowedRoutes = ["/billing", "/plan", "/checkout", "/account/profile", "/account/security"];
 
 function isAuthFailure(error: unknown) {
   const status = (error as { response?: { status?: number } })?.response?.status;
@@ -60,7 +61,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
         try {
-          await fetchMe();
+          const profile = await fetchMe();
+          const canVisitForBilling = billingAllowedRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+          if (profile.account_type !== "student" && profile.requires_payment && !canVisitForBilling) {
+            router.replace("/billing?trial=expired");
+            return;
+          }
         } catch (error) {
           if (!active) return;
           if (isAuthFailure(error)) {
@@ -161,13 +167,13 @@ function OAuthFragmentCapture() {
     fetchMe()
       .then((profile) => {
         if (!active) return;
-        const destination = resolvePostLoginRedirect(pathname, profile.account_type);
+        const destination = resolvePostLoginRedirect(params.get("redirect") || pathname, profile.account_type);
         if (destination === pathname) router.refresh();
         else router.replace(destination);
       })
       .catch(() => {
         if (!active) return;
-        const destination = resolvePostLoginRedirect(pathname);
+        const destination = resolvePostLoginRedirect(params.get("redirect") || pathname);
         if (destination === pathname) router.refresh();
         else router.replace(destination);
       });

@@ -7,8 +7,10 @@ import { SiteLogoMark } from "@/components/site-logo";
 import { Button } from "@/components/ui/button";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+type OAuthProvider = "kakao" | "naver";
+type OAuthMode = "login" | "signup";
 
-export function AuthCard({ title, children }: { title: string; subtitle?: string; children?: React.ReactNode }) {
+export function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children?: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <section className="w-full max-w-[430px] rounded-[12px] border border-white/10 bg-card/90 p-8 shadow-[0_28px_80px_rgba(0,0,0,0.40)] backdrop-blur">
@@ -17,6 +19,7 @@ export function AuthCard({ title, children }: { title: string; subtitle?: string
         </Link>
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold tracking-normal text-white">{title}</h1>
+          {subtitle ? <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p> : null}
         </div>
         {children}
       </section>
@@ -29,34 +32,76 @@ export function FieldError({ message }: { message?: string }) {
   return <p className="mt-1.5 text-xs font-medium text-red-300">{message}</p>;
 }
 
-export function SocialButtons({ compact = false }: { compact?: boolean }) {
+export function SocialButtons({
+  compact = false,
+  mode = "login",
+  accountType,
+  redirect,
+  disabled = false,
+}: {
+  compact?: boolean;
+  mode?: OAuthMode;
+  accountType?: "academy" | "student";
+  redirect?: string | null;
+  disabled?: boolean;
+}) {
   if (compact) {
     return (
-      <div className="grid grid-cols-3 gap-2">
-        <SocialButton provider="google" label="G" compact />
-        <SocialButton provider="kakao" label="K" compact />
-        <SocialButton provider="naver" label="N" compact />
+      <div className="grid grid-cols-2 gap-2">
+        <SocialButton provider="kakao" label="K" compact mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
+        <SocialButton provider="naver" label="N" compact mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
       </div>
     );
   }
+  const suffix = mode === "signup" ? "로 가입하기" : "로 로그인";
   return (
     <div className="space-y-2">
-      <SocialButton provider="google" label="Google로 로그인" />
-      <SocialButton provider="kakao" label="카카오로 로그인" />
-      <SocialButton provider="naver" label="네이버로 로그인" />
+      <SocialButton provider="kakao" label={`카카오${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
+      <SocialButton provider="naver" label={`네이버${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
     </div>
   );
 }
 
-function SocialButton({ provider, label, compact }: { provider: "google" | "kakao" | "naver"; label: string; compact?: boolean }) {
+function oauthHref(provider: OAuthProvider, mode: OAuthMode, accountType?: "academy" | "student", redirect?: string | null) {
+  const params = new URLSearchParams({ mode });
+  if (accountType) params.set("account_type", accountType);
+  if (redirect) params.set("redirect", redirect);
+  return `${API_URL}/api/auth/${provider}?${params.toString()}`;
+}
+
+function SocialButton({
+  provider,
+  label,
+  compact,
+  mode,
+  accountType,
+  redirect,
+  disabled,
+}: {
+  provider: OAuthProvider;
+  label: string;
+  compact?: boolean;
+  mode: OAuthMode;
+  accountType?: "academy" | "student";
+  redirect?: string | null;
+  disabled?: boolean;
+}) {
   const styles = {
-    google: "border-white/12 bg-white/[0.06] text-slate-100 hover:bg-white/[0.10]",
     kakao: "border-[#FEE500] bg-[#FEE500] text-black hover:bg-[#f5dc00]",
     naver: "border-[#03C75A] bg-[#03C75A] text-white hover:bg-[#02b350]",
   }[provider];
-  const mark = provider === "google" ? "G" : provider === "kakao" ? "K" : "N";
+  const mark = provider === "kakao" ? "K" : "N";
+  const className = `inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border text-sm font-semibold transition ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
+  if (disabled) {
+    return (
+      <button type="button" disabled className={className}>
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 text-xs font-black text-slate-900">{mark}</span>
+        {compact ? null : label}
+      </button>
+    );
+  }
   return (
-    <a href={`${API_URL}/api/auth/${provider}`} className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border text-sm font-semibold transition ${styles}`}>
+    <a href={oauthHref(provider, mode, accountType, redirect)} className={className}>
       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 text-xs font-black text-slate-900">{mark}</span>
       {compact ? null : label}
     </a>

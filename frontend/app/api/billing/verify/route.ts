@@ -61,7 +61,27 @@ export async function POST(request: NextRequest) {
     }
 
     const updated = await updateSubscriptionOrder(paymentId, { status: "paid", paymentSnapshot: payment });
-    // TODO: Create/update the production subscription record and renewal schedule after billing-key renewal is enabled.
+    const authorization = request.headers.get("authorization");
+    if (authorization && updated) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const activation = await fetch(`${apiUrl}/api/saas/billing/activate`, {
+        method: "POST",
+        headers: {
+          Authorization: authorization,
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify({
+          plan_code: updated.planType,
+          billing_cycle: updated.billingCycle,
+          payment_id: paymentId,
+        }),
+      });
+      if (!activation.ok) {
+        const detail = await activation.json().catch(() => ({}));
+        return NextResponse.json({ message: detail?.detail || "결제는 확인됐지만 구독 활성화에 실패했습니다." }, { status: 502 });
+      }
+    }
     return NextResponse.json({ verified: true, order: updated });
   } catch (error: any) {
     return NextResponse.json({ message: error?.message || "결제 검증에 실패했습니다." }, { status: 500 });

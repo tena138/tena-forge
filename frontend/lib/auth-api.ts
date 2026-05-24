@@ -10,6 +10,9 @@ export type AcademyProfile = {
   phone?: string | null;
   address?: string | null;
   plan: string;
+  plan_expires_at?: string | null;
+  trial_ends_at?: string | null;
+  requires_payment?: boolean;
   is_active: boolean;
   is_suspended: boolean;
   suspension_reason?: string | null;

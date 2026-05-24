@@ -175,9 +175,14 @@ def plan_cost_policy(db: Session | None, plan_code: str | None) -> PlanCostPolic
 
 
 def active_plan_for_user(db: Session, user_id: str) -> tuple[Plan | None, Subscription | None, PlanCostPolicy]:
+    now = datetime.utcnow()
     subscription = db.scalar(
         select(Subscription)
-        .where(Subscription.user_id == user_id, Subscription.status.in_(["trialing", "active"]))
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.status.in_(["trialing", "active"]),
+            ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > now)),
+        )
         .order_by(Subscription.created_at.desc())
     )
     academy = db.get(Academy, user_id)
@@ -189,6 +194,24 @@ def active_plan_for_user(db: Session, user_id: str) -> tuple[Plan | None, Subscr
         or db.scalar(select(Plan).where(Plan.code == "free"))
     )
     return plan, subscription, plan_cost_policy(db, plan_code)
+
+
+def academy_payment_required(db: Session, user_id: str) -> bool:
+    academy = db.get(Academy, user_id)
+    if not academy or academy.account_type != "academy" or not academy.plan_expires_at:
+        return False
+    if academy.plan_expires_at > datetime.utcnow():
+        return False
+    subscription = db.scalar(
+        select(Subscription)
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.status == "active",
+            ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > datetime.utcnow())),
+        )
+        .order_by(Subscription.created_at.desc())
+    )
+    return subscription is None
 
 
 def monthly_usage_totals(db: Session, user_id: str, now: datetime | None = None) -> dict[str, float]:
@@ -324,6 +347,15 @@ def enforce_extraction_preflight(
     page_count: int,
     upload_mb_to_add: float | None = None,
 ) -> PlanCostPolicy:
+    if academy_payment_required(db, user_id):
+        policy = plan_cost_policy(db, "basic")
+        _raise_limit(
+            "TRIAL_EXPIRED",
+            "Your Basic trial has ended. Add a payment method or upgrade your plan to continue.",
+            policy=policy,
+            estimate=estimate,
+            current=monthly_usage_totals(db, user_id),
+        )
     _, _, policy = active_plan_for_user(db, user_id)
     current = monthly_usage_totals(db, user_id)
     upload_mb = file_size_mb if upload_mb_to_add is None else upload_mb_to_add

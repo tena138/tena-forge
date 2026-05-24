@@ -1,12 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import JobOutput, ProcessingJob, Subscription, SubscriptionEvent
+from models import Academy, AcademyPlan, JobOutput, ProcessingJob, Subscription, SubscriptionEvent
 from schemas import CheckoutRequest, CheckoutResponse, ProcessingJobCreate, ProcessingJobRead, SignedUrlResponse, UsageSummaryRead
 from services.ownership import current_owner_id
 from services.saas_security import audit, create_signed_url, enforce_usage_limit, ensure_default_plans, get_roles, usage_cost_summary, usage_summary
@@ -14,6 +15,55 @@ from services.usage_cost_policy import enforce_extraction_preflight, estimate_ex
 from services.subject_engines import normalize_subject_engines, subject_engine_pricing
 
 router = APIRouter(prefix="/api/saas", tags=["saas"])
+
+
+class BillingActivationRequest(BaseModel):
+    plan_code: str
+    billing_cycle: str = "monthly"
+    enabled_subject_engines: list[str] | None = None
+    payment_id: str | None = None
+
+
+def _activate_subscription(
+    db: Session,
+    user_id: str,
+    *,
+    plan_code: str,
+    billing_cycle: str = "monthly",
+    enabled_subject_engines: list[str] | None = None,
+    provider: str = "mock",
+    provider_subscription_id: str | None = None,
+) -> Subscription:
+    from models import Plan
+
+    plan = db.scalar(select(Plan).where(Plan.code == plan_code))
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+    now = datetime.utcnow()
+    period_days = 365 if billing_cycle == "annual" else 31
+    enabled_engines = normalize_subject_engines(enabled_subject_engines or getattr(plan, "enabled_subject_engines", None) or ["math"])
+    pricing = subject_engine_pricing(plan.monthly_price, enabled_engines)
+    subscription = Subscription(
+        user_id=user_id,
+        plan_code=plan_code,
+        status="active",
+        provider=provider,
+        provider_subscription_id=provider_subscription_id,
+        current_period_start=now,
+        current_period_end=now + timedelta(days=period_days),
+        enabled_subject_engines=pricing["enabled_subject_engines"],
+        subject_engine_count=int(pricing["subject_engine_count"]),
+        subject_multiplier=float(pricing["subject_multiplier"]),
+        final_monthly_price=int(pricing["final_monthly_price"]),
+        final_annual_price=int(pricing["final_annual_price"]),
+    )
+    db.add(subscription)
+    academy = db.get(Academy, user_id)
+    if academy and academy.account_type == "academy":
+        canonical = "pro" if str(plan_code).startswith("pro") or str(plan_code) == "team" else "basic"
+        academy.plan = AcademyPlan.pro if canonical == "pro" else AcademyPlan.basic
+        academy.plan_expires_at = None
+    return subscription
 
 
 @router.get("/roles")
@@ -49,35 +99,49 @@ def list_plans(db: Session = Depends(get_db)):
 def create_checkout(payload: CheckoutRequest, request: Request, db: Session = Depends(get_db)):
     user_id = current_owner_id(request)
     ensure_default_plans(db)
-    from models import Plan
 
-    plan = db.scalar(select(Plan).where(Plan.code == payload.plan_code))
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found.")
-    enabled_engines = normalize_subject_engines(payload.enabled_subject_engines)
-    pricing = subject_engine_pricing(plan.monthly_price, enabled_engines)
-    subscription = Subscription(
-        user_id=user_id,
+    subscription = _activate_subscription(
+        db,
+        user_id,
         plan_code=payload.plan_code,
-        status="active",
         provider="mock",
-        current_period_start=datetime.utcnow(),
-        enabled_subject_engines=pricing["enabled_subject_engines"],
-        subject_engine_count=int(pricing["subject_engine_count"]),
-        subject_multiplier=float(pricing["subject_multiplier"]),
-        final_monthly_price=int(pricing["final_monthly_price"]),
-        final_annual_price=int(pricing["final_annual_price"]),
+        enabled_subject_engines=payload.enabled_subject_engines,
     )
-    db.add(subscription)
     event_payload = {
         "plan_code": payload.plan_code,
-        "enabled_subject_engines": pricing["enabled_subject_engines"],
-        "final_monthly_price": pricing["final_monthly_price"],
+        "enabled_subject_engines": subscription.enabled_subject_engines,
+        "final_monthly_price": subscription.final_monthly_price,
     }
     db.add(SubscriptionEvent(provider="mock", provider_event_id=f"checkout-{subscription.id}", event_type="subscription.mock_checkout", payload=event_payload, processed_at=datetime.utcnow()))
     audit(db, user_id, "subscription.checkout.mock", "subscription", str(subscription.id), event_payload)
     db.commit()
     return {"provider": "mock", "checkout_url": "/billing?mock=success", "message": "개발용 mock 결제가 완료되었습니다."}
+
+
+@router.post("/billing/activate")
+def activate_paid_subscription(payload: BillingActivationRequest, request: Request, db: Session = Depends(get_db)):
+    user_id = current_owner_id(request)
+    ensure_default_plans(db)
+    subscription = _activate_subscription(
+        db,
+        user_id,
+        plan_code=payload.plan_code,
+        billing_cycle=payload.billing_cycle,
+        enabled_subject_engines=payload.enabled_subject_engines,
+        provider="portone",
+        provider_subscription_id=payload.payment_id,
+    )
+    event_payload = {
+        "plan_code": payload.plan_code,
+        "billing_cycle": payload.billing_cycle,
+        "payment_id": payload.payment_id,
+        "enabled_subject_engines": subscription.enabled_subject_engines,
+        "final_monthly_price": subscription.final_monthly_price,
+    }
+    db.add(SubscriptionEvent(provider="portone", provider_event_id=f"activate-{payload.payment_id or subscription.id}", event_type="subscription.activated", payload=event_payload, processed_at=datetime.utcnow()))
+    audit(db, user_id, "subscription.activated", "subscription", str(subscription.id), event_payload)
+    db.commit()
+    return {"ok": True, "subscription_id": str(subscription.id), "plan_code": subscription.plan_code}
 
 
 @router.post("/jobs", response_model=ProcessingJobRead)

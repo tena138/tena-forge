@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from jose import ExpiredSignatureError, JWTError
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import inspect, select, text
 
 from database import Base, SessionLocal, engine, get_settings
@@ -23,6 +24,14 @@ from services.private_files import guess_media_type, static_file_path, verify_st
 settings = get_settings()
 
 app = FastAPI(title="Tena Forge API")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    session_cookie="tena_oauth_session",
+    same_site="lax",
+    https_only=settings.refresh_cookie_secure,
+)
 
 def _origin_values(*values: str) -> set[str]:
     origins: set[str] = set()

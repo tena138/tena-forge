@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
-import { getUsageSummary, listPlans, mockCheckout, Plan, UsageSummary } from "@/lib/saas";
+import { getUsageSummary, listPlans, Plan, UsageSummary } from "@/lib/saas";
 
 const subjectEngineOptions = [
   { code: "math", label: "Math" },
@@ -22,7 +22,6 @@ export default function BillingPage() {
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedEngines, setSelectedEngines] = useState<string[]>(["math"]);
-  const [message, setMessage] = useState("");
 
   useEffect(() => {
     getUsageSummary()
@@ -39,12 +38,6 @@ export default function BillingPage() {
       const next = current.includes(engine) ? current.filter((item) => item !== engine) : [...current, engine];
       return next.length ? next : ["math"];
     });
-  }
-
-  async function checkout(plan: string) {
-    const result = await mockCheckout(plan, selectedEngines);
-    setMessage(result.message);
-    setSummary(await getUsageSummary());
   }
 
   return (
@@ -101,13 +94,15 @@ export default function BillingPage() {
               <p className="mt-1 text-xs text-slate-500">
                 Base {won(plan.monthly_price)} x {multiplier} engine{multiplier > 1 ? "s" : ""}
               </p>
-              <Button className="mt-5 w-full" onClick={() => checkout(plan.code)}>mock 업그레이드</Button>
+              {plan.code === "basic" || plan.code === "pro" ? (
+                <Link className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90" href={`/plan/${plan.code}`}>
+                  결제 / 업그레이드
+                </Link>
+              ) : null}
             </div>
           );
         })}
       </section>
-
-      {message && <p className="rounded-md border border-violet-300/20 bg-violet-500/10 p-3 text-sm text-violet-100">{message}</p>}
     </div>
   );
 }

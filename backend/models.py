@@ -119,6 +119,14 @@ class Academy(Base):
     def totp_enabled_at(self) -> datetime | None:
         return self.totp_secret.enabled_at if self.totp_secret and self.totp_secret.enabled else None
 
+    @property
+    def trial_ends_at(self) -> datetime | None:
+        return self.plan_expires_at if self.account_type == "academy" else None
+
+    @property
+    def requires_payment(self) -> bool:
+        return bool(self.account_type == "academy" and self.plan_expires_at and self.plan_expires_at <= datetime.utcnow())
+
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"

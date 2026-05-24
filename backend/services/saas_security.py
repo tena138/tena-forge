@@ -112,9 +112,14 @@ def ensure_default_plans(db: Session) -> None:
 
 
 def active_subscription(db: Session, user_id: str) -> Subscription | None:
+    now = datetime.utcnow()
     return db.scalar(
         select(Subscription)
-        .where(Subscription.user_id == user_id, Subscription.status.in_(["trialing", "active"]))
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.status.in_(["trialing", "active"]),
+            ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > now)),
+        )
         .order_by(Subscription.created_at.desc())
     )
 
