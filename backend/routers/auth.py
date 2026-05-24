@@ -13,7 +13,7 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from database import get_db, get_settings
@@ -133,15 +133,46 @@ if settings.naver_client_id and settings.naver_client_secret:
     )
 
 
-def _profile(academy: Academy) -> AcademyProfile:
-    return AcademyProfile.model_validate(academy)
+def _active_subscription_for_profile(db: Session, academy: Academy) -> Subscription | None:
+    if academy.account_type != "academy":
+        return None
+    now = now_utc()
+    return db.scalar(
+        select(Subscription)
+        .where(
+            Subscription.user_id == str(academy.id),
+            Subscription.status.in_(["trialing", "active"]),
+            ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > now)),
+        )
+        .order_by(case((Subscription.status == "active", 0), else_=1), Subscription.created_at.desc())
+    )
+
+
+def _should_start_basic_trial(academy: Academy) -> bool:
+    return bool(academy.account_type == "academy" and academy.plan == AcademyPlan.free and not academy.plan_expires_at)
+
+
+def _profile(academy: Academy, db: Session | None = None) -> AcademyProfile:
+    profile = AcademyProfile.model_validate(academy)
+    subscription = _active_subscription_for_profile(db, academy) if db else None
+    if subscription:
+        profile.plan = subscription.plan_code
+        if subscription.status == "trialing":
+            profile.plan_expires_at = subscription.current_period_end
+            profile.trial_ends_at = subscription.current_period_end
+            profile.requires_payment = bool(subscription.current_period_end and subscription.current_period_end <= now_utc())
+        elif subscription.status == "active":
+            profile.plan_expires_at = None
+            profile.trial_ends_at = None
+            profile.requires_payment = False
+    return profile
 
 
 def _issue_token_response(db: Session, request: Request, response: Response, academy: Academy, remember: bool = True) -> TokenResponse:
     access_token, _, _ = create_access_token(academy)
     refresh_token, _ = issue_refresh_token(db, request, academy, remember=remember)
     set_refresh_cookie(response, refresh_token, remember=remember)
-    return TokenResponse(access_token=access_token, academy=_profile(academy))
+    return TokenResponse(access_token=access_token, academy=_profile(academy, db))
 
 
 def _create_email_verification(db: Session, academy: Academy) -> str:
@@ -843,7 +874,7 @@ def revoke_other_sessions(request: Request, academy: Academy = Depends(get_curre
 
 @router.get("/me", response_model=AcademyProfile)
 def me(academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
-    if academy.account_type == "academy" and not academy.plan_expires_at:
+    if _should_start_basic_trial(academy):
         active_sub = db.scalar(
             select(Subscription).where(
                 Subscription.user_id == str(academy.id),
@@ -855,7 +886,7 @@ def me(academy: Academy = Depends(get_current_academy), db: Session = Depends(ge
             _start_basic_trial(db, academy)
             db.commit()
             db.refresh(academy)
-    return academy
+    return _profile(academy, db)
 
 
 @router.patch("/me", response_model=AcademyProfile)
@@ -869,7 +900,7 @@ def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_curr
         academy.plan_expires_at = None
         for subscription in db.scalars(select(Subscription).where(Subscription.user_id == str(academy.id), Subscription.status == "trialing")).all():
             subscription.status = "canceled"
-    elif payload.account_type == "academy" and not academy.plan_expires_at:
+    elif payload.account_type == "academy" and _should_start_basic_trial(academy):
         active_sub = db.scalar(
             select(Subscription).where(
                 Subscription.user_id == str(academy.id),
@@ -881,7 +912,7 @@ def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_curr
             _start_basic_trial(db, academy)
     db.commit()
     db.refresh(academy)
-    return academy
+    return _profile(academy, db)
 
 
 @router.get("/login-history", response_model=list[LoginHistoryRead])
