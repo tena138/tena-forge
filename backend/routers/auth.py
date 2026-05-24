@@ -842,7 +842,19 @@ def revoke_other_sessions(request: Request, academy: Academy = Depends(get_curre
 
 
 @router.get("/me", response_model=AcademyProfile)
-def me(academy: Academy = Depends(get_current_academy)):
+def me(academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    if academy.account_type == "academy" and not academy.plan_expires_at:
+        active_sub = db.scalar(
+            select(Subscription).where(
+                Subscription.user_id == str(academy.id),
+                Subscription.status.in_(["trialing", "active"]),
+                ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > now_utc())),
+            )
+        )
+        if not active_sub:
+            _start_basic_trial(db, academy)
+            db.commit()
+            db.refresh(academy)
     return academy
 
 

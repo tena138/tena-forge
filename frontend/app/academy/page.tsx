@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { AcademyProfile } from "@/lib/auth-api";
+import { AcademyProfile, fetchMe } from "@/lib/auth-api";
 import { readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
 import { getUsageSummary, UsageSummary } from "@/lib/saas";
@@ -195,6 +195,16 @@ function subjectEngineLabel(code: string) {
   return labels[code] || code;
 }
 
+function planNameFallback(plan?: string | null) {
+  const labels: Record<string, string> = {
+    free: "Free",
+    basic: "Basic",
+    pro: "Pro",
+    enterprise: "Enterprise",
+  };
+  return labels[String(plan || "").toLowerCase()] || "Plan";
+}
+
 function compactDateOnly(value?: string | null) {
   if (!value) return "";
   return new Date(value).toLocaleDateString("ko-KR", {
@@ -233,7 +243,7 @@ function UsageRing({ label, used, total, value, sub }: { label: string; used: nu
 }
 
 function UsageOverview({ summary, profile, loading, updatedAt }: { summary: UsageSummary | null; profile: AcademyProfile | null; loading: boolean; updatedAt: string | null }) {
-  const planName = summary?.plan?.name || "Plan";
+  const planName = summary?.plan?.name || planNameFallback(profile?.plan);
   const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
   const subscription = summary?.subscription;
   const periodEnd = subscription?.current_period_end || profile?.trial_ends_at || profile?.plan_expires_at || null;
@@ -304,7 +314,17 @@ function AcademyConsoleHome() {
 
   useEffect(() => {
     let cancelled = false;
-    setProfile(readStoredAuthProfile<AcademyProfile>());
+    const storedProfile = readStoredAuthProfile<AcademyProfile>();
+    setProfile(storedProfile);
+
+    async function loadProfile() {
+      try {
+        const freshProfile = await fetchMe();
+        if (!cancelled) setProfile(freshProfile);
+      } catch {
+        if (!cancelled && !storedProfile) setProfile(null);
+      }
+    }
 
     async function loadBatches() {
       try {
@@ -363,7 +383,8 @@ function AcademyConsoleHome() {
 
     async function loadConsole() {
       setLoading(true);
-      await Promise.all([loadBatches(), loadArchiveAndSets(), loadUsage()]);
+      await Promise.all([loadProfile(), loadBatches(), loadArchiveAndSets()]);
+      await loadUsage();
       if (!cancelled) setLoading(false);
     }
 
