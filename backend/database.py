@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = ""
     cors_origin: str = "http://localhost:3000"
     frontend_url: str = "http://localhost:3001"
+    public_api_url: str = ""
     secret_key: str = "dev-secret-key-change-me-dev-secret-key-change-me-dev-secret-key-change-me-64"
     refresh_secret_key: str = "dev-refresh-secret-change-me-dev-refresh-secret-change-me-dev-refresh-secret-64"
     access_token_expire_minutes: int = 15

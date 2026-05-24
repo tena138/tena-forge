@@ -4,7 +4,7 @@ import secrets
 import hashlib
 import hmac
 from datetime import timedelta
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -804,10 +804,24 @@ def _oauth_client(name: str):
     return client
 
 
+def _oauth_callback_url(request: Request, callback_name: str) -> str:
+    public_base = settings.public_api_url.strip().rstrip("/")
+    if public_base:
+        return f"{public_base}{request.app.url_path_for(callback_name)}"
+
+    url = str(request.url_for(callback_name))
+    parts = urlsplit(url)
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",", 1)[0].strip()
+    scheme = forwarded_proto or parts.scheme
+    if parts.netloc.endswith(".onrender.com") and scheme == "http":
+        scheme = "https"
+    return urlunsplit((scheme, parts.netloc, parts.path, parts.query, parts.fragment))
+
+
 @router.get("/google")
 async def google_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
     _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
-    redirect_uri = str(request.url_for("google_callback"))
+    redirect_uri = _oauth_callback_url(request, "google_callback")
     return await _oauth_client("google").authorize_redirect(request, redirect_uri)
 
 
@@ -822,7 +836,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 @router.get("/kakao")
 async def kakao_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
     _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
-    redirect_uri = str(request.url_for("kakao_callback"))
+    redirect_uri = _oauth_callback_url(request, "kakao_callback")
     return await _oauth_client("kakao").authorize_redirect(request, redirect_uri)
 
 
@@ -840,7 +854,7 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
 @router.get("/naver")
 async def naver_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
     _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
-    redirect_uri = str(request.url_for("naver_callback"))
+    redirect_uri = _oauth_callback_url(request, "naver_callback")
     return await _oauth_client("naver").authorize_redirect(request, redirect_uri)
 
 
