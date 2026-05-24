@@ -30,6 +30,13 @@ from services.ownership import current_owner_id
 BASE_STUDENT_QUOTA = {"upload": 5, "extraction": 5, "export": 5}
 ACADEMY_OWNER_ROLES = {"owner", "admin"}
 STAFF_ROLES = {"owner", "admin", "teacher", "assistant"}
+SYSTEM_STUDENT_PLAN_CODES = {"free", "basic", "pro", "enterprise", "tutor"}
+ACADEMY_PLAN_TO_STUDENT_PLAN = {
+    "free": "free",
+    "basic": "basic",
+    "pro": "pro",
+    "enterprise": "enterprise",
+}
 
 
 def hash_invite_code(code: str) -> str:
@@ -72,13 +79,17 @@ def audit(db: Session, request: Request | None, actor_id: str | None, action: st
 
 def ensure_default_academy_plans(db: Session) -> None:
     defaults = [
+        ("free", "Free", 0, 0, 0, 5, 5, 5),
+        ("basic", "Basic", 3, 0, 6000, 10, 10, 10),
+        ("pro", "Pro", 10, 0, 6000, 20, 20, 20),
         ("tutor", "Tutor / Private Tutor", 5, 29000, 6000, 10, 10, 10),
         ("studio", "Studio", 20, 99000, 5000, 20, 20, 20),
         ("academy", "Academy", 50, 249000, 4500, 30, 30, 30),
         ("enterprise", "Enterprise / Custom", 0, 0, 0, 50, 50, 50),
     ]
     for code, name, seats, price, seat_price, upload, extraction, export in defaults:
-        if not db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == code)):
+        plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == code))
+        if not plan:
             db.add(
                 AcademyStudentPlan(
                     code=code,
@@ -91,21 +102,43 @@ def ensure_default_academy_plans(db: Session) -> None:
                     daily_export_quota_per_student=export,
                 )
             )
+        elif code in {"free", "basic", "pro", "enterprise"}:
+            plan.name = name
+            plan.included_seats = seats
+            plan.monthly_price = price
+            plan.additional_seat_price = seat_price
+            plan.daily_upload_quota_per_student = upload
+            plan.daily_extraction_quota_per_student = extraction
+            plan.daily_export_quota_per_student = export
+
+
+def academy_student_plan_code(db: Session, academy_id: str) -> str:
+    try:
+        academy = db.get(Academy, UUID(academy_id))
+    except ValueError:
+        return "free"
+    if not academy or academy.account_type != "academy":
+        return "free"
+    return ACADEMY_PLAN_TO_STUDENT_PLAN.get(str(academy.plan.value if hasattr(academy.plan, "value") else academy.plan), "free")
 
 
 def ensure_academy_subscription(db: Session, academy_id: str) -> AcademyStudentSubscription:
     ensure_default_academy_plans(db)
+    plan_code = academy_student_plan_code(db, academy_id)
     sub = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == academy_id))
     if not sub:
         now = datetime.utcnow()
         sub = AcademyStudentSubscription(
             academy_id=academy_id,
-            plan_code="tutor",
+            plan_code=plan_code,
             current_period_start=now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
             current_period_end=(now.replace(day=1, hour=0, minute=0, second=0, microsecond=0) + timedelta(days=32)).replace(day=1),
         )
         db.add(sub)
         db.flush()
+    elif sub.plan_code in SYSTEM_STUDENT_PLAN_CODES and sub.plan_code != plan_code:
+        sub.plan_code = plan_code
+        sub.updated_at = datetime.utcnow()
     return sub
 
 

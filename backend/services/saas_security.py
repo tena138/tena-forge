@@ -71,7 +71,7 @@ def ensure_default_plans(db: Session) -> None:
         ("basic", "Basic", 48000, 100, 1000, 20480, 5_000_000),
         ("basic_local", "Basic Local", 48000, 100, 1000, 20480, 5_000_000),
         ("basic_cloud", "Basic Cloud", 79000, 100, 1000, 20480, 5_000_000),
-        ("pro", "Pro", 29000, 100, 1000, 5120, 5_000_000),
+        ("pro", "Pro", 108000, 100, 1000, 5120, 5_000_000),
         ("pro_cloud", "Pro Cloud", 157000, 500, 10000, 51200, 50_000_000),
         ("team", "Team", 99000, 500, 10000, 51200, 50_000_000),
         ("enterprise", "Enterprise", 0, 999999, 999999, 999999, 999999999),
@@ -98,6 +98,8 @@ def ensure_default_plans(db: Session) -> None:
                 )
             )
         else:
+            plan.name = name
+            plan.monthly_price = price
             engines = normalize_subject_engines(getattr(plan, "enabled_subject_engines", None))
             pricing = subject_engine_pricing(plan.monthly_price, engines)
             plan.monthly_upload_count = policy.max_jobs_per_day * 31
