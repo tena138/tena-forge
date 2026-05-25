@@ -7,15 +7,13 @@ import {
   ArrowRight,
   Bell,
   Check,
+  ChevronRight,
   ClipboardCheck,
-  Database,
   FileUp,
   FolderKanban,
   GraduationCap,
   LayoutDashboard,
-  Layers3,
   PanelLeftClose,
-  Sparkles,
   UserCircle,
   Users,
 } from "lucide-react";
@@ -26,12 +24,12 @@ import { SiteLogo } from "@/components/site-logo";
 
 type IconComponent = ComponentType<{ className?: string }>;
 
-const workspaceLinks: Array<{ label: string; href: string; icon: IconComponent }> = [
-  { label: "추출", href: "/upload", icon: FileUp },
-  { label: "검토", href: "/problems/review", icon: ClipboardCheck },
-  { label: "보관", href: "/problems", icon: Archive },
-  { label: "세트", href: "/problem-sets", icon: FolderKanban },
-  { label: "학생", href: "/student-management", icon: Users },
+const workflowSteps: Array<{ title: string; body: string; href: string; icon: IconComponent }> = [
+  { title: "추출", body: "PDF를 문항 단위로 분리", href: "/upload", icon: FileUp },
+  { title: "검토", body: "원본과 해설을 빠르게 확인", href: "/problems/review", icon: ClipboardCheck },
+  { title: "보관", body: "태그와 출처로 문항 정리", href: "/problems", icon: Archive },
+  { title: "세트", body: "시험지와 과제 세트 제작", href: "/problem-sets", icon: FolderKanban },
+  { title: "학생", body: "채점 결과와 오답 기록 연결", href: "/student-management", icon: Users },
 ];
 
 const planCards = [
@@ -39,7 +37,7 @@ const planCards = [
     name: "Free",
     price: "무료",
     href: "/register?plan=free",
-    cta: "시작",
+    cta: "무료로 시작하기",
     points: ["기본 체험", "문항 추출 테스트", "시험지 제작"],
   },
   {
@@ -61,28 +59,33 @@ const planCards = [
 
 export function PlanLandingPage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#07080c] text-white">
+    <main className="min-h-screen overflow-hidden bg-[var(--landing-bg-base)] text-[var(--landing-text-primary)]">
       <LandingNav />
 
       <section className="relative min-h-screen overflow-hidden pt-16">
         <AuroraBackdrop />
-        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[96rem] flex-col justify-center px-4 py-10 sm:px-6 xl:px-8">
-          <div className="grid gap-8 lg:grid-cols-[0.52fr_1.48fr] lg:items-center">
-            <div className="max-w-[34rem] lg:pt-8">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-100">Tena Forge</p>
-              <h1 className="mt-4 text-4xl font-black leading-none tracking-normal text-white sm:text-5xl xl:text-6xl">
-                문제를 꺼내고,
-                <br />
-                수업으로 보낸다.
+        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[104rem] flex-col justify-center px-4 py-8 sm:px-6 lg:py-10 xl:px-8">
+          <div className="grid gap-8 lg:grid-cols-[minmax(21rem,0.55fr)_minmax(0,1.45fr)] lg:items-center">
+            <div className="max-w-[34rem]">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/80">TENA FORGE</p>
+              <h1 className="landing-hero-title landing-keep-words mt-4 text-white">
+                <span className="block">문제를 꺼내고,</span>
+                <span className="block">수업으로 보낸다.</span>
               </h1>
-              <p className="mt-5 max-w-md text-base leading-7 text-slate-300">
+              <p className="landing-keep-words mt-5 max-w-[31rem] text-lg leading-8 text-[var(--landing-text-secondary)]">
                 PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.
               </p>
-              <div className="mt-7 flex flex-wrap gap-3">
-                <Link href="/register?plan=free" className="inline-flex h-11 items-center gap-2 rounded-[7px] bg-[#7c3aed] px-5 text-sm font-black text-white shadow-[0_14px_34px_rgba(124,58,237,0.30)] transition hover:bg-[#8b5cf6]">
-                  시작하기 <ArrowRight className="h-4 w-4" />
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <Link
+                  href="/register?plan=free"
+                  className="landing-motion-safe inline-flex h-12 items-center gap-2 rounded-[8px] bg-[var(--landing-accent)] px-6 text-sm font-black text-white shadow-[0_18px_42px_rgba(124,92,255,0.36)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] hover:shadow-[0_22px_54px_rgba(124,92,255,0.44)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98]"
+                >
+                  무료로 시작하기 <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link href="/login?redirect=/academy" className="inline-flex h-11 items-center rounded-[7px] border border-white/12 bg-white/[0.055] px-5 text-sm font-black text-slate-100 transition hover:bg-white/[0.09]">
+                <Link
+                  href="/login?redirect=/academy"
+                  className="text-sm font-black text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25"
+                >
                   로그인
                 </Link>
               </div>
@@ -91,20 +94,7 @@ export function PlanLandingPage() {
             <ProductPreview />
           </div>
 
-          <div className="mt-8 grid gap-2 sm:grid-cols-5">
-            {workspaceLinks.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link key={item.label} href={item.href} className="group flex h-14 items-center justify-between rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-4 text-sm font-black text-slate-100 transition hover:border-violet-200/28 hover:bg-white/[0.07]">
-                  <span className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 text-violet-200" />
-                    {item.label}
-                  </span>
-                  <ArrowRight className="h-4 w-4 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-                </Link>
-              );
-            })}
-          </div>
+          <WorkflowSection />
         </div>
       </section>
 
@@ -115,15 +105,15 @@ export function PlanLandingPage() {
 
 function LandingNav() {
   return (
-    <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.08] bg-[#07080c]/78 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center justify-between px-4 sm:px-6 xl:px-8">
-        <Link href="/" className="inline-flex min-w-0 items-center" aria-label="Tena Forge">
+    <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.08] bg-[rgba(10,10,15,0.78)] backdrop-blur-xl">
+      <div className="mx-auto flex h-16 w-full max-w-[104rem] items-center justify-between px-4 sm:px-6 xl:px-8">
+        <Link href="/" className="inline-flex min-w-0 items-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25" aria-label="Tena Forge">
           <img src="/tenaforgelogo-dark.png" alt="Tena Forge" className="h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
         </Link>
         <div className="flex items-center gap-2 text-sm font-black">
-          <a href="#plans" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white sm:inline-flex">플랜</a>
-          <Link href="/login?redirect=/academy" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white sm:inline-flex">로그인</Link>
-          <Link href="/register?plan=free" className="inline-flex h-9 items-center rounded-[7px] bg-[#7c3aed] px-4 text-white transition hover:bg-[#8b5cf6]">시작</Link>
+          <a href="#plans" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">플랜</a>
+          <Link href="/login?redirect=/academy" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">로그인</Link>
+          <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-4 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98]">무료로 시작하기</Link>
         </div>
       </div>
     </nav>
@@ -133,75 +123,30 @@ function LandingNav() {
 function AuroraBackdrop() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[#06070b]" />
-      <div className="aurora-layer aurora-layer-a" />
-      <div className="aurora-layer aurora-layer-b" />
-      <div className="aurora-layer aurora-layer-c" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,7,11,0.04)_0%,rgba(6,7,11,0.38)_56%,rgba(6,7,11,0.95)_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,var(--landing-bg-deep)_0%,var(--landing-bg-base)_54%,#07070b_100%)]" />
+      <div className="landing-aurora bg-[radial-gradient(ellipse_at_26%_18%,rgba(124,92,255,0.38),transparent_42%),radial-gradient(ellipse_at_70%_24%,rgba(139,107,255,0.26),transparent_38%),linear-gradient(116deg,transparent_0_22%,rgba(124,92,255,0.30)_38%,transparent_62%)] [animation:landingAuroraA_22s_ease-in-out_infinite_alternate]" />
+      <div className="landing-aurora opacity-45 mix-blend-screen bg-[radial-gradient(ellipse_at_56%_36%,rgba(45,212,191,0.07),transparent_34%),linear-gradient(128deg,transparent_0_38%,rgba(167,139,250,0.22)_56%,transparent_78%)] [animation:landingAuroraB_30s_ease-in-out_infinite_alternate]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(10,10,15,0.05)_0%,rgba(10,10,15,0.42)_54%,rgba(10,10,15,0.96)_100%)]" />
       <div className="absolute inset-x-0 top-16 h-px bg-white/10" />
-      <div className="absolute inset-x-0 bottom-0 h-72 bg-[linear-gradient(180deg,transparent,#07080c_82%)]" />
-      <style jsx>{`
-        .aurora-layer {
-          position: absolute;
-          inset: -26% -18%;
-          filter: blur(44px);
-          opacity: 0.72;
-          transform-origin: center;
-          will-change: transform;
-        }
-        .aurora-layer-a {
-          background:
-            linear-gradient(116deg, transparent 0 18%, rgba(37, 99, 235, 0.72) 28%, rgba(20, 184, 166, 0.52) 39%, transparent 56%),
-            linear-gradient(148deg, transparent 0 42%, rgba(124, 58, 237, 0.64) 59%, transparent 75%);
-          animation: auroraDriftA 18s ease-in-out infinite alternate;
-        }
-        .aurora-layer-b {
-          background:
-            linear-gradient(68deg, transparent 0 22%, rgba(6, 182, 212, 0.42) 39%, transparent 58%),
-            linear-gradient(124deg, transparent 0 48%, rgba(167, 139, 250, 0.56) 63%, rgba(15, 23, 42, 0) 82%);
-          mix-blend-mode: screen;
-          opacity: 0.5;
-          animation: auroraDriftB 24s ease-in-out infinite alternate;
-        }
-        .aurora-layer-c {
-          background:
-            linear-gradient(100deg, rgba(7, 8, 12, 0) 0 36%, rgba(52, 211, 153, 0.28) 47%, rgba(99, 102, 241, 0.4) 58%, rgba(7, 8, 12, 0) 76%);
-          mix-blend-mode: screen;
-          opacity: 0.45;
-          animation: auroraDriftC 30s ease-in-out infinite alternate;
-        }
-        @keyframes auroraDriftA {
-          from { transform: translate3d(-5%, -2%, 0) rotate(-4deg) scale(1.02); }
-          to { transform: translate3d(7%, 4%, 0) rotate(3deg) scale(1.08); }
-        }
-        @keyframes auroraDriftB {
-          from { transform: translate3d(6%, 3%, 0) rotate(5deg) scale(1.08); }
-          to { transform: translate3d(-6%, -5%, 0) rotate(-3deg) scale(1.02); }
-        }
-        @keyframes auroraDriftC {
-          from { transform: translate3d(-2%, 6%, 0) rotate(2deg) scale(1.02); }
-          to { transform: translate3d(4%, -4%, 0) rotate(-4deg) scale(1.1); }
-        }
-      `}</style>
+      <div className="absolute inset-x-0 bottom-0 h-72 bg-[linear-gradient(180deg,transparent,var(--landing-bg-base)_82%)]" />
     </div>
   );
 }
 
 function ProductPreview() {
   return (
-    <div className="relative min-h-[32rem] lg:min-h-[42rem]">
-      <div className="absolute right-0 top-1/2 w-full max-w-[72rem] -translate-y-1/2 rounded-[10px] border border-white/10 bg-[#07080d] shadow-[0_34px_130px_rgba(0,0,0,0.48)] backdrop-blur-md">
-        <div className="absolute inset-0 rounded-[10px] bg-[radial-gradient(circle_at_18%_4%,rgba(124,58,237,0.17),transparent_20rem),radial-gradient(circle_at_94%_18%,rgba(34,211,238,0.12),transparent_22rem),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(7,8,13,0.94)_44%,rgba(8,10,16,0.98))]" />
-        <div className="relative z-10 overflow-hidden rounded-[10px]">
+    <div className="landing-mock-perspective relative min-h-[32rem] lg:min-h-[42rem]">
+      <div className="absolute right-[-1rem] top-1/2 h-[26rem] w-[46rem] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.36),transparent_68%)] blur-3xl" />
+      <div className="landing-mock-frame absolute right-0 top-1/2 w-full max-w-[74rem] -translate-y-1/2 rounded-2xl border border-white/[0.09] bg-[#07080d] shadow-[0_38px_140px_rgba(0,0,0,0.56),0_0_90px_rgba(124,92,255,0.18)] backdrop-blur-md">
+        <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_18%_4%,rgba(124,92,255,0.18),transparent_20rem),radial-gradient(circle_at_92%_16%,rgba(139,107,255,0.12),transparent_22rem),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(7,8,13,0.94)_44%,rgba(8,10,16,0.98))]" />
+        <div className="relative z-10 overflow-hidden rounded-2xl">
           <div className="flex h-14 items-center justify-between border-b border-white/10 bg-black/55 px-4 backdrop-blur-xl">
             <div className="flex min-w-0 items-center gap-3">
               <SiteLogo className="h-9 sm:h-9" />
-              <button type="button" className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-slate-400 lg:inline-flex">
+              <button type="button" className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-slate-400 lg:inline-flex" aria-label="사이드바 닫기">
                 <PanelLeftClose className="h-4 w-4" />
               </button>
-              <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">
-                제작 콘솔
-              </span>
+              <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">제작 콘솔</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[11px] font-bold text-slate-300 sm:inline-flex">/problems</span>
@@ -230,8 +175,8 @@ function ProductPreview() {
               />
               <SidebarGroup
                 title="Academy OS"
-                accent="bg-emerald-300"
-                panel="border-emerald-300/20 bg-emerald-300/[0.045]"
+                accent="bg-violet-300"
+                panel="border-violet-300/20 bg-violet-300/[0.045]"
                 items={[
                   ["학생 관리", GraduationCap, false],
                   ["클래스", Users, false],
@@ -246,7 +191,7 @@ function ProductPreview() {
                   <p className="mt-0.5 text-sm font-black text-slate-100">문항 보관함</p>
                 </div>
                 <div className="hidden items-center gap-2 sm:flex">
-                  <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.7)]" />
+                  <span className="h-2 w-2 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.7)]" />
                   <span className="text-xs font-bold text-slate-400">Live preview</span>
                 </div>
               </div>
@@ -261,7 +206,7 @@ function ProductPreview() {
                       </div>
                       <div className="flex gap-2">
                         <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-200">필터</span>
-                        <span className="rounded-[7px] bg-[#7c3aed] px-3 py-2 text-xs font-black text-white">세트에 담기</span>
+                        <span className="rounded-[7px] bg-[var(--landing-accent)] px-3 py-2 text-xs font-black text-white">세트에 담기</span>
                       </div>
                     </div>
                     <div className="mt-4 h-11 rounded-[7px] border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-slate-500">
@@ -304,6 +249,39 @@ function ProductPreview() {
         </div>
       </div>
     </div>
+  );
+}
+
+function WorkflowSection() {
+  return (
+    <section className="mt-10 rounded-2xl border border-white/[0.08] bg-[var(--landing-surface-soft)] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-md sm:p-5">
+      <h2 className="landing-keep-words text-lg font-black text-white">추출부터 학생 기록까지, 하나의 흐름</h2>
+      <div className="mt-5 grid gap-3 lg:grid-cols-5">
+        {workflowSteps.map((step, index) => {
+          const Icon = step.icon;
+          return (
+            <Link
+              key={step.title}
+              href={step.href}
+              className="group relative rounded-[10px] border border-white/[0.08] bg-white/[0.035] p-4 transition hover:border-violet-200/26 hover:bg-white/[0.065] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25"
+            >
+              {index < workflowSteps.length - 1 ? (
+                <span className="absolute left-[calc(100%+0.75rem)] top-1/2 hidden h-px w-3 -translate-y-1/2 bg-violet-200/24 lg:block" />
+              ) : null}
+              <div className="flex items-center justify-between gap-3">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-violet-400/14 text-xs font-black text-violet-100 ring-1 ring-violet-200/18">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <Icon className="h-5 w-5 text-violet-200" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-white">{step.title}</h3>
+              <p className="landing-keep-words mt-2 text-sm leading-6 text-[var(--landing-text-secondary)]">{step.body}</p>
+              <ChevronRight className="mt-4 h-4 w-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-violet-100" />
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -365,14 +343,14 @@ function ProblemCard({ number, selected }: { number: number; selected: boolean }
 
 function PlanSection() {
   return (
-    <section id="plans" className="relative border-t border-white/[0.08] bg-[#08090d] px-4 py-16 sm:px-6">
-      <div className="mx-auto w-full max-w-[96rem]">
+    <section id="plans" className="relative border-t border-white/[0.08] bg-[var(--landing-bg-base)] px-4 py-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[104rem]">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
             <p className="text-sm font-black uppercase text-violet-200">Plans</p>
             <h2 className="mt-3 text-4xl font-black tracking-normal text-white">플랜</h2>
           </div>
-          <Link href="/pricing" className="inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 px-4 text-sm font-black text-slate-100 transition hover:bg-white/[0.07]">
+          <Link href="/pricing" className="inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 px-4 text-sm font-black text-slate-100 transition hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25">
             가격 보기 <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -384,7 +362,7 @@ function PlanSection() {
                   <h3 className="text-2xl font-black text-white">{plan.name}</h3>
                   <p className="mt-2 text-xl font-black text-violet-100">{plan.price}</p>
                 </div>
-                {plan.featured ? <span className="rounded-[6px] bg-[#7c3aed] px-2.5 py-1 text-xs font-black text-white">추천</span> : null}
+                {plan.featured ? <span className="rounded-[6px] bg-[var(--landing-accent)] px-2.5 py-1 text-xs font-black text-white">추천</span> : null}
               </div>
               <ul className="mt-6 space-y-3 text-sm font-semibold text-slate-300">
                 {plan.points.map((point) => (
@@ -394,7 +372,7 @@ function PlanSection() {
                   </li>
                 ))}
               </ul>
-              <Link href={plan.href} className={cn("mt-7 inline-flex h-11 w-full items-center justify-center rounded-[7px] text-sm font-black transition", plan.featured ? "bg-[#7c3aed] text-white hover:bg-[#8b5cf6]" : "border border-white/12 text-white hover:bg-white/[0.07]")}>
+              <Link href={plan.href} className={cn("mt-7 inline-flex h-11 w-full items-center justify-center rounded-[7px] text-sm font-black transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25", plan.featured ? "bg-[var(--landing-accent)] text-white hover:bg-[var(--landing-accent-hover)]" : "border border-white/12 text-white hover:bg-white/[0.07]")}>
                 {plan.cta}
               </Link>
             </article>
