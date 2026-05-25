@@ -102,7 +102,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
       router.push(`/checkout/success?paymentId=${encodeURIComponent(confirmResponse.data.payment_id || billingCheckout.payment_id)}`);
       return;
     } catch (error: any) {
-      setError(error?.message || "결제 처리 중 문제가 발생했습니다.");
+      setError(paymentErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -215,4 +215,11 @@ function PriceLine({ label, value, positive }: { label: string; value: string; p
       <span className={positive ? "font-black text-emerald-200" : "font-black"}>{value}</span>
     </div>
   );
+}
+
+function paymentErrorMessage(error: any) {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") return JSON.stringify(detail);
+  return error?.message || "결제 처리 중 문제가 발생했습니다.";
 }

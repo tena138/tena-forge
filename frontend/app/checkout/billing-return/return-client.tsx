@@ -44,7 +44,7 @@ export function CheckoutBillingReturnClient() {
         });
         router.replace(`/checkout/success?paymentId=${encodeURIComponent(response.data.payment_id || "")}`);
       } catch (error: any) {
-        setMessage(error?.response?.data?.detail || error?.message || "결제 승인에 실패했습니다.");
+        setMessage(paymentErrorMessage(error));
       }
     }
     confirm();
@@ -59,4 +59,11 @@ export function CheckoutBillingReturnClient() {
       </div>
     </main>
   );
+}
+
+function paymentErrorMessage(error: any) {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") return JSON.stringify(detail);
+  return error?.message || "결제 확인에 실패했습니다.";
 }
