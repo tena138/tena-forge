@@ -135,7 +135,7 @@ const demoTemplateSet: TemplateSet = {
       id: "landing-template-page",
       name: "시험지",
       role: "exam",
-      background: { color: "#ffffff" },
+      background: { color: "#f2f1f8" },
       elements: [
         {
           id: "header-date-box",
@@ -151,7 +151,7 @@ const demoTemplateSet: TemplateSet = {
           zIndex: 1,
           locked: true,
           hidden: false,
-          style: { fill: "#ffffff", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+          style: { fill: "#f8f7fc", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
         },
         {
           id: "header-title-box",
@@ -167,7 +167,7 @@ const demoTemplateSet: TemplateSet = {
           zIndex: 1,
           locked: true,
           hidden: false,
-          style: { fill: "#eeeeee", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+          style: { fill: "#e7e5ef", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
         },
         {
           id: "header-logo-box",
@@ -183,7 +183,7 @@ const demoTemplateSet: TemplateSet = {
           zIndex: 1,
           locked: true,
           hidden: false,
-          style: { fill: "#ffffff", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+          style: { fill: "#f8f7fc", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
         },
         {
           id: "header-date",
@@ -275,10 +275,10 @@ const demoTemplateSet: TemplateSet = {
           locked: true,
           hidden: false,
           style: {},
-          cardStyle: { fill: "#ffffff", stroke: "transparent", strokeWidth: 0, radius: 0 },
+          cardStyle: { fill: "#f8f7fc", stroke: "transparent", strokeWidth: 0, radius: 0 },
           numberStyle: { color: "#111827", fontSize: 13, fontWeight: "bold" },
           bodyStyle: { color: "#111827", fontSize: 12, lineHeight: 1.5 },
-          answerSpaceStyle: { fill: "#ffffff", stroke: "#cbd5e1", strokeWidth: 1, borderStyle: "dashed", radius: 4 },
+          answerSpaceStyle: { fill: "#f2f1f8", stroke: "#c7c3d7", strokeWidth: 1, borderStyle: "dashed", radius: 4 },
           columnDividerStyle: { stroke: "#111827", strokeWidth: 1, borderStyle: "solid" },
         },
         {
@@ -567,57 +567,80 @@ function ScrollStorySection() {
   const progressByScene = storyScenes.map((_, index) => sceneProgress(progress, index));
 
   return (
-    <section ref={sectionRef} className="relative z-10 border-y border-white/[0.08] bg-[#06070d]/70">
+    <section ref={sectionRef} className="relative z-10 bg-transparent">
       <div className="lg:hidden">
         {storyScenes.map((scene, index) => (
           <div key={scene.title} className="px-4 py-12 sm:px-6">
             <div className="mx-auto max-w-5xl">
               <h2 className="landing-keep-words text-3xl font-black leading-tight tracking-normal text-white">{scene.title}</h2>
-              <div className="mt-6 h-[28rem] overflow-hidden rounded-[8px] border border-white/10 bg-[#090b10]/90">
-                <StoryConsoleFrame scene={scene}>
-                  {index === 0 ? <DigitizeScene progress={1} /> : null}
-                  {index === 1 ? <ContentCreationScene progress={1} /> : null}
-                  {index === 2 ? <WrongAnswerScene progress={1} /> : null}
-                </StoryConsoleFrame>
+              <div className="relative mt-6 h-[30rem] overflow-hidden rounded-[18px] bg-[#07080f]/70">
+                {index === 0 ? <DigitizeScene progress={1} /> : null}
+                {index === 1 ? <ContentCreationScene progress={1} /> : null}
+                {index === 2 ? <WrongAnswerScene progress={1} /> : null}
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div ref={pinRef} className="relative hidden h-screen min-h-[46rem] items-center overflow-hidden lg:flex">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_28%,rgba(45,212,191,0.10),transparent_28rem),radial-gradient(circle_at_78%_40%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.14),rgba(6,7,13,0.88))]" />
-        <div className="relative z-10 mx-auto w-full max-w-[104rem] px-4 sm:px-6 xl:px-8">
-          <div className="landing-keep-words relative mb-5 h-16">
-              {storyScenes.map((scene, index) => {
-                const active = activeIndex === index;
-                return (
-                  <div
-                    key={scene.title}
-                    className="landing-story-copy absolute inset-0"
-                    style={{
-                      opacity: active ? 1 : 0,
-                      transform: active ? "translate3d(0,0,0)" : "translate3d(0,1.5rem,0)",
-                    }}
-                  >
-                    <h2 className="text-4xl font-black leading-tight tracking-normal text-white sm:text-5xl">{scene.title}</h2>
-                  </div>
-                );
-              })}
-          </div>
-
-          <div className="relative h-[42rem] rounded-[8px] border border-white/[0.08] bg-black/22 p-3 shadow-[0_34px_120px_rgba(0,0,0,0.34)] backdrop-blur-xl">
-            <DigitizeVisualScene active={activeIndex === 0} scene={storyScenes[0]} progress={progressByScene[0]} />
-            <StoryVisualScene active={activeIndex === 1} scene={storyScenes[1]}>
+      <div ref={pinRef} className="relative hidden h-screen min-h-[46rem] overflow-hidden lg:block">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(45,212,191,0.09),transparent_28rem),radial-gradient(circle_at_80%_42%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.10),rgba(6,7,13,0.78))]" />
+        <div className="absolute inset-0">
+            <StoryStageScene active={activeIndex === 0}>
+              <DigitizeScene progress={progressByScene[0]} />
+            </StoryStageScene>
+            <StoryStageScene active={activeIndex === 1}>
               <ContentCreationScene progress={progressByScene[1]} />
-            </StoryVisualScene>
-            <StoryVisualScene active={activeIndex === 2} scene={storyScenes[2]}>
+            </StoryStageScene>
+            <StoryStageScene active={activeIndex === 2}>
               <WrongAnswerScene progress={progressByScene[2]} />
-            </StoryVisualScene>
-          </div>
+            </StoryStageScene>
         </div>
       </div>
     </section>
+  );
+}
+
+function StoryStageScene({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <div
+      className="landing-story-visual absolute inset-0 overflow-hidden"
+      style={{
+        opacity: active ? 1 : 0,
+        transform: active ? "scale(1)" : "scale(1.015)",
+        pointerEvents: active ? "auto" : "none",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function StoryCaption({
+  tag,
+  children,
+  progress,
+  className,
+}: {
+  tag: string;
+  children: ReactNode;
+  progress: number;
+  className: string;
+}) {
+  const visible = clampProgress((progress - 0.55) / 0.12) * (1 - clampProgress((progress - 0.96) / 0.04));
+  return (
+    <div
+      className={cn("landing-keep-words pointer-events-none absolute z-30", className)}
+      style={{
+        opacity: visible,
+        transform: `translateY(${(1 - visible) * 24}px)`,
+      }}
+    >
+      <span className="block text-xs font-black uppercase tracking-[0.42em] text-cyan-200">{tag}</span>
+      <div className="mt-3 max-w-[42rem] text-[clamp(2rem,4.5vw,4rem)] font-black leading-[1.08] tracking-normal text-white drop-shadow-[0_0_42px_rgba(124,92,255,0.45)]">
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -762,116 +785,88 @@ function DigitizePaperStack({ progress }: { progress: number }) {
 }
 
 function DigitizeScene({ progress }: { progress: number }) {
-  const introVisible = 1 - clampProgress((progress - 0.36) / 0.12);
-  const batchIntro = clampProgress((progress - 0.43) / 0.12);
-  const batchProgress = clampProgress((progress - 0.49) / 0.23);
-  const batchExit = clampProgress((progress - 0.72) / 0.1);
-  const batchVisible = batchIntro * (1 - batchExit);
-  const browserProgress = clampProgress((progress - 0.84) / 0.16);
-  const batchPercent = Math.min(100, Math.round(batchProgress * 100));
+  const paperIn = clampProgress(progress / 0.15);
+  const scanProgress = clampProgress((progress - 0.15) / 0.27);
+  const absorbProgress = clampProgress((progress - 0.28) / 0.22);
+  const pulseProgress = Math.sin(clampProgress((progress - 0.45) / 0.11) * Math.PI);
+  const gridProgress = clampProgress((progress - 0.55) / 0.27);
 
   return (
-    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_20%_28%,rgba(45,212,191,0.10),transparent_20rem),radial-gradient(circle_at_72%_42%,rgba(124,92,255,0.20),transparent_28rem),#090b10]">
+    <div className="relative h-full overflow-hidden bg-transparent">
       <div
-        className="absolute inset-0 overflow-hidden bg-[#080a10]/95 shadow-[0_28px_100px_rgba(0,0,0,0.42)]"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.42),rgba(45,212,191,0.12)_38%,transparent_70%)] blur-3xl"
+        style={{
+          opacity: 0.22 + pulseProgress * 0.5,
+          transform: `translate(-50%, -50%) scale(${1 + pulseProgress * 0.28})`,
+        }}
+      />
+
+      {[0, 1, 2].map((index) => {
+        const startX = [-58, -64, -55][index];
+        const startY = [-20, 2, 22][index];
+        const endX = -6;
+        const endY = -11;
+        const drift = Math.sin(progress * 7 + index * 1.7) * 10 * (1 - absorbProgress);
+        const x = startX + (endX - startX) * absorbProgress;
+        const y = startY + (endY - startY) * absorbProgress;
+        const scale = paperIn * (1 - absorbProgress * 0.94);
+        const opacity = paperIn * (1 - clampProgress((progress - 0.46) / 0.08));
+        return (
+          <div
+            key={index}
+            className="landing-story-paper absolute left-1/2 top-1/2 h-[13rem] w-[9.5rem] overflow-hidden rounded-[11px] border border-white/20 bg-[linear-gradient(160deg,#f3f3f9,#d4d4e2)] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
+            style={{
+              transform: `translate(calc(-50% + ${x}vw + ${drift}px), calc(-50% + ${y}vh + ${drift * 0.4}px)) rotate(${[-13, 8, -6][index] * (1 - absorbProgress)}deg) scale(${scale})`,
+              opacity,
+            }}
+          >
+            <div className="absolute left-4 top-4 h-3 w-20 rounded bg-[#6b6f8c]" />
+            <div className="absolute left-4 right-4 top-12 h-1.5 rounded bg-[#aeb0c4]" />
+            <div className="absolute left-4 top-16 h-1.5 w-24 rounded bg-[#aeb0c4]" />
+            <div className="absolute left-4 right-4 top-24 h-16 rounded border border-slate-300/60 bg-slate-50/70" />
+            <div
+              className="absolute left-0 right-0 h-5 bg-[linear-gradient(90deg,transparent,#2dd4bf,transparent)] shadow-[0_0_20px_#2dd4bf]"
+              style={{
+                top: `${scanProgress * 88}%`,
+                opacity: scanProgress > 0 && scanProgress < 1 ? 1 : 0,
+              }}
+            />
+          </div>
+        );
+      })}
+
+      <div
+        className="absolute grid grid-cols-3 gap-3"
+        style={{
+          left: "47%",
+          top: "25%",
+          opacity: clampProgress((progress - 0.52) / 0.1),
+          transform: `perspective(1400px) rotateY(${18 + (-25 * gridProgress)}deg) rotateX(3deg) scale(${0.72 + gridProgress * 0.28})`,
+          transformOrigin: "30% 50%",
+        }}
       >
-        <div
-          className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_46%,rgba(124,92,255,0.18),transparent_17rem)]"
-          style={{ opacity: introVisible }}
-        >
-          <div className="w-[min(16rem,70%)] rounded-[9px] border border-dashed border-cyan-200/28 bg-cyan-200/[0.055] p-5 text-center shadow-[0_0_46px_rgba(45,212,191,0.10)]">
-            <FileUp className="mx-auto h-7 w-7 text-cyan-100" />
-            <p className="mt-3 text-sm font-black text-white">PDF 자료</p>
-          </div>
-        </div>
-
-        <div
-          className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_40%,rgba(45,212,191,0.13),transparent_18rem),rgba(5,7,12,0.88)] p-6"
-          style={{
-            opacity: batchVisible,
-            transform: `scale(${0.94 + batchIntro * 0.06 - batchExit * 0.05})`,
-            pointerEvents: batchVisible > 0.01 ? "auto" : "none",
-          }}
-        >
-          <div className="w-[min(40rem,86%)] rounded-[12px] border border-cyan-100/14 bg-[#0c1019]/95 p-8 text-center shadow-[0_30px_110px_rgba(45,212,191,0.16)]">
-            <p className="text-lg font-black text-cyan-100">배치 추출</p>
-            <p className="mt-5 text-7xl font-black tracking-tight text-white drop-shadow-[0_0_28px_rgba(45,212,191,0.25)]">{batchPercent}%</p>
-            <div className="mx-auto mt-7 h-3 max-w-[28rem] overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-[linear-gradient(90deg,#2dd4bf,#7c5cff,#c4b5fd)]" style={{ width: `${batchPercent}%` }} />
-            </div>
-            <div className="mt-7 grid gap-2 sm:grid-cols-4">
-              {["페이지 감지", "문항 분리", "태그 분류", "보관함 저장"].map((label, index) => (
-                <div key={label} className="rounded-[8px] border border-white/10 bg-white/[0.045] px-3 py-3">
-                  <span className={cn("mx-auto block h-2.5 w-2.5 rounded-full", batchProgress > index * 0.22 ? "bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.7)]" : "bg-slate-600")} />
-                  <p className="mt-2 text-xs font-black text-slate-300">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="grid h-full gap-4 p-4 lg:grid-cols-[19rem_minmax(0,1fr)]"
-          style={{
-            opacity: browserProgress,
-            transform: `translateY(${(1 - browserProgress) * 12}px)`,
-          }}
-        >
-          <aside className="relative rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-black text-white">추출 기록</span>
-              <FileUp className="h-4 w-4 text-cyan-100" />
-            </div>
-            <div className="mt-5 rounded-[8px] border border-cyan-200/16 bg-cyan-200/[0.045] p-4">
-              <p className="text-xs font-bold text-cyan-100">PDF 자료</p>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300" style={{ width: "100%" }} />
-              </div>
-              <p className="mt-3 text-xs font-semibold text-slate-400">검토 대기</p>
-            </div>
-            <div className="mt-4 space-y-2">
-              {["원본 페이지 감지", "문항 번호 추출", "태그 자동 분류", "보관함 저장"].map((label) => (
-                <div key={label} className="flex items-center justify-between rounded-[7px] border border-white/10 bg-black/25 px-3 py-2">
-                  <span className="text-xs font-bold text-slate-300">{label}</span>
-                  <span className="h-2 w-2 rounded-full bg-emerald-300" />
-                </div>
-              ))}
-            </div>
-          </aside>
-
-          <div className="min-w-0 rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xl font-black text-white">문항 브라우저</p>
-                <p className="mt-1 text-xs font-bold text-slate-500">58개 문항 · 원문 순</p>
-              </div>
-              <div className="flex gap-2">
-                <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-200">검토 완료</span>
-                <span className="rounded-[7px] bg-[var(--landing-accent)] px-3 py-2 text-xs font-black text-white">세트에 담기</span>
-              </div>
-            </div>
-            <div className="mt-4 h-11 rounded-[7px] border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-slate-500">
-              본문, 번호, 정답, 태그, 출처 검색
-            </div>
-            <div className="mt-4 grid gap-3 xl:grid-cols-3">
-              {demoProblems.concat(demoProblems).slice(0, 6).map((problem, index) => {
-                const cardProgress = clampProgress((browserProgress - index * 0.06) / 0.34);
-                return (
-                  <ProblemCard
-                    key={`${problem.id}-${index}`}
-                    number={index + 1}
-                    selected={false}
-                    style={{
-                      opacity: cardProgress,
-                      transform: `translateY(${(1 - cardProgress) * 18}px)`,
-                    }}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        {Array.from({ length: 9 }).map((_, index) => {
+          const cardProgress = clampProgress((progress - 0.62 - index * 0.03) / 0.18);
+          return (
+            <ProblemCard
+              key={index}
+              number={index + 1}
+              selected={false}
+              style={{
+                width: "10.5rem",
+                minHeight: "5.4rem",
+                opacity: cardProgress,
+                transform: `translateY(${(1 - cardProgress) * 16}px) scale(${0.9 + cardProgress * 0.1})`,
+              }}
+            />
+          );
+        })}
       </div>
+
+      <StoryCaption tag="Digitize" progress={progress} className="bottom-[14vh] left-[7vw]">
+        오프라인 문항들을<br />한 곳에{" "}
+        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">전산화</span>
+      </StoryCaption>
     </div>
   );
 }
@@ -879,20 +874,23 @@ function DigitizeScene({ progress }: { progress: number }) {
 function ContentCreationScene({ progress }: { progress: number }) {
   const selectedThresholds = new Map([
     [0, 0.11],
-    [1, 0.22],
+    [2, 0.22],
     [3, 0.34],
-    [4, 0.46],
+    [5, 0.46],
   ]);
-  const templateProgress = clampProgress((progress - 0.45) / 0.45);
+  const selectedCount = Array.from(selectedThresholds.values()).filter((threshold) => progress >= threshold).length;
+  const sourceFade = 1 - clampProgress((progress - 0.55) / 0.18) * 0.72;
+  const templateProgress = clampProgress((progress - 0.7) / 0.3);
+  const sheetIntro = clampProgress((progress - 0.5) / 0.16);
   const cursorPoint = interpolateTimeline(progress, [
-    { at: 0, x: 10.5, y: 28.5 },
-    { at: 0.11, x: 10.5, y: 28.5 },
-    { at: 0.22, x: 30.5, y: 28.5 },
-    { at: 0.34, x: 30.5, y: 41.5 },
-    { at: 0.46, x: 10.5, y: 54.5 },
-    { at: 0.58, x: 30.5, y: 80 },
-    { at: 0.7, x: 67.5, y: 22 },
-    { at: 1, x: 78, y: 22 },
+    { at: 0, x: 6, y: 48 },
+    { at: 0.11, x: 6, y: 48 },
+    { at: 0.22, x: 18, y: 48 },
+    { at: 0.34, x: 18, y: 63 },
+    { at: 0.46, x: 6, y: 78 },
+    { at: 0.58, x: 43, y: 72 },
+    { at: 0.7, x: 76, y: 28 },
+    { at: 1, x: 84, y: 28 },
   ]);
   const cursorStyle: CSSProperties = {
     left: `${cursorPoint.x}%`,
@@ -901,48 +899,75 @@ function ContentCreationScene({ progress }: { progress: number }) {
   };
 
   return (
-    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_30%_35%,rgba(124,92,255,0.22),transparent_24rem),radial-gradient(circle_at_82%_46%,rgba(45,212,191,0.09),transparent_22rem),#07080d]">
-      <div className="absolute left-[5%] top-[12%] w-[42%] rounded-[10px] border border-white/10 bg-[#0b0d14]/92 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.30)]">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-black text-white">문항 보관함</span>
-          <Archive className="h-4 w-4 text-violet-200" />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {Array.from({ length: 8 }).map((_, index) => {
-            const selected = progress >= (selectedThresholds.get(index) ?? 2);
-            return (
-              <div
-                key={index}
-                className={cn(
-                  "rounded-[7px] border p-3 transition",
-                  selected
-                    ? "border-violet-200/70 bg-violet-400/20 shadow-[0_0_0_1px_rgba(196,181,253,0.22),0_12px_36px_rgba(124,92,255,0.18)]"
-                    : "border-white/10 bg-white/[0.045]"
-                )}
-              >
-                <span className="block h-2 w-8 rounded bg-white/65" />
-                <span className="mt-4 block h-2 w-full rounded bg-slate-500/36" />
-                <span className="mt-2 block h-2 w-7/12 rounded bg-slate-500/24" />
-              </div>
-            );
-          })}
-        </div>
+    <div className="relative h-full overflow-hidden bg-transparent">
+      <div className="pointer-events-none absolute left-[55%] top-[28%] h-[35rem] w-[35rem] rounded-full bg-[radial-gradient(circle,rgba(59,111,245,0.26),rgba(124,92,255,0.12)_42%,transparent_70%)] blur-3xl" />
+
+      <div
+        className="absolute -left-10 top-[42%] grid grid-cols-2 gap-3"
+        style={{
+          opacity: sourceFade,
+          transform: "perspective(1400px) rotateY(9deg) rotateX(2deg) scale(0.92)",
+          transformOrigin: "0% 50%",
+        }}
+      >
+        {Array.from({ length: 6 }).map((_, index) => {
+          const selected = progress >= (selectedThresholds.get(index) ?? 2);
+          const fly = selected ? clampProgress((progress - 0.4) / 0.16) : 0;
+          return (
+            <ProblemCard
+              key={index}
+              number={index + 1}
+              selected={selected && progress < 0.55}
+              style={{
+                width: "10rem",
+                minHeight: "5.7rem",
+                opacity: selected ? 1 - clampProgress((progress - 0.48) / 0.08) : 1 - clampProgress((progress - 0.4) / 0.1) * 0.75,
+                transform: selected ? `translate(${fly * (18 + (index % 2) * 3)}rem, ${fly * (7 - Math.floor(index / 2) * 3)}rem) scale(${1 - fly * 0.58})` : undefined,
+                zIndex: selected ? 10 : 1,
+              }}
+            />
+          );
+        })}
       </div>
 
-      <div className="absolute bottom-[13%] left-[27%] rounded-[10px] border border-violet-200/24 bg-violet-400/12 px-4 py-3 shadow-[0_18px_54px_rgba(124,92,255,0.20)]">
-        <span className="text-sm font-black text-white">선택 문항 {Array.from(selectedThresholds.values()).filter((threshold) => progress >= threshold).length}개</span>
+      <div
+        className="absolute left-[calc(50%_-_8rem)] top-[calc(50%_+_9rem)] rounded-[14px] border border-white/10 bg-white/[0.055] px-5 py-4 shadow-[0_18px_54px_rgba(124,92,255,0.20)] backdrop-blur-xl"
+        style={{ opacity: 1 - clampProgress((progress - 0.6) / 0.12) }}
+      >
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-cyan-100">Set</p>
+        <p className="mt-1 text-4xl font-black text-white">
+          {selectedCount}
+          <span className="ml-1 text-sm font-bold text-slate-400">문항</span>
+        </p>
       </div>
+
       <div className="landing-story-cursor" style={cursorStyle} />
 
-      <div className="absolute right-[6%] top-[10%] h-[78%] w-[38%] rounded-[10px] border border-white/12 bg-[#0a0c13]/94 p-4 shadow-[0_30px_90px_rgba(0,0,0,0.36)]">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-black text-white">템플릿 출력</span>
-          <FolderKanban className="h-4 w-4 text-violet-200" />
-        </div>
-        <div className="mx-auto mt-5 flex h-[82%] max-w-[18rem] items-start justify-center overflow-hidden rounded-[6px] bg-white text-slate-900 shadow-[0_18px_48px_rgba(0,0,0,0.30)] ring-1 ring-white/15">
-          <DemoExamPreview reveal={templateProgress} scale={0.34} />
+      <div
+        className="absolute -right-10 top-[13%] h-[78vh] w-[25rem]"
+        style={{
+          opacity: sheetIntro,
+          transform: `perspective(1500px) rotateY(${-12 + sheetIntro * 8}deg) scale(${0.9 + sheetIntro * 0.1})`,
+          transformOrigin: "60% 50%",
+        }}
+      >
+        <div className="absolute -inset-8 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.18),transparent_70%)] blur-2xl" />
+        <div className="relative h-full overflow-hidden rounded-[18px] bg-[#d9d8e7]/95 shadow-[0_40px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(124,92,255,0.20)] ring-1 ring-white/20">
+          <DemoExamPreview reveal={templateProgress} scale={0.47} />
+          <span
+            className="pointer-events-none absolute inset-y-0 w-1/2 bg-[linear-gradient(100deg,transparent,rgba(255,255,255,0.68),transparent)]"
+            style={{
+              opacity: progress > 0.93 && progress < 1 ? 0.85 : 0,
+              transform: `translateX(${-130 + clampProgress((progress - 0.93) / 0.07) * 300}%)`,
+            }}
+          />
         </div>
       </div>
+
+      <StoryCaption tag="Create" progress={clampProgress((progress - 0.11) / 0.89)} className="left-[7vw] top-[16vh]">
+        선택한 문항이<br />템플릿에{" "}
+        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">그대로 출력</span>
+      </StoryCaption>
     </div>
   );
 }
@@ -972,6 +997,14 @@ function DemoExamPreview({ reveal, scale = 0.34 }: { reveal: number; scale?: num
 function WrongAnswerScene({ progress }: { progress: number }) {
   const gridProgress = clampProgress((progress - 0.18) / 0.42);
   const branchProgress = clampProgress((progress - 0.62) / 0.32);
+  const studentProgress = clampProgress((progress - 0.15) / 0.15);
+  const cursorPoint = interpolateTimeline(progress, [
+    { at: 0, x: 5, y: 42 },
+    { at: 0.15, x: 5, y: 42 },
+    { at: 0.3, x: 33, y: 43 },
+    { at: 0.5, x: 72, y: 38 },
+    { at: 0.66, x: 51, y: 68 },
+  ]);
   const statuses = Array.from({ length: 18 }).map((_, index) => {
     if (gridProgress > 0.88 && [4, 11, 16].includes(index)) return "missed";
     if (gridProgress > 0.52 && [2, 7, 13].includes(index)) return "wrong";
@@ -979,8 +1012,9 @@ function WrongAnswerScene({ progress }: { progress: number }) {
   });
 
   return (
-    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_28%_26%,rgba(74,222,128,0.12),transparent_20rem),radial-gradient(circle_at_78%_36%,rgba(124,92,255,0.22),transparent_26rem),#07080d]">
-      <div className="absolute left-[6%] top-[13%] w-[28%] rounded-[10px] border border-white/10 bg-[#0b0d14]/92 p-4">
+    <div className="relative h-full overflow-hidden bg-transparent">
+      <div className="pointer-events-none absolute left-[50%] top-[35%] h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.25),rgba(91,214,176,0.09)_42%,transparent_72%)] blur-3xl" />
+      <div className="absolute -left-14 top-[calc(50%_-_8rem)] w-[17rem] rounded-[16px] border border-white/10 bg-white/[0.055] p-5 shadow-[0_30px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl">
         <div className="flex items-center justify-between">
           <span className="text-xl font-black text-white">P1</span>
           <Users className="h-4 w-4 text-violet-200" />
@@ -988,14 +1022,20 @@ function WrongAnswerScene({ progress }: { progress: number }) {
         <p className="mt-2 text-sm font-bold text-slate-400">4명</p>
         <div className="mt-5 space-y-2">
           {["이나은", "이수현", "이우노", "황지윤"].map((name, index) => (
-            <div key={name} className={cn("rounded-[7px] border px-3 py-2 text-sm font-black", index === 0 ? "border-violet-200/44 bg-violet-400/16 text-white" : "border-white/10 bg-white/[0.045] text-slate-300")}>
+            <div key={name} className={cn("rounded-[10px] border px-3 py-3 text-sm font-black", index === 0 && progress > 0.1 ? "border-violet-200/44 bg-violet-400/16 text-white" : "border-white/10 bg-white/[0.045] text-slate-300")}>
               {name}
             </div>
           ))}
         </div>
       </div>
 
-      <div className="absolute left-[37%] top-[12%] w-[24%] rounded-[10px] border border-white/10 bg-[#0b0d14]/92 p-4">
+      <div
+        className="absolute left-[26%] top-[calc(50%_-_8.2rem)] w-[18rem] rounded-[16px] border border-white/10 bg-white/[0.055] p-5 shadow-[0_30px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+        style={{
+          opacity: studentProgress,
+          transform: `translateY(${(1 - studentProgress) * 20}px)`,
+        }}
+      >
         <span className="text-sm font-black text-white">시험 일정</span>
         <div className="mt-4 rounded-[8px] border border-violet-200/30 bg-violet-400/14 p-3">
           <span className="block text-sm font-black text-white">0527</span>
@@ -1004,7 +1044,13 @@ function WrongAnswerScene({ progress }: { progress: number }) {
         </div>
       </div>
 
-      <div className="absolute right-[7%] top-[13%] w-[33%] rounded-[10px] border border-white/12 bg-[#0a0c13]/95 p-4 shadow-[0_30px_90px_rgba(0,0,0,0.34)]">
+      <div
+        className="absolute right-[6vw] top-[calc(50%_-_12rem)] w-[31rem] rounded-[18px] border border-white/12 bg-white/[0.055] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-xl"
+        style={{
+          opacity: clampProgress((progress - 0.3) / 0.1),
+          transform: `translateY(${(1 - clampProgress((progress - 0.3) / 0.1)) * 20}px)`,
+        }}
+      >
         <div className="flex items-center justify-between">
           <span className="text-sm font-black text-white">오답 체크</span>
           <ClipboardCheck className="h-4 w-4 text-violet-200" />
@@ -1013,13 +1059,30 @@ function WrongAnswerScene({ progress }: { progress: number }) {
           {statuses.map((status, index) => (
             <span
               key={index}
-              className={cn(
-                "grid aspect-square place-items-center rounded-[6px] text-xs font-black text-white transition",
-                status === "wrong" && "bg-orange-400",
-                status === "missed" && "bg-rose-500",
-                status === "correct" && "bg-emerald-400"
-              )}
-              style={{ opacity: clampProgress((gridProgress - index * 0.015) / 0.28) }}
+              className="grid aspect-square place-items-center rounded-[9px] border text-xs font-black text-white transition"
+              style={{
+                opacity: clampProgress((gridProgress - index * 0.015) / 0.28),
+                background:
+                  status === "wrong"
+                    ? "rgba(217,154,91,0.22)"
+                    : status === "missed"
+                      ? "rgba(217,96,128,0.28)"
+                      : "rgba(91,214,176,0.22)",
+                borderColor:
+                  status === "wrong"
+                    ? "rgba(217,154,91,0.50)"
+                    : status === "missed"
+                      ? "rgba(217,96,128,0.60)"
+                      : "rgba(91,214,176,0.50)",
+                boxShadow:
+                  status === "wrong"
+                    ? "0 0 14px rgba(217,154,91,0.16)"
+                    : status === "missed"
+                      ? "0 0 16px rgba(217,96,128,0.26)"
+                      : "0 0 14px rgba(91,214,176,0.14)",
+                transform: (status === "wrong" || status === "missed") && branchProgress > 0 ? `translate(${branchProgress * (-42 + (index % 6) * 8)}px, ${branchProgress * 120}px) scale(${1 + branchProgress * 0.05})` : undefined,
+                zIndex: status === "wrong" || status === "missed" ? 5 : 1,
+              }}
             >
               {index + 1}
             </span>
@@ -1027,12 +1090,17 @@ function WrongAnswerScene({ progress }: { progress: number }) {
         </div>
       </div>
 
-      <div className="absolute bottom-[12%] left-[36%] right-[7%] grid grid-cols-2 gap-3" style={{ opacity: branchProgress, transform: `translateY(${(1 - branchProgress) * 18}px)` }}>
+      <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ opacity: branchProgress }}>
+        <path d="M 50 63 C 38 73, 34 73, 27 78" fill="none" stroke="#3b6ff5" strokeWidth="0.35" strokeDasharray="1.4 1.4" opacity="0.6" />
+        <path d="M 50 63 C 61 73, 66 73, 73 78" fill="none" stroke="#2dd4bf" strokeWidth="0.35" strokeDasharray="1.4 1.4" opacity="0.6" />
+      </svg>
+
+      <div className="absolute bottom-[12%] left-[26%] right-[15%] z-10 grid grid-cols-2 gap-6" style={{ opacity: branchProgress, transform: `translateY(${(1 - branchProgress) * 30}px) scale(${0.9 + branchProgress * 0.1})` }}>
         {["오답 시험지", "퀴즈 뷰"].map((label, index) => (
-          <div key={label} className="rounded-[10px] border border-violet-200/24 bg-violet-400/12 p-4 shadow-[0_18px_54px_rgba(124,92,255,0.18)]">
+          <div key={label} className="rounded-[16px] border border-violet-200/20 bg-white/[0.055] p-5 shadow-[0_18px_54px_rgba(124,92,255,0.18)] backdrop-blur-xl">
             <span className="text-sm font-black text-white">{label}</span>
             {index === 0 ? (
-              <div className="mt-3 h-28 overflow-hidden rounded-[6px] bg-white">
+              <div className="mt-3 h-28 overflow-hidden rounded-[10px] bg-[#d9d8e7]/95">
                 <DemoExamPreview reveal={1} scale={0.13} />
               </div>
             ) : (
@@ -1049,6 +1117,21 @@ function WrongAnswerScene({ progress }: { progress: number }) {
           </div>
         ))}
       </div>
+
+      <div
+        className="landing-story-cursor"
+        style={{
+          left: `${cursorPoint.x}%`,
+          top: `${cursorPoint.y}%`,
+          opacity: progress > 0.04 && progress < 0.66 ? 1 : 0,
+          transform: "rotate(-13deg)",
+        }}
+      />
+
+      <StoryCaption tag="Master" progress={progress} className="bottom-[13vh] left-[7vw]">
+        오답까지{" "}
+        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">완벽하게</span>
+      </StoryCaption>
     </div>
   );
 }
