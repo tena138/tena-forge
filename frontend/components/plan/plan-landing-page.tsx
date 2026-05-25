@@ -785,11 +785,23 @@ function DigitizeScene({ progress }: { progress: number }) {
         const startY = document.y;
         const endX = -2;
         const endY = -6;
-        const swirlRadius = Math.sin(absorbProgress * Math.PI) * (10.5 - index * 0.55);
-        const swirlAngle = absorbProgress * Math.PI * 2.7 + index * 0.86;
+        const radiusBase = 10.5 - index * 0.55;
+        const positionAt = (value: number) => {
+          const radius = Math.sin(value * Math.PI) * radiusBase;
+          const angle = value * Math.PI * 2.7 + index * 0.86;
+          return {
+            x: startX + (endX - startX) * value + Math.cos(angle) * radius,
+            y: startY + (endY - startY) * value + Math.sin(angle) * radius * 0.56,
+          };
+        };
+        const currentPosition = positionAt(absorbProgress);
+        const nextPosition = positionAt(Math.min(1, absorbProgress + 0.015));
+        const flowRotation = Math.atan2(nextPosition.y - currentPosition.y, nextPosition.x - currentPosition.x) * (180 / Math.PI) - 90;
+        const flowInfluence = clampProgress((absorbProgress - 0.08) / 0.72);
+        const rotation = document.rotate * (1 - flowInfluence) + flowRotation * flowInfluence + Math.sin(absorbProgress * Math.PI * 2 + index) * 4 * flowInfluence;
         const drift = Math.sin(progress * 5.2 + index * 1.7) * 5 * (1 - absorbProgress);
-        const x = startX + (endX - startX) * absorbProgress + Math.cos(swirlAngle) * swirlRadius;
-        const y = startY + (endY - startY) * absorbProgress + Math.sin(swirlAngle) * swirlRadius * 0.56;
+        const x = currentPosition.x;
+        const y = currentPosition.y;
         const scale = paperIn * (1 - absorbProgress * 0.86);
         const opacity = paperIn * (1 - clampProgress((progress - 0.41) / 0.08));
         return (
@@ -799,7 +811,7 @@ function DigitizeScene({ progress }: { progress: number }) {
             style={{
               width: `${document.width}rem`,
               height: `${document.height}rem`,
-              transform: `translate(calc(-50% + ${x}vw + ${drift}px), calc(-50% + ${y}vh + ${drift * 0.4}px)) rotate(${document.rotate * (1 - absorbProgress) + absorbProgress * 390}deg) scale(${scale})`,
+              transform: `translate(calc(-50% + ${x}vw + ${drift}px), calc(-50% + ${y}vh + ${drift * 0.4}px)) rotate(${rotation}deg) scale(${scale})`,
               opacity,
               zIndex: 12 - index,
             }}
