@@ -74,9 +74,9 @@ const planCtaToneClass: Record<PlanCardTone, string> = {
 };
 
 const storyScenes = [
-  { step: "01", title: "오프라인 문항들을 한 곳에 전산화" },
-  { step: "02", title: "가장 빠르게 컨텐츠 제작" },
-  { step: "03", title: "오답까지 완벽하게" },
+  { title: "오프라인 문항들을 한 곳에 전산화", eyebrow: "Private Studio", pageTitle: "문항 보관함", route: "/problems" },
+  { title: "가장 빠르게 컨텐츠 제작", eyebrow: "Private Studio", pageTitle: "세트 제작", route: "/problem-sets/export" },
+  { title: "오답까지 완벽하게", eyebrow: "Academy OS", pageTitle: "학생 관리", route: "/student-management" },
 ];
 
 const demoProblems: SampleProblem[] = [
@@ -443,14 +443,13 @@ function ScrollStorySection() {
         {storyScenes.map((scene, index) => (
           <div key={scene.title} className="px-4 py-12 sm:px-6">
             <div className="mx-auto max-w-5xl">
-              <span className="inline-grid h-9 w-9 place-items-center rounded-full border border-violet-200/24 bg-violet-400/12 text-xs font-black text-violet-100">
-                {scene.step}
-              </span>
-              <h2 className="landing-keep-words mt-5 text-3xl font-black leading-tight tracking-normal text-white">{scene.title}</h2>
+              <h2 className="landing-keep-words text-3xl font-black leading-tight tracking-normal text-white">{scene.title}</h2>
               <div className="mt-6 h-[28rem] overflow-hidden rounded-[8px] border border-white/10 bg-[#090b10]/90">
-                {index === 0 ? <DigitizeScene progress={1} /> : null}
-                {index === 1 ? <ContentCreationScene progress={1} /> : null}
-                {index === 2 ? <WrongAnswerScene progress={1} /> : null}
+                <StoryConsoleFrame scene={scene}>
+                  {index === 0 ? <DigitizeScene progress={1} /> : null}
+                  {index === 1 ? <ContentCreationScene progress={1} /> : null}
+                  {index === 2 ? <WrongAnswerScene progress={1} /> : null}
+                </StoryConsoleFrame>
               </div>
             </div>
           </div>
@@ -459,10 +458,8 @@ function ScrollStorySection() {
 
       <div ref={pinRef} className="relative hidden h-screen min-h-[46rem] items-center overflow-hidden lg:flex">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_28%,rgba(45,212,191,0.10),transparent_28rem),radial-gradient(circle_at_78%_40%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.14),rgba(6,7,13,0.88))]" />
-        <div className="relative z-10 mx-auto grid w-full max-w-[104rem] gap-8 px-4 sm:px-6 lg:grid-cols-[0.42fr_0.58fr] lg:items-center xl:px-8">
-          <div className="landing-keep-words max-w-[35rem]">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/80">Workflow</p>
-            <div className="relative mt-5 min-h-[12rem]">
+        <div className="relative z-10 mx-auto w-full max-w-[104rem] px-4 sm:px-6 xl:px-8">
+          <div className="landing-keep-words relative mb-5 h-16">
               {storyScenes.map((scene, index) => {
                 const active = activeIndex === index;
                 return (
@@ -474,29 +471,20 @@ function ScrollStorySection() {
                       transform: active ? "translate3d(0,0,0)" : "translate3d(0,1.5rem,0)",
                     }}
                   >
-                    <span className="inline-grid h-9 w-9 place-items-center rounded-full border border-violet-200/24 bg-violet-400/12 text-xs font-black text-violet-100">
-                      {scene.step}
-                    </span>
-                    <h2 className="mt-5 text-4xl font-black leading-tight tracking-normal text-white sm:text-5xl">{scene.title}</h2>
+                    <h2 className="text-4xl font-black leading-tight tracking-normal text-white sm:text-5xl">{scene.title}</h2>
                   </div>
                 );
               })}
-            </div>
-            <div className="mt-8 flex gap-2">
-              {storyScenes.map((scene, index) => (
-                <span key={scene.step} className={cn("h-1.5 rounded-full transition-all duration-500", activeIndex === index ? "w-16 bg-violet-200" : "w-6 bg-white/18")} />
-              ))}
-            </div>
           </div>
 
-          <div className="relative h-[34rem] rounded-[8px] border border-white/[0.08] bg-black/22 p-3 shadow-[0_34px_120px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:h-[40rem] sm:p-5">
-            <StoryVisualScene active={activeIndex === 0}>
+          <div className="relative h-[42rem] rounded-[8px] border border-white/[0.08] bg-black/22 p-3 shadow-[0_34px_120px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+            <StoryVisualScene active={activeIndex === 0} scene={storyScenes[0]}>
               <DigitizeScene progress={progressByScene[0]} />
             </StoryVisualScene>
-            <StoryVisualScene active={activeIndex === 1}>
+            <StoryVisualScene active={activeIndex === 1} scene={storyScenes[1]}>
               <ContentCreationScene progress={progressByScene[1]} />
             </StoryVisualScene>
-            <StoryVisualScene active={activeIndex === 2}>
+            <StoryVisualScene active={activeIndex === 2} scene={storyScenes[2]}>
               <WrongAnswerScene progress={progressByScene[2]} />
             </StoryVisualScene>
           </div>
@@ -506,7 +494,7 @@ function ScrollStorySection() {
   );
 }
 
-function StoryVisualScene({ active, children }: { active: boolean; children: ReactNode }) {
+function StoryVisualScene({ active, scene, children }: { active: boolean; scene: (typeof storyScenes)[number]; children: ReactNode }) {
   return (
     <div
       className="landing-story-visual absolute inset-3 overflow-hidden rounded-[8px] border border-white/10 bg-[#090b10]/90 sm:inset-5"
@@ -516,7 +504,64 @@ function StoryVisualScene({ active, children }: { active: boolean; children: Rea
         pointerEvents: active ? "auto" : "none",
       }}
     >
-      {children}
+      <StoryConsoleFrame scene={scene}>{children}</StoryConsoleFrame>
+    </div>
+  );
+}
+
+function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[number]; children: ReactNode }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#090b10]">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-black/55 px-4 backdrop-blur-xl">
+        <div className="flex min-w-0 items-center gap-3">
+          <SiteLogo className="h-9" />
+          <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">제작 콘솔</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[11px] font-bold text-slate-300 sm:inline-flex">{scene.route}</span>
+          <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.75)]" />
+        </div>
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[12rem_minmax(0,1fr)]">
+        <aside className="border-r border-white/10 bg-black/45 px-1.5 py-3 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-2">
+          <SidebarGroup
+            title="Private Studio"
+            accent="bg-violet-400"
+            panel="border-violet-400/20 bg-violet-400/[0.055]"
+            items={[
+              ["제작 콘솔", LayoutDashboard, scene.eyebrow === "Private Studio" && scene.route === "/problems"],
+              ["추출", FileUp, false],
+              ["검토", ClipboardCheck, false],
+              ["보관", Archive, scene.route === "/problems"],
+              ["세트", FolderKanban, scene.route.includes("problem-sets")],
+            ]}
+          />
+          <SidebarGroup
+            title="Academy OS"
+            accent="bg-sky-300"
+            panel="border-sky-300/20 bg-sky-300/[0.045]"
+            items={[
+              ["학생 관리", GraduationCap, scene.route === "/student-management"],
+              ["클래스", Users, scene.route === "/student-management"],
+            ]}
+          />
+        </aside>
+
+        <section className="flex min-h-0 min-w-0 flex-col bg-[#090b10]/[0.92]">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-5">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">{scene.eyebrow}</p>
+              <p className="mt-0.5 text-sm font-black text-slate-100">{scene.pageTitle}</p>
+            </div>
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="h-2 w-2 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.7)]" />
+              <span className="text-xs font-bold text-slate-400">Live preview</span>
+            </div>
+          </div>
+          <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -526,15 +571,15 @@ function DigitizeScene({ progress }: { progress: number }) {
   const consoleFill = clampProgress((progress - 0.34) / 0.5);
 
   return (
-    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_22%_22%,rgba(45,212,191,0.14),transparent_20rem),radial-gradient(circle_at_78%_38%,rgba(124,92,255,0.20),transparent_26rem),#07080d]">
-      <div className="absolute left-[7%] top-[18%] h-[21rem] w-[14rem] sm:h-[27rem] sm:w-[18rem]">
+    <div className="relative h-full overflow-hidden bg-[#090b10] p-5">
+      <div className="pointer-events-none absolute left-[5%] top-[16%] h-[18rem] w-[12rem]">
         {[0, 1, 2].map((index) => (
           <div
             key={index}
             className="landing-story-paper absolute inset-0 rounded-[8px] border border-white/12 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.34)]"
             style={{
-              transform: `translate3d(${paperShift * (145 + index * 12)}%, ${index * 1.25 - paperShift * 7}rem, 0) rotate(${index * -4 + paperShift * 5}deg) scale(${1 - paperShift * 0.48})`,
-              opacity: 1 - paperShift * 0.72,
+              transform: `translate3d(${paperShift * (174 + index * 10)}%, ${index * 1.1 - paperShift * 3}rem, 0) rotate(${index * -4 + paperShift * 5}deg) scale(${1 - paperShift * 0.58})`,
+              opacity: 1 - paperShift * 0.8,
             }}
           >
             <div className="m-4 h-5 w-20 rounded bg-slate-900/80" />
@@ -548,34 +593,54 @@ function DigitizeScene({ progress }: { progress: number }) {
         ))}
       </div>
 
-      <div className="absolute left-1/2 top-1/2 w-[70%] max-w-[38rem] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[10px] border border-white/12 bg-[#0a0c13]/95 shadow-[0_30px_90px_rgba(0,0,0,0.42)]">
-        <div className="flex h-11 items-center justify-between border-b border-white/10 bg-black/45 px-3">
-          <span className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Tena Console</span>
-          <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.8)]" />
-        </div>
-        <div className="grid min-h-[22rem] gap-3 p-4 sm:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[8px] border border-dashed border-cyan-200/22 bg-cyan-200/[0.04] p-4">
-            <FileUp className="h-7 w-7 text-cyan-100" />
-            <div className="mt-6 space-y-2">
-              {[0, 1, 2, 3].map((index) => (
-                <span key={index} className="block h-2 rounded bg-cyan-100/20" style={{ width: `${88 - index * 12}%`, opacity: 0.35 + consoleFill * 0.55 }} />
-              ))}
+      <div className="grid h-full gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside className="relative rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-black text-white">배치 추출</span>
+            <FileUp className="h-4 w-4 text-cyan-100" />
+          </div>
+          <div className="mt-5 rounded-[8px] border border-dashed border-cyan-200/24 bg-cyan-200/[0.055] p-4">
+            <p className="text-xs font-bold text-cyan-100">2025 이미지 미친개념 워크북.pdf</p>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300" style={{ width: `${Math.round(28 + consoleFill * 72)}%` }} />
+            </div>
+            <p className="mt-3 text-xs font-semibold text-slate-400">{consoleFill > 0.88 ? "검토 대기" : "문항 구조화 중"}</p>
+          </div>
+          <div className="mt-4 space-y-2">
+            {["원본 페이지 감지", "문항 번호 추출", "태그 자동 분류", "보관함 저장"].map((label, index) => (
+              <div key={label} className="flex items-center justify-between rounded-[7px] border border-white/10 bg-black/25 px-3 py-2">
+                <span className="text-xs font-bold text-slate-300">{label}</span>
+                <span className={cn("h-2 w-2 rounded-full", consoleFill > index * 0.22 ? "bg-emerald-300" : "bg-slate-600")} />
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <div className="min-w-0 rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xl font-black text-white">문항 브라우저</p>
+              <p className="mt-1 text-xs font-bold text-slate-500">58개 문항 · 원문 순</p>
+            </div>
+            <div className="flex gap-2">
+              <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-200">검토 완료</span>
+              <span className="rounded-[7px] bg-[var(--landing-accent)] px-3 py-2 text-xs font-black text-white">세트에 담기</span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div
-                key={index}
-                className="rounded-[7px] border border-white/10 bg-white/[0.045] p-3"
+          <div className="mt-4 h-11 rounded-[7px] border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-slate-500">
+            본문, 번호, 정답, 태그, 출처 검색
+          </div>
+          <div className="mt-4 grid gap-3 xl:grid-cols-3">
+            {demoProblems.concat(demoProblems).slice(0, 6).map((problem, index) => (
+              <ProblemCard
+                key={`${problem.id}-${index}`}
+                number={index + 1}
+                selected={false}
                 style={{
                   opacity: clampProgress((consoleFill - index * 0.06) / 0.35),
                   transform: `translateY(${(1 - clampProgress((consoleFill - index * 0.06) / 0.35)) * 18}px)`,
                 }}
-              >
-                <span className="block h-2 w-8 rounded bg-violet-200/60" />
-                <span className="mt-4 block h-2 w-full rounded bg-slate-500/42" />
-                <span className="mt-2 block h-2 w-8/12 rounded bg-slate-500/26" />
-              </div>
+              />
             ))}
           </div>
         </div>
@@ -774,9 +839,9 @@ function SidebarGroup({
   );
 }
 
-function ProblemCard({ number, selected }: { number: number; selected: boolean }) {
+function ProblemCard({ number, selected, style }: { number: number; selected: boolean; style?: CSSProperties }) {
   return (
-    <article className={cn("min-h-40 rounded-[8px] border p-4", selected ? "border-violet-300/45 bg-violet-400/[0.08]" : "border-white/10 bg-white/[0.035]")}>
+    <article className={cn("min-h-40 rounded-[8px] border p-4 transition", selected ? "border-violet-300/45 bg-violet-400/[0.08]" : "border-white/10 bg-white/[0.035]")} style={style}>
       <div className="flex items-center justify-between">
         <span className="text-sm font-black text-white">#{number}</span>
         <span className="rounded-[6px] border border-white/10 bg-white/[0.06] px-2 py-1 text-[11px] font-black text-slate-300">수학</span>
