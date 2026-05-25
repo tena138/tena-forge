@@ -1029,7 +1029,7 @@ function DemoStudentManagementSurface({
   className?: string;
   style?: CSSProperties;
 }) {
-  const studentNames = ["이나은", "이수현", "이우노", "황지윤"];
+  const studentNames = ["학생 01", "학생 02", "학생 03", "학생 04"];
   const studentOpen = clampProgress((progress - 0.14) / 0.16);
   const gradingOpen = clampProgress((progress - 0.28) / 0.12);
 
@@ -1057,7 +1057,7 @@ function DemoStudentManagementSurface({
           </div>
           <aside className="flex flex-col justify-between border-r border-white/10 p-4">
             <div>
-              <p className="text-4xl font-black tracking-normal text-white">P1</p>
+              <p className="text-4xl font-black tracking-normal text-white">CLASS</p>
               <p className="mt-5 text-3xl font-black text-slate-200">4</p>
               <p className="text-xs text-slate-500">학생</p>
               <p className="mt-3 truncate text-xs text-slate-500">수학 · N</p>
@@ -1115,10 +1115,10 @@ function DemoStudentManagementSurface({
                 <p className="text-sm font-semibold text-white">채점할 세션</p>
                 <div className="mt-3 rounded-md border border-violet-300/30 bg-violet-500/15 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-sm font-semibold text-white">0527</span>
+                    <span className="truncate text-sm font-semibold text-white">TEST 01</span>
                     <span className="rounded border border-violet-300/25 bg-violet-400/15 px-2 py-0.5 text-[11px] font-bold text-violet-100">grading</span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">이나은 · 18문항</p>
+                  <p className="mt-1 text-xs text-slate-500">학생 01 · 18문항</p>
                 </div>
               </div>
 
@@ -1128,8 +1128,8 @@ function DemoStudentManagementSurface({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-base font-semibold text-white">0527</p>
-                    <p className="mt-1 text-xs text-slate-500">이나은 · 18문항</p>
+                    <p className="text-base font-semibold text-white">TEST 01</p>
+                    <p className="mt-1 text-xs text-slate-500">학생 01 · 18문항</p>
                   </div>
                   <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-bold text-slate-200">
                     <ClipboardCheck className="h-3.5 w-3.5 text-violet-200" />
