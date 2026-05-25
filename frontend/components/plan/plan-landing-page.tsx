@@ -836,11 +836,11 @@ function ContentCreationScene({ progress }: { progress: number }) {
   const templateProgress = clampProgress((progress - 0.7) / 0.3);
   const sheetIntro = clampProgress((progress - 0.5) / 0.16);
   const cursorPoint = interpolateTimeline(progress, [
-    { at: 0, x: 6, y: 48 },
-    { at: 0.11, x: 6, y: 48 },
-    { at: 0.22, x: 18, y: 48 },
-    { at: 0.34, x: 18, y: 63 },
-    { at: 0.46, x: 6, y: 78 },
+    { at: 0, x: 16, y: 48 },
+    { at: 0.11, x: 16, y: 48 },
+    { at: 0.22, x: 32, y: 48 },
+    { at: 0.34, x: 32, y: 63 },
+    { at: 0.46, x: 16, y: 78 },
     { at: 0.58, x: 43, y: 72 },
     { at: 0.7, x: 76, y: 28 },
     { at: 1, x: 84, y: 28 },
@@ -862,10 +862,10 @@ function ContentCreationScene({ progress }: { progress: number }) {
         cardCount={6}
         className="absolute w-[44rem]"
         style={{
-          left: "-2.5rem",
-          top: "38%",
+          left: "7vw",
+          top: "35%",
           opacity: sourceFade,
-          transform: "perspective(1400px) rotateY(9deg) rotateX(2deg) scale(0.92)",
+          transform: "perspective(1400px) rotateY(9deg) rotateX(2deg) scale(0.9)",
           transformOrigin: "0% 50%",
         }}
       />
@@ -884,7 +884,7 @@ function ContentCreationScene({ progress }: { progress: number }) {
       <div className="landing-story-cursor" style={cursorStyle} />
 
       <div
-        className="absolute -right-10 top-[13%] h-[78vh] w-[25rem]"
+        className="absolute right-[4vw] top-[13%] h-[78vh] w-[23rem]"
         style={{
           opacity: sheetIntro,
           transform: `perspective(1500px) rotateY(${-12 + sheetIntro * 8}deg) scale(${0.9 + sheetIntro * 0.1})`,
