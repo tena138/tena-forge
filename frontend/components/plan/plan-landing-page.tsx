@@ -478,9 +478,7 @@ function ScrollStorySection() {
           </div>
 
           <div className="relative h-[42rem] rounded-[8px] border border-white/[0.08] bg-black/22 p-3 shadow-[0_34px_120px_rgba(0,0,0,0.34)] backdrop-blur-xl">
-            <StoryVisualScene active={activeIndex === 0} scene={storyScenes[0]}>
-              <DigitizeScene progress={progressByScene[0]} />
-            </StoryVisualScene>
+            <DigitizeVisualScene active={activeIndex === 0} scene={storyScenes[0]} progress={progressByScene[0]} />
             <StoryVisualScene active={activeIndex === 1} scene={storyScenes[1]}>
               <ContentCreationScene progress={progressByScene[1]} />
             </StoryVisualScene>
@@ -491,6 +489,38 @@ function ScrollStorySection() {
         </div>
       </div>
     </section>
+  );
+}
+
+function DigitizeVisualScene({ active, scene, progress }: { active: boolean; scene: (typeof storyScenes)[number]; progress: number }) {
+  const expandProgress = clampProgress((progress - 0.31) / 0.2);
+  const consoleScale = 0.32 + expandProgress * 0.68;
+  const consoleDriftX = (1 - expandProgress) * 7;
+  const consoleDriftY = (1 - expandProgress) * 1.2;
+
+  return (
+    <div
+      className="landing-story-visual absolute inset-3 overflow-hidden rounded-[8px] border border-white/[0.06] bg-[#05070d]/80 sm:inset-5"
+      style={{
+        opacity: active ? 1 : 0,
+        transform: active ? "scale(1)" : "scale(0.985)",
+        pointerEvents: active ? "auto" : "none",
+      }}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_48%,rgba(45,212,191,0.10),transparent_20rem),radial-gradient(circle_at_64%_42%,rgba(124,92,255,0.18),transparent_28rem),#05070d]" />
+      <DigitizePaperStack progress={progress} />
+      <div
+        className="absolute inset-0 overflow-hidden rounded-[8px] border border-white/10 bg-[#090b10]/95 shadow-[0_34px_120px_rgba(0,0,0,0.44)]"
+        style={{
+          transform: `translate3d(${consoleDriftX}%, ${consoleDriftY}rem, 0) scale(${consoleScale})`,
+          transformOrigin: "50% 48%",
+        }}
+      >
+        <StoryConsoleFrame scene={scene}>
+          <DigitizeScene progress={progress} />
+        </StoryConsoleFrame>
+      </div>
+    </div>
   );
 }
 
@@ -566,59 +596,59 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
   );
 }
 
-function DigitizeScene({ progress }: { progress: number }) {
+function DigitizePaperStack({ progress }: { progress: number }) {
   const intakeProgress = clampProgress(progress / 0.34);
   const scanProgress = clampProgress((progress - 0.06) / 0.22);
-  const expandProgress = clampProgress((progress - 0.31) / 0.2);
+  const paperOpacity = 1 - clampProgress((intakeProgress - 0.72) / 0.2);
+
+  return (
+    <div className="pointer-events-none absolute left-[10%] top-[34%] z-20 h-[18rem] w-[12.5rem]">
+      {[0, 1, 2].map((index) => (
+        <div
+          key={index}
+          className="landing-story-paper absolute inset-0 rounded-[8px] border border-white/12 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.34)]"
+          style={{
+            transform: `translate3d(${intakeProgress * (375 + index * 8)}%, ${index * 0.9 - intakeProgress * 0.9}rem, 0) rotate(${index * -4 + intakeProgress * 8}deg) scale(${1 - intakeProgress * 0.58})`,
+            opacity: paperOpacity,
+          }}
+        >
+          <div className="m-4 h-5 w-20 rounded bg-slate-900/80" />
+          <div className="mx-4 mt-6 space-y-3">
+            <span className="block h-2 w-10/12 rounded bg-slate-300" />
+            <span className="block h-2 w-8/12 rounded bg-slate-300" />
+            <span className="block h-16 rounded border border-slate-200 bg-slate-50" />
+            <span className="block h-2 w-9/12 rounded bg-slate-300" />
+          </div>
+          <span
+            className="absolute left-0 right-0 h-10 bg-[linear-gradient(180deg,transparent,rgba(45,212,191,0.34),transparent)]"
+            style={{
+              top: `${scanProgress * 78 + 4}%`,
+              opacity: scanProgress > 0 && scanProgress < 1 ? 0.75 : 0,
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DigitizeScene({ progress }: { progress: number }) {
+  const introVisible = 1 - clampProgress((progress - 0.36) / 0.12);
   const batchIntro = clampProgress((progress - 0.43) / 0.12);
   const batchProgress = clampProgress((progress - 0.49) / 0.23);
   const batchExit = clampProgress((progress - 0.72) / 0.1);
   const batchVisible = batchIntro * (1 - batchExit);
   const browserProgress = clampProgress((progress - 0.84) / 0.16);
-  const consoleScale = 0.38 + expandProgress * 0.62;
-  const paperOpacity = 1 - clampProgress((intakeProgress - 0.72) / 0.2);
   const batchPercent = Math.min(100, Math.round(batchProgress * 100));
 
   return (
-    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_20%_28%,rgba(45,212,191,0.10),transparent_20rem),radial-gradient(circle_at_72%_42%,rgba(124,92,255,0.20),transparent_28rem),#090b10] p-5">
-      <div className="pointer-events-none absolute left-[6%] top-[20%] z-20 h-[16rem] w-[11rem]">
-        {[0, 1, 2].map((index) => (
-          <div
-            key={index}
-            className="landing-story-paper absolute inset-0 rounded-[8px] border border-white/12 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.34)]"
-            style={{
-              transform: `translate3d(${intakeProgress * (300 + index * 8)}%, ${index * 0.9 - intakeProgress * 0.7}rem, 0) rotate(${index * -4 + intakeProgress * 8}deg) scale(${1 - intakeProgress * 0.58})`,
-              opacity: paperOpacity,
-            }}
-          >
-            <div className="m-4 h-5 w-20 rounded bg-slate-900/80" />
-            <div className="mx-4 mt-6 space-y-3">
-              <span className="block h-2 w-10/12 rounded bg-slate-300" />
-              <span className="block h-2 w-8/12 rounded bg-slate-300" />
-              <span className="block h-16 rounded border border-slate-200 bg-slate-50" />
-              <span className="block h-2 w-9/12 rounded bg-slate-300" />
-            </div>
-            <span
-              className="absolute left-0 right-0 h-10 bg-[linear-gradient(180deg,transparent,rgba(45,212,191,0.34),transparent)]"
-              style={{
-                top: `${scanProgress * 78 + 4}%`,
-                opacity: scanProgress > 0 && scanProgress < 1 ? 0.75 : 0,
-              }}
-            />
-          </div>
-        ))}
-      </div>
-
+    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_20%_28%,rgba(45,212,191,0.10),transparent_20rem),radial-gradient(circle_at_72%_42%,rgba(124,92,255,0.20),transparent_28rem),#090b10]">
       <div
-        className="absolute inset-5 z-10 overflow-hidden rounded-[10px] border border-white/10 bg-[#080a10]/95 shadow-[0_28px_100px_rgba(0,0,0,0.42)]"
-        style={{
-          transform: `scale(${consoleScale})`,
-          transformOrigin: "50% 45%",
-        }}
+        className="absolute inset-0 overflow-hidden bg-[#080a10]/95 shadow-[0_28px_100px_rgba(0,0,0,0.42)]"
       >
         <div
           className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_46%,rgba(124,92,255,0.18),transparent_17rem)]"
-          style={{ opacity: 1 - clampProgress(expandProgress * 1.6) }}
+          style={{ opacity: introVisible }}
         >
           <div className="w-[min(16rem,70%)] rounded-[9px] border border-dashed border-cyan-200/28 bg-cyan-200/[0.055] p-5 text-center shadow-[0_0_46px_rgba(45,212,191,0.10)]">
             <FileUp className="mx-auto h-7 w-7 text-cyan-100" />
