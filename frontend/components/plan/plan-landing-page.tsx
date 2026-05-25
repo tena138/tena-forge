@@ -88,7 +88,7 @@ const planCtaToneClass: Record<PlanCardTone, string> = {
 const storyScenes = [
   { title: "오프라인 문항들을 한 곳에 전산화", eyebrow: "Private Studio", pageTitle: "문항 보관함", route: "/problems" },
   { title: "가장 빠르게 컨텐츠 제작", eyebrow: "Private Studio", pageTitle: "세트 제작", route: "/problem-sets/export" },
-  { title: "오답까지 완벽하게", eyebrow: "Academy OS", pageTitle: "학생 관리", route: "/student-management" },
+  { title: "오답 관리까지 꼼꼼하게", eyebrow: "Academy OS", pageTitle: "학생 관리", route: "/student-management" },
 ];
 
 const demoProblems: SampleProblem[] = [
@@ -1057,8 +1057,8 @@ function WrongAnswerScene({ progress }: { progress: number }) {
       />
 
       <StoryCaption tag="Master" progress={progress} className="bottom-[13vh] left-[7vw]">
-        오답까지{" "}
-        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">완벽하게</span>
+        오답 관리까지{" "}
+        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">꼼꼼하게</span>
       </StoryCaption>
     </div>
   );
