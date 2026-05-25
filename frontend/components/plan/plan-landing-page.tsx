@@ -22,6 +22,8 @@ import {
 import { PLANS, formatKRW } from "@/lib/plan-pricing";
 import { cn } from "@/lib/utils";
 import { SiteLogo } from "@/components/site-logo";
+import { TemplatePageView } from "@/components/templates/visual-template-renderer";
+import { PAGE_SIZES, SampleProblem, TemplateSet } from "@/lib/visualTemplateTypes";
 
 type IconComponent = ComponentType<{ className?: string }>;
 type PlanCardTone = "free" | "basic" | "pro";
@@ -76,6 +78,117 @@ const storyScenes = [
   { step: "02", title: "가장 빠르게 컨텐츠 제작" },
   { step: "03", title: "오답까지 완벽하게" },
 ];
+
+const demoProblems: SampleProblem[] = [
+  {
+    id: "landing-problem-1",
+    number: 1,
+    text: "다항함수 $f(x)$가 $\\lim_{x\\to\\infty}\\frac{f(x)-x^3}{x^2}=-6$ 을 만족시킬 때, $f(1)$의 값을 구하시오.",
+    choices: ["1", "2", "3", "4", "5"],
+    answer: "3",
+    difficulty: "중",
+    tags: ["수학II", "극한"],
+  },
+  {
+    id: "landing-problem-2",
+    number: 2,
+    text: "상수항과 모든 항의 계수가 정수인 다항함수 $f(x), g(x)$가 조건을 만족시킬 때 가능한 모든 $f(3)$의 합을 구하시오.",
+    answer: "12",
+    difficulty: "상",
+    tags: ["수학II", "함수"],
+  },
+  {
+    id: "landing-problem-3",
+    number: 3,
+    text: "다음 조건을 만족시키는 모든 자연수 $n$의 개수를 구하시오.",
+    choices: ["2", "4", "6", "8", "10"],
+    answer: "4",
+    difficulty: "중",
+    tags: ["수학II", "수열"],
+  },
+  {
+    id: "landing-problem-4",
+    number: 4,
+    text: "최고차항의 계수가 1인 삼차함수 $f(x)$와 이차함수 $g(x)$가 조건을 만족시킬 때 $g(5)$의 값을 구하시오.",
+    answer: "7",
+    difficulty: "상",
+    tags: ["수학II", "다항함수"],
+  },
+];
+
+const demoTemplateSet: TemplateSet = {
+  id: "landing-template-set",
+  schemaVersion: 1,
+  title: "세움 스파르타 시험지 양식",
+  category: "exam",
+  visibility: "private",
+  defaultPageSize: PAGE_SIZES.A4_PORTRAIT,
+  theme: {
+    primary: "#111827",
+    graphite: "#111827",
+    muted: "#64748b",
+    fontFamily: "Pretendard, sans-serif",
+  },
+  assets: [],
+  pages: [
+    {
+      id: "landing-template-page",
+      name: "시험지",
+      role: "exam",
+      background: { color: "#ffffff" },
+      elements: [
+        {
+          id: "header",
+          type: "headerBlock",
+          name: "헤더",
+          title: "2026년 05월 25일",
+          subtitle: "시험명",
+          x: 58,
+          y: 38,
+          width: 676,
+          height: 54,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 1,
+          locked: true,
+          hidden: false,
+          style: { color: "#111827", fontSize: 13, fontWeight: "bold", stroke: "#111827", strokeWidth: 1, borderStyle: "solid" },
+        },
+        {
+          id: "region-problems",
+          type: "problemRegion",
+          name: "문항 영역",
+          binding: "problems",
+          columns: 2,
+          rows: 3,
+          columnGap: 20,
+          rowGap: 18,
+          padding: 8,
+          fillDirection: "row-first",
+          keepTogether: true,
+          allowSplit: false,
+          overflowStrategy: "create-next-page",
+          minItemHeight: 120,
+          numberFormat: "{n}.",
+          x: 58,
+          y: 120,
+          width: 676,
+          height: 880,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 2,
+          locked: true,
+          hidden: false,
+          style: {},
+          cardStyle: { fill: "#ffffff", stroke: "transparent", strokeWidth: 0, radius: 0 },
+          numberStyle: { color: "#111827", fontSize: 13, fontWeight: "bold" },
+          bodyStyle: { color: "#111827", fontSize: 12, lineHeight: 1.5 },
+          answerSpaceStyle: { fill: "#ffffff", stroke: "#cbd5e1", strokeWidth: 1, borderStyle: "dashed", radius: 4 },
+        },
+      ],
+    },
+  ],
+};
 
 const storyTiming = [
   { start: 0, end: 0.24 },
@@ -281,30 +394,43 @@ function ProductPreview() {
 
 function ScrollStorySection() {
   const sectionRef = useRef<HTMLElement | null>(null);
+  const pinRef = useRef<HTMLDivElement | null>(null);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    let frame = 0;
-    const update = () => {
-      const section = sectionRef.current;
-      if (!section) return;
-      const viewport = Math.max(1, window.innerHeight);
-      const rect = section.getBoundingClientRect();
-      const scrollable = Math.max(1, section.offsetHeight - viewport);
-      setProgress(clampProgress(-rect.top / scrollable));
-    };
-    const requestUpdate = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(update);
-    };
+    const section = sectionRef.current;
+    const pin = pinRef.current;
+    if (!section || !pin) return;
 
-    update();
-    window.addEventListener("scroll", requestUpdate, { passive: true });
-    window.addEventListener("resize", requestUpdate);
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    if (reduceMotion.matches || !desktop.matches) return;
+
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+
+    void Promise.all([import("gsap"), import("gsap/ScrollTrigger")]).then(([gsapModule, scrollTriggerModule]) => {
+      if (cancelled) return;
+      const gsap = gsapModule.gsap;
+      const ScrollTrigger = scrollTriggerModule.ScrollTrigger;
+      gsap.registerPlugin(ScrollTrigger);
+      const trigger = ScrollTrigger.create({
+        trigger: section,
+        pin,
+        scrub: 1,
+        start: "top top",
+        end: "+=360%",
+        anticipatePin: 1,
+        invalidateOnRefresh: true,
+        onUpdate: (self) => setProgress(clampProgress(self.progress)),
+      });
+      cleanup = () => trigger.kill();
+      ScrollTrigger.refresh();
+    });
+
     return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", requestUpdate);
-      window.removeEventListener("resize", requestUpdate);
+      cancelled = true;
+      cleanup?.();
     };
   }, []);
 
@@ -312,8 +438,26 @@ function ScrollStorySection() {
   const progressByScene = storyScenes.map((_, index) => sceneProgress(progress, index));
 
   return (
-    <section ref={sectionRef} className="relative z-10 h-[440vh] border-y border-white/[0.08] bg-[#06070d]/70">
-      <div className="sticky top-0 flex h-screen min-h-[46rem] items-center overflow-hidden">
+    <section ref={sectionRef} className="relative z-10 border-y border-white/[0.08] bg-[#06070d]/70">
+      <div className="lg:hidden">
+        {storyScenes.map((scene, index) => (
+          <div key={scene.title} className="px-4 py-12 sm:px-6">
+            <div className="mx-auto max-w-5xl">
+              <span className="inline-grid h-9 w-9 place-items-center rounded-full border border-violet-200/24 bg-violet-400/12 text-xs font-black text-violet-100">
+                {scene.step}
+              </span>
+              <h2 className="landing-keep-words mt-5 text-3xl font-black leading-tight tracking-normal text-white">{scene.title}</h2>
+              <div className="mt-6 h-[28rem] overflow-hidden rounded-[8px] border border-white/10 bg-[#090b10]/90">
+                {index === 0 ? <DigitizeScene progress={1} /> : null}
+                {index === 1 ? <ContentCreationScene progress={1} /> : null}
+                {index === 2 ? <WrongAnswerScene progress={1} /> : null}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div ref={pinRef} className="relative hidden h-screen min-h-[46rem] items-center overflow-hidden lg:flex">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_28%,rgba(45,212,191,0.10),transparent_28rem),radial-gradient(circle_at_78%_40%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.14),rgba(6,7,13,0.88))]" />
         <div className="relative z-10 mx-auto grid w-full max-w-[104rem] gap-8 px-4 sm:px-6 lg:grid-cols-[0.42fr_0.58fr] lg:items-center xl:px-8">
           <div className="landing-keep-words max-w-[35rem]">
@@ -480,22 +624,32 @@ function ContentCreationScene({ progress }: { progress: number }) {
           <span className="text-sm font-black text-white">템플릿 출력</span>
           <FolderKanban className="h-4 w-4 text-violet-200" />
         </div>
-        <div className="mx-auto mt-5 h-[82%] max-w-[18rem] rounded-[6px] bg-white p-5 text-slate-900 shadow-[0_18px_48px_rgba(0,0,0,0.30)]">
-          <div className="h-8 rounded border border-slate-900/60" style={{ opacity: templateProgress }} />
-          <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div
-                key={index}
-                style={{ opacity: clampProgress((templateProgress - index * 0.06) / 0.35) }}
-              >
-                <span className="block h-2 w-6 rounded bg-slate-900" />
-                <span className="mt-3 block h-1.5 w-full rounded bg-slate-400" />
-                <span className="mt-1.5 block h-1.5 w-8/12 rounded bg-slate-300" />
-              </div>
-            ))}
-          </div>
+        <div className="mx-auto mt-5 flex h-[82%] max-w-[18rem] items-start justify-center overflow-hidden rounded-[6px] bg-white text-slate-900 shadow-[0_18px_48px_rgba(0,0,0,0.30)]">
+          <DemoExamPreview reveal={templateProgress} scale={0.34} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function DemoExamPreview({ reveal, scale = 0.34 }: { reveal: number; scale?: number }) {
+  const visibleCount = Math.min(demoProblems.length, Math.max(0, Math.ceil(reveal * demoProblems.length)));
+  const page = {
+    ...demoTemplateSet.pages[0],
+    dynamicPlacements: {
+      "region-problems": demoProblems.slice(0, visibleCount),
+    },
+  };
+
+  return (
+    <div
+      className="transition"
+      style={{
+        opacity: clampProgress(reveal * 1.35),
+        transform: `translateY(${(1 - clampProgress(reveal)) * 18}px)`,
+      }}
+    >
+      <TemplatePageView templateSet={demoTemplateSet} page={page} scale={scale} scaleOrigin="top-left" selectedIds={[]} />
     </div>
   );
 }
@@ -559,13 +713,24 @@ function WrongAnswerScene({ progress }: { progress: number }) {
       </div>
 
       <div className="absolute bottom-[12%] left-[36%] right-[7%] grid grid-cols-2 gap-3" style={{ opacity: branchProgress, transform: `translateY(${(1 - branchProgress) * 18}px)` }}>
-        {["오답 시험지", "퀴즈 뷰"].map((label) => (
+        {["오답 시험지", "퀴즈 뷰"].map((label, index) => (
           <div key={label} className="rounded-[10px] border border-violet-200/24 bg-violet-400/12 p-4 shadow-[0_18px_54px_rgba(124,92,255,0.18)]">
             <span className="text-sm font-black text-white">{label}</span>
-            <div className="mt-4 space-y-2">
-              <span className="block h-2 w-full rounded bg-white/25" />
-              <span className="block h-2 w-7/12 rounded bg-white/16" />
-            </div>
+            {index === 0 ? (
+              <div className="mt-3 h-28 overflow-hidden rounded-[6px] bg-white">
+                <DemoExamPreview reveal={1} scale={0.13} />
+              </div>
+            ) : (
+              <div className="mt-3 rounded-[10px] border border-white/10 bg-black/35 p-3">
+                <span className="block text-xs font-bold text-violet-100">#2</span>
+                <span className="mt-3 block h-2 w-full rounded bg-white/25" />
+                <span className="mt-2 block h-2 w-7/12 rounded bg-white/16" />
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <span className="h-8 rounded-[6px] bg-white/10" />
+                  <span className="h-8 rounded-[6px] bg-violet-400/45" />
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

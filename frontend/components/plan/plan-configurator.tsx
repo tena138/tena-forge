@@ -71,22 +71,10 @@ const sectionScenes: Partial<Record<string, SceneKey>> = {
   student: "student",
 };
 
-const planScrollTiming = {
-  introStart: 0.035,
-  introSpan: 0.28,
-  workspaceStart: 0.68,
-  workspaceSpan: 0.15,
-  panelStart: 0.76,
-  panelSpan: 0.13,
-};
-
 export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const [selectedPackageIds, setSelectedPackageIds] = useState<Record<PackageGroup, string>>(getDefaultSelections(plan));
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual");
   const [activeScene, setActiveScene] = useState<SceneKey>("ai");
-  const [isDesktop, setIsDesktop] = useState(false);
-  const [introProgress, setIntroProgress] = useState(0);
-  const [workspaceReveal, setWorkspaceReveal] = useState(0);
   const transitionSceneRef = useRef<HTMLElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
@@ -98,54 +86,6 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const planConfig = PLANS[plan];
 
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
-    const update = () => setIsDesktop(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-
-  useEffect(() => {
-    let frame = 0;
-    const update = () => {
-      const scene = transitionSceneRef.current;
-      const viewport = Math.max(1, window.innerHeight);
-      if (!scene) {
-        setIntroProgress(0);
-        setWorkspaceReveal(0);
-        return;
-      }
-
-      const rect = scene.getBoundingClientRect();
-      const scrollable = Math.max(1, scene.offsetHeight - viewport);
-      const progress = Math.max(0, Math.min(1, -rect.top / scrollable));
-      const nextIntro = Math.max(0, Math.min(1, (progress - planScrollTiming.introStart) / planScrollTiming.introSpan));
-      const reachedSceneEnd = rect.bottom <= viewport + 2;
-      const nextWorkspace = reachedSceneEnd ? 1 : Math.max(0, Math.min(1, (progress - planScrollTiming.workspaceStart) / planScrollTiming.workspaceSpan));
-      const panel = rightPanelRef.current;
-      if (panel && nextWorkspace > 0.96) {
-        const panelMaxScroll = Math.max(0, panel.scrollHeight - panel.clientHeight);
-        const panelProgress = reachedSceneEnd ? 1 : Math.max(0, Math.min(1, (progress - planScrollTiming.panelStart) / planScrollTiming.panelSpan));
-        panel.scrollTop = panelMaxScroll * panelProgress;
-      }
-      setIntroProgress(nextIntro);
-      setWorkspaceReveal(nextWorkspace);
-    };
-    const requestUpdate = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener("scroll", requestUpdate, { passive: true });
-    window.addEventListener("resize", requestUpdate);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", requestUpdate);
-      window.removeEventListener("resize", requestUpdate);
-    };
-  }, []);
-
-  useEffect(() => {
     const previous = previousPackageIdsRef.current;
     const changedGroup = (["ai", "storage", "student"] as const).find((group) => previous[group] !== selectedPackageIds[group]);
     previousPackageIdsRef.current = selectedPackageIds;
@@ -153,7 +93,6 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   }, [selectedPackageIds]);
 
   useEffect(() => {
-    const root = isDesktop ? rightPanelRef.current : null;
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -162,20 +101,17 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
         const nextScene = visible?.target.id ? sectionScenes[visible.target.id] : undefined;
         if (nextScene) setActiveScene(nextScene);
       },
-      { root, rootMargin: isDesktop ? "-34% 0px -46% 0px" : "-28% 0px -52% 0px", threshold: [0.2, 0.45, 0.7] }
+      { root: null, rootMargin: "-30% 0px -50% 0px", threshold: [0.2, 0.45, 0.7] }
     );
     Object.values(sectionRefs.current).forEach((node) => node && observer.observe(node));
     return () => observer.disconnect();
-  }, [plan, isDesktop]);
+  }, [plan]);
 
   function selectPackage(group: PackageGroup, id: string) {
     setSelectedPackageIds((current) => ({ ...current, [group]: id }));
   }
 
   const reviewHref = `/checkout/review?plan=${plan}&billing=${billingCycle}&packages=${encodeURIComponent(stringifySelectedPackageIds(selectedPackageIds))}`;
-  const introOpacity = Math.max(0, 1 - introProgress * 1.2);
-  const workspaceOpacity = workspaceReveal;
-
   return (
     <main data-plan-theme={plan} className="relative min-h-screen overflow-x-clip bg-[#07080d] text-white">
       <ConfiguratorNav plan={plan} />
@@ -183,30 +119,29 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
       {plan === "pro" && <ProPlanBackdrop />}
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:72px_72px] opacity-25" />
       <div className="pointer-events-none fixed inset-x-0 top-16 h-px bg-gradient-to-r from-transparent via-cyan-200/30 to-transparent" />
-      <section ref={transitionSceneRef} data-plan-journey className="relative z-10 h-[500vh] bg-[#050609]">
-        <div data-plan-sticky className="sticky top-0 h-screen overflow-hidden bg-[#050609]">
-          <div className="absolute inset-0" style={{ opacity: introOpacity, transition: "opacity 700ms ease-out", pointerEvents: workspaceReveal > 0.08 ? "none" : "auto" }}>
+      <section ref={transitionSceneRef} data-plan-journey className="relative z-10 bg-[#050609] px-4 pb-16 pt-24 sm:px-6">
+        <div data-plan-sticky className="mx-auto max-w-[92rem] bg-transparent">
+          <div className="rounded-[12px] border border-white/10 bg-white/[0.045] shadow-[0_28px_90px_rgba(0,0,0,0.30)] backdrop-blur-md">
             <PlanIntroStage
               plan={plan}
               specs={specs}
               monthlyPrice={monthlyPrice}
               annual={annual}
               billingCycle={billingCycle}
-              progress={introProgress}
+              progress={1}
               style={{ opacity: 1 }}
             />
           </div>
 
           <div
             id="plan-config-workspace"
-            className="absolute inset-0 z-10 mx-auto grid h-full max-w-[92rem] min-h-0 gap-6 overflow-hidden px-4 pb-20 pt-24 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,21rem)] lg:pb-8 lg:pt-20"
-            style={{ opacity: workspaceOpacity, transition: "opacity 850ms ease-out", pointerEvents: workspaceOpacity > 0.9 ? "auto" : "none" }}
+            className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:items-start"
           >
-            <aside className="h-full min-h-0 overflow-hidden" data-plan-stage>
+            <aside className="min-h-0 lg:sticky lg:top-24" data-plan-stage>
               <ProductStage scene={activeScene} plan={plan} specs={specs} />
             </aside>
 
-            <div ref={rightPanelRef} data-plan-scroll-panel className="h-full min-h-0 space-y-6 overflow-y-auto pb-16 pr-1">
+            <div ref={rightPanelRef} data-plan-scroll-panel className="space-y-6 pb-4">
               <PackageSection plan={plan} group="ai" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
               <PackageSection plan={plan} group="storage" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
               <PackageSection plan={plan} group="student" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs}>
