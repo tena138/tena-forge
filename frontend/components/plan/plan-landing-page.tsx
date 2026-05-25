@@ -755,11 +755,11 @@ function DigitizeScene({ progress }: { progress: number }) {
   const paperIn = clampProgress(progress / 0.08);
   const scanProgress = clampProgress((progress - 0.08) / 0.22);
   const absorbProgress = clampProgress((progress - 0.22) / 0.22);
-  const loadingProgress = clampProgress((progress - 0.42) / 0.22);
-  const burstProgress = Math.sin(clampProgress((progress - 0.58) / 0.12) * Math.PI);
-  const gridProgress = clampProgress((progress - 0.64) / 0.26);
-  const consoleProgress = clampProgress((progress - 0.6) / 0.14);
-  const pointOpacity = clampProgress((progress - 0.32) / 0.08) * (1 - clampProgress((progress - 0.64) / 0.1));
+  const loadingProgress = clampProgress((progress - 0.42) / 0.24);
+  const burstProgress = Math.sin(clampProgress((progress - 0.73) / 0.12) * Math.PI);
+  const gridProgress = clampProgress((progress - 0.82) / 0.18);
+  const consoleProgress = clampProgress((progress - 0.76) / 0.14);
+  const pointOpacity = clampProgress((progress - 0.32) / 0.08) * (1 - clampProgress((progress - 0.66) / 0.08));
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
@@ -825,7 +825,7 @@ function DigitizeScene({ progress }: { progress: number }) {
       </div>
 
       <DemoProblemBrowserSurface
-        progress={clampProgress((progress - 0.72) / 0.28)}
+        progress={clampProgress((progress - 0.84) / 0.16)}
         cardCount={6}
         className="absolute w-[66rem]"
         style={{
