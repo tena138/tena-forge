@@ -189,6 +189,11 @@ function formatUsageNumber(value: number, suffix = "") {
   return `${rounded.toLocaleString("ko-KR")}${suffix}`;
 }
 
+function formatLimitLabel(total: number, suffix = "") {
+  if (!total || total <= 0) return "제한 없음";
+  return `월 한도 ${formatUsageNumber(total, suffix)}`;
+}
+
 function subjectEngineLabel(code: string) {
   const labels: Record<string, string> = { math: "수학", korean: "국어" };
   return labels[code] || code;
@@ -227,7 +232,7 @@ function daysUntil(value?: string | null) {
 }
 
 function UsageRing({ label, used, total, value, sub }: { label: string; used: number; total: number; value: string; sub: string }) {
-  const percent = remainingPercent(used, total);
+  const percent = total > 0 ? remainingPercent(used, total) : 100;
   const tone = remainingTone(percent);
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3">
@@ -281,19 +286,21 @@ function UsageOverview({
     ? Math.max(activeSeats, assignedSeats, 1)
     : billing?.included_seats ?? defaultStudentSeatLimit(profile?.plan);
   const seatValue = billing?.unlimited_seats
-    ? `${formatUsageNumber(activeSeats)}명 / 무제한`
-    : `${formatUsageNumber(activeSeats)}명 / ${formatUsageNumber(seatLimit)}명`;
-  const seatSub = billing?.unlimited_seats
-    ? `${formatUsageNumber(assignedSeats)}명 배정됨`
+    ? "무제한"
     : `${formatUsageNumber(Math.max(seatLimit - activeSeats, 0))}명 추가 가능`;
-  const uploadCountUsed = summary?.monthly_uploads_used ?? 0;
-  const uploadCountLimit = summary?.plan?.monthly_upload_count || 0;
+  const seatSub = billing?.unlimited_seats
+    ? `현재 ${formatUsageNumber(activeSeats)}명 활성`
+    : `총 ${formatUsageNumber(seatLimit)}명까지`;
   const pageUsed = summary?.monthly_pages_used ?? 0;
   const pageLimit = summary?.plan?.monthly_processed_pages || 0;
   const uploadMbUsed = summary?.uploaded_mb_this_month ?? 0;
   const uploadMbLimit = summary?.monthly_upload_mb_limit || 0;
   const storageUsed = summary?.storage_mb_used ?? 0;
   const storageLimit = summary?.plan?.storage_quota_mb || 0;
+  const creditsRemaining = Math.max(creditsLimit - creditsUsed, 0);
+  const pageRemaining = Math.max(pageLimit - pageUsed, 0);
+  const uploadMbRemaining = Math.max(uploadMbLimit - uploadMbUsed, 0);
+  const storageRemaining = Math.max(storageLimit - storageUsed, 0);
 
   return (
     <section className="rounded-[12px] border border-white/10 bg-white/[0.035] p-4">
@@ -315,13 +322,12 @@ function UsageOverview({
           </Link>
           <div className="mt-3 text-[11px] text-slate-500">{loading ? "불러오는 중" : updatedAt ? compactTime(updatedAt) : ""}</div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsUsed)} / ${formatUsageNumber(creditsLimit)}`} sub={`${formatUsageNumber(Math.max(creditsLimit - creditsUsed, 0))} 남음`} />
-          <UsageRing label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"} used={activeSeats} total={seatLimit} value={seatValue} sub={seatSub} />
-          <UsageRing label="처리 페이지" used={pageUsed} total={pageLimit} value={`${formatUsageNumber(pageUsed, "p")} / ${formatUsageNumber(pageLimit, "p")}`} sub={`${formatUsageNumber(Math.max(pageLimit - pageUsed, 0), "p")} 남음`} />
-          <UsageRing label="업로드 횟수" used={uploadCountUsed} total={uploadCountLimit} value={`${formatUsageNumber(uploadCountUsed)} / ${formatUsageNumber(uploadCountLimit)}`} sub={`${formatUsageNumber(Math.max(uploadCountLimit - uploadCountUsed, 0))}회 남음`} />
-          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} value={`${formatUsageNumber(uploadMbUsed, "MB")} / ${formatUsageNumber(uploadMbLimit, "MB")}`} sub={`${formatUsageNumber(Math.max(uploadMbLimit - uploadMbUsed, 0), "MB")} 남음`} />
-          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} value={`${formatUsageNumber(storageUsed, "MB")} / ${formatUsageNumber(storageLimit, "MB")}`} sub={`${formatUsageNumber(Math.max(storageLimit - storageUsed, 0), "MB")} 남음`} />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsRemaining)} 남음`} sub={formatLimitLabel(creditsLimit)} />
+          <UsageRing label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"} used={billing?.unlimited_seats ? 0 : activeSeats} total={billing?.unlimited_seats ? 0 : seatLimit} value={seatValue} sub={seatSub} />
+          <UsageRing label="처리 페이지" used={pageUsed} total={pageLimit} value={`${formatUsageNumber(pageRemaining, "p")} 남음`} sub={formatLimitLabel(pageLimit, "p")} />
+          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} value={`${formatUsageNumber(uploadMbRemaining, "MB")} 남음`} sub={formatLimitLabel(uploadMbLimit, "MB")} />
+          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} value={`${formatUsageNumber(storageRemaining, "MB")} 남음`} sub={`총 ${formatUsageNumber(storageLimit, "MB")}`} />
         </div>
       </div>
     </section>
