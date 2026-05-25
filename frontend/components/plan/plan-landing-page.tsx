@@ -138,21 +138,116 @@ const demoTemplateSet: TemplateSet = {
       background: { color: "#ffffff" },
       elements: [
         {
-          id: "header",
-          type: "headerBlock",
-          name: "헤더",
-          title: "2026년 05월 25일",
-          subtitle: "시험명",
+          id: "header-date-box",
+          type: "shape",
+          name: "날짜 박스",
+          shape: "rect",
           x: 58,
           y: 38,
-          width: 676,
-          height: 54,
+          width: 224,
+          height: 58,
           rotation: 0,
           opacity: 1,
           zIndex: 1,
           locked: true,
           hidden: false,
-          style: { color: "#111827", fontSize: 13, fontWeight: "bold", stroke: "#111827", strokeWidth: 1, borderStyle: "solid" },
+          style: { fill: "#ffffff", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+        },
+        {
+          id: "header-title-box",
+          type: "shape",
+          name: "시험명 박스",
+          shape: "rect",
+          x: 282,
+          y: 38,
+          width: 250,
+          height: 58,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 1,
+          locked: true,
+          hidden: false,
+          style: { fill: "#eeeeee", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+        },
+        {
+          id: "header-logo-box",
+          type: "shape",
+          name: "학원 박스",
+          shape: "rect",
+          x: 532,
+          y: 38,
+          width: 204,
+          height: 58,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 1,
+          locked: true,
+          hidden: false,
+          style: { fill: "#ffffff", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+        },
+        {
+          id: "header-date",
+          type: "text",
+          name: "날짜",
+          text: "2026년 05월 25일",
+          x: 58,
+          y: 55,
+          width: 224,
+          height: 26,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 2,
+          locked: true,
+          hidden: false,
+          style: { color: "#111827", fontSize: 15, fontWeight: "bold", textAlign: "center", lineHeight: 1.35 },
+        },
+        {
+          id: "header-title",
+          type: "text",
+          name: "시험명",
+          text: "[시험명]",
+          x: 322,
+          y: 49,
+          width: 170,
+          height: 22,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 2,
+          locked: true,
+          hidden: false,
+          style: { color: "#111827", fontSize: 14, fontWeight: "bold", textAlign: "center", lineHeight: 1.35 },
+        },
+        {
+          id: "header-time",
+          type: "text",
+          name: "제한 시간",
+          text: "(제한: 50분)",
+          x: 322,
+          y: 72,
+          width: 170,
+          height: 18,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 2,
+          locked: true,
+          hidden: false,
+          style: { color: "#111827", fontSize: 11, fontWeight: "bold", textAlign: "center", lineHeight: 1.35 },
+        },
+        {
+          id: "header-logo",
+          type: "text",
+          name: "로고",
+          text: "S 세움스파르타",
+          x: 548,
+          y: 56,
+          width: 174,
+          height: 24,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 2,
+          locked: true,
+          hidden: false,
+          style: { color: "#111827", fontSize: 16, fontWeight: "bold", textAlign: "center", lineHeight: 1.35 },
         },
         {
           id: "region-problems",
@@ -171,9 +266,9 @@ const demoTemplateSet: TemplateSet = {
           minItemHeight: 120,
           numberFormat: "{n}.",
           x: 58,
-          y: 120,
+          y: 124,
           width: 676,
-          height: 880,
+          height: 846,
           rotation: 0,
           opacity: 1,
           zIndex: 2,
@@ -184,6 +279,23 @@ const demoTemplateSet: TemplateSet = {
           numberStyle: { color: "#111827", fontSize: 13, fontWeight: "bold" },
           bodyStyle: { color: "#111827", fontSize: 12, lineHeight: 1.5 },
           answerSpaceStyle: { fill: "#ffffff", stroke: "#cbd5e1", strokeWidth: 1, borderStyle: "dashed", radius: 4 },
+          columnDividerStyle: { stroke: "#111827", strokeWidth: 1, borderStyle: "solid" },
+        },
+        {
+          id: "page-number",
+          type: "pageNumber",
+          name: "페이지 번호",
+          format: "1 / 1",
+          x: 337,
+          y: 1018,
+          width: 120,
+          height: 28,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 3,
+          locked: true,
+          hidden: false,
+          style: { color: "#64748b", fontSize: 11, textAlign: "center", fill: "transparent", stroke: "transparent" },
         },
       ],
     },
@@ -203,6 +315,23 @@ function clampProgress(value: number) {
 function sceneProgress(progress: number, index: number) {
   const timing = storyTiming[index];
   return clampProgress((progress - timing.start) / Math.max(0.01, timing.end - timing.start));
+}
+
+function interpolateTimeline(progress: number, points: Array<{ at: number; x: number; y: number }>) {
+  if (progress <= points[0].at) return points[0];
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const next = points[index];
+    if (progress <= next.at) {
+      const segment = clampProgress((progress - previous.at) / Math.max(0.01, next.at - previous.at));
+      return {
+        at: progress,
+        x: previous.x + (next.x - previous.x) * segment,
+        y: previous.y + (next.y - previous.y) * segment,
+      };
+    }
+  }
+  return points[points.length - 1];
 }
 
 function activeStoryIndex(progress: number) {
@@ -748,12 +877,27 @@ function DigitizeScene({ progress }: { progress: number }) {
 }
 
 function ContentCreationScene({ progress }: { progress: number }) {
-  const selectProgress = clampProgress(progress * 1.55);
+  const selectedThresholds = new Map([
+    [0, 0.11],
+    [1, 0.22],
+    [3, 0.34],
+    [4, 0.46],
+  ]);
   const templateProgress = clampProgress((progress - 0.45) / 0.45);
+  const cursorPoint = interpolateTimeline(progress, [
+    { at: 0, x: 10.5, y: 28.5 },
+    { at: 0.11, x: 10.5, y: 28.5 },
+    { at: 0.22, x: 30.5, y: 28.5 },
+    { at: 0.34, x: 30.5, y: 41.5 },
+    { at: 0.46, x: 10.5, y: 54.5 },
+    { at: 0.58, x: 30.5, y: 80 },
+    { at: 0.7, x: 67.5, y: 22 },
+    { at: 1, x: 78, y: 22 },
+  ]);
   const cursorStyle: CSSProperties = {
-    left: `${16 + selectProgress * 46}%`,
-    top: `${70 - selectProgress * 43}%`,
-    transform: `rotate(-13deg) scale(${1 + selectProgress * 0.06})`,
+    left: `${cursorPoint.x}%`,
+    top: `${cursorPoint.y}%`,
+    transform: `rotate(-13deg) scale(${1 + clampProgress(progress) * 0.06})`,
   };
 
   return (
@@ -765,9 +909,17 @@ function ContentCreationScene({ progress }: { progress: number }) {
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           {Array.from({ length: 8 }).map((_, index) => {
-            const selected = selectProgress > index * 0.08 + 0.12 && [0, 1, 3, 4].includes(index);
+            const selected = progress >= (selectedThresholds.get(index) ?? 2);
             return (
-              <div key={index} className={cn("rounded-[7px] border p-3 transition", selected ? "border-violet-200/60 bg-violet-400/18" : "border-white/10 bg-white/[0.045]")}>
+              <div
+                key={index}
+                className={cn(
+                  "rounded-[7px] border p-3 transition",
+                  selected
+                    ? "border-violet-200/70 bg-violet-400/20 shadow-[0_0_0_1px_rgba(196,181,253,0.22),0_12px_36px_rgba(124,92,255,0.18)]"
+                    : "border-white/10 bg-white/[0.045]"
+                )}
+              >
                 <span className="block h-2 w-8 rounded bg-white/65" />
                 <span className="mt-4 block h-2 w-full rounded bg-slate-500/36" />
                 <span className="mt-2 block h-2 w-7/12 rounded bg-slate-500/24" />
@@ -778,7 +930,7 @@ function ContentCreationScene({ progress }: { progress: number }) {
       </div>
 
       <div className="absolute bottom-[13%] left-[27%] rounded-[10px] border border-violet-200/24 bg-violet-400/12 px-4 py-3 shadow-[0_18px_54px_rgba(124,92,255,0.20)]">
-        <span className="text-sm font-black text-white">선택 문항 4개</span>
+        <span className="text-sm font-black text-white">선택 문항 {Array.from(selectedThresholds.values()).filter((threshold) => progress >= threshold).length}개</span>
       </div>
       <div className="landing-story-cursor" style={cursorStyle} />
 
@@ -787,7 +939,7 @@ function ContentCreationScene({ progress }: { progress: number }) {
           <span className="text-sm font-black text-white">템플릿 출력</span>
           <FolderKanban className="h-4 w-4 text-violet-200" />
         </div>
-        <div className="mx-auto mt-5 flex h-[82%] max-w-[18rem] items-start justify-center overflow-hidden rounded-[6px] bg-white text-slate-900 shadow-[0_18px_48px_rgba(0,0,0,0.30)]">
+        <div className="mx-auto mt-5 flex h-[82%] max-w-[18rem] items-start justify-center overflow-hidden rounded-[6px] bg-white text-slate-900 shadow-[0_18px_48px_rgba(0,0,0,0.30)] ring-1 ring-white/15">
           <DemoExamPreview reveal={templateProgress} scale={0.34} />
         </div>
       </div>
@@ -808,8 +960,8 @@ function DemoExamPreview({ reveal, scale = 0.34 }: { reveal: number; scale?: num
     <div
       className="transition"
       style={{
-        opacity: clampProgress(reveal * 1.35),
-        transform: `translateY(${(1 - clampProgress(reveal)) * 18}px)`,
+        opacity: 1,
+        transform: `translateY(${(1 - clampProgress(reveal)) * 5}px)`,
       }}
     >
       <TemplatePageView templateSet={demoTemplateSet} page={page} scale={scale} scaleOrigin="top-left" selectedIds={[]} />
