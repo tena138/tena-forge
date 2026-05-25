@@ -978,9 +978,7 @@ function WrongAnswerScene({ progress }: { progress: number }) {
           <div key={label} className="rounded-[16px] border border-violet-200/20 bg-white/[0.055] p-5 shadow-[0_18px_54px_rgba(124,92,255,0.18)] backdrop-blur-xl">
             <span className="text-sm font-black text-white">{label}</span>
             {index === 0 ? (
-              <div className="mt-3 h-28 overflow-hidden rounded-[10px] bg-[#d9d8e7]/95">
-                <DemoExamPreview reveal={1} scale={0.13} />
-              </div>
+              <DemoReviewPaperPreview />
             ) : (
               <div className="mt-3 rounded-[10px] border border-white/10 bg-black/35 p-3">
                 <span className="block text-xs font-bold text-violet-100">#2</span>
@@ -1014,6 +1012,32 @@ function WrongAnswerScene({ progress }: { progress: number }) {
   );
 }
 
+function DemoReviewPaperPreview() {
+  return (
+    <div className="mt-3 h-36 overflow-hidden rounded-[12px] border border-white/10 bg-[#0b0d15] p-3 shadow-inner shadow-black/30">
+      <div className="relative mx-auto h-[7.25rem] w-[15rem] rounded-[10px] border border-slate-300/25 bg-[#f1eff8] p-3 text-[#20222d] shadow-[0_18px_50px_rgba(0,0,0,0.32)]">
+        <div className="grid grid-cols-[1fr_1.2fr_0.85fr] overflow-hidden rounded-[3px] border border-[#22242f] text-[8px] font-black">
+          <div className="border-r border-[#22242f] px-2 py-1">REVIEW 01</div>
+          <div className="border-r border-[#22242f] px-2 py-1 text-center">오답 시험지</div>
+          <div className="px-2 py-1 text-center">Tena Forge</div>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {[3, 8, 12, 17].map((number) => (
+            <div key={number} className="min-h-8 rounded-[5px] border border-[#c8c5d5] bg-white/72 p-1.5">
+              <div className="flex items-center gap-2">
+                <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[#7c5cff] text-[6px] font-black text-white">{number}</span>
+                <span className="h-1 flex-1 rounded-full bg-[#323546]/35" />
+              </div>
+              <span className="mt-1.5 block h-1 w-10/12 rounded-full bg-[#323546]/20" />
+              <span className="mt-1 block h-1 w-7/12 rounded-full bg-[#323546]/16" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DemoStudentManagementSurface({
   progress,
   gridProgress,
@@ -1029,7 +1053,12 @@ function DemoStudentManagementSurface({
   className?: string;
   style?: CSSProperties;
 }) {
-  const studentNames = ["학생 01", "학생 02", "학생 03", "학생 04"];
+  const students = [
+    { name: "학생 01", score: "50점", wrong: "4" },
+    { name: "학생 02", score: "82점", wrong: "2" },
+    { name: "학생 03", score: "76점", wrong: "3" },
+    { name: "학생 04", score: "91점", wrong: "1" },
+  ];
   const studentOpen = clampProgress((progress - 0.14) / 0.16);
   const gradingOpen = clampProgress((progress - 0.28) / 0.12);
 
@@ -1074,9 +1103,9 @@ function DemoStudentManagementSurface({
 
           <div className="min-w-0 p-4">
             <div className="flex gap-3 overflow-hidden pb-1">
-              {studentNames.map((name, index) => (
+              {students.map((student, index) => (
                 <div
-                  key={name}
+                  key={student.name}
                   className={cn(
                     "w-[210px] shrink-0 rounded-md border bg-white/[0.035] p-3 transition",
                     index === 0 && progress > 0.1 ? "border-violet-300/45 bg-violet-500/10" : "border-white/[0.08]"
@@ -1088,7 +1117,7 @@ function DemoStudentManagementSurface({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{name}</p>
+                      <p className="truncate text-sm font-semibold text-white">{student.name}</p>
                       <p className="mt-1 truncate text-xs text-slate-400">N</p>
                     </div>
                     <span className="shrink-0 rounded border border-emerald-300/25 bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-100">Active</span>
@@ -1096,11 +1125,11 @@ function DemoStudentManagementSurface({
                   <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
                     <div className="rounded-md bg-white/[0.04] p-2">
                       <p className="text-slate-500">최근 점수</p>
-                      <p className="mt-1 font-semibold text-white">{index === 0 ? "50점" : "-"}</p>
+                      <p className="mt-1 font-semibold text-white">{student.score}</p>
                     </div>
                     <div className="rounded-md bg-white/[0.04] p-2">
                       <p className="text-slate-500">오답</p>
-                      <p className="mt-1 font-semibold text-rose-100">{index === 0 ? "4" : "0"}</p>
+                      <p className="mt-1 font-semibold text-rose-100">{student.wrong}</p>
                     </div>
                   </div>
                 </div>
