@@ -1436,18 +1436,26 @@ function ProblemCard({ number, selected, style }: { number: number; selected: bo
 
 function PlanSection() {
   return (
-    <section id="plans" className="relative border-t border-white/[0.08] bg-[var(--landing-bg-base)] px-4 py-16 sm:px-6">
-      <div className="mx-auto w-full max-w-[104rem]">
+    <section id="plans" className="landing-plan-section relative overflow-hidden px-4 py-20 sm:px-6">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[linear-gradient(180deg,rgba(8,8,15,0),rgba(8,8,15,0.86)_72%,rgba(8,8,15,0))]" />
+      <div className="pointer-events-none absolute left-[-12rem] top-16 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(45,212,191,0.14),transparent_68%)] blur-3xl" />
+      <div className="pointer-events-none absolute right-[-9rem] top-8 h-[38rem] w-[38rem] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.26),transparent_70%)] blur-3xl" />
+      <div className="pointer-events-none absolute inset-x-0 top-28 h-px bg-[linear-gradient(90deg,transparent,rgba(45,212,191,0.24),rgba(124,92,255,0.42),transparent)]" />
+
+      <div className="relative z-10 mx-auto w-full max-w-[104rem]">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-sm font-black uppercase text-violet-200">Plans</p>
-            <h2 className="mt-3 text-4xl font-black tracking-normal text-white">플랜</h2>
+          <div className="max-w-2xl">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-200/90">Plans</p>
+            <h2 className="landing-keep-words mt-3 text-4xl font-black tracking-normal text-white sm:text-5xl">필요한 만큼만 확장</h2>
+            <p className="landing-keep-words mt-3 text-sm font-semibold leading-6 text-slate-400 sm:text-base">
+              무료로 시작하고, 수업 규모와 처리량에 맞춰 Basic 또는 Pro로 이어갑니다.
+            </p>
           </div>
-          <Link href="/pricing" className="inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 px-4 text-sm font-black text-slate-100 transition hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25">
+          <Link href="/pricing" className="landing-motion-safe inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 bg-white/[0.035] px-4 text-sm font-black text-slate-100 shadow-[0_18px_42px_rgba(0,0,0,0.20)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25">
             가격 보기 <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
-        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <div className="landing-plan-rail mt-10 grid gap-4 lg:grid-cols-3">
           {planCards.map((plan) => (
             <article key={plan.name} className={cn("landing-plan-card", planCardToneClass[plan.tone])}>
               <div className="relative z-10 flex w-full flex-1 flex-col">
@@ -1456,7 +1464,7 @@ function PlanSection() {
                     <h3 className="text-2xl font-black text-white">{plan.name}</h3>
                     <p className="mt-2 text-xl font-black text-violet-50">{plan.price}</p>
                   </div>
-                  {plan.featured ? <span className="rounded-[6px] bg-white/10 px-2.5 py-1 text-xs font-black text-white ring-1 ring-white/15">추천</span> : null}
+                  {plan.featured ? <span className="rounded-[6px] bg-violet-400/20 px-2.5 py-1 text-xs font-black text-violet-50 ring-1 ring-violet-200/25">추천</span> : null}
                 </div>
                 <ul className="mt-6 space-y-3 text-sm font-semibold text-slate-200/90">
                   {plan.points.map((point) => (
