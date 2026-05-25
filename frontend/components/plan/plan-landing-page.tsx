@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { SiteLogo } from "@/components/site-logo";
 
 type IconComponent = ComponentType<{ className?: string }>;
+type PlanCardTone = "free" | "basic" | "pro";
 
 const AuroraWebGLBackground = dynamic(
   () => import("@/components/landing/aurora-webgl-background").then((mod) => mod.AuroraWebGLBackground),
@@ -41,6 +42,7 @@ const workflowSteps: Array<{ title: string; body: string; href: string; icon: Ic
 const planCards = [
   {
     name: "Free",
+    tone: "free" as PlanCardTone,
     price: "무료",
     href: "/register?plan=free",
     cta: "무료로 시작하기",
@@ -48,6 +50,7 @@ const planCards = [
   },
   {
     name: "Basic",
+    tone: "basic" as PlanCardTone,
     price: `${formatKRW(PLANS.basic.baseMonthlyPrice)} / 월`,
     href: "/plan/basic",
     cta: "Basic",
@@ -56,12 +59,25 @@ const planCards = [
   },
   {
     name: "Pro",
+    tone: "pro" as PlanCardTone,
     price: `${formatKRW(PLANS.pro.baseMonthlyPrice)} / 월`,
     href: "/plan/pro",
     cta: "Pro",
     points: ["학생 키 10명", "동시 추출", "빠른 처리"],
   },
 ];
+
+const planCardToneClass: Record<PlanCardTone, string> = {
+  free: "landing-plan-card-free",
+  basic: "landing-plan-card-basic",
+  pro: "landing-plan-card-pro",
+};
+
+const planCtaToneClass: Record<PlanCardTone, string> = {
+  free: "border border-white/12 text-white hover:bg-white/[0.07]",
+  basic: "bg-[linear-gradient(135deg,#2dd4bf_0%,#7c5cff_58%,#f472b6_100%)] text-white shadow-[0_18px_54px_rgba(20,184,166,0.18)] hover:shadow-[0_22px_64px_rgba(124,92,255,0.26)]",
+  pro: "bg-[linear-gradient(135deg,#7c5cff_0%,#8b6bff_48%,#c4b5fd_100%)] text-white shadow-[0_18px_54px_rgba(124,92,255,0.24)] hover:shadow-[0_22px_70px_rgba(124,92,255,0.34)]",
+};
 
 export function PlanLandingPage() {
   return (
@@ -349,25 +365,33 @@ function PlanSection() {
         </div>
         <div className="mt-8 grid gap-4 lg:grid-cols-3">
           {planCards.map((plan) => (
-            <article key={plan.name} className={cn("rounded-[8px] border p-5", plan.featured ? "border-violet-300/30 bg-violet-400/[0.09]" : "border-white/[0.08] bg-white/[0.035]")}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-2xl font-black text-white">{plan.name}</h3>
-                  <p className="mt-2 text-xl font-black text-violet-100">{plan.price}</p>
+            <article key={plan.name} className={cn("landing-plan-card", planCardToneClass[plan.tone])}>
+              <div className="relative z-10 flex w-full flex-1 flex-col">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-2xl font-black text-white">{plan.name}</h3>
+                    <p className="mt-2 text-xl font-black text-violet-50">{plan.price}</p>
+                  </div>
+                  {plan.featured ? <span className="rounded-[6px] bg-white/10 px-2.5 py-1 text-xs font-black text-white ring-1 ring-white/15">추천</span> : null}
                 </div>
-                {plan.featured ? <span className="rounded-[6px] bg-[var(--landing-accent)] px-2.5 py-1 text-xs font-black text-white">추천</span> : null}
+                <ul className="mt-6 space-y-3 text-sm font-semibold text-slate-200/90">
+                  {plan.points.map((point) => (
+                    <li key={point} className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-violet-100" />
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href={plan.href}
+                  className={cn(
+                    "mt-auto inline-flex h-11 w-full items-center justify-center rounded-[7px] text-sm font-black transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25",
+                    planCtaToneClass[plan.tone]
+                  )}
+                >
+                  {plan.cta}
+                </Link>
               </div>
-              <ul className="mt-6 space-y-3 text-sm font-semibold text-slate-300">
-                {plan.points.map((point) => (
-                  <li key={point} className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-violet-200" />
-                    {point}
-                  </li>
-                ))}
-              </ul>
-              <Link href={plan.href} className={cn("mt-7 inline-flex h-11 w-full items-center justify-center rounded-[7px] text-sm font-black transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25", plan.featured ? "bg-[var(--landing-accent)] text-white hover:bg-[var(--landing-accent-hover)]" : "border border-white/12 text-white hover:bg-white/[0.07]")}>
-                {plan.cta}
-              </Link>
             </article>
           ))}
         </div>

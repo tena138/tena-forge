@@ -256,6 +256,85 @@
     background-size: 180px 180px;
   }
 
+  .landing-plan-card {
+    position: relative;
+    display: flex;
+    isolation: isolate;
+    min-height: 21.25rem;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.035);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  }
+
+  .landing-plan-card::before,
+  .landing-plan-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .landing-plan-card::after {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), transparent 28%, rgba(0, 0, 0, 0.24) 100%),
+      repeating-linear-gradient(90deg, transparent 0 5.5rem, rgba(255, 255, 255, 0.024) 5.5rem calc(5.5rem + 1px));
+    opacity: 0.72;
+  }
+
+  .landing-plan-card-free {
+    background:
+      radial-gradient(ellipse at 24% 0%, rgba(124, 92, 255, 0.12), transparent 36rem),
+      linear-gradient(145deg, rgba(18, 18, 26, 0.98), rgba(10, 10, 15, 0.98));
+  }
+
+  .landing-plan-card-basic {
+    border-color: rgba(125, 211, 252, 0.26);
+    background:
+      linear-gradient(118deg, rgba(20, 184, 166, 0.19) 0%, transparent 28%, rgba(167, 139, 250, 0.17) 48%, transparent 70%, rgba(251, 191, 36, 0.12) 100%),
+      linear-gradient(180deg, #05070d 0%, #080b13 50%, #040507 100%);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.025) inset,
+      0 28px 90px rgba(0, 0, 0, 0.36),
+      0 20px 72px rgba(20, 184, 166, 0.12);
+  }
+
+  .landing-plan-card-basic::before {
+    inset: -18% -10%;
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(20, 184, 166, 0.22) 20%, rgba(125, 211, 252, 0.16) 42%, rgba(244, 114, 182, 0.14) 64%, rgba(251, 191, 36, 0.12) 82%, transparent 100%),
+      repeating-linear-gradient(112deg, transparent 0 4.8rem, rgba(125, 211, 252, 0.065) 4.8rem calc(4.8rem + 1px)),
+      repeating-linear-gradient(72deg, transparent 0 7rem, rgba(251, 191, 36, 0.048) 7rem calc(7rem + 1px));
+    filter: blur(14px);
+    opacity: 0.78;
+    transform: rotate(-5deg);
+  }
+
+  .landing-plan-card-pro {
+    border-color: rgba(196, 181, 253, 0.28);
+    background:
+      linear-gradient(126deg, rgba(91, 33, 182, 0.28) 0%, transparent 28%, rgba(49, 46, 129, 0.22) 50%, transparent 72%, rgba(226, 232, 240, 0.08) 100%),
+      linear-gradient(180deg, #05050a 0%, #0a0812 40%, #050507 100%);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+      0 28px 90px rgba(0, 0, 0, 0.38),
+      0 22px 74px rgba(109, 40, 217, 0.16);
+  }
+
+  .landing-plan-card-pro::before {
+    inset: -12% -10%;
+    background:
+      linear-gradient(112deg, transparent 0 20%, rgba(167, 139, 250, 0.14) 20% 20.35%, transparent 20.35% 100%),
+      linear-gradient(112deg, transparent 0 44%, rgba(221, 214, 254, 0.2) 44% 44.24%, transparent 44.24% 100%),
+      linear-gradient(112deg, transparent 0 68%, rgba(99, 102, 241, 0.13) 68% 68.32%, transparent 68.32% 100%),
+      radial-gradient(ellipse at 78% 18%, rgba(196, 181, 253, 0.18), transparent 26rem),
+      radial-gradient(ellipse at 24% 72%, rgba(124, 58, 237, 0.18), transparent 24rem);
+    opacity: 0.88;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .landing-aurora {
       animation: none !important;
