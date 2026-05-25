@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import type { ComponentType } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ComponentType, CSSProperties, ReactNode } from "react";
 import {
   Archive,
   ArrowRight,
   Bell,
   Check,
-  ChevronRight,
   ClipboardCheck,
   FileUp,
   FolderKanban,
@@ -30,14 +30,6 @@ const AuroraWebGLBackground = dynamic(
   () => import("@/components/landing/aurora-webgl-background").then((mod) => mod.AuroraWebGLBackground),
   { ssr: false }
 );
-
-const workflowSteps: Array<{ title: string; body: string; href: string; icon: IconComponent }> = [
-  { title: "추출", body: "PDF를 문항 단위로 분리", href: "/upload", icon: FileUp },
-  { title: "검토", body: "원본과 해설을 빠르게 확인", href: "/problems/review", icon: ClipboardCheck },
-  { title: "보관", body: "태그와 출처로 문항 정리", href: "/problems", icon: Archive },
-  { title: "세트", body: "시험지와 과제 세트 제작", href: "/problem-sets", icon: FolderKanban },
-  { title: "학생", body: "채점 결과와 오답 기록 연결", href: "/student-management", icon: Users },
-];
 
 const planCards = [
   {
@@ -79,6 +71,20 @@ const planCtaToneClass: Record<PlanCardTone, string> = {
   pro: "bg-[linear-gradient(135deg,#7c5cff_0%,#8b6bff_48%,#c4b5fd_100%)] text-white shadow-[0_18px_54px_rgba(124,92,255,0.24)] hover:shadow-[0_22px_70px_rgba(124,92,255,0.34)]",
 };
 
+const storyScenes = [
+  { step: "01", title: "오프라인 문항들을 한 곳에 전산화" },
+  { step: "02", title: "가장 빠르게 컨텐츠 제작" },
+  { step: "03", title: "오답까지 완벽하게" },
+];
+
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function sceneProgress(progress: number, index: number) {
+  return clampProgress((progress - index / storyScenes.length) * storyScenes.length);
+}
+
 export function PlanLandingPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-transparent text-[var(--landing-text-primary)]">
@@ -91,8 +97,8 @@ export function PlanLandingPage() {
             <div className="max-w-[34rem]">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
               <h1 className="landing-hero-title landing-keep-words mt-4 bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
-                <span className="block">문제를 꺼내고,</span>
-                <span className="block">수업으로 보낸다.</span>
+                <span className="block">혼자서도 빠르고,</span>
+                <span className="block">강력하게</span>
               </h1>
               <p className="landing-keep-words mt-5 max-w-[31rem] text-lg leading-8 text-[var(--landing-text-secondary)]">
                 PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.
@@ -115,11 +121,10 @@ export function PlanLandingPage() {
 
             <ProductPreview />
           </div>
-
-          <WorkflowSection />
         </div>
       </section>
 
+      <ScrollStorySection />
       <PlanSection />
     </main>
   );
@@ -261,36 +266,297 @@ function ProductPreview() {
   );
 }
 
-function WorkflowSection() {
+function ScrollStorySection() {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      const section = sectionRef.current;
+      if (!section) return;
+      const viewport = Math.max(1, window.innerHeight);
+      const rect = section.getBoundingClientRect();
+      const scrollable = Math.max(1, section.offsetHeight - viewport);
+      setProgress(clampProgress(-rect.top / scrollable));
+    };
+    const requestUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, []);
+
+  const activeIndex = Math.min(storyScenes.length - 1, Math.floor(progress * storyScenes.length));
+  const progressByScene = storyScenes.map((_, index) => sceneProgress(progress, index));
+
   return (
-    <section className="mt-10 rounded-2xl border border-white/[0.08] bg-[var(--landing-surface-soft)] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-md sm:p-5">
-      <h2 className="landing-keep-words text-lg font-black text-white">추출부터 학생 기록까지, 하나의 흐름</h2>
-      <div className="mt-5 grid gap-3 lg:grid-cols-5">
-        {workflowSteps.map((step, index) => {
-          const Icon = step.icon;
-          return (
-            <Link
-              key={step.title}
-              href={step.href}
-              className="group relative rounded-[10px] border border-white/[0.08] bg-white/[0.035] p-4 transition hover:border-violet-200/26 hover:bg-white/[0.065] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25"
-            >
-              {index < workflowSteps.length - 1 ? (
-                <span className="absolute left-[calc(100%+0.75rem)] top-1/2 hidden h-px w-3 -translate-y-1/2 bg-violet-200/24 lg:block" />
-              ) : null}
-              <div className="flex items-center justify-between gap-3">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-violet-400/14 text-xs font-black text-violet-100 ring-1 ring-violet-200/18">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <Icon className="h-5 w-5 text-violet-200" />
-              </div>
-              <h3 className="mt-4 text-base font-black text-white">{step.title}</h3>
-              <p className="landing-keep-words mt-2 text-sm leading-6 text-[var(--landing-text-secondary)]">{step.body}</p>
-              <ChevronRight className="mt-4 h-4 w-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-violet-100" />
-            </Link>
-          );
-        })}
+    <section ref={sectionRef} className="relative z-10 h-[360vh] border-y border-white/[0.08] bg-[#06070d]/70">
+      <div className="sticky top-0 flex h-screen min-h-[46rem] items-center overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_28%,rgba(45,212,191,0.10),transparent_28rem),radial-gradient(circle_at_78%_40%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.14),rgba(6,7,13,0.88))]" />
+        <div className="relative z-10 mx-auto grid w-full max-w-[104rem] gap-8 px-4 sm:px-6 lg:grid-cols-[0.42fr_0.58fr] lg:items-center xl:px-8">
+          <div className="landing-keep-words max-w-[35rem]">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/80">Workflow</p>
+            <div className="relative mt-5 min-h-[12rem]">
+              {storyScenes.map((scene, index) => {
+                const active = activeIndex === index;
+                return (
+                  <div
+                    key={scene.title}
+                    className="landing-story-copy absolute inset-0"
+                    style={{
+                      opacity: active ? 1 : 0,
+                      transform: active ? "translate3d(0,0,0)" : "translate3d(0,1.5rem,0)",
+                    }}
+                  >
+                    <span className="inline-grid h-9 w-9 place-items-center rounded-full border border-violet-200/24 bg-violet-400/12 text-xs font-black text-violet-100">
+                      {scene.step}
+                    </span>
+                    <h2 className="mt-5 text-4xl font-black leading-tight tracking-normal text-white sm:text-5xl">{scene.title}</h2>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-8 flex gap-2">
+              {storyScenes.map((scene, index) => (
+                <span key={scene.step} className={cn("h-1.5 rounded-full transition-all duration-500", activeIndex === index ? "w-16 bg-violet-200" : "w-6 bg-white/18")} />
+              ))}
+            </div>
+          </div>
+
+          <div className="relative h-[34rem] rounded-[8px] border border-white/[0.08] bg-black/22 p-3 shadow-[0_34px_120px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:h-[40rem] sm:p-5">
+            <StoryVisualScene active={activeIndex === 0}>
+              <DigitizeScene progress={progressByScene[0]} />
+            </StoryVisualScene>
+            <StoryVisualScene active={activeIndex === 1}>
+              <ContentCreationScene progress={progressByScene[1]} />
+            </StoryVisualScene>
+            <StoryVisualScene active={activeIndex === 2}>
+              <WrongAnswerScene progress={progressByScene[2]} />
+            </StoryVisualScene>
+          </div>
+        </div>
       </div>
     </section>
+  );
+}
+
+function StoryVisualScene({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <div
+      className="landing-story-visual absolute inset-3 overflow-hidden rounded-[8px] border border-white/10 bg-[#090b10]/90 sm:inset-5"
+      style={{
+        opacity: active ? 1 : 0,
+        transform: active ? "scale(1)" : "scale(0.985)",
+        pointerEvents: active ? "auto" : "none",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DigitizeScene({ progress }: { progress: number }) {
+  const paperShift = clampProgress(progress * 1.25);
+  const consoleFill = clampProgress((progress - 0.34) / 0.5);
+
+  return (
+    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_22%_22%,rgba(45,212,191,0.14),transparent_20rem),radial-gradient(circle_at_78%_38%,rgba(124,92,255,0.20),transparent_26rem),#07080d]">
+      <div className="absolute left-[7%] top-[18%] h-[21rem] w-[14rem] sm:h-[27rem] sm:w-[18rem]">
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            className="landing-story-paper absolute inset-0 rounded-[8px] border border-white/12 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.34)]"
+            style={{
+              transform: `translate3d(${paperShift * (145 + index * 12)}%, ${index * 1.25 - paperShift * 7}rem, 0) rotate(${index * -4 + paperShift * 5}deg) scale(${1 - paperShift * 0.48})`,
+              opacity: 1 - paperShift * 0.72,
+            }}
+          >
+            <div className="m-4 h-5 w-20 rounded bg-slate-900/80" />
+            <div className="mx-4 mt-6 space-y-3">
+              <span className="block h-2 w-10/12 rounded bg-slate-300" />
+              <span className="block h-2 w-8/12 rounded bg-slate-300" />
+              <span className="block h-16 rounded border border-slate-200 bg-slate-50" />
+              <span className="block h-2 w-9/12 rounded bg-slate-300" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="absolute left-1/2 top-1/2 w-[70%] max-w-[38rem] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[10px] border border-white/12 bg-[#0a0c13]/95 shadow-[0_30px_90px_rgba(0,0,0,0.42)]">
+        <div className="flex h-11 items-center justify-between border-b border-white/10 bg-black/45 px-3">
+          <span className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Tena Console</span>
+          <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.8)]" />
+        </div>
+        <div className="grid min-h-[22rem] gap-3 p-4 sm:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[8px] border border-dashed border-cyan-200/22 bg-cyan-200/[0.04] p-4">
+            <FileUp className="h-7 w-7 text-cyan-100" />
+            <div className="mt-6 space-y-2">
+              {[0, 1, 2, 3].map((index) => (
+                <span key={index} className="block h-2 rounded bg-cyan-100/20" style={{ width: `${88 - index * 12}%`, opacity: 0.35 + consoleFill * 0.55 }} />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-[7px] border border-white/10 bg-white/[0.045] p-3"
+                style={{
+                  opacity: clampProgress((consoleFill - index * 0.06) / 0.35),
+                  transform: `translateY(${(1 - clampProgress((consoleFill - index * 0.06) / 0.35)) * 18}px)`,
+                }}
+              >
+                <span className="block h-2 w-8 rounded bg-violet-200/60" />
+                <span className="mt-4 block h-2 w-full rounded bg-slate-500/42" />
+                <span className="mt-2 block h-2 w-8/12 rounded bg-slate-500/26" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContentCreationScene({ progress }: { progress: number }) {
+  const selectProgress = clampProgress(progress * 1.55);
+  const templateProgress = clampProgress((progress - 0.45) / 0.45);
+  const cursorStyle: CSSProperties = {
+    left: `${16 + selectProgress * 46}%`,
+    top: `${70 - selectProgress * 43}%`,
+    transform: `rotate(-13deg) scale(${1 + selectProgress * 0.06})`,
+  };
+
+  return (
+    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_30%_35%,rgba(124,92,255,0.22),transparent_24rem),radial-gradient(circle_at_82%_46%,rgba(45,212,191,0.09),transparent_22rem),#07080d]">
+      <div className="absolute left-[5%] top-[12%] w-[42%] rounded-[10px] border border-white/10 bg-[#0b0d14]/92 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.30)]">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-black text-white">문항 보관함</span>
+          <Archive className="h-4 w-4 text-violet-200" />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {Array.from({ length: 8 }).map((_, index) => {
+            const selected = selectProgress > index * 0.08 + 0.12 && [0, 1, 3, 4].includes(index);
+            return (
+              <div key={index} className={cn("rounded-[7px] border p-3 transition", selected ? "border-violet-200/60 bg-violet-400/18" : "border-white/10 bg-white/[0.045]")}>
+                <span className="block h-2 w-8 rounded bg-white/65" />
+                <span className="mt-4 block h-2 w-full rounded bg-slate-500/36" />
+                <span className="mt-2 block h-2 w-7/12 rounded bg-slate-500/24" />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="absolute bottom-[13%] left-[27%] rounded-[10px] border border-violet-200/24 bg-violet-400/12 px-4 py-3 shadow-[0_18px_54px_rgba(124,92,255,0.20)]">
+        <span className="text-sm font-black text-white">선택 문항 4개</span>
+      </div>
+      <div className="landing-story-cursor" style={cursorStyle} />
+
+      <div className="absolute right-[6%] top-[10%] h-[78%] w-[38%] rounded-[10px] border border-white/12 bg-[#0a0c13]/94 p-4 shadow-[0_30px_90px_rgba(0,0,0,0.36)]">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-black text-white">템플릿 출력</span>
+          <FolderKanban className="h-4 w-4 text-violet-200" />
+        </div>
+        <div className="mx-auto mt-5 h-[82%] max-w-[18rem] rounded-[6px] bg-white p-5 text-slate-900 shadow-[0_18px_48px_rgba(0,0,0,0.30)]">
+          <div className="h-8 rounded border border-slate-900/60" style={{ opacity: templateProgress }} />
+          <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                key={index}
+                style={{ opacity: clampProgress((templateProgress - index * 0.06) / 0.35) }}
+              >
+                <span className="block h-2 w-6 rounded bg-slate-900" />
+                <span className="mt-3 block h-1.5 w-full rounded bg-slate-400" />
+                <span className="mt-1.5 block h-1.5 w-8/12 rounded bg-slate-300" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WrongAnswerScene({ progress }: { progress: number }) {
+  const gridProgress = clampProgress((progress - 0.18) / 0.42);
+  const branchProgress = clampProgress((progress - 0.62) / 0.32);
+  const statuses = Array.from({ length: 18 }).map((_, index) => {
+    if (gridProgress > 0.88 && [4, 11, 16].includes(index)) return "missed";
+    if (gridProgress > 0.52 && [2, 7, 13].includes(index)) return "wrong";
+    return "correct";
+  });
+
+  return (
+    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_28%_26%,rgba(74,222,128,0.12),transparent_20rem),radial-gradient(circle_at_78%_36%,rgba(124,92,255,0.22),transparent_26rem),#07080d]">
+      <div className="absolute left-[6%] top-[13%] w-[28%] rounded-[10px] border border-white/10 bg-[#0b0d14]/92 p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xl font-black text-white">P1</span>
+          <Users className="h-4 w-4 text-violet-200" />
+        </div>
+        <p className="mt-2 text-sm font-bold text-slate-400">4명</p>
+        <div className="mt-5 space-y-2">
+          {["이나은", "이수현", "이우노", "황지윤"].map((name, index) => (
+            <div key={name} className={cn("rounded-[7px] border px-3 py-2 text-sm font-black", index === 0 ? "border-violet-200/44 bg-violet-400/16 text-white" : "border-white/10 bg-white/[0.045] text-slate-300")}>
+              {name}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="absolute left-[37%] top-[12%] w-[24%] rounded-[10px] border border-white/10 bg-[#0b0d14]/92 p-4">
+        <span className="text-sm font-black text-white">시험 일정</span>
+        <div className="mt-4 rounded-[8px] border border-violet-200/30 bg-violet-400/14 p-3">
+          <span className="block text-sm font-black text-white">0527</span>
+          <span className="mt-2 block h-2 w-10/12 rounded bg-slate-400/40" />
+          <span className="mt-2 block h-2 w-7/12 rounded bg-slate-400/28" />
+        </div>
+      </div>
+
+      <div className="absolute right-[7%] top-[13%] w-[33%] rounded-[10px] border border-white/12 bg-[#0a0c13]/95 p-4 shadow-[0_30px_90px_rgba(0,0,0,0.34)]">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-black text-white">오답 체크</span>
+          <ClipboardCheck className="h-4 w-4 text-violet-200" />
+        </div>
+        <div className="mt-5 grid grid-cols-6 gap-2">
+          {statuses.map((status, index) => (
+            <span
+              key={index}
+              className={cn(
+                "grid aspect-square place-items-center rounded-[6px] text-xs font-black text-white transition",
+                status === "wrong" && "bg-orange-400",
+                status === "missed" && "bg-rose-500",
+                status === "correct" && "bg-emerald-400"
+              )}
+              style={{ opacity: clampProgress((gridProgress - index * 0.015) / 0.28) }}
+            >
+              {index + 1}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="absolute bottom-[12%] left-[36%] right-[7%] grid grid-cols-2 gap-3" style={{ opacity: branchProgress, transform: `translateY(${(1 - branchProgress) * 18}px)` }}>
+        {["오답 시험지", "퀴즈 뷰"].map((label) => (
+          <div key={label} className="rounded-[10px] border border-violet-200/24 bg-violet-400/12 p-4 shadow-[0_18px_54px_rgba(124,92,255,0.18)]">
+            <span className="text-sm font-black text-white">{label}</span>
+            <div className="mt-4 space-y-2">
+              <span className="block h-2 w-full rounded bg-white/25" />
+              <span className="block h-2 w-7/12 rounded bg-white/16" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
