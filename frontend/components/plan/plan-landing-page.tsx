@@ -77,12 +77,25 @@ const storyScenes = [
   { step: "03", title: "오답까지 완벽하게" },
 ];
 
+const storyTiming = [
+  { start: 0, end: 0.24 },
+  { start: 0.25, end: 0.58 },
+  { start: 0.59, end: 0.94 },
+];
+
 function clampProgress(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
 function sceneProgress(progress: number, index: number) {
-  return clampProgress((progress - index / storyScenes.length) * storyScenes.length);
+  const timing = storyTiming[index];
+  return clampProgress((progress - timing.start) / Math.max(0.01, timing.end - timing.start));
+}
+
+function activeStoryIndex(progress: number) {
+  if (progress < storyTiming[1].start) return 0;
+  if (progress < storyTiming[2].start) return 1;
+  return 2;
 }
 
 export function PlanLandingPage() {
@@ -295,11 +308,11 @@ function ScrollStorySection() {
     };
   }, []);
 
-  const activeIndex = Math.min(storyScenes.length - 1, Math.floor(progress * storyScenes.length));
+  const activeIndex = activeStoryIndex(progress);
   const progressByScene = storyScenes.map((_, index) => sceneProgress(progress, index));
 
   return (
-    <section ref={sectionRef} className="relative z-10 h-[360vh] border-y border-white/[0.08] bg-[#06070d]/70">
+    <section ref={sectionRef} className="relative z-10 h-[440vh] border-y border-white/[0.08] bg-[#06070d]/70">
       <div className="sticky top-0 flex h-screen min-h-[46rem] items-center overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_28%,rgba(45,212,191,0.10),transparent_28rem),radial-gradient(circle_at_78%_40%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.14),rgba(6,7,13,0.88))]" />
         <div className="relative z-10 mx-auto grid w-full max-w-[104rem] gap-8 px-4 sm:px-6 lg:grid-cols-[0.42fr_0.58fr] lg:items-center xl:px-8">
