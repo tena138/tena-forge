@@ -752,32 +752,35 @@ function DigitizePaperStack({ progress }: { progress: number }) {
 }
 
 function DigitizeScene({ progress }: { progress: number }) {
-  const paperIn = clampProgress(progress / 0.15);
-  const scanProgress = clampProgress((progress - 0.15) / 0.27);
-  const absorbProgress = clampProgress((progress - 0.28) / 0.22);
-  const pulseProgress = Math.sin(clampProgress((progress - 0.45) / 0.11) * Math.PI);
-  const gridProgress = clampProgress((progress - 0.55) / 0.27);
+  const paperIn = clampProgress(progress / 0.08);
+  const scanProgress = clampProgress((progress - 0.08) / 0.22);
+  const absorbProgress = clampProgress((progress - 0.22) / 0.22);
+  const loadingProgress = clampProgress((progress - 0.42) / 0.22);
+  const burstProgress = Math.sin(clampProgress((progress - 0.58) / 0.12) * Math.PI);
+  const gridProgress = clampProgress((progress - 0.64) / 0.26);
+  const consoleProgress = clampProgress((progress - 0.6) / 0.14);
+  const pointOpacity = clampProgress((progress - 0.32) / 0.08) * (1 - clampProgress((progress - 0.64) / 0.1));
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
       <div
         className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.42),rgba(45,212,191,0.12)_38%,transparent_70%)] blur-3xl"
         style={{
-          opacity: 0.22 + pulseProgress * 0.5,
-          transform: `translate(-50%, -50%) scale(${1 + pulseProgress * 0.28})`,
+          opacity: 0.2 + burstProgress * 0.58,
+          transform: `translate(-50%, -50%) scale(${1 + burstProgress * 0.34})`,
         }}
       />
 
       {[0, 1, 2].map((index) => {
-        const startX = [-58, -64, -55][index];
-        const startY = [-20, 2, 22][index];
-        const endX = -6;
-        const endY = -11;
-        const drift = Math.sin(progress * 7 + index * 1.7) * 10 * (1 - absorbProgress);
+        const startX = [-24, -6, 12][index];
+        const startY = [-15, 2, 16][index];
+        const endX = -2;
+        const endY = -6;
+        const drift = Math.sin(progress * 5.2 + index * 1.7) * 8 * (1 - absorbProgress);
         const x = startX + (endX - startX) * absorbProgress;
         const y = startY + (endY - startY) * absorbProgress;
-        const scale = paperIn * (1 - absorbProgress * 0.94);
-        const opacity = paperIn * (1 - clampProgress((progress - 0.46) / 0.08));
+        const scale = paperIn * (1 - absorbProgress * 0.88);
+        const opacity = paperIn * (1 - clampProgress((progress - 0.41) / 0.08));
         return (
           <div
             key={index}
@@ -802,15 +805,34 @@ function DigitizeScene({ progress }: { progress: number }) {
         );
       })}
 
+      <div
+        className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+        style={{
+          opacity: pointOpacity,
+          transform: `translate(-50%, -50%) scale(${0.82 + loadingProgress * 0.18 + burstProgress * 0.18})`,
+        }}
+      >
+        <div
+          className="relative grid h-24 w-24 place-items-center rounded-full border border-violet-200/18 bg-[#121326]/82 shadow-[0_0_45px_rgba(124,92,255,0.38)] backdrop-blur-xl"
+          style={{ transform: `rotate(${loadingProgress * 540}deg)` }}
+        >
+          <span className="absolute inset-2 rounded-full border border-transparent border-t-cyan-300 border-r-violet-300 shadow-[0_0_22px_rgba(45,212,191,0.25)]" />
+          <span className="h-3 w-3 rounded-full bg-cyan-200 shadow-[0_0_18px_rgba(45,212,191,0.9)]" />
+        </div>
+        <div className="mt-4 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black tracking-[0.12em] text-violet-100 shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur">
+          문항 추출 중
+        </div>
+      </div>
+
       <DemoProblemBrowserSurface
-        progress={clampProgress((progress - 0.62) / 0.38)}
+        progress={clampProgress((progress - 0.72) / 0.28)}
         cardCount={6}
         className="absolute w-[66rem]"
         style={{
           left: "47%",
           top: "18%",
-          opacity: clampProgress((progress - 0.52) / 0.1),
-          transform: `perspective(1400px) rotateY(${18 + (-25 * gridProgress)}deg) rotateX(3deg) scale(${0.72 + gridProgress * 0.28})`,
+          opacity: consoleProgress,
+          transform: `perspective(1400px) rotateY(${20 + (-27 * gridProgress)}deg) rotateX(3deg) scale(${0.56 + consoleProgress * 0.44})`,
           transformOrigin: "30% 50%",
         }}
       />
