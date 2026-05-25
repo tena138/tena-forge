@@ -241,6 +241,21 @@
     mask-image: linear-gradient(180deg, black 0%, black 82%, transparent 100%);
   }
 
+  .landing-webgl-fallback {
+    background:
+      radial-gradient(ellipse at 22% 20%, rgba(59, 111, 245, 0.30), transparent 42%),
+      radial-gradient(ellipse at 66% 22%, rgba(124, 92, 255, 0.34), transparent 40%),
+      radial-gradient(ellipse at 48% 52%, rgba(45, 212, 191, 0.06), transparent 36%),
+      linear-gradient(180deg, var(--landing-bg-deep), var(--landing-bg-base) 58%, #07070b);
+  }
+
+  .landing-film-grain {
+    opacity: 0.045;
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .landing-aurora {
       animation: none !important;

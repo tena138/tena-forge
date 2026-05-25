@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { ComponentType } from "react";
 import {
   Archive,
@@ -23,6 +24,11 @@ import { cn } from "@/lib/utils";
 import { SiteLogo } from "@/components/site-logo";
 
 type IconComponent = ComponentType<{ className?: string }>;
+
+const AuroraWebGLBackground = dynamic(
+  () => import("@/components/landing/aurora-webgl-background").then((mod) => mod.AuroraWebGLBackground),
+  { ssr: false }
+);
 
 const workflowSteps: Array<{ title: string; body: string; href: string; icon: IconComponent }> = [
   { title: "추출", body: "PDF를 문항 단위로 분리", href: "/upload", icon: FileUp },
@@ -59,16 +65,16 @@ const planCards = [
 
 export function PlanLandingPage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[var(--landing-bg-base)] text-[var(--landing-text-primary)]">
+    <main className="relative isolate min-h-screen overflow-hidden bg-transparent text-[var(--landing-text-primary)]">
+      <AuroraWebGLBackground />
       <LandingNav />
 
       <section className="relative min-h-screen overflow-hidden pt-16">
-        <AuroraBackdrop />
         <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[104rem] flex-col justify-center px-4 py-8 sm:px-6 lg:py-10 xl:px-8">
           <div className="grid gap-8 lg:grid-cols-[minmax(21rem,0.55fr)_minmax(0,1.45fr)] lg:items-center">
             <div className="max-w-[34rem]">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/80">TENA FORGE</p>
-              <h1 className="landing-hero-title landing-keep-words mt-4 text-white">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
+              <h1 className="landing-hero-title landing-keep-words mt-4 bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
                 <span className="block">문제를 꺼내고,</span>
                 <span className="block">수업으로 보낸다.</span>
               </h1>
@@ -120,24 +126,11 @@ function LandingNav() {
   );
 }
 
-function AuroraBackdrop() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,var(--landing-bg-deep)_0%,var(--landing-bg-base)_54%,#07070b_100%)]" />
-      <div className="landing-aurora bg-[radial-gradient(ellipse_at_26%_18%,rgba(124,92,255,0.38),transparent_42%),radial-gradient(ellipse_at_70%_24%,rgba(139,107,255,0.26),transparent_38%),linear-gradient(116deg,transparent_0_22%,rgba(124,92,255,0.30)_38%,transparent_62%)] [animation:landingAuroraA_22s_ease-in-out_infinite_alternate]" />
-      <div className="landing-aurora opacity-45 mix-blend-screen bg-[radial-gradient(ellipse_at_56%_36%,rgba(45,212,191,0.07),transparent_34%),linear-gradient(128deg,transparent_0_38%,rgba(167,139,250,0.22)_56%,transparent_78%)] [animation:landingAuroraB_30s_ease-in-out_infinite_alternate]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(10,10,15,0.05)_0%,rgba(10,10,15,0.42)_54%,rgba(10,10,15,0.96)_100%)]" />
-      <div className="absolute inset-x-0 top-16 h-px bg-white/10" />
-      <div className="absolute inset-x-0 bottom-0 h-72 bg-[linear-gradient(180deg,transparent,var(--landing-bg-base)_82%)]" />
-    </div>
-  );
-}
-
 function ProductPreview() {
   return (
     <div className="landing-mock-perspective relative min-h-[32rem] lg:min-h-[42rem]">
       <div className="absolute right-[-1rem] top-1/2 h-[26rem] w-[46rem] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.36),transparent_68%)] blur-3xl" />
-      <div className="landing-mock-frame absolute right-0 top-1/2 w-full max-w-[74rem] -translate-y-1/2 rounded-2xl border border-white/[0.09] bg-[#07080d] shadow-[0_38px_140px_rgba(0,0,0,0.56),0_0_90px_rgba(124,92,255,0.18)] backdrop-blur-md">
+      <div className="landing-mock-frame absolute right-0 top-1/2 w-full max-w-[74rem] -translate-y-1/2 rounded-2xl border border-white/[0.09] bg-[rgba(7,8,13,0.74)] shadow-[0_38px_140px_rgba(0,0,0,0.56),0_0_90px_rgba(124,92,255,0.18)] backdrop-blur-xl">
         <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_18%_4%,rgba(124,92,255,0.18),transparent_20rem),radial-gradient(circle_at_92%_16%,rgba(139,107,255,0.12),transparent_22rem),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(7,8,13,0.94)_44%,rgba(8,10,16,0.98))]" />
         <div className="relative z-10 overflow-hidden rounded-2xl">
           <div className="flex h-14 items-center justify-between border-b border-white/10 bg-black/55 px-4 backdrop-blur-xl">
