@@ -32,6 +32,7 @@ class BillingCheckoutRequest(BaseModel):
 class BillingKeyConfirmRequest(BaseModel):
     issue_id: str
     billing_key: str
+    billing_issue_token: str | None = None
 
 
 def _portone_id(prefix: str, plan_code: str | None = None) -> str:
@@ -190,6 +191,7 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
     config = portone_public_config()
     pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids)
     enabled_engines = normalize_subject_engines(payload.enabled_subject_engines or ["math"])
+    academy = db.get(Academy, user_id)
     issue_id = _portone_id("tf-bill", payload.plan_code)
     payment_id = _portone_id("tf-pay", payload.plan_code)
     order_name = f"Tena Forge {payload.plan_code.title()} {'annual' if pricing['billing_cycle'] == 'annual' else 'monthly'} subscription"
@@ -217,6 +219,7 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
     db.commit()
     return {
         "provider": "portone",
+        "order_id": str(order.id),
         "issue_id": issue_id,
         "issue_name": order_name,
         "payment_id": payment_id,
@@ -224,12 +227,15 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
         "amount": order.amount_krw,
         "currency": "KRW",
         "customer_id": user_id,
+        "customer_name": academy.academy_name if academy else None,
+        "customer_email": academy.email if academy else None,
         "billing_cycle": order.billing_cycle,
         "selected_packages": order.selected_packages,
         "portone": {
             "store_id": config["store_id"],
             "channel_key": config["channel_key"],
-            "billing_key_method": "CARD",
+            "billing_key_method": config["billing_key_method"],
+            "is_test_channel": config["is_test_channel"],
         },
     }
 
@@ -259,6 +265,8 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
     billing_key = payload.billing_key.strip()
     if not billing_key:
         raise HTTPException(status_code=400, detail="billing_key is required.")
+    if billing_key == "NEEDS_CONFIRMATION" or payload.billing_issue_token:
+        raise HTTPException(status_code=400, detail="This PortOne channel requires manual billing-key confirmation. Use an automatic billing-key issue channel or disable manual confirmation in PortOne.")
 
     key_record = SubscriptionBillingKey(
         user_id=user_id,

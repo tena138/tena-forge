@@ -65,10 +65,21 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
         issueId: billingCheckout.issue_id,
         issueName: billingCheckout.issue_name,
         customerId: billingCheckout.customer_id,
-        customer: { id: billingCheckout.customer_id },
+        customer: {
+          id: billingCheckout.customer_id,
+          customerId: billingCheckout.customer_id,
+          fullName: billingCheckout.customer_name || undefined,
+          email: billingCheckout.customer_email || undefined,
+        },
         displayAmount: billingCheckout.amount,
         currency: "KRW",
         locale: "KO_KR",
+        isTestChannel: Boolean(billingCheckout.portone.is_test_channel),
+        customData: {
+          orderId: billingCheckout.order_id,
+          planCode: plan,
+          billingCycle,
+        },
         redirectUrl: `${window.location.origin}/checkout/billing-return?issueId=${encodeURIComponent(billingCheckout.issue_id)}`,
       });
 
@@ -79,10 +90,14 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
       }
       const billingKey = issue.billingKey || issue.billing_key;
       if (!billingKey) throw new Error("PortOne did not return a billingKey.");
+      if (billingKey === "NEEDS_CONFIRMATION" || issue.billingIssueToken || issue.billing_issue_token) {
+        throw new Error("이 PortOne 채널은 빌링키 수동 승인이 필요합니다. 포트원 채널 설정을 자동 발급으로 바꿔주세요.");
+      }
 
       const confirmResponse = await authHttp.post("/api/saas/billing/confirm-billing-key", {
         issue_id: billingCheckout.issue_id,
         billing_key: billingKey,
+        billing_issue_token: issue.billingIssueToken || issue.billing_issue_token || null,
       });
       router.push(`/checkout/success?paymentId=${encodeURIComponent(confirmResponse.data.payment_id || billingCheckout.payment_id)}`);
       return;

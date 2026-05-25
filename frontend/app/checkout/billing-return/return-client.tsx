@@ -21,8 +21,13 @@ export function CheckoutBillingReturnClient() {
 
       const issueId = searchParams.get("issueId") || searchParams.get("issue_id");
       const billingKey = searchParams.get("billingKey") || searchParams.get("billing_key");
+      const billingIssueToken = searchParams.get("billingIssueToken") || searchParams.get("billing_issue_token");
       if (!issueId || !billingKey) {
         router.replace(`/checkout/fail?message=${encodeURIComponent("PortOne did not return billing key details.")}`);
+        return;
+      }
+      if (billingKey === "NEEDS_CONFIRMATION" || billingIssueToken) {
+        router.replace(`/checkout/fail?message=${encodeURIComponent("이 PortOne 채널은 빌링키 수동 승인이 필요합니다. 포트원 채널 설정을 자동 발급으로 바꿔주세요.")}`);
         return;
       }
 
@@ -35,6 +40,7 @@ export function CheckoutBillingReturnClient() {
         const response = await authHttp.post("/api/saas/billing/confirm-billing-key", {
           issue_id: issueId,
           billing_key: billingKey,
+          billing_issue_token: billingIssueToken || null,
         });
         router.replace(`/checkout/success?paymentId=${encodeURIComponent(response.data.payment_id || "")}`);
       } catch (error: any) {

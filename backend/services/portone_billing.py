@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 from datetime import datetime
 from typing import Any
 
@@ -13,18 +14,60 @@ from database import get_settings
 PORTONE_API_BASE = "https://api.portone.io"
 
 
-def portone_public_config() -> dict[str, str]:
+def _env_first(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value.strip()
+    return ""
+
+
+def _store_id() -> str:
     settings = get_settings()
-    if not settings.portone_store_id or not settings.portone_channel_key:
+    return settings.portone_store_id or _env_first("PORTONE_STORE_ID", "NEXT_PUBLIC_PORTONE_STORE_ID")
+
+
+def _channel_key() -> str:
+    settings = get_settings()
+    return settings.portone_channel_key or _env_first(
+        "PORTONE_CHANNEL_KEY",
+        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY",
+        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS",
+    )
+
+
+def _billing_key_method() -> str:
+    method = get_settings().portone_billing_key_method or _env_first("PORTONE_BILLING_KEY_METHOD")
+    return (method or "CARD").strip().upper()
+
+
+def _is_test_channel() -> bool:
+    raw = _env_first("PORTONE_IS_TEST_CHANNEL", "NEXT_PUBLIC_PORTONE_IS_TEST_CHANNEL")
+    if raw:
+        return raw.lower() in {"1", "true", "yes", "y", "on"}
+    return bool(get_settings().portone_is_test_channel)
+
+
+def _normalize_payment_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    payment = payload.get("payment")
+    return payment if isinstance(payment, dict) else payload
+
+
+def portone_public_config() -> dict[str, Any]:
+    store_id = _store_id()
+    channel_key = _channel_key()
+    if not store_id or not channel_key:
         raise HTTPException(status_code=503, detail="PortOne Store ID or channel key is not configured.")
     return {
-        "store_id": settings.portone_store_id,
-        "channel_key": settings.portone_channel_key,
+        "store_id": store_id,
+        "channel_key": channel_key,
+        "billing_key_method": _billing_key_method(),
+        "is_test_channel": _is_test_channel(),
     }
 
 
 def _api_secret() -> str:
-    secret = get_settings().portone_api_secret
+    secret = get_settings().portone_api_secret or _env_first("PORTONE_API_SECRET")
     if not secret:
         raise HTTPException(status_code=503, detail="PORTONE_API_SECRET is not configured.")
     return secret
@@ -54,10 +97,9 @@ def pay_with_billing_key(
     amount_krw: int,
     user_id: str,
 ) -> dict[str, Any]:
-    settings = get_settings()
     payload = {
-        "storeId": settings.portone_store_id,
-        "channelKey": settings.portone_channel_key,
+        "storeId": _store_id(),
+        "channelKey": _channel_key(),
         "billingKey": billing_key,
         "orderName": order_name,
         "customer": {"id": user_id},
@@ -68,10 +110,10 @@ def pay_with_billing_key(
         response = client.post(f"{PORTONE_API_BASE}/payments/{payment_id}/billing-key", headers=_headers(), json=payload)
         if not response.is_success:
             _raise_portone_error("Billing key payment", response)
-        paid = response.json()
+        paid = _normalize_payment_payload(response.json())
         lookup = client.get(f"{PORTONE_API_BASE}/payments/{payment_id}", headers={"Authorization": f"PortOne {_api_secret()}"})
         if lookup.is_success:
-            return lookup.json()
+            return _normalize_payment_payload(lookup.json())
         return paid
 
 
@@ -84,11 +126,10 @@ def schedule_billing_key_payment(
     user_id: str,
     time_to_pay: datetime,
 ) -> dict[str, Any]:
-    settings = get_settings()
     payload = {
         "payment": {
-            "storeId": settings.portone_store_id,
-            "channelKey": settings.portone_channel_key,
+            "storeId": _store_id(),
+            "channelKey": _channel_key(),
             "billingKey": billing_key,
             "orderName": order_name,
             "customer": {"id": user_id},
@@ -111,7 +152,7 @@ def get_payment(payment_id: str) -> dict[str, Any] | None:
         return None
     if not response.is_success:
         _raise_portone_error("Payment lookup", response)
-    return response.json()
+    return _normalize_payment_payload(response.json())
 
 
 def payment_status(payment: dict[str, Any]) -> str:
