@@ -61,7 +61,6 @@ const planCards = [
     href: "/plan/basic",
     cta: "Basic",
     points: ["학생 키 3명", "소규모 수업", "표준 처리"],
-    featured: true,
   },
   {
     name: "Pro",
@@ -75,8 +74,8 @@ const planCards = [
 
 const planCardToneClass: Record<PlanCardTone, string> = {
   free: "landing-plan-card-free",
-  basic: "landing-plan-card-basic",
-  pro: "landing-plan-card-pro",
+  basic: "landing-plan-card-pro",
+  pro: "landing-plan-card-basic",
 };
 
 const planCtaToneClass: Record<PlanCardTone, string> = {
@@ -1464,7 +1463,6 @@ function PlanSection() {
                     <h3 className="text-2xl font-black text-white">{plan.name}</h3>
                     <p className="mt-2 text-xl font-black text-violet-50">{plan.price}</p>
                   </div>
-                  {plan.featured ? <span className="rounded-[6px] bg-violet-400/20 px-2.5 py-1 text-xs font-black text-violet-50 ring-1 ring-violet-200/25">추천</span> : null}
                 </div>
                 <ul className="mt-6 space-y-3 text-sm font-semibold text-slate-200/90">
                   {plan.points.map((point) => (
