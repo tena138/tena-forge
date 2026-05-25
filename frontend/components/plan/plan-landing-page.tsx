@@ -8,20 +8,32 @@ import {
   Archive,
   ArrowRight,
   Bell,
+  BarChart3,
+  CheckSquare,
+  ChevronDown,
   Check,
   ClipboardCheck,
+  Eye,
   FileUp,
   FolderKanban,
+  FolderPlus,
   GraduationCap,
+  Grid3X3,
   LayoutDashboard,
+  List,
   PanelLeftClose,
+  Search,
+  Send,
+  SlidersHorizontal,
   UserCircle,
+  UserPlus,
   Users,
 } from "lucide-react";
 
 import { PLANS, formatKRW } from "@/lib/plan-pricing";
 import { cn } from "@/lib/utils";
 import { SiteLogo } from "@/components/site-logo";
+import { MathText } from "@/components/math-text";
 import { TemplatePageView } from "@/components/templates/visual-template-renderer";
 import { PAGE_SIZES, SampleProblem, TemplateSet } from "@/lib/visualTemplateTypes";
 
@@ -465,53 +477,8 @@ function ProductPreview() {
                 </div>
               </div>
 
-              <div className="grid gap-5 p-5 lg:grid-cols-[1fr_18rem]">
-                <div className="min-w-0">
-                  <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xl font-black text-white">문항 브라우저</p>
-                        <p className="mt-1 text-xs font-bold text-slate-500">검토 완료 문항을 바로 세트로 묶습니다.</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-200">필터</span>
-                        <span className="rounded-[7px] bg-[var(--landing-accent)] px-3 py-2 text-xs font-black text-white">세트에 담기</span>
-                      </div>
-                    </div>
-                    <div className="mt-4 h-11 rounded-[7px] border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-slate-500">
-                      본문, 번호, 정답, 태그, 출처 검색
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 xl:grid-cols-3">
-                    {[1, 2, 3, 4, 5, 6].map((number) => (
-                      <ProblemCard key={number} number={number} selected={number <= 3} />
-                    ))}
-                  </div>
-                </div>
-
-                <aside className="space-y-4">
-                  <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
-                    <p className="text-sm font-black text-white">내보내기</p>
-                    <div className="mt-4 space-y-2">
-                      {["템플릿 선택", "클래스 배정", "PDF 생성"].map((label, index) => (
-                        <div key={label} className="flex items-center gap-3 rounded-[7px] border border-white/10 bg-black/25 px-3 py-2">
-                          <span className={cn("grid h-6 w-6 place-items-center rounded-full text-[11px] font-black", index === 0 ? "bg-violet-400 text-white" : "bg-white/10 text-slate-300")}>{index + 1}</span>
-                          <span className="text-xs font-bold text-slate-300">{label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
-                    <p className="text-sm font-black text-white">학생 기록</p>
-                    <div className="mt-4 grid grid-cols-5 gap-2">
-                      {Array.from({ length: 15 }).map((_, index) => (
-                        <span key={index} className={cn("aspect-square rounded-[5px]", index % 5 === 1 ? "bg-orange-400" : index % 7 === 2 ? "bg-rose-500" : "bg-emerald-400")} />
-                      ))}
-                    </div>
-                  </div>
-                </aside>
+              <div className="p-5">
+                <DemoProblemBrowserSurface progress={1} selectedNumbers={[1, 2, 3]} showSelectionBar cardCount={6} />
               </div>
             </section>
           </div>
@@ -835,33 +802,18 @@ function DigitizeScene({ progress }: { progress: number }) {
         );
       })}
 
-      <div
-        className="absolute grid grid-cols-3 gap-3"
+      <DemoProblemBrowserSurface
+        progress={clampProgress((progress - 0.62) / 0.38)}
+        cardCount={6}
+        className="absolute w-[66rem]"
         style={{
           left: "47%",
-          top: "25%",
+          top: "18%",
           opacity: clampProgress((progress - 0.52) / 0.1),
           transform: `perspective(1400px) rotateY(${18 + (-25 * gridProgress)}deg) rotateX(3deg) scale(${0.72 + gridProgress * 0.28})`,
           transformOrigin: "30% 50%",
         }}
-      >
-        {Array.from({ length: 9 }).map((_, index) => {
-          const cardProgress = clampProgress((progress - 0.62 - index * 0.03) / 0.18);
-          return (
-            <ProblemCard
-              key={index}
-              number={index + 1}
-              selected={false}
-              style={{
-                width: "10.5rem",
-                minHeight: "5.4rem",
-                opacity: cardProgress,
-                transform: `translateY(${(1 - cardProgress) * 16}px) scale(${0.9 + cardProgress * 0.1})`,
-              }}
-            />
-          );
-        })}
-      </div>
+      />
 
       <StoryCaption tag="Digitize" progress={progress} className="bottom-[14vh] left-[7vw]">
         오프라인 문항들을<br />한 곳에{" "}
@@ -878,7 +830,8 @@ function ContentCreationScene({ progress }: { progress: number }) {
     [3, 0.34],
     [5, 0.46],
   ]);
-  const selectedCount = Array.from(selectedThresholds.values()).filter((threshold) => progress >= threshold).length;
+  const selectedNumbers = Array.from(selectedThresholds.entries()).filter(([, threshold]) => progress >= threshold).map(([index]) => index + 1);
+  const selectedCount = selectedNumbers.length;
   const sourceFade = 1 - clampProgress((progress - 0.55) / 0.18) * 0.72;
   const templateProgress = clampProgress((progress - 0.7) / 0.3);
   const sheetIntro = clampProgress((progress - 0.5) / 0.16);
@@ -902,33 +855,20 @@ function ContentCreationScene({ progress }: { progress: number }) {
     <div className="relative h-full overflow-hidden bg-transparent">
       <div className="pointer-events-none absolute left-[55%] top-[28%] h-[35rem] w-[35rem] rounded-full bg-[radial-gradient(circle,rgba(59,111,245,0.26),rgba(124,92,255,0.12)_42%,transparent_70%)] blur-3xl" />
 
-      <div
-        className="absolute -left-10 top-[42%] grid grid-cols-2 gap-3"
+      <DemoProblemBrowserSurface
+        progress={1}
+        selectedNumbers={selectedNumbers}
+        showSelectionBar={selectedCount > 0}
+        cardCount={6}
+        className="absolute w-[44rem]"
         style={{
+          left: "-2.5rem",
+          top: "38%",
           opacity: sourceFade,
           transform: "perspective(1400px) rotateY(9deg) rotateX(2deg) scale(0.92)",
           transformOrigin: "0% 50%",
         }}
-      >
-        {Array.from({ length: 6 }).map((_, index) => {
-          const selected = progress >= (selectedThresholds.get(index) ?? 2);
-          const fly = selected ? clampProgress((progress - 0.4) / 0.16) : 0;
-          return (
-            <ProblemCard
-              key={index}
-              number={index + 1}
-              selected={selected && progress < 0.55}
-              style={{
-                width: "10rem",
-                minHeight: "5.7rem",
-                opacity: selected ? 1 - clampProgress((progress - 0.48) / 0.08) : 1 - clampProgress((progress - 0.4) / 0.1) * 0.75,
-                transform: selected ? `translate(${fly * (18 + (index % 2) * 3)}rem, ${fly * (7 - Math.floor(index / 2) * 3)}rem) scale(${1 - fly * 0.58})` : undefined,
-                zIndex: selected ? 10 : 1,
-              }}
-            />
-          );
-        })}
-      </div>
+      />
 
       <div
         className="absolute left-[calc(50%_-_8rem)] top-[calc(50%_+_9rem)] rounded-[14px] border border-white/10 bg-white/[0.055] px-5 py-4 shadow-[0_18px_54px_rgba(124,92,255,0.20)] backdrop-blur-xl"
@@ -997,12 +937,11 @@ function DemoExamPreview({ reveal, scale = 0.34 }: { reveal: number; scale?: num
 function WrongAnswerScene({ progress }: { progress: number }) {
   const gridProgress = clampProgress((progress - 0.18) / 0.42);
   const branchProgress = clampProgress((progress - 0.62) / 0.32);
-  const studentProgress = clampProgress((progress - 0.15) / 0.15);
   const cursorPoint = interpolateTimeline(progress, [
-    { at: 0, x: 5, y: 42 },
-    { at: 0.15, x: 5, y: 42 },
-    { at: 0.3, x: 33, y: 43 },
-    { at: 0.5, x: 72, y: 38 },
+    { at: 0, x: 12, y: 43 },
+    { at: 0.15, x: 12, y: 43 },
+    { at: 0.3, x: 39, y: 42 },
+    { at: 0.5, x: 70, y: 42 },
     { at: 0.66, x: 51, y: 68 },
   ]);
   const statuses = Array.from({ length: 18 }).map((_, index) => {
@@ -1014,81 +953,20 @@ function WrongAnswerScene({ progress }: { progress: number }) {
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
       <div className="pointer-events-none absolute left-[50%] top-[35%] h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.25),rgba(91,214,176,0.09)_42%,transparent_72%)] blur-3xl" />
-      <div className="absolute -left-14 top-[calc(50%_-_8rem)] w-[17rem] rounded-[16px] border border-white/10 bg-white/[0.055] p-5 shadow-[0_30px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-        <div className="flex items-center justify-between">
-          <span className="text-xl font-black text-white">P1</span>
-          <Users className="h-4 w-4 text-violet-200" />
-        </div>
-        <p className="mt-2 text-sm font-bold text-slate-400">4명</p>
-        <div className="mt-5 space-y-2">
-          {["이나은", "이수현", "이우노", "황지윤"].map((name, index) => (
-            <div key={name} className={cn("rounded-[10px] border px-3 py-3 text-sm font-black", index === 0 && progress > 0.1 ? "border-violet-200/44 bg-violet-400/16 text-white" : "border-white/10 bg-white/[0.045] text-slate-300")}>
-              {name}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div
-        className="absolute left-[26%] top-[calc(50%_-_8.2rem)] w-[18rem] rounded-[16px] border border-white/10 bg-white/[0.055] p-5 shadow-[0_30px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+      <DemoStudentManagementSurface
+        progress={progress}
+        gridProgress={gridProgress}
+        branchProgress={branchProgress}
+        statuses={statuses}
+        className="absolute w-[76rem]"
         style={{
-          opacity: studentProgress,
-          transform: `translateY(${(1 - studentProgress) * 20}px)`,
+          left: "4vw",
+          top: "15vh",
+          opacity: clampProgress((progress - 0.02) / 0.1),
+          transform: `perspective(1400px) rotateY(${9 - clampProgress(progress / 0.55) * 14}deg) rotateX(2deg) scale(${0.9 + clampProgress(progress / 0.44) * 0.1})`,
+          transformOrigin: "20% 50%",
         }}
-      >
-        <span className="text-sm font-black text-white">시험 일정</span>
-        <div className="mt-4 rounded-[8px] border border-violet-200/30 bg-violet-400/14 p-3">
-          <span className="block text-sm font-black text-white">0527</span>
-          <span className="mt-2 block h-2 w-10/12 rounded bg-slate-400/40" />
-          <span className="mt-2 block h-2 w-7/12 rounded bg-slate-400/28" />
-        </div>
-      </div>
-
-      <div
-        className="absolute right-[6vw] top-[calc(50%_-_12rem)] w-[31rem] rounded-[18px] border border-white/12 bg-white/[0.055] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-xl"
-        style={{
-          opacity: clampProgress((progress - 0.3) / 0.1),
-          transform: `translateY(${(1 - clampProgress((progress - 0.3) / 0.1)) * 20}px)`,
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-black text-white">오답 체크</span>
-          <ClipboardCheck className="h-4 w-4 text-violet-200" />
-        </div>
-        <div className="mt-5 grid grid-cols-6 gap-2">
-          {statuses.map((status, index) => (
-            <span
-              key={index}
-              className="grid aspect-square place-items-center rounded-[9px] border text-xs font-black text-white transition"
-              style={{
-                opacity: clampProgress((gridProgress - index * 0.015) / 0.28),
-                background:
-                  status === "wrong"
-                    ? "rgba(217,154,91,0.22)"
-                    : status === "missed"
-                      ? "rgba(217,96,128,0.28)"
-                      : "rgba(91,214,176,0.22)",
-                borderColor:
-                  status === "wrong"
-                    ? "rgba(217,154,91,0.50)"
-                    : status === "missed"
-                      ? "rgba(217,96,128,0.60)"
-                      : "rgba(91,214,176,0.50)",
-                boxShadow:
-                  status === "wrong"
-                    ? "0 0 14px rgba(217,154,91,0.16)"
-                    : status === "missed"
-                      ? "0 0 16px rgba(217,96,128,0.26)"
-                      : "0 0 14px rgba(91,214,176,0.14)",
-                transform: (status === "wrong" || status === "missed") && branchProgress > 0 ? `translate(${branchProgress * (-42 + (index % 6) * 8)}px, ${branchProgress * 120}px) scale(${1 + branchProgress * 0.05})` : undefined,
-                zIndex: status === "wrong" || status === "missed" ? 5 : 1,
-              }}
-            >
-              {index + 1}
-            </span>
-          ))}
-        </div>
-      </div>
+      />
 
       <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ opacity: branchProgress }}>
         <path d="M 50 63 C 38 73, 34 73, 27 78" fill="none" stroke="#3b6ff5" strokeWidth="0.35" strokeDasharray="1.4 1.4" opacity="0.6" />
@@ -1136,6 +1014,178 @@ function WrongAnswerScene({ progress }: { progress: number }) {
   );
 }
 
+function DemoStudentManagementSurface({
+  progress,
+  gridProgress,
+  branchProgress,
+  statuses,
+  className,
+  style,
+}: {
+  progress: number;
+  gridProgress: number;
+  branchProgress: number;
+  statuses: string[];
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const studentNames = ["이나은", "이수현", "이우노", "황지윤"];
+  const studentOpen = clampProgress((progress - 0.14) / 0.16);
+  const gradingOpen = clampProgress((progress - 0.28) / 0.12);
+
+  return (
+    <section className={cn("space-y-4", className)} style={style}>
+      <header className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <span className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-300">Student Management</span>
+          <span className="text-sm text-slate-500">Class Dashboard</span>
+        </div>
+        <div className="flex gap-2">
+          {[["클래스", "1"], ["학생", "4"]].map(([label, value]) => (
+            <span key={label} className="flex min-w-[86px] items-center justify-between gap-3 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+              <span className="text-xs text-slate-500">{label}</span>
+              <span className="text-base font-black text-white">{value}</span>
+            </span>
+          ))}
+        </div>
+      </header>
+
+      <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] shadow-[0_26px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+        <div className="grid min-h-[180px] grid-cols-[28px_185px_minmax(0,1fr)]">
+          <div className="flex items-center justify-center border-r border-white/10 text-slate-500">
+            <span className="h-14 w-1 rounded-full bg-white/10" />
+          </div>
+          <aside className="flex flex-col justify-between border-r border-white/10 p-4">
+            <div>
+              <p className="text-4xl font-black tracking-normal text-white">P1</p>
+              <p className="mt-5 text-3xl font-black text-slate-200">4</p>
+              <p className="text-xs text-slate-500">학생</p>
+              <p className="mt-3 truncate text-xs text-slate-500">수학 · N</p>
+            </div>
+            <div className="flex gap-2">
+              <span className="grid h-10 w-10 place-items-center rounded-md border border-violet-300/50 bg-violet-500/20 text-violet-100">
+                <BarChart3 className="h-5 w-5" />
+              </span>
+              <span className="grid h-10 w-10 place-items-center rounded-md border border-emerald-300/40 bg-emerald-500/15 text-emerald-100">
+                <UserPlus className="h-5 w-5" />
+              </span>
+            </div>
+          </aside>
+
+          <div className="min-w-0 p-4">
+            <div className="flex gap-3 overflow-hidden pb-1">
+              {studentNames.map((name, index) => (
+                <div
+                  key={name}
+                  className={cn(
+                    "w-[210px] shrink-0 rounded-md border bg-white/[0.035] p-3 transition",
+                    index === 0 && progress > 0.1 ? "border-violet-300/45 bg-violet-500/10" : "border-white/[0.08]"
+                  )}
+                  style={{
+                    opacity: clampProgress((progress - index * 0.035) / 0.22),
+                    transform: `translateY(${(1 - clampProgress((progress - index * 0.035) / 0.22)) * 16}px)`,
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{name}</p>
+                      <p className="mt-1 truncate text-xs text-slate-400">N</p>
+                    </div>
+                    <span className="shrink-0 rounded border border-emerald-300/25 bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-100">Active</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
+                    <div className="rounded-md bg-white/[0.04] p-2">
+                      <p className="text-slate-500">최근 점수</p>
+                      <p className="mt-1 font-semibold text-white">{index === 0 ? "50점" : "-"}</p>
+                    </div>
+                    <div className="rounded-md bg-white/[0.04] p-2">
+                      <p className="text-slate-500">오답</p>
+                      <p className="mt-1 font-semibold text-rose-100">{index === 0 ? "4" : "0"}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="mt-4 grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]"
+              style={{ opacity: studentOpen, transform: `translateY(${(1 - studentOpen) * 18}px)` }}
+            >
+              <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                <p className="text-sm font-semibold text-white">채점할 세션</p>
+                <div className="mt-3 rounded-md border border-violet-300/30 bg-violet-500/15 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm font-semibold text-white">0527</span>
+                    <span className="rounded border border-violet-300/25 bg-violet-400/15 px-2 py-0.5 text-[11px] font-bold text-violet-100">grading</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">이나은 · 18문항</p>
+                </div>
+              </div>
+
+              <div
+                className="rounded-lg border border-white/10 bg-white/[0.035] p-4"
+                style={{ opacity: gradingOpen, transform: `translateY(${(1 - gradingOpen) * 16}px)` }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold text-white">0527</p>
+                    <p className="mt-1 text-xs text-slate-500">이나은 · 18문항</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-bold text-slate-200">
+                    <ClipboardCheck className="h-3.5 w-3.5 text-violet-200" />
+                    저장됨
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-9 gap-2">
+                  {statuses.map((status, index) => (
+                    <span
+                      key={index}
+                      className="grid aspect-square place-items-center rounded-[9px] border text-xs font-black text-white transition"
+                      style={{
+                        opacity: clampProgress((gridProgress - index * 0.015) / 0.28),
+                        background:
+                          status === "wrong"
+                            ? "rgba(217,154,91,0.22)"
+                            : status === "missed"
+                              ? "rgba(217,96,128,0.28)"
+                              : "rgba(91,214,176,0.22)",
+                        borderColor:
+                          status === "wrong"
+                            ? "rgba(217,154,91,0.50)"
+                            : status === "missed"
+                              ? "rgba(217,96,128,0.60)"
+                              : "rgba(91,214,176,0.50)",
+                        boxShadow:
+                          status === "wrong"
+                            ? "0 0 14px rgba(217,154,91,0.16)"
+                            : status === "missed"
+                              ? "0 0 16px rgba(217,96,128,0.26)"
+                              : "0 0 14px rgba(91,214,176,0.14)",
+                        transform:
+                          (status === "wrong" || status === "missed") && branchProgress > 0
+                            ? `translate(${branchProgress * (-70 + (index % 9) * 10)}px, ${branchProgress * 130}px) scale(${1 + branchProgress * 0.05})`
+                            : undefined,
+                        zIndex: status === "wrong" || status === "missed" ? 5 : 1,
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+                  <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
+                  <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답</span>
+                  <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SidebarGroup({
   title,
   accent,
@@ -1172,21 +1222,132 @@ function SidebarGroup({
   );
 }
 
-function ProblemCard({ number, selected, style }: { number: number; selected: boolean; style?: CSSProperties }) {
+function DemoProblemBrowserSurface({
+  progress,
+  selectedNumbers = [],
+  className,
+  style,
+  showSelectionBar = false,
+  cardCount = 6,
+}: {
+  progress: number;
+  selectedNumbers?: number[];
+  className?: string;
+  style?: CSSProperties;
+  showSelectionBar?: boolean;
+  cardCount?: number;
+}) {
   return (
-    <article className={cn("min-h-40 rounded-[8px] border p-4 transition", selected ? "border-violet-300/45 bg-violet-400/[0.08]" : "border-white/10 bg-white/[0.035]")} style={style}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-black text-white">#{number}</span>
-        <span className="rounded-[6px] border border-white/10 bg-white/[0.06] px-2 py-1 text-[11px] font-black text-slate-300">수학</span>
+    <div className={cn("space-y-4", className)} style={style}>
+      <section className="forge-panel rounded-lg p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-white">문항 브라우저</h1>
+            <p className="mt-1 text-sm text-muted-foreground">58개 문항</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex h-9 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-slate-300">
+              정렬
+              <span className="text-sm font-semibold text-white">원문 순</span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+            </label>
+            <div className="flex h-9 rounded-md border border-white/10 bg-white/[0.04] p-1">
+              <span className="inline-flex items-center gap-1.5 rounded bg-[#7F77DD] px-2.5 text-xs font-semibold text-white">
+                <Grid3X3 className="h-3.5 w-3.5" />격자
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold text-muted-foreground">
+                <List className="h-3.5 w-3.5" />목록
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex h-11 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3">
+          <Search className="h-4 w-4 text-[#7F77DD]" />
+          <span className="text-sm text-muted-foreground">본문, 번호, 정답, 태그, 출처 검색</span>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-7 items-center rounded-md border border-[#7F77DD]/25 bg-[#7F77DD]/10 px-2 text-xs font-semibold text-violet-100">검토 완료</span>
+          <span className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200">
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            필터 펼치기
+            <ChevronDown className="h-3.5 w-3.5" />
+          </span>
+        </div>
+      </section>
+
+      {showSelectionBar ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur">
+          <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
+            <CheckSquare className="h-4 w-4 text-[#7F77DD]" />
+            {selectedNumbers.length}개 선택됨
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#7F77DD] px-3 text-xs font-semibold text-white">
+              <FolderPlus className="h-4 w-4" />세트에 담기
+            </span>
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200">
+              <Send className="h-4 w-4" />바로 내보내기
+            </span>
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200">
+              <Eye className="h-4 w-4" />미리보기
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+        {Array.from({ length: cardCount }).map((_, index) => {
+          const number = index + 1;
+          const cardProgress = clampProgress((progress - index * 0.035) / 0.22);
+          return (
+            <ProblemCard
+              key={number}
+              number={number}
+              selected={selectedNumbers.includes(number)}
+              style={{
+                opacity: cardProgress,
+                transform: `translateY(${(1 - cardProgress) * 16}px) scale(${0.94 + cardProgress * 0.06})`,
+              }}
+            />
+          );
+        })}
       </div>
-      <div className="mt-5 space-y-2">
-        <span className="block h-2 w-11/12 rounded-full bg-slate-500/45" />
-        <span className="block h-2 w-8/12 rounded-full bg-slate-500/30" />
-        <span className="block h-2 w-10/12 rounded-full bg-slate-500/35" />
-      </div>
-      <div className="mt-6 flex gap-2">
-        <span className="h-7 flex-1 rounded-[6px] bg-black/25" />
-        <span className="h-7 flex-1 rounded-[6px] bg-black/25" />
+    </div>
+  );
+}
+
+function ProblemCard({ number, selected, style }: { number: number; selected: boolean; style?: CSSProperties }) {
+  const problem = demoProblems[(number - 1) % demoProblems.length];
+  const toneColor = ["#7F77DD", "#5bd6b0", "#d99a5b", "#d96080"][number % 4];
+  return (
+    <article
+      className={cn(
+        "group relative min-h-[215px] overflow-hidden rounded-lg border bg-card/80 transition-all",
+        selected ? "border-[#7F77DD] bg-[#7F77DD]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
+      )}
+      style={style}
+    >
+      <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: toneColor }} />
+      <span className="absolute left-3 top-3 z-10 inline-flex h-6 w-6 items-center justify-center rounded border border-white/15 bg-black/30 backdrop-blur">
+        <span className={cn("h-4 w-4 rounded-[3px] border border-white/25", selected && "border-[#7F77DD] bg-[#7F77DD] shadow-[0_0_14px_rgba(127,119,221,0.55)]")} />
+      </span>
+      <div className="flex h-full flex-col px-4 pb-4 pl-6 pt-3">
+        <div className="flex items-start justify-between gap-3 pl-8">
+          <div className="min-w-0">
+            <div className="line-clamp-1 text-[11px] font-medium leading-4 text-muted-foreground">2026 수학 워크북 / p.{number + 1}</div>
+            <div className="mt-1 text-[13px] font-medium leading-5 text-slate-200">#{number}</div>
+          </div>
+          <span className="shrink-0 rounded border border-violet-300/25 bg-violet-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100">수학</span>
+        </div>
+        <MathText className="mt-3 line-clamp-4 text-[14px] font-medium leading-[1.55] text-foreground" value={problem.text} />
+        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 text-[11px] font-medium text-muted-foreground">
+          <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-slate-300">수학II</span>
+          <span>{number + 1}p</span>
+          <span className="text-slate-600">·</span>
+          <span>{problem.choices?.length ? "객관식" : "주관식·단답형"}</span>
+          <span className="text-slate-600">·</span>
+          <span>검토 완료</span>
+        </div>
       </div>
     </article>
   );
