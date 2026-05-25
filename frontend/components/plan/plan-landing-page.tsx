@@ -760,6 +760,15 @@ function DigitizeScene({ progress }: { progress: number }) {
   const gridProgress = clampProgress((progress - 0.82) / 0.18);
   const consoleProgress = clampProgress((progress - 0.76) / 0.14);
   const pointOpacity = clampProgress((progress - 0.32) / 0.08) * (1 - clampProgress((progress - 0.66) / 0.08));
+  const documents = [
+    { x: -30, y: -17, rotate: -13, width: 9.4, height: 12.8, accent: "#6b6f8c" },
+    { x: -14, y: -22, rotate: 7, width: 8.8, height: 12, accent: "#7c5cff" },
+    { x: 5, y: -15, rotate: -5, width: 9.6, height: 13.2, accent: "#2dd4bf" },
+    { x: -24, y: 5, rotate: 11, width: 8.7, height: 11.8, accent: "#3b6ff5" },
+    { x: -2, y: 6, rotate: -9, width: 9.2, height: 12.4, accent: "#a24bff" },
+    { x: 18, y: 8, rotate: 12, width: 8.4, height: 11.5, accent: "#6b6f8c" },
+    { x: -12, y: 23, rotate: -6, width: 9, height: 12.2, accent: "#2dd4bf" },
+  ];
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
@@ -771,29 +780,39 @@ function DigitizeScene({ progress }: { progress: number }) {
         }}
       />
 
-      {[0, 1, 2].map((index) => {
-        const startX = [-24, -6, 12][index];
-        const startY = [-15, 2, 16][index];
+      {documents.map((document, index) => {
+        const startX = document.x;
+        const startY = document.y;
         const endX = -2;
         const endY = -6;
-        const drift = Math.sin(progress * 5.2 + index * 1.7) * 8 * (1 - absorbProgress);
-        const x = startX + (endX - startX) * absorbProgress;
-        const y = startY + (endY - startY) * absorbProgress;
-        const scale = paperIn * (1 - absorbProgress * 0.88);
+        const swirlRadius = Math.sin(absorbProgress * Math.PI) * (10.5 - index * 0.55);
+        const swirlAngle = absorbProgress * Math.PI * 2.7 + index * 0.86;
+        const drift = Math.sin(progress * 5.2 + index * 1.7) * 5 * (1 - absorbProgress);
+        const x = startX + (endX - startX) * absorbProgress + Math.cos(swirlAngle) * swirlRadius;
+        const y = startY + (endY - startY) * absorbProgress + Math.sin(swirlAngle) * swirlRadius * 0.56;
+        const scale = paperIn * (1 - absorbProgress * 0.86);
         const opacity = paperIn * (1 - clampProgress((progress - 0.41) / 0.08));
         return (
           <div
             key={index}
             className="landing-story-paper absolute left-1/2 top-1/2 h-[13rem] w-[9.5rem] overflow-hidden rounded-[11px] border border-white/20 bg-[linear-gradient(160deg,#f3f3f9,#d4d4e2)] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
             style={{
-              transform: `translate(calc(-50% + ${x}vw + ${drift}px), calc(-50% + ${y}vh + ${drift * 0.4}px)) rotate(${[-13, 8, -6][index] * (1 - absorbProgress)}deg) scale(${scale})`,
+              width: `${document.width}rem`,
+              height: `${document.height}rem`,
+              transform: `translate(calc(-50% + ${x}vw + ${drift}px), calc(-50% + ${y}vh + ${drift * 0.4}px)) rotate(${document.rotate * (1 - absorbProgress) + absorbProgress * 390}deg) scale(${scale})`,
               opacity,
+              zIndex: 12 - index,
             }}
           >
-            <div className="absolute left-4 top-4 h-3 w-20 rounded bg-[#6b6f8c]" />
+            <div className="absolute left-4 top-4 h-3 w-20 rounded" style={{ backgroundColor: document.accent }} />
             <div className="absolute left-4 right-4 top-12 h-1.5 rounded bg-[#aeb0c4]" />
             <div className="absolute left-4 top-16 h-1.5 w-24 rounded bg-[#aeb0c4]" />
             <div className="absolute left-4 right-4 top-24 h-16 rounded border border-slate-300/60 bg-slate-50/70" />
+            <div className="absolute bottom-4 left-4 right-4 grid grid-cols-3 gap-1.5">
+              <span className="h-7 rounded border border-slate-300/60 bg-slate-50/70" />
+              <span className="h-7 rounded border border-slate-300/60 bg-slate-50/70" />
+              <span className="h-7 rounded border border-slate-300/60 bg-slate-50/70" />
+            </div>
             <div
               className="absolute left-0 right-0 h-5 bg-[linear-gradient(90deg,transparent,#2dd4bf,transparent)] shadow-[0_0_20px_#2dd4bf]"
               style={{
@@ -817,7 +836,6 @@ function DigitizeScene({ progress }: { progress: number }) {
           style={{ transform: `rotate(${loadingProgress * 540}deg)` }}
         >
           <span className="absolute inset-2 rounded-full border border-transparent border-t-cyan-300 border-r-violet-300 shadow-[0_0_22px_rgba(45,212,191,0.25)]" />
-          <span className="h-3 w-3 rounded-full bg-cyan-200 shadow-[0_0_18px_rgba(45,212,191,0.9)]" />
         </div>
         <div className="mt-4 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black tracking-[0.12em] text-violet-100 shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur">
           문항 추출 중
