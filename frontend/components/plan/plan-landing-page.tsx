@@ -567,19 +567,28 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
 }
 
 function DigitizeScene({ progress }: { progress: number }) {
-  const paperShift = clampProgress(progress * 1.25);
-  const consoleFill = clampProgress((progress - 0.34) / 0.5);
+  const intakeProgress = clampProgress(progress / 0.34);
+  const scanProgress = clampProgress((progress - 0.06) / 0.22);
+  const expandProgress = clampProgress((progress - 0.31) / 0.2);
+  const batchIntro = clampProgress((progress - 0.43) / 0.12);
+  const batchProgress = clampProgress((progress - 0.49) / 0.23);
+  const batchExit = clampProgress((progress - 0.72) / 0.1);
+  const batchVisible = batchIntro * (1 - batchExit);
+  const browserProgress = clampProgress((progress - 0.84) / 0.16);
+  const consoleScale = 0.38 + expandProgress * 0.62;
+  const paperOpacity = 1 - clampProgress((intakeProgress - 0.72) / 0.2);
+  const batchPercent = Math.min(100, Math.round(batchProgress * 100));
 
   return (
-    <div className="relative h-full overflow-hidden bg-[#090b10] p-5">
-      <div className="pointer-events-none absolute left-[5%] top-[16%] h-[18rem] w-[12rem]">
+    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_20%_28%,rgba(45,212,191,0.10),transparent_20rem),radial-gradient(circle_at_72%_42%,rgba(124,92,255,0.20),transparent_28rem),#090b10] p-5">
+      <div className="pointer-events-none absolute left-[6%] top-[20%] z-20 h-[16rem] w-[11rem]">
         {[0, 1, 2].map((index) => (
           <div
             key={index}
             className="landing-story-paper absolute inset-0 rounded-[8px] border border-white/12 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.34)]"
             style={{
-              transform: `translate3d(${paperShift * (174 + index * 10)}%, ${index * 1.1 - paperShift * 3}rem, 0) rotate(${index * -4 + paperShift * 5}deg) scale(${1 - paperShift * 0.58})`,
-              opacity: 1 - paperShift * 0.8,
+              transform: `translate3d(${intakeProgress * (300 + index * 8)}%, ${index * 0.9 - intakeProgress * 0.7}rem, 0) rotate(${index * -4 + intakeProgress * 8}deg) scale(${1 - intakeProgress * 0.58})`,
+              opacity: paperOpacity,
             }}
           >
             <div className="m-4 h-5 w-20 rounded bg-slate-900/80" />
@@ -589,59 +598,118 @@ function DigitizeScene({ progress }: { progress: number }) {
               <span className="block h-16 rounded border border-slate-200 bg-slate-50" />
               <span className="block h-2 w-9/12 rounded bg-slate-300" />
             </div>
+            <span
+              className="absolute left-0 right-0 h-10 bg-[linear-gradient(180deg,transparent,rgba(45,212,191,0.34),transparent)]"
+              style={{
+                top: `${scanProgress * 78 + 4}%`,
+                opacity: scanProgress > 0 && scanProgress < 1 ? 0.75 : 0,
+              }}
+            />
           </div>
         ))}
       </div>
 
-      <div className="grid h-full gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <aside className="relative rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-black text-white">배치 추출</span>
-            <FileUp className="h-4 w-4 text-cyan-100" />
+      <div
+        className="absolute inset-5 z-10 overflow-hidden rounded-[10px] border border-white/10 bg-[#080a10]/95 shadow-[0_28px_100px_rgba(0,0,0,0.42)]"
+        style={{
+          transform: `scale(${consoleScale})`,
+          transformOrigin: "50% 45%",
+        }}
+      >
+        <div
+          className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_46%,rgba(124,92,255,0.18),transparent_17rem)]"
+          style={{ opacity: 1 - clampProgress(expandProgress * 1.6) }}
+        >
+          <div className="w-[min(16rem,70%)] rounded-[9px] border border-dashed border-cyan-200/28 bg-cyan-200/[0.055] p-5 text-center shadow-[0_0_46px_rgba(45,212,191,0.10)]">
+            <FileUp className="mx-auto h-7 w-7 text-cyan-100" />
+            <p className="mt-3 text-sm font-black text-white">PDF 자료</p>
           </div>
-          <div className="mt-5 rounded-[8px] border border-dashed border-cyan-200/24 bg-cyan-200/[0.055] p-4">
-            <p className="text-xs font-bold text-cyan-100">2025 이미지 미친개념 워크북.pdf</p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300" style={{ width: `${Math.round(28 + consoleFill * 72)}%` }} />
-            </div>
-            <p className="mt-3 text-xs font-semibold text-slate-400">{consoleFill > 0.88 ? "검토 대기" : "문항 구조화 중"}</p>
-          </div>
-          <div className="mt-4 space-y-2">
-            {["원본 페이지 감지", "문항 번호 추출", "태그 자동 분류", "보관함 저장"].map((label, index) => (
-              <div key={label} className="flex items-center justify-between rounded-[7px] border border-white/10 bg-black/25 px-3 py-2">
-                <span className="text-xs font-bold text-slate-300">{label}</span>
-                <span className={cn("h-2 w-2 rounded-full", consoleFill > index * 0.22 ? "bg-emerald-300" : "bg-slate-600")} />
-              </div>
-            ))}
-          </div>
-        </aside>
+        </div>
 
-        <div className="min-w-0 rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xl font-black text-white">문항 브라우저</p>
-              <p className="mt-1 text-xs font-bold text-slate-500">58개 문항 · 원문 순</p>
+        <div
+          className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_40%,rgba(45,212,191,0.13),transparent_18rem),rgba(5,7,12,0.88)] p-6"
+          style={{
+            opacity: batchVisible,
+            transform: `scale(${0.94 + batchIntro * 0.06 - batchExit * 0.05})`,
+            pointerEvents: batchVisible > 0.01 ? "auto" : "none",
+          }}
+        >
+          <div className="w-[min(40rem,86%)] rounded-[12px] border border-cyan-100/14 bg-[#0c1019]/95 p-8 text-center shadow-[0_30px_110px_rgba(45,212,191,0.16)]">
+            <p className="text-lg font-black text-cyan-100">배치 추출</p>
+            <p className="mt-5 text-7xl font-black tracking-tight text-white drop-shadow-[0_0_28px_rgba(45,212,191,0.25)]">{batchPercent}%</p>
+            <div className="mx-auto mt-7 h-3 max-w-[28rem] overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-[linear-gradient(90deg,#2dd4bf,#7c5cff,#c4b5fd)]" style={{ width: `${batchPercent}%` }} />
             </div>
-            <div className="flex gap-2">
-              <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-200">검토 완료</span>
-              <span className="rounded-[7px] bg-[var(--landing-accent)] px-3 py-2 text-xs font-black text-white">세트에 담기</span>
+            <div className="mt-7 grid gap-2 sm:grid-cols-4">
+              {["페이지 감지", "문항 분리", "태그 분류", "보관함 저장"].map((label, index) => (
+                <div key={label} className="rounded-[8px] border border-white/10 bg-white/[0.045] px-3 py-3">
+                  <span className={cn("mx-auto block h-2.5 w-2.5 rounded-full", batchProgress > index * 0.22 ? "bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.7)]" : "bg-slate-600")} />
+                  <p className="mt-2 text-xs font-black text-slate-300">{label}</p>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="mt-4 h-11 rounded-[7px] border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-slate-500">
-            본문, 번호, 정답, 태그, 출처 검색
-          </div>
-          <div className="mt-4 grid gap-3 xl:grid-cols-3">
-            {demoProblems.concat(demoProblems).slice(0, 6).map((problem, index) => (
-              <ProblemCard
-                key={`${problem.id}-${index}`}
-                number={index + 1}
-                selected={false}
-                style={{
-                  opacity: clampProgress((consoleFill - index * 0.06) / 0.35),
-                  transform: `translateY(${(1 - clampProgress((consoleFill - index * 0.06) / 0.35)) * 18}px)`,
-                }}
-              />
-            ))}
+        </div>
+
+        <div
+          className="grid h-full gap-4 p-4 lg:grid-cols-[19rem_minmax(0,1fr)]"
+          style={{
+            opacity: browserProgress,
+            transform: `translateY(${(1 - browserProgress) * 12}px)`,
+          }}
+        >
+          <aside className="relative rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-black text-white">추출 기록</span>
+              <FileUp className="h-4 w-4 text-cyan-100" />
+            </div>
+            <div className="mt-5 rounded-[8px] border border-cyan-200/16 bg-cyan-200/[0.045] p-4">
+              <p className="text-xs font-bold text-cyan-100">PDF 자료</p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300" style={{ width: "100%" }} />
+              </div>
+              <p className="mt-3 text-xs font-semibold text-slate-400">검토 대기</p>
+            </div>
+            <div className="mt-4 space-y-2">
+              {["원본 페이지 감지", "문항 번호 추출", "태그 자동 분류", "보관함 저장"].map((label) => (
+                <div key={label} className="flex items-center justify-between rounded-[7px] border border-white/10 bg-black/25 px-3 py-2">
+                  <span className="text-xs font-bold text-slate-300">{label}</span>
+                  <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          <div className="min-w-0 rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xl font-black text-white">문항 브라우저</p>
+                <p className="mt-1 text-xs font-bold text-slate-500">58개 문항 · 원문 순</p>
+              </div>
+              <div className="flex gap-2">
+                <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-200">검토 완료</span>
+                <span className="rounded-[7px] bg-[var(--landing-accent)] px-3 py-2 text-xs font-black text-white">세트에 담기</span>
+              </div>
+            </div>
+            <div className="mt-4 h-11 rounded-[7px] border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-slate-500">
+              본문, 번호, 정답, 태그, 출처 검색
+            </div>
+            <div className="mt-4 grid gap-3 xl:grid-cols-3">
+              {demoProblems.concat(demoProblems).slice(0, 6).map((problem, index) => {
+                const cardProgress = clampProgress((browserProgress - index * 0.06) / 0.34);
+                return (
+                  <ProblemCard
+                    key={`${problem.id}-${index}`}
+                    number={index + 1}
+                    selected={false}
+                    style={{
+                      opacity: cardProgress,
+                      transform: `translateY(${(1 - cardProgress) * 18}px)`,
+                    }}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
