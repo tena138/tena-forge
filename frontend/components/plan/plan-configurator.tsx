@@ -115,23 +115,21 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   return (
     <main data-plan-theme={plan} className="relative min-h-screen overflow-x-clip bg-[#07080d] text-white">
       <ConfiguratorNav plan={plan} />
-      {plan === "basic" && <BasicPlanBackdrop />}
-      {plan === "pro" && <ProPlanBackdrop />}
+      {plan === "basic" && <ProPlanBackdrop />}
+      {plan === "pro" && <BasicPlanBackdrop />}
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:72px_72px] opacity-25" />
-      <div className="pointer-events-none fixed inset-x-0 top-16 h-px bg-gradient-to-r from-transparent via-cyan-200/30 to-transparent" />
-      <section ref={transitionSceneRef} data-plan-journey className="relative z-10 bg-[#050609] px-4 pb-16 pt-24 sm:px-6">
+      <div data-plan-divider className="pointer-events-none fixed inset-x-0 top-16 h-px bg-gradient-to-r from-transparent via-cyan-200/30 to-transparent" />
+      <section ref={transitionSceneRef} data-plan-journey className="relative z-10 bg-transparent px-4 pb-16 pt-24 sm:px-6">
         <div data-plan-sticky className="mx-auto max-w-[92rem] bg-transparent">
-          <div className="rounded-[12px] border border-white/10 bg-white/[0.045] shadow-[0_28px_90px_rgba(0,0,0,0.30)] backdrop-blur-md">
-            <PlanIntroStage
-              plan={plan}
-              specs={specs}
-              monthlyPrice={monthlyPrice}
-              annual={annual}
-              billingCycle={billingCycle}
-              progress={1}
-              style={{ opacity: 1 }}
-            />
-          </div>
+          <PlanIntroStage
+            plan={plan}
+            specs={specs}
+            monthlyPrice={monthlyPrice}
+            annual={annual}
+            billingCycle={billingCycle}
+            progress={1}
+            style={{ opacity: 1 }}
+          />
 
           <div
             id="plan-config-workspace"
@@ -241,7 +239,7 @@ function ConfiguratorNav({ plan }: { plan: PaidPlanType }) {
             <ArrowLeft className="h-4 w-4" /> 플랜 다시 선택
           </span>
         </Link>
-        <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-cyan-100">{PLANS[plan].name}</span>
+        <span data-plan-badge className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-cyan-100">{PLANS[plan].name}</span>
       </div>
     </nav>
   );
@@ -271,7 +269,7 @@ function PlanIntroStage({
     <section className="relative z-10 flex min-h-screen items-center px-4 pt-16 sm:px-6">
       <div className="mx-auto w-full max-w-5xl py-20 transition-transform duration-300 ease-out" style={style}>
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">Plan</p>
+          <p data-plan-kicker className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">Plan</p>
           <h1 className="mt-5 text-5xl font-black tracking-normal text-white sm:text-7xl">{planConfig.name} 구성하기</h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-slate-400 sm:text-lg">{planConfig.positioning}</p>
         </div>
@@ -283,11 +281,11 @@ function PlanIntroStage({
           <PlanIntroMetric icon={School} label="Student keys" value={`${specs.studentKeys.toLocaleString()}개`} />
         </div>
 
-        <div className="mx-auto mt-8 max-w-2xl rounded-[12px] border border-cyan-200/20 bg-cyan-200/10 p-5 text-center shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
+        <div data-plan-intro-callout className="mx-auto mt-8 max-w-2xl rounded-[12px] border border-cyan-200/20 bg-cyan-200/10 p-5 text-center shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
           <p className="text-sm font-bold leading-6 text-cyan-100">PDF 추출은 AI credits를 사용합니다. 별도의 PDF 페이지 제한 없이, 선택한 AI 사용량 안에서 작업할 수 있습니다.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm font-black">
             <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1.5 text-white">{formatKRW(displayPrice)} / 월</span>
-            {billingCycle === "annual" && <span className="rounded-[7px] bg-emerald-200 px-3 py-1.5 text-slate-950">연간 결제 {BILLING.annualDiscountPercent}% 할인</span>}
+            {billingCycle === "annual" && <span data-plan-discount-badge className="rounded-[7px] bg-emerald-200 px-3 py-1.5 text-slate-950">연간 결제 {BILLING.annualDiscountPercent}% 할인</span>}
           </div>
         </div>
 
@@ -303,10 +301,10 @@ function PlanIntroStage({
 
 function PlanIntroMetric({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
   return (
-    <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4 text-left shadow-[0_18px_52px_rgba(0,0,0,0.24)] backdrop-blur-md">
+    <div data-plan-intro-metric className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4 text-left shadow-[0_18px_52px_rgba(0,0,0,0.24)] backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-bold text-slate-500">{label}</p>
-        <Icon className="h-4 w-4 text-cyan-100" />
+        <Icon data-plan-intro-icon className="h-4 w-4 text-cyan-100" />
       </div>
       <p className="mt-3 text-lg font-black text-white">{value}</p>
     </div>
@@ -349,11 +347,11 @@ function PackageSection({ plan, group, selectedPackageIds, onSelect, register, c
                   <h3 className="text-lg font-black">{option.name}</h3>
                   <p className={cn("mt-1 text-sm leading-6", selected ? "text-slate-300" : "text-slate-400")}>{option.description}</p>
                 </div>
-                <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full border", selected ? "border-cyan-100 bg-cyan-100 text-slate-950" : "border-white/15 text-transparent")}>
+                <span data-plan-check-dot className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full border", selected ? "border-cyan-100 bg-cyan-100 text-slate-950" : "border-white/15 text-transparent")}>
                   <Check className="h-4 w-4" />
                 </span>
               </div>
-              <p className={cn("mt-4 text-sm font-black", selected ? "text-cyan-100" : "text-slate-200")}>{option.label}</p>
+              <p data-plan-option-label className={cn("mt-4 text-sm font-black", selected ? "text-cyan-100" : "text-slate-200")}>{option.label}</p>
             </button>
           );
         })}
@@ -386,12 +384,12 @@ function LockedCard({ title, body }: { title: string; body: string }) {
 
 function BillingCard({ active, title, price, detail, badge, onClick }: { active: boolean; title: string; price: string; detail: string; badge?: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={cn("rounded-[10px] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200/30", active ? "border-cyan-200/60 bg-cyan-200/10 shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.065]")}>
+    <button type="button" data-plan-billing-card data-active={active} onClick={onClick} className={cn("rounded-[10px] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200/30", active ? "border-cyan-200/60 bg-cyan-200/10 shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.065]")}>
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-black text-white">{title}</h3>
-        {badge && <span className="rounded-[6px] bg-emerald-200 px-2 py-1 text-[11px] font-black text-slate-950">{badge}</span>}
+        {badge && <span data-plan-discount-badge className="rounded-[6px] bg-emerald-200 px-2 py-1 text-[11px] font-black text-slate-950">{badge}</span>}
       </div>
-      <p className="mt-4 text-2xl font-black text-cyan-100">{price}</p>
+      <p data-plan-billing-price className="mt-4 text-2xl font-black text-cyan-100">{price}</p>
       <p className="mt-1 text-sm font-semibold text-slate-400">{detail}</p>
     </button>
   );
@@ -1130,23 +1128,23 @@ function FullPlanSummarySection({
   const displayPrice = billingCycle === "annual" ? annual.discountedMonthly : monthlyPrice;
 
   return (
-    <section id="summary" className="relative z-20 min-h-screen bg-[#07080d] px-4 py-24 sm:px-6 lg:py-28">
+    <section id="summary" data-plan-summary className="relative z-20 min-h-screen bg-transparent px-4 py-24 sm:px-6 lg:py-28">
       <div className="mx-auto max-w-[92rem]">
         <div className="max-w-3xl">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Summary</p>
+          <p data-plan-summary-kicker className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Summary</p>
           <h2 className="mt-3 text-4xl font-black tracking-normal text-white sm:text-5xl">구성 요약</h2>
           <p className="mt-4 text-base leading-7 text-slate-400">콘솔 데모를 벗어나 결제 전 마지막 구성만 넓게 다시 확인합니다.</p>
         </div>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)]">
-          <div className="rounded-[12px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+          <div data-plan-summary-card className="rounded-[12px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
             <div className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-bold text-slate-400">{planConfig.name}</p>
                 <p className="mt-2 text-4xl font-black text-white">{formatKRW(displayPrice)} / 월</p>
                 {billingCycle === "annual" && <p className="mt-2 text-sm font-bold text-emerald-200">연 {formatKRW(annual.annualTotal)} 결제 · {formatKRW(annual.discountAmount)} 절감</p>}
               </div>
-              <span className="w-fit rounded-[7px] bg-cyan-200 px-3 py-1.5 text-xs font-black text-slate-950">{billingCycle === "annual" ? "Annual" : "Monthly"}</span>
+              <span data-plan-cycle-badge className="w-fit rounded-[7px] bg-cyan-200 px-3 py-1.5 text-xs font-black text-slate-950">{billingCycle === "annual" ? "Annual" : "Monthly"}</span>
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2">
@@ -1174,7 +1172,7 @@ function FullPlanSummarySection({
             </div>
           </div>
 
-          <aside className="rounded-[12px] border border-cyan-200/18 bg-cyan-200/[0.08] p-6 shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
+          <aside data-plan-checkout className="rounded-[12px] border border-cyan-200/18 bg-cyan-200/[0.08] p-6 shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Checkout</p>
             <h3 className="mt-3 text-2xl font-black text-white">마지막 확인</h3>
             <div className="mt-6 space-y-3 text-sm">
@@ -1183,7 +1181,7 @@ function FullPlanSummarySection({
               <InvoiceRow label="Today" value={billingCycle === "annual" ? formatKRW(annual.annualTotal) : formatKRW(monthlyPrice)} highlighted={billingCycle === "annual"} />
               <InvoiceRow label="Savings" value={billingCycle === "annual" ? `-${formatKRW(annual.discountAmount)}` : "-"} positive={billingCycle === "annual"} highlighted={billingCycle === "annual"} />
             </div>
-            <Link href={reviewHref} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] bg-cyan-200 text-sm font-black text-slate-950 transition hover:bg-white">
+            <Link href={reviewHref} data-plan-checkout-link className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] bg-cyan-200 text-sm font-black text-slate-950 transition hover:bg-white">
               구성 확인하기 <ArrowRight className="h-4 w-4" />
             </Link>
             <p className="mt-3 text-center text-xs text-slate-500">결제 전 마지막 단계에서 구성을 다시 확인할 수 있습니다.</p>
