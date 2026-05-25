@@ -80,8 +80,8 @@ const planCardToneClass: Record<PlanCardTone, string> = {
 
 const planCtaToneClass: Record<PlanCardTone, string> = {
   free: "border border-white/12 text-white hover:bg-white/[0.07]",
-  basic: "bg-[linear-gradient(135deg,#2dd4bf_0%,#7c5cff_58%,#f472b6_100%)] text-white shadow-[0_18px_54px_rgba(20,184,166,0.18)] hover:shadow-[0_22px_64px_rgba(124,92,255,0.26)]",
-  pro: "bg-[linear-gradient(135deg,#7c5cff_0%,#8b6bff_48%,#c4b5fd_100%)] text-white shadow-[0_18px_54px_rgba(124,92,255,0.24)] hover:shadow-[0_22px_70px_rgba(124,92,255,0.34)]",
+  basic: "bg-[linear-gradient(135deg,#7c5cff_0%,#8b6bff_48%,#c4b5fd_100%)] text-white shadow-[0_18px_54px_rgba(124,92,255,0.24)] hover:shadow-[0_22px_70px_rgba(124,92,255,0.34)]",
+  pro: "bg-[linear-gradient(135deg,#2dd4bf_0%,#7c5cff_58%,#f472b6_100%)] text-white shadow-[0_18px_54px_rgba(20,184,166,0.18)] hover:shadow-[0_22px_64px_rgba(124,92,255,0.26)]",
 };
 
 const storyScenes = [
