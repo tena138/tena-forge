@@ -23,7 +23,7 @@ class MatcherTests(unittest.TestCase):
         self.assertIsNone(_normalize_section_label("singleconnection 수학 1"))
         self.assertIsNone(_normalize_section_label("수학Ⅰ"))
 
-    def test_repeated_numbers_do_not_cross_match_when_sections_disagree(self):
+    def test_repeated_numbers_use_number_order_when_sections_disagree(self):
         problems = [
             {
                 "problem_number": 1,
@@ -58,10 +58,12 @@ class MatcherTests(unittest.TestCase):
         result = match_with_summary(problems, solutions)
         matched = result["problems"]
 
-        self.assertIsNone(matched[0]["solution"])
-        self.assertIsNone(matched[1]["solution"])
-        self.assertEqual(matched[0]["match_flags"]["matched_via"], "unmatched")
-        self.assertEqual(matched[1]["match_flags"]["matched_via"], "unmatched")
+        self.assertEqual(matched[0]["solution"]["answer"], "A")
+        self.assertEqual(matched[1]["solution"]["answer"], "B")
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "number_order")
+        self.assertEqual(matched[1]["match_flags"]["matched_via"], "number_order")
+        self.assertTrue(matched[0]["match_flags"]["needs_review"])
+        self.assertIn("repeated_number_order_match", matched[0]["match_flags"]["warnings"])
         self.assertIn("global_order_disabled", result["summary"]["warnings"])
 
     def test_primary_match_keeps_solution_when_snippet_similarity_is_low(self):
@@ -186,7 +188,7 @@ class MatcherTests(unittest.TestCase):
         self.assertIn("global_order_disabled", result["summary"]["warnings"])
         self.assertEqual(result["validation_report"]["method_counts"]["unique_number"], 41)
 
-    def test_large_unsectioned_repeated_numbers_still_do_not_guess(self):
+    def test_repeated_unsectioned_numbers_use_number_order(self):
         result = match_with_summary(
             [
                 {"problem_number": "1", "problem_text": "day one first", "page_index": 1},
@@ -198,8 +200,11 @@ class MatcherTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(result["summary"]["matched_count"], 0)
+        self.assertEqual(result["summary"]["matched_count"], 2)
         self.assertEqual(result["validation_report"]["method_counts"]["unique_number"], 0)
+        self.assertEqual(result["validation_report"]["method_counts"]["number_order"], 2)
+        self.assertEqual([item["solution"]["answer"] for item in result["problems"]], ["A", "B"])
+        self.assertTrue(result["problems"][0]["match_flags"]["needs_review"])
 
     def test_section_number_match_is_confident_and_deterministic(self):
         result = match_with_summary(
@@ -448,7 +453,7 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(matched[0]["match_confidence"], 0.88)
         self.assertIn("choice_answer_label_only", matched[0]["match_flags"]["warnings"])
 
-    def test_number_order_does_not_match_repeated_numbers_when_sections_differ(self):
+    def test_number_order_matches_repeated_numbers_and_leaves_extra_problem_unmatched(self):
         matched = match(
             [
                 {"problem_number": "1", "problem_text": "first one", "section_label": "problem A", "page_index": 1},
@@ -461,9 +466,10 @@ class MatcherTests(unittest.TestCase):
             ],
         )
 
-        self.assertIsNone(matched[0]["solution"])
-        self.assertIsNone(matched[2]["solution"])
-        self.assertEqual(matched[2]["match_flags"]["matched_via"], "unmatched")
+        self.assertEqual(matched[0]["solution"]["answer"], "A")
+        self.assertEqual(matched[2]["solution"]["answer"], "B")
+        self.assertEqual(matched[0]["match_flags"]["matched_via"], "number_order")
+        self.assertEqual(matched[2]["match_flags"]["matched_via"], "number_order")
         self.assertEqual(matched[1]["match_flags"]["matched_via"], "unmatched")
 
     def test_lexical_similarity_rewards_snippet_containment(self):

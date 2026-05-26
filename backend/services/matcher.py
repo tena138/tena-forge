@@ -430,6 +430,10 @@ def _semantic_review_warnings(problem: dict[str, Any], solution: dict[str, Any] 
 def _reference_supports_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> bool:
     if _choice_answer_evidence(problem, solution) == "mismatch":
         return False
+    return _snippet_supports_pair(problem, solution)
+
+
+def _snippet_supports_pair(problem: dict[str, Any], solution: dict[str, Any] | None) -> bool:
     snippet = _solution_snippet(solution)
     if not snippet:
         return True
@@ -793,7 +797,7 @@ def _assign_unique_number(
             continue
         problem = number_problems[0]
         solution = number_solutions[0]
-        if not _reference_supports_pair(problem.item, solution.item):
+        if not _snippet_supports_pair(problem.item, solution.item):
             continue
         warnings = list(solution.item.get("matching_warnings") or [])
         if problem.section_label and solution.section_label and problem.section_label != solution.section_label:
@@ -829,11 +833,15 @@ def _assign_number_order(
         for problem, solution in zip(ordered_problems, ordered_solutions):
             if problem.item.get("solution") is not None or id(solution.item) in used_solution_ids:
                 continue
-            if not _reference_supports_pair(problem.item, solution.item):
+            if not _snippet_supports_pair(problem.item, solution.item):
                 continue
             warnings = list(solution.item.get("matching_warnings") or [])
+            if problem.section_label != solution.section_label:
+                warnings.append("section_label_mismatch")
+            if len(number_problems) > 1:
+                warnings.append("repeated_number_order_match")
             warnings.extend(_semantic_review_warnings(problem.item, solution.item))
-            _attach(problem.item, solution.item, 0.92, bool(warnings), "number_order", warnings)
+            _attach(problem.item, solution.item, 0.86, True, "number_order", warnings)
             used_solution_ids.add(id(solution.item))
             matched += 1
     return matched
@@ -1181,9 +1189,9 @@ def match_with_summary(problems: list[dict[str, Any]], solutions: list[dict[str,
 
     method_counts["section_number"] = _assign_section_number(problem_items, solution_items, used_solution_ids)
     method_counts["section_order"] = _assign_section_order(problem_items, solution_items, used_solution_ids, section_validations)
-    method_counts["number_order"] = 0
     method_counts["global_order"] = _assign_global_order(problem_items, solution_items, used_solution_ids, section_validations)
     method_counts["unique_number"] = _assign_unique_number(problem_items, solution_items, used_solution_ids)
+    method_counts["number_order"] = _assign_number_order(problem_items, solution_items, used_solution_ids)
     method_counts["semantic_section"] = _semantic_assign(
         problem_items,
         solution_items,
