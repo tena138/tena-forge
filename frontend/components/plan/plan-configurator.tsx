@@ -144,7 +144,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
               <PackageSection plan={plan} group="storage" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
               <PackageSection plan={plan} group="student" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs}>
                 <p className="mt-4 text-sm font-semibold text-slate-400">
-                  {plan === "basic" ? "Basic은 학생 키 50개까지 지원합니다. 더 많은 학생 키가 필요하면 Pro를 선택하세요." : "500개를 초과하는 학생 키가 필요하면 Enterprise 문의를 이용해주세요."}
+                  {plan === "basic" ? "Basic은 학생 키 20개까지 지원합니다. 더 많은 학생 키가 필요하면 Pro를 선택하세요." : "500개를 초과하는 학생 키가 필요하면 Enterprise 문의를 이용해주세요."}
                 </p>
               </PackageSection>
 
@@ -902,7 +902,7 @@ function StorageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
 
 function StudentKeyConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: ReturnType<typeof getResolvedSpecs> }) {
   const studentKeys = numericSpec(specs.studentKeys);
-  const keyMax = plan === "basic" ? 50 : 500;
+  const keyMax = plan === "basic" ? 20 : 500;
   const animatedKeys = useAnimatedNumber(studentKeys, 760);
   const activeRows = Math.min(8, Math.max(3, Math.ceil(studentKeys / (plan === "basic" ? 7 : 65))));
   const [previousRows, setPreviousRows] = useState(activeRows);

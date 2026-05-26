@@ -85,7 +85,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       dailyAiLimit: 50,
       problemDb: 5_000,
       fileStorageGb: 20,
-      studentKeys: 3,
+      studentKeys: 5,
       cloudProcessing: true,
       processingSpeed: "Standard",
       concurrentJobs: 1,
@@ -166,9 +166,9 @@ export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, P
       { id: "basic-storage-max", group: "storage", name: "Storage Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { problemDb: 20_000, fileStorageGb: 100 }, description: "20,000 questions, 100GB file storage" },
     ],
     student: [
-      { id: "basic-student", group: "student", name: "Basic Student", label: "포함", monthlyPriceDelta: 0, specs: { studentKeys: 3 }, description: "3 student keys" },
-      { id: "basic-student-plus", group: "student", name: "Student Plus", label: "+₩9,000 / 월", monthlyPriceDelta: 9_000, specs: { studentKeys: 25 }, description: "25 student keys" },
-      { id: "basic-student-max", group: "student", name: "Student Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { studentKeys: 50 }, description: "50 student keys" },
+      { id: "basic-student", group: "student", name: "Basic Student", label: "포함", monthlyPriceDelta: 0, specs: { studentKeys: 5 }, description: "5 student keys" },
+      { id: "basic-student-plus", group: "student", name: "Student Plus", label: "+₩9,000 / 월", monthlyPriceDelta: 9_000, specs: { studentKeys: 10 }, description: "10 student keys" },
+      { id: "basic-student-max", group: "student", name: "Student Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { studentKeys: 20 }, description: "20 student keys" },
     ],
     processing: [
       { id: "basic-processing-cloud", group: "processing", name: "Cloud Processing", label: "포함", monthlyPriceDelta: 0, specs: { cloudProcessing: true, processingSpeed: "Standard", concurrentJobs: 1, concurrentPdfExtractions: 1 }, description: "서버에서 PDF를 추출합니다." },

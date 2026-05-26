@@ -60,7 +60,7 @@ const planCards = [
     price: `${formatKRW(PLANS.basic.baseMonthlyPrice)} / 월`,
     href: "/plan/basic",
     cta: "Basic",
-    points: ["학생 키 3명", "소규모 수업", "표준 처리"],
+    points: ["학생 키 5명", "소규모 수업", "표준 처리"],
   },
   {
     name: "Pro",

@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Academy, AcademyPlan, JobOutput, ProcessingJob, Subscription, SubscriptionBillingKey, SubscriptionEvent, SubscriptionOrder, SubscriptionPaymentAttempt
+from models import Academy, AcademyPlan, AcademyStudentPlan, JobOutput, ProcessingJob, Subscription, SubscriptionBillingKey, SubscriptionEvent, SubscriptionOrder, SubscriptionPaymentAttempt
 from schemas import ProcessingJobCreate, ProcessingJobRead, SignedUrlResponse, UsageSummaryRead
+from services.academy_student_access import ensure_academy_subscription
 from services.auth_security import decrypt_secret, encrypt_secret, sha256_token
 from services.ownership import current_owner_id
 from services.portone_billing import get_payment, pay_with_billing_key, payment_amount, payment_currency, payment_status, portone_public_config, read_verified_webhook, schedule_billing_key_payment
@@ -20,6 +21,19 @@ from services.subject_engines import normalize_subject_engines, subject_engine_p
 from services.usage_cost_policy import enforce_extraction_preflight, estimate_extraction, record_usage_event
 
 router = APIRouter(prefix="/api/saas", tags=["saas"])
+
+STUDENT_KEYS_BY_PACKAGE = {
+    "basic": {
+        "basic-student": 5,
+        "basic-student-plus": 10,
+        "basic-student-max": 20,
+    },
+    "pro": {
+        "pro-student": 10,
+        "pro-student-plus": 300,
+        "pro-student-max": 500,
+    },
+}
 
 
 class BillingCheckoutRequest(BaseModel):
@@ -63,6 +77,7 @@ def _activate_subscription(
     provider_subscription_id: str | None = None,
     monthly_price_krw: int | None = None,
     period_amount_krw: int | None = None,
+    selected_packages: dict[str, str] | None = None,
 ) -> Subscription:
     from models import Plan
 
@@ -103,6 +118,13 @@ def _activate_subscription(
         canonical = "pro" if str(plan_code).startswith("pro") or str(plan_code) == "team" else "basic"
         academy.plan = AcademyPlan.pro if canonical == "pro" else AcademyPlan.basic
         academy.plan_expires_at = None
+        selected_student_package = (selected_packages or {}).get("student")
+        target_student_keys = STUDENT_KEYS_BY_PACKAGE.get(canonical, {}).get(str(selected_student_package or ""))
+        if target_student_keys is not None:
+            student_subscription = ensure_academy_subscription(db, user_id)
+            student_plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == student_subscription.plan_code))
+            included_seats = int(student_plan.included_seats if student_plan else 0)
+            student_subscription.purchased_additional_seats = max(int(target_student_keys) - included_seats, 0)
     return subscription
 
 
@@ -334,6 +356,7 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
         provider_subscription_id=attempt.provider_payment_id,
         monthly_price_krw=order.monthly_price_krw,
         period_amount_krw=order.amount_krw,
+        selected_packages=order.selected_packages,
     )
     db.flush()
 
@@ -354,6 +377,7 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
         "next_payment_id": next_attempt.provider_payment_id,
         "schedule_error": schedule_error,
         "enabled_subject_engines": subscription.enabled_subject_engines,
+        "selected_packages": order.selected_packages,
         "final_monthly_price": subscription.final_monthly_price,
         "final_annual_price": subscription.final_annual_price,
     }

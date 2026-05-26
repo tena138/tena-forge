@@ -211,7 +211,7 @@ function planNameFallback(plan?: string | null) {
 
 function defaultStudentSeatLimit(plan?: string | null) {
   const key = String(plan || "").toLowerCase();
-  if (key === "basic") return 3;
+  if (key === "basic") return 5;
   if (key === "pro") return 10;
   return 0;
 }
