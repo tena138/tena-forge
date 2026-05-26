@@ -9,7 +9,13 @@ const ACCESS_TOKEN_STORAGE_KEY = "tena-access-token";
 function readStoredAccessToken() {
   if (typeof window === "undefined") return null;
   try {
-    return window.sessionStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    const sessionToken = window.sessionStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    if (sessionToken) return sessionToken;
+  } catch {
+    // Session storage is optional; fall back to local storage below.
+  }
+  try {
+    return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
   } catch {
     return null;
   }
@@ -27,12 +33,19 @@ export function setAccessToken(token: string | null) {
     } catch {
       // Session storage is optional; in-memory auth still works for this tab.
     }
+    try {
+      if (token) window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+      else window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    } catch {
+      // Local storage is optional; refresh cookies can still recover the session.
+    }
   }
   if (token) Cookies.set("tf_logged_in", "1", { sameSite: "lax", expires: 30 });
   else Cookies.remove("tf_logged_in");
 }
 
 export function getAccessToken() {
+  if (!accessToken) accessToken = readStoredAccessToken();
   return accessToken;
 }
 
@@ -53,7 +66,8 @@ export async function refreshAccessToken() {
 }
 
 export async function ensureAccessToken() {
-  if (accessToken) return accessToken;
+  const storedToken = getAccessToken();
+  if (storedToken) return storedToken;
   try {
     return await refreshAccessToken();
   } catch {
@@ -69,6 +83,11 @@ export function clearAuthState() {
       window.sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     } catch {
       // Ignore unavailable session storage.
+    }
+    try {
+      window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    } catch {
+      // Ignore unavailable local storage.
     }
     localStorage.removeItem(PROFILE_STORAGE_KEY);
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
@@ -99,8 +118,9 @@ export const authHttp = axios.create({
 });
 
 authHttp.interceptors.request.use((config) => {
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   config.headers["X-Requested-With"] = "XMLHttpRequest";
   return config;
