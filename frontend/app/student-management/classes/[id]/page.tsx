@@ -85,6 +85,10 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
   const selectedEvent = events.find((event) => event.id === selectedEventId) || events[0] || null;
   const selectedWeekdays = recurrenceWeekdays.length ? recurrenceWeekdays : [defaultWeekdayFromDateTime(scheduleForm.starts_at)];
   const selectedMonthDay = Number(recurrenceMonthDay) || defaultMonthDayFromDateTime(scheduleForm.starts_at);
+  const classStudents = data?.students || [];
+  const paperSessions = data?.paper_sessions || [];
+  const scoredStudentCount = classStudents.filter((student) => typeof student.recent_score === "number").length;
+  const studentWrongTotal = classStudents.reduce((total, student) => total + student.unresolved_wrong_count, 0);
 
   async function refresh() {
     const next = await getClassDetail(params.id);
@@ -208,9 +212,9 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
               <h1 className="mt-2 text-3xl font-black text-white">{data.name}</h1>
               <p className="mt-2 text-sm text-slate-400">{data.description || [data.subject, data.grade_level].filter(Boolean).join(" · ") || "클래스 설명 없음"}</p>
               <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-300">학생 {data.student_count}명</span>
-                <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-300">진행 세션 {data.upcoming_count}개</span>
-                <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-300">미해결 오답 {data.unresolved_wrong_count}개</span>
+                <span className="rounded-lg border border-white/[0.08] bg-white/[0.045] px-3 py-2 text-slate-300">학생 {data.student_count}명</span>
+                <span className="rounded-lg border border-white/[0.08] bg-white/[0.045] px-3 py-2 text-slate-300">진행 세션 {data.upcoming_count}개</span>
+                <span className="rounded-lg border border-white/[0.08] bg-white/[0.045] px-3 py-2 text-slate-300">미해결 오답 {data.unresolved_wrong_count}개</span>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -271,40 +275,75 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
         </div>
 
         {activeTab === "students" ? (
-          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <Card className="border-white/10 bg-white/[0.035]">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><Users className="h-5 w-5" />학생</CardTitle></CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-2">
-                {data.students.map((student) => (
-                  <Link key={student.id} href={`/student-management/students/${student.id}`} className="rounded-lg border border-white/10 bg-black/20 p-3 hover:border-violet-300/40">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-white">{student.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
+          <section className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                ["학생", classStudents.length],
+                ["최근 점수", scoredStudentCount],
+                ["미해결 오답", studentWrongTotal],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+                  <p className="text-xs font-semibold text-slate-500">{label}</p>
+                  <p className="mt-2 text-2xl font-black text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+              <section className="min-w-0 rounded-lg border border-white/[0.08] bg-white/[0.025]">
+                <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+                  <h2 className="flex items-center gap-2 text-sm font-black text-white"><Users className="h-4 w-4" />학생</h2>
+                  <span className="text-xs font-semibold text-slate-500">{classStudents.length}명</span>
+                </div>
+                <div className="grid gap-2 p-3 md:grid-cols-2">
+                  {classStudents.map((student) => (
+                    <Link
+                      key={student.id}
+                      href={`/student-management/students/${student.id}`}
+                      className="min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-violet-300/35 hover:bg-violet-500/[0.08]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-white">{student.name}</p>
+                          <p className="mt-1 truncate text-xs text-slate-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
+                        </div>
+                        <Badge className={cn("shrink-0 border", tone(student.status_chip))}>{student.status_chip}</Badge>
                       </div>
-                      <Badge className={cn("border", tone(student.status_chip))}>{student.status_chip}</Badge>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded bg-white/[0.045] px-2 py-2">
+                          <p className="text-slate-500">최근</p>
+                          <p className="mt-1 font-bold text-slate-100">{student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
+                        </div>
+                        <div className="rounded bg-white/[0.045] px-2 py-2">
+                          <p className="text-slate-500">오답</p>
+                          <p className="mt-1 font-bold text-rose-100">{student.unresolved_wrong_count}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                  {!classStudents.length ? (
+                    <p className="rounded-lg border border-dashed border-white/[0.1] p-6 text-center text-sm text-slate-500 md:col-span-2">아직 이 클래스에 연결된 학생이 없습니다.</p>
+                  ) : null}
+                </div>
+              </section>
+              <aside className="rounded-lg border border-white/[0.08] bg-white/[0.025]">
+                <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+                  <h2 className="flex items-center gap-2 text-sm font-black text-white"><ClipboardCheck className="h-4 w-4" />Paper Sessions</h2>
+                  <span className="text-xs font-semibold text-slate-500">{paperSessions.length}개</span>
+                </div>
+                <div className="space-y-2 p-3">
+                  {paperSessions.map((session) => (
+                    <div key={session.id} className="rounded-md border border-white/[0.08] bg-white/[0.03] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-sm font-semibold text-white">{session.title}</p>
+                        <Badge className={cn("shrink-0 border", tone(session.status))}>{session.status}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{session.graded_count}/{session.assigned_count}명 채점 · {session.problem_count}문항</p>
                     </div>
-                    <p className="mt-3 text-sm text-slate-400">오답 {student.unresolved_wrong_count}개 · 최근 {student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
-                  </Link>
-                ))}
-                {!data.students.length ? <p className="text-sm text-slate-500">아직 이 클래스에 연결된 학생이 없습니다.</p> : null}
-              </CardContent>
-            </Card>
-            <Card className="border-white/10 bg-white/[0.035]">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><ClipboardCheck className="h-5 w-5" />Paper Sessions</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {(data.paper_sessions || []).map((session) => (
-                  <div key={session.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-white">{session.title}</p>
-                      <Badge className={cn("border", tone(session.status))}>{session.status}</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">{session.graded_count}/{session.assigned_count}명 채점 · {session.problem_count}문항</p>
-                  </div>
-                ))}
-                {!(data.paper_sessions || []).length ? <p className="text-sm text-slate-500">아직 연결된 세션이 없습니다.</p> : null}
-              </CardContent>
-            </Card>
+                  ))}
+                  {!paperSessions.length ? <p className="rounded-lg border border-dashed border-white/[0.1] p-4 text-sm text-slate-500">아직 연결된 세션이 없습니다.</p> : null}
+                </div>
+              </aside>
+            </div>
           </section>
         ) : null}
 

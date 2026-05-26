@@ -4,13 +4,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
+  CalendarDays,
   Check,
+  ClipboardCheck,
+  FileText,
   GripVertical,
   LineChart,
   Loader2,
   Plus,
   RotateCcw,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 
@@ -70,6 +74,15 @@ const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel
   { key: "stddev", label: "표준편차", shortLabel: "σ", color: "#cbd5e1" },
 ];
 const defaultTrendMetrics: TrendMetricKey[] = ["average", "highest", "lowest", "q1", "q2", "q3"];
+const tabItems: Array<{ key: TabKey; label: string; icon: typeof Users }> = [
+  { key: "classes", label: "클래스", icon: Users },
+  { key: "students", label: "학생", icon: UserPlus },
+  { key: "sessions", label: "세션", icon: FileText },
+  { key: "grading", label: "채점", icon: ClipboardCheck },
+  { key: "wrong", label: "오답", icon: RotateCcw },
+  { key: "calendar", label: "일정", icon: CalendarDays },
+  { key: "analytics", label: "통계", icon: BarChart3 },
+];
 
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
@@ -164,6 +177,38 @@ function ClassStudentCard({ student }: { student: StudentCard }) {
         <div className="rounded-md bg-white/[0.04] p-2">
           <p className="text-slate-500">오답</p>
           <p className="mt-1 font-semibold text-rose-100">{student.unresolved_wrong_count}</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function StudentDirectoryCard({ student }: { student: StudentCard }) {
+  const meta = [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "학생 정보 미입력";
+  return (
+    <Link
+      href={`/student-management/students/${student.id}`}
+      className="group block min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-violet-300/35 hover:bg-violet-500/[0.08]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-white">{student.name}</p>
+          <p className="mt-1 truncate text-xs text-slate-400">{meta}</p>
+        </div>
+        <Badge className={cn("shrink-0 border", statusTone(student.status_chip))}>{student.status_chip}</Badge>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded bg-white/[0.045] px-2 py-2">
+          <p className="text-slate-500">최근</p>
+          <p className="mt-1 font-bold text-slate-100">{student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
+        </div>
+        <div className="rounded bg-white/[0.045] px-2 py-2">
+          <p className="text-slate-500">오답</p>
+          <p className="mt-1 font-bold text-rose-100">{student.unresolved_wrong_count}</p>
+        </div>
+        <div className="rounded bg-white/[0.045] px-2 py-2">
+          <p className="text-slate-500">반</p>
+          <p className="mt-1 truncate font-bold text-cyan-100">{student.class_names.length || "-"}</p>
         </div>
       </div>
     </Link>
@@ -941,6 +986,11 @@ export default function StudentManagementPage() {
   }
 
   const selectedStudent = sessionDetail?.students.find((student) => student.id === selectedStudentId);
+  const activeStudentCount = allStudents.filter(
+    (student) => student.status === "active" || student.status_chip === "Active" || student.status_chip === "active"
+  ).length;
+  const scoredStudentCount = allStudents.filter((student) => typeof student.recent_score === "number").length;
+  const unresolvedStudentWrongs = allStudents.reduce((total, student) => total + student.unresolved_wrong_count, 0);
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -980,6 +1030,28 @@ export default function StudentManagementPage() {
         ) : null}
 
         {!loading ? (
+          <nav className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
+            {tabItems.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
+                    activeTab === tab.key ? "bg-violet-500/25 text-white shadow-lg shadow-violet-950/20" : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        ) : null}
+
+        {!loading && activeTab === "classes" ? (
           <section className="space-y-3">
             {classes.map((classRow) => (
               <Card
@@ -1109,12 +1181,42 @@ export default function StudentManagementPage() {
         ) : null}
 
         {!loading && activeTab === "students" ? (
-          <section className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <Card className="border-white/10 bg-white/[0.035]">
-              <CardHeader>
-                <CardTitle className="text-white">학생 추가</CardTitle>
-              </CardHeader>
-              <CardContent>
+          <section className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                ["전체 학생", allStudents.length],
+                ["활성 학생", activeStudentCount],
+                ["미해결 오답", unresolvedStudentWrongs],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+                  <p className="text-xs font-semibold text-slate-500">{label}</p>
+                  <p className="mt-2 text-2xl font-black text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <section className="min-w-0 rounded-lg border border-white/[0.08] bg-white/[0.025]">
+                <div className="flex flex-col gap-1 border-b border-white/[0.08] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-sm font-black text-white">학생 목록</h2>
+                    <p className="mt-1 text-xs text-slate-500">최근 점수 입력 {scoredStudentCount}명</p>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">{allStudents.length}명</span>
+                </div>
+                <div className="grid gap-2 p-3 sm:grid-cols-2 2xl:grid-cols-3">
+                  {allStudents.map((student) => <StudentDirectoryCard key={student.id} student={student} />)}
+                  {!allStudents.length ? (
+                    <div className="rounded-lg border border-dashed border-white/[0.1] p-8 text-center text-sm text-slate-500 sm:col-span-2 2xl:col-span-3">
+                      아직 등록된 학생이 없습니다.
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+              <aside className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+                <div className="mb-4">
+                  <h2 className="text-sm font-black text-white">학생 추가</h2>
+                  <p className="mt-1 text-xs text-slate-500">필요한 정보만 빠르게 등록합니다.</p>
+                </div>
                 <form
                   className="space-y-3"
                   onSubmit={(event) => {
@@ -1132,10 +1234,7 @@ export default function StudentManagementPage() {
                   <Input placeholder="메모" value={studentForm.memo} onChange={(event) => setStudentForm((current) => ({ ...current, memo: event.target.value }))} />
                   <Button type="submit" className="w-full" disabled={!studentForm.name.trim()}>학생 추가</Button>
                 </form>
-              </CardContent>
-            </Card>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {allStudents.map((student) => <ClassStudentCard key={student.id} student={student} />)}
+              </aside>
             </div>
           </section>
         ) : null}
@@ -1387,36 +1486,40 @@ export default function StudentManagementPage() {
             </Card>
           </section>
         ) : null}
-        {showClassCreator ? (
-          <div className="fixed bottom-24 right-6 z-40 w-[min(360px,calc(100vw-48px))] rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/50">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="font-semibold text-white">클래스 만들기</p>
-              <button type="button" onClick={() => setShowClassCreator(false)} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="space-y-2">
-              <Input placeholder="클래스 이름" value={classForm.name} onChange={(event) => setClassForm((current) => ({ ...current, name: event.target.value }))} />
-              <Input placeholder="레벨/설명" value={classForm.description} onChange={(event) => setClassForm((current) => ({ ...current, description: event.target.value }))} />
-              <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
-                <Input placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
+        {activeTab === "classes" ? (
+          <>
+            {showClassCreator ? (
+              <div className="fixed bottom-24 right-6 z-40 w-[min(360px,calc(100vw-48px))] rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/50">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="font-semibold text-white">클래스 만들기</p>
+                  <button type="button" onClick={() => setShowClassCreator(false)} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <Input placeholder="클래스 이름" value={classForm.name} onChange={(event) => setClassForm((current) => ({ ...current, name: event.target.value }))} />
+                  <Input placeholder="레벨/설명" value={classForm.description} onChange={(event) => setClassForm((current) => ({ ...current, description: event.target.value }))} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
+                    <Input placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                  </div>
+                  <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
+                    {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    클래스 추가
+                  </Button>
+                </div>
               </div>
-              <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
-                {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                클래스 추가
-              </Button>
-            </div>
-          </div>
+            ) : null}
+            <Button
+              type="button"
+              onClick={() => setShowClassCreator((current) => !current)}
+              className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-violet-950/40"
+              aria-label="클래스 만들기"
+            >
+              <Plus className="h-5 w-5" />
+            </Button>
+          </>
         ) : null}
-        <Button
-          type="button"
-          onClick={() => setShowClassCreator((current) => !current)}
-          className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-violet-950/40"
-          aria-label="클래스 만들기"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
       </div>
     </main>
   );
