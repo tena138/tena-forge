@@ -1,3 +1,4 @@
+import math
 import re
 import uuid
 from datetime import datetime
@@ -52,6 +53,58 @@ def _decimal_float(value) -> float | None:
     if isinstance(value, Decimal):
         return float(value)
     return value
+
+
+def _round_stat(value: float | None) -> float | None:
+    if value is None or not math.isfinite(value):
+        return None
+    return round(value, 2)
+
+
+def _quantile(sorted_values: list[float], fraction: float) -> float | None:
+    if not sorted_values:
+        return None
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    position = (len(sorted_values) - 1) * fraction
+    lower_index = math.floor(position)
+    upper_index = math.ceil(position)
+    if lower_index == upper_index:
+        return sorted_values[lower_index]
+    lower = sorted_values[lower_index]
+    upper = sorted_values[upper_index]
+    return lower + (upper - lower) * (position - lower_index)
+
+
+def _score_distribution(results: list[PaperSessionResult]) -> dict:
+    scores = sorted(
+        float(row.score)
+        for row in results
+        if row.status == "graded" and row.score is not None and math.isfinite(float(row.score))
+    )
+    if not scores:
+        return {
+            "respondent_count": 0,
+            "average_score": None,
+            "highest_score": None,
+            "lowest_score": None,
+            "q1_score": None,
+            "q2_score": None,
+            "q3_score": None,
+            "score_standard_deviation": None,
+        }
+    average_score = sum(scores) / len(scores)
+    variance = sum((score - average_score) ** 2 for score in scores) / len(scores)
+    return {
+        "respondent_count": len(scores),
+        "average_score": _round_stat(average_score),
+        "highest_score": _round_stat(max(scores)),
+        "lowest_score": _round_stat(min(scores)),
+        "q1_score": _round_stat(_quantile(scores, 0.25)),
+        "q2_score": _round_stat(_quantile(scores, 0.5)),
+        "q3_score": _round_stat(_quantile(scores, 0.75)),
+        "score_standard_deviation": _round_stat(math.sqrt(variance)),
+    }
 
 
 def _clean_optional_text(value: str | None) -> str | None:
@@ -400,9 +453,7 @@ def _session_summary(db: Session, academy_id: str, session: PaperSession | None)
         )
     ).all()
     graded = [row for row in results if row.status == "graded"]
-    avg_score = None
-    if graded:
-        avg_score = sum(float(row.score or 0) for row in graded) / len(graded)
+    score_stats = _score_distribution(results)
     return {
         "id": str(session.id),
         "title": session.title,
@@ -419,7 +470,14 @@ def _session_summary(db: Session, academy_id: str, session: PaperSession | None)
         "problem_count": len(_session_problems(session)),
         "assigned_count": len(results),
         "graded_count": len(graded),
-        "average_score": avg_score,
+        "respondent_count": score_stats["respondent_count"],
+        "average_score": score_stats["average_score"],
+        "highest_score": score_stats["highest_score"],
+        "lowest_score": score_stats["lowest_score"],
+        "q1_score": score_stats["q1_score"],
+        "q2_score": score_stats["q2_score"],
+        "q3_score": score_stats["q3_score"],
+        "score_standard_deviation": score_stats["score_standard_deviation"],
         "created_at": session.created_at.isoformat() if session.created_at else None,
         "updated_at": session.updated_at.isoformat() if session.updated_at else None,
     }

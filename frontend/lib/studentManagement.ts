@@ -51,7 +51,14 @@ export type PaperSessionSummary = {
   problem_count: number;
   assigned_count: number;
   graded_count: number;
+  respondent_count?: number;
   average_score?: number | null;
+  highest_score?: number | null;
+  lowest_score?: number | null;
+  q1_score?: number | null;
+  q2_score?: number | null;
+  q3_score?: number | null;
+  score_standard_deviation?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

@@ -6,6 +6,7 @@ import {
   BarChart3,
   Check,
   GripVertical,
+  LineChart,
   Loader2,
   Plus,
   RotateCcw,
@@ -41,7 +42,34 @@ import { cn } from "@/lib/utils";
 
 type TabKey = "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
+type TrendChartMode = "line" | "bar";
+type TrendMetricKey = "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
+type ClassSessionMetricPoint = {
+  id: string;
+  title: string;
+  date?: string | null;
+  assigned: number;
+  respondents: number;
+  average: number | null;
+  highest: number | null;
+  lowest: number | null;
+  q1: number | null;
+  q2: number | null;
+  q3: number | null;
+  stddev: number | null;
+};
+
 const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
+const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel: string; color: string }> = [
+  { key: "average", label: "응시자 평균", shortLabel: "평균", color: "#a78bfa" },
+  { key: "highest", label: "최고점", shortLabel: "최고", color: "#34d399" },
+  { key: "lowest", label: "최저점", shortLabel: "최저", color: "#fb7185" },
+  { key: "q1", label: "Q1", shortLabel: "Q1", color: "#38bdf8" },
+  { key: "q2", label: "Q2 중앙값", shortLabel: "Q2", color: "#facc15" },
+  { key: "q3", label: "Q3", shortLabel: "Q3", color: "#f97316" },
+  { key: "stddev", label: "표준편차", shortLabel: "σ", color: "#cbd5e1" },
+];
+const defaultTrendMetrics: TrendMetricKey[] = ["average", "highest", "lowest", "q1", "q2", "q3"];
 
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
@@ -66,12 +94,43 @@ function average(values: Array<number | null | undefined>) {
   return scores.reduce((total, value) => total + value, 0) / scores.length;
 }
 
+function numericValues(values: Array<number | null | undefined>) {
+  return values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+}
+
+function quantile(values: Array<number | null | undefined>, fraction: number) {
+  const scores = numericValues(values).sort((left, right) => left - right);
+  if (!scores.length) return null;
+  if (scores.length === 1) return scores[0];
+  const position = (scores.length - 1) * fraction;
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.ceil(position);
+  if (lowerIndex === upperIndex) return scores[lowerIndex];
+  const lower = scores[lowerIndex];
+  const upper = scores[upperIndex];
+  return lower + (upper - lower) * (position - lowerIndex);
+}
+
 function standardDeviation(values: Array<number | null | undefined>) {
-  const scores = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const scores = numericValues(values);
   if (scores.length < 2) return null;
   const mean = average(scores) || 0;
   const variance = scores.reduce((total, value) => total + (value - mean) ** 2, 0) / scores.length;
   return Math.sqrt(variance);
+}
+
+function minScore(values: Array<number | null | undefined>) {
+  const scores = numericValues(values);
+  return scores.length ? Math.min(...scores) : null;
+}
+
+function maxScore(values: Array<number | null | undefined>) {
+  const scores = numericValues(values);
+  return scores.length ? Math.max(...scores) : null;
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, value));
 }
 
 function scoreLabel(value: number | null | undefined) {
@@ -111,6 +170,161 @@ function ClassStudentCard({ student }: { student: StudentCard }) {
   );
 }
 
+function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
+  const [mode, setMode] = useState<TrendChartMode>("line");
+  const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(defaultTrendMetrics);
+  const visibleMetrics = trendMetricOptions.filter((metric) => selectedMetrics.includes(metric.key));
+  const latestPoint = [...points].reverse().find((point) => point.respondents > 0);
+  const chartWidth = Math.max(760, points.length * 118);
+  const chartHeight = 300;
+  const padding = { top: 22, right: 26, bottom: 58, left: 44 };
+  const plotWidth = chartWidth - padding.left - padding.right;
+  const plotHeight = chartHeight - padding.top - padding.bottom;
+  const baseline = padding.top + plotHeight;
+  const xFor = (index: number) => padding.left + (points.length <= 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth);
+  const yFor = (value: number) => padding.top + ((100 - clampScore(value)) / 100) * plotHeight;
+
+  function toggleMetric(key: TrendMetricKey) {
+    setSelectedMetrics((current) => {
+      if (current.includes(key)) return current.length === 1 ? current : current.filter((item) => item !== key);
+      return [...current, key];
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <p className="text-sm font-black text-white">시험 통계 추이</p>
+          <p className="mt-1 text-xs text-slate-500">평균, 최고/최저, 분위수를 선택해서 시간 흐름으로 비교합니다.</p>
+        </div>
+        <div className="flex w-fit rounded-md border border-white/10 bg-white/[0.035] p-1">
+          <button
+            type="button"
+            aria-label="선 그래프"
+            title="선 그래프"
+            onClick={() => setMode("line")}
+            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:text-white", mode === "line" && "bg-violet-500/25 text-white")}
+          >
+            <LineChart className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="막대 그래프"
+            title="막대 그래프"
+            onClick={() => setMode("bar")}
+            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:text-white", mode === "bar" && "bg-violet-500/25 text-white")}
+          >
+            <BarChart3 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {trendMetricOptions.map((metric) => {
+          const active = selectedMetrics.includes(metric.key);
+          return (
+            <button
+              key={metric.key}
+              type="button"
+              onClick={() => toggleMetric(metric.key)}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-bold transition",
+                active ? "border-white/20 bg-white/[0.08] text-white" : "border-white/10 bg-transparent text-slate-500 hover:text-slate-200"
+              )}
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: active ? metric.color : "rgba(148, 163, 184, 0.35)" }} />
+              {metric.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {points.length ? (
+        <div className="mt-4 overflow-x-auto rounded-md border border-white/[0.08] bg-[#070812] p-3 [scrollbar-width:thin]">
+          <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="시험 통계 추이 그래프">
+            {[100, 75, 50, 25, 0].map((tick) => {
+              const y = yFor(tick);
+              return (
+                <g key={tick}>
+                  <line x1={padding.left} x2={chartWidth - padding.right} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.16)" />
+                  <text x={padding.left - 10} y={y + 4} textAnchor="end" fontSize="11" fill="rgb(100, 116, 139)">{tick}</text>
+                </g>
+              );
+            })}
+            <line x1={padding.left} x2={padding.left} y1={padding.top} y2={baseline} stroke="rgba(148, 163, 184, 0.22)" />
+            <line x1={padding.left} x2={chartWidth - padding.right} y1={baseline} y2={baseline} stroke="rgba(148, 163, 184, 0.22)" />
+
+            {mode === "line" ? visibleMetrics.map((metric) => {
+              const linePoints = points
+                .map((point, index) => ({ x: xFor(index), y: typeof point[metric.key] === "number" ? yFor(point[metric.key] as number) : null }))
+                .filter((point): point is { x: number; y: number } => point.y != null);
+              return (
+                <g key={metric.key}>
+                  {linePoints.length > 1 ? (
+                    <polyline points={linePoints.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={metric.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  ) : null}
+                  {linePoints.map((point, index) => (
+                    <circle key={`${metric.key}-${index}`} cx={point.x} cy={point.y} r="4" fill={metric.color} stroke="#070812" strokeWidth="2" />
+                  ))}
+                </g>
+              );
+            }) : null}
+
+            {mode === "bar" ? points.map((point, pointIndex) => {
+              const groupWidth = Math.min(78, Math.max(24, visibleMetrics.length * 12));
+              const barWidth = Math.max(5, Math.min(10, (groupWidth - visibleMetrics.length * 3) / Math.max(1, visibleMetrics.length)));
+              return (
+                <g key={point.id}>
+                  {visibleMetrics.map((metric, metricIndex) => {
+                    const value = point[metric.key];
+                    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+                    const y = yFor(value);
+                    const x = xFor(pointIndex) - groupWidth / 2 + metricIndex * (barWidth + 3);
+                    return <rect key={metric.key} x={x} y={y} width={barWidth} height={Math.max(2, baseline - y)} rx="2" fill={metric.color} opacity="0.88" />;
+                  })}
+                </g>
+              );
+            }) : null}
+
+            {points.map((point, index) => (
+              <g key={point.id}>
+                <text x={xFor(index)} y={chartHeight - 32} textAnchor="middle" fontSize="11" fontWeight="700" fill="rgb(203, 213, 225)">
+                  {point.title.length > 11 ? `${point.title.slice(0, 11)}…` : point.title}
+                </text>
+                <text x={xFor(index)} y={chartHeight - 15} textAnchor="middle" fontSize="10" fill="rgb(100, 116, 139)">
+                  {formatDate(point.date)}
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-md border border-dashed border-white/10 p-6 text-center text-sm text-slate-500">통계를 낼 채점 완료 시험이 없습니다.</div>
+      )}
+
+      <div className="mt-3 grid gap-2 text-xs md:grid-cols-4">
+        <div className="rounded-md bg-white/[0.04] p-3">
+          <p className="text-slate-500">최근 평균</p>
+          <p className="mt-1 text-base font-black text-white">{scoreLabel(latestPoint?.average)}</p>
+        </div>
+        <div className="rounded-md bg-white/[0.04] p-3">
+          <p className="text-slate-500">최근 중앙값</p>
+          <p className="mt-1 text-base font-black text-amber-100">{scoreLabel(latestPoint?.q2)}</p>
+        </div>
+        <div className="rounded-md bg-white/[0.04] p-3">
+          <p className="text-slate-500">최근 범위</p>
+          <p className="mt-1 text-base font-black text-slate-100">{latestPoint ? `${scoreLabel(latestPoint.lowest)} - ${scoreLabel(latestPoint.highest)}` : "-"}</p>
+        </div>
+        <div className="rounded-md bg-white/[0.04] p-3">
+          <p className="text-slate-500">최근 응시</p>
+          <p className="mt-1 text-base font-black text-cyan-100">{latestPoint ? `${latestPoint.respondents}/${latestPoint.assigned}` : "-"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClassStatsPanel({
   classRow,
   details,
@@ -147,14 +361,15 @@ function ClassStatsPanel({
         const gradedOverallStudents = detail.students.filter((student) => typeof student.result.score === "number" && student.result.status === "graded");
         const classScores = gradedClassStudents.map((student) => student.result.score);
         const overallScores = gradedOverallStudents.map((student) => student.result.score);
+        const classScoreValues = numericValues(classScores);
         const selectedRow = selectedStudent ? classStudents.find((student) => student.id === selectedStudent.id) : null;
         const selectedScore = typeof selectedRow?.result.score === "number" && selectedRow.result.status === "graded" ? selectedRow.result.score : null;
         const classAverage = average(classScores);
         const overallAverage = average(overallScores);
         const classStdDev = standardDeviation(classScores);
         const overallStdDev = standardDeviation(overallScores);
-        const rank = selectedScore == null ? null : classScores.filter((score) => typeof score === "number" && score > selectedScore).length + 1;
-        const percentile = selectedScore == null || classScores.length < 2 || rank == null ? null : Math.round(((classScores.length - rank) / (classScores.length - 1)) * 100);
+        const rank = selectedScore == null ? null : classScoreValues.filter((score) => score > selectedScore).length + 1;
+        const percentile = selectedScore == null || classScoreValues.length < 2 || rank == null ? null : Math.round(((classScoreValues.length - rank) / (classScoreValues.length - 1)) * 100);
         const selectedMissed = (selectedRow?.problem_results || [])
           .filter((result) => result.result_status === "wrong" || result.result_status === "unanswered")
           .map((result) => result.problem_number)
@@ -177,9 +392,15 @@ function ClassStatsPanel({
           overallAverage,
           classStdDev,
           overallStdDev,
+          highestScore: maxScore(classScores),
+          lowestScore: minScore(classScores),
+          q1Score: quantile(classScores, 0.25),
+          q2Score: quantile(classScores, 0.5),
+          q3Score: quantile(classScores, 0.75),
           rank,
           percentile,
-          classGradedCount: classScores.length,
+          classAssignedCount: classStudents.length,
+          classGradedCount: classScoreValues.length,
           overallGradedCount: overallScores.length,
           selectedMissed,
           commonMissed,
@@ -199,6 +420,22 @@ function ClassStatsPanel({
   const trend = firstScore != null && latestScore != null && scoredStats.length >= 2 ? latestScore - firstScore : null;
   const averageClassDelta = average(sessionStats.map((item) => item.selectedScore != null && item.classAverage != null ? item.selectedScore - item.classAverage : null));
   const bestExam = scoredStats.length ? scoredStats.reduce((best, item) => (item.selectedScore || 0) > (best.selectedScore || 0) ? item : best, scoredStats[0]) : null;
+  const classMetricPoints: ClassSessionMetricPoint[] = sessionStats
+    .filter((item) => item.classGradedCount > 0)
+    .map((item) => ({
+      id: item.detail.id,
+      title: item.detail.title,
+      date: item.detail.scheduled_at || item.detail.created_at,
+      assigned: item.classAssignedCount,
+      respondents: item.classGradedCount,
+      average: item.classAverage,
+      highest: item.highestScore,
+      lowest: item.lowestScore,
+      q1: item.q1Score,
+      q2: item.q2Score,
+      q3: item.q3Score,
+      stddev: item.classStdDev,
+    }));
 
   return (
     <div className="border-t border-white/10 px-4 pb-4">
@@ -235,6 +472,8 @@ function ClassStatsPanel({
                 ))}
               </div>
             </div>
+
+            <ClassTrendChart points={classMetricPoints} />
 
             <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
               <div className="rounded-md bg-white/[0.045] p-3">
