@@ -36,25 +36,25 @@
   }
 
   :root[data-theme="light"] {
-    --background: 220 33% 97%;
-    --foreground: 222 47% 11%;
+    --background: 220 38% 96%;
+    --foreground: 222 54% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --muted: 220 22% 92%;
-    --muted-foreground: 220 10% 42%;
+    --card-foreground: 222 54% 9%;
+    --muted: 220 26% 90%;
+    --muted-foreground: 218 30% 31%;
     --accent: 258 86% 96%;
     --accent-foreground: 258 60% 28%;
     --primary: 263 72% 52%;
     --primary-foreground: 0 0% 100%;
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 18% 86%;
-    --input: 220 18% 86%;
+    --border: 220 22% 82%;
+    --input: 220 22% 82%;
     --ring: 263 72% 52%;
     --graphite: 222 47% 11%;
-    --graphite-soft: 220 14% 96%;
+    --graphite-soft: 220 20% 94%;
     --surface-raised: 0 0% 100%;
-    --surface-subtle: 220 33% 97%;
+    --surface-subtle: 220 38% 96%;
   }
 
   .dark {
@@ -1060,9 +1060,9 @@
 
   html[data-theme="light"] .forge-panel,
   html[data-theme="light"] .forge-surface {
-    border-color: rgb(15 23 42 / 0.10);
-    background: rgb(255 255 255 / 0.86);
-    box-shadow: 0 18px 46px rgb(15 23 42 / 0.09);
+    border-color: rgb(15 23 42 / 0.13);
+    background: rgb(255 255 255 / 0.94);
+    box-shadow: 0 18px 46px rgb(15 23 42 / 0.10);
   }
 
   html[data-theme="light"] .forge-hairline {
@@ -1093,8 +1093,8 @@
 
   html[data-theme="light"] [data-app-shell] header {
     border-color: rgb(15 23 42 / 0.10);
-    background: rgb(255 255 255 / 0.78) !important;
-    box-shadow: 0 12px 36px rgb(15 23 42 / 0.06);
+    background: rgb(255 255 255 / 0.90) !important;
+    box-shadow: 0 12px 36px rgb(15 23 42 / 0.08);
   }
 
   html[data-theme="light"] [data-app-shell] nav {
@@ -1133,7 +1133,7 @@
   html[data-theme="light"] [data-app-shell] [class*="bg-[#0b0d12]"],
   html[data-theme="light"] [data-app-shell] [class*="bg-[#0b0d13]"],
   html[data-theme="light"] [data-app-shell] [class*="bg-[#11141c]"] {
-    background: rgb(255 255 255 / 0.88) !important;
+    background: rgb(255 255 255 / 0.94) !important;
   }
 
   html[data-theme="light"] [data-app-shell] [class*="bg-white/[0.03"],
@@ -1144,7 +1144,7 @@
   html[data-theme="light"] [data-app-shell] [class*="bg-white/[0.08"],
   html[data-theme="light"] [data-app-shell] [class*="bg-white/[0.09"],
   html[data-theme="light"] [data-app-shell] [class*="bg-white/[0.10"] {
-    background-color: rgb(255 255 255 / 0.72) !important;
+    background-color: rgb(255 255 255 / 0.84) !important;
   }
 
   html[data-theme="light"] [data-app-shell] [class*="bg-black/20"],
@@ -1154,7 +1154,7 @@
   html[data-theme="light"] [data-app-shell] [class*="bg-black/45"],
   html[data-theme="light"] [data-app-shell] [class*="bg-black/50"],
   html[data-theme="light"] [data-app-shell] [class*="bg-black/55"] {
-    background-color: rgb(255 255 255 / 0.74) !important;
+    background-color: rgb(255 255 255 / 0.86) !important;
   }
 
   html[data-theme="light"] [data-app-shell] [style*="linear-gradient(180deg, hsl(224 28% 7%)"],
@@ -1162,43 +1162,123 @@
     background: linear-gradient(180deg, rgb(245 247 251), rgb(239 243 249)) !important;
   }
 
+  html[data-theme="light"] [data-app-shell] [class*="text-slate-50"],
   html[data-theme="light"] [data-app-shell] [class*="text-slate-100"],
   html[data-theme="light"] [data-app-shell] [class*="text-slate-200"],
   html[data-theme="light"] [data-app-shell] [class*="text-white"] {
     color: rgb(15 23 42) !important;
   }
 
-  html[data-theme="light"] [data-app-shell] [class*="text-slate-300"],
-  html[data-theme="light"] [data-app-shell] [class*="text-slate-400"] {
+  html[data-theme="light"] [data-app-shell] [class*="text-slate-300"] {
+    color: rgb(51 65 85) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="text-slate-400"],
+  html[data-theme="light"] [data-app-shell] [class*="text-slate-500"],
+  html[data-theme="light"] [data-app-shell] [class*="text-muted-foreground"] {
     color: rgb(71 85 105) !important;
   }
 
-  html[data-theme="light"] [data-app-shell] [class*="text-slate-500"],
-  html[data-theme="light"] [data-app-shell] [class*="text-muted-foreground"] {
-    color: rgb(100 116 139) !important;
+  html[data-theme="light"] [data-app-shell] [class*="text-violet-50"],
+  html[data-theme="light"] [data-app-shell] [class*="text-violet-100"],
+  html[data-theme="light"] [data-app-shell] [class*="text-violet-200"],
+  html[data-theme="light"] [data-app-shell] [class*="text-violet-300"] {
+    color: rgb(91 33 182) !important;
   }
 
-  html[data-theme="light"] [data-app-shell] [class*="bg-primary"][class*="text-primary-foreground"],
-  html[data-theme="light"] [data-app-shell] [class*="bg-violet-500"][class*="text-white"],
-  html[data-theme="light"] [data-app-shell] [class*="bg-violet-600"][class*="text-white"],
-  html[data-theme="light"] [data-app-shell] [class*="bg-[#03C75A]"][class*="text-white"],
-  html[data-theme="light"] [data-app-shell] [class*="bg-slate-950"][class*="text-white"],
-  html[data-theme="light"] [data-app-shell] [class*="bg-red-"][class*="text-white"],
-  html[data-theme="light"] [data-app-shell] [class*="bg-emerald-"][class*="text-white"],
-  html[data-theme="light"] [data-app-shell] [class*="bg-sky-"][class*="text-white"] {
+  html[data-theme="light"] [data-app-shell] [class*="text-sky-50"],
+  html[data-theme="light"] [data-app-shell] [class*="text-sky-100"],
+  html[data-theme="light"] [data-app-shell] [class*="text-sky-200"],
+  html[data-theme="light"] [data-app-shell] [class*="text-cyan-50"],
+  html[data-theme="light"] [data-app-shell] [class*="text-cyan-100"],
+  html[data-theme="light"] [data-app-shell] [class*="text-cyan-200"] {
+    color: rgb(14 116 144) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="text-emerald-50"],
+  html[data-theme="light"] [data-app-shell] [class*="text-emerald-100"],
+  html[data-theme="light"] [data-app-shell] [class*="text-emerald-200"] {
+    color: rgb(4 120 87) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="text-amber-50"],
+  html[data-theme="light"] [data-app-shell] [class*="text-amber-100"],
+  html[data-theme="light"] [data-app-shell] [class*="text-amber-200"] {
+    color: rgb(146 64 14) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="text-red-50"],
+  html[data-theme="light"] [data-app-shell] [class*="text-red-100"],
+  html[data-theme="light"] [data-app-shell] [class*="text-red-200"],
+  html[data-theme="light"] [data-app-shell] [class*="text-red-300"],
+  html[data-theme="light"] [data-app-shell] [class*="text-rose-50"],
+  html[data-theme="light"] [data-app-shell] [class*="text-rose-100"],
+  html[data-theme="light"] [data-app-shell] [class*="text-rose-200"] {
+    color: rgb(190 18 60) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="bg-violet-400/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-violet-400/15"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-violet-400/20"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-violet-500/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-violet-500/15"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-violet-500/20"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-violet-500/25"] {
+    background-color: rgb(237 233 254 / 0.86) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="bg-sky-300/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-cyan-200/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-cyan-300/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-cyan-400/12"] {
+    background-color: rgb(224 247 255 / 0.86) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="bg-emerald-300/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-emerald-400/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-emerald-500/15"] {
+    background-color: rgb(209 250 229 / 0.82) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="bg-amber-300/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-amber-400/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-amber-500/10"] {
+    background-color: rgb(254 243 199 / 0.86) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="bg-red-400/10"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-red-400/12"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-rose-400/12"],
+  html[data-theme="light"] [data-app-shell] [class*="bg-rose-500/14"] {
+    background-color: rgb(255 228 230 / 0.86) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class~="bg-primary"][class*="text-primary-foreground"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-violet-400"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-violet-500"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-violet-500/90"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-violet-600"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-[#03C75A]"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-slate-950"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-red-500"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-red-600"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-emerald-500"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-emerald-600"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-sky-500"][class*="text-white"],
+  html[data-theme="light"] [data-app-shell] [class~="bg-sky-600"][class*="text-white"] {
     color: rgb(255 255 255) !important;
   }
 
   html[data-theme="light"] [data-app-shell] input,
   html[data-theme="light"] [data-app-shell] textarea,
   html[data-theme="light"] [data-app-shell] select {
-    border-color: rgb(15 23 42 / 0.12);
-    background-color: rgb(255 255 255 / 0.84);
+    border-color: rgb(15 23 42 / 0.15);
+    background-color: rgb(255 255 255 / 0.96);
     color: rgb(15 23 42);
   }
 
   html[data-theme="light"] [data-app-shell] input::placeholder,
   html[data-theme="light"] [data-app-shell] textarea::placeholder {
-    color: rgb(100 116 139 / 0.72);
+    color: rgb(71 85 105 / 0.82);
   }
 }
