@@ -1347,7 +1347,7 @@ function AcademySchedulePanel() {
                       </select>
                     </label>
                   ) : null}
-                  <p className="text-xs text-slate-500">종료일을 비워두면 시작 일정 1개만 저장됩니다.</p>
+                  <p className="text-xs text-slate-500">종료일을 비워두면 최대 160개까지 반복 일정을 자동 저장합니다.</p>
                 </div>
               ) : null}
               <textarea

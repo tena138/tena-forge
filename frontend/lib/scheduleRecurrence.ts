@@ -101,7 +101,7 @@ export function buildRecurringDateTimes(startDateTime: string, settings: Schedul
   if (settings.unit === "none") return [startDateTime];
 
   const limit = settings.until ? endOfDate(settings.until) : null;
-  if (!limit || start > limit) return [startDateTime];
+  if (settings.until && (!limit || start > limit)) return [startDateTime];
 
   const interval = clampInteger(settings.interval, 1, settings.unit === "day" ? 365 : 60);
   const maxOccurrences = clampInteger(settings.maxOccurrences || 160, 1, 500);
@@ -111,7 +111,7 @@ export function buildRecurringDateTimes(startDateTime: string, settings: Schedul
   if (settings.unit === "day") {
     let cursor = new Date(start);
     let guard = 0;
-    while (cursor <= limit && starts.length < maxOccurrences && guard < maxOccurrences) {
+    while ((!limit || cursor <= limit) && starts.length < maxOccurrences && guard < maxOccurrences) {
       starts.push(new Date(cursor));
       cursor = addDays(cursor, interval);
       guard += 1;
@@ -122,10 +122,10 @@ export function buildRecurringDateTimes(startDateTime: string, settings: Schedul
     const weekdays = Array.from(new Set((settings.weekdays?.length ? settings.weekdays : [start.getDay()]).map((day) => clampInteger(day, 0, 6)))).sort((a, b) => a - b);
     let weekCursor = startOfWeek(start);
     let guard = 0;
-    while (weekCursor <= limit && starts.length < maxOccurrences && guard < maxOccurrences) {
+    while ((!limit || weekCursor <= limit) && starts.length < maxOccurrences && guard < maxOccurrences) {
       for (const weekday of weekdays) {
         const candidate = copyDateWithTime(addDays(weekCursor, weekday), time);
-        if (candidate >= start && candidate <= limit) starts.push(candidate);
+        if (candidate >= start && (!limit || candidate <= limit)) starts.push(candidate);
       }
       weekCursor = addDays(weekCursor, interval * 7);
       guard += 1;
@@ -136,9 +136,9 @@ export function buildRecurringDateTimes(startDateTime: string, settings: Schedul
     const day = clampInteger(settings.monthDay || start.getDate(), 1, 31);
     let monthCursor = new Date(start.getFullYear(), start.getMonth(), 1);
     let guard = 0;
-    while (monthCursor <= limit && starts.length < maxOccurrences && guard < maxOccurrences) {
+    while ((!limit || monthCursor <= limit) && starts.length < maxOccurrences && guard < maxOccurrences) {
       const candidate = monthDate(monthCursor.getFullYear(), monthCursor.getMonth(), day, time);
-      if (candidate >= start && candidate <= limit) starts.push(candidate);
+      if (candidate >= start && (!limit || candidate <= limit)) starts.push(candidate);
       monthCursor = addMonths(monthCursor, interval);
       guard += 1;
     }

@@ -948,8 +948,8 @@ def get_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
     events = db.scalars(
         select(ClassScheduleEvent)
         .where(ClassScheduleEvent.academy_id == academy_id, ClassScheduleEvent.class_id == class_id)
-        .order_by(ClassScheduleEvent.starts_at.desc())
-        .limit(40)
+        .order_by(ClassScheduleEvent.starts_at.asc())
+        .limit(500)
     ).all()
     payload = _class_payload(db, academy_id, row, include_students=True)
     payload["paper_sessions"] = [_session_summary(db, academy_id, session) for session in sessions if str(class_id) in (session.class_ids or [])]
@@ -1168,8 +1168,8 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         events = db.scalars(
             select(ClassScheduleEvent)
             .where(ClassScheduleEvent.academy_id == academy_id, ClassScheduleEvent.class_id.in_(class_ids))
-            .order_by(ClassScheduleEvent.starts_at.desc())
-            .limit(120)
+            .order_by(ClassScheduleEvent.starts_at.asc())
+            .limit(500)
         ).all()
         data["schedule_events"] = [_schedule_event_payload(event) for event in events]
     else:
@@ -1670,7 +1670,7 @@ def list_schedule_events(request: Request, class_id: UUID | None = None, db: Ses
     if class_id:
         _get_class(db, academy_id, class_id)
         stmt = stmt.where(ClassScheduleEvent.class_id == class_id)
-    rows = db.scalars(stmt.order_by(ClassScheduleEvent.starts_at.desc()).limit(100)).all()
+    rows = db.scalars(stmt.order_by(ClassScheduleEvent.starts_at.asc()).limit(500)).all()
     return [_schedule_event_payload(row) for row in rows]
 
 
