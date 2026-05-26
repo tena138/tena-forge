@@ -23,6 +23,7 @@ import {
   Hash,
   ImageIcon,
   Layers,
+  LineChart,
   Lock,
   PanelBottom,
   PanelTop,
@@ -50,7 +51,7 @@ import { ClipboardDesignImage, createClipboardEditableElements, createClipboardI
 import { importPowerPointFile } from "@/lib/powerpointPptxImport";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createElement, createProblemRegion, createTemplateSet, pageRoleLabels, visualTemplateCategories } from "@/lib/visualTemplatePresets";
-import { ElementStyle, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
+import { ElementStyle, ExamStatsMetricKey, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubTemplate, ensureTemplateHubSession, getHubTemplate, updateHubTemplate } from "@/lib/templateHub";
 
 const LOCAL_STORAGE_KEY = "tena-forge-visual-template-studio";
@@ -81,6 +82,7 @@ const elementPalette: Array<{ type: TemplateElementType; label: string; descript
   { type: "solutionRegion", label: "해설 영역", description: "해설 자동 배치", group: "동적 영역", icon: FileText },
   { type: "answerRegion", label: "답안 영역", description: "답안 자동 배치", group: "동적 영역", icon: Grid3X3 },
   { type: "contentRegion", label: "콘텐츠 영역", description: "범용 동적 영역", group: "동적 영역", icon: BoxSelect },
+  { type: "examStatsChart", label: "시험 통계 차트", description: "평균, 최고/최저, 분위수 추이", group: "동적 영역", icon: LineChart },
   { type: "pageNumber", label: "페이지 번호", description: "자동 페이지 표시", group: "시스템", icon: Hash },
   { type: "qr", label: "QR 코드", description: "QR 자리 표시자", group: "시스템", icon: QrCode },
   { type: "watermark", label: "워터마크", description: "보안과 브랜드 표시", group: "시스템", icon: Droplets },
@@ -199,6 +201,16 @@ const numberFormatOptions = [
   { value: "[{n}]", label: "[1]" },
   { value: "({n})", label: "(1)" },
   { value: "{n}번", label: "1번" },
+];
+
+const examStatsMetricOptions: Array<{ key: ExamStatsMetricKey; label: string }> = [
+  { key: "average", label: "응시자 평균" },
+  { key: "highest", label: "최고점" },
+  { key: "lowest", label: "최저점" },
+  { key: "q1", label: "Q1" },
+  { key: "q2", label: "Q2 중앙값" },
+  { key: "q3", label: "Q3" },
+  { key: "stddev", label: "표준편차" },
 ];
 
 const knownVariableTokens = new Set(visualTemplateVariableTokens.map((token) => token.token));
@@ -2087,6 +2099,67 @@ function VisualTemplateStudioPageContent() {
                           onChange={(patch) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, answerSpaceStyle: { ...element.answerSpaceStyle, ...patch } } : element))}
                         />
                       ) : null}
+                    </div>
+                  </InspectorSection>
+                ) : null}
+
+                {selectedElement.type === "examStatsChart" ? (
+                  <InspectorSection title="시험 통계 차트">
+                    <div className="space-y-3">
+                      <FieldLabel label="차트 제목">
+                        <Input className="h-8" value={selectedElement.title} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, title: event.target.value } : element))} />
+                      </FieldLabel>
+                      <div className="grid grid-cols-2 gap-2">
+                        <FieldLabel label="그래프 유형">
+                          <select className="h-8 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-xs text-white outline-none" value={selectedElement.chartMode} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, chartMode: event.target.value as typeof element.chartMode } : element))}>
+                            <option value="line">선 그래프</option>
+                            <option value="bar">막대 그래프</option>
+                          </select>
+                        </FieldLabel>
+                        <FieldLabel label="데이터 변수">
+                          <Input className="h-8" value={selectedElement.dataVariableKey || ""} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, dataVariableKey: event.target.value || "exam_stats_series_json" } : element))} />
+                        </FieldLabel>
+                        <FieldLabel label="Y 최소">
+                          <Input className="h-8" type="number" value={selectedElement.yAxisMin} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, yAxisMin: Number(event.target.value) } : element))} />
+                        </FieldLabel>
+                        <FieldLabel label="Y 최대">
+                          <Input className="h-8" type="number" value={selectedElement.yAxisMax} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, yAxisMax: Number(event.target.value) } : element))} />
+                        </FieldLabel>
+                      </div>
+                      <div>
+                        <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">표시 지표</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {examStatsMetricOptions.map((metric) => {
+                            const checked = (selectedElement.metrics || []).includes(metric.key);
+                            return (
+                              <label key={metric.key} className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) => updateSelectedElement((element) => {
+                                    if (element.type !== "examStatsChart") return element;
+                                    const currentMetrics = element.metrics || ["average"];
+                                    if (event.target.checked) return { ...element, metrics: Array.from(new Set([...currentMetrics, metric.key])) };
+                                    const next = currentMetrics.filter((item) => item !== metric.key);
+                                    return { ...element, metrics: next.length ? next : currentMetrics };
+                                  })}
+                                />
+                                {metric.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                          <input type="checkbox" checked={selectedElement.showLegend} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, showLegend: event.target.checked } : element))} />
+                          범례 표시
+                        </label>
+                        <label className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                          <input type="checkbox" checked={selectedElement.showGrid} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, showGrid: event.target.checked } : element))} />
+                          격자 표시
+                        </label>
+                      </div>
                     </div>
                   </InspectorSection>
                 ) : null}

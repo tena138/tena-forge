@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import re
 from datetime import datetime
 from functools import lru_cache
@@ -173,6 +174,19 @@ VISUAL_TOKEN_ALIASES = {
     "전체페이지": "total_pages",
     "난이도": "difficulty",
     "태그": "tags",
+    "응시자수": "exam_stats_respondent_count",
+    "응시자평균": "exam_stats_average",
+    "평균점수": "exam_stats_average",
+    "최고점": "exam_stats_highest",
+    "최저점": "exam_stats_lowest",
+    "Q1": "exam_stats_q1",
+    "q1": "exam_stats_q1",
+    "Q2": "exam_stats_q2",
+    "q2": "exam_stats_q2",
+    "중앙값": "exam_stats_q2",
+    "Q3": "exam_stats_q3",
+    "q3": "exam_stats_q3",
+    "표준편차": "exam_stats_standard_deviation",
 }
 
 
@@ -511,6 +525,175 @@ def _render_region(element: dict[str, Any], items: list[dict[str, Any]], base_da
 </div>"""
 
 
+EXAM_STATS_METRICS = {
+    "average": {"label": "응시자 평균", "short": "평균", "color": "#8b5cf6"},
+    "highest": {"label": "최고점", "short": "최고", "color": "#10b981"},
+    "lowest": {"label": "최저점", "short": "최저", "color": "#f43f5e"},
+    "q1": {"label": "Q1", "short": "Q1", "color": "#0ea5e9"},
+    "q2": {"label": "Q2 중앙값", "short": "Q2", "color": "#eab308"},
+    "q3": {"label": "Q3", "short": "Q3", "color": "#f97316"},
+    "stddev": {"label": "표준편차", "short": "σ", "color": "#64748b"},
+}
+DEFAULT_EXAM_STATS_METRICS = ["average", "highest", "lowest", "q1", "q2", "q3"]
+
+
+def _finite_number(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in {float("inf"), float("-inf")}:
+        return None
+    return number
+
+
+def _chart_value(value: float, minimum: float, maximum: float) -> float:
+    if maximum <= minimum:
+        return minimum
+    return min(maximum, max(minimum, value))
+
+
+def _normalize_exam_stats_point(value: Any, index: int) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    point: dict[str, Any] = {
+        "title": str(value.get("title") or value.get("label") or f"시험 {index + 1}"),
+        "date": str(value.get("date") or ""),
+    }
+    for key in EXAM_STATS_METRICS:
+        number = _finite_number(value.get(key))
+        if number is not None:
+            point[key] = number
+    respondents = _finite_number(value.get("respondents") or value.get("respondent_count"))
+    if respondents is not None:
+        point["respondents"] = respondents
+    return point
+
+
+def _exam_stats_points(element: dict[str, Any], data: dict[str, Any]) -> list[dict[str, Any]]:
+    key = str(element.get("dataVariableKey") or "exam_stats_series_json")
+    source = data.get(key)
+    raw_points: Any = source
+    if isinstance(source, str):
+        try:
+            raw_points = json.loads(source)
+        except json.JSONDecodeError:
+            raw_points = None
+    points = [
+        normalized
+        for index, item in enumerate(raw_points if isinstance(raw_points, list) else [])
+        if (normalized := _normalize_exam_stats_point(item, index))
+    ]
+    if points:
+        return points
+
+    single_point = {
+        "title": data.get("test_title") or data.get("exam_title") or "시험",
+        "date": data.get("exam_date") or data.get("date") or "",
+        "average": data.get("exam_stats_average"),
+        "highest": data.get("exam_stats_highest"),
+        "lowest": data.get("exam_stats_lowest"),
+        "q1": data.get("exam_stats_q1"),
+        "q2": data.get("exam_stats_q2"),
+        "q3": data.get("exam_stats_q3"),
+        "stddev": data.get("exam_stats_standard_deviation"),
+        "respondents": data.get("exam_stats_respondent_count"),
+    }
+    normalized = _normalize_exam_stats_point(single_point, 0)
+    if normalized and any(metric in normalized for metric in EXAM_STATS_METRICS):
+        return [normalized]
+    return []
+
+
+def _render_exam_stats_chart(element: dict[str, Any], data: dict[str, Any]) -> str:
+    points = _exam_stats_points(element, data)
+    if not points:
+        return '<div class="exam-stats-empty">시험 통계 데이터가 연결되면 차트가 표시됩니다.</div>'
+
+    metrics = [
+        metric
+        for metric in (element.get("metrics") if isinstance(element.get("metrics"), list) else DEFAULT_EXAM_STATS_METRICS)
+        if metric in EXAM_STATS_METRICS
+    ] or DEFAULT_EXAM_STATS_METRICS
+    mode = str(element.get("chartMode") or "line")
+    width = max(320.0, _num(element.get("width"), 640))
+    height = max(180.0, _num(element.get("height"), 300))
+    y_min = _num(element.get("yAxisMin"), 0)
+    y_max = _num(element.get("yAxisMax"), 100)
+    if y_max <= y_min:
+        y_min, y_max = 0, 100
+    style = element.get("style") if isinstance(element.get("style"), dict) else {}
+    fill = _safe_css_value(style.get("fill"), "#ffffff")
+    text_color = _safe_css_value(style.get("color"), "#111827")
+    title = _resolve_visual_text(str(element.get("title") or ""), data)
+    title_height = 30 if title else 10
+    legend_height = 28 if element.get("showLegend", True) else 6
+    padding = {"top": title_height + 10, "right": 20, "bottom": 36 + legend_height, "left": 38}
+    plot_width = max(1.0, width - padding["left"] - padding["right"])
+    plot_height = max(1.0, height - padding["top"] - padding["bottom"])
+    baseline = padding["top"] + plot_height
+
+    def x_for(index: int) -> float:
+        return padding["left"] + (plot_width / 2 if len(points) <= 1 else (index / (len(points) - 1)) * plot_width)
+
+    def y_for(value: float) -> float:
+        return padding["top"] + ((y_max - _chart_value(value, y_min, y_max)) / (y_max - y_min)) * plot_height
+
+    parts: list[str] = [
+        f'<svg width="100%" height="100%" viewBox="0 0 {width:g} {height:g}" preserveAspectRatio="none" role="img" aria-label="{escape(title or "시험 통계 차트", quote=True)}">'
+    ]
+    if title:
+        parts.append(f'<text x="16" y="24" font-size="15" font-weight="700" fill="{text_color}">{title}</text>')
+    if element.get("showGrid", True):
+        ticks = [y_max, y_min + (y_max - y_min) * 0.75, y_min + (y_max - y_min) * 0.5, y_min + (y_max - y_min) * 0.25, y_min]
+        for tick in ticks:
+            y = y_for(tick)
+            parts.append(f'<line x1="{padding["left"]:g}" x2="{width - padding["right"]:g}" y1="{y:g}" y2="{y:g}" stroke="rgba(148,163,184,0.26)" />')
+            parts.append(f'<text x="{padding["left"] - 8:g}" y="{y + 4:g}" text-anchor="end" font-size="10" fill="#64748b">{round(tick):g}</text>')
+    parts.append(f'<line x1="{padding["left"]:g}" x2="{padding["left"]:g}" y1="{padding["top"]:g}" y2="{baseline:g}" stroke="rgba(100,116,139,0.35)" />')
+    parts.append(f'<line x1="{padding["left"]:g}" x2="{width - padding["right"]:g}" y1="{baseline:g}" y2="{baseline:g}" stroke="rgba(100,116,139,0.35)" />')
+
+    if mode == "bar":
+        for point_index, point in enumerate(points):
+            group_width = min(72.0, max(22.0, len(metrics) * 10.0))
+            bar_width = max(4.0, min(9.0, (group_width - len(metrics) * 2.0) / max(1, len(metrics))))
+            for metric_index, metric in enumerate(metrics):
+                value = _finite_number(point.get(metric))
+                if value is None:
+                    continue
+                y = y_for(value)
+                x = x_for(point_index) - group_width / 2 + metric_index * (bar_width + 2)
+                parts.append(f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{max(2, baseline - y):g}" rx="2" fill="{EXAM_STATS_METRICS[metric]["color"]}" opacity="0.9" />')
+    else:
+        for metric in metrics:
+            line_points: list[tuple[float, float]] = []
+            for point_index, point in enumerate(points):
+                value = _finite_number(point.get(metric))
+                if value is not None:
+                    line_points.append((x_for(point_index), y_for(value)))
+            if len(line_points) > 1:
+                polyline = " ".join(f"{x:g},{y:g}" for x, y in line_points)
+                parts.append(f'<polyline points="{polyline}" fill="none" stroke="{EXAM_STATS_METRICS[metric]["color"]}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />')
+            for x, y in line_points:
+                parts.append(f'<circle cx="{x:g}" cy="{y:g}" r="3.6" fill="{EXAM_STATS_METRICS[metric]["color"]}" stroke="{fill}" stroke-width="1.5" />')
+
+    for index, point in enumerate(points):
+        title_text = str(point.get("title") or "")
+        date_text = str(point.get("date") or "")
+        short_title = title_text[:7] + "…" if len(title_text) > 7 else title_text
+        x = x_for(index)
+        parts.append(f'<text x="{x:g}" y="{height - legend_height - 18:g}" text-anchor="middle" font-size="10" font-weight="700" fill="{text_color}">{escape(short_title)}</text>')
+        parts.append(f'<text x="{x:g}" y="{height - legend_height - 4:g}" text-anchor="middle" font-size="9" fill="#64748b">{escape(date_text)}</text>')
+
+    if element.get("showLegend", True):
+        for index, metric in enumerate(metrics):
+            x = padding["left"] + index * 72
+            parts.append(f'<g transform="translate({x:g}, {height - 18:g})"><circle cx="0" cy="-3" r="3.4" fill="{EXAM_STATS_METRICS[metric]["color"]}" /><text x="8" y="1" font-size="10" fill="#64748b">{escape(EXAM_STATS_METRICS[metric]["short"])}</text></g>')
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
 def _render_visual_element(element: dict[str, Any], placements: dict[str, list[dict[str, Any]]], data: dict[str, Any]) -> str:
     if element.get("hidden"):
         return ""
@@ -554,6 +737,8 @@ def _render_visual_element(element: dict[str, Any], placements: dict[str, list[d
         columns = max(1, int(_num(element.get("columns"), 3)))
         cells = "".join('<span></span>' for _ in range(rows * columns))
         content = f'<div class="visual-table" style="display:grid;grid-template-columns:repeat({columns},1fr);grid-template-rows:repeat({rows},1fr);width:100%;height:100%">{cells}</div>'
+    elif element_type == "examStatsChart":
+        content = _render_exam_stats_chart(element, data)
     elif element_type == "qr":
         content = '<div class="qr-placeholder">QR</div>'
     elif element_type == "watermark":
@@ -873,6 +1058,7 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
     .math-display > .katex-display {{ margin: 0; }}
     .katex-display {{ margin: 0.35em 0; }}
     .visual-table span {{ border-right: 1px solid #d8dee9; border-bottom: 1px solid #d8dee9; }}
+    .exam-stats-empty {{ width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; color: #64748b; font-size: 12px; text-align: center; }}
     .qr-placeholder {{ width: 100%; height: 100%; display: grid; place-items: center; border: 8px solid #111827; font-weight: 800; }}
     .header-block {{ display: flex; align-items: center; justify-content: space-between; width: 100%; height: 100%; border-bottom: 1px solid #111827; }}
     .header-block span {{ font-size: 12px; color: #64748b; }}

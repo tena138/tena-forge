@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 
 import {
   ContentRegionElement,
+  ExamStatsChartElement,
   PAGE_SIZES,
   PageRole,
   TemplateCategory,
@@ -43,6 +44,14 @@ export const variableOptions: Array<{ key: TemplateVariableKey; label: string; g
   { key: "total_pages", label: "총 페이지", group: "페이지" },
   { key: "difficulty", label: "난이도", group: "문항" },
   { key: "tags", label: "태그", group: "문항" },
+  { key: "exam_stats_respondent_count", label: "응시자 수", group: "시험 통계" },
+  { key: "exam_stats_average", label: "응시자 평균", group: "시험 통계" },
+  { key: "exam_stats_highest", label: "최고점", group: "시험 통계" },
+  { key: "exam_stats_lowest", label: "최저점", group: "시험 통계" },
+  { key: "exam_stats_q1", label: "Q1", group: "시험 통계" },
+  { key: "exam_stats_q2", label: "Q2 중앙값", group: "시험 통계" },
+  { key: "exam_stats_q3", label: "Q3", group: "시험 통계" },
+  { key: "exam_stats_standard_deviation", label: "표준편차", group: "시험 통계" },
 ];
 
 export const pageRoleLabels: Record<PageRole, string> = {
@@ -173,6 +182,32 @@ export function createAnswerRegion(x = 64, y = 200, width = 666, height = 360): 
   };
 }
 
+export function createExamStatsChart(x = 64, y = 180, width = 666, height = 320): ExamStatsChartElement {
+  return baseElement("examStatsChart", "시험 통계 차트", x, y, width, height, {
+    title: "시험 통계 추이",
+    chartMode: "line",
+    metrics: ["average", "highest", "lowest", "q1", "q2", "q3"],
+    dataVariableKey: "exam_stats_series_json",
+    showLegend: true,
+    showGrid: true,
+    yAxisMin: 0,
+    yAxisMax: 100,
+    style: {
+      fill: "#ffffff",
+      stroke: "#d8dee9",
+      strokeWidth: 1,
+      borderStyle: "solid",
+      radius: 12,
+      color: "#111827",
+      fontFamily: "Pretendard, Noto Sans KR, sans-serif",
+      fontSize: 12,
+      fontWeight: "normal",
+      lineHeight: 1.35,
+      textAlign: "left",
+    },
+  } as Partial<TemplateElement>) as ExamStatsChartElement;
+}
+
 export function createElement(type: TemplateElementType, x = 120, y = 140): TemplateElement {
   if (type === "text") return createText("텍스트를 입력하세요", x, y);
   if (type === "richText") {
@@ -206,6 +241,7 @@ export function createElement(type: TemplateElementType, x = 120, y = 140): Temp
   if (type === "problemRegion") return createProblemRegion(x, y);
   if (type === "solutionRegion") return createSolutionRegion(x, y);
   if (type === "answerRegion") return createAnswerRegion(x, y);
+  if (type === "examStatsChart") return createExamStatsChart(x, y);
   if (type === "contentRegion") {
     return {
       ...createProblemRegion(x, y, 520, 280, 1),
@@ -283,8 +319,8 @@ export function createTemplateSet(category: TemplateCategory): TemplateSet {
       createPage("리포트", "report", [
         createText("학습 리포트", 64, 64, 260, 50, 28),
         createVariable("student_name", "학생명", 64, 130),
-        createElement("table", 64, 210),
-        createElement("contentRegion", 64, 410),
+        createExamStatsChart(64, 205, 666, 310),
+        createElement("contentRegion", 64, 565),
       ]),
     ];
   } else if (category === "custom") {

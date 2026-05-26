@@ -40,6 +40,19 @@ export const visualTemplateSampleData: Record<string, string | number> = {
   solution_text: sampleProblems[0]?.solution || "",
   difficulty: "중",
   tags: "고1, 중간고사, 이차함수",
+  exam_stats_respondent_count: 24,
+  exam_stats_average: 78,
+  exam_stats_highest: 96,
+  exam_stats_lowest: 42,
+  exam_stats_q1: 68,
+  exam_stats_q2: 80,
+  exam_stats_q3: 88,
+  exam_stats_standard_deviation: 12.4,
+  exam_stats_series_json: JSON.stringify([
+    { title: "3월 진단", date: "2026.03.08", average: 70, highest: 92, lowest: 38, q1: 61, q2: 72, q3: 82, stddev: 13.8, respondents: 22 },
+    { title: "4월 모의", date: "2026.04.12", average: 74, highest: 95, lowest: 41, q1: 64, q2: 75, q3: 85, stddev: 12.6, respondents: 23 },
+    { title: "중간 대비", date: "2026.05.03", average: 78, highest: 96, lowest: 42, q1: 68, q2: 80, q3: 88, stddev: 12.4, respondents: 24 },
+  ]),
   qr_code: "https://tenaforge.com",
 };
 
@@ -53,6 +66,14 @@ export const visualTemplateVariableTokens: Array<{ token: string; label: string;
   { token: "{종료시간}", label: "종료 시간", group: "시간" },
   { token: "{페이지}", label: "페이지", group: "페이지" },
   { token: "{전체페이지}", label: "전체 페이지", group: "페이지" },
+  { token: "{응시자수}", label: "응시자 수", group: "시험 통계" },
+  { token: "{응시자평균}", label: "응시자 평균", group: "시험 통계" },
+  { token: "{최고점}", label: "최고점", group: "시험 통계" },
+  { token: "{최저점}", label: "최저점", group: "시험 통계" },
+  { token: "{Q1}", label: "Q1", group: "시험 통계" },
+  { token: "{Q2}", label: "Q2 중앙값", group: "시험 통계" },
+  { token: "{Q3}", label: "Q3", group: "시험 통계" },
+  { token: "{표준편차}", label: "표준편차", group: "시험 통계" },
 ];
 
 const visualTemplateVariableAliases: Record<string, string> = {
@@ -70,6 +91,19 @@ const visualTemplateVariableAliases: Record<string, string> = {
   전체페이지: "total_pages",
   난이도: "difficulty",
   태그: "tags",
+  응시자수: "exam_stats_respondent_count",
+  응시자평균: "exam_stats_average",
+  평균점수: "exam_stats_average",
+  최고점: "exam_stats_highest",
+  최저점: "exam_stats_lowest",
+  Q1: "exam_stats_q1",
+  q1: "exam_stats_q1",
+  Q2: "exam_stats_q2",
+  q2: "exam_stats_q2",
+  중앙값: "exam_stats_q2",
+  Q3: "exam_stats_q3",
+  q3: "exam_stats_q3",
+  표준편차: "exam_stats_standard_deviation",
 };
 
 const visualTemplateSystemKeys = new Set([
@@ -114,6 +148,7 @@ export function collectVisualTemplateManualVariables(templateSet: TemplateSet | 
         collectManualVariablesFromText(element.subtitle, variables);
       }
       if (element.type === "footerBlock") collectManualVariablesFromText(element.text, variables);
+      if (element.type === "examStatsChart") collectManualVariablesFromText(element.title, variables);
       if (element.type === "variable" && !isSystemVariableName(element.variableKey)) variables.add(element.variableKey);
       if (element.type === "qr") collectManualVariablesFromText(element.value, variables);
     }

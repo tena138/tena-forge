@@ -4,8 +4,8 @@ import { CSSProperties, PointerEvent, ReactNode, useLayoutEffect, useRef, useSta
 
 import { MathText } from "@/components/math-text";
 import { assetUrl } from "@/lib/api";
-import { isRegionElement, resolveTemplateText } from "@/lib/visualTemplateEngine";
-import { ContentRegionElement, PAGE_SIZES, SampleProblem, TemplateElement, TemplatePage, TemplateSet, VariableElement } from "@/lib/visualTemplateTypes";
+import { isRegionElement, resolveTemplateText, visualTemplateSampleData } from "@/lib/visualTemplateEngine";
+import { ContentRegionElement, ExamStatsChartElement, ExamStatsMetricKey, PAGE_SIZES, SampleProblem, TemplateElement, TemplatePage, TemplateSet, VariableElement } from "@/lib/visualTemplateTypes";
 
 export type ResizeHandleDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
@@ -150,6 +150,160 @@ function renderTable(element: Extract<TemplateElement, { type: "table" }>) {
             style={{ borderRight: "1px solid #d8dee9", borderBottom: "1px solid #d8dee9" }}
           />
         ))
+      )}
+    </div>
+  );
+}
+
+type ExamStatsChartPoint = {
+  title: string;
+  date?: string;
+  average?: number;
+  highest?: number;
+  lowest?: number;
+  q1?: number;
+  q2?: number;
+  q3?: number;
+  stddev?: number;
+  respondents?: number;
+};
+
+const examStatsMetricConfig: Record<ExamStatsMetricKey, { label: string; shortLabel: string; color: string }> = {
+  average: { label: "응시자 평균", shortLabel: "평균", color: "#8b5cf6" },
+  highest: { label: "최고점", shortLabel: "최고", color: "#10b981" },
+  lowest: { label: "최저점", shortLabel: "최저", color: "#f43f5e" },
+  q1: { label: "Q1", shortLabel: "Q1", color: "#0ea5e9" },
+  q2: { label: "Q2 중앙값", shortLabel: "Q2", color: "#eab308" },
+  q3: { label: "Q3", shortLabel: "Q3", color: "#f97316" },
+  stddev: { label: "표준편차", shortLabel: "σ", color: "#64748b" },
+};
+const defaultExamStatsMetrics: ExamStatsMetricKey[] = ["average", "highest", "lowest", "q1", "q2", "q3"];
+
+function scoreValue(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function clampChartValue(value: number, min: number, max: number) {
+  if (max <= min) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function sampleExamStatsPoints(): ExamStatsChartPoint[] {
+  try {
+    const parsed = JSON.parse(String(visualTemplateSampleData.exam_stats_series_json || "[]"));
+    if (Array.isArray(parsed)) {
+      return parsed.map((point, index) => ({
+        title: String(point.title || `시험 ${index + 1}`),
+        date: point.date ? String(point.date) : undefined,
+        average: scoreValue(point.average) ?? undefined,
+        highest: scoreValue(point.highest) ?? undefined,
+        lowest: scoreValue(point.lowest) ?? undefined,
+        q1: scoreValue(point.q1) ?? undefined,
+        q2: scoreValue(point.q2) ?? undefined,
+        q3: scoreValue(point.q3) ?? undefined,
+        stddev: scoreValue(point.stddev) ?? undefined,
+        respondents: scoreValue(point.respondents) ?? undefined,
+      }));
+    }
+  } catch {
+    return [];
+  }
+  return [];
+}
+
+function renderExamStatsChart(element: ExamStatsChartElement) {
+  const points = sampleExamStatsPoints();
+  const metrics = (element.metrics?.length ? element.metrics : defaultExamStatsMetrics).filter((metric) => examStatsMetricConfig[metric]);
+  const mode = element.chartMode || "line";
+  const yMin = Number.isFinite(element.yAxisMin) ? element.yAxisMin : 0;
+  const yMax = Number.isFinite(element.yAxisMax) && element.yAxisMax > yMin ? element.yAxisMax : 100;
+  const viewWidth = Math.max(320, element.width);
+  const viewHeight = Math.max(180, element.height);
+  const titleHeight = element.title ? 30 : 10;
+  const legendHeight = element.showLegend ? 28 : 6;
+  const padding = { top: titleHeight + 10, right: 20, bottom: 36 + legendHeight, left: 38 };
+  const plotWidth = Math.max(1, viewWidth - padding.left - padding.right);
+  const plotHeight = Math.max(1, viewHeight - padding.top - padding.bottom);
+  const baseline = padding.top + plotHeight;
+  const xFor = (index: number) => padding.left + (points.length <= 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth);
+  const yFor = (value: number) => padding.top + ((yMax - clampChartValue(value, yMin, yMax)) / (yMax - yMin)) * plotHeight;
+  const ticks = [yMax, yMin + (yMax - yMin) * 0.75, yMin + (yMax - yMin) * 0.5, yMin + (yMax - yMin) * 0.25, yMin];
+  const fill = element.style?.fill || "#ffffff";
+  const textColor = element.style?.color || "#111827";
+  const mutedColor = "#64748b";
+
+  return (
+    <div className="h-full w-full overflow-hidden" style={{ background: fill }}>
+      {!points.length ? (
+        <div className="flex h-full w-full items-center justify-center p-4 text-center text-xs text-slate-500">시험 통계 데이터가 연결되면 차트가 표시됩니다.</div>
+      ) : (
+        <svg width="100%" height="100%" viewBox={`0 0 ${viewWidth} ${viewHeight}`} preserveAspectRatio="none" role="img" aria-label={element.title || "시험 통계 차트"}>
+          {element.title ? <text x={16} y={24} fontSize={15} fontWeight={700} fill={textColor}>{resolveTemplateText(element.title)}</text> : null}
+          {(element.showGrid ?? true) ? ticks.map((tick) => {
+            const y = yFor(tick);
+            return (
+              <g key={tick}>
+                <line x1={padding.left} x2={viewWidth - padding.right} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.26)" strokeWidth="1" />
+                <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill={mutedColor}>{Math.round(tick)}</text>
+              </g>
+            );
+          }) : null}
+          <line x1={padding.left} x2={padding.left} y1={padding.top} y2={baseline} stroke="rgba(100, 116, 139, 0.35)" />
+          <line x1={padding.left} x2={viewWidth - padding.right} y1={baseline} y2={baseline} stroke="rgba(100, 116, 139, 0.35)" />
+
+          {mode === "line" ? metrics.map((metric) => {
+            const config = examStatsMetricConfig[metric];
+            const linePoints = points
+              .map((point, index) => {
+                const value = scoreValue(point[metric]);
+                return value == null ? null : { x: xFor(index), y: yFor(value) };
+              })
+              .filter((point): point is { x: number; y: number } => !!point);
+            return (
+              <g key={metric}>
+                {linePoints.length > 1 ? <polyline points={linePoints.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={config.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /> : null}
+                {linePoints.map((point, index) => <circle key={`${metric}-${index}`} cx={point.x} cy={point.y} r="3.6" fill={config.color} stroke={fill} strokeWidth="1.5" />)}
+              </g>
+            );
+          }) : null}
+
+          {mode === "bar" ? points.map((point, pointIndex) => {
+            const groupWidth = Math.min(72, Math.max(22, metrics.length * 10));
+            const barWidth = Math.max(4, Math.min(9, (groupWidth - metrics.length * 2) / Math.max(1, metrics.length)));
+            return (
+              <g key={point.title}>
+                {metrics.map((metric, metricIndex) => {
+                  const value = scoreValue(point[metric]);
+                  if (value == null) return null;
+                  const y = yFor(value);
+                  const x = xFor(pointIndex) - groupWidth / 2 + metricIndex * (barWidth + 2);
+                  return <rect key={metric} x={x} y={y} width={barWidth} height={Math.max(2, baseline - y)} rx="2" fill={examStatsMetricConfig[metric].color} opacity="0.9" />;
+                })}
+              </g>
+            );
+          }) : null}
+
+          {points.map((point, index) => (
+            <g key={`${point.title}-${index}`}>
+              <text x={xFor(index)} y={viewHeight - legendHeight - 18} textAnchor="middle" fontSize="10" fontWeight={700} fill={textColor}>
+                {point.title.length > 7 ? `${point.title.slice(0, 7)}…` : point.title}
+              </text>
+              <text x={xFor(index)} y={viewHeight - legendHeight - 4} textAnchor="middle" fontSize="9" fill={mutedColor}>{point.date || ""}</text>
+            </g>
+          ))}
+
+          {element.showLegend ? metrics.map((metric, index) => {
+            const config = examStatsMetricConfig[metric];
+            const x = padding.left + index * 72;
+            return (
+              <g key={`legend-${metric}`} transform={`translate(${x}, ${viewHeight - 18})`}>
+                <circle cx="0" cy="-3" r="3.4" fill={config.color} />
+                <text x="8" y="1" fontSize="10" fill={mutedColor}>{config.shortLabel}</text>
+              </g>
+            );
+          }) : null}
+        </svg>
       )}
     </div>
   );
@@ -355,6 +509,7 @@ export function renderVisualElement(element: TemplateElement, dynamicProblems?: 
   if (element.type === "image") {
     return element.src ? <img src={element.src} alt="" className="h-full w-full" style={{ objectFit: element.objectFit }} /> : <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">이미지</div>;
   }
+  if (element.type === "examStatsChart") return renderExamStatsChart(element);
   if (isRegionElement(element)) return renderRegion(element, dynamicProblems, showRegionChrome);
   if (element.type === "qr") return <div className="grid h-full w-full grid-cols-5 grid-rows-5 gap-1 bg-white p-2">{Array.from({ length: 25 }).map((_, index) => <span key={index} className={index % 2 || index === 12 ? "bg-slate-900" : "bg-slate-200"} />)}</div>;
   if (element.type === "watermark") return <div className="flex h-full w-full items-center justify-center">{element.text}</div>;

@@ -98,6 +98,14 @@ export type TemplateVariableKey =
   | "solution_text"
   | "difficulty"
   | "tags"
+  | "exam_stats_respondent_count"
+  | "exam_stats_average"
+  | "exam_stats_highest"
+  | "exam_stats_lowest"
+  | "exam_stats_q1"
+  | "exam_stats_q2"
+  | "exam_stats_q3"
+  | "exam_stats_standard_deviation"
   | "qr_code";
 
 export type TextElement = ElementBase & { type: "text"; text: string };
@@ -110,6 +118,21 @@ export type VariableElement = ElementBase & { type: "variable"; variableKey: Tem
 export type PageNumberElement = ElementBase & { type: "pageNumber"; format: string };
 export type QrElement = ElementBase & { type: "qr"; value: string };
 export type WatermarkElement = ElementBase & { type: "watermark"; text: string };
+
+export type ExamStatsMetricKey = "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
+export type ExamStatsChartMode = "line" | "bar";
+
+export type ExamStatsChartElement = ElementBase & {
+  type: "examStatsChart";
+  title: string;
+  chartMode: ExamStatsChartMode;
+  metrics: ExamStatsMetricKey[];
+  dataVariableKey?: string;
+  showLegend: boolean;
+  showGrid: boolean;
+  yAxisMin: number;
+  yAxisMax: number;
+};
 
 export type RegionBinding = "problems" | "solutions" | "answers" | "passages" | "generic";
 export type RegionOverflowStrategy = "create-next-page" | "clip" | "warn";
@@ -153,6 +176,7 @@ export type TemplateElement =
   | ContentRegionElement
   | QrElement
   | WatermarkElement
+  | ExamStatsChartElement
   | HeaderBlockElement
   | FooterBlockElement;
 
@@ -171,6 +195,7 @@ export type TemplateElementType =
   | "contentRegion"
   | "qr"
   | "watermark"
+  | "examStatsChart"
   | "headerBlock"
   | "footerBlock";
 
