@@ -22,6 +22,11 @@ function isAuthFailure(error: unknown) {
   return status === 401 || status === 403;
 }
 
+function currentPathWithSearch() {
+  if (typeof window === "undefined") return "/";
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -56,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         if (!active) return;
         if (!token) {
           clearAuthState();
-          const loginUrl = `/login?redirect=${encodeURIComponent(pathname)}`;
+          const loginUrl = `/login?redirect=${encodeURIComponent(currentPathWithSearch())}`;
           router.replace(loginUrl);
           return;
         }
@@ -71,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           if (!active) return;
           if (isAuthFailure(error)) {
             clearAuthState();
-            router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+            router.replace(`/login?redirect=${encodeURIComponent(currentPathWithSearch())}`);
             return;
           }
           setSessionReady(true);
@@ -87,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
         clearAuthState();
-        router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+        router.replace(`/login?redirect=${encodeURIComponent(currentPathWithSearch())}`);
       });
     return () => {
       active = false;
@@ -163,18 +168,19 @@ function OAuthFragmentCapture() {
     if (!token) return;
     setAccessToken(token);
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    const currentPath = currentPathWithSearch();
 
     fetchMe()
       .then((profile) => {
         if (!active) return;
-        const destination = resolvePostLoginRedirect(params.get("redirect") || pathname, profile.account_type);
-        if (destination === pathname) router.refresh();
+        const destination = resolvePostLoginRedirect(params.get("redirect") || currentPath, profile.account_type);
+        if (destination === currentPath) router.refresh();
         else router.replace(destination);
       })
       .catch(() => {
         if (!active) return;
-        const destination = resolvePostLoginRedirect(params.get("redirect") || pathname);
-        if (destination === pathname) router.refresh();
+        const destination = resolvePostLoginRedirect(params.get("redirect") || currentPath);
+        if (destination === currentPath) router.refresh();
         else router.replace(destination);
       });
 

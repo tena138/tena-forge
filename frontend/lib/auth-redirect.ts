@@ -21,11 +21,22 @@ export function isMarketingOrAuthPath(pathname: string) {
   ].some((prefix) => pathname.startsWith(prefix));
 }
 
+function isAllowedPostLoginPath(pathname: string) {
+  return [
+    "/checkout/review",
+    "/checkout/billing-return",
+    "/billing",
+    "/account/profile",
+    "/account/security",
+  ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 export function resolvePostLoginRedirect(rawRedirect: string | null, accountType?: AccountType) {
   const fallback = workspaceHome(accountType);
   if (!rawRedirect || !rawRedirect.startsWith("/") || rawRedirect.startsWith("//")) return fallback;
 
   const pathname = rawRedirect.split(/[?#]/)[0] || "/";
+  if (isAllowedPostLoginPath(pathname)) return rawRedirect;
   if (isMarketingOrAuthPath(pathname)) return fallback;
   return rawRedirect;
 }
