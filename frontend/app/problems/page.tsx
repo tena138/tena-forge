@@ -109,6 +109,7 @@ function ProblemsBrowser() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedProblemCache, setSelectedProblemCache] = useState<Record<string, Problem>>({});
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [quickExportOpen, setQuickExportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -196,13 +197,23 @@ function ProblemsBrowser() {
   }, [query]);
 
   useEffect(() => {
-    const visibleIds = new Set(data.items.map((problem) => problem.id));
-    setSelectedIds((current) => current.filter((id) => visibleIds.has(id)));
+    if (!data.items.length) return;
+    setSelectedProblemCache((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const problem of data.items) {
+        if (next[problem.id] !== problem) {
+          next[problem.id] = problem;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
   }, [data.items]);
 
   const selectedProblems = useMemo(
-    () => data.items.filter((problem) => selectedIds.includes(problem.id)),
-    [data.items, selectedIds]
+    () => selectedIds.map((id) => selectedProblemCache[id]).filter((problem): problem is Problem => Boolean(problem)),
+    [selectedIds, selectedProblemCache]
   );
 
   const activeFilterChips = useMemo(() => {
@@ -226,8 +237,10 @@ function ProblemsBrowser() {
     resetPageAnd(() => setList(list.includes(value) ? list.filter((item) => item !== value) : [...list, value]));
   }
 
-  function toggleProblemSelection(problemId: string, checked?: boolean) {
+  function toggleProblemSelection(problem: Problem, checked?: boolean) {
+    setSelectedProblemCache((current) => (current[problem.id] ? current : { ...current, [problem.id]: problem }));
     setSelectedIds((current) => {
+      const problemId = problem.id;
       const shouldSelect = checked ?? !current.includes(problemId);
       if (shouldSelect) return current.includes(problemId) ? current : [...current, problemId];
       return current.filter((id) => id !== problemId);
@@ -252,6 +265,11 @@ function ProblemsBrowser() {
         total: Math.max(0, current.total - response.deleted_count),
       }));
       setSelectedIds([]);
+      setSelectedProblemCache((current) => {
+        const next = { ...current };
+        deletedIds.forEach((id) => delete next[id]);
+        return next;
+      });
       await loadProblems();
     } catch {
       window.alert("선택한 문항을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -278,7 +296,11 @@ function ProblemsBrowser() {
         return rect.left < selectionRect.right && rect.right > selectionRect.left && rect.top < selectionRect.bottom && rect.bottom > selectionRect.top;
       })
       .map((problem) => problem.id);
-    setSelectedIds(nextIds);
+    const visibleIds = new Set(data.items.map((problem) => problem.id));
+    setSelectedIds((current) => {
+      const preservedIds = current.filter((id) => !visibleIds.has(id));
+      return [...preservedIds, ...nextIds];
+    });
   }
 
   function updateDragBox(currentX: number, currentY: number) {
@@ -349,7 +371,7 @@ function ProblemsBrowser() {
             className="h-4 w-4 accent-[#7F77DD]"
             type="checkbox"
             checked={selected}
-            onChange={(event) => toggleProblemSelection(problem.id, event.target.checked)}
+            onChange={(event) => toggleProblemSelection(problem, event.target.checked)}
             aria-label={`${problem.problem_number}번 선택`}
           />
         </label>
@@ -405,7 +427,7 @@ function ProblemsBrowser() {
               className="h-4 w-4 accent-[#7F77DD]"
               type="checkbox"
               checked={selected}
-              onChange={(event) => toggleProblemSelection(problem.id, event.target.checked)}
+              onChange={(event) => toggleProblemSelection(problem, event.target.checked)}
               aria-label={`${problem.problem_number}번 선택`}
             />
           </label>
