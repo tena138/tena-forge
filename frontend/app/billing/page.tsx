@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { getUsageSummary, listPlans, Plan, UsageSummary } from "@/lib/saas";
+import { SUBJECT_ENGINE_MONTHLY_ADDON } from "@/lib/plan-pricing";
 
 const subjectEngineOptions = [
   { code: "math", label: "Math" },
@@ -86,13 +87,13 @@ export default function BillingPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {plans.map((plan) => {
-          const multiplier = Math.max(selectedEngines.length, 1);
+          const engineDelta = Math.max(selectedEngines.length - 1, 0) * SUBJECT_ENGINE_MONTHLY_ADDON;
           return (
             <div key={plan.code} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5">
               <h2 className="text-lg font-bold text-white">{plan.name}</h2>
-              <p className="mt-2 text-2xl font-bold text-violet-200">{won(plan.monthly_price * multiplier)}</p>
+              <p className="mt-2 text-2xl font-bold text-violet-200">{won(plan.monthly_price + engineDelta)}</p>
               <p className="mt-1 text-xs text-slate-500">
-                Base {won(plan.monthly_price)} x {multiplier} engine{multiplier > 1 ? "s" : ""}
+                Base {won(plan.monthly_price)}{engineDelta ? ` + engine ${won(engineDelta)}` : ""}
               </p>
               {plan.code === "basic" || plan.code === "pro" ? (
                 <Link className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90" href={`/plan/${plan.code}`}>

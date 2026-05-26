@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -160,9 +161,32 @@ def ensure_subject_engine_access(db: Session, user_id: str, subject_engine: str)
     raise HTTPException(status_code=402, detail=detail)
 
 
-def usage_summary(db: Session, user_id: str) -> tuple[Plan, Subscription | None, int, int, int, float]:
+def _plan_summary_for_policy(plan: Plan, subscription: Subscription | None, policy) -> SimpleNamespace:
+    engines = sorted(SUBJECT_ENGINES) if getattr(policy, "plan_id", "") == "admin" else normalize_subject_engines(
+        subscription.enabled_subject_engines if subscription else getattr(plan, "enabled_subject_engines", None)
+    )
+    subject_multiplier = float(getattr(subscription, "subject_multiplier", None) or len(engines) or 1)
+    return SimpleNamespace(
+        code=plan.code,
+        name=plan.name,
+        monthly_price=plan.monthly_price,
+        currency=plan.currency,
+        monthly_upload_count=policy.max_jobs_per_day * 31,
+        monthly_processed_pages=policy.monthly_processed_pages_limit,
+        storage_quota_mb=policy.storage_quota_mb,
+        monthly_ai_tokens=policy.monthly_credit_limit,
+        enabled_subject_engines=engines,
+        subject_engine_count=len(engines),
+        subject_multiplier=subject_multiplier,
+        final_monthly_price=int(getattr(subscription, "final_monthly_price", None) or getattr(plan, "final_monthly_price", 0) or 0),
+        final_annual_price=int(getattr(subscription, "final_annual_price", None) or getattr(plan, "final_annual_price", 0) or 0),
+    )
+
+
+def usage_summary(db: Session, user_id: str) -> tuple[SimpleNamespace, Subscription | None, int, int, int, float]:
     ensure_default_plans(db)
-    plan, subscription, _ = active_plan_for_user(db, user_id)
+    plan, subscription, policy = active_plan_for_user(db, user_id)
+    plan_summary = _plan_summary_for_policy(plan, subscription, policy)
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     upload_event_types = ("upload", "batch_extraction_estimate", "job_extraction_estimate")
     uploads = db.scalar(select(func.count(UsageLog.id)).where(UsageLog.user_id == user_id, UsageLog.usage_type.in_(upload_event_types), UsageLog.created_at >= month_start)) or 0
@@ -170,7 +194,7 @@ def usage_summary(db: Session, user_id: str) -> tuple[Plan, Subscription | None,
     credit_milli = db.scalar(select(func.coalesce(func.sum(UsageLog.tokens_used), 0)).where(UsageLog.user_id == user_id, UsageLog.created_at >= month_start)) or 0
     storage = db.scalar(select(func.coalesce(func.sum(UsageLog.storage_mb), 0)).where(UsageLog.user_id == user_id)) or 0
     tokens = round(int(credit_milli or 0) / 1000)
-    return plan, subscription, int(uploads), int(pages), int(tokens), float(storage)
+    return plan_summary, subscription, int(uploads), int(pages), int(tokens), float(storage)
 
 
 def enforce_usage_limit(db: Session, user_id: str, pages_to_add: int = 0, upload_count: int = 0) -> None:

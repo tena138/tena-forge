@@ -211,8 +211,8 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
     user_id = current_owner_id(request)
     ensure_default_plans(db)
     config = portone_public_config()
-    pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids)
     enabled_engines = normalize_subject_engines(payload.enabled_subject_engines or ["math"])
+    pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids, enabled_engines)
     academy = db.get(Academy, user_id)
     issue_id = _portone_id("tf-bill", payload.plan_code)
     payment_id = _portone_id("tf-pay", payload.plan_code)
@@ -253,6 +253,8 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
         "customer_email": academy.email if academy else None,
         "billing_cycle": order.billing_cycle,
         "selected_packages": order.selected_packages,
+        "enabled_subject_engines": order.enabled_subject_engines,
+        "subject_engine_monthly_delta_krw": pricing["subject_engine_monthly_delta_krw"],
         "portone": {
             "store_id": config["store_id"],
             "channel_key": config["channel_key"],

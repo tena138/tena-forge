@@ -12,25 +12,30 @@ import {
   PLANS,
   PackageGroup,
   PaidPlanType,
+  SubjectEngineCode,
+  calculateSubjectEngineMonthlyDelta,
   calculateAnnualPrice,
   calculateChargeAmount,
   calculateMonthlyPrice,
   formatKRW,
   getResolvedSpecs,
+  normalizeSubjectEngines,
   parseSelectedPackageIds,
   resolveSelectedPackages,
-  stringifySelectedPackageIds,
+  subjectEngineLabel,
 } from "@/lib/plan-pricing";
 import { authHttp, ensureAccessToken } from "@/lib/auth-client";
 
-export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: PaidPlanType; billingCycle: BillingCycle; packages: string }) {
+export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: { plan: PaidPlanType; billingCycle: BillingCycle; packages: string; engines: string }) {
   const router = useRouter();
   const selectedPackageIds = useMemo(() => parseSelectedPackageIds(packages), [packages]);
-  const specs = useMemo(() => getResolvedSpecs(plan, selectedPackageIds), [plan, selectedPackageIds]);
+  const selectedSubjectEngines = useMemo<SubjectEngineCode[]>(() => normalizeSubjectEngines(engines), [engines]);
+  const specs = useMemo(() => getResolvedSpecs(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
   const selectedPackages = useMemo(() => resolveSelectedPackages(plan, selectedPackageIds), [plan, selectedPackageIds]);
-  const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds), [plan, selectedPackageIds]);
+  const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
   const annual = useMemo(() => calculateAnnualPrice(monthlyPrice), [monthlyPrice]);
-  const chargeAmount = useMemo(() => calculateChargeAmount(plan, selectedPackageIds, billingCycle), [plan, selectedPackageIds, billingCycle]);
+  const chargeAmount = useMemo(() => calculateChargeAmount(plan, selectedPackageIds, billingCycle, selectedSubjectEngines), [plan, selectedPackageIds, billingCycle, selectedSubjectEngines]);
+  const subjectEngineDelta = useMemo(() => calculateSubjectEngineMonthlyDelta(selectedSubjectEngines), [selectedSubjectEngines]);
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -51,6 +56,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
         plan_code: plan,
         billing_cycle: billingCycle,
         selected_package_ids: selectedPackageIds,
+        enabled_subject_engines: selectedSubjectEngines,
       });
       const billingCheckout = billingCheckoutResponse.data;
       if (!billingCheckout.portone?.store_id || !billingCheckout.portone?.channel_key) {
@@ -79,6 +85,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
           orderId: billingCheckout.order_id,
           planCode: plan,
           billingCycle,
+          enabledSubjectEngines: selectedSubjectEngines,
         },
         redirectUrl: `${window.location.origin}/checkout/billing-return?issueId=${encodeURIComponent(billingCheckout.issue_id)}`,
       });
@@ -127,6 +134,19 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
                   <span>{billingCycle === "annual" ? "연간 결제" : "월간 결제"}</span>
                 </div>
               </ReviewBlock>
+              <ReviewBlock title="선택 엔진">
+                <div className="grid gap-3">
+                  {selectedSubjectEngines.map((engine) => (
+                    <div key={engine} className="flex items-center justify-between rounded-[12px] bg-slate-50 px-4 py-3">
+                      <span className="font-bold text-slate-500">{subjectEngineLabel(engine)}</span>
+                      <span className="font-black">{engine === "math" ? "수학 추출" : "국어 추출"}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-sm font-bold text-slate-600">
+                  {selectedSubjectEngines.length > 1 ? "용량 관련 한도가 2배로 적용됩니다." : "선택하지 않은 엔진은 추출 탭에서 잠금 처리됩니다."}
+                </p>
+              </ReviewBlock>
               <ReviewBlock title="선택 패키지">
                 <div className="grid gap-3">
                   {(Object.keys(PACKAGE_GROUPS[plan]) as PackageGroup[]).map((group) => {
@@ -169,6 +189,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages }: { plan: P
             <h2 className="mt-5 text-2xl font-black">결제 금액</h2>
             <div className="mt-6 space-y-3 border-b border-white/10 pb-5 text-sm">
               <PriceLine label="기본 플랜" value={`${formatKRW(PLANS[plan].baseMonthlyPrice)} / 월`} />
+              {subjectEngineDelta > 0 ? <PriceLine label="엔진 추가" value={`+${formatKRW(subjectEngineDelta)} / 월`} /> : null}
               {Object.values(selectedPackages).map((option) => option && option.monthlyPriceDelta > 0 ? <PriceLine key={option.id} label={option.name} value={`+${formatKRW(option.monthlyPriceDelta)} / 월`} /> : null)}
               {billingCycle === "annual" && <PriceLine label="연간 할인" value={`-${formatKRW(annual.discountAmount)}`} positive />}
             </div>

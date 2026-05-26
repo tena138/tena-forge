@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
@@ -193,6 +193,22 @@ def plan_cost_policy(db: Session | None, plan_code: str | None) -> PlanCostPolic
     return base
 
 
+def scaled_plan_cost_policy(policy: PlanCostPolicy, multiplier: float | int | None) -> PlanCostPolicy:
+    factor = max(float(multiplier or 1), 1.0)
+    if factor == 1.0:
+        return policy
+    return replace(
+        policy,
+        monthly_cost_cap_krw=int(round(policy.monthly_cost_cap_krw * factor)),
+        storage_gb_limit=policy.storage_gb_limit * factor,
+        monthly_upload_mb_limit=int(round(policy.monthly_upload_mb_limit * factor)),
+        max_file_size_mb=int(round(policy.max_file_size_mb * factor)),
+        max_pages_per_job=int(round(policy.max_pages_per_job * factor)),
+        max_jobs_per_day=int(round(policy.max_jobs_per_day * factor)),
+        max_concurrent_jobs=int(round(policy.max_concurrent_jobs * factor)),
+    )
+
+
 def is_admin_user(db: Session, user_id: str) -> bool:
     roles = set(db.scalars(select(UserRole.role).where(UserRole.user_id == user_id)).all())
     if roles & ADMIN_ROLES:
@@ -225,7 +241,10 @@ def active_plan_for_user(db: Session, user_id: str) -> tuple[Plan | None, Subscr
         or db.scalar(select(Plan).where(Plan.code == canonical))
         or db.scalar(select(Plan).where(Plan.code == "free"))
     )
-    return plan, subscription, plan_cost_policy(db, plan_code)
+    policy = plan_cost_policy(db, plan_code)
+    if subscription:
+        policy = scaled_plan_cost_policy(policy, getattr(subscription, "subject_multiplier", 1))
+    return plan, subscription, policy
 
 
 def academy_payment_required(db: Session, user_id: str) -> bool:

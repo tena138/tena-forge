@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { FileText, Loader2, ShieldCheck, Sparkles, UploadCloud, X } from "lucide-react";
+import { FileText, Loader2, LockKeyhole, ShieldCheck, Sparkles, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -543,8 +543,8 @@ export default function UploadPage() {
       setUnitCandidates(finalUnitCandidates);
       setUnitInput("");
     }
-    if (koreanLocked) {
-      setMessage("Korean Language extraction is locked for the current plan. Enable the Korean Language subject engine in billing.");
+    if (selectedEngineLocked) {
+      setMessage("선택한 과목 엔진은 현재 플랜에서 잠겨 있습니다. 결제 화면에서 엔진을 추가해주세요.");
       return;
     }
     if (!batchName || !problemPdf || !rightsConfirmed || !selectedSubjects.length) return;
@@ -594,7 +594,14 @@ export default function UploadPage() {
   const currentStatus = historyBatchSnapshot?.id === batchId ? historyBatchSnapshot.status : null;
   const enabledSubjectEngines = usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"];
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
-  const koreanLocked = !isAdmin && Boolean(usageSummary) && subjectEngine === "korean" && !enabledSubjectEngines.includes("korean");
+  const selectedEngineLocked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(subjectEngine);
+
+  useEffect(() => {
+    if (isAdmin || !usageSummary || enabledSubjectEngines.includes(subjectEngine)) return;
+    const nextEngine = enabledSubjectEngines.find((engine): engine is "math" | "korean" => engine === "math" || engine === "korean") || "math";
+    setSubjectEngine(nextEngine);
+  }, [enabledSubjectEngines, isAdmin, subjectEngine, usageSummary]);
+
   const creditEstimate = useMemo(
     () => buildCreditEstimate({
       problem: problemPdfEstimate,
@@ -610,7 +617,7 @@ export default function UploadPage() {
   );
   const creditsAfterUpload = creditEstimate && creditsRemaining !== null ? Math.max(creditsRemaining - creditEstimate.credits, 0) : null;
   const creditEstimateExceedsRemaining = Boolean(creditEstimate && creditsRemaining !== null && creditEstimate.credits > creditsRemaining);
-  const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting && !koreanLocked);
+  const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting && !selectedEngineLocked);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -636,7 +643,7 @@ export default function UploadPage() {
                 { value: "math" as const, label: "Math" },
                 { value: "korean" as const, label: "Korean Language" },
               ].map((engine) => {
-                const locked = !isAdmin && engine.value === "korean" && Boolean(usageSummary) && !enabledSubjectEngines.includes("korean");
+                const locked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(engine.value);
                 const selected = subjectEngine === engine.value;
                 return (
                   <button
@@ -655,12 +662,15 @@ export default function UploadPage() {
                       }
                     }}
                   >
-                    {engine.label}{locked ? " · Locked" : ""}
+                    <span className="inline-flex items-center gap-1.5">
+                      {locked ? <LockKeyhole className="h-3.5 w-3.5" /> : null}
+                      {engine.label}{locked ? " · Locked" : ""}
+                    </span>
                   </button>
                 );
               })}
             </div>
-            {koreanLocked ? <p className="mt-3 text-xs text-amber-200">Korean Language engine is not enabled on the current plan.</p> : null}
+            {selectedEngineLocked ? <p className="mt-3 text-xs text-amber-200">선택한 엔진은 현재 플랜에서 사용할 수 없습니다.</p> : null}
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">

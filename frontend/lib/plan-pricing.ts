@@ -2,6 +2,7 @@ export type PlanType = "free" | "basic" | "pro" | "enterprise";
 export type PaidPlanType = "basic" | "pro";
 export type BillingCycle = "monthly" | "annual";
 export type PackageGroup = "ai" | "storage" | "student" | "processing";
+export type SubjectEngineCode = "math" | "korean";
 
 export type PlanSpecs = {
   monthlyAiCredits: number | "custom";
@@ -42,6 +43,28 @@ export type SelectedPackageIds = Partial<Record<PackageGroup, string>>;
 export const BILLING = {
   annualDiscountPercent: 20,
 } as const;
+
+export const SUBJECT_ENGINE_MONTHLY_ADDON = 30_000;
+
+export const SUBJECT_ENGINES: Array<{
+  code: SubjectEngineCode;
+  label: string;
+  version: string;
+  description: string;
+}> = [
+  {
+    code: "math",
+    label: "수학",
+    version: "1.0",
+    description: "수식, 객관식, 정답, 해설을 수학 문항 구조로 추출합니다.",
+  },
+  {
+    code: "korean",
+    label: "국어",
+    version: "1.0",
+    description: "긴 지문, 공통 지문 묶음, 선택지를 국어형 구조로 추출합니다.",
+  },
+];
 
 export const PLANS: Record<PlanType, PlanConfig> = {
   free: {
@@ -238,9 +261,49 @@ export function resolveSelectedPackages(plan: PaidPlanType, selectedPackageIds: 
   return selected;
 }
 
-export function calculateMonthlyPrice(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds) {
+export function normalizeSubjectEngines(value: unknown): SubjectEngineCode[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const engines: SubjectEngineCode[] = [];
+  for (const item of rawItems) {
+    const normalized = String(item || "").trim().toLowerCase();
+    const engine = normalized === "korean" || normalized === "kor" || normalized === "국어" ? "korean" : normalized === "math" || normalized === "수학" ? "math" : null;
+    if (engine && !engines.includes(engine)) engines.push(engine);
+  }
+  return engines.length ? engines : ["math"];
+}
+
+export function stringifySubjectEngines(enabledSubjectEngines: SubjectEngineCode[]) {
+  return normalizeSubjectEngines(enabledSubjectEngines).join(",");
+}
+
+export function subjectEngineLabel(code: string) {
+  const engine = SUBJECT_ENGINES.find((item) => item.code === code);
+  return engine ? `${engine.label} ${engine.version}` : code;
+}
+
+export function calculateSubjectEngineMonthlyDelta(enabledSubjectEngines: SubjectEngineCode[]) {
+  return Math.max(normalizeSubjectEngines(enabledSubjectEngines).length - 1, 0) * SUBJECT_ENGINE_MONTHLY_ADDON;
+}
+
+function applySubjectEngineCapacity(specs: PlanSpecs, enabledSubjectEngines: SubjectEngineCode[]): PlanSpecs {
+  const multiplier = Math.max(normalizeSubjectEngines(enabledSubjectEngines).length, 1);
+  if (multiplier <= 1) return specs;
+  return {
+    ...specs,
+    monthlyAiCredits: typeof specs.monthlyAiCredits === "number" ? specs.monthlyAiCredits * multiplier : specs.monthlyAiCredits,
+    dailyAiLimit: typeof specs.dailyAiLimit === "number" ? specs.dailyAiLimit * multiplier : specs.dailyAiLimit,
+    problemDb: typeof specs.problemDb === "number" ? specs.problemDb * multiplier : specs.problemDb,
+    fileStorageGb: typeof specs.fileStorageGb === "number" ? specs.fileStorageGb * multiplier : specs.fileStorageGb,
+  };
+}
+
+export function calculateMonthlyPrice(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds, enabledSubjectEngines: SubjectEngineCode[] = ["math"]) {
   const selected = resolveSelectedPackages(plan, selectedPackageIds);
-  return Object.values(selected).reduce((total, option) => total + (option?.monthlyPriceDelta || 0), PLANS[plan].baseMonthlyPrice);
+  return Object.values(selected).reduce((total, option) => total + (option?.monthlyPriceDelta || 0), PLANS[plan].baseMonthlyPrice + calculateSubjectEngineMonthlyDelta(enabledSubjectEngines));
 }
 
 export function calculateAnnualPrice(monthlyPrice: number) {
@@ -252,18 +315,19 @@ export function calculateAnnualPrice(monthlyPrice: number) {
   };
 }
 
-export function calculateChargeAmount(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds, billingCycle: BillingCycle) {
-  const monthly = calculateMonthlyPrice(plan, selectedPackageIds);
+export function calculateChargeAmount(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds, billingCycle: BillingCycle, enabledSubjectEngines: SubjectEngineCode[] = ["math"]) {
+  const monthly = calculateMonthlyPrice(plan, selectedPackageIds, enabledSubjectEngines);
   if (billingCycle === "annual") return calculateAnnualPrice(monthly).annualTotal;
   return monthly;
 }
 
-export function getResolvedSpecs(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds): PlanSpecs {
+export function getResolvedSpecs(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds, enabledSubjectEngines: SubjectEngineCode[] = ["math"]): PlanSpecs {
   const selected = resolveSelectedPackages(plan, selectedPackageIds);
-  return Object.values(selected).reduce<PlanSpecs>(
+  const specs = Object.values(selected).reduce<PlanSpecs>(
     (specs, option) => ({ ...specs, ...(option?.specs || {}) }),
     { ...PLANS[plan].specs }
   );
+  return applySubjectEngineCapacity(specs, enabledSubjectEngines);
 }
 
 export function parseSelectedPackageIds(value: string | null): SelectedPackageIds {

@@ -53,13 +53,17 @@ import {
   PLANS,
   PackageGroup,
   PaidPlanType,
-  SelectedPackageIds,
+  SubjectEngineCode,
+  SUBJECT_ENGINES,
+  calculateSubjectEngineMonthlyDelta,
   calculateAnnualPrice,
   calculateMonthlyPrice,
   formatKRW,
   getDefaultSelections,
   getResolvedSpecs,
+  subjectEngineLabel,
   stringifySelectedPackageIds,
+  stringifySubjectEngines,
 } from "@/lib/plan-pricing";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +77,7 @@ const sectionScenes: Partial<Record<string, SceneKey>> = {
 
 export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const [selectedPackageIds, setSelectedPackageIds] = useState<Record<PackageGroup, string>>(getDefaultSelections(plan));
+  const [selectedSubjectEngines, setSelectedSubjectEngines] = useState<SubjectEngineCode[]>(["math"]);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual");
   const [activeScene, setActiveScene] = useState<SceneKey>("ai");
   const transitionSceneRef = useRef<HTMLElement | null>(null);
@@ -80,8 +85,8 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
   const previousPackageIdsRef = useRef<Record<PackageGroup, string>>(selectedPackageIds);
 
-  const specs = useMemo(() => getResolvedSpecs(plan, selectedPackageIds), [plan, selectedPackageIds]);
-  const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds), [plan, selectedPackageIds]);
+  const specs = useMemo(() => getResolvedSpecs(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
+  const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
   const annual = useMemo(() => calculateAnnualPrice(monthlyPrice), [monthlyPrice]);
   const planConfig = PLANS[plan];
 
@@ -111,7 +116,17 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
     setSelectedPackageIds((current) => ({ ...current, [group]: id }));
   }
 
-  const reviewHref = `/checkout/review?plan=${plan}&billing=${billingCycle}&packages=${encodeURIComponent(stringifySelectedPackageIds(selectedPackageIds))}`;
+  function toggleSubjectEngine(engine: SubjectEngineCode) {
+    setSelectedSubjectEngines((current) => {
+      if (current.includes(engine)) {
+        const next = current.filter((item) => item !== engine);
+        return next.length ? next : current;
+      }
+      return [...current, engine];
+    });
+  }
+
+  const reviewHref = `/checkout/review?plan=${plan}&billing=${billingCycle}&packages=${encodeURIComponent(stringifySelectedPackageIds(selectedPackageIds))}&engines=${encodeURIComponent(stringifySubjectEngines(selectedSubjectEngines))}`;
   return (
     <main data-plan-theme={plan} className="relative min-h-screen overflow-x-clip bg-[#07080d] text-white">
       <ConfiguratorNav plan={plan} />
@@ -124,6 +139,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
           <PlanIntroStage
             plan={plan}
             specs={specs}
+            selectedSubjectEngines={selectedSubjectEngines}
             monthlyPrice={monthlyPrice}
             annual={annual}
             billingCycle={billingCycle}
@@ -140,6 +156,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
             </aside>
 
             <div ref={rightPanelRef} data-plan-scroll-panel className="space-y-6 pb-4">
+              <SubjectEngineSection selectedSubjectEngines={selectedSubjectEngines} onToggle={toggleSubjectEngine} register={sectionRefs} />
               <PackageSection plan={plan} group="ai" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
               <PackageSection plan={plan} group="storage" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
               <PackageSection plan={plan} group="student" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs}>
@@ -197,6 +214,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
         plan={plan}
         specs={specs}
         selectedPackageIds={selectedPackageIds}
+        selectedSubjectEngines={selectedSubjectEngines}
         billingCycle={billingCycle}
         monthlyPrice={monthlyPrice}
         annual={annual}
@@ -248,6 +266,7 @@ function ConfiguratorNav({ plan }: { plan: PaidPlanType }) {
 function PlanIntroStage({
   plan,
   specs,
+  selectedSubjectEngines,
   monthlyPrice,
   annual,
   billingCycle,
@@ -256,6 +275,7 @@ function PlanIntroStage({
 }: {
   plan: PaidPlanType;
   specs: ReturnType<typeof getResolvedSpecs>;
+  selectedSubjectEngines: SubjectEngineCode[];
   monthlyPrice: number;
   annual: ReturnType<typeof calculateAnnualPrice>;
   billingCycle: BillingCycle;
@@ -284,6 +304,9 @@ function PlanIntroStage({
         <div data-plan-intro-callout className="mx-auto mt-8 max-w-2xl rounded-[12px] border border-cyan-200/20 bg-cyan-200/10 p-5 text-center shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
           <p className="text-sm font-bold leading-6 text-cyan-100">PDF 추출은 AI credits를 사용합니다. 별도의 PDF 페이지 제한 없이, 선택한 AI 사용량 안에서 작업할 수 있습니다.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm font-black">
+            <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1.5 text-white">
+              {selectedSubjectEngines.map(subjectEngineLabel).join(" + ")}
+            </span>
             <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1.5 text-white">{formatKRW(displayPrice)} / 월</span>
             {billingCycle === "annual" && <span data-plan-discount-badge className="rounded-[7px] bg-emerald-200 px-3 py-1.5 text-slate-950">연간 결제 {BILLING.annualDiscountPercent}% 할인</span>}
           </div>
@@ -357,6 +380,65 @@ function PackageSection({ plan, group, selectedPackageIds, onSelect, register, c
         })}
       </div>
       {children}
+    </ConfigSection>
+  );
+}
+
+function SubjectEngineSection({
+  selectedSubjectEngines,
+  onToggle,
+  register,
+}: {
+  selectedSubjectEngines: SubjectEngineCode[];
+  onToggle: (engine: SubjectEngineCode) => void;
+  register: React.MutableRefObject<Record<string, HTMLElement | null>>;
+}) {
+  const engineDelta = calculateSubjectEngineMonthlyDelta(selectedSubjectEngines);
+  const capacityMultiplier = Math.max(selectedSubjectEngines.length, 1);
+
+  return (
+    <ConfigSection id="engines" register={register} eyebrow="Subject Engine" title="엔진 선택">
+      <div className="grid gap-3">
+        {SUBJECT_ENGINES.map((engine) => {
+          const selected = selectedSubjectEngines.includes(engine.code);
+          const disabled = selected && selectedSubjectEngines.length === 1;
+          return (
+            <button
+              key={engine.code}
+              type="button"
+              aria-pressed={selected}
+              disabled={disabled}
+              onClick={() => onToggle(engine.code)}
+              className={cn(
+                "rounded-[10px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200/30 disabled:cursor-not-allowed",
+                selected ? "border-cyan-200/60 bg-cyan-200/10 text-white shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] text-white hover:border-white/20 hover:bg-white/[0.065]",
+                disabled && "opacity-85"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-black">{engine.label} {engine.version}</h3>
+                  <p className={cn("mt-1 text-sm leading-6", selected ? "text-slate-300" : "text-slate-400")}>{engine.description}</p>
+                </div>
+                <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full border", selected ? "border-cyan-100 bg-cyan-100 text-slate-950" : "border-white/15 text-transparent")}>
+                  <Check className="h-4 w-4" />
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-3">
+          <p className="text-xs font-bold text-slate-500">추가 금액</p>
+          <p className="mt-1 text-sm font-black text-white">{engineDelta ? `+${formatKRW(engineDelta)} / 월` : "포함"}</p>
+        </div>
+        <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-3">
+          <p className="text-xs font-bold text-slate-500">용량 배율</p>
+          <p className="mt-1 text-sm font-black text-white">x{capacityMultiplier} 적용</p>
+        </div>
+      </div>
+      <p className="mt-4 text-sm font-semibold text-slate-400">둘 다 선택하면 AI credits, 문제 DB, 저장공간과 업로드 한도가 2배로 계산됩니다.</p>
     </ConfigSection>
   );
 }
@@ -1111,6 +1193,7 @@ function FullPlanSummarySection({
   plan,
   specs,
   selectedPackageIds,
+  selectedSubjectEngines,
   billingCycle,
   monthlyPrice,
   annual,
@@ -1119,6 +1202,7 @@ function FullPlanSummarySection({
   plan: PaidPlanType;
   specs: ReturnType<typeof getResolvedSpecs>;
   selectedPackageIds: Record<PackageGroup, string>;
+  selectedSubjectEngines: SubjectEngineCode[];
   billingCycle: BillingCycle;
   monthlyPrice: number;
   annual: ReturnType<typeof calculateAnnualPrice>;
@@ -1148,6 +1232,11 @@ function FullPlanSummarySection({
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2">
+              <SummaryConsoleItem
+                label="Subject Engine"
+                value={selectedSubjectEngines.map(subjectEngineLabel).join(" + ")}
+                detail={selectedSubjectEngines.length > 1 ? "+₩30,000 / 월 · 용량 x2" : "기본 포함"}
+              />
               {(Object.keys(PACKAGE_GROUPS[plan]) as PackageGroup[]).map((group) => {
                 const option = PACKAGE_GROUPS[plan][group]?.find((item) => item.id === selectedPackageIds[group]);
                 if (!option) return null;
@@ -1176,6 +1265,7 @@ function FullPlanSummarySection({
             <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Checkout</p>
             <h3 className="mt-3 text-2xl font-black text-white">마지막 확인</h3>
             <div className="mt-6 space-y-3 text-sm">
+              <InvoiceRow label="Subject engines" value={selectedSubjectEngines.map(subjectEngineLabel).join(" + ")} highlighted />
               <InvoiceRow label="Billing cycle" value={billingCycle === "annual" ? "Annual billing" : "Monthly billing"} highlighted />
               <InvoiceRow label="Monthly equivalent" value={formatKRW(displayPrice)} />
               <InvoiceRow label="Today" value={billingCycle === "annual" ? formatKRW(annual.annualTotal) : formatKRW(monthlyPrice)} highlighted={billingCycle === "annual"} />

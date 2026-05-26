@@ -219,7 +219,8 @@ class KoreanExtractionTests(unittest.TestCase):
 
         self.assertEqual(pricing["subject_engine_count"], 2)
         self.assertEqual(pricing["subject_multiplier"], 2.0)
-        self.assertEqual(pricing["final_monthly_price"], 158000)
+        self.assertEqual(pricing["subject_engine_monthly_delta_krw"], 30000)
+        self.assertEqual(pricing["final_monthly_price"], 109000)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from services.subject_engines import normalize_subject_engines, subject_engine_pricing
+
 
 PACKAGE_GROUPS: dict[str, dict[str, dict[str, int]]] = {
     "basic": {
@@ -46,12 +48,15 @@ def normalize_selected_packages(plan_code: str, selected_package_ids: Any) -> di
     return selected
 
 
-def calculate_subscription_price(plan_code: str, billing_cycle: str, selected_package_ids: Any) -> dict[str, Any]:
+def calculate_subscription_price(plan_code: str, billing_cycle: str, selected_package_ids: Any, enabled_subject_engines: Any = None) -> dict[str, Any]:
     if plan_code not in BASE_MONTHLY_PRICE:
         raise HTTPException(status_code=400, detail="Invalid paid plan.")
     cycle = normalize_billing_cycle(billing_cycle)
     selected = normalize_selected_packages(plan_code, selected_package_ids)
+    engines = normalize_subject_engines(enabled_subject_engines or ["math"])
+    engine_pricing = subject_engine_pricing(BASE_MONTHLY_PRICE[plan_code], engines)
     monthly = BASE_MONTHLY_PRICE[plan_code]
+    monthly += int(engine_pricing["subject_engine_monthly_delta_krw"])
     for group, package_id in selected.items():
         monthly += PACKAGE_GROUPS[plan_code][group][package_id]
     if cycle == "annual":
@@ -63,6 +68,10 @@ def calculate_subscription_price(plan_code: str, billing_cycle: str, selected_pa
         "plan_code": plan_code,
         "billing_cycle": cycle,
         "selected_packages": selected,
+        "enabled_subject_engines": engines,
+        "subject_engine_count": int(engine_pricing["subject_engine_count"]),
+        "subject_multiplier": float(engine_pricing["subject_multiplier"]),
+        "subject_engine_monthly_delta_krw": int(engine_pricing["subject_engine_monthly_delta_krw"]),
         "monthly_price_krw": monthly,
         "amount_krw": amount,
         "currency": "KRW",

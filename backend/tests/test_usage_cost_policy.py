@@ -6,7 +6,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from services.usage_cost_policy import estimate_extraction, estimate_single_reextract, plan_cost_policy  # noqa: E402
+from services.usage_cost_policy import estimate_extraction, estimate_single_reextract, plan_cost_policy, scaled_plan_cost_policy  # noqa: E402
 
 
 class UsageCostPolicyTests(unittest.TestCase):
@@ -25,6 +25,14 @@ class UsageCostPolicyTests(unittest.TestCase):
         self.assertEqual(policy.monthly_credit_limit, 923)
         self.assertEqual(policy.max_file_size_mb, 1000)
         self.assertEqual(policy.max_pages_per_job, 1500)
+
+    def test_subject_engine_multiplier_scales_capacity_limits(self):
+        policy = scaled_plan_cost_policy(plan_cost_policy(None, "basic"), 2)
+
+        self.assertEqual(policy.monthly_cost_cap_krw, 26_000)
+        self.assertEqual(policy.monthly_credit_limit, 800)
+        self.assertEqual(policy.monthly_upload_mb_limit, 1000)
+        self.assertEqual(policy.storage_quota_mb, 2048)
 
     def test_clean_math_and_solution_credits(self):
         estimate = estimate_extraction(subject_engine="math", problem_pages=100, solution_pages=20, problem_file_mb=10, solution_file_mb=2)
