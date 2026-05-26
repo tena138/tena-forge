@@ -232,7 +232,7 @@ function ProPlanBackdrop() {
 function ConfiguratorNav({ plan }: { plan: PaidPlanType }) {
   return (
     <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-[#07080d]/76 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-[104rem] items-center justify-between px-4 sm:px-6 xl:px-8">
         <Link href="/plan" className="inline-flex h-11 min-w-0 items-center gap-3 text-sm font-black text-slate-300 transition hover:text-white" aria-label="플랜 다시 선택">
           <img src="/tenaforgelogo-dark.png" alt="Tena Forge" className="h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
           <span className="hidden items-center gap-1 sm:inline-flex">
