@@ -35,6 +35,7 @@ type ReviewFilter = "all" | "needs" | "reviewed";
 type ViewMode = "grid" | "list";
 type ProblemSort = "source_order" | "newest" | "oldest" | "number_asc" | "number_desc";
 
+const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24, pages: 1 };
 const difficulties = ["하", "중", "상", "최상"];
 const defaultReviewFilter: ReviewFilter = "reviewed";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
@@ -119,6 +120,7 @@ function ProblemsBrowser() {
   const listRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const loadRequestRef = useRef(0);
 
   const batchId = searchParams.get("batch_id");
 
@@ -176,13 +178,21 @@ function ProblemsBrowser() {
     return params.toString();
   }, [filterQuery, page]);
 
-  async function loadProblems() {
-    const nextData = await api<ProblemPage>(`/api/problems?${query}`);
-    setData(nextData);
+  async function loadProblems(requestQuery = query) {
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
+    try {
+      const nextData = await api<ProblemPage>(`/api/problems?${requestQuery}`);
+      if (requestId === loadRequestRef.current) setData(nextData);
+      return nextData;
+    } catch (error) {
+      if (requestId === loadRequestRef.current) setData(emptyProblemPage);
+      throw error;
+    }
   }
 
   useEffect(() => {
-    loadProblems().catch(() => setData({ items: [], total: 0, page: 1, limit: 24, pages: 1 }));
+    loadProblems(query).catch(() => undefined);
   }, [query]);
 
   useEffect(() => {
