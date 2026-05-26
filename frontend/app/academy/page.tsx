@@ -31,6 +31,18 @@ import { Input } from "@/components/ui/input";
 import { AcademyProfile, fetchMe } from "@/lib/auth-api";
 import { readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
+import {
+  ScheduleRecurrenceUnit,
+  buildRecurringDateTimes,
+  dayIntervalOptions,
+  defaultMonthDayFromDateTime,
+  defaultWeekdayFromDateTime,
+  localDateTimeInputValue,
+  monthDayOptions,
+  monthIntervalOptions,
+  scheduleWeekdays,
+  weekIntervalOptions,
+} from "@/lib/scheduleRecurrence";
 import { getUsageSummary, UsageSummary } from "@/lib/saas";
 import {
   AcademyBilling,
@@ -1007,7 +1019,11 @@ function AcademySchedulePanel() {
     date: academyDateKey(new Date()),
     starts_at: "16:00",
     ends_at: "18:00",
-    repeat_weeks: "1",
+    recurrence_unit: "none" as ScheduleRecurrenceUnit,
+    recurrence_interval: "1",
+    recurrence_weekdays: [] as number[],
+    recurrence_month_day: "",
+    repeat_until: "",
     description: "",
   });
 
@@ -1052,6 +1068,9 @@ function AcademySchedulePanel() {
     return grouped;
   }, [monthEvents]);
   const studentCount = useMemo(() => classes.reduce((sum, classRow) => sum + classRow.student_count, 0), [classes]);
+  const academyStartDateTime = `${form.date}T${form.starts_at || "00:00"}`;
+  const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
+  const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
 
   if (profile?.account_type === "student") {
     return (
@@ -1071,19 +1090,28 @@ function AcademySchedulePanel() {
     setNotice("");
     setError("");
     try {
-      const repeatWeeks = Math.max(1, Math.min(52, Number(form.repeat_weeks) || 1));
-      for (let index = 0; index < repeatWeeks; index += 1) {
-        const eventDate = academyDateKey(academyAddDays(new Date(`${form.date}T00:00:00`), index * 7));
+      const startDateTime = `${form.date}T${form.starts_at}:00`;
+      const endOffset = form.ends_at ? new Date(`${form.date}T${form.ends_at}:00`).getTime() - new Date(startDateTime).getTime() : null;
+      const starts = buildRecurringDateTimes(startDateTime, {
+        unit: form.recurrence_unit,
+        interval: Number(form.recurrence_interval) || 1,
+        weekdays: academySelectedWeekdays,
+        monthDay: academySelectedMonthDay,
+        until: form.repeat_until,
+        maxOccurrences: 160,
+      });
+      for (const start of starts) {
+        const end = endOffset && endOffset > 0 ? localDateTimeInputValue(new Date(new Date(start).getTime() + endOffset)) : null;
         await createScheduleEvent({
           class_id: form.class_id,
           title: form.title.trim(),
           description: form.description.trim() || null,
           event_type: form.event_type,
-          starts_at: `${eventDate}T${form.starts_at}:00`,
-          ends_at: form.ends_at ? `${eventDate}T${form.ends_at}:00` : null,
+          starts_at: start,
+          ends_at: end,
         });
       }
-      setNotice("저장됨");
+      setNotice(starts.length > 1 ? `${starts.length}개 일정 저장됨` : "저장됨");
       setForm((current) => ({ ...current, title: "", description: "" }));
       setFormOpen(false);
       await load();
@@ -1092,6 +1120,16 @@ function AcademySchedulePanel() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggleAcademyRecurrenceWeekday(day: number) {
+    setForm((current) => {
+      const base = current.recurrence_weekdays.length ? current.recurrence_weekdays : [defaultWeekdayFromDateTime(`${current.date}T${current.starts_at || "00:00"}`)];
+      return {
+        ...current,
+        recurrence_weekdays: base.includes(day) ? base.filter((item) => item !== day) : [...base, day].sort((left, right) => left - right),
+      };
+    });
   }
 
   async function removeEvent(eventId: string) {
@@ -1253,10 +1291,65 @@ function AcademySchedulePanel() {
                 <Input type="time" value={form.starts_at} onChange={(event) => setForm((current) => ({ ...current, starts_at: event.target.value }))} />
                 <Input type="time" value={form.ends_at} onChange={(event) => setForm((current) => ({ ...current, ends_at: event.target.value }))} />
               </div>
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <Input type="number" min="1" max="52" value={form.repeat_weeks} onChange={(event) => setForm((current) => ({ ...current, repeat_weeks: event.target.value }))} />
-                <div className="flex items-center rounded-[8px] border border-white/10 bg-white/[0.035] px-3 text-sm text-slate-400">주 반복</div>
-              </div>
+              <select
+                className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                value={form.recurrence_unit}
+                onChange={(event) => setForm((current) => ({ ...current, recurrence_unit: event.target.value as ScheduleRecurrenceUnit, recurrence_interval: "1" }))}
+              >
+                <option value="none">한 번만</option>
+                <option value="day">일 단위 반복</option>
+                <option value="week">주 단위 반복</option>
+                <option value="month">월 단위 반복</option>
+              </select>
+              {form.recurrence_unit !== "none" ? (
+                <div className="space-y-3 rounded-[10px] border border-white/10 bg-black/20 p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block text-xs font-semibold text-slate-400">
+                      반복 간격
+                      <select className="mt-1 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.recurrence_interval} onChange={(event) => setForm((current) => ({ ...current, recurrence_interval: event.target.value }))}>
+                        {(form.recurrence_unit === "day" ? dayIntervalOptions : form.recurrence_unit === "week" ? weekIntervalOptions : monthIntervalOptions).map((value) => (
+                          <option key={value} value={value}>
+                            {form.recurrence_unit === "day" ? `${value}일마다` : form.recurrence_unit === "week" ? `${value}주마다` : `${value}개월마다`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-400">
+                      반복 종료일
+                      <Input className="mt-1" type="date" value={form.repeat_until} onChange={(event) => setForm((current) => ({ ...current, repeat_until: event.target.value }))} />
+                    </label>
+                  </div>
+                  {form.recurrence_unit === "week" ? (
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-slate-400">요일</p>
+                      <div className="grid grid-cols-7 gap-1.5">
+                        {scheduleWeekdays.map((day) => {
+                          const active = academySelectedWeekdays.includes(day.value);
+                          return (
+                            <button
+                              key={day.value}
+                              type="button"
+                              onClick={() => toggleAcademyRecurrenceWeekday(day.value)}
+                              className={`h-8 rounded-[7px] border text-xs font-bold transition ${active ? "border-violet-300/50 bg-violet-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-500 hover:text-slate-200"}`}
+                            >
+                              {day.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  {form.recurrence_unit === "month" ? (
+                    <label className="block text-xs font-semibold text-slate-400">
+                      반복 날짜
+                      <select className="mt-1 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={academySelectedMonthDay} onChange={(event) => setForm((current) => ({ ...current, recurrence_month_day: event.target.value }))}>
+                        {monthDayOptions.map((value) => <option key={value} value={value}>{value}일</option>)}
+                      </select>
+                    </label>
+                  ) : null}
+                  <p className="text-xs text-slate-500">종료일을 비워두면 시작 일정 1개만 저장됩니다.</p>
+                </div>
+              ) : null}
               <textarea
                 value={form.description}
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
