@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Bell, CheckCircle2, ExternalLink, Loader2, X } from "lucide-react";
 
 import {
@@ -86,13 +88,28 @@ export function HeaderNotifications() {
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [activeStatus, setActiveStatus] = useState<BatchStatusResponse | null>(null);
   const [pollVersion, setPollVersion] = useState(0);
+  const [portalReady, setPortalReady] = useState(false);
+  const [layerPosition, setLayerPosition] = useState({ top: 64, right: 16 });
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const unreadCount = useMemo(() => notifications.filter((notification) => !notification.read).length, [notifications]);
   const activeStatusData = activeStatus && (activeStatus.status === "pending" || activeStatus.status === "processing") ? activeStatus : null;
   const activeProgress = activeStatusData?.progress_percent ?? 0;
   const buttonLabel = activeStatusData ? `추출 진행 중 ${activeProgress}%` : unreadCount ? `알림 ${unreadCount}개` : "알림";
+  const layerStyle: CSSProperties = { top: layerPosition.top, right: layerPosition.right };
+
+  const updateLayerPosition = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const viewportGap = 16;
+    setLayerPosition({
+      top: Math.round(rect.bottom + 8),
+      right: Math.max(viewportGap, Math.round(window.innerWidth - rect.right)),
+    });
+  }, []);
 
   useEffect(() => {
+    setPortalReady(true);
     setNotifications(readBatchNotifications());
     setActiveBatchId(readActiveBatch());
 
@@ -127,6 +144,17 @@ export function HeaderNotifications() {
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
+
+  useEffect(() => {
+    if (!open && !toast) return;
+    updateLayerPosition();
+    window.addEventListener("resize", updateLayerPosition);
+    window.addEventListener("scroll", updateLayerPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateLayerPosition);
+      window.removeEventListener("scroll", updateLayerPosition, true);
+    };
+  }, [open, toast, updateLayerPosition]);
 
   useEffect(() => {
     if (!activeBatchId) {
@@ -235,9 +263,83 @@ export function HeaderNotifications() {
     setToast(null);
   }
 
+  const notificationLayer = portalReady
+    ? createPortal(
+        <>
+          {toast && !open ? (
+            <Link
+              href={toast.href}
+              className="fixed z-[4000] w-[min(84vw,340px)] rounded-[10px] border border-white/10 bg-[#090b12] p-3 text-sm text-white shadow-[0_24px_70px_rgba(0,0,0,0.46)] ring-1 ring-violet-300/10"
+              style={layerStyle}
+              onClick={() => openNotification(toast)}
+            >
+              <div className="flex gap-3">
+                <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", toast.status === "done" ? "bg-emerald-400/12 text-emerald-200" : "bg-red-400/12 text-red-200")}>
+                  {toast.status === "done" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold">{toast.title}</span>
+                  <span className="mt-1 block leading-5 text-slate-300">{toast.body}</span>
+                </span>
+              </div>
+            </Link>
+          ) : null}
+
+          {open ? (
+            <div className="fixed z-[4000] w-[min(88vw,380px)] rounded-[10px] border border-white/10 bg-[#090b12] p-2 text-sm shadow-[0_24px_70px_rgba(0,0,0,0.42)]" style={layerStyle}>
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                <div>
+                  <div className="font-bold text-white">알림</div>
+                </div>
+                {notifications.length ? (
+                  <button type="button" className="rounded-[7px] p-1 text-slate-500 hover:bg-white/[0.07] hover:text-white" aria-label="알림 비우기" onClick={clearAll}>
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-1 max-h-[420px] overflow-y-auto [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+                {activeStatusData ? <ActiveBatchPanel statusData={activeStatusData} /> : null}
+                {notifications.length ? (
+                  <div className="grid gap-1">
+                    {notifications.map((notification) => (
+                      <Link
+                        key={notification.id}
+                        href={notification.href}
+                        className="group flex gap-3 rounded-[8px] px-2 py-2.5 text-left transition hover:bg-white/[0.06]"
+                        onClick={() => openNotification(notification)}
+                      >
+                        <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", notification.status === "done" ? "bg-emerald-400/12 text-emerald-200" : "bg-red-400/12 text-red-200")}>
+                          {notification.status === "done" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className={cn("font-semibold", notification.read ? "text-slate-200" : "text-white")}>{notification.title}</span>
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:text-slate-300" />
+                          </span>
+                          <span className="mt-1 block leading-5 text-slate-400">{notification.body}</span>
+                          <span className="mt-1.5 block text-xs text-slate-600">{formatTime(notification.createdAt)}</span>
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : !activeStatusData ? (
+                  <div className="rounded-[8px] border border-white/10 bg-white/[0.035] px-3 py-8 text-center text-sm text-slate-500">
+                    아직 알림이 없습니다.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </>,
+        document.body
+      )
+    : null;
+
   return (
     <div className="relative z-10">
       <button
+        ref={triggerRef}
         type="button"
         className={cn(
           "relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.045] text-slate-400 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white",
@@ -262,71 +364,7 @@ export function HeaderNotifications() {
           </span>
         ) : null}
       </button>
-
-      {toast && !open ? (
-        <Link
-          href={toast.href}
-          className="absolute right-0 top-11 z-50 w-[min(84vw,340px)] rounded-[10px] border border-white/10 bg-[#090b12] p-3 text-sm text-white shadow-[0_24px_70px_rgba(0,0,0,0.46)] ring-1 ring-violet-300/10"
-          onClick={() => openNotification(toast)}
-        >
-          <div className="flex gap-3">
-            <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", toast.status === "done" ? "bg-emerald-400/12 text-emerald-200" : "bg-red-400/12 text-red-200")}>
-              {toast.status === "done" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-            </span>
-            <span className="min-w-0">
-              <span className="block font-bold">{toast.title}</span>
-              <span className="mt-1 block leading-5 text-slate-300">{toast.body}</span>
-            </span>
-          </div>
-        </Link>
-      ) : null}
-
-      {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-[min(88vw,380px)] rounded-[10px] border border-white/10 bg-[#090b12] p-2 text-sm shadow-[0_24px_70px_rgba(0,0,0,0.42)]">
-          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-            <div>
-              <div className="font-bold text-white">알림</div>
-            </div>
-            {notifications.length ? (
-              <button type="button" className="rounded-[7px] p-1 text-slate-500 hover:bg-white/[0.07] hover:text-white" aria-label="알림 비우기" onClick={clearAll}>
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-
-          <div className="mt-1 max-h-[420px] overflow-y-auto [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-            {activeStatusData ? <ActiveBatchPanel statusData={activeStatusData} /> : null}
-            {notifications.length ? (
-              <div className="grid gap-1">
-                {notifications.map((notification) => (
-                  <Link
-                    key={notification.id}
-                    href={notification.href}
-                    className="group flex gap-3 rounded-[8px] px-2 py-2.5 text-left transition hover:bg-white/[0.06]"
-                    onClick={() => openNotification(notification)}
-                  >
-                    <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", notification.status === "done" ? "bg-emerald-400/12 text-emerald-200" : "bg-red-400/12 text-red-200")}>
-                      {notification.status === "done" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className={cn("font-semibold", notification.read ? "text-slate-200" : "text-white")}>{notification.title}</span>
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:text-slate-300" />
-                      </span>
-                      <span className="mt-1 block leading-5 text-slate-400">{notification.body}</span>
-                      <span className="mt-1.5 block text-xs text-slate-600">{formatTime(notification.createdAt)}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            ) : !activeStatusData ? (
-              <div className="rounded-[8px] border border-white/10 bg-white/[0.035] px-3 py-8 text-center text-sm text-slate-500">
-                아직 알림이 없습니다.
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {notificationLayer}
     </div>
   );
 }
