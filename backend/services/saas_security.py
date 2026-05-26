@@ -174,6 +174,9 @@ def usage_summary(db: Session, user_id: str) -> tuple[Plan, Subscription | None,
 
 
 def enforce_usage_limit(db: Session, user_id: str, pages_to_add: int = 0, upload_count: int = 0) -> None:
+    if get_roles(db, user_id) & ADMIN_ROLES:
+        return
+
     plan, _, uploads, pages, _, _ = usage_summary(db, user_id)
     if uploads + upload_count > plan.monthly_upload_count:
         raise HTTPException(status_code=402, detail="이번 달 업로드 한도를 초과했습니다. 플랜을 업그레이드하세요.")

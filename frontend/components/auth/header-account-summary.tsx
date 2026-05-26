@@ -11,9 +11,10 @@ import { Input } from "@/components/ui/input";
 import { AcademyProfile, fetchMe, logout, updateMe } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, authHttp, getAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 
-type PlanTone = "trial" | "free" | "basic" | "pro" | "enterprise";
+type PlanTone = "admin" | "trial" | "free" | "basic" | "pro" | "enterprise";
 
 const planStyles: Record<PlanTone, string> = {
+  admin: "bg-amber-100 text-amber-900 ring-1 ring-amber-300",
   trial: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
   free: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
   basic: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
@@ -22,6 +23,7 @@ const planStyles: Record<PlanTone, string> = {
 };
 
 const planNames: Record<string, { label: string; tone: PlanTone }> = {
+  admin: { label: "Admin", tone: "admin" },
   free: { label: "Free", tone: "free" },
   basic: { label: "Basic", tone: "basic" },
   plus: { label: "Basic", tone: "basic" },
@@ -70,6 +72,12 @@ function isFutureDate(value?: string | null) {
 }
 
 function displayPlan(profile: AcademyProfile) {
+  const roles = profile.roles || [];
+  const isAdmin = String(profile.plan || "").toLowerCase() === "admin" || roles.includes("admin") || roles.includes("super_admin");
+  if (isAdmin) {
+    return { label: "Admin", tone: "admin" as PlanTone, status: "무제한", statusClass: "text-amber-500" };
+  }
+
   const trialEndsAt = profile.trial_ends_at || profile.plan_expires_at;
   const isTrial = profile.account_type !== "student" && !profile.requires_payment && isFutureDate(trialEndsAt);
   if (isTrial) {

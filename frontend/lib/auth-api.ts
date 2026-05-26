@@ -13,6 +13,7 @@ export type AcademyProfile = {
   plan_expires_at?: string | null;
   trial_ends_at?: string | null;
   requires_payment?: boolean;
+  roles?: string[];
   is_active: boolean;
   is_suspended: boolean;
   suspension_reason?: string | null;

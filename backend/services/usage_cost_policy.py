@@ -9,7 +9,8 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from models import Academy, Batch, BatchStatus, Plan, PlatformSetting, Subscription, UsageLog
+from database import get_settings
+from models import Academy, Batch, BatchStatus, Plan, PlatformSetting, Subscription, UsageLog, UserRole
 from services.subject_engines import KOREAN_ENGINE, normalize_subject_engine
 
 
@@ -130,6 +131,24 @@ DEFAULT_PLAN_POLICIES: dict[str, PlanCostPolicy] = {
     ),
 }
 
+ADMIN_ROLES = {"admin", "super_admin"}
+ADMIN_PLAN_POLICY = PlanCostPolicy(
+    plan_id="admin",
+    monthly_cost_cap_krw=999_999_999,
+    storage_gb_limit=999_999,
+    monthly_upload_mb_limit=999_999_999,
+    max_file_size_mb=999_999,
+    max_pages_per_job=999_999,
+    max_jobs_per_day=999_999,
+    max_concurrent_jobs=999_999,
+    original_file_retention_days=3650,
+    extracted_result_retention_days=3650,
+    allowed_models=("mini", "standard", "premium"),
+    default_model="standard",
+    fallback_model="premium",
+    allow_premium_model=True,
+)
+
 PLAN_ALIASES = {
     "basic_local": "basic",
     "basic_cloud": "basic",
@@ -174,7 +193,20 @@ def plan_cost_policy(db: Session | None, plan_code: str | None) -> PlanCostPolic
     return base
 
 
+def is_admin_user(db: Session, user_id: str) -> bool:
+    roles = set(db.scalars(select(UserRole.role).where(UserRole.user_id == user_id)).all())
+    if roles & ADMIN_ROLES:
+        return True
+    academy = db.get(Academy, user_id)
+    admin_emails = {email.strip().lower() for email in get_settings().admin_emails.split(",") if email.strip()}
+    return bool(academy and academy.email.strip().lower() in admin_emails)
+
+
 def active_plan_for_user(db: Session, user_id: str) -> tuple[Plan | None, Subscription | None, PlanCostPolicy]:
+    if is_admin_user(db, user_id):
+        admin_plan = db.scalar(select(Plan).where(Plan.code == "enterprise")) or db.scalar(select(Plan).where(Plan.code == "pro"))
+        return admin_plan, None, ADMIN_PLAN_POLICY
+
     now = datetime.utcnow()
     subscription = db.scalar(
         select(Subscription)
@@ -197,6 +229,8 @@ def active_plan_for_user(db: Session, user_id: str) -> tuple[Plan | None, Subscr
 
 
 def academy_payment_required(db: Session, user_id: str) -> bool:
+    if is_admin_user(db, user_id):
+        return False
     academy = db.get(Academy, user_id)
     if not academy or academy.account_type != "academy" or not academy.plan_expires_at:
         return False
@@ -347,6 +381,9 @@ def enforce_extraction_preflight(
     page_count: int,
     upload_mb_to_add: float | None = None,
 ) -> PlanCostPolicy:
+    if is_admin_user(db, user_id):
+        return ADMIN_PLAN_POLICY
+
     if academy_payment_required(db, user_id):
         policy = plan_cost_policy(db, "basic")
         _raise_limit(

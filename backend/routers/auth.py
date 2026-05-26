@@ -30,6 +30,7 @@ from models import (
     RefreshToken,
     Subscription,
     TotpSecret,
+    UserRole,
 )
 from schemas import (
     AcademyProfile,
@@ -149,11 +150,36 @@ def _active_subscription_for_profile(db: Session, academy: Academy) -> Subscript
 
 
 def _should_start_basic_trial(academy: Academy) -> bool:
+    admin_emails = {email.strip().lower() for email in settings.admin_emails.split(",") if email.strip()}
+    if academy.email.strip().lower() in admin_emails:
+        return False
     return bool(academy.account_type == "academy" and academy.plan == AcademyPlan.free and not academy.plan_expires_at)
+
+
+def _account_roles(db: Session | None, academy: Academy) -> set[str]:
+    roles: set[str] = set()
+    if db:
+        roles = set(db.scalars(select(UserRole.role).where(UserRole.user_id == str(academy.id))).all())
+    admin_emails = {email.strip().lower() for email in settings.admin_emails.split(",") if email.strip()}
+    if academy.email.strip().lower() in admin_emails:
+        roles.add("admin")
+    return roles
+
+
+def _is_admin_account(db: Session | None, academy: Academy) -> bool:
+    return bool(_account_roles(db, academy) & {"admin", "super_admin"})
 
 
 def _profile(academy: Academy, db: Session | None = None) -> AcademyProfile:
     profile = AcademyProfile.model_validate(academy)
+    profile.roles = sorted(_account_roles(db, academy))
+    if _is_admin_account(db, academy):
+        profile.plan = "admin"
+        profile.plan_expires_at = None
+        profile.trial_ends_at = None
+        profile.requires_payment = False
+        return profile
+
     subscription = _active_subscription_for_profile(db, academy) if db else None
     if subscription:
         profile.plan = subscription.plan_code
@@ -374,6 +400,10 @@ async def _fetch_kakao_profile(token: dict) -> tuple[dict | None, str | None]:
 def _start_basic_trial(db: Session, academy: Academy) -> None:
     if academy.account_type != "academy":
         academy.plan = AcademyPlan.free
+        academy.plan_expires_at = None
+        return
+    if _is_admin_account(db, academy):
+        academy.plan = AcademyPlan.pro
         academy.plan_expires_at = None
         return
     now = now_utc()
