@@ -57,7 +57,7 @@ import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubT
 
 const LOCAL_STORAGE_KEY = "tena-forge-visual-template-studio";
 
-type StudioPanel = "presets" | "elements" | "pages" | "variables" | "layers";
+type StudioPanel = "presets" | "elements" | "pages" | "variables" | "search" | "layers";
 type PaletteGroup = "기본 요소" | "문서 블록" | "동적 영역" | "시스템";
 type SaveMode = "manual" | "auto";
 type AutoSaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
@@ -67,6 +67,7 @@ const panelTabs: Array<{ key: StudioPanel; label: string; icon: typeof Type }> =
   { key: "elements", label: "요소", icon: BoxSelect },
   { key: "pages", label: "페이지", icon: FileStack },
   { key: "variables", label: "변수", icon: Braces },
+  { key: "search", label: "검색", icon: Search },
   { key: "layers", label: "레이어", icon: Layers },
 ];
 
@@ -874,6 +875,7 @@ function VisualTemplateStudioPageContent() {
   const [zoom, setZoom] = useState(0.84);
   const [leftPanel, setLeftPanel] = useState<StudioPanel>("elements");
   const [paletteQuery, setPaletteQuery] = useState("");
+  const [elementSearchQuery, setElementSearchQuery] = useState("");
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
@@ -915,6 +917,14 @@ function VisualTemplateStudioPageContent() {
     if (!query) return elementPalette;
     return elementPalette.filter((item) => `${item.label} ${item.description} ${item.group}`.toLowerCase().includes(query));
   }, [paletteQuery]);
+
+  const pageElementsByLayer = useMemo(() => [...(selectedPage?.elements || [])].sort((a, b) => b.zIndex - a.zIndex), [selectedPage]);
+
+  const filteredPageElements = useMemo(() => {
+    const query = elementSearchQuery.trim().toLowerCase();
+    if (!query) return pageElementsByLayer;
+    return pageElementsByLayer.filter((element) => `${getElementLabel(element)} ${element.type}`.toLowerCase().includes(query));
+  }, [elementSearchQuery, pageElementsByLayer]);
 
   const pushHistory = useCallback(() => {
     setUndoStack((current) => [...current.slice(-49), cloneTemplateSet(templateSet)]);
@@ -1672,6 +1682,11 @@ function VisualTemplateStudioPageContent() {
     }
   }
 
+  function selectSingleElement(element: TemplateElement) {
+    setSelectedIds([element.id]);
+    setEditingTextElementId(element.type === "text" ? element.id : null);
+  }
+
   function renderLeftPanel() {
     if (leftPanel === "presets") {
       return (
@@ -1787,6 +1802,50 @@ function VisualTemplateStudioPageContent() {
       );
     }
 
+    if (leftPanel === "search") {
+      return (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-white">요소 검색</h2>
+            <span className="rounded-full border border-white/10 bg-white/[0.045] px-2 py-0.5 text-[11px] font-bold text-slate-400">
+              {filteredPageElements.length}/{pageElementsByLayer.length}
+            </span>
+          </div>
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+            <Input value={elementSearchQuery} onChange={(event) => setElementSearchQuery(event.target.value)} placeholder="이름, 타입 검색" className="h-9 bg-white/[0.035] pl-9 text-sm" />
+          </label>
+          <div className="space-y-2">
+            {filteredPageElements.map((element) => (
+              <button
+                key={element.id}
+                className={cls(
+                  "flex w-full items-center gap-2 rounded-[11px] border px-3 py-2.5 text-left transition",
+                  selectedIds.includes(element.id) ? "border-violet-300/55 bg-violet-500/14" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                )}
+                onClick={() => selectSingleElement(element)}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-white/10 bg-black/25 text-violet-200">
+                  <Layers className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold text-white">{getElementLabel(element)}</span>
+                  <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+                    {element.type} · {Math.round(element.x)}, {Math.round(element.y)} · {Math.round(element.width)}×{Math.round(element.height)}
+                  </span>
+                </span>
+                {element.hidden ? <EyeOff className="h-4 w-4 shrink-0 text-slate-500" /> : null}
+                {element.locked ? <Lock className="h-4 w-4 shrink-0 text-amber-200" /> : null}
+              </button>
+            ))}
+            {!filteredPageElements.length ? (
+              <div className="rounded-[12px] border border-dashed border-white/10 bg-white/[0.03] px-3 py-6 text-center text-sm font-semibold text-slate-500">검색 결과 없음</div>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
+
     if (leftPanel === "pages") {
       return (
         <div className="space-y-3">
@@ -1865,19 +1924,14 @@ function VisualTemplateStudioPageContent() {
       <div className="space-y-3">
         <h2 className="text-sm font-bold text-white">레이어</h2>
         <div className="space-y-2">
-          {[...(selectedPage?.elements || [])]
-            .sort((a, b) => b.zIndex - a.zIndex)
-            .map((element) => (
+          {pageElementsByLayer.map((element) => (
               <button
                 key={element.id}
                 className={cls(
                   "flex w-full items-center gap-2 rounded-[10px] border px-3 py-2 text-left text-sm transition",
                   selectedIds.includes(element.id) ? "border-violet-300/55 bg-violet-500/14" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
                 )}
-                onClick={() => {
-                  setSelectedIds([element.id]);
-                  setEditingTextElementId(element.type === "text" ? element.id : null);
-                }}
+                onClick={() => selectSingleElement(element)}
               >
                 <Layers className="h-4 w-4 shrink-0 text-slate-500" />
                 <span className="min-w-0 flex-1 truncate">{getElementLabel(element)}</span>
@@ -1932,9 +1986,8 @@ function VisualTemplateStudioPageContent() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[56px_minmax(0,1fr)_300px]">
-        <div className="group/left-panel relative z-40 min-h-0">
-          <nav className="relative z-20 flex min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#080a0f] px-1.5 py-2">
+      <div className="grid min-h-0 flex-1 grid-cols-[56px_300px_minmax(0,1fr)_300px]">
+          <nav className="relative z-40 flex min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#080a0f] px-1.5 py-2">
             {panelTabs.map((tab) => {
               const Icon = tab.icon;
               const active = leftPanel === tab.key;
@@ -1950,16 +2003,15 @@ function VisualTemplateStudioPageContent() {
                 >
                   {active ? <span className="absolute -left-2 h-6 w-0.5 rounded-full bg-violet-300" /> : null}
                   <Icon className="h-5 w-5" />
-                  <span className="pointer-events-none absolute left-[50px] z-20 hidden rounded-md border border-white/10 bg-[#11141c] px-2 py-1 text-xs font-semibold text-white shadow-xl group-hover:block">{tab.label}</span>
+                  <span className="sr-only">{tab.label}</span>
                 </button>
               );
             })}
           </nav>
 
-          <aside className="pointer-events-none absolute inset-y-0 left-full z-10 w-[280px] -translate-x-3 border-r border-white/10 bg-[#090b10]/98 opacity-0 shadow-[22px_0_70px_rgba(0,0,0,0.42)] backdrop-blur transition duration-200 ease-out group-hover/left-panel:pointer-events-auto group-hover/left-panel:translate-x-0 group-hover/left-panel:opacity-100 group-focus-within/left-panel:pointer-events-auto group-focus-within/left-panel:translate-x-0 group-focus-within/left-panel:opacity-100">
+          <aside className="relative z-30 min-h-0 border-r border-white/10 bg-[#090b10]/98 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur">
             <div className="h-full overflow-y-auto p-3 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">{renderLeftPanel()}</div>
           </aside>
-        </div>
 
         <main className="min-h-0 overflow-auto bg-[radial-gradient(circle_at_top,#1c2130_0,#0b0e15_42%,#07080b_100%)] [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
           <div className="mx-auto flex w-fit flex-col gap-7 p-5 pb-20">
