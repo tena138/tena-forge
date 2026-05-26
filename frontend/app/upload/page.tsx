@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { FileText, Loader2, ShieldCheck, UploadCloud, X } from "lucide-react";
+import { FileText, Loader2, ShieldCheck, Sparkles, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +20,19 @@ type TagColorMap = Record<string, string>;
 
 const SUBJECT_TAG_COLORS_KEY = "tena-forge-upload-subject-tag-colors";
 const UNIT_TAG_COLORS_KEY = "tena-forge-upload-unit-tag-colors";
+const MB = 1024 * 1024;
+const PDF_SAMPLE_BYTES = 16 * MB;
+const PDF_FULL_SCAN_LIMIT_BYTES = 80 * MB;
 const tagPalette = ["#8b5cf6", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ec4899", "#6366f1", "#06b6d4", "#84cc16"];
+
+type PdfPageEstimate = {
+  pages: number | null;
+  source: "none" | "pdf" | "size" | "error";
+  loading: boolean;
+  error?: string;
+};
+
+const emptyPdfEstimate: PdfPageEstimate = { pages: null, source: "none", loading: false };
 
 const subjectOptions = [
   { label: "국어", value: "국어" },
@@ -126,6 +138,105 @@ function nextPaletteColor(current: string) {
 function fileNameToBatchName(fileName: string) {
   const cleanName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
   return cleanName || fileName.trim();
+}
+
+function fileSizeMb(file: File | null) {
+  return file ? file.size / MB : 0;
+}
+
+function formatCompactNumber(value: number, digits = 1) {
+  const safe = Number.isFinite(value) ? value : 0;
+  const rounded = safe >= 100 ? Math.round(safe) : Math.round(safe * 10 ** digits) / 10 ** digits;
+  return rounded.toLocaleString("ko-KR");
+}
+
+function decodePdfText(buffer: ArrayBuffer) {
+  return new TextDecoder("latin1").decode(buffer);
+}
+
+function parsePdfPageCount(text: string) {
+  let maxCount = 0;
+  const countRegex = /\/Type\s*\/Pages\b[\s\S]{0,1200}?\/Count\s+(\d+)/g;
+  for (let match = countRegex.exec(text); match; match = countRegex.exec(text)) {
+    maxCount = Math.max(maxCount, Number(match[1]) || 0);
+  }
+  if (maxCount > 0) return maxCount;
+  const pageObjects = text.match(/\/Type\s*\/Page\b/g);
+  return pageObjects?.length || 0;
+}
+
+function estimatePagesFromSize(file: File) {
+  return Math.max(1, Math.ceil(file.size / (0.85 * MB)));
+}
+
+async function estimatePdfPageCount(file: File): Promise<PdfPageEstimate> {
+  try {
+    const head = decodePdfText(await file.slice(0, Math.min(file.size, PDF_SAMPLE_BYTES)).arrayBuffer());
+    const tail = file.size > PDF_SAMPLE_BYTES
+      ? decodePdfText(await file.slice(Math.max(0, file.size - PDF_SAMPLE_BYTES), file.size).arrayBuffer())
+      : "";
+    const sampledPages = parsePdfPageCount(`${head}\n${tail}`);
+    if (sampledPages > 0) return { pages: sampledPages, source: "pdf", loading: false };
+
+    if (file.size <= PDF_FULL_SCAN_LIMIT_BYTES) {
+      const fullPages = parsePdfPageCount(decodePdfText(await file.arrayBuffer()));
+      if (fullPages > 0) return { pages: fullPages, source: "pdf", loading: false };
+    }
+
+    return { pages: estimatePagesFromSize(file), source: "size", loading: false };
+  } catch {
+    return { pages: estimatePagesFromSize(file), source: "error", loading: false, error: "페이지 수를 정확히 읽지 못해 파일 크기로 추정했습니다." };
+  }
+}
+
+function pageEstimateLabel(estimate: PdfPageEstimate, emptyLabel = "-") {
+  if (estimate.loading) return "확인 중";
+  if (!estimate.pages) return emptyLabel;
+  return `${estimate.source === "pdf" ? "" : "약 "}${estimate.pages.toLocaleString("ko-KR")}p`;
+}
+
+function likelyHardScan(totalMb: number, totalPages: number) {
+  return totalPages > 0 && totalMb / totalPages >= 1;
+}
+
+function buildCreditEstimate({
+  problem,
+  solution,
+  subjectEngine,
+  problemFile,
+  solutionFile,
+}: {
+  problem: PdfPageEstimate;
+  solution: PdfPageEstimate;
+  subjectEngine: "math" | "korean";
+  problemFile: File | null;
+  solutionFile: File | null;
+}) {
+  if (!problemFile || problem.loading || solution.loading || !problem.pages) return null;
+  const problemPages = problem.pages;
+  const solutionPages = solutionFile ? solution.pages || 0 : 0;
+  const totalPages = problemPages + solutionPages;
+  const totalMb = fileSizeMb(problemFile) + fileSizeMb(solutionFile);
+  const hardScan = likelyHardScan(totalMb, Math.max(totalPages, 1));
+  let problemMultiplier = 1;
+  let solutionMultiplier = 1.35;
+  if (subjectEngine === "korean") {
+    problemMultiplier = hardScan ? 4 : 3;
+    solutionMultiplier = 1.5;
+  } else if (hardScan) {
+    problemMultiplier = 2;
+    solutionMultiplier = 2;
+  }
+  const credits = problemPages * problemMultiplier + solutionPages * solutionMultiplier;
+  return {
+    credits: Math.round(credits * 10) / 10,
+    problemPages,
+    solutionPages,
+    totalPages,
+    totalMb,
+    hardScan,
+    approximate: problem.source !== "pdf" || (solutionFile ? solution.source !== "pdf" : false),
+  };
 }
 
 function TagColorPicker({
@@ -277,6 +388,8 @@ export default function UploadPage() {
   const [autoBatchName, setAutoBatchName] = useState("");
   const [problemPdf, setProblemPdf] = useState<File | null>(null);
   const [solutionPdf, setSolutionPdf] = useState<File | null>(null);
+  const [problemPdfEstimate, setProblemPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
+  const [solutionPdfEstimate, setSolutionPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
   const [subjectEngine, setSubjectEngine] = useState<"math" | "korean">("math");
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
@@ -312,6 +425,40 @@ export default function UploadPage() {
     setSubjectTagColors(readTagColors(SUBJECT_TAG_COLORS_KEY));
     setUnitTagColors(readTagColors(UNIT_TAG_COLORS_KEY));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!problemPdf) {
+      setProblemPdfEstimate(emptyPdfEstimate);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setProblemPdfEstimate({ pages: null, source: "none", loading: true });
+    estimatePdfPageCount(problemPdf).then((estimate) => {
+      if (!cancelled) setProblemPdfEstimate(estimate);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [problemPdf]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!solutionPdf) {
+      setSolutionPdfEstimate(emptyPdfEstimate);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setSolutionPdfEstimate({ pages: null, source: "none", loading: true });
+    estimatePdfPageCount(solutionPdf).then((estimate) => {
+      if (!cancelled) setSolutionPdfEstimate(estimate);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [solutionPdf]);
 
   function toggleSubject(subject: string) {
     if (subject === "국어") setSubjectEngine("korean");
@@ -448,6 +595,21 @@ export default function UploadPage() {
   const enabledSubjectEngines = usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"];
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const koreanLocked = !isAdmin && Boolean(usageSummary) && subjectEngine === "korean" && !enabledSubjectEngines.includes("korean");
+  const creditEstimate = useMemo(
+    () => buildCreditEstimate({
+      problem: problemPdfEstimate,
+      solution: solutionPdfEstimate,
+      subjectEngine,
+      problemFile: problemPdf,
+      solutionFile: solutionPdf,
+    }),
+    [problemPdfEstimate, solutionPdfEstimate, subjectEngine, problemPdf, solutionPdf]
+  );
+  const creditsRemaining = usageSummary?.extraction_credits_remaining ?? (
+    usageSummary ? Math.max((usageSummary.monthly_credit_limit || 0) - (usageSummary.extraction_credits_used || 0), 0) : null
+  );
+  const creditsAfterUpload = creditEstimate && creditsRemaining !== null ? Math.max(creditsRemaining - creditEstimate.credits, 0) : null;
+  const creditEstimateExceedsRemaining = Boolean(creditEstimate && creditsRemaining !== null && creditEstimate.credits > creditsRemaining);
   const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting && !koreanLocked);
 
   return (
@@ -606,6 +768,40 @@ export default function UploadPage() {
             <DropZone label="문제 PDF" helper="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
             <DropZone label="해설 PDF" helper="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
           </div>
+
+          {problemPdf ? (
+            <div className="rounded-lg border border-violet-300/20 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),rgba(255,255,255,0.035)_52%,rgba(0,0,0,0.18))] p-4 shadow-[0_18px_52px_rgba(76,29,149,0.16)]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-violet-200">
+                    <Sparkles className="h-4 w-4" />
+                    예상 credits
+                  </div>
+                  <div className="mt-2 text-3xl font-black text-white">
+                    {creditEstimate ? `${formatCompactNumber(creditEstimate.credits)} credits` : "계산 중"}
+                  </div>
+                </div>
+                <div className="rounded-[8px] border border-white/10 bg-black/25 px-3 py-2 text-right">
+                  <div className="text-xs font-semibold text-slate-500">남은 credits</div>
+                  <div className="mt-1 text-sm font-black text-white">
+                    {creditsRemaining === null ? "불러오는 중" : `${formatCompactNumber(creditsRemaining)} → ${formatCompactNumber(creditsAfterUpload ?? creditsRemaining)}`}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-300 sm:grid-cols-4">
+                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
+                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">해설 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
+                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
+                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : subjectEngine === "korean" ? "국어 엔진 가중치" : "기본 가중치"}</div>
+              </div>
+              {creditEstimate?.approximate || problemPdfEstimate.error || solutionPdfEstimate.error ? (
+                <p className="mt-3 text-xs font-semibold text-amber-200">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>
+              ) : null}
+              {creditEstimateExceedsRemaining ? (
+                <p className="mt-3 text-xs font-semibold text-red-200">현재 남은 credits보다 예상 소모량이 큽니다. 플랜 사용량을 확인해주세요.</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="flex items-center gap-2 text-sm font-bold text-white">
