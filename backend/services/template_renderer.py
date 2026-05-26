@@ -534,7 +534,7 @@ EXAM_STATS_METRICS = {
     "q3": {"label": "Q3", "short": "Q3", "color": "#f97316"},
     "stddev": {"label": "표준편차", "short": "σ", "color": "#64748b"},
 }
-DEFAULT_EXAM_STATS_METRICS = ["average", "highest", "lowest", "q1", "q2", "q3"]
+DEFAULT_EXAM_STATS_METRICS = ["average", "q2"]
 
 
 def _finite_number(value: Any) -> float | None:
@@ -627,8 +627,11 @@ def _render_exam_stats_chart(element: dict[str, Any], data: dict[str, Any]) -> s
     text_color = _safe_css_value(style.get("color"), "#111827")
     title = _resolve_visual_text(str(element.get("title") or ""), data)
     title_height = 30 if title else 10
+    show_point_labels = bool(element.get("showPointLabels", False))
+    show_respondents = bool(element.get("showRespondents", False))
     legend_height = 28 if element.get("showLegend", True) else 6
-    padding = {"top": title_height + 10, "right": 20, "bottom": 36 + legend_height, "left": 38}
+    x_label_height = 32 if show_point_labels else 8
+    padding = {"top": title_height + 10, "right": 20, "bottom": x_label_height + legend_height + 8, "left": 38}
     plot_width = max(1.0, width - padding["left"] - padding["right"])
     plot_height = max(1.0, height - padding["top"] - padding["bottom"])
     baseline = padding["top"] + plot_height
@@ -677,13 +680,16 @@ def _render_exam_stats_chart(element: dict[str, Any], data: dict[str, Any]) -> s
             for x, y in line_points:
                 parts.append(f'<circle cx="{x:g}" cy="{y:g}" r="3.6" fill="{EXAM_STATS_METRICS[metric]["color"]}" stroke="{fill}" stroke-width="1.5" />')
 
-    for index, point in enumerate(points):
-        title_text = str(point.get("title") or "")
-        date_text = str(point.get("date") or "")
-        short_title = title_text[:7] + "…" if len(title_text) > 7 else title_text
-        x = x_for(index)
-        parts.append(f'<text x="{x:g}" y="{height - legend_height - 18:g}" text-anchor="middle" font-size="10" font-weight="700" fill="{text_color}">{escape(short_title)}</text>')
-        parts.append(f'<text x="{x:g}" y="{height - legend_height - 4:g}" text-anchor="middle" font-size="9" fill="#64748b">{escape(date_text)}</text>')
+    if show_point_labels:
+        for index, point in enumerate(points):
+            title_text = str(point.get("title") or "")
+            date_text = str(point.get("date") or "")
+            respondents = _finite_number(point.get("respondents"))
+            caption = f"n={round(respondents)}" if show_respondents and respondents is not None else date_text
+            short_title = title_text[:7] + "…" if len(title_text) > 7 else title_text
+            x = x_for(index)
+            parts.append(f'<text x="{x:g}" y="{height - legend_height - 18:g}" text-anchor="middle" font-size="10" font-weight="700" fill="{text_color}">{escape(short_title)}</text>')
+            parts.append(f'<text x="{x:g}" y="{height - legend_height - 4:g}" text-anchor="middle" font-size="9" fill="#64748b">{escape(caption)}</text>')
 
     if element.get("showLegend", True):
         for index, metric in enumerate(metrics):

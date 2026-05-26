@@ -177,7 +177,7 @@ const examStatsMetricConfig: Record<ExamStatsMetricKey, { label: string; shortLa
   q3: { label: "Q3", shortLabel: "Q3", color: "#f97316" },
   stddev: { label: "표준편차", shortLabel: "σ", color: "#64748b" },
 };
-const defaultExamStatsMetrics: ExamStatsMetricKey[] = ["average", "highest", "lowest", "q1", "q2", "q3"];
+const defaultExamStatsMetrics: ExamStatsMetricKey[] = ["average", "q2"];
 
 function scoreValue(value: unknown) {
   const number = Number(value);
@@ -222,7 +222,10 @@ function renderExamStatsChart(element: ExamStatsChartElement) {
   const viewHeight = Math.max(180, element.height);
   const titleHeight = element.title ? 30 : 10;
   const legendHeight = element.showLegend ? 28 : 6;
-  const padding = { top: titleHeight + 10, right: 20, bottom: 36 + legendHeight, left: 38 };
+  const showPointLabels = element.showPointLabels === true;
+  const showRespondents = element.showRespondents === true;
+  const xLabelHeight = showPointLabels ? 32 : 8;
+  const padding = { top: titleHeight + 10, right: 20, bottom: xLabelHeight + legendHeight + 8, left: 38 };
   const plotWidth = Math.max(1, viewWidth - padding.left - padding.right);
   const plotHeight = Math.max(1, viewHeight - padding.top - padding.bottom);
   const baseline = padding.top + plotHeight;
@@ -284,14 +287,16 @@ function renderExamStatsChart(element: ExamStatsChartElement) {
             );
           }) : null}
 
-          {points.map((point, index) => (
+          {showPointLabels ? points.map((point, index) => (
             <g key={`${point.title}-${index}`}>
               <text x={xFor(index)} y={viewHeight - legendHeight - 18} textAnchor="middle" fontSize="10" fontWeight={700} fill={textColor}>
                 {point.title.length > 7 ? `${point.title.slice(0, 7)}…` : point.title}
               </text>
-              <text x={xFor(index)} y={viewHeight - legendHeight - 4} textAnchor="middle" fontSize="9" fill={mutedColor}>{point.date || ""}</text>
+              <text x={xFor(index)} y={viewHeight - legendHeight - 4} textAnchor="middle" fontSize="9" fill={mutedColor}>
+                {showRespondents && point.respondents ? `n=${Math.round(point.respondents)}` : point.date || ""}
+              </text>
             </g>
-          ))}
+          )) : null}
 
           {element.showLegend ? metrics.map((metric, index) => {
             const config = examStatsMetricConfig[metric];

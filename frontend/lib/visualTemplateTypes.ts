@@ -130,6 +130,8 @@ export type ExamStatsChartElement = ElementBase & {
   dataVariableKey?: string;
   showLegend: boolean;
   showGrid: boolean;
+  showPointLabels?: boolean;
+  showRespondents?: boolean;
   yAxisMin: number;
   yAxisMax: number;
 };

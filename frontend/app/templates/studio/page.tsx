@@ -9,6 +9,7 @@ import {
   AlignHorizontalJustifyCenter,
   AlignStartHorizontal,
   ArrowLeft,
+  BarChart3,
   BookOpen,
   BoxSelect,
   Braces,
@@ -92,6 +93,46 @@ function cloneTemplateSet(templateSet: TemplateSet): TemplateSet {
   return JSON.parse(JSON.stringify(templateSet)) as TemplateSet;
 }
 
+const examStatsMetricKeys: ExamStatsMetricKey[] = ["average", "highest", "lowest", "q1", "q2", "q3", "stddev"];
+const defaultExamStatsChartMetrics: ExamStatsMetricKey[] = ["average", "q2"];
+const validExamStatsMetricSet = new Set<string>(examStatsMetricKeys);
+
+function finiteOr(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeExamStatsElement(element: TemplateElement): TemplateElement {
+  if (element.type !== "examStatsChart") return element;
+  const metrics = (Array.isArray(element.metrics) ? element.metrics : [])
+    .filter((metric): metric is ExamStatsMetricKey => validExamStatsMetricSet.has(String(metric)));
+  const yAxisMin = finiteOr(element.yAxisMin, 0);
+  const rawMax = finiteOr(element.yAxisMax, 100);
+  const yAxisMax = rawMax > yAxisMin ? rawMax : 100;
+  return {
+    ...element,
+    title: element.title || "시험 통계",
+    chartMode: element.chartMode === "bar" ? "bar" : "line",
+    metrics: metrics.length ? metrics : defaultExamStatsChartMetrics,
+    dataVariableKey: element.dataVariableKey || "exam_stats_series_json",
+    showLegend: element.showLegend !== false,
+    showGrid: element.showGrid !== false,
+    showPointLabels: element.showPointLabels === true,
+    showRespondents: element.showRespondents === true,
+    yAxisMin,
+    yAxisMax,
+  };
+}
+
+function sanitizeTemplateSetForSave(templateSet: TemplateSet): TemplateSet {
+  const next = cloneTemplateSet(templateSet);
+  next.pages = next.pages.map((page) => ({
+    ...page,
+    elements: page.elements.map(normalizeExamStatsElement),
+  }));
+  return JSON.parse(JSON.stringify(next)) as TemplateSet;
+}
+
 function isTemplateCategory(value: string | null): value is TemplateCategory {
   return !!value && visualTemplateCategories.some((category) => category.value === value);
 }
@@ -110,14 +151,15 @@ function templateSnapshot(templateSet: TemplateSet) {
 }
 
 function visualTemplatePayload(templateSet: TemplateSet): HubTemplatePayload {
+  const safeTemplateSet = sanitizeTemplateSetForSave(templateSet);
   return {
-    title: templateSet.title,
-    description: templateSet.description || null,
-    category: mapToHubCategory(templateSet.category),
-    visibility: templateSet.visibility === "academy" ? "unlisted" : templateSet.visibility === "marketplace" ? "marketplace" : templateSet.visibility,
+    title: safeTemplateSet.title,
+    description: safeTemplateSet.description || null,
+    category: mapToHubCategory(safeTemplateSet.category),
+    visibility: safeTemplateSet.visibility === "academy" ? "unlisted" : safeTemplateSet.visibility === "marketplace" ? "marketplace" : safeTemplateSet.visibility,
     html: "<!-- Visual Template Studio: render from schema_json.visualTemplateSet -->",
     css: "",
-    schema_json: { visualTemplateSet: templateSet, schemaVersion: templateSet.schemaVersion },
+    schema_json: { visualTemplateSet: safeTemplateSet, schemaVersion: safeTemplateSet.schemaVersion },
     thumbnail_url: null,
     source_type: "self_created",
     rights_confirmed: true,
@@ -211,6 +253,13 @@ const examStatsMetricOptions: Array<{ key: ExamStatsMetricKey; label: string }> 
   { key: "q2", label: "Q2 중앙값" },
   { key: "q3", label: "Q3" },
   { key: "stddev", label: "표준편차" },
+];
+
+const examStatsMetricPresets: Array<{ label: string; metrics: ExamStatsMetricKey[] }> = [
+  { label: "핵심", metrics: ["average", "q2"] },
+  { label: "범위", metrics: ["average", "highest", "lowest"] },
+  { label: "분위수", metrics: ["q1", "q2", "q3"] },
+  { label: "전체", metrics: examStatsMetricKeys },
 ];
 
 const knownVariableTokens = new Set(visualTemplateVariableTokens.map((token) => token.token));
@@ -938,11 +987,12 @@ function VisualTemplateStudioPageContent() {
 
   const saveTemplateSet = useCallback(
     async (source: TemplateSet, mode: SaveMode = "manual") => {
-      const snapshot = templateSnapshot(source);
+      const safeSource = sanitizeTemplateSetForSave(source);
+      const snapshot = templateSnapshot(safeSource);
       if (mode === "auto" && snapshot === lastServerSavedSnapshotRef.current) return;
 
       if (saveInFlightRef.current) {
-        pendingSaveRef.current = { templateSet: cloneTemplateSet(source), mode };
+        pendingSaveRef.current = { templateSet: cloneTemplateSet(safeSource), mode };
         setAutoSaveStatus("pending");
         return;
       }
@@ -955,7 +1005,7 @@ function VisualTemplateStudioPageContent() {
       try {
         await ensureTemplateHubSession();
         const templateId = persistedTemplateIdRef.current;
-        const payload = visualTemplatePayload(source);
+        const payload = visualTemplatePayload(safeSource);
         const saved = templateId ? await updateHubTemplate(templateId, payload) : await createHubTemplate(payload);
         persistedTemplateIdRef.current = saved.id;
         setPersistedTemplateId(saved.id);
@@ -2109,13 +2159,33 @@ function VisualTemplateStudioPageContent() {
                       <FieldLabel label="차트 제목">
                         <Input className="h-8" value={selectedElement.title} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, title: event.target.value } : element))} />
                       </FieldLabel>
+                      <div>
+                        <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">그래프 형태</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: "line", label: "선 그래프", icon: LineChart },
+                            { value: "bar", label: "막대 그래프", icon: BarChart3 },
+                          ].map((option) => {
+                            const Icon = option.icon;
+                            const active = selectedElement.chartMode === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, chartMode: option.value as typeof element.chartMode } : element))}
+                                className={cls(
+                                  "flex h-9 items-center justify-center gap-2 rounded-md border text-xs font-bold transition",
+                                  active ? "border-violet-300/50 bg-violet-500/20 text-white" : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
+                                )}
+                              >
+                                <Icon className="h-4 w-4" />
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <FieldLabel label="그래프 유형">
-                          <select className="h-8 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-xs text-white outline-none" value={selectedElement.chartMode} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, chartMode: event.target.value as typeof element.chartMode } : element))}>
-                            <option value="line">선 그래프</option>
-                            <option value="bar">막대 그래프</option>
-                          </select>
-                        </FieldLabel>
                         <FieldLabel label="데이터 변수">
                           <Input className="h-8" value={selectedElement.dataVariableKey || ""} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, dataVariableKey: event.target.value || "exam_stats_series_json" } : element))} />
                         </FieldLabel>
@@ -2127,7 +2197,21 @@ function VisualTemplateStudioPageContent() {
                         </FieldLabel>
                       </div>
                       <div>
-                        <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">표시 지표</div>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">표시 지표</div>
+                          <div className="flex flex-wrap gap-1">
+                            {examStatsMetricPresets.map((preset) => (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, metrics: preset.metrics } : element))}
+                                className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-bold text-slate-400 transition hover:border-violet-300/35 hover:text-white"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                           {examStatsMetricOptions.map((metric) => {
                             const checked = (selectedElement.metrics || []).includes(metric.key);
@@ -2158,6 +2242,14 @@ function VisualTemplateStudioPageContent() {
                         <label className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-slate-300">
                           <input type="checkbox" checked={selectedElement.showGrid} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, showGrid: event.target.checked } : element))} />
                           격자 표시
+                        </label>
+                        <label className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                          <input type="checkbox" checked={selectedElement.showPointLabels === true} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, showPointLabels: event.target.checked } : element))} />
+                          시험명 표시
+                        </label>
+                        <label className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                          <input type="checkbox" checked={selectedElement.showRespondents === true} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, showRespondents: event.target.checked, showPointLabels: event.target.checked ? true : element.showPointLabels } : element))} />
+                          응시자 수
                         </label>
                       </div>
                     </div>

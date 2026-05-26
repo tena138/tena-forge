@@ -49,9 +49,9 @@ export const visualTemplateSampleData: Record<string, string | number> = {
   exam_stats_q3: 88,
   exam_stats_standard_deviation: 12.4,
   exam_stats_series_json: JSON.stringify([
-    { title: "3월 진단", date: "2026.03.08", average: 70, highest: 92, lowest: 38, q1: 61, q2: 72, q3: 82, stddev: 13.8, respondents: 22 },
-    { title: "4월 모의", date: "2026.04.12", average: 74, highest: 95, lowest: 41, q1: 64, q2: 75, q3: 85, stddev: 12.6, respondents: 23 },
-    { title: "중간 대비", date: "2026.05.03", average: 78, highest: 96, lowest: 42, q1: 68, q2: 80, q3: 88, stddev: 12.4, respondents: 24 },
+    { title: "시험 1", average: 70, highest: 90, lowest: 48, q1: 62, q2: 72, q3: 82, stddev: 12, respondents: 24 },
+    { title: "시험 2", average: 74, highest: 92, lowest: 50, q1: 66, q2: 76, q3: 84, stddev: 11, respondents: 24 },
+    { title: "시험 3", average: 78, highest: 94, lowest: 52, q1: 68, q2: 80, q3: 88, stddev: 10, respondents: 24 },
   ]),
   qr_code: "https://tenaforge.com",
 };

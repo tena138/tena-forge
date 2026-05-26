@@ -184,12 +184,14 @@ export function createAnswerRegion(x = 64, y = 200, width = 666, height = 360): 
 
 export function createExamStatsChart(x = 64, y = 180, width = 666, height = 320): ExamStatsChartElement {
   return baseElement("examStatsChart", "시험 통계 차트", x, y, width, height, {
-    title: "시험 통계 추이",
+    title: "시험 통계",
     chartMode: "line",
-    metrics: ["average", "highest", "lowest", "q1", "q2", "q3"],
+    metrics: ["average", "q2"],
     dataVariableKey: "exam_stats_series_json",
     showLegend: true,
     showGrid: true,
+    showPointLabels: false,
+    showRespondents: false,
     yAxisMin: 0,
     yAxisMax: 100,
     style: {
