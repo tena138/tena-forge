@@ -33,6 +33,13 @@ from services.ownership import current_owner_id
 
 router = APIRouter(prefix="/api/student-management", tags=["student management"])
 CLASS_ORDER_METADATA_KEY = "student_management_class_order"
+COUNSELING_FORMATS_METADATA_KEY = "student_management_counseling_formats"
+COUNSELING_PRESETS_METADATA_KEY = "student_management_counseling_presets"
+DEFAULT_COUNSELING_FIELDS = [
+    {"id": "notes", "label": "상담하면서 기록할 내용", "placeholder": "상담하면서 기록할 내용", "include_in_report": True},
+    {"id": "weekly_report", "label": "주간 리포트 초안", "placeholder": "주간 리포트 초안", "include_in_report": False},
+    {"id": "next_plan", "label": "다음 지도 계획", "placeholder": "다음 지도 계획 / 과제 제안", "include_in_report": True},
+]
 
 
 def _academy_id(request: Request) -> str:
@@ -132,6 +139,111 @@ def _save_class_order(db: Session, academy_id: str, class_ids: list[str]) -> Non
     subscription.billing_metadata = metadata
 
 
+def _billing_metadata(db: Session, academy_id: str) -> dict:
+    subscription = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == academy_id))
+    if not subscription:
+        return {}
+    return dict(subscription.billing_metadata or {})
+
+
+def _field_id(value: str | None, fallback: str, used: set[str]) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "_", (value or "").strip()).strip("_")[:48] or fallback
+    candidate = cleaned
+    suffix = 2
+    while candidate in used:
+        candidate = f"{cleaned}_{suffix}"[:48]
+        suffix += 1
+    used.add(candidate)
+    return candidate
+
+
+def _normalize_counseling_fields(fields: list[dict] | None) -> list[dict]:
+    source = fields if isinstance(fields, list) else DEFAULT_COUNSELING_FIELDS
+    normalized: list[dict] = []
+    used: set[str] = set()
+    for index, field in enumerate(source[:12]):
+        if not isinstance(field, dict):
+            continue
+        label = str(field.get("label") or "").strip()[:80]
+        if not label:
+            continue
+        field_id = _field_id(str(field.get("id") or ""), f"field_{index + 1}", used)
+        placeholder = str(field.get("placeholder") or label).strip()[:160]
+        normalized.append(
+            {
+                "id": field_id,
+                "label": label,
+                "placeholder": placeholder,
+                "include_in_report": bool(field.get("include_in_report", True)),
+            }
+        )
+    return normalized or [dict(field) for field in DEFAULT_COUNSELING_FIELDS]
+
+
+def _normalize_counseling_sections(sections: list[dict] | None) -> list[dict]:
+    if not isinstance(sections, list):
+        return []
+    normalized: list[dict] = []
+    used: set[str] = set()
+    for index, section in enumerate(sections[:20]):
+        if not isinstance(section, dict):
+            continue
+        label = str(section.get("label") or "").strip()[:80]
+        if not label:
+            continue
+        field_id = _field_id(str(section.get("field_id") or section.get("id") or ""), f"field_{index + 1}", used)
+        normalized.append(
+            {
+                "field_id": field_id,
+                "label": label,
+                "value": str(section.get("value") or ""),
+                "include_in_report": bool(section.get("include_in_report", True)),
+            }
+        )
+    return normalized
+
+
+def _counseling_format_for_class(db: Session, academy_id: str, class_id: UUID | str) -> dict:
+    metadata = _billing_metadata(db, academy_id)
+    formats = metadata.get(COUNSELING_FORMATS_METADATA_KEY)
+    row = formats.get(str(class_id)) if isinstance(formats, dict) else None
+    row = row if isinstance(row, dict) else {}
+    return {
+        "class_id": str(class_id),
+        "fields": _normalize_counseling_fields(row.get("fields") if isinstance(row, dict) else None),
+        "updated_at": row.get("updated_at") if isinstance(row, dict) else None,
+    }
+
+
+def _counseling_presets(db: Session, academy_id: str) -> list[dict]:
+    metadata = _billing_metadata(db, academy_id)
+    rows = metadata.get(COUNSELING_PRESETS_METADATA_KEY)
+    by_slot: dict[int, dict] = {}
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                slot = int(row.get("slot"))
+            except (TypeError, ValueError):
+                continue
+            if 1 <= slot <= 4:
+                by_slot[slot] = row
+    presets: list[dict] = []
+    for slot in range(1, 5):
+        row = by_slot.get(slot, {})
+        presets.append(
+            {
+                "slot": slot,
+                "name": row.get("name") or f"프리셋 {slot}",
+                "subject": row.get("subject"),
+                "fields": _normalize_counseling_fields(row.get("fields")) if row.get("fields") else [],
+                "updated_at": row.get("updated_at"),
+            }
+        )
+    return presets
+
+
 def _sort_class_rows(rows: list[AcademyClass], class_order: list[str]) -> list[AcademyClass]:
     order_index = {class_id: index for index, class_id in enumerate(class_order)}
     fallback_index = len(order_index)
@@ -168,7 +280,21 @@ def _counseling_logs(membership: StudentAcademyMembership) -> list[dict]:
     logs = (membership.metadata_json or {}).get("counseling_logs") or []
     if not isinstance(logs, list):
         return []
-    rows = [row for row in logs if isinstance(row, dict)]
+    rows = []
+    for row in logs:
+        if not isinstance(row, dict):
+            continue
+        next_row = dict(row)
+        sections = _normalize_counseling_sections(next_row.get("sections"))
+        if not sections:
+            fallback_sections = [
+                {"field_id": "notes", "label": "상담하면서 기록할 내용", "value": next_row.get("notes") or "", "include_in_report": True},
+                {"field_id": "weekly_report", "label": "주간 리포트", "value": next_row.get("weekly_report") or "", "include_in_report": False},
+                {"field_id": "next_plan", "label": "다음 지도 계획", "value": next_row.get("next_plan") or "", "include_in_report": True},
+            ]
+            sections = [section for section in fallback_sections if section["value"]]
+        next_row["sections"] = sections
+        rows.append(next_row)
     return sorted(rows, key=lambda row: str(row.get("counseling_date") or row.get("created_at") or ""), reverse=True)
 
 
@@ -226,6 +352,7 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
         "memo": metadata.get("memo"),
         "class_ids": [str(row.id) for row in classes],
         "class_names": [row.name for row in classes],
+        "class_subjects": [row.subject for row in classes],
         "recent_score": _decimal_float(latest_result.score) if latest_result else None,
         "recent_completion_status": latest_result.status if latest_result else "not_started",
         "unresolved_wrong_count": unresolved,
@@ -685,12 +812,38 @@ class ScheduleEventPayload(BaseModel):
     linked_paper_session_id: UUID | None = None
 
 
+class CounselingFormatFieldPayload(BaseModel):
+    id: str | None = None
+    label: str = Field(min_length=1, max_length=80)
+    placeholder: str | None = None
+    include_in_report: bool = True
+
+
+class CounselingFormatPayload(BaseModel):
+    fields: list[CounselingFormatFieldPayload] = []
+
+
+class CounselingPresetPayload(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    subject: str | None = Field(default=None, max_length=80)
+    fields: list[CounselingFormatFieldPayload] = []
+
+
+class CounselingLogSectionPayload(BaseModel):
+    field_id: str | None = None
+    label: str = Field(min_length=1, max_length=80)
+    value: str | None = None
+    include_in_report: bool = True
+
+
 class CounselingLogPayload(BaseModel):
     counseling_date: datetime | None = None
     title: str = Field(default="학습 상담", max_length=255)
+    class_id: UUID | None = None
     notes: str | None = None
     weekly_report: str | None = None
     next_plan: str | None = None
+    sections: list[CounselingLogSectionPayload] = []
 
 
 class ReviewSetPayload(BaseModel):
@@ -818,6 +971,60 @@ def update_class(class_id: UUID, payload: ClassUpdatePayload, request: Request, 
     db.commit()
     db.refresh(row)
     return _class_payload(db, academy_id, row, include_students=True)
+
+
+@router.put("/classes/{class_id}/counseling-format")
+def update_class_counseling_format(class_id: UUID, payload: CounselingFormatPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    _get_class(db, academy_id, class_id)
+    subscription = ensure_academy_subscription(db, academy_id)
+    metadata = dict(subscription.billing_metadata or {})
+    formats = metadata.get(COUNSELING_FORMATS_METADATA_KEY)
+    if not isinstance(formats, dict):
+        formats = {}
+    row = {
+        "class_id": str(class_id),
+        "fields": _normalize_counseling_fields([field.model_dump() for field in payload.fields]),
+        "updated_by": current_owner_id(request),
+        "updated_at": _now().isoformat(),
+    }
+    formats[str(class_id)] = row
+    metadata[COUNSELING_FORMATS_METADATA_KEY] = formats
+    subscription.billing_metadata = metadata
+    db.commit()
+    return row
+
+
+@router.put("/counseling-presets/{slot}")
+def save_counseling_preset(slot: int, payload: CounselingPresetPayload, request: Request, db: Session = Depends(get_db)):
+    if slot < 1 or slot > 4:
+        raise HTTPException(status_code=400, detail="Preset slot must be between 1 and 4.")
+    academy_id = _academy_id(request)
+    subscription = ensure_academy_subscription(db, academy_id)
+    metadata = dict(subscription.billing_metadata or {})
+    rows = metadata.get(COUNSELING_PRESETS_METADATA_KEY)
+    existing = [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+    row = {
+        "slot": slot,
+        "name": (payload.name or f"프리셋 {slot}").strip() or f"프리셋 {slot}",
+        "subject": _clean_optional_text(payload.subject),
+        "fields": _normalize_counseling_fields([field.model_dump() for field in payload.fields]),
+        "updated_by": current_owner_id(request),
+        "updated_at": _now().isoformat(),
+    }
+    next_rows = []
+    for item in existing:
+        try:
+            existing_slot = int(item.get("slot") or 0)
+        except (TypeError, ValueError):
+            existing_slot = 0
+        if existing_slot != slot:
+            next_rows.append(item)
+    next_rows.append(row)
+    metadata[COUNSELING_PRESETS_METADATA_KEY] = sorted(next_rows, key=lambda item: int(item.get("slot") or 0) if str(item.get("slot") or "").isdigit() else 0)
+    subscription.billing_metadata = metadata
+    db.commit()
+    return row
 
 
 @router.delete("/classes/{class_id}", status_code=204)
@@ -967,6 +1174,8 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         data["schedule_events"] = [_schedule_event_payload(event) for event in events]
     else:
         data["schedule_events"] = []
+    data["counseling_formats"] = [_counseling_format_for_class(db, academy_id, class_id) for class_id in class_ids]
+    data["counseling_presets"] = _counseling_presets(db, academy_id)
     data["counseling_logs"] = _counseling_logs(membership)
     data["wrong_answers"] = wrongs
     data["analytics"] = {
@@ -987,14 +1196,30 @@ def create_counseling_log(student_id: UUID, payload: CounselingLogPayload, reque
     membership = _get_membership(db, academy_id, student_id)
     title = payload.title.strip() or "학습 상담"
     now = _now()
+    class_row = None
+    if payload.class_id:
+        class_row = _get_class(db, academy_id, payload.class_id)
+        link = db.scalar(
+            select(ClassStudent).where(
+                ClassStudent.class_id == payload.class_id,
+                ClassStudent.student_membership_id == membership.id,
+                ClassStudent.left_at.is_(None),
+            )
+        )
+        if not link:
+            raise HTTPException(status_code=400, detail="Student is not active in this class.")
+    sections = _normalize_counseling_sections([section.model_dump() for section in payload.sections])
     row = {
         "id": str(uuid.uuid4()),
         "student_membership_id": str(membership.id),
+        "class_id": str(class_row.id) if class_row else None,
+        "class_name": class_row.name if class_row else None,
         "title": title,
         "counseling_date": (payload.counseling_date or now).isoformat(),
         "notes": payload.notes or "",
         "weekly_report": payload.weekly_report or "",
         "next_plan": payload.next_plan or "",
+        "sections": sections,
         "created_by": current_owner_id(request),
         "created_at": now.isoformat(),
         "updated_at": now.isoformat(),

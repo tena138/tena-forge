@@ -11,6 +11,7 @@ export type StudentCard = {
   memo?: string | null;
   class_ids: string[];
   class_names: string[];
+  class_subjects?: Array<string | null>;
   recent_score?: number | null;
   recent_completion_status?: string | null;
   unresolved_wrong_count: number;
@@ -129,14 +130,45 @@ export type ScheduleEvent = {
   linked_paper_session_id?: string | null;
 };
 
+export type CounselingFormatField = {
+  id: string;
+  label: string;
+  placeholder?: string | null;
+  include_in_report?: boolean;
+};
+
+export type CounselingFormat = {
+  class_id: string;
+  fields: CounselingFormatField[];
+  updated_at?: string | null;
+};
+
+export type CounselingPreset = {
+  slot: number;
+  name: string;
+  subject?: string | null;
+  fields: CounselingFormatField[];
+  updated_at?: string | null;
+};
+
+export type CounselingLogSection = {
+  field_id: string;
+  label: string;
+  value?: string | null;
+  include_in_report?: boolean;
+};
+
 export type CounselingLog = {
   id: string;
   student_membership_id: string;
+  class_id?: string | null;
+  class_name?: string | null;
   title: string;
   counseling_date: string;
   notes?: string | null;
   weekly_report?: string | null;
   next_plan?: string | null;
+  sections?: CounselingLogSection[];
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -238,6 +270,8 @@ export function getStudentDetail(id: string) {
       paper_session_history: unknown[];
       wrong_answers: WrongAnswer[];
       schedule_events: ScheduleEvent[];
+      counseling_formats: CounselingFormat[];
+      counseling_presets: CounselingPreset[];
       counseling_logs: CounselingLog[];
       analytics: Record<string, unknown>;
     }
@@ -302,13 +336,34 @@ export function createCounselingLog(
   payload: {
     counseling_date?: string | null;
     title: string;
+    class_id?: string | null;
     notes?: string | null;
     weekly_report?: string | null;
     next_plan?: string | null;
+    sections?: Array<{
+      field_id: string;
+      label: string;
+      value?: string | null;
+      include_in_report?: boolean;
+    }>;
   }
 ) {
   return api<CounselingLog>(`/api/student-management/students/${studentId}/counseling-logs`, {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateClassCounselingFormat(classId: string, payload: { fields: CounselingFormatField[] }) {
+  return api<CounselingFormat>(`/api/student-management/classes/${classId}/counseling-format`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function saveCounselingPreset(slot: number, payload: { name?: string | null; subject?: string | null; fields: CounselingFormatField[] }) {
+  return api<CounselingPreset>(`/api/student-management/counseling-presets/${slot}`, {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }
