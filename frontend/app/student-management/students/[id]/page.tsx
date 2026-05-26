@@ -408,19 +408,19 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     URL.revokeObjectURL(url);
   }
 
-  if (!data) return <main className="min-h-screen bg-[#07080d] p-8 text-slate-400">학생 정보를 불러오는 중입니다.</main>;
+  if (!data) return <main className="min-h-screen bg-transparent p-8 text-slate-400">학생 정보를 불러오는 중입니다.</main>;
 
   return (
-    <main className="min-h-screen bg-[#07080d] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-5">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1600px] space-y-5">
         <Link href="/student-management" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
           <ArrowLeft className="h-4 w-4" />
           Student Management
         </Link>
-        <header className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
+        <header className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-4">
-              <div className="rounded-xl border border-violet-300/20 bg-violet-500/15 p-3 text-violet-100">
+              <div className="rounded-lg border border-violet-300/20 bg-violet-500/15 p-3 text-violet-100">
                 <UserRound className="h-7 w-7" />
               </div>
               <div>
@@ -438,13 +438,13 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         </header>
 
         <section className="grid gap-4 md:grid-cols-4">
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">최근 점수</p><p className="mt-1 text-2xl font-black text-white">{data.recent_score == null ? "-" : `${Math.round(data.recent_score)}점`}</p></CardContent></Card>
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">평균 점수</p><p className="mt-1 text-2xl font-black text-emerald-100">{data.analytics.average_score == null ? "-" : `${Math.round(data.analytics.average_score)}점`}</p></CardContent></Card>
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">채점 기록</p><p className="mt-1 text-2xl font-black text-violet-100">{data.analytics.graded_count || 0}</p></CardContent></Card>
-          <Card className="border-white/10 bg-white/[0.035]"><CardContent className="p-4"><p className="text-xs text-slate-500">미해결 오답</p><p className="mt-1 text-2xl font-black text-rose-100">{data.analytics.unresolved_wrong_count || 0}</p></CardContent></Card>
+          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">최근 점수</p><p className="mt-1 text-2xl font-black text-white">{data.recent_score == null ? "-" : `${Math.round(data.recent_score)}점`}</p></CardContent></Card>
+          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">평균 점수</p><p className="mt-1 text-2xl font-black text-emerald-100">{data.analytics.average_score == null ? "-" : `${Math.round(data.analytics.average_score)}점`}</p></CardContent></Card>
+          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">채점 기록</p><p className="mt-1 text-2xl font-black text-violet-100">{data.analytics.graded_count || 0}</p></CardContent></Card>
+          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">미해결 오답</p><p className="mt-1 text-2xl font-black text-rose-100">{data.analytics.unresolved_wrong_count || 0}</p></CardContent></Card>
         </section>
 
-        <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
           {[
             { id: "calendar", label: "캘린더", icon: CalendarDays },
             { id: "wrong", label: "오답", icon: RotateCcw },
@@ -457,8 +457,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 type="button"
                 onClick={() => setActiveTab(tab.id as StudentTab)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
-                  activeTab === tab.id ? "bg-violet-500 text-white shadow-lg shadow-violet-950/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                  "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
+                  activeTab === tab.id ? "bg-violet-500/85 text-white shadow-lg shadow-violet-950/25" : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -469,8 +469,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         </div>
 
         {activeTab === "calendar" ? (
-          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <Card className="border-white/10 bg-white/[0.035]">
+          <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_380px]">
+            <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardHeader>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="flex items-center gap-2 text-white"><CalendarDays className="h-5 w-5" />캘린더</CardTitle>
@@ -487,13 +487,13 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <div className="min-w-[840px]">
-                    <div className="grid grid-cols-7 border-y border-white/10 bg-white/[0.025] text-center text-xs font-semibold text-slate-500">
+                  <div className="min-w-[760px]">
+                    <div className="grid grid-cols-7 border-y border-white/[0.08] bg-white/[0.025] text-center text-xs font-semibold text-slate-500">
                       {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
                         <div key={day} className="px-2 py-2">{day}</div>
                       ))}
                     </div>
-                    <div className="grid grid-cols-7 border-l border-white/10">
+                    <div className="grid grid-cols-7 border-l border-white/[0.08]">
                       {calendarDays.map((day) => {
                         const key = dateKey(day);
                         const items = calendarItemsByDate[key] || [];
@@ -510,9 +510,9 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                               if (event.key === "Enter" || event.key === " ") setSelectedCalendarDate(key);
                             }}
                             className={cn(
-                              "min-h-[138px] border-b border-r border-white/10 p-2 text-left outline-none transition",
-                              isCurrentMonth ? "bg-black/15" : "bg-black/35 text-slate-600",
-                              isSelected && "bg-violet-500/10 ring-1 ring-inset ring-violet-300/50",
+                              "min-h-[138px] border-b border-r border-white/[0.08] p-2 text-left outline-none transition",
+                              isCurrentMonth ? "bg-white/[0.012]" : "bg-white/[0.006] text-slate-600",
+                              isSelected && "bg-violet-500/[0.08] ring-1 ring-inset ring-violet-300/45",
                               "hover:bg-white/[0.04]"
                             )}
                           >
@@ -557,13 +557,13 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 {!calendarItems.length ? <p className="mt-4 rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">아직 이 학생에게 표시할 수업 일정이나 시험 일정이 없습니다.</p> : null}
               </CardContent>
             </Card>
-            <Card className="border-white/10 bg-white/[0.035]">
+            <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardHeader>
                 <CardTitle className="text-white">{shortDate(`${selectedCalendarDate}T00:00:00`)}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {selectedCalendarItems.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                  <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold text-violet-200">{dateLabel(item.date)}</p>
@@ -585,7 +585,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
         {activeTab === "wrong" ? (
           <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
-            <Card className="border-white/10 bg-white/[0.035]">
+            <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardHeader><CardTitle className="flex items-center gap-2 text-white"><FileText className="h-5 w-5" />오답 체크</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {data.paper_session_history.map((result) => {
@@ -595,7 +595,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                   const redCount = Object.values(statuses).filter((status) => status === "unanswered").length;
                   const autosaveState = autosaveStates[result.id];
                   return (
-                    <div key={result.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div key={result.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="font-semibold text-white">{result.session?.title || "Paper Session"}</p>
@@ -644,11 +644,11 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 {!data.paper_session_history.length ? <p className="text-sm text-slate-500">아직 기록된 세션이 없습니다.</p> : null}
               </CardContent>
             </Card>
-            <Card className="border-white/10 bg-white/[0.035]">
+            <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardHeader><CardTitle className="flex items-center gap-2 text-white"><RotateCcw className="h-5 w-5" />Wrong Answer Archive</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {data.wrong_answers.map((wrong) => (
-                  <div key={wrong.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                  <div key={wrong.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-semibold text-white">{wrong.problem_number}번</p>
                       <Badge className={cn("border", tone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
@@ -665,25 +665,25 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
         {activeTab === "counseling" ? (
           <section className="grid gap-5 lg:grid-cols-[420px_minmax(0,1fr)]">
-            <Card className="border-white/10 bg-white/[0.035]">
+            <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardHeader><CardTitle className="flex items-center gap-2 text-white"><MessageSquareText className="h-5 w-5" />상담일지 작성</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Input type="date" value={counselingForm.counseling_date} onChange={(event) => setCounselingForm((current) => ({ ...current, counseling_date: event.target.value }))} />
                 <Input placeholder="상담 제목" value={counselingForm.title} onChange={(event) => setCounselingForm((current) => ({ ...current, title: event.target.value }))} />
                 <textarea
-                  className="min-h-32 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                  className="min-h-32 w-full rounded-md border border-white/[0.08] bg-white/[0.035] p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
                   placeholder="상담하면서 기록할 내용"
                   value={counselingForm.notes}
                   onChange={(event) => setCounselingForm((current) => ({ ...current, notes: event.target.value }))}
                 />
                 <textarea
-                  className="min-h-28 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                  className="min-h-28 w-full rounded-md border border-white/[0.08] bg-white/[0.035] p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
                   placeholder="주간 리포트 초안"
                   value={counselingForm.weekly_report}
                   onChange={(event) => setCounselingForm((current) => ({ ...current, weekly_report: event.target.value }))}
                 />
                 <textarea
-                  className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                  className="min-h-24 w-full rounded-md border border-white/[0.08] bg-white/[0.035] p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
                   placeholder="다음 지도 계획 / 과제 제안"
                   value={counselingForm.next_plan}
                   onChange={(event) => setCounselingForm((current) => ({ ...current, next_plan: event.target.value }))}
@@ -694,7 +694,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 </Button>
               </CardContent>
             </Card>
-            <Card className="border-white/10 bg-white/[0.035]">
+            <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-white">상담 기록</CardTitle>
@@ -706,7 +706,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               </CardHeader>
               <CardContent className="space-y-3">
                 {data.counseling_logs.map((log) => (
-                  <div key={log.id} className="rounded-lg border border-white/10 bg-black/20 p-4">
+                  <div key={log.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-sm text-violet-200">{shortDate(log.counseling_date)}</p>
