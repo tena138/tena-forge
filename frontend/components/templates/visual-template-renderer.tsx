@@ -184,6 +184,27 @@ function scoreValue(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
+function pointDateKey(value?: string) {
+  if (!value) return "";
+  const text = String(value);
+  const match = text.match(/(\d{4})\D*(\d{1,2})\D*(\d{1,2})/);
+  if (match) return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function filterExamStatsPoints(points: ExamStatsChartPoint[], element: ExamStatsChartElement) {
+  const start = element.xAxisDateStart || "";
+  const end = element.xAxisDateEnd || "";
+  if (!start && !end) return points;
+  return points.filter((point) => {
+    const key = pointDateKey(point.date);
+    if (!key) return false;
+    return (!start || key >= start) && (!end || key <= end);
+  });
+}
+
 function clampChartValue(value: number, min: number, max: number) {
   if (max <= min) return min;
   return Math.min(max, Math.max(min, value));
@@ -213,7 +234,7 @@ function sampleExamStatsPoints(): ExamStatsChartPoint[] {
 }
 
 function renderExamStatsChart(element: ExamStatsChartElement) {
-  const points = sampleExamStatsPoints();
+  const points = filterExamStatsPoints(sampleExamStatsPoints(), element);
   const metrics = (element.metrics?.length ? element.metrics : defaultExamStatsMetrics).filter((metric) => examStatsMetricConfig[metric]);
   const mode = element.chartMode || "line";
   const yMin = Number.isFinite(element.yAxisMin) ? element.yAxisMin : 0;

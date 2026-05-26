@@ -50,6 +50,18 @@ def _now() -> datetime:
     return datetime.utcnow()
 
 
+def _date_boundary(value: str | None, end: bool = False) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+    if end:
+        return parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return parsed.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _uuid_list(values: list[UUID | str] | None) -> list[str]:
     return [str(value) for value in values or [] if value]
 
@@ -1188,6 +1200,58 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         "unresolved_wrong_count": len([row for row in wrongs if row["resolved_status"] in {"unresolved", "reviewing"}]),
     }
     return data
+
+
+@router.get("/students/{student_id}/exam-stats-series")
+def student_exam_stats_series(student_id: UUID, request: Request, start_date: str | None = None, end_date: str | None = None, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    membership = _get_membership(db, academy_id, student_id)
+    start = _date_boundary(start_date)
+    end = _date_boundary(end_date, end=True)
+    rows = db.execute(
+        select(PaperSessionResult, PaperSession)
+        .join(PaperSession, PaperSession.id == PaperSessionResult.paper_session_id)
+        .where(
+            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.student_membership_id == membership.id,
+            PaperSessionResult.status == "graded",
+            PaperSessionResult.score.is_not(None),
+        )
+        .order_by(PaperSession.scheduled_at.asc().nullslast(), PaperSessionResult.graded_at.asc().nullslast(), PaperSessionResult.updated_at.asc())
+    ).all()
+    points: list[dict] = []
+    for result, session in rows:
+        event_at = session.scheduled_at or result.graded_at or result.updated_at or result.created_at
+        if not event_at:
+            continue
+        if start and event_at < start:
+            continue
+        if end and event_at > end:
+            continue
+        session_results = db.scalars(
+            select(PaperSessionResult).where(
+                PaperSessionResult.academy_id == academy_id,
+                PaperSessionResult.paper_session_id == session.id,
+            )
+        ).all()
+        stats = _score_distribution(session_results)
+        points.append(
+            {
+                "id": str(session.id),
+                "title": session.title,
+                "date": event_at.date().isoformat(),
+                "student_score": _decimal_float(result.score),
+                "average": stats["average_score"],
+                "highest": stats["highest_score"],
+                "lowest": stats["lowest_score"],
+                "q1": stats["q1_score"],
+                "q2": stats["q2_score"],
+                "q3": stats["q3_score"],
+                "stddev": stats["score_standard_deviation"],
+                "respondents": stats["respondent_count"],
+            }
+        )
+    return points[:200]
 
 
 @router.post("/students/{student_id}/counseling-logs")

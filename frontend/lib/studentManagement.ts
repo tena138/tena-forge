@@ -158,6 +158,21 @@ export type CounselingLogSection = {
   include_in_report?: boolean;
 };
 
+export type StudentExamStatsPoint = {
+  id: string;
+  title: string;
+  date: string;
+  student_score?: number | null;
+  average?: number | null;
+  highest?: number | null;
+  lowest?: number | null;
+  q1?: number | null;
+  q2?: number | null;
+  q3?: number | null;
+  stddev?: number | null;
+  respondents?: number | null;
+};
+
 export type CounselingLog = {
   id: string;
   student_membership_id: string;
@@ -276,6 +291,14 @@ export function getStudentDetail(id: string) {
       analytics: Record<string, unknown>;
     }
   >(`/api/student-management/students/${id}`);
+}
+
+export function getStudentExamStatsSeries(studentId: string, params?: { start_date?: string; end_date?: string }) {
+  const search = new URLSearchParams();
+  if (params?.start_date) search.set("start_date", params.start_date);
+  if (params?.end_date) search.set("end_date", params.end_date);
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return api<StudentExamStatsPoint[]>(`/api/student-management/students/${studentId}/exam-stats-series${suffix}`);
 }
 
 export function listPaperSessions() {

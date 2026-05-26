@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ExamTemplate, api, downloadExport } from "@/lib/api";
-import { ClassCard, StudentCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
+import { ClassCard, StudentCard, createPaperSession, getStudentExamStatsSeries, getStudentManagementDashboard } from "@/lib/studentManagement";
 import { collectVisualTemplateManualVariables, createDynamicPreviewPages } from "@/lib/visualTemplateEngine";
 import { PAGE_SIZES, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplate, listMyTemplates, listPublicTemplates } from "@/lib/templateHub";
@@ -54,6 +54,22 @@ function getVisualTemplateSet(template: HubTemplate): TemplateSet | null {
   const candidate = visual as TemplateSet;
   if (!Array.isArray(candidate.pages) || !candidate.defaultPageSize) return null;
   return candidate;
+}
+
+function studentExamStatsBindings(templateSet?: TemplateSet | null) {
+  const bindings = new Map<string, { key: string; start_date?: string; end_date?: string }>();
+  for (const page of templateSet?.pages || []) {
+    for (const element of page.elements || []) {
+      if (element.type !== "examStatsChart" || element.dataSource !== "studentExamHistory") continue;
+      const key = element.dataVariableKey || "exam_stats_series_json";
+      bindings.set(`${key}:${element.xAxisDateStart || ""}:${element.xAxisDateEnd || ""}`, {
+        key,
+        start_date: element.xAxisDateStart || undefined,
+        end_date: element.xAxisDateEnd || undefined,
+      });
+    }
+  }
+  return Array.from(bindings.values());
 }
 
 function dedupeHubTemplates(items: HubTemplate[]) {
@@ -251,6 +267,7 @@ export function ExportModal({
   const legacyOptions = options.filter((option) => option.kind === "legacy");
   const htmlOptions = options.filter((option) => option.kind === "html");
   const manualVariables = useMemo(() => collectVisualTemplateManualVariables(selected?.templateSet), [selected?.templateSet]);
+  const statsBindings = useMemo(() => studentExamStatsBindings(selected?.templateSet), [selected?.templateSet]);
   const assignClass = classes.find((classRow) => classRow.id === assignClassId) || null;
   const assignableStudents = useMemo<StudentCard[]>(() => {
     const pool = assignClass ? assignClass.students : classes.flatMap((classRow) => classRow.students);
@@ -295,6 +312,19 @@ export function ExportModal({
     if (!selected || !examTitle.trim() || loading) return;
     setLoading(true);
     try {
+      let resolvedCustomVariables = customVariables;
+      if (statsBindings.length && assignStudentIds.length === 1) {
+        const statsVariables = await Promise.all(
+          statsBindings.map(async (binding) => {
+            const series = await getStudentExamStatsSeries(assignStudentIds[0], {
+              start_date: binding.start_date,
+              end_date: binding.end_date,
+            });
+            return [binding.key, JSON.stringify(series)] as const;
+          })
+        );
+        resolvedCustomVariables = { ...customVariables, ...Object.fromEntries(statsVariables) };
+      }
       await downloadExport({
         source,
         problem_set_id: source === "set" ? problemSetId || null : null,
@@ -309,7 +339,7 @@ export function ExportModal({
         exam_end_time: examEndTime,
         exam_time: examTime,
         exam_datetime: examDateTime,
-        custom_variables: customVariables,
+        custom_variables: resolvedCustomVariables,
         include_solution: includeSolution,
       });
       if (assignEnabled && assignTargetCount > 0) {
@@ -355,6 +385,11 @@ export function ExportModal({
                 {examDateTime || "시험 일시 미입력"}
               </div>
             </div>
+            {statsBindings.length ? (
+              <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-xs leading-5 text-violet-100">
+                이 템플릿은 학생 시험 이력 통계를 사용합니다. 학생 1명을 선택하면 설정한 X축 날짜 범위 안의 채점 완료 시험만 자동 연결됩니다.
+              </div>
+            ) : null}
             {manualVariables.length ? (
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
                 <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">템플릿 입력값</div>

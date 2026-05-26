@@ -52,7 +52,7 @@ import { ClipboardDesignImage, createClipboardEditableElements, createClipboardI
 import { importPowerPointFile } from "@/lib/powerpointPptxImport";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createElement, createProblemRegion, createTemplateSet, pageRoleLabels, visualTemplateCategories } from "@/lib/visualTemplatePresets";
-import { ElementStyle, ExamStatsMetricKey, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
+import { ElementStyle, ExamStatsDataSource, ExamStatsMetricKey, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubTemplate, ensureTemplateHubSession, getHubTemplate, updateHubTemplate } from "@/lib/templateHub";
 
 const LOCAL_STORAGE_KEY = "tena-forge-visual-template-studio";
@@ -114,7 +114,10 @@ function normalizeExamStatsElement(element: TemplateElement): TemplateElement {
     title: element.title || "시험 통계",
     chartMode: element.chartMode === "bar" ? "bar" : "line",
     metrics: metrics.length ? metrics : defaultExamStatsChartMetrics,
+    dataSource: element.dataSource === "studentExamHistory" ? "studentExamHistory" : "templateVariable",
     dataVariableKey: element.dataVariableKey || "exam_stats_series_json",
+    xAxisDateStart: element.xAxisDateStart || "",
+    xAxisDateEnd: element.xAxisDateEnd || "",
     showLegend: element.showLegend !== false,
     showGrid: element.showGrid !== false,
     showPointLabels: element.showPointLabels === true,
@@ -2189,12 +2192,34 @@ function VisualTemplateStudioPageContent() {
                         <FieldLabel label="데이터 변수">
                           <Input className="h-8" value={selectedElement.dataVariableKey || ""} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, dataVariableKey: event.target.value || "exam_stats_series_json" } : element))} />
                         </FieldLabel>
+                        <FieldLabel label="데이터 소스">
+                          <select
+                            className="h-8 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-xs text-white outline-none"
+                            value={selectedElement.dataSource || "templateVariable"}
+                            onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, dataSource: event.target.value as ExamStatsDataSource } : element))}
+                          >
+                            <option value="templateVariable">템플릿 변수</option>
+                            <option value="studentExamHistory">학생 시험 이력</option>
+                          </select>
+                        </FieldLabel>
                         <FieldLabel label="Y 최소">
                           <Input className="h-8" type="number" value={selectedElement.yAxisMin} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, yAxisMin: Number(event.target.value) } : element))} />
                         </FieldLabel>
                         <FieldLabel label="Y 최대">
                           <Input className="h-8" type="number" value={selectedElement.yAxisMax} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, yAxisMax: Number(event.target.value) } : element))} />
                         </FieldLabel>
+                      </div>
+                      <div>
+                        <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">X축 날짜 범위</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <FieldLabel label="시작일">
+                            <Input className="h-8" type="date" value={selectedElement.xAxisDateStart || ""} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, xAxisDateStart: event.target.value } : element))} />
+                          </FieldLabel>
+                          <FieldLabel label="종료일">
+                            <Input className="h-8" type="date" value={selectedElement.xAxisDateEnd || ""} onChange={(event) => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, xAxisDateEnd: event.target.value } : element))} />
+                          </FieldLabel>
+                        </div>
+                        <p className="mt-2 text-[11px] leading-5 text-slate-500">학생 시험 이력을 쓰면 이 기간 안의 시험 일자만 차트에 연결됩니다.</p>
                       </div>
                       <div>
                         <div className="mb-2 flex items-center justify-between gap-2">

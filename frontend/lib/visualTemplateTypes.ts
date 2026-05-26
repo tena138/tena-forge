@@ -121,13 +121,17 @@ export type WatermarkElement = ElementBase & { type: "watermark"; text: string }
 
 export type ExamStatsMetricKey = "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
 export type ExamStatsChartMode = "line" | "bar";
+export type ExamStatsDataSource = "templateVariable" | "studentExamHistory";
 
 export type ExamStatsChartElement = ElementBase & {
   type: "examStatsChart";
   title: string;
   chartMode: ExamStatsChartMode;
   metrics: ExamStatsMetricKey[];
+  dataSource?: ExamStatsDataSource;
   dataVariableKey?: string;
+  xAxisDateStart?: string;
+  xAxisDateEnd?: string;
   showLegend: boolean;
   showGrid: boolean;
   showPointLabels?: boolean;

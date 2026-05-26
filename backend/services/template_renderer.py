@@ -547,6 +547,37 @@ def _finite_number(value: Any) -> float | None:
     return number
 
 
+def _point_date_key(value: Any) -> str:
+    text = str(value or "")
+    match = re.search(r"(\d{4})\D*(\d{1,2})\D*(\d{1,2})", text)
+    if match:
+        year, month, day = match.groups()
+        return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return ""
+    return parsed.strftime("%Y-%m-%d")
+
+
+def _filter_exam_stats_points(points: list[dict[str, Any]], element: dict[str, Any]) -> list[dict[str, Any]]:
+    start = str(element.get("xAxisDateStart") or "")
+    end = str(element.get("xAxisDateEnd") or "")
+    if not start and not end:
+        return points
+    filtered: list[dict[str, Any]] = []
+    for point in points:
+        key = _point_date_key(point.get("date"))
+        if not key:
+            continue
+        if start and key < start:
+            continue
+        if end and key > end:
+            continue
+        filtered.append(point)
+    return filtered
+
+
 def _chart_value(value: float, minimum: float, maximum: float) -> float:
     if maximum <= minimum:
         return minimum
@@ -585,7 +616,7 @@ def _exam_stats_points(element: dict[str, Any], data: dict[str, Any]) -> list[di
         if (normalized := _normalize_exam_stats_point(item, index))
     ]
     if points:
-        return points
+        return _filter_exam_stats_points(points, element)
 
     single_point = {
         "title": data.get("test_title") or data.get("exam_title") or "시험",
@@ -601,7 +632,7 @@ def _exam_stats_points(element: dict[str, Any], data: dict[str, Any]) -> list[di
     }
     normalized = _normalize_exam_stats_point(single_point, 0)
     if normalized and any(metric in normalized for metric in EXAM_STATS_METRICS):
-        return [normalized]
+        return _filter_exam_stats_points([normalized], element)
     return []
 
 
