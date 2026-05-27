@@ -224,18 +224,18 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
   const percent = total > 0 ? remainingPercent(used, total) : 100;
   const tone = remainingTone(percent);
   return (
-    <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] border border-white/10 bg-black/20 p-3 text-center">
-      <div className="text-xs font-semibold text-slate-500">{label}</div>
+    <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] border border-border bg-card/65 p-3 text-center shadow-sm">
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div
         className="relative mt-2 grid aspect-square w-full max-w-[6.75rem] place-items-center overflow-visible rounded-full p-[7px]"
         style={{
           background: `conic-gradient(${tone} ${percent * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
         }}
       >
-        <div className="h-full w-full rounded-full bg-[#111018]" />
+        <div className="h-full w-full rounded-full bg-card" />
         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-visible text-center">
-          <span className="whitespace-nowrap text-lg font-black leading-none text-white">{Math.round(percent)}%</span>
-          <span className="mt-1 whitespace-nowrap text-[10px] font-bold leading-none text-sky-200 drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
+          <span className="whitespace-nowrap text-lg font-black leading-none text-foreground">{Math.round(percent)}%</span>
+          <span className="mt-1 whitespace-nowrap text-[10px] font-bold leading-none text-sky-700 drop-shadow-[0_1px_5px_rgba(255,255,255,0.85)] dark:text-sky-200 dark:drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
             {ratio}
           </span>
         </div>
@@ -277,14 +277,14 @@ function UsageOverview({
   const storageRemaining = Math.max(storageLimit - storageUsed, 0);
 
   return (
-    <section className="rounded-[12px] border border-white/10 bg-white/[0.035] p-4">
+    <section className="rounded-[12px] border border-border bg-card/70 p-4 shadow-sm">
       <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="rounded-[10px] border border-violet-300/15 bg-violet-500/[0.08] p-4">
-          <div className="text-2xl font-black text-white">{planName}</div>
-          <div className="mt-2 inline-flex rounded-full border border-violet-300/20 bg-black/20 px-2 py-1 text-[11px] font-black text-violet-100">{planStatus}</div>
+        <div className="rounded-[10px] border border-violet-300/25 bg-violet-500/[0.08] p-4">
+          <div className="text-2xl font-black text-foreground">{planName}</div>
+          <div className="mt-2 inline-flex rounded-full border border-violet-300/30 bg-violet-500/10 px-2 py-1 text-[11px] font-black text-violet-700 dark:bg-black/20 dark:text-violet-100">{planStatus}</div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
-              <span key={engine} className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-semibold text-slate-200">
+              <span key={engine} className="rounded-full border border-border bg-background/65 px-2 py-1 text-[11px] font-semibold text-foreground">
                 {subjectEngineLabel(engine)}
               </span>
             ))}
