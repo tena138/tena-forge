@@ -377,6 +377,30 @@ export function createCounselingLog(
   });
 }
 
+export function updateCounselingLog(
+  studentId: string,
+  logId: string,
+  payload: {
+    counseling_date?: string | null;
+    title: string;
+    class_id?: string | null;
+    notes?: string | null;
+    weekly_report?: string | null;
+    next_plan?: string | null;
+    sections?: Array<{
+      field_id: string;
+      label: string;
+      value?: string | null;
+      include_in_report?: boolean;
+    }>;
+  }
+) {
+  return api<CounselingLog>(`/api/student-management/students/${studentId}/counseling-logs/${logId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function updateClassCounselingFormat(classId: string, payload: { fields: CounselingFormatField[] }) {
   return api<CounselingFormat>(`/api/student-management/classes/${classId}/counseling-format`, {
     method: "PUT",

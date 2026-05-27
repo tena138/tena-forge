@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Download, FileText, Loader2, MessageSquareText, Plus, RotateCcw, Save, Settings, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Download, FileText, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Settings, Trash2, UserRound, X } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import {
   savePaperSessionGrade,
   saveCounselingPreset,
   updateClassCounselingFormat,
+  updateCounselingLog,
 } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
@@ -111,17 +112,17 @@ function sectionValue(log: CounselingLog, fieldId: string, label: string, fallba
   return section?.value || fallback || "";
 }
 
-function logSections(log: CounselingLog): Array<{ field_id: string; label: string; value: string }> {
+function logSections(log: CounselingLog): Array<{ field_id: string; label: string; value: string; include_in_report?: boolean }> {
   if (log.sections?.length) {
     return log.sections.map((section) => {
       const isReport = section.field_id === "weekly_report" || /리포트|보고/.test(section.label);
-      return { field_id: section.field_id, label: section.label, value: (isReport ? log.weekly_report || section.value : section.value) || "" };
+      return { field_id: section.field_id, label: section.label, value: (isReport ? log.weekly_report || section.value : section.value) || "", include_in_report: section.include_in_report };
     });
   }
   return [
-    { field_id: "notes", label: "상담하면서 기록할 내용", value: log.notes || "" },
-    { field_id: "weekly_report", label: "주간 리포트", value: log.weekly_report || "" },
-    { field_id: "next_plan", label: "다음 지도 계획", value: log.next_plan || "" },
+    { field_id: "notes", label: "상담하면서 기록할 내용", value: log.notes || "", include_in_report: true },
+    { field_id: "weekly_report", label: "주간 리포트", value: log.weekly_report || "", include_in_report: false },
+    { field_id: "next_plan", label: "다음 지도 계획", value: log.next_plan || "", include_in_report: true },
   ].filter((section) => section.value);
 }
 
@@ -296,6 +297,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     counseling_date: new Date().toISOString().slice(0, 10),
     title: "학습 상담",
   });
+  const [editingCounselingLogId, setEditingCounselingLogId] = useState<string | null>(null);
 
   const calendarItems = useMemo(() => (data ? studentCalendarItems(data) : []), [data]);
   const activeReportField = useMemo(() => reportField(counselingFields), [counselingFields]);
@@ -363,6 +365,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
   useEffect(() => {
     if (!data) return;
+    if (editingCounselingLogId) return;
     const format = (data.counseling_formats || []).find((item) => item.class_id === counselingClassId);
     const nextFields = normalizeCounselingFields(format?.fields);
     setCounselingFields(nextFields);
@@ -371,7 +374,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       for (const field of nextFields) next[field.id] = current[field.id] || "";
       return next;
     });
-  }, [data, counselingClassId]);
+  }, [data, counselingClassId, editingCounselingLogId]);
 
   useEffect(() => {
     return () => {
@@ -571,33 +574,84 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     setMessage(`${preset.name || `프리셋 ${preset.slot}`}을 적용했습니다. 클래스에 반영하려면 포맷 저장을 눌러주세요.`);
   }
 
+  function buildCounselingLogPayload() {
+    const sections = counselingFields.map((field) => ({
+      field_id: field.id,
+      label: field.label,
+      value: counselingFieldValues[field.id] || "",
+      include_in_report: field.include_in_report !== false,
+    }));
+    const notesField = counselingFields.find((field) => field.id === "notes") || counselingFields.find((field) => field.label.includes("상담")) || counselingFields[0];
+    const nextPlanField = counselingFields.find((field) => field.id === "next_plan") || counselingFields.find((field) => field.label.includes("다음") || field.label.includes("계획"));
+    const report = activeReportField ? resolveReportTemplate(counselingFieldValues[activeReportField.id] || "") : "";
+    return {
+      counseling_date: counselingForm.counseling_date ? `${counselingForm.counseling_date}T00:00:00` : null,
+      title: counselingForm.title.trim(),
+      class_id: counselingClassId || null,
+      notes: notesField ? counselingFieldValues[notesField.id] || "" : "",
+      weekly_report: report,
+      next_plan: nextPlanField ? counselingFieldValues[nextPlanField.id] || "" : "",
+      sections,
+    };
+  }
+
+  function resetCounselingEntryForm() {
+    setEditingCounselingLogId(null);
+    setCounselingForm({ counseling_date: new Date().toISOString().slice(0, 10), title: "학습 상담" });
+    setCounselingFieldValues({});
+  }
+
+  function startEditingCounselingLog(log: CounselingLog) {
+    const sourceSections = log.sections?.length
+      ? log.sections.map((section) => ({
+          field_id: section.field_id,
+          label: section.label,
+          value: section.value || "",
+          include_in_report: section.include_in_report,
+        }))
+      : [
+          { field_id: "notes", label: "상담하면서 기록할 내용", value: log.notes || "", include_in_report: true },
+          { field_id: "weekly_report", label: "주간 리포트", value: log.weekly_report || "", include_in_report: false },
+          { field_id: "next_plan", label: "다음 지도 계획", value: log.next_plan || "", include_in_report: true },
+        ];
+    const fields = normalizeCounselingFields(
+      sourceSections.map((section) => ({
+        id: section.field_id,
+        label: section.label,
+        placeholder: section.label,
+        include_in_report: section.include_in_report !== false,
+      }))
+    );
+    const values = Object.fromEntries(
+      fields.map((field) => {
+        const section = sourceSections.find((item) => item.field_id === field.id || item.label === field.label);
+        return [field.id, section?.value || ""];
+      })
+    );
+    setEditingCounselingLogId(log.id);
+    setCounselingClassId(log.class_id && data?.class_ids.includes(log.class_id) ? log.class_id : "");
+    setCounselingFields(fields);
+    setCounselingFieldValues(values);
+    setCounselingForm({
+      counseling_date: dateKey(log.counseling_date) || new Date().toISOString().slice(0, 10),
+      title: log.title || "학습 상담",
+    });
+    setFormatSettingsOpen(false);
+    setMessage("상담 기록을 편집 중입니다. 내용을 수정한 뒤 저장해 주세요.");
+  }
+
   async function saveCounselingLog() {
     if (!data || !counselingForm.title.trim()) return;
     setCounselingSaving(true);
     try {
-      const sections = counselingFields.map((field) => ({
-        field_id: field.id,
-        label: field.label,
-        value: counselingFieldValues[field.id] || "",
-        include_in_report: field.include_in_report !== false,
-      }));
-      const notesField = counselingFields.find((field) => field.id === "notes") || counselingFields.find((field) => field.label.includes("상담")) || counselingFields[0];
-      const nextPlanField = counselingFields.find((field) => field.id === "next_plan") || counselingFields.find((field) => field.label.includes("다음") || field.label.includes("계획"));
-      const report = activeReportField ? resolveReportTemplate(counselingFieldValues[activeReportField.id] || "") : "";
-      await createCounselingLog(data.id, {
-        counseling_date: counselingForm.counseling_date ? `${counselingForm.counseling_date}T00:00:00` : null,
-        title: counselingForm.title.trim(),
-        class_id: counselingClassId || null,
-        notes: notesField ? counselingFieldValues[notesField.id] || "" : "",
-        weekly_report: report,
-        next_plan: nextPlanField ? counselingFieldValues[nextPlanField.id] || "" : "",
-        sections,
-      });
+      const payload = buildCounselingLogPayload();
+      if (editingCounselingLogId) await updateCounselingLog(data.id, editingCounselingLogId, payload);
+      else await createCounselingLog(data.id, payload);
       await refreshStudent();
-      setCounselingFieldValues((current) => Object.fromEntries(Object.keys(current).map((key) => [key, ""])));
-      setMessage("상담일지를 저장했습니다.");
+      resetCounselingEntryForm();
+      setMessage(editingCounselingLogId ? "상담일지를 수정했습니다." : "상담일지를 저장했습니다.");
     } catch {
-      setMessage("상담일지 저장에 실패했습니다. 다시 시도해주세요.");
+      setMessage(editingCounselingLogId ? "상담일지 수정에 실패했습니다. 다시 시도해주세요." : "상담일지 저장에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setCounselingSaving(false);
     }
@@ -886,10 +940,18 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
             <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="flex items-center gap-2 text-white"><MessageSquareText className="h-5 w-5" />상담일지 작성</CardTitle>
-                  <Button type="button" size="icon" variant="outline" onClick={() => setFormatSettingsOpen((current) => !current)} aria-label="상담일지 포맷 설정">
-                    <Settings className="h-4 w-4" />
-                  </Button>
+                  <CardTitle className="flex items-center gap-2 text-white"><MessageSquareText className="h-5 w-5" />{editingCounselingLogId ? "상담일지 편집" : "상담일지 작성"}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    {editingCounselingLogId ? (
+                      <Button type="button" size="sm" variant="outline" onClick={resetCounselingEntryForm}>
+                        <X className="h-4 w-4" />
+                        취소
+                      </Button>
+                    ) : null}
+                    <Button type="button" size="icon" variant="outline" onClick={() => setFormatSettingsOpen((current) => !current)} aria-label="상담일지 포맷 설정">
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1006,7 +1068,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 ))}
                 <Button className="w-full" onClick={saveCounselingLog} disabled={counselingSaving || !counselingForm.title.trim()}>
                   {counselingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  상담일지 저장
+                  {editingCounselingLogId ? "상담일지 수정 저장" : "상담일지 저장"}
                 </Button>
               </CardContent>
             </Card>
@@ -1029,7 +1091,13 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                         <p className="mt-1 text-lg font-black text-white">{log.title}</p>
                         {log.class_name ? <p className="mt-1 text-xs text-slate-500">{log.class_name}</p> : null}
                       </div>
-                      <Badge className="border border-violet-300/20 bg-violet-500/15 text-violet-100">상담</Badge>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => startEditingCounselingLog(log)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                          편집
+                        </Button>
+                        <Badge className="border border-violet-300/20 bg-violet-500/15 text-violet-100">상담</Badge>
+                      </div>
                     </div>
                     <div className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
                       {logSections(log).map((section) => (

@@ -858,6 +858,50 @@ class CounselingLogPayload(BaseModel):
     sections: list[CounselingLogSectionPayload] = []
 
 
+def _resolve_counseling_class(db: Session, academy_id: str, membership: StudentAcademyMembership, class_id: UUID | None) -> AcademyClass | None:
+    if not class_id:
+        return None
+    class_row = _get_class(db, academy_id, class_id)
+    link = db.scalar(
+        select(ClassStudent).where(
+            ClassStudent.class_id == class_id,
+            ClassStudent.student_membership_id == membership.id,
+            ClassStudent.left_at.is_(None),
+        )
+    )
+    if not link:
+        raise HTTPException(status_code=400, detail="Student is not active in this class.")
+    return class_row
+
+
+def _counseling_log_row(
+    payload: CounselingLogPayload,
+    request: Request,
+    membership: StudentAcademyMembership,
+    class_row: AcademyClass | None,
+    existing: dict | None = None,
+) -> dict:
+    now = _now()
+    existing = existing or {}
+    title = payload.title.strip() or "학습 상담"
+    return {
+        "id": str(existing.get("id") or uuid.uuid4()),
+        "student_membership_id": str(membership.id),
+        "class_id": str(class_row.id) if class_row else None,
+        "class_name": class_row.name if class_row else None,
+        "title": title,
+        "counseling_date": (payload.counseling_date or now).isoformat(),
+        "notes": payload.notes or "",
+        "weekly_report": payload.weekly_report or "",
+        "next_plan": payload.next_plan or "",
+        "sections": _normalize_counseling_sections([section.model_dump() for section in payload.sections]),
+        "created_by": existing.get("created_by") or current_owner_id(request),
+        "created_at": existing.get("created_at") or now.isoformat(),
+        "updated_by": current_owner_id(request),
+        "updated_at": now.isoformat(),
+    }
+
+
 class ReviewSetPayload(BaseModel):
     title: str = "오답 복습 세트"
     wrong_answer_ids: list[UUID] = []
@@ -1258,39 +1302,28 @@ def student_exam_stats_series(student_id: UUID, request: Request, start_date: st
 def create_counseling_log(student_id: UUID, payload: CounselingLogPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
     membership = _get_membership(db, academy_id, student_id)
-    title = payload.title.strip() or "학습 상담"
-    now = _now()
-    class_row = None
-    if payload.class_id:
-        class_row = _get_class(db, academy_id, payload.class_id)
-        link = db.scalar(
-            select(ClassStudent).where(
-                ClassStudent.class_id == payload.class_id,
-                ClassStudent.student_membership_id == membership.id,
-                ClassStudent.left_at.is_(None),
-            )
-        )
-        if not link:
-            raise HTTPException(status_code=400, detail="Student is not active in this class.")
-    sections = _normalize_counseling_sections([section.model_dump() for section in payload.sections])
-    row = {
-        "id": str(uuid.uuid4()),
-        "student_membership_id": str(membership.id),
-        "class_id": str(class_row.id) if class_row else None,
-        "class_name": class_row.name if class_row else None,
-        "title": title,
-        "counseling_date": (payload.counseling_date or now).isoformat(),
-        "notes": payload.notes or "",
-        "weekly_report": payload.weekly_report or "",
-        "next_plan": payload.next_plan or "",
-        "sections": sections,
-        "created_by": current_owner_id(request),
-        "created_at": now.isoformat(),
-        "updated_at": now.isoformat(),
-    }
+    class_row = _resolve_counseling_class(db, academy_id, membership, payload.class_id)
+    row = _counseling_log_row(payload, request, membership, class_row)
     metadata = dict(membership.metadata_json or {})
     logs = _counseling_logs(membership)
     metadata["counseling_logs"] = [row, *logs][:200]
+    membership.metadata_json = metadata
+    db.commit()
+    return row
+
+
+@router.put("/students/{student_id}/counseling-logs/{log_id}")
+def update_counseling_log(student_id: UUID, log_id: str, payload: CounselingLogPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    membership = _get_membership(db, academy_id, student_id)
+    logs = _counseling_logs(membership)
+    existing = next((row for row in logs if str(row.get("id")) == log_id), None)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Counseling log not found.")
+    class_row = _resolve_counseling_class(db, academy_id, membership, payload.class_id)
+    row = _counseling_log_row(payload, request, membership, class_row, existing=existing)
+    metadata = dict(membership.metadata_json or {})
+    metadata["counseling_logs"] = [row if str(item.get("id")) == log_id else item for item in logs][:200]
     membership.metadata_json = metadata
     db.commit()
     return row
