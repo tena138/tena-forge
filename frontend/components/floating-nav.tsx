@@ -7,7 +7,6 @@ import {
   BookOpen,
   CalendarDays,
   ClipboardCheck,
-  ClipboardList,
   FileUp,
   FolderKanban,
   GraduationCap,
@@ -64,23 +63,8 @@ const sections = [
     activeIcon: "text-sky-200 group-hover:text-sky-200",
     items: [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
-      { href: "/academy?panel=seats", label: "좌석 / 키", icon: KeyRound },
-      { href: "/academy?panel=classes", label: "클래스 / 과제", icon: ClipboardList },
-      { href: "/student-management", label: "학생 관리", icon: NotebookPen },
-    ],
-  },
-  {
-    title: "Licensed Library",
-    shortTitle: "LL",
-    description: "구독 및 구매 콘텐츠",
-    accent: "bg-cyan-300",
-    panel: "border-cyan-300/20 bg-cyan-300/[0.045]",
-    header: "text-cyan-100",
-    activeItem: "border-cyan-300/25 bg-cyan-300/10 text-cyan-50 hover:bg-cyan-300/10 hover:text-cyan-50 shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
-    activeIndicator: "bg-cyan-300",
-    activeIcon: "text-cyan-200 group-hover:text-cyan-200",
-    items: [
       { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
+      { href: "/student-management", label: "학생 관리", icon: NotebookPen },
     ],
   },
   {
