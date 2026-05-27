@@ -10,7 +10,7 @@ export const SERVICE_INFO = {
   companyName: "테나랩스",
   effectiveDateLabel: "2026년 5월 25일",
   businessStartDateLabel: "2026년 5월 25일",
-  businessRegistrationNumber: "신청 중, 발급 완료 후 즉시 반영 예정",
+  businessRegistrationNumber: "849-05-03464",
   mailOrderRegistrationNumber: "신청 중, 발급 완료 후 즉시 반영 예정",
   address: "서울특별시 관악구 남부순환로 224길 5, 1701호",
   supportEmail: CUSTOMER_SUPPORT_EMAIL,
