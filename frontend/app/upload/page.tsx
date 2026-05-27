@@ -500,13 +500,11 @@ function SubjectFolderRow({
 
 function DropZone({
   label,
-  helper,
   file,
   required = false,
   onChange
 }: {
   label: string;
-  helper: string;
   file: File | null;
   required?: boolean;
   onChange: (file: File | null) => void;
@@ -555,8 +553,7 @@ function DropZone({
         <span className="font-semibold text-white">
           {label} {required && <span className="text-red-300">*</span>}
         </span>
-        <span className="mt-2 text-sm text-slate-400">{file ? file.name : isDragging ? "여기에 PDF를 놓으세요" : helper}</span>
-        <span className="mt-1 text-xs text-slate-500">클릭해서 선택하거나 PDF를 끌어다 놓을 수 있습니다.</span>
+        {file || isDragging ? <span className="mt-2 text-sm text-slate-400">{file ? file.name : "여기에 PDF를 놓으세요"}</span> : null}
         <input className="hidden" type="file" accept="application/pdf" onChange={(event) => pickFile(event.target.files?.[0] ?? null)} />
       </label>
       {file && (
@@ -960,8 +957,8 @@ export default function UploadPage() {
 
             <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-                <DropZone label="문제 PDF" helper="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
-                <DropZone label="해설 PDF" helper="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
+                <DropZone label="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
+                <DropZone label="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
               </div>
 
           {problemPdf ? (
