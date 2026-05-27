@@ -98,15 +98,6 @@ function compactDate(value: string) {
   });
 }
 
-function compactTime(value: string | null) {
-  if (!value) return "";
-  return new Date(value).toLocaleTimeString("ko-KR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 function fileName(value: string | null) {
   if (!value) return "-";
   return value.split(/[\\/]/).pop() || value;
@@ -228,15 +219,6 @@ function defaultStudentSeatLimit(plan?: string | null) {
   return 0;
 }
 
-function compactDateOnly(value?: string | null) {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function daysUntil(value?: string | null) {
   if (!value) return null;
   const diff = new Date(value).getTime() - Date.now();
@@ -269,27 +251,19 @@ function UsageOverview({
   summary,
   profile,
   billing,
-  loading,
-  updatedAt,
 }: {
   summary: UsageSummary | null;
   profile: AcademyProfile | null;
   billing: AcademyBilling | null;
-  loading: boolean;
-  updatedAt: string | null;
 }) {
   const planName = summary?.plan?.name || planNameFallback(profile?.plan);
   const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
   const subscription = summary?.subscription;
-  const periodEnd = subscription?.current_period_end || profile?.trial_ends_at || profile?.plan_expires_at || null;
-  const remainingDays = daysUntil(periodEnd);
+  const normalizedPlan = String(summary?.plan?.code || profile?.plan || "").toLowerCase();
+  const hasAssignedPlan = !["", "free", "plan"].includes(normalizedPlan) || !["", "Free", "Plan"].includes(planName);
+  const remainingDays = daysUntil(profile?.trial_ends_at || profile?.plan_expires_at || null);
   const isTrial = subscription?.status === "trialing" || Boolean(profile?.plan_expires_at && profile?.plan === "basic");
-  const planStatus = isTrial ? "무료 체험" : subscription?.status === "active" ? "사용 중" : "플랜 미등록";
-  const periodLabel = isTrial && remainingDays !== null
-    ? `무료 체험 ${Math.max(remainingDays, 0)}일 남음 · ${compactDateOnly(periodEnd)}`
-    : periodEnd
-      ? `${compactDateOnly(periodEnd)}${remainingDays !== null ? ` · D-${Math.max(remainingDays, 0)}` : ""}`
-      : "결제 수단 등록 필요";
+  const planStatus = isTrial && remainingDays !== null ? `무료 체험 ${Math.max(remainingDays, 0)}일 남음` : subscription?.status === "active" || hasAssignedPlan ? "사용 중" : "플랜 미등록";
   const creditsUsed = summary?.extraction_credits_used ?? 0;
   const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;
   const activeSeats = billing?.active_seats ?? 0;
@@ -303,25 +277,20 @@ function UsageOverview({
   const seatSub = billing?.unlimited_seats
     ? `현재 ${formatUsageNumber(activeSeats)}명 활성`
     : `총 ${formatUsageNumber(seatLimit)}명까지`;
-  const pageUsed = summary?.monthly_pages_used ?? 0;
-  const pageLimit = summary?.plan?.monthly_processed_pages || 0;
   const uploadMbUsed = summary?.uploaded_mb_this_month ?? 0;
   const uploadMbLimit = summary?.monthly_upload_mb_limit || 0;
   const storageUsed = summary?.storage_mb_used ?? 0;
   const storageLimit = summary?.plan?.storage_quota_mb || 0;
   const creditsRemaining = Math.max(creditsLimit - creditsUsed, 0);
-  const pageRemaining = Math.max(pageLimit - pageUsed, 0);
   const uploadMbRemaining = Math.max(uploadMbLimit - uploadMbUsed, 0);
   const storageRemaining = Math.max(storageLimit - storageUsed, 0);
 
   return (
     <section className="rounded-[12px] border border-white/10 bg-white/[0.035] p-4">
-      <div className="grid gap-4 2xl:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
         <div className="rounded-[10px] border border-violet-300/15 bg-violet-500/[0.08] p-4">
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-violet-200">이번 달 사용량</div>
-          <div className="mt-2 text-2xl font-black text-white">{planName}</div>
+          <div className="text-2xl font-black text-white">{planName}</div>
           <div className="mt-2 inline-flex rounded-full border border-violet-300/20 bg-black/20 px-2 py-1 text-[11px] font-black text-violet-100">{planStatus}</div>
-          <div className="mt-2 text-xs font-semibold text-slate-300">{periodLabel}</div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
               <span key={engine} className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-semibold text-slate-200">
@@ -329,15 +298,10 @@ function UsageOverview({
               </span>
             ))}
           </div>
-          <Link href="/billing" className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[7px] border border-violet-300/30 bg-violet-500/20 px-3 text-xs font-black text-violet-50 transition hover:border-violet-200/50 hover:bg-violet-500/30">
-            플랜 등록
-          </Link>
-          <div className="mt-3 text-[11px] text-slate-500">{loading ? "불러오는 중" : updatedAt ? compactTime(updatedAt) : ""}</div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2">
           <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsRemaining)} 남음`} sub={formatLimitLabel(creditsLimit)} />
           <UsageRing label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"} used={billing?.unlimited_seats ? 0 : activeSeats} total={billing?.unlimited_seats ? 0 : seatLimit} value={seatValue} sub={seatSub} />
-          <UsageRing label="처리 페이지" used={pageUsed} total={pageLimit} value={`${formatUsageNumber(pageRemaining, "p")} 남음`} sub={formatLimitLabel(pageLimit, "p")} />
           <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} value={`${formatUsageNumber(uploadMbRemaining, "MB")} 남음`} sub={formatLimitLabel(uploadMbLimit, "MB")} />
           <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} value={`${formatUsageNumber(storageRemaining, "MB")} 남음`} sub={`총 ${formatUsageNumber(storageLimit, "MB")}`} />
         </div>
@@ -354,8 +318,6 @@ function AcademyConsoleHome() {
   const [sets, setSets] = useState<ProblemSetListItem[]>([]);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [billingSummary, setBillingSummary] = useState<AcademyBilling | null>(null);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [dataError, setDataError] = useState("");
 
   useEffect(() => {
@@ -392,7 +354,6 @@ function AcademyConsoleHome() {
         const batchData = await api<Batch[]>("/api/batches");
         if (cancelled) return;
         setBatches(batchData);
-        setLastUpdatedAt(new Date().toISOString());
         setDataError("");
       } catch {
         if (!cancelled) {
@@ -443,10 +404,8 @@ function AcademyConsoleHome() {
     }
 
     async function loadConsole() {
-      setLoading(true);
       await Promise.all([loadProfile(), loadBatches(), loadArchiveAndSets()]);
       await loadUsage();
-      if (!cancelled) setLoading(false);
     }
 
     void loadConsole();
@@ -473,7 +432,7 @@ function AcademyConsoleHome() {
 
   return (
     <div className="space-y-5">
-      <UsageOverview summary={usageSummary} profile={profile} billing={billingSummary} loading={loading} updatedAt={lastUpdatedAt} />
+      <UsageOverview summary={usageSummary} profile={profile} billing={billingSummary} />
       {dataError ? <p className="rounded-[8px] border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">{dataError}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-4">
