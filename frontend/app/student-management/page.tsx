@@ -4,17 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
-  CalendarDays,
   Check,
-  ClipboardCheck,
-  FileText,
   GripVertical,
   LineChart,
   Loader2,
   Plus,
   RotateCcw,
   UserPlus,
-  Users,
   X,
 } from "lucide-react";
 
@@ -74,16 +70,6 @@ const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel
   { key: "stddev", label: "표준편차", shortLabel: "σ", color: "#cbd5e1" },
 ];
 const defaultTrendMetrics: TrendMetricKey[] = ["average", "highest", "lowest", "q1", "q2", "q3"];
-const tabItems: Array<{ key: TabKey; label: string; icon: typeof Users }> = [
-  { key: "classes", label: "클래스", icon: Users },
-  { key: "students", label: "학생", icon: UserPlus },
-  { key: "sessions", label: "세션", icon: FileText },
-  { key: "grading", label: "채점", icon: ClipboardCheck },
-  { key: "wrong", label: "오답", icon: RotateCcw },
-  { key: "calendar", label: "일정", icon: CalendarDays },
-  { key: "analytics", label: "통계", icon: BarChart3 },
-];
-
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -688,7 +674,6 @@ export default function StudentManagementPage() {
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<ClassCard[]>([]);
   const [sessions, setSessions] = useState<PaperSessionSummary[]>([]);
-  const [summary, setSummary] = useState({ class_count: 0, student_count: 0, active_session_count: 0, unresolved_wrong_count: 0 });
   const [statsOpen, setStatsOpen] = useState<Record<string, boolean>>({});
   const [classStatsDetails, setClassStatsDetails] = useState<Record<string, PaperSessionDetail[]>>({});
   const [classStatsLoading, setClassStatsLoading] = useState<Record<string, boolean>>({});
@@ -744,7 +729,6 @@ export default function StudentManagementPage() {
       ]);
       setClasses(dashboard.classes);
       setSessions(allSessions.length ? allSessions : dashboard.recent_sessions);
-      setSummary(dashboard.summary);
       setProblemSets(sets);
       setWrongAnswers(wrongs);
       if (!selectedSessionId && (allSessions[0] || dashboard.recent_sessions[0])) setSelectedSessionId((allSessions[0] || dashboard.recent_sessions[0]).id);
@@ -995,24 +979,6 @@ export default function StudentManagementPage() {
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-300">Student Management</p>
-            <p className="text-sm text-slate-500">Class Dashboard</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              ["클래스", summary.class_count],
-              ["학생", summary.student_count],
-            ].map(([label, value]) => (
-              <div key={label} className="flex min-w-[92px] items-center justify-between gap-3 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-2">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="text-base font-black text-white">{value}</p>
-              </div>
-            ))}
-          </div>
-        </header>
-
         {message ? (
           <div className="flex items-center justify-between rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
             <span>{message}</span>
@@ -1027,28 +993,6 @@ export default function StudentManagementPage() {
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             학생관리 데이터를 불러오는 중입니다.
           </div>
-        ) : null}
-
-        {!loading ? (
-          <nav className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
-            {tabItems.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  className={cn(
-                    "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
-                    activeTab === tab.key ? "bg-violet-500/25 text-white shadow-lg shadow-violet-950/20" : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
         ) : null}
 
         {!loading && activeTab === "classes" ? (
