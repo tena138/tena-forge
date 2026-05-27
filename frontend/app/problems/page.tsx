@@ -245,6 +245,7 @@ function ProblemsBrowser() {
   }, [reviewFilter, search, selectedBatch, selectedBatchId, selectedDiffs, selectedSourceTypes, subjects, types, unit]);
 
   function resetPageAnd(run: () => void) {
+    loadRequestRef.current += 1;
     setPage(1);
     run();
   }

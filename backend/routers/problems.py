@@ -90,6 +90,35 @@ def _problem_order(sort: str | None):
     return _problem_source_order()
 
 
+def _search_terms(search: str | None) -> list[str]:
+    if not search:
+        return []
+    return [term.strip() for term in search.split(",") if term.strip()]
+
+
+def _problem_search_condition(term: str):
+    like = f"%{term}%"
+    return or_(
+        Problem.problem_text.ilike(like),
+        Problem.answer.ilike(like),
+        Problem.solution_steps.ilike(like),
+        Problem.key_concept.ilike(like),
+        Problem.source_label.ilike(like),
+        Problem.source_type.ilike(like),
+        cast(Problem.problem_number, String).ilike(like),
+        Tag.subject.ilike(like),
+        Tag.unit.ilike(like),
+        Tag.difficulty.ilike(like),
+        Tag.problem_type.ilike(like),
+        Tag.source.ilike(like),
+        Batch.name.ilike(like),
+        Batch.problem_pdf_filename.ilike(like),
+        Batch.solution_pdf_filename.ilike(like),
+        Batch.source_label.ilike(like),
+        Batch.source_type.ilike(like),
+    )
+
+
 def _serialize_problem(problem: Problem, schema=ProblemRead):
     owner_id = str(problem.owner_id or "")
     item = schema.model_validate(problem)
@@ -264,30 +293,8 @@ def _problem_filter_conditions(
         filters.append(Problem.visibility.in_(visibility))
     if origin_type:
         filters.append(Problem.origin_type.in_(origin_type))
-    if search and search.strip():
-        term = search.strip()
-        like = f"%{term}%"
-        filters.append(
-            or_(
-                Problem.problem_text.ilike(like),
-                Problem.answer.ilike(like),
-                Problem.solution_steps.ilike(like),
-                Problem.key_concept.ilike(like),
-                Problem.source_label.ilike(like),
-                Problem.source_type.ilike(like),
-                cast(Problem.problem_number, String).ilike(like),
-                Tag.subject.ilike(like),
-                Tag.unit.ilike(like),
-                Tag.difficulty.ilike(like),
-                Tag.problem_type.ilike(like),
-                Tag.source.ilike(like),
-                Batch.name.ilike(like),
-                Batch.problem_pdf_filename.ilike(like),
-                Batch.solution_pdf_filename.ilike(like),
-                Batch.source_label.ilike(like),
-                Batch.source_type.ilike(like),
-            )
-        )
+    for term in _search_terms(search):
+        filters.append(_problem_search_condition(term))
     if batch_id:
         filters.append(Problem.source_batch_id == batch_id)
     return filters
