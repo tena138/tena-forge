@@ -211,7 +211,7 @@ export function HeaderAccountSummary() {
       <div className="relative">
         <button
           type="button"
-          className="flex min-w-0 items-center gap-2.5 rounded-[8px] border border-white/10 bg-white/[0.055] px-2.5 py-1.5 text-left shadow-sm transition-all hover:border-white/18 hover:bg-white/[0.08] hover:shadow-md"
+          className="flex min-w-0 items-center gap-2.5 rounded-[8px] border border-transparent bg-white/[0.055] px-2.5 py-1.5 text-left shadow-sm transition-all hover:border-transparent hover:bg-white/[0.08] hover:shadow-md"
           onClick={() => setOpen((value) => !value)}
           aria-label="계정 메뉴"
         >
