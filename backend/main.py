@@ -205,11 +205,13 @@ def repair_production_schema_and_admin():
         return
     from scripts.ensure_admin_account import main as ensure_admin_account
     from scripts.ensure_admin_templates import main as ensure_admin_templates
+    from scripts.ensure_pg_review_account import main as ensure_pg_review_account
     from scripts.repair_alembic_version import main as repair_alembic_version
 
     repair_alembic_version()
     ensure_admin_account()
     ensure_admin_templates()
+    ensure_pg_review_account()
     _mark_interrupted_batches()
     print("Production schema repair, admin bootstrap, and template seed completed.", flush=True)
 
