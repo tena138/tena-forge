@@ -986,8 +986,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 <UserRound className="h-7 w-7" />
               </div>
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-300">Student Profile</p>
-                <h1 className="mt-2 text-3xl font-black text-white">{data.name}</h1>
+                <h1 className="text-3xl font-black text-white">{data.name}</h1>
                 <p className="mt-2 text-sm text-slate-400">{[data.school, data.grade_level, ...data.class_names].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
               </div>
             </div>
