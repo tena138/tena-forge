@@ -971,13 +971,16 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1600px] space-y-5">
-        <Link href="/student-management" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
-          <ArrowLeft className="h-4 w-4" />
-          Student Management
-        </Link>
         <header className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-4">
+              <Link
+                href="/student-management"
+                className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/[0.05] hover:text-white"
+                aria-label="학생 관리로 돌아가기"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
               <div className="rounded-lg border border-violet-300/20 bg-violet-500/15 p-3 text-violet-100">
                 <UserRound className="h-7 w-7" />
               </div>
