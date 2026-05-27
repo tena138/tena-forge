@@ -135,7 +135,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <ThemeToggle />
             <HeaderNotifications />
             <HeaderAccountSummary />
           </div>

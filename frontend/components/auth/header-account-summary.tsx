@@ -2,8 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
+import { LogOut, Moon, Settings, ShieldCheck, Sun, UserRound } from "lucide-react";
 
+import { useTheme } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -100,6 +101,7 @@ export function HeaderAccountSummary() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +153,7 @@ export function HeaderAccountSummary() {
   const currentProfile = profile;
   const plan = displayPlan(currentProfile);
   const initials = (currentProfile.academy_name || currentProfile.email).slice(0, 1).toUpperCase();
+  const isDarkMode = theme === "dark";
 
   function openProfileEditor() {
     setDraft(toProfileDraft(currentProfile));
@@ -206,21 +209,21 @@ export function HeaderAccountSummary() {
       }}
     >
       <div className="relative">
-      <button
-        type="button"
-        className="flex min-w-0 items-center gap-2.5 rounded-[8px] border border-white/10 bg-white/[0.055] px-2.5 py-1.5 text-left shadow-sm transition-all hover:border-white/18 hover:bg-white/[0.08] hover:shadow-md"
-        onClick={() => setOpen((value) => !value)}
-        aria-label="계정 메뉴"
-      >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-violet-500 text-sm font-bold text-white">
-          {initials}
-        </span>
-        <span className="hidden min-w-0 sm:block">
-          <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{currentProfile.academy_name}</span>
-          <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{currentProfile.email}</span>
-        </span>
-        <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
-      </button>
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-2.5 rounded-[8px] border border-white/10 bg-white/[0.055] px-2.5 py-1.5 text-left shadow-sm transition-all hover:border-white/18 hover:bg-white/[0.08] hover:shadow-md"
+          onClick={() => setOpen((value) => !value)}
+          aria-label="계정 메뉴"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-violet-500 text-sm font-bold text-white">
+            {initials}
+          </span>
+          <span className="hidden min-w-0 sm:block">
+            <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{currentProfile.academy_name}</span>
+            <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{currentProfile.email}</span>
+          </span>
+          <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
+        </button>
 
       {open && (
         <div className="absolute right-0 mt-2 w-72 rounded-[10px] border border-white/10 bg-[#090b12] p-2 text-sm shadow-[0_24px_70px_rgba(0,0,0,0.42)]">
@@ -242,6 +245,44 @@ export function HeaderAccountSummary() {
             <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5" />
               {currentProfile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}
+            </div>
+          </div>
+
+          <div className="mt-2 rounded-[8px] border border-white/10 bg-white/[0.045] p-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2 px-1 text-slate-200">
+                {isDarkMode ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">화면 모드</div>
+                  <div className="truncate text-xs text-muted-foreground">{isDarkMode ? "다크 모드로 시작" : "라이트 모드로 시작"}</div>
+                </div>
+              </div>
+              <div className="grid shrink-0 grid-cols-2 rounded-[7px] border border-white/10 bg-black/20 p-0.5">
+                <button
+                  type="button"
+                  className={`flex h-8 w-8 items-center justify-center rounded-[6px] transition ${
+                    isDarkMode ? "bg-white text-slate-950 shadow-sm" : "text-slate-400 hover:bg-white/[0.07] hover:text-white"
+                  }`}
+                  onClick={() => setTheme("dark")}
+                  aria-label="다크 모드"
+                  aria-pressed={isDarkMode}
+                  title="다크 모드"
+                >
+                  <Moon className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className={`flex h-8 w-8 items-center justify-center rounded-[6px] transition ${
+                    !isDarkMode ? "bg-white text-slate-950 shadow-sm" : "text-slate-400 hover:bg-white/[0.07] hover:text-white"
+                  }`}
+                  onClick={() => setTheme("light")}
+                  aria-label="라이트 모드"
+                  aria-pressed={!isDarkMode}
+                  title="라이트 모드"
+                >
+                  <Sun className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
 
