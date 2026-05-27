@@ -9,8 +9,15 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
-PREVIOUS_REVISION = "0022_problem_choices"
-HEAD_REVISION = "0023_portone_billing"
+PREVIOUS_REVISION = "0023_portone_billing"
+HEAD_REVISION = "0024_batch_accent_color"
+BATCH_REQUIRED_COLUMNS = {
+    "subject_candidates",
+    "unit_candidates",
+    "processing_task",
+    "subject_engine",
+    "accent_color",
+}
 SUBJECT_ENGINE_COLUMNS = {
     "enabled_subject_engines",
     "subject_engine_count",
@@ -138,6 +145,7 @@ def _ensure_batch_columns(connection, inspector) -> bool:
         ("unit_candidates", json_definition),
         ("processing_task", "VARCHAR(30) NOT NULL DEFAULT 'full'"),
         ("subject_engine", "VARCHAR(30) NOT NULL DEFAULT 'math'"),
+        ("accent_color", "VARCHAR(7) NULL"),
     ]
     for column_name, definition in specs:
         if _add_column_if_missing(connection, inspector, "batches", column_name, definition):
@@ -255,7 +263,7 @@ def _schema_is_at_head(inspector) -> bool:
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
-        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task", "subject_engine"})
+        and _has_columns(inspector, "batches", BATCH_REQUIRED_COLUMNS)
         and _has_columns(inspector, "plans", SUBJECT_ENGINE_COLUMNS)
         and _has_columns(inspector, "subscriptions", SUBJECT_ENGINE_COLUMNS)
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
@@ -273,7 +281,7 @@ def _schema_is_at_previous(inspector) -> bool:
     tables = set(inspector.get_table_names())
     return (
         required_tables.issubset(tables)
-        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task"})
+        and _has_columns(inspector, "batches", {"subject_candidates", "unit_candidates", "processing_task", "subject_engine"})
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
     )
 

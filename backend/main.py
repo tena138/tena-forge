@@ -322,6 +322,7 @@ def _ensure_sqlite_columns():
             "rights_confirmed": "BOOLEAN DEFAULT 0 NOT NULL",
             "rights_confirmed_at": "DATETIME",
             "rights_note": "TEXT",
+            "accent_color": "VARCHAR(7)",
             "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
             "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
             "subject_engine": "VARCHAR(30) DEFAULT 'math' NOT NULL",
