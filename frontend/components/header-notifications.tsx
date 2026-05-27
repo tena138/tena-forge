@@ -342,9 +342,9 @@ export function HeaderNotifications() {
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] border border-transparent bg-white/[0.045] text-slate-400 transition hover:border-transparent hover:bg-white/[0.08] hover:text-white",
-          unreadCount && "bg-violet-400/10 text-violet-100",
-          activeStatusData && "bg-cyan-400/12 text-cyan-100"
+          "relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] border border-transparent bg-transparent text-slate-400 shadow-none transition hover:border-transparent hover:bg-transparent hover:text-white",
+          unreadCount && "text-violet-100",
+          activeStatusData && "text-cyan-100"
         )}
         aria-label={buttonLabel}
         title={buttonLabel}
