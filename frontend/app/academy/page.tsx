@@ -192,11 +192,6 @@ function formatUsageNumber(value: number, suffix = "") {
   return `${rounded.toLocaleString("ko-KR")}${suffix}`;
 }
 
-function formatLimitLabel(total: number, suffix = "") {
-  if (!total || total <= 0) return "제한 없음";
-  return `월 한도 ${formatUsageNumber(total, suffix)}`;
-}
-
 function subjectEngineLabel(code: string) {
   const labels: Record<string, string> = { math: "수학", korean: "국어" };
   return labels[code] || code;
@@ -225,23 +220,22 @@ function daysUntil(value?: string | null) {
   return Math.ceil(diff / 86_400_000);
 }
 
-function UsageRing({ label, used, total, value, sub }: { label: string; used: number; total: number; value: string; sub: string }) {
+function UsageRing({ label, used, total, ratio }: { label: string; used: number; total: number; ratio: string }) {
   const percent = total > 0 ? remainingPercent(used, total) : 100;
   const tone = remainingTone(percent);
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3">
+    <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] border border-white/10 bg-black/20 p-3 text-center">
+      <div className="text-xs font-semibold text-slate-500">{label}</div>
       <div
-        className="grid h-14 w-14 shrink-0 place-items-center rounded-full"
+        className="mt-2 grid aspect-square w-full max-w-[6.75rem] place-items-center rounded-full p-[7px]"
         style={{
           background: `conic-gradient(${tone} ${percent * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
         }}
       >
-        <div className="grid h-10 w-10 place-items-center rounded-full bg-[#111018] text-[11px] font-black text-white">{Math.round(percent)}%</div>
-      </div>
-      <div className="min-w-0">
-        <div className="text-xs font-semibold text-slate-500">{label}</div>
-        <div className="mt-1 truncate text-sm font-black text-white">{value}</div>
-        <div className="mt-0.5 truncate text-[11px] text-slate-500">{sub}</div>
+        <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-[#111018] px-2">
+          <span className="text-lg font-black leading-none text-white">{Math.round(percent)}%</span>
+          <span className="mt-1 max-w-full truncate text-[10px] font-bold leading-none text-slate-400">{ratio}</span>
+        </div>
       </div>
     </div>
   );
@@ -271,12 +265,6 @@ function UsageOverview({
   const seatLimit = billing?.unlimited_seats
     ? Math.max(activeSeats, assignedSeats, 1)
     : billing?.included_seats ?? defaultStudentSeatLimit(profile?.plan);
-  const seatValue = billing?.unlimited_seats
-    ? "무제한"
-    : `${formatUsageNumber(Math.max(seatLimit - activeSeats, 0))}명 추가 가능`;
-  const seatSub = billing?.unlimited_seats
-    ? `현재 ${formatUsageNumber(activeSeats)}명 활성`
-    : `총 ${formatUsageNumber(seatLimit)}명까지`;
   const uploadMbUsed = summary?.uploaded_mb_this_month ?? 0;
   const uploadMbLimit = summary?.monthly_upload_mb_limit || 0;
   const storageUsed = summary?.storage_mb_used ?? 0;
@@ -299,11 +287,16 @@ function UsageOverview({
             ))}
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} value={`${formatUsageNumber(creditsRemaining)} 남음`} sub={formatLimitLabel(creditsLimit)} />
-          <UsageRing label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"} used={billing?.unlimited_seats ? 0 : activeSeats} total={billing?.unlimited_seats ? 0 : seatLimit} value={seatValue} sub={seatSub} />
-          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} value={`${formatUsageNumber(uploadMbRemaining, "MB")} 남음`} sub={formatLimitLabel(uploadMbLimit, "MB")} />
-          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} value={`${formatUsageNumber(storageRemaining, "MB")} 남음`} sub={`총 ${formatUsageNumber(storageLimit, "MB")}`} />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} ratio={`${formatUsageNumber(creditsRemaining)}/${formatUsageNumber(creditsLimit)}`} />
+          <UsageRing
+            label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"}
+            used={billing?.unlimited_seats ? 0 : activeSeats}
+            total={billing?.unlimited_seats ? 0 : seatLimit}
+            ratio={billing?.unlimited_seats ? `${formatUsageNumber(activeSeats)}/무제한` : `${formatUsageNumber(Math.max(seatLimit - activeSeats, 0))}/${formatUsageNumber(seatLimit)}`}
+          />
+          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} ratio={`${formatUsageNumber(uploadMbRemaining, "MB")}/${formatUsageNumber(uploadMbLimit, "MB")}`} />
+          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} ratio={`${formatUsageNumber(storageRemaining, "MB")}/${formatUsageNumber(storageLimit, "MB")}`} />
         </div>
       </div>
     </section>
