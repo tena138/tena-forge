@@ -19,6 +19,7 @@ import {
   WrongAnswer,
   createCounselingLog,
   createReviewSet,
+  deleteWrongAnswerRecord,
   getStudentDetail,
   savePaperSessionGrade,
   saveCounselingPreset,
@@ -337,6 +338,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
+  const [deletingWrongAnswerId, setDeletingWrongAnswerId] = useState("");
   const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const calendarInitializedRef = useRef(false);
   const [message, setMessage] = useState("");
@@ -657,6 +659,20 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   async function saveResult(result: StudentDetail["paper_session_history"][number]) {
     clearAutosaveTimer(result.id);
     await persistResult(result, resultStatuses[result.id] || buildStatuses(result), true);
+  }
+
+  async function deleteWrongAnswer(wrong: WrongAnswer) {
+    if (!window.confirm(`${wrong.problem_number}번 오답 기록을 삭제할까요?`)) return;
+    setDeletingWrongAnswerId(wrong.id);
+    try {
+      await deleteWrongAnswerRecord(wrong.id);
+      await refreshStudent();
+      setMessage("오답 기록을 삭제했습니다.");
+    } catch {
+      setMessage("오답 기록 삭제에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setDeletingWrongAnswerId("");
+    }
   }
 
   function updateCounselingFieldValue(fieldId: string, value: string) {
@@ -1115,7 +1131,20 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                   <div key={wrong.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-semibold text-white">{wrong.problem_number}번</p>
-                      <Badge className={cn("border", tone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className={cn("border", tone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
+                          onClick={() => deleteWrongAnswer(wrong)}
+                          disabled={deletingWrongAnswerId === wrong.id}
+                          aria-label={`${wrong.problem_number}번 오답 기록 삭제`}
+                        >
+                          {deletingWrongAnswerId === wrong.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </div>
                     </div>
                     <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300" value={wrong.problem_text} />
                     <p className="mt-2 text-xs text-slate-500">오답 {wrong.wrong_count}회 · {wrong.unit || "단원 정보 없음"}</p>

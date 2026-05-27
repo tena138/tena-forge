@@ -443,6 +443,12 @@ export function listWrongAnswers(params?: { class_id?: string; student_membershi
   return api<WrongAnswer[]>(`/api/student-management/wrong-answers${suffix}`);
 }
 
+export function deleteWrongAnswerRecord(id: string) {
+  return api<void>(`/api/student-management/wrong-answers/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export function createReviewSet(payload: {
   title: string;
   wrong_answer_ids?: string[];

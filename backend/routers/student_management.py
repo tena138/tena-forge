@@ -1713,6 +1713,22 @@ def list_wrong_answers(
     return rows
 
 
+@router.delete("/wrong-answers/{wrong_answer_id}", status_code=204)
+def delete_wrong_answer(wrong_answer_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    row = db.scalar(
+        select(WrongAnswerRecord).where(
+            WrongAnswerRecord.id == wrong_answer_id,
+            WrongAnswerRecord.academy_id == academy_id,
+        )
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Wrong answer record not found.")
+    db.delete(row)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.post("/wrong-answers/review-set")
 def create_review_set(payload: ReviewSetPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
