@@ -227,14 +227,16 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
     <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] border border-white/10 bg-black/20 p-3 text-center">
       <div className="text-xs font-semibold text-slate-500">{label}</div>
       <div
-        className="mt-2 grid aspect-square w-full max-w-[6.75rem] place-items-center rounded-full p-[7px]"
+        className="relative mt-2 grid aspect-square w-full max-w-[6.75rem] place-items-center overflow-visible rounded-full p-[7px]"
         style={{
           background: `conic-gradient(${tone} ${percent * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
         }}
       >
-        <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-[#111018] px-2">
+        <div className="relative flex h-full w-full flex-col items-center justify-center overflow-visible rounded-full bg-[#111018] px-2">
           <span className="text-lg font-black leading-none text-white">{Math.round(percent)}%</span>
-          <span className="mt-1 max-w-full truncate text-[10px] font-bold leading-none text-slate-400">{ratio}</span>
+          <span className="mt-1 w-max max-w-none whitespace-nowrap text-center text-[10px] font-bold leading-none text-sky-200 drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
+            {ratio}
+          </span>
         </div>
       </div>
     </div>
