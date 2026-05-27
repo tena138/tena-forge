@@ -26,7 +26,7 @@ import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api, Batch, Problem, sourceTypeLabel, sourceTypeOptions } from "@/lib/api";
+import { api, Batch, Problem } from "@/lib/api";
 import {
   SubjectNode,
   buildSubjectTree,
@@ -37,7 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
-type Facets = { subjects: string[]; units: string[]; problem_types: string[]; sources: string[]; source_types?: string[]; visibilities?: string[]; origin_types?: string[] };
+type Facets = { subjects: string[]; units: string[]; sources: string[]; visibilities?: string[]; origin_types?: string[] };
 type DragBox = { left: number; top: number; width: number; height: number };
 type ReviewFilter = "all" | "needs" | "reviewed";
 type ViewMode = "grid" | "list";
@@ -281,15 +281,13 @@ function ProblemsBrowser() {
   const searchParams = useSearchParams();
   const paramsKey = searchParams.toString();
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
-  const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], problem_types: [], sources: [], source_types: [], visibilities: [], origin_types: [] });
+  const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], sources: [], visibilities: [], origin_types: [] });
   const [batches, setBatches] = useState<Batch[]>([]);
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
   const [unit, setUnit] = useState(() => searchParams.get("unit") || "");
   const [subjects, setSubjects] = useState<string[]>(() => searchParams.getAll("subject"));
   const [customSubjectFilters, setCustomSubjectFilters] = useState<string[]>([]);
-  const [types, setTypes] = useState<string[]>(() => searchParams.getAll("problem_type"));
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
-  const [selectedSourceTypes, setSelectedSourceTypes] = useState<string[]>(() => searchParams.getAll("source_type"));
   const [selectedBatchId, setSelectedBatchId] = useState(() => searchParams.get("batch_id") || "");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => readReviewFilter(searchParams.get("needs_review")));
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
@@ -333,9 +331,7 @@ function ProblemsBrowser() {
     setSearch(searchParams.get("search") || "");
     setUnit(searchParams.get("unit") || "");
     setSubjects(searchParams.getAll("subject"));
-    setTypes(searchParams.getAll("problem_type"));
     setSelectedDiffs(searchParams.getAll("difficulty"));
-    setSelectedSourceTypes(searchParams.getAll("source_type"));
     setSelectedBatchId(searchParams.get("batch_id") || "");
     setReviewFilter(readReviewFilter(searchParams.get("needs_review")));
     setSort(readSort(searchParams.get("sort")));
@@ -352,11 +348,9 @@ function ProblemsBrowser() {
     if (sort !== "source_order") params.set("sort", sort);
     if (selectedBatchId) params.set("batch_id", selectedBatchId);
     subjects.forEach((value) => params.append("subject", value));
-    types.forEach((value) => params.append("problem_type", value));
     selectedDiffs.forEach((value) => params.append("difficulty", value));
-    selectedSourceTypes.forEach((value) => params.append("source_type", value));
     return params.toString();
-  }, [reviewFilter, search, selectedBatchId, selectedDiffs, selectedSourceTypes, sort, subjects, types, unit]);
+  }, [reviewFilter, search, selectedBatchId, selectedDiffs, sort, subjects, unit]);
 
   const query = useMemo(() => {
     const params = new URLSearchParams(filterQuery);
@@ -418,11 +412,9 @@ function ProblemsBrowser() {
     if (unit.trim()) chips.push({ key: "unit", label: `단원: ${unit.trim()}`, onRemove: () => setUnit("") });
     subjects.forEach((value) => chips.push({ key: `subject-${value}`, label: `과목: ${subjectDisplayLabel(value)}`, onRemove: () => setSubjects(subjects.filter((item) => item !== value)) }));
     selectedDiffs.forEach((value) => chips.push({ key: `difficulty-${value}`, label: `난이도: ${value}`, onRemove: () => setSelectedDiffs(selectedDiffs.filter((item) => item !== value)) }));
-    types.forEach((value) => chips.push({ key: `type-${value}`, label: `유형: ${value}`, onRemove: () => setTypes(types.filter((item) => item !== value)) }));
-    selectedSourceTypes.forEach((value) => chips.push({ key: `source-${value}`, label: `출처: ${sourceTypeLabel(value)}`, onRemove: () => setSelectedSourceTypes(selectedSourceTypes.filter((item) => item !== value)) }));
     if (reviewFilter !== "all") chips.push({ key: "review", label: reviewFilter === "needs" ? "검토 필요" : "검토 완료", onRemove: () => setReviewFilter("all") });
     return chips;
-  }, [reviewFilter, search, selectedBatch, selectedBatchId, selectedDiffs, selectedSourceTypes, subjects, types, unit]);
+  }, [reviewFilter, search, selectedBatch, selectedBatchId, selectedDiffs, subjects, unit]);
 
   function resetPageAnd(run: () => void) {
     loadRequestRef.current += 1;
@@ -846,43 +838,15 @@ function ProblemsBrowser() {
               </div>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[1fr_auto]">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">문항 유형</label>
-                <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-md border border-white/10 bg-card/50 p-2">
-                  {facets.problem_types.length ? facets.problem_types.map((type) => (
-                    <button key={type} className={cn("rounded-md border px-2 py-1 text-xs transition-colors", types.includes(type) ? "border-[#7F77DD] bg-[#7F77DD] text-white" : "border-white/10 bg-card/70 hover:bg-accent")} onClick={() => toggle(type, types, setTypes)}>
-                      {type}
-                    </button>
-                  )) : <span className="text-sm text-muted-foreground">유형 태그 없음</span>}
-                </div>
-              </div>
-
-              <div className="space-y-2 xl:self-end">
-                <label className="text-sm font-medium">검토 상태</label>
-                <div className="flex rounded-md border border-white/10 bg-card/70 p-1">
-                  {reviewFilters.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={cn("rounded px-3 py-1.5 text-sm font-medium transition-colors", reviewFilter === option.value ? "bg-[#7F77DD] text-white shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground")}
-                      onClick={() => resetPageAnd(() => setReviewFilter(option.value))}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-2">
-              <label className="text-sm font-medium">출처 유형</label>
-              <div className="flex flex-wrap gap-2 rounded-md border border-white/10 bg-card/50 p-2">
-                {sourceTypeOptions.map((option) => (
+              <label className="text-sm font-medium">검토 상태</label>
+              <div className="flex w-fit rounded-md border border-white/10 bg-card/70 p-1">
+                {reviewFilters.map((option) => (
                   <button
                     key={option.value}
-                    className={cn("rounded-md border px-2 py-1 text-xs transition-colors", selectedSourceTypes.includes(option.value) ? "border-[#7F77DD] bg-[#7F77DD] text-white" : "border-white/10 bg-card/70 hover:bg-accent")}
-                    onClick={() => toggle(option.value, selectedSourceTypes, setSelectedSourceTypes)}
+                    type="button"
+                    className={cn("rounded px-3 py-1.5 text-sm font-medium transition-colors", reviewFilter === option.value ? "bg-[#7F77DD] text-white shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground")}
+                    onClick={() => resetPageAnd(() => setReviewFilter(option.value))}
                   >
                     {option.label}
                   </button>
