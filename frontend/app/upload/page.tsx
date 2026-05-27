@@ -13,12 +13,22 @@ import { Batch, BatchStatus, SourceType } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
 import { getRoles, getUsageSummary, UsageSummary } from "@/lib/saas";
+import {
+  SubjectNode,
+  buildSubjectTree,
+  collectSubjectNodeValues,
+  isKoreanSubjectValue,
+  makeSubjectPathValue,
+  normalizeSubjectValue,
+  subjectDisplayLabel,
+} from "@/lib/subjectHierarchy";
 import { cn } from "@/lib/utils";
 
 type UploadResponse = { batch_id: string; status: BatchStatus };
 type TagColorMap = Record<string, string>;
 
 const SUBJECT_TAG_COLORS_KEY = "tena-forge-upload-subject-tag-colors";
+const CUSTOM_SUBJECTS_KEY = "tena-forge-upload-custom-subjects";
 const UNIT_TAG_COLORS_KEY = "tena-forge-upload-unit-tag-colors";
 const MB = 1024 * 1024;
 const PDF_SAMPLE_BYTES = 16 * MB;
@@ -33,17 +43,6 @@ type PdfPageEstimate = {
 };
 
 const emptyPdfEstimate: PdfPageEstimate = { pages: null, source: "none", loading: false };
-
-const subjectOptions = [
-  { label: "국어", value: "국어" },
-  { label: "공수1", value: "공통수학1" },
-  { label: "공수2", value: "공통수학2" },
-  { label: "수1", value: "수학Ⅰ" },
-  { label: "수2", value: "수학Ⅱ" },
-  { label: "미적분", value: "미적분" },
-  { label: "확통", value: "확률과 통계" },
-  { label: "기하", value: "기하" },
-];
 
 const commonMathPattern = /공통수학[12]|공통수[12]|공수[12]/g;
 const filenameSubjectRules: Array<{ value: string; pattern: RegExp; stripCommon?: boolean }> = [
@@ -73,10 +72,6 @@ function inferSubjectsFromFilename(fileName: string | null | undefined) {
   return subjects;
 }
 
-function subjectLabel(value: string) {
-  return subjectOptions.find((option) => option.value === value)?.label || value;
-}
-
 function hashText(value: string) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -102,6 +97,21 @@ function readTagColors(key: string): TagColorMap {
 function writeTagColors(key: string, colors: TagColorMap) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, JSON.stringify(colors));
+}
+
+function readStringList(key: string) {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed.map((value) => normalizeSubjectValue(String(value))).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStringList(key: string, values: string[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify([...new Set(values.map(normalizeSubjectValue).filter(Boolean))]));
 }
 
 function tagColor(value: string, colors: TagColorMap, group: "subject" | "unit") {
@@ -312,6 +322,74 @@ function EditableTagChip({
   );
 }
 
+function SubjectTreeSelector({
+  nodes,
+  selectedSubjects,
+  subjectTagColors,
+  onToggleSubject,
+  onToggleGroup,
+}: {
+  nodes: SubjectNode[];
+  selectedSubjects: string[];
+  subjectTagColors: TagColorMap;
+  onToggleSubject: (subject: string) => void;
+  onToggleGroup: (node: SubjectNode) => void;
+}) {
+  return (
+    <div className="grid gap-2 md:grid-cols-2">
+      {nodes.map((node) => {
+        const nodeValues = collectSubjectNodeValues(node);
+        const allSelected = nodeValues.length > 0 && nodeValues.every((value) => selectedSubjects.includes(value));
+        const someSelected = !allSelected && nodeValues.some((value) => selectedSubjects.includes(value));
+        const groupColor = tagColor(node.value || node.label, subjectTagColors, "subject");
+        return (
+          <div key={node.value || node.label} className="rounded-[8px] border border-white/10 bg-black/20 p-2">
+            <button
+              type="button"
+              className={cn(
+                "flex h-9 w-full items-center justify-between gap-2 rounded-[7px] border px-2 text-sm font-bold transition hover:brightness-110",
+                allSelected ? "text-white" : someSelected ? "text-violet-100" : "text-slate-300"
+              )}
+              style={tagToneStyle(groupColor, allSelected || someSelected)}
+              onClick={() => onToggleGroup(node)}
+            >
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: groupColor }} />
+                <span className="truncate">{node.label}</span>
+              </span>
+              <span className="shrink-0 text-[11px] font-semibold text-slate-300">{allSelected ? "전체 선택됨" : someSelected ? "일부 선택" : "전체"}</span>
+            </button>
+            {node.children?.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {node.children.map((child) => {
+                  const value = normalizeSubjectValue(child.value || child.label);
+                  const selected = selectedSubjects.includes(value);
+                  const color = tagColor(value, subjectTagColors, "subject");
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className={cn(
+                        "inline-flex h-8 max-w-full items-center gap-1.5 rounded-[7px] border px-2 text-xs font-semibold transition hover:brightness-110",
+                        selected ? "text-white" : "text-slate-300"
+                      )}
+                      style={tagToneStyle(color, selected)}
+                      onClick={() => onToggleSubject(value)}
+                    >
+                      <span className="h-2 w-2 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: color }} />
+                      <span className="truncate">{child.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function DropZone({
   label,
   helper,
@@ -396,7 +474,9 @@ export default function UploadPage() {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [batchAccentColor, setBatchAccentColor] = useState(() => defaultTagColor("new-batch", "batch"));
   const [batchColorTouched, setBatchColorTouched] = useState(false);
+  const [customSubjectParent, setCustomSubjectParent] = useState("");
   const [customSubject, setCustomSubject] = useState("");
+  const [customSubjectOptions, setCustomSubjectOptions] = useState<string[]>([]);
   const [customSubjectColor, setCustomSubjectColor] = useState(tagPalette[0]);
   const [unitInput, setUnitInput] = useState("");
   const [unitInputColor, setUnitInputColor] = useState(tagPalette[1]);
@@ -426,6 +506,7 @@ export default function UploadPage() {
   useEffect(() => {
     setSubjectTagColors(readTagColors(SUBJECT_TAG_COLORS_KEY));
     setUnitTagColors(readTagColors(UNIT_TAG_COLORS_KEY));
+    setCustomSubjectOptions(readStringList(CUSTOM_SUBJECTS_KEY));
   }, []);
 
   useEffect(() => {
@@ -463,15 +544,34 @@ export default function UploadPage() {
   }, [solutionPdf]);
 
   function toggleSubject(subject: string) {
-    if (subject === "국어") setSubjectEngine("korean");
-    setSelectedSubjects((current) => (current.includes(subject) ? current.filter((item) => item !== subject) : [...current, subject]));
+    const normalized = normalizeSubjectValue(subject);
+    if (!normalized) return;
+    if (isKoreanSubjectValue(normalized)) setSubjectEngine("korean");
+    setSelectedSubjects((current) => (current.includes(normalized) ? current.filter((item) => item !== normalized) : [...current, normalized]));
+  }
+
+  function toggleSubjectGroup(node: SubjectNode) {
+    const values = collectSubjectNodeValues(node);
+    if (!values.length) return;
+    if (values.some(isKoreanSubjectValue)) setSubjectEngine("korean");
+    setSelectedSubjects((current) => {
+      const allSelected = values.every((value) => current.includes(value));
+      return allSelected ? current.filter((item) => !values.includes(item)) : [...current, ...values.filter((value) => !current.includes(value))];
+    });
   }
 
   function addCustomSubject() {
-    const subject = customSubject.trim();
+    const subject = normalizeSubjectValue(customSubject.includes(">") || customSubject.includes("/") ? customSubject : makeSubjectPathValue(customSubjectParent, customSubject));
     if (!subject || selectedSubjects.includes(subject)) return;
     setSelectedSubjects((current) => [...current, subject]);
+    setCustomSubjectOptions((current) => {
+      const next = current.includes(subject) ? current : [...current, subject];
+      writeStringList(CUSTOM_SUBJECTS_KEY, next);
+      return next;
+    });
+    if (isKoreanSubjectValue(subject)) setSubjectEngine("korean");
     updateSubjectTagColor(subject, customSubjectColor);
+    setCustomSubjectParent("");
     setCustomSubject("");
     setCustomSubjectColor((current) => nextPaletteColor(current));
   }
@@ -540,8 +640,9 @@ export default function UploadPage() {
       return current;
     });
     if (inferredSubjects.length) {
-      setSelectedSubjects((current) => [...current, ...inferredSubjects.filter((subject) => !current.includes(subject))]);
-      if (inferredSubjects.includes("국어")) setSubjectEngine("korean");
+      const nextSubjects = inferredSubjects.map(normalizeSubjectValue).filter(Boolean);
+      setSelectedSubjects((current) => [...current, ...nextSubjects.filter((subject) => !current.includes(subject))]);
+      if (nextSubjects.some(isKoreanSubjectValue)) setSubjectEngine("korean");
     }
     setAutoBatchName(nextAutoBatchName);
   }
@@ -609,6 +710,8 @@ export default function UploadPage() {
   const enabledSubjectEngines = usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"];
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const selectedEngineLocked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(subjectEngine);
+  const subjectTree = useMemo(() => buildSubjectTree([...customSubjectOptions, ...selectedSubjects]), [customSubjectOptions, selectedSubjects]);
+  const subjectParentOptions = useMemo(() => subjectTree.map((node) => node.label), [subjectTree]);
 
   useEffect(() => {
     if (isAdmin || !usageSummary || enabledSubjectEngines.includes(subjectEngine)) return;
@@ -696,31 +799,24 @@ export default function UploadPage() {
             <div className="mt-4 space-y-3">
               <div>
                 <div className="mb-2 text-xs font-semibold text-slate-400">과목 후보</div>
-                <div className="flex flex-wrap gap-2">
-                  {subjectOptions.map((subject) => {
-                    const selected = selectedSubjects.includes(subject.value);
-                    const color = tagColor(subject.value, subjectTagColors, "subject");
-                    return (
-                      <button
-                        key={subject.value}
-                        type="button"
-                        className={cn(
-                          "inline-flex h-9 items-center gap-2 rounded-[7px] border px-3 text-sm font-semibold transition hover:brightness-110",
-                          selected ? "text-white" : "text-slate-300"
-                        )}
-                        style={tagToneStyle(color, selected)}
-                        onClick={() => toggleSubject(subject.value)}
-                      >
-                        <span className="h-2.5 w-2.5 rounded-full border border-white/30" style={{ backgroundColor: color }} />
-                        {subject.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <SubjectTreeSelector
+                  nodes={subjectTree}
+                  selectedSubjects={selectedSubjects}
+                  subjectTagColors={subjectTagColors}
+                  onToggleSubject={toggleSubject}
+                  onToggleGroup={toggleSubjectGroup}
+                />
+                <div className="mt-2 grid gap-2 sm:grid-cols-[0.8fr_1fr_auto_auto]">
                   <Input
-                    className="min-w-0 flex-1"
-                    placeholder="직접 입력할 과목"
+                    className="min-w-0"
+                    placeholder="상위 과목"
+                    value={customSubjectParent}
+                    list="upload-subject-parent-options"
+                    onChange={(event) => setCustomSubjectParent(event.target.value)}
+                  />
+                  <Input
+                    className="min-w-0"
+                    placeholder="하위 과목 또는 상위 > 하위"
                     value={customSubject}
                     onChange={(event) => setCustomSubject(event.target.value)}
                     onKeyDown={(event) => {
@@ -733,6 +829,9 @@ export default function UploadPage() {
                   <TagColorPicker value={customSubjectColor} onChange={setCustomSubjectColor} label="과목 태그 색상" />
                   <Button type="button" variant="outline" onClick={addCustomSubject}>추가</Button>
                 </div>
+                <datalist id="upload-subject-parent-options">
+                  {subjectParentOptions.map((subject) => <option key={subject} value={subject} />)}
+                </datalist>
                 {selectedSubjects.length ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedSubjects.map((subject) => {
@@ -740,7 +839,7 @@ export default function UploadPage() {
                       return (
                         <EditableTagChip
                           key={subject}
-                          label={subjectLabel(subject)}
+                          label={subjectDisplayLabel(subject)}
                           color={color}
                           onColorChange={(nextColor) => updateSubjectTagColor(subject, nextColor)}
                           onRemove={() => toggleSubject(subject)}

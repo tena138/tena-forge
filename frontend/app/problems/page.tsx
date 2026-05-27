@@ -27,6 +27,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, Batch, Problem, sourceTypeLabel, sourceTypeOptions } from "@/lib/api";
+import {
+  SubjectNode,
+  buildSubjectTree,
+  collectSubjectNodeValues,
+  makeSubjectPathValue,
+  normalizeSubjectValue,
+  subjectDisplayLabel,
+} from "@/lib/subjectHierarchy";
 import { cn } from "@/lib/utils";
 
 type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
@@ -40,6 +48,7 @@ const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24,
 const difficulties = ["하", "중", "상", "최상"];
 const defaultReviewFilter: ReviewFilter = "reviewed";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
+const customSubjectFiltersStorageKey = "tena.problemBrowser.customSubjects";
 const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "all", label: "전체" },
   { value: "needs", label: "검토 필요" },
@@ -52,6 +61,21 @@ const sortOptions: Array<{ value: ProblemSort; label: string }> = [
   { value: "number_asc", label: "번호 오름차순" },
   { value: "number_desc", label: "번호 내림차순" },
 ];
+
+function readSubjectList(key: string) {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed.map((value) => normalizeSubjectValue(String(value))).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSubjectList(key: string, values: string[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify([...new Set(values.map(normalizeSubjectValue).filter(Boolean))]));
+}
 
 function readPageParam(value: string | null) {
   const parsed = Number(value);
@@ -110,6 +134,9 @@ function ProblemsBrowser() {
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
   const [unit, setUnit] = useState(() => searchParams.get("unit") || "");
   const [subjects, setSubjects] = useState<string[]>(() => searchParams.getAll("subject"));
+  const [customSubjectParent, setCustomSubjectParent] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
+  const [customSubjectFilters, setCustomSubjectFilters] = useState<string[]>([]);
   const [types, setTypes] = useState<string[]>(() => searchParams.getAll("problem_type"));
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
   const [selectedSourceTypes, setSelectedSourceTypes] = useState<string[]>(() => searchParams.getAll("source_type"));
@@ -145,6 +172,7 @@ function ProblemsBrowser() {
   useEffect(() => {
     const saved = window.localStorage.getItem(viewModeStorageKey);
     if (saved === "grid" || saved === "list") setViewMode(saved);
+    setCustomSubjectFilters(readSubjectList(customSubjectFiltersStorageKey));
   }, []);
 
   useEffect(() => {
@@ -231,13 +259,15 @@ function ProblemsBrowser() {
   );
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
+  const subjectTree = useMemo(() => buildSubjectTree([...facets.subjects, ...customSubjectFilters, ...subjects]), [customSubjectFilters, facets.subjects, subjects]);
+  const subjectParentOptions = useMemo(() => subjectTree.map((node) => node.label), [subjectTree]);
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
     if (selectedBatchId) chips.push({ key: "batch", label: `배치: ${selectedBatch?.name || selectedBatchId.slice(0, 8)}`, onRemove: () => setSelectedBatchId("") });
     if (search.trim()) chips.push({ key: "search", label: `검색: ${search.trim()}`, onRemove: () => setSearch("") });
     if (unit.trim()) chips.push({ key: "unit", label: `단원: ${unit.trim()}`, onRemove: () => setUnit("") });
-    subjects.forEach((value) => chips.push({ key: `subject-${value}`, label: `과목: ${value}`, onRemove: () => setSubjects(subjects.filter((item) => item !== value)) }));
+    subjects.forEach((value) => chips.push({ key: `subject-${value}`, label: `과목: ${subjectDisplayLabel(value)}`, onRemove: () => setSubjects(subjects.filter((item) => item !== value)) }));
     selectedDiffs.forEach((value) => chips.push({ key: `difficulty-${value}`, label: `난이도: ${value}`, onRemove: () => setSelectedDiffs(selectedDiffs.filter((item) => item !== value)) }));
     types.forEach((value) => chips.push({ key: `type-${value}`, label: `유형: ${value}`, onRemove: () => setTypes(types.filter((item) => item !== value)) }));
     selectedSourceTypes.forEach((value) => chips.push({ key: `source-${value}`, label: `출처: ${sourceTypeLabel(value)}`, onRemove: () => setSelectedSourceTypes(selectedSourceTypes.filter((item) => item !== value)) }));
@@ -253,6 +283,34 @@ function ProblemsBrowser() {
 
   function toggle(value: string, list: string[], setList: (next: string[]) => void) {
     resetPageAnd(() => setList(list.includes(value) ? list.filter((item) => item !== value) : [...list, value]));
+  }
+
+  function toggleSubjectValue(value: string) {
+    const subject = normalizeSubjectValue(value);
+    if (!subject) return;
+    resetPageAnd(() => setSubjects(subjects.includes(subject) ? subjects.filter((item) => item !== subject) : [...subjects, subject]));
+  }
+
+  function toggleSubjectGroup(node: SubjectNode) {
+    const values = collectSubjectNodeValues(node);
+    if (!values.length) return;
+    const allSelected = values.every((value) => subjects.includes(value));
+    resetPageAnd(() => setSubjects(allSelected ? subjects.filter((item) => !values.includes(item)) : [...subjects, ...values.filter((value) => !subjects.includes(value))]));
+  }
+
+  function addCustomSubjectFilter() {
+    const subject = normalizeSubjectValue(customSubject.includes(">") || customSubject.includes("/") ? customSubject : makeSubjectPathValue(customSubjectParent, customSubject));
+    if (!subject) return;
+    resetPageAnd(() => {
+      setSubjects(subjects.includes(subject) ? subjects : [...subjects, subject]);
+      setCustomSubjectFilters((current) => {
+        const next = current.includes(subject) ? current : [...current, subject];
+        writeSubjectList(customSubjectFiltersStorageKey, next);
+        return next;
+      });
+      setCustomSubjectParent("");
+      setCustomSubject("");
+    });
   }
 
   function toggleProblemSelection(problem: Problem, checked?: boolean) {
@@ -615,13 +673,69 @@ function ProblemsBrowser() {
             <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
               <div className="space-y-2">
                 <label className="text-sm font-medium">과목</label>
-                <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-md border border-white/10 bg-card/50 p-2">
-                  {facets.subjects.length ? facets.subjects.map((subject) => (
-                    <button key={subject} className={cn("rounded-md border px-2 py-1 text-xs transition-colors", subjects.includes(subject) ? "border-[#7F77DD] bg-[#7F77DD] text-white" : "border-white/10 bg-card/70 hover:bg-accent")} onClick={() => toggle(subject, subjects, setSubjects)}>
-                      {subject}
-                    </button>
-                  )) : <span className="text-sm text-muted-foreground">과목 태그 없음</span>}
+                <div className="max-h-64 space-y-2 overflow-auto rounded-md border border-white/10 bg-card/50 p-2 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+                  {subjectTree.map((node) => {
+                    const nodeValues = collectSubjectNodeValues(node);
+                    const allSelected = nodeValues.length > 0 && nodeValues.every((value) => subjects.includes(value));
+                    const someSelected = !allSelected && nodeValues.some((value) => subjects.includes(value));
+                    return (
+                      <div key={node.value || node.label} className="rounded-md border border-white/10 bg-black/15 p-2">
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex h-8 w-full items-center justify-between gap-2 rounded-md border px-2 text-left text-xs font-bold transition-colors",
+                            allSelected ? "border-[#7F77DD] bg-[#7F77DD] text-white" : someSelected ? "border-violet-300/40 bg-violet-500/15 text-violet-100" : "border-white/10 bg-card/70 text-slate-300 hover:bg-accent"
+                          )}
+                          onClick={() => toggleSubjectGroup(node)}
+                        >
+                          <span className="truncate">{node.label}</span>
+                          <span className="shrink-0 text-[10px]">{allSelected ? "전체 선택됨" : someSelected ? "일부 선택" : "전체"}</span>
+                        </button>
+                        {node.children?.length ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {node.children.map((child) => {
+                              const value = normalizeSubjectValue(child.value || child.label);
+                              const selected = subjects.includes(value);
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  className={cn("rounded-md border px-2 py-1 text-xs transition-colors", selected ? "border-[#7F77DD] bg-[#7F77DD] text-white" : "border-white/10 bg-card/70 hover:bg-accent")}
+                                  onClick={() => toggleSubjectValue(value)}
+                                >
+                                  {child.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
+                <div className="grid gap-2 sm:grid-cols-[0.8fr_1fr_auto]">
+                  <Input
+                    value={customSubjectParent}
+                    list="problem-subject-parent-options"
+                    onChange={(event) => setCustomSubjectParent(event.target.value)}
+                    placeholder="상위 과목"
+                  />
+                  <Input
+                    value={customSubject}
+                    onChange={(event) => setCustomSubject(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addCustomSubjectFilter();
+                      }
+                    }}
+                    placeholder="하위 과목 또는 상위 > 하위"
+                  />
+                  <Button type="button" variant="outline" onClick={addCustomSubjectFilter}>추가</Button>
+                </div>
+                <datalist id="problem-subject-parent-options">
+                  {subjectParentOptions.map((subject) => <option key={subject} value={subject} />)}
+                </datalist>
               </div>
 
               <div className="space-y-2">
