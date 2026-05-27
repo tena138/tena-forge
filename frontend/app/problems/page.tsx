@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type KeyboardEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  ArrowUpRight,
   CheckSquare,
   ChevronDown,
   ChevronLeft,
@@ -264,6 +265,18 @@ function ProblemsBrowser() {
     });
   }
 
+  function handleProblemBlockClick(problem: Problem) {
+    if (suppressClick) return;
+    toggleProblemSelection(problem);
+  }
+
+  function handleProblemBlockKeyDown(event: KeyboardEvent<HTMLElement>, problem: Problem) {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    handleProblemBlockClick(problem);
+  }
+
   async function deleteSelectedProblems() {
     if (!selectedIds.length || deleting) return;
     const ok = window.confirm(`선택한 문항 ${selectedIds.length}개를 삭제할까요? 문항 세트에서도 함께 빠집니다.`);
@@ -374,32 +387,38 @@ function ProblemsBrowser() {
     const tone = difficultyTone(problem.tags?.difficulty);
     const accentColor = problemAccentColor(problem, tone.color);
     const showSubject = subjects.length === 0 && problem.tags?.subject;
+    const detailHref = `/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`;
     return (
       <article
         key={problem.id}
         ref={(element) => { cardRefs.current[problem.id] = element; }}
+        role="button"
+        tabIndex={0}
+        aria-pressed={selected}
+        aria-label={`${problem.problem_number}번 문항 ${selected ? "선택 해제" : "선택"}`}
+        onClick={() => handleProblemBlockClick(problem)}
+        onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "group relative min-h-[215px] overflow-hidden rounded-lg border bg-card/80 transition-all hover:-translate-y-0.5 hover:border-[#7F77DD]/70 hover:shadow-[0_18px_45px_rgba(76,29,149,0.16)]",
+          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-all hover:-translate-y-0.5 hover:border-[#7F77DD]/70 hover:shadow-[0_18px_45px_rgba(76,29,149,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70",
           selected ? "border-[#7F77DD] bg-[#7F77DD]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-        <label className="absolute left-3 top-3 z-10 inline-flex h-6 w-6 items-center justify-center rounded border border-white/15 bg-black/30 backdrop-blur" onClick={stopInteractiveEvent} onPointerDown={stopInteractiveEvent}>
-          <input
-            className="h-4 w-4 accent-[#7F77DD]"
-            type="checkbox"
-            checked={selected}
-            onChange={(event) => toggleProblemSelection(problem, event.target.checked)}
-            aria-label={`${problem.problem_number}번 선택`}
-          />
-        </label>
         <Link
-          className="flex h-full flex-col px-4 pb-4 pl-6 pt-3"
-          href={`/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`}
+          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70"
+          href={detailHref}
           draggable={false}
-          onClick={(event) => { if (suppressClick) event.preventDefault(); }}
+          onPointerDown={stopInteractiveEvent}
+          onClick={(event) => {
+            stopInteractiveEvent(event);
+            if (suppressClick) event.preventDefault();
+          }}
+          aria-label={`${problem.problem_number}번 상세 보기`}
         >
-          <div className="flex items-start justify-between gap-3 pl-8">
+          <ArrowUpRight className="h-4 w-4" />
+        </Link>
+        <div className="flex h-full flex-col px-4 pb-4 pl-6 pr-12 pt-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="line-clamp-1 text-[11px] font-medium leading-4 text-muted-foreground">{sourceLabel(problem)}</div>
               <div className="mt-1 text-[13px] font-medium leading-5 text-slate-200">#{problem.problem_number}</div>
@@ -421,7 +440,7 @@ function ProblemsBrowser() {
               </>
             ) : null}
           </div>
-        </Link>
+        </div>
       </article>
     );
   }
@@ -430,37 +449,48 @@ function ProblemsBrowser() {
     const selected = selectedIds.includes(problem.id);
     const tone = difficultyTone(problem.tags?.difficulty);
     const accentColor = problemAccentColor(problem, tone.color);
+    const detailHref = `/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`;
     return (
       <article
         key={problem.id}
         ref={(element) => { cardRefs.current[problem.id] = element; }}
+        role="button"
+        tabIndex={0}
+        aria-pressed={selected}
+        aria-label={`${problem.problem_number}번 문항 ${selected ? "선택 해제" : "선택"}`}
+        onClick={() => handleProblemBlockClick(problem)}
+        onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "relative overflow-hidden rounded-lg border bg-card/80 transition-colors hover:border-[#7F77DD]/70",
+          "relative cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-colors hover:border-[#7F77DD]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70",
           selected ? "border-[#7F77DD] bg-[#7F77DD]/10" : "border-white/10"
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-        <div className="grid min-h-[58px] grid-cols-[38px_70px_minmax(0,1fr)_auto_auto] items-center gap-3 py-2 pl-6 pr-4">
-          <label className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/15 bg-black/20" onClick={stopInteractiveEvent} onPointerDown={stopInteractiveEvent}>
-            <input
-              className="h-4 w-4 accent-[#7F77DD]"
-              type="checkbox"
-              checked={selected}
-              onChange={(event) => toggleProblemSelection(problem, event.target.checked)}
-              aria-label={`${problem.problem_number}번 선택`}
-            />
-          </label>
-          <Link href={`/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`} className="text-[13px] font-medium text-slate-200" onClick={(event) => { if (suppressClick) event.preventDefault(); }}>
+        <div className="grid min-h-[66px] grid-cols-[70px_minmax(0,1fr)_auto_auto_36px] items-start gap-3 py-3 pl-6 pr-3">
+          <div className="pt-1 text-[13px] font-medium text-slate-200">
             #{problem.problem_number}
-          </Link>
-          <Link href={`/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`} className="min-w-0" onClick={(event) => { if (suppressClick) event.preventDefault(); }}>
+          </div>
+          <div className="min-w-0">
             <div className="mb-0.5 line-clamp-1 text-[11px] font-medium text-muted-foreground">{sourceLabel(problem)}</div>
             <MathText className="line-clamp-1 text-[14px] font-medium leading-[1.45] text-foreground" value={problem.problem_text} />
-          </Link>
-          <div className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+          </div>
+          <div className="whitespace-nowrap pt-1 text-[11px] font-medium text-muted-foreground">
             {pageLabel(problem)} · {problemTypeLabel(problem)}{problem.has_visual ? " · 이미지" : ""}
           </div>
           <span className={cn("whitespace-nowrap rounded border px-2 py-1 text-[11px] font-semibold", tone.badge)}>{tone.label}</span>
+          <Link
+            href={detailHref}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70"
+            draggable={false}
+            onPointerDown={stopInteractiveEvent}
+            onClick={(event) => {
+              stopInteractiveEvent(event);
+              if (suppressClick) event.preventDefault();
+            }}
+            aria-label={`${problem.problem_number}번 상세 보기`}
+          >
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
         </div>
       </article>
     );
