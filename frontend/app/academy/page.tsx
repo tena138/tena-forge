@@ -232,9 +232,10 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
           background: `conic-gradient(${tone} ${percent * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
         }}
       >
-        <div className="relative flex h-full w-full flex-col items-center justify-center overflow-visible rounded-full bg-[#111018] px-2">
-          <span className="text-lg font-black leading-none text-white">{Math.round(percent)}%</span>
-          <span className="mt-1 w-max max-w-none whitespace-nowrap text-center text-[10px] font-bold leading-none text-sky-200 drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
+        <div className="h-full w-full rounded-full bg-[#111018]" />
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-visible text-center">
+          <span className="whitespace-nowrap text-lg font-black leading-none text-white">{Math.round(percent)}%</span>
+          <span className="mt-1 whitespace-nowrap text-[10px] font-bold leading-none text-sky-200 drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
             {ratio}
           </span>
         </div>
