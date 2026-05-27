@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type AutosaveState = "pending" | "saving" | "saved" | "error";
+type FormatAutosaveState = "idle" | "pending" | "saving" | "saved" | "error";
 type CounselingDraftStatus = "idle" | "restored" | "saving" | "saved" | "error";
 type StudentTab = "calendar" | "wrong" | "counseling";
 type StudentCalendarItem = {
@@ -344,6 +345,9 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [message, setMessage] = useState("");
   const [counselingSaving, setCounselingSaving] = useState(false);
   const [formatSaving, setFormatSaving] = useState(false);
+  const [formatAutosaveState, setFormatAutosaveState] = useState<FormatAutosaveState>("idle");
+  const [formatAutosaveSavedAt, setFormatAutosaveSavedAt] = useState<string | null>(null);
+  const [formatRevision, setFormatRevision] = useState(0);
   const [presetSavingSlot, setPresetSavingSlot] = useState<number | null>(null);
   const [formatSettingsOpen, setFormatSettingsOpen] = useState(false);
   const [counselingClassId, setCounselingClassId] = useState("");
@@ -358,6 +362,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [counselingDraftSavedAt, setCounselingDraftSavedAt] = useState<string | null>(null);
   const counselingDraftHydratedRef = useRef<Record<string, boolean>>({});
   const counselingDraftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const formatAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const formatSaveRequestRef = useRef(0);
   const skipNextCounselingDraftSaveRef = useRef(false);
   const skipNextCounselingFormatSyncRef = useRef(false);
 
@@ -394,6 +400,17 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     const savedTime = formatDraftSavedAt(counselingDraftSavedAt);
     return savedTime ? `임시 저장됨 ${savedTime}` : "입력 내용은 자동 임시 저장됩니다.";
   }, [counselingDraftSavedAt, counselingDraftStatus]);
+  const formatAutosaveLabel = useMemo(() => {
+    if (!counselingClassId) return "클래스를 선택하면 포맷이 클래스 단위로 자동 저장됩니다.";
+    if (formatAutosaveState === "pending") return "클래스 포맷 자동 저장 대기 중...";
+    if (formatAutosaveState === "saving") return "클래스 포맷 자동 저장 중...";
+    if (formatAutosaveState === "saved") {
+      const savedTime = formatDraftSavedAt(formatAutosaveSavedAt);
+      return savedTime ? `클래스 포맷 자동 저장됨 ${savedTime}` : "클래스 포맷 자동 저장됨";
+    }
+    if (formatAutosaveState === "error") return "자동 저장 실패. 지금 저장을 눌러 다시 시도하세요.";
+    return "이 클래스의 모든 학생에게 같은 포맷이 자동 적용됩니다.";
+  }, [counselingClassId, formatAutosaveSavedAt, formatAutosaveState]);
   const calendarDays = useMemo(() => buildMonthDays(calendarMonth), [calendarMonth]);
   const calendarItemsByDate = useMemo(() => {
     const grouped: Record<string, StudentCalendarItem[]> = {};
@@ -465,6 +482,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
   useEffect(() => {
     calendarInitializedRef.current = false;
+    setFormatAutosaveState("idle");
+    setFormatAutosaveSavedAt(null);
     getStudentDetail(params.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
   }, [params.id]);
 
@@ -557,9 +576,31 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }, [data, params.id, editingCounselingLogId, counselingClassId, counselingForm, counselingFields, counselingFieldValues, counselingSaving]);
 
   useEffect(() => {
+    if (!formatRevision || !counselingClassId) return;
+    if (formatAutosaveTimerRef.current) {
+      clearTimeout(formatAutosaveTimerRef.current);
+      formatAutosaveTimerRef.current = null;
+    }
+    setFormatAutosaveState("pending");
+    const classId = counselingClassId;
+    const fields = counselingFields;
+    formatAutosaveTimerRef.current = setTimeout(() => {
+      formatAutosaveTimerRef.current = null;
+      persistClassFormat(fields, classId).catch(() => undefined);
+    }, 650);
+    return () => {
+      if (formatAutosaveTimerRef.current) {
+        clearTimeout(formatAutosaveTimerRef.current);
+        formatAutosaveTimerRef.current = null;
+      }
+    };
+  }, [formatRevision]);
+
+  useEffect(() => {
     return () => {
       for (const timer of Object.values(autosaveTimers.current)) clearTimeout(timer);
       if (counselingDraftTimerRef.current) clearTimeout(counselingDraftTimerRef.current);
+      if (formatAutosaveTimerRef.current) clearTimeout(formatAutosaveTimerRef.current);
     };
   }, []);
 
@@ -675,12 +716,55 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     }
   }
 
+  function markCounselingFormatChanged() {
+    setFormatRevision((current) => current + 1);
+  }
+
+  function changeCounselingClass(nextClassId: string) {
+    setCounselingClassId(nextClassId);
+    setFormatAutosaveState("idle");
+    setFormatAutosaveSavedAt(null);
+  }
+
+  async function persistClassFormat(fields: CounselingFormatField[], classId: string, options: { manual?: boolean } = {}) {
+    if (!classId) return null;
+    const requestId = formatSaveRequestRef.current + 1;
+    formatSaveRequestRef.current = requestId;
+    setFormatSaving(true);
+    setFormatAutosaveState("saving");
+    try {
+      const saved = await updateClassCounselingFormat(classId, { fields });
+      setData((current) => {
+        if (!current) return current;
+        if (!current.class_ids.includes(classId)) return current;
+        const others = (current.counseling_formats || []).filter((item) => item.class_id !== classId);
+        return { ...current, counseling_formats: [...others, saved] };
+      });
+      if (formatSaveRequestRef.current === requestId) {
+        setFormatAutosaveState("saved");
+        setFormatAutosaveSavedAt(new Date().toISOString());
+      }
+      if (options.manual) setMessage("상담일지 포맷을 저장했습니다.");
+      return saved;
+    } catch {
+      if (formatSaveRequestRef.current === requestId) {
+        setFormatAutosaveState("error");
+        setFormatAutosaveSavedAt(null);
+      }
+      setMessage(options.manual ? "상담일지 포맷 저장에 실패했습니다." : "상담일지 포맷 자동 저장에 실패했습니다.");
+      return null;
+    } finally {
+      if (formatSaveRequestRef.current === requestId) setFormatSaving(false);
+    }
+  }
+
   function updateCounselingFieldValue(fieldId: string, value: string) {
     setCounselingFieldValues((current) => ({ ...current, [fieldId]: value }));
   }
 
   function updateCounselingField(fieldId: string, patch: Partial<CounselingFormatField>) {
     setCounselingFields((current) => current.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)));
+    markCounselingFormatChanged();
   }
 
   function addCounselingField() {
@@ -688,6 +772,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       const id = createFieldId("새 항목", current.map((field) => field.id));
       return [...current, { id, label: "새 항목", placeholder: "기록할 내용을 입력하세요", include_in_report: true }];
     });
+    markCounselingFormatChanged();
   }
 
   function removeCounselingField(fieldId: string) {
@@ -697,6 +782,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       delete next[fieldId];
       return next;
     });
+    markCounselingFormatChanged();
   }
 
   function insertReportVariable(field: CounselingFormatField) {
@@ -720,20 +806,11 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
   async function saveClassFormat() {
     if (!counselingClassId) return;
-    setFormatSaving(true);
-    try {
-      const saved = await updateClassCounselingFormat(counselingClassId, { fields: counselingFields });
-      setData((current) => {
-        if (!current) return current;
-        const others = (current.counseling_formats || []).filter((item) => item.class_id !== counselingClassId);
-        return { ...current, counseling_formats: [...others, saved] };
-      });
-      setMessage("상담일지 포맷을 저장했습니다.");
-    } catch {
-      setMessage("상담일지 포맷 저장에 실패했습니다.");
-    } finally {
-      setFormatSaving(false);
+    if (formatAutosaveTimerRef.current) {
+      clearTimeout(formatAutosaveTimerRef.current);
+      formatAutosaveTimerRef.current = null;
     }
+    await persistClassFormat(counselingFields, counselingClassId, { manual: true });
   }
 
   async function savePreset(slot: number) {
@@ -766,7 +843,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       for (const field of nextFields) next[field.id] = current[field.id] || "";
       return next;
     });
-    setMessage(`${preset.name || `프리셋 ${preset.slot}`}을 적용했습니다. 클래스에 반영하려면 포맷 저장을 눌러주세요.`);
+    markCounselingFormatChanged();
+    setMessage(`${preset.name || `프리셋 ${preset.slot}`}을 적용했습니다. 같은 클래스 학생에게 자동 반영됩니다.`);
   }
 
   function buildCounselingLogPayload() {
@@ -1183,7 +1261,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                       {data.class_ids.length ? (
                         <select
                           value={counselingClassId}
-                          onChange={(event) => setCounselingClassId(event.target.value)}
+                          onChange={(event) => changeCounselingClass(event.target.value)}
                           className="h-10 w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 text-sm text-white outline-none"
                         >
                           {data.class_ids.map((classId, index) => (
@@ -1233,9 +1311,10 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                       </Button>
                       <Button type="button" size="sm" onClick={saveClassFormat} disabled={formatSaving || !counselingClassId}>
                         {formatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        클래스 포맷 저장
+                        지금 저장
                       </Button>
                     </div>
+                    <p className={cn("text-xs", formatAutosaveState === "error" ? "text-rose-300" : "text-slate-500")}>{formatAutosaveLabel}</p>
 
                     <div className="grid grid-cols-2 gap-2">
                       {counselingPresets.map((preset) => (
