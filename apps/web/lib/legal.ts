@@ -1,4 +1,4 @@
-export const CUSTOMER_SUPPORT_EMAIL = process.env.NEXT_PUBLIC_CUSTOMER_SUPPORT_EMAIL?.trim() || "support@tenaforge.com";
+export const CUSTOMER_SUPPORT_EMAIL = process.env.NEXT_PUBLIC_CUSTOMER_SUPPORT_EMAIL?.trim() || "support@tena-forge.com";
 export const BUSINESS_REPRESENTATIVE_NAME =
   process.env.NEXT_PUBLIC_BUSINESS_REPRESENTATIVE_NAME?.trim() || "[대표자명 입력 필요]";
 export const BUSINESS_PHONE = process.env.NEXT_PUBLIC_BUSINESS_PHONE?.trim() || "[유선번호 입력 필요]";

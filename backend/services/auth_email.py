@@ -29,7 +29,7 @@ BASE_TEMPLATE = """
             </tr>
             <tr>
               <td style="padding:18px 32px;background:#f9fafb;color:#6b7280;font-size:12px;text-align:center;">
-                Tena Forge | 문의: support@tenaforge.com
+                Tena Forge | 문의: support@tena-forge.com
               </td>
             </tr>
           </table>
