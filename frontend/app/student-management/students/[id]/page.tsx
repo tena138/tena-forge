@@ -971,16 +971,17 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1600px] space-y-5">
-        <header className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-4">
-              <Link
-                href="/student-management"
-                className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/[0.05] hover:text-white"
-                aria-label="학생 관리로 돌아가기"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
+        <div className="relative">
+          <Link
+            href="/student-management"
+            className="absolute left-0 top-1/2 inline-flex h-10 w-10 -translate-x-[calc(100%+0.75rem)] -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/[0.05] hover:text-white max-lg:top-5 max-lg:translate-x-0 max-lg:-translate-y-0"
+            aria-label="학생 관리로 돌아가기"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <header className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-4">
               <div className="rounded-lg border border-violet-300/20 bg-violet-500/15 p-3 text-violet-100">
                 <UserRound className="h-7 w-7" />
               </div>
@@ -994,9 +995,10 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               <RotateCcw className="h-4 w-4" />
               오답 복습 세트
             </Button>
-          </div>
-          {message ? <div className="mt-4 rounded-lg border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-sm text-violet-100">{message}</div> : null}
-        </header>
+            </div>
+            {message ? <div className="mt-4 rounded-lg border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-sm text-violet-100">{message}</div> : null}
+          </header>
+        </div>
 
         <section className="grid gap-4 md:grid-cols-4">
           <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">최근 점수</p><p className="mt-1 text-2xl font-black text-white">{data.recent_score == null ? "-" : `${Math.round(data.recent_score)}점`}</p></CardContent></Card>
