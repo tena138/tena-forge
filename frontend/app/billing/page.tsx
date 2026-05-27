@@ -4,15 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { getUsageSummary, listPlans, Plan, UsageSummary } from "@/lib/saas";
-import { SUBJECT_ENGINE_MONTHLY_ADDON } from "@/lib/plan-pricing";
+import { SUBJECT_ENGINES, SUBJECT_ENGINE_MONTHLY_ADDON, subjectEngineLabel } from "@/lib/plan-pricing";
 
-const subjectEngineOptions = [
-  { code: "math", label: "Math" },
-  { code: "korean", label: "Korean Language" },
-];
+const subjectEngineOptions = SUBJECT_ENGINES;
 
 function engineLabel(code: string) {
-  return subjectEngineOptions.find((engine) => engine.code === code)?.label || code;
+  return subjectEngineLabel(code);
 }
 
 function won(value: number | undefined) {
@@ -79,7 +76,7 @@ export default function BillingPage() {
               }`}
               onClick={() => toggleEngine(engine.code)}
             >
-              {engine.label}
+              {subjectEngineLabel(engine.code)}
             </button>
           ))}
         </div>

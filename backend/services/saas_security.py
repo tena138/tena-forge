@@ -155,9 +155,9 @@ def ensure_subject_engine_access(db: Session, user_id: str, subject_engine: str)
     if engine in enabled_subject_engines_for_user(db, user_id):
         return
     if engine == KOREAN_ENGINE:
-        detail = "Korean Language extraction is not enabled for this plan. Enable the Korean Language subject engine in billing."
+        detail = "국어 beta 엔진은 현재 플랜에서 사용할 수 없습니다. 결제 화면에서 국어 beta 엔진을 추가해주세요."
     else:
-        detail = "This subject extraction engine is not enabled for this plan."
+        detail = "수학 1.0 엔진은 현재 플랜에서 사용할 수 없습니다."
     raise HTTPException(status_code=402, detail=detail)
 
 

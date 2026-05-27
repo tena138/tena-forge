@@ -61,7 +61,7 @@ export const SUBJECT_ENGINES: Array<{
   {
     code: "korean",
     label: "국어",
-    version: "1.0",
+    version: "beta",
     description: "긴 지문, 공통 지문 묶음, 선택지를 국어형 구조로 추출합니다.",
   },
 ];

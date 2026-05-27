@@ -44,6 +44,7 @@ import {
   weekIntervalOptions,
 } from "@/lib/scheduleRecurrence";
 import { getUsageSummary, UsageSummary } from "@/lib/saas";
+import { subjectEngineLabel } from "@/lib/plan-pricing";
 import {
   AcademyBilling,
   AcademyClass,
@@ -190,11 +191,6 @@ function formatUsageNumber(value: number, suffix = "") {
   const safe = Number.isFinite(value) ? value : 0;
   const rounded = safe >= 100 ? Math.round(safe) : Math.round(safe * 10) / 10;
   return `${rounded.toLocaleString("ko-KR")}${suffix}`;
-}
-
-function subjectEngineLabel(code: string) {
-  const labels: Record<string, string> = { math: "수학", korean: "국어" };
-  return labels[code] || code;
 }
 
 function planNameFallback(plan?: string | null) {

@@ -20,12 +20,12 @@ class SubjectEngineDefinition:
 SUBJECT_ENGINES: dict[str, SubjectEngineDefinition] = {
     MATH_ENGINE: SubjectEngineDefinition(
         code=MATH_ENGINE,
-        label="Math",
+        label="수학 1.0",
         description="Math extraction for formulas, problem stems, choices, answers, and LaTeX-preserved solutions.",
     ),
     KOREAN_ENGINE: SubjectEngineDefinition(
         code=KOREAN_ENGINE,
-        label="Korean Language",
+        label="국어 beta",
         description=(
             "Korean Language extraction uses a separate high-precision pipeline for long passages, "
             "shared passage-question groups, and exact multiple-choice extraction."

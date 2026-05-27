@@ -12,6 +12,7 @@ import { ColorPicker } from "@/components/editor/color-picker";
 import { Batch, BatchStatus, SourceType } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
+import { SUBJECT_ENGINES, subjectEngineLabel } from "@/lib/plan-pricing";
 import { getRoles, getUsageSummary, UsageSummary } from "@/lib/saas";
 import {
   SubjectNode,
@@ -851,15 +852,12 @@ export default function UploadPage() {
               <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
                 <h2 className="text-sm font-bold text-white">Subject Engine</h2>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {[
-                    { value: "math" as const, label: "Math" },
-                    { value: "korean" as const, label: "Korean Language" },
-                  ].map((engine) => {
-                    const locked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(engine.value);
-                    const selected = subjectEngine === engine.value;
+                  {SUBJECT_ENGINES.map((engine) => {
+                    const locked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(engine.code);
+                    const selected = subjectEngine === engine.code;
                     return (
                       <button
-                        key={engine.value}
+                        key={engine.code}
                         type="button"
                         disabled={locked}
                         className={cn(
@@ -868,15 +866,15 @@ export default function UploadPage() {
                           locked && "cursor-not-allowed opacity-45"
                         )}
                         onClick={() => {
-                          setSubjectEngine(engine.value);
-                          if (engine.value === "korean" && !selectedSubjects.includes("국어")) {
+                          setSubjectEngine(engine.code);
+                          if (engine.code === "korean" && !selectedSubjects.includes("국어")) {
                             setSelectedSubjects((current) => [...current, "국어"]);
                           }
                         }}
                       >
                         <span className="inline-flex items-center gap-1.5">
                           {locked ? <LockKeyhole className="h-3.5 w-3.5" /> : null}
-                          {engine.label}{locked ? " · Locked" : ""}
+                          {subjectEngineLabel(engine.code)}{locked ? " · Locked" : ""}
                         </span>
                       </button>
                     );
