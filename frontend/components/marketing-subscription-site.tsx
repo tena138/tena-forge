@@ -21,6 +21,7 @@ import {
   Zap
 } from "lucide-react";
 
+import { HOMEPAGE_BUSINESS_INFO_ROWS } from "@/lib/legal";
 import { cn } from "@/lib/utils";
 
 type PlanCode = "basic" | "pro";
@@ -507,16 +508,27 @@ export function MarketingSubscriptionSite() {
       </section>
 
       <footer className="border-t border-white/10 bg-[#07080d]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div className="flex items-center gap-3">
-            <img src="/tenaforge-mark-dark.png" alt="" className="h-8 w-8 object-contain" />
-            <span>Tena Forge</span>
+        <div className="mx-auto grid max-w-7xl gap-5 px-4 py-8 text-sm text-slate-500 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <img src="/tenaforge-mark-dark.png" alt="" className="h-8 w-8 object-contain" />
+              <span>Tena Forge</span>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <Link href="/terms" className="hover:text-slate-300">이용약관</Link>
+              <Link href="/privacy" className="hover:text-slate-300">개인정보처리방침</Link>
+              <Link href="/copyright-policy" className="hover:text-slate-300">저작권 정책</Link>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/terms" className="hover:text-slate-300">이용약관</Link>
-            <Link href="/privacy" className="hover:text-slate-300">개인정보처리방침</Link>
-            <Link href="/copyright-policy" className="hover:text-slate-300">저작권 정책</Link>
-          </div>
+
+          <dl className="grid gap-x-5 gap-y-1 text-[11px] leading-5 sm:grid-cols-2 lg:grid-cols-3">
+            {HOMEPAGE_BUSINESS_INFO_ROWS.map(([label, value]) => (
+              <div key={label} className="flex min-w-0 flex-wrap gap-x-1.5">
+                <dt className="shrink-0 text-slate-600">{label}</dt>
+                <dd className="min-w-0 break-words text-slate-400">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </footer>
     </main>

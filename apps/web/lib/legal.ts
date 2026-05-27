@@ -1,4 +1,7 @@
-export const CUSTOMER_SUPPORT_EMAIL = "[고객센터 이메일 입력 예정]";
+export const CUSTOMER_SUPPORT_EMAIL = process.env.NEXT_PUBLIC_CUSTOMER_SUPPORT_EMAIL?.trim() || "support@tenaforge.com";
+export const BUSINESS_REPRESENTATIVE_NAME =
+  process.env.NEXT_PUBLIC_BUSINESS_REPRESENTATIVE_NAME?.trim() || "[대표자명 입력 필요]";
+export const BUSINESS_PHONE = process.env.NEXT_PUBLIC_BUSINESS_PHONE?.trim() || "[유선번호 입력 필요]";
 
 export const LEGAL_VERSIONS = {
   terms: "2026-05-25",
@@ -11,19 +14,32 @@ export const SERVICE_INFO = {
   effectiveDateLabel: "2026년 5월 25일",
   businessStartDateLabel: "2026년 5월 25일",
   businessRegistrationNumber: "849-05-03464",
+  representativeName: BUSINESS_REPRESENTATIVE_NAME,
   mailOrderRegistrationNumber: "신청 중, 발급 완료 후 즉시 반영 예정",
   address: "서울특별시 관악구 남부순환로 224길 5, 1701호",
+  phone: BUSINESS_PHONE,
   supportEmail: CUSTOMER_SUPPORT_EMAIL,
 } as const;
 
 export const BUSINESS_INFO_ROWS = [
   ["상호명", SERVICE_INFO.companyName],
+  ["대표자명", SERVICE_INFO.representativeName],
   ["서비스명", SERVICE_INFO.serviceName],
-  ["주소", SERVICE_INFO.address],
+  ["사업장 주소", SERVICE_INFO.address],
   ["사업자등록번호", SERVICE_INFO.businessRegistrationNumber],
+  ["유선번호", SERVICE_INFO.phone],
   ["통신판매업 신고번호", SERVICE_INFO.mailOrderRegistrationNumber],
   ["고객센터 이메일", SERVICE_INFO.supportEmail],
   ["시행일", SERVICE_INFO.effectiveDateLabel],
+] as const;
+
+export const HOMEPAGE_BUSINESS_INFO_ROWS = [
+  ["상호명", SERVICE_INFO.companyName],
+  ["대표자명", SERVICE_INFO.representativeName],
+  ["사업자등록번호", SERVICE_INFO.businessRegistrationNumber],
+  ["사업장 주소", SERVICE_INFO.address],
+  ["유선번호", SERVICE_INFO.phone],
+  ["고객센터 이메일", SERVICE_INFO.supportEmail],
 ] as const;
 
 export type LegalDocumentKey = "terms" | "privacy";

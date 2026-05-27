@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, FileUp, ShieldCheck, Sparkles } from "lucide-react";
 import { Badge, Button, Card } from "@/components/ui";
+import { HOMEPAGE_BUSINESS_INFO_ROWS } from "@/lib/legal";
 
 const features = [
   ["권리 확인 기반 아카이빙", "업로드 전 권리 확인, 출처 유형, 감사 로그를 통해 안전한 작업 흐름을 만듭니다."],
@@ -58,6 +59,26 @@ export default function LandingPage() {
           </Card>
         ))}
       </section>
+      <footer className="border-t border-white/10">
+        <div className="mx-auto grid max-w-7xl gap-5 px-5 py-8 text-sm text-slate-500">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <span className="font-semibold text-slate-300">Tena Forge</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              <Link href="/terms" className="hover:text-slate-300">이용약관</Link>
+              <Link href="/privacy" className="hover:text-slate-300">개인정보처리방침</Link>
+              <Link href="/copyright-policy" className="hover:text-slate-300">저작권 정책</Link>
+            </div>
+          </div>
+          <dl className="grid gap-x-5 gap-y-1 text-[11px] leading-5 sm:grid-cols-2 lg:grid-cols-3">
+            {HOMEPAGE_BUSINESS_INFO_ROWS.map(([label, value]) => (
+              <div key={label} className="flex min-w-0 flex-wrap gap-x-1.5">
+                <dt className="shrink-0 text-slate-600">{label}</dt>
+                <dd className="min-w-0 break-words text-slate-400">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </footer>
     </main>
   );
 }
