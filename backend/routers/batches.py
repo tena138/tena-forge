@@ -14,6 +14,7 @@ from limiter import limiter
 from models import Batch, BatchStatus, KoreanExtractionDocument, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, KoreanExtractionRead, SOURCE_TYPES
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
+from services.batch_colors import batch_color_for_seed, normalize_batch_color
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids
 from services.pipeline import count_pdf_pages, get_progress_detail
 from services.saas_security import ensure_subject_engine_access
@@ -123,6 +124,7 @@ def _batch_read(
             "source_label": batch.source_label,
             "rights_confirmed": bool(batch.rights_confirmed),
             "rights_note": batch.rights_note,
+            "accent_color": normalize_batch_color(batch.accent_color) or batch_color_for_seed(batch.id or batch.name),
             "subject_candidates": batch.subject_candidates,
             "unit_candidates": batch.unit_candidates,
             "subject_engine": batch.subject_engine or "math",
@@ -159,6 +161,7 @@ def upload_batch(
     source_label: str | None = Form(default=None),
     rights_confirmed: bool = Form(False),
     rights_note: str | None = Form(default=None),
+    accent_color: str | None = Form(default=None),
     subject_candidates: str | None = Form(default=None),
     unit_candidates: str | None = Form(default=None),
     subject_engine: str | None = Form(default=None),
@@ -216,6 +219,7 @@ def upload_batch(
         rights_confirmed=True,
         rights_confirmed_at=datetime.utcnow(),
         rights_note=rights_note,
+        accent_color=normalize_batch_color(accent_color) or batch_color_for_seed(batch_name),
         subject_candidates=parsed_subject_candidates,
         unit_candidates=_parse_candidate_list(unit_candidates, max_items=80),
         subject_engine=engine,

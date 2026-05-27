@@ -42,6 +42,8 @@ class ProblemRead(BaseModel):
     source_batch_id: UUID
     source_type: str = "self_created"
     source_label: str | None = None
+    batch_name: str | None = None
+    batch_accent_color: str | None = None
     rights_confirmed: bool = False
     rights_confirmed_at: datetime | None = None
     rights_note: str | None = None
@@ -71,6 +73,8 @@ class ProblemListItem(BaseModel):
     source_batch_id: UUID
     source_type: str = "self_created"
     source_label: str | None = None
+    batch_name: str | None = None
+    batch_accent_color: str | None = None
     rights_confirmed: bool = False
     visibility: str = "private"
     origin_type: str = "owned"
@@ -220,6 +224,7 @@ class BatchRead(BaseModel):
     source_label: str | None = None
     rights_confirmed: bool = False
     rights_note: str | None = None
+    accent_color: str
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
     subject_engine: str = "math"

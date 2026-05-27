@@ -85,7 +85,7 @@ function hashText(value: string) {
   return hash;
 }
 
-function defaultTagColor(value: string, group: "subject" | "unit") {
+function defaultTagColor(value: string, group: "subject" | "unit" | "batch") {
   return tagPalette[hashText(`${group}:${value}`) % tagPalette.length];
 }
 
@@ -394,6 +394,8 @@ export default function UploadPage() {
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [batchAccentColor, setBatchAccentColor] = useState(() => defaultTagColor("new-batch", "batch"));
+  const [batchColorTouched, setBatchColorTouched] = useState(false);
   const [customSubject, setCustomSubject] = useState("");
   const [customSubjectColor, setCustomSubjectColor] = useState(tagPalette[0]);
   const [unitInput, setUnitInput] = useState("");
@@ -516,10 +518,21 @@ export default function UploadPage() {
     });
   }
 
+  function updateBatchName(value: string) {
+    setBatchName(value);
+    if (!batchColorTouched && value.trim()) setBatchAccentColor(defaultTagColor(value.trim(), "batch"));
+  }
+
+  function updateBatchAccentColor(color: string) {
+    setBatchColorTouched(true);
+    setBatchAccentColor(color);
+  }
+
   function handleProblemPdfChange(file: File | null) {
     const nextAutoBatchName = file ? fileNameToBatchName(file.name) : "";
     const inferredSubjects = inferSubjectsFromFilename(file?.name);
     setProblemPdf(file);
+    if (!batchColorTouched && nextAutoBatchName) setBatchAccentColor(defaultTagColor(nextAutoBatchName, "batch"));
     setBatchName((current) => {
       const trimmed = current.trim();
       if (!file) return autoBatchName && trimmed === autoBatchName ? "" : current;
@@ -558,6 +571,7 @@ export default function UploadPage() {
     form.append("source_label", sourceLabel);
     form.append("rights_confirmed", String(rightsConfirmed));
     form.append("rights_note", rightsNote);
+    form.append("accent_color", batchAccentColor);
     form.append("subject_candidates", JSON.stringify(selectedSubjects));
     form.append("unit_candidates", JSON.stringify(finalUnitCandidates));
     form.append("subject_engine", subjectEngine);
@@ -634,7 +648,10 @@ export default function UploadPage() {
           <CardTitle>새 아카이브 배치</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <Input placeholder="배치 이름" value={batchName} onChange={(event) => setBatchName(event.target.value)} />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input className="min-w-0 flex-1" placeholder="배치 이름" value={batchName} onChange={(event) => updateBatchName(event.target.value)} />
+            <TagColorPicker value={batchAccentColor} onChange={updateBatchAccentColor} label="배치 색상" />
+          </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="text-sm font-bold text-white">Subject Engine</h2>

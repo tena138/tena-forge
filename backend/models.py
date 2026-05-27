@@ -246,6 +246,7 @@ class Batch(Base):
     rights_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     rights_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     rights_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    accent_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     subject_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     unit_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     subject_engine: Mapped[str] = mapped_column(String(30), default="math", nullable=False, index=True)

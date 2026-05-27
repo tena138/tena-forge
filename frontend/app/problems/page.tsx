@@ -76,6 +76,14 @@ function difficultyTone(value?: string | null) {
   return { label: "미지정", color: "#64748b", badge: "border-slate-400/20 bg-slate-400/10 text-slate-300" };
 }
 
+function normalizeHexColor(value?: string | null) {
+  return value && /^#[0-9a-f]{6}$/i.test(value) ? value : null;
+}
+
+function problemAccentColor(problem: Problem, fallback: string) {
+  return normalizeHexColor(problem.batch_accent_color) || fallback;
+}
+
 function pageLabel(problem: Problem) {
   return problem.review_page_number ? `${problem.review_page_number}p` : "페이지 미상";
 }
@@ -355,6 +363,7 @@ function ProblemsBrowser() {
   function renderProblemCard(problem: Problem) {
     const selected = selectedIds.includes(problem.id);
     const tone = difficultyTone(problem.tags?.difficulty);
+    const accentColor = problemAccentColor(problem, tone.color);
     const showSubject = subjects.length === 0 && problem.tags?.subject;
     return (
       <article
@@ -365,7 +374,7 @@ function ProblemsBrowser() {
           selected ? "border-[#7F77DD] bg-[#7F77DD]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
         )}
       >
-        <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: tone.color }} />
+        <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
         <label className="absolute left-3 top-3 z-10 inline-flex h-6 w-6 items-center justify-center rounded border border-white/15 bg-black/30 backdrop-blur" onClick={stopInteractiveEvent} onPointerDown={stopInteractiveEvent}>
           <input
             className="h-4 w-4 accent-[#7F77DD]"
@@ -411,6 +420,7 @@ function ProblemsBrowser() {
   function renderProblemRow(problem: Problem) {
     const selected = selectedIds.includes(problem.id);
     const tone = difficultyTone(problem.tags?.difficulty);
+    const accentColor = problemAccentColor(problem, tone.color);
     return (
       <article
         key={problem.id}
@@ -420,7 +430,7 @@ function ProblemsBrowser() {
           selected ? "border-[#7F77DD] bg-[#7F77DD]/10" : "border-white/10"
         )}
       >
-        <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: tone.color }} />
+        <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
         <div className="grid min-h-[58px] grid-cols-[38px_70px_minmax(0,1fr)_auto_auto] items-center gap-3 py-2 pl-6 pr-4">
           <label className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/15 bg-black/20" onClick={stopInteractiveEvent} onPointerDown={stopInteractiveEvent}>
             <input

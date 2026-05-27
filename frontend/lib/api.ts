@@ -31,6 +31,8 @@ export type Problem = {
   source_batch_id: string;
   source_type: SourceType;
   source_label: string | null;
+  batch_name?: string | null;
+  batch_accent_color?: string | null;
   rights_confirmed: boolean;
   rights_confirmed_at?: string | null;
   rights_note?: string | null;
@@ -51,6 +53,7 @@ export type Batch = {
   status: BatchStatus;
   source_type: SourceType;
   source_label: string | null;
+  accent_color: string;
   rights_confirmed: boolean;
   rights_note: string | null;
   subject_candidates?: string[];

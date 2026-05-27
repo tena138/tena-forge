@@ -19,6 +19,7 @@ from database import get_db, get_settings
 from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag
 from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigation, ProblemRead, ProblemStats, ProblemUpdate, ReviewUpdate, TagBase, TagRead, VisualCropUpdate
 from services.math_normalization import normalize_geometry_notation
+from services.batch_colors import batch_color_for_seed, normalize_batch_color
 from services.ownership import current_owner_id, current_owner_ids
 from services.pipeline import strip_answer_choices, vision_json
 from services.private_files import sign_static_url
@@ -92,10 +93,13 @@ def _problem_order(sort: str | None):
 def _serialize_problem(problem: Problem, schema=ProblemRead):
     owner_id = str(problem.owner_id or "")
     item = schema.model_validate(problem)
+    batch = getattr(problem, "batch", None)
     return item.model_copy(
         update={
             "visual_url": sign_static_url(item.visual_url, owner_id),
             "review_page_image_url": sign_static_url(getattr(item, "review_page_image_url", None), owner_id),
+            "batch_name": getattr(batch, "name", None),
+            "batch_accent_color": normalize_batch_color(getattr(batch, "accent_color", None)) or batch_color_for_seed(getattr(batch, "id", None) or problem.source_batch_id),
         }
     )
 
@@ -322,7 +326,7 @@ def list_problems(
         batch_id=batch_id,
     )
 
-    base = select(Problem).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id).options(joinedload(Problem.tags))
+    base = select(Problem).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id).options(joinedload(Problem.tags), joinedload(Problem.batch))
     count_query = select(func.count(distinct(Problem.id))).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id)
     if filters:
         condition = and_(*filters)
@@ -398,7 +402,7 @@ def problem_detail(problem_id: UUID, request: Request, db: Session = Depends(get
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
-        .options(joinedload(Problem.tags))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
@@ -410,7 +414,7 @@ def update_tags(problem_id: UUID, payload: TagBase, request: Request, db: Sessio
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
-        .options(joinedload(Problem.tags))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
@@ -431,7 +435,7 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
-        .options(joinedload(Problem.tags))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
@@ -450,7 +454,7 @@ def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
-        .options(joinedload(Problem.tags))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
@@ -494,7 +498,7 @@ def crop_visual(problem_id: UUID, payload: VisualCropUpdate, request: Request, d
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
-        .options(joinedload(Problem.tags))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
@@ -538,7 +542,7 @@ def delete_visual(problem_id: UUID, request: Request, db: Session = Depends(get_
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
-        .options(joinedload(Problem.tags))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
@@ -552,7 +556,11 @@ def delete_visual(problem_id: UUID, request: Request, db: Session = Depends(get_
 
 @router.patch("/{problem_id}/review", response_model=ProblemRead)
 def update_review(problem_id: UUID, payload: ReviewUpdate, request: Request, db: Session = Depends(get_db)):
-    problem = db.scalars(select(Problem).where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))).first()
+    problem = db.scalars(
+        select(Problem)
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
+        .options(joinedload(Problem.batch))
+    ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
     problem.needs_review = payload.needs_review
