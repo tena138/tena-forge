@@ -91,6 +91,33 @@ const storyScenes = [
   { title: "오답 관리까지 꼼꼼하게", eyebrow: "Academy OS", pageTitle: "학생 관리", route: "/student-management" },
 ];
 
+const mobileHeroStats = [
+  ["PDF", "추출"],
+  ["DB", "정리"],
+  ["시험지", "제작"],
+];
+
+const mobileWorkflow = [
+  {
+    eyebrow: "01",
+    title: "PDF를 올리면 문항 후보로 정리",
+    body: "원본, 해설, 선택지, 이미지까지 검수 가능한 형태로 모읍니다.",
+    icon: FileUp,
+  },
+  {
+    eyebrow: "02",
+    title: "필터로 필요한 문항만 고르기",
+    body: "과목, 단원, 배치, 난이도를 조합해서 수업용 문항을 빠르게 찾습니다.",
+    icon: Search,
+  },
+  {
+    eyebrow: "03",
+    title: "시험지와 학생 기록까지 연결",
+    body: "선택한 문항은 자료로 내보내고, 결과는 오답 기록과 상담 흐름으로 이어집니다.",
+    icon: CheckSquare,
+  },
+];
+
 const demoProblems: SampleProblem[] = [
   {
     id: "landing-problem-1",
@@ -358,35 +385,48 @@ export function PlanLandingPage() {
       <AuroraWebGLBackground />
       <LandingNav />
 
-      <section className="relative min-h-screen overflow-hidden pt-16">
-        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[104rem] flex-col justify-center px-4 py-8 sm:px-6 lg:py-10 xl:px-8">
-          <div className="grid gap-8 lg:grid-cols-[minmax(21rem,0.55fr)_minmax(0,1.45fr)] lg:items-center">
+      <section className="relative min-h-[100svh] overflow-hidden pt-16 lg:min-h-screen">
+        <div className="relative z-10 mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-[104rem] flex-col justify-start px-4 pb-10 pt-7 sm:px-6 lg:min-h-[calc(100vh-4rem)] lg:justify-center lg:py-10 xl:px-8">
+          <div className="grid gap-7 lg:grid-cols-[minmax(21rem,0.55fr)_minmax(0,1.45fr)] lg:items-center">
             <div className="max-w-[34rem]">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
               <h1 className="landing-hero-title landing-keep-words mt-4 bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
                 <span className="block">혼자서도 빠르고,</span>
                 <span className="block">강력하게</span>
               </h1>
-              <p className="landing-keep-words mt-5 max-w-[31rem] text-lg leading-8 text-[var(--landing-text-secondary)]">
+              <p className="landing-keep-words mt-4 max-w-[31rem] text-base leading-7 text-[var(--landing-text-secondary)] sm:mt-5 sm:text-lg sm:leading-8">
                 PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.
               </p>
-              <div className="mt-8 flex flex-wrap items-center gap-4">
+              <div className="mt-5 grid grid-cols-3 gap-2 lg:hidden">
+                {mobileHeroStats.map(([value, label]) => (
+                  <div key={label} className="rounded-[8px] border border-white/10 bg-white/[0.045] px-3 py-2.5">
+                    <p className="text-sm font-black text-white">{value}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-8 sm:gap-4">
                 <Link
                   href="/register?plan=free"
-                  className="landing-motion-safe inline-flex h-12 items-center gap-2 rounded-[8px] bg-[var(--landing-accent)] px-6 text-sm font-black text-white shadow-[0_18px_42px_rgba(124,92,255,0.36)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] hover:shadow-[0_22px_54px_rgba(124,92,255,0.44)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98]"
+                  className="landing-motion-safe inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[8px] bg-[var(--landing-accent)] px-5 text-sm font-black text-white shadow-[0_18px_42px_rgba(124,92,255,0.36)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] hover:shadow-[0_22px_54px_rgba(124,92,255,0.44)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98] sm:flex-none sm:px-6"
                 >
                   무료로 시작하기 <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/login?redirect=/academy"
-                  className="text-sm font-black text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25"
+                  className="inline-flex h-12 items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:border-0 sm:bg-transparent sm:px-0"
                 >
                   로그인
                 </Link>
               </div>
             </div>
 
-            <ProductPreview />
+            <div className="lg:hidden">
+              <MobileProductPreview />
+            </div>
+            <div className="hidden lg:block">
+              <ProductPreview />
+            </div>
           </div>
         </div>
       </section>
@@ -408,7 +448,10 @@ function LandingNav() {
         <div className="flex items-center gap-2 text-sm font-black">
           <a href="#plans" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">플랜</a>
           <Link href="/login?redirect=/academy" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">로그인</Link>
-          <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-4 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98]">무료로 시작하기</Link>
+          <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98] sm:px-4">
+            <span className="sm:hidden">시작</span>
+            <span className="hidden sm:inline">무료로 시작하기</span>
+          </Link>
         </div>
       </div>
     </nav>
@@ -524,6 +567,66 @@ function ProductPreview() {
   );
 }
 
+function MobileProductPreview() {
+  const previewSteps: Array<[string, string, IconComponent, string]> = [
+    ["PDF 업로드", "모의고사_수학.pdf", FileUp, "bg-violet-400/15 text-violet-100 border-violet-300/20"],
+    ["문항 검수", "58문항 · 태그 대기", ClipboardCheck, "bg-cyan-400/12 text-cyan-100 border-cyan-300/20"],
+    ["시험지 제작", "선택 12문항", Send, "bg-emerald-400/12 text-emerald-100 border-emerald-300/20"],
+  ];
+
+  return (
+    <section className="relative overflow-hidden rounded-[10px] border border-white/10 bg-[#090b12]/90 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_0%,rgba(124,92,255,0.18),transparent_13rem),radial-gradient(circle_at_92%_18%,rgba(45,212,191,0.12),transparent_12rem)]" />
+      <div className="relative z-10 border-b border-white/10 px-3.5 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Private Studio</p>
+            <h2 className="mt-1 truncate text-sm font-black text-white">오늘 만들 자료</h2>
+          </div>
+          <span className="rounded-[7px] border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-bold text-emerald-100">3단계</span>
+        </div>
+      </div>
+
+      <div className="relative z-10 space-y-3 p-3.5">
+        {previewSteps.map(([title, body, Icon, tone]) => (
+          <div key={title} className={cn("flex items-center gap-3 rounded-[8px] border bg-white/[0.035] p-3", tone)}>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[7px] border border-white/10 bg-black/20">
+              <Icon className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-white">{title}</p>
+              <p className="mt-1 truncate text-xs text-slate-400">{body}</p>
+            </div>
+          </div>
+        ))}
+
+        <div className="rounded-[8px] border border-white/10 bg-black/24 p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-xs font-bold text-slate-400">문항 브라우저</p>
+            <span className="text-[11px] font-semibold text-violet-200">실시간 선택</span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {Array.from({ length: 8 }, (_, index) => {
+              const active = [0, 2, 5].includes(index);
+              return (
+                <span
+                  key={index}
+                  className={cn(
+                    "grid aspect-square place-items-center rounded-[7px] border text-xs font-black",
+                    active ? "border-violet-300/40 bg-violet-500/25 text-white" : "border-white/10 bg-white/[0.04] text-slate-500"
+                  )}
+                >
+                  {index + 1}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ScrollStorySection() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const pinRef = useRef<HTMLDivElement | null>(null);
@@ -571,20 +674,7 @@ function ScrollStorySection() {
 
   return (
     <section ref={sectionRef} className="relative z-10 bg-transparent">
-      <div className="lg:hidden">
-        {storyScenes.map((scene, index) => (
-          <div key={scene.title} className="px-4 py-12 sm:px-6">
-            <div className="mx-auto max-w-5xl">
-              <h2 className="landing-keep-words text-3xl font-black leading-tight tracking-normal text-white">{scene.title}</h2>
-              <div className="relative mt-6 h-[30rem] overflow-hidden rounded-[18px] bg-[#07080f]/70">
-                {index === 0 ? <DigitizeScene progress={1} /> : null}
-                {index === 1 ? <ContentCreationScene progress={1} /> : null}
-                {index === 2 ? <WrongAnswerScene progress={1} /> : null}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <MobileWorkflowSection />
 
       <div ref={pinRef} className="relative hidden h-screen min-h-[46rem] overflow-hidden lg:block">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(45,212,191,0.09),transparent_28rem),radial-gradient(circle_at_80%_42%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.10),rgba(6,7,13,0.78))]" />
@@ -601,6 +691,39 @@ function ScrollStorySection() {
         </div>
       </div>
     </section>
+  );
+}
+
+function MobileWorkflowSection() {
+  return (
+    <div className="relative z-10 bg-[#07080d]/70 px-4 py-12 sm:px-6 lg:hidden">
+      <div className="mx-auto max-w-md">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Workflow</p>
+        <h2 className="landing-keep-words mt-3 text-[2rem] font-black leading-tight tracking-normal text-white">
+          수업 준비는 세 단계면 충분합니다.
+        </h2>
+        <p className="landing-keep-words mt-3 text-sm leading-6 text-slate-400">
+          PDF를 올리고, 문항을 고르고, 바로 수업 자료로 이어갑니다.
+        </p>
+
+        <div className="mt-6 space-y-3">
+          {mobileWorkflow.map(({ eyebrow, title, body, icon: Icon }) => (
+            <article key={title} className="rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[7px] border border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{eyebrow}</p>
+                  <h3 className="landing-keep-words mt-1 text-base font-black leading-6 text-white">{title}</h3>
+                  <p className="landing-keep-words mt-2 text-sm leading-6 text-slate-400">{body}</p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
