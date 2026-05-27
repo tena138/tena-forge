@@ -917,12 +917,35 @@ export default function StudentManagementPage() {
     setMessage(`복습 세트를 만들었습니다: ${review.name}`);
   }
 
-  function classSessionCount(classId: string) {
-    return sessions.filter((session) => session.class_ids.includes(classId)).length;
+  function classStudentMembershipIds(classRow: ClassCard) {
+    return new Set([...(classRow.student_membership_ids || []), ...classRow.students.map((student) => student.id)]);
+  }
+
+  function sessionBelongsToClass(session: PaperSessionSummary, classRow: ClassCard) {
+    if (session.class_ids.includes(classRow.id)) return true;
+    const studentIds = classStudentMembershipIds(classRow);
+    return session.student_membership_ids.some((studentId) => studentIds.has(studentId));
+  }
+
+  function sessionsForClass(classRow: ClassCard) {
+    const byId = new Map<string, PaperSessionSummary>();
+    for (const session of [...(classRow.paper_sessions || []), ...sessions]) {
+      if (sessionBelongsToClass(session, classRow)) byId.set(session.id, session);
+    }
+    return Array.from(byId.values()).sort((left, right) => {
+      const leftDate = left.scheduled_at || left.created_at || "";
+      const rightDate = right.scheduled_at || right.created_at || "";
+      return rightDate.localeCompare(leftDate) || right.title.localeCompare(left.title);
+    });
+  }
+
+  function classSessionCount(classRow: ClassCard) {
+    return sessionsForClass(classRow).length;
   }
 
   async function loadClassStats(classId: string) {
-    const targetSessions = sessions.filter((session) => session.class_ids.includes(classId));
+    const classRow = classes.find((row) => row.id === classId);
+    const targetSessions = classRow ? sessionsForClass(classRow) : sessions.filter((session) => session.class_ids.includes(classId));
     setClassStatsLoading((current) => ({ ...current, [classId]: true }));
     try {
       const details = await Promise.all(targetSessions.map((session) => getPaperSessionDetail(session.id)));
@@ -1376,13 +1399,13 @@ export default function StudentManagementPage() {
                   <CardTitle className="text-white">{classRow.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {(classRow.paper_sessions || sessions.filter((session) => session.class_ids.includes(classRow.id))).slice(0, 6).map((session) => (
+                  {sessionsForClass(classRow).slice(0, 6).map((session) => (
                     <div key={session.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
                       <p className="text-sm font-semibold text-white">{session.title}</p>
                       <p className="mt-1 text-xs text-slate-500">{formatDate(session.scheduled_at)} · {session.session_type}</p>
                     </div>
                   ))}
-                  {!sessions.some((session) => session.class_ids.includes(classRow.id)) ? <p className="text-sm text-slate-500">등록된 일정이 없습니다.</p> : null}
+                  {!sessionsForClass(classRow).length ? <p className="text-sm text-slate-500">등록된 일정이 없습니다.</p> : null}
                 </CardContent>
               </Card>
             ))}
@@ -1423,7 +1446,7 @@ export default function StudentManagementPage() {
                       <p className="font-semibold text-white">{classRow.name}</p>
                       <span className="text-rose-100">{classRow.unresolved_wrong_count}</span>
                     </div>
-                    <p className="mt-2 text-sm text-slate-500">{classRow.student_count}명 · 세션 {classSessionCount(classRow.id)}개</p>
+                    <p className="mt-2 text-sm text-slate-500">{classRow.student_count}명 · 세션 {classSessionCount(classRow)}개</p>
                   </div>
                 ))}
               </CardContent>

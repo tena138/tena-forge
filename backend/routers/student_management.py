@@ -387,6 +387,13 @@ def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) 
     ).all()
 
 
+def _session_belongs_to_class(session: PaperSession, class_row: AcademyClass, memberships: list[StudentAcademyMembership]) -> bool:
+    if str(class_row.id) in {str(value) for value in (session.class_ids or [])}:
+        return True
+    student_membership_ids = {str(membership.id) for membership in memberships}
+    return bool(student_membership_ids.intersection({str(value) for value in (session.student_membership_ids or [])}))
+
+
 def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_students: bool = True) -> dict:
     memberships = _active_memberships_for_class(db, academy_id, row.id)
     student_ids = [membership.student_user_id for membership in memberships]
@@ -413,7 +420,7 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
         select(PaperSession).where(PaperSession.academy_id == academy_id).order_by(PaperSession.created_at.desc())
     ).all()
     now = _now()
-    class_sessions = [session for session in sessions if str(row.id) in (session.class_ids or [])]
+    class_sessions = [session for session in sessions if _session_belongs_to_class(session, row, memberships)]
     upcoming_count = sum(
         1
         for session in class_sessions
@@ -1008,7 +1015,8 @@ def get_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
         .limit(500)
     ).all()
     payload = _class_payload(db, academy_id, row, include_students=True)
-    payload["paper_sessions"] = [_session_summary(db, academy_id, session) for session in sessions if str(class_id) in (session.class_ids or [])]
+    memberships = _active_memberships_for_class(db, academy_id, row.id)
+    payload["paper_sessions"] = [_session_summary(db, academy_id, session) for session in sessions if _session_belongs_to_class(session, row, memberships)]
     payload["schedule_events"] = [_schedule_event_payload(event) for event in events]
     return payload
 

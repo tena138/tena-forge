@@ -32,6 +32,7 @@ export type ClassCard = {
   average_recent_score?: number | null;
   unresolved_wrong_count: number;
   students: StudentCard[];
+  student_membership_ids?: string[];
   paper_sessions?: PaperSessionSummary[];
   schedule_events?: ScheduleEvent[];
 };
