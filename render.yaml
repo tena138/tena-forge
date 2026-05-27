@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head && python scripts/ensure_admin_account.py && python scripts/ensure_admin_templates.py
+    preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head && python scripts/ensure_admin_account.py && python scripts/ensure_admin_templates.py && python scripts/ensure_pg_review_account.py
     plan: standard
     healthCheckPath: /health
     disk:
@@ -58,6 +58,12 @@ services:
         sync: false
       - key: BOOTSTRAP_ADMIN_NAME
         value: Tena Admin
+      - key: PG_REVIEW_EMAIL
+        value: pg-review@tena-forge.com
+      - key: PG_REVIEW_PASSWORD
+        value: TenaTossReview!2026
+      - key: PG_REVIEW_NAME
+        value: Toss Payments Review
       - key: AI_MODEL_POOL
         value: gpt-5.4-mini,gpt-5-mini
       - key: AI_SOLUTION_MODEL_POOL
