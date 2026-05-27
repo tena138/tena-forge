@@ -31,14 +31,14 @@ const requiredAgreementItems: AgreementItem[] = [
   {
     id: "terms",
     label: "[필수] 서비스 이용약관 동의",
-    inactiveText: "전문 보기",
+    inactiveText: "보기",
     activeText: "동의 완료",
     documentKey: "terms",
   },
   {
     id: "privacy",
     label: "[필수] 개인정보 처리방침 동의",
-    inactiveText: "전문 보기",
+    inactiveText: "보기",
     activeText: "동의 완료",
     documentKey: "privacy",
   },
@@ -95,7 +95,7 @@ function RegisterPageContent() {
               <h2 id="signup-agreement-title" className="text-sm font-bold text-white">
                 회원가입 전 약관 동의
               </h2>
-              <p className="mt-1 text-xs leading-5 text-slate-400">약관 전문을 끝까지 확인한 뒤 동의해 주세요.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">내용을 끝까지 확인한 뒤 동의해 주세요.</p>
             </div>
 
             <div className="space-y-2">

@@ -322,7 +322,7 @@ function AgreementRow({
           type="button"
           onClick={onView}
           className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.055] px-3 text-sm font-bold text-slate-100 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
-          aria-label={`${item.label} 전문 보기`}
+          aria-label={`${item.label} 보기`}
         >
           <FileText className="h-4 w-4" aria-hidden="true" />
           보기
@@ -389,14 +389,10 @@ function LegalModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="legal-dialog-title"
-        aria-describedby="legal-dialog-description"
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/10 p-4 sm:p-5">
           <div>
-            <p id="legal-dialog-description" className="text-xs font-bold text-violet-200">
-              약관 전문
-            </p>
-            <h2 id="legal-dialog-title" className="mt-1 text-xl font-bold text-white">
+            <h2 id="legal-dialog-title" className="text-xl font-bold text-white">
               {activeDocument.title}
             </h2>
           </div>
@@ -405,7 +401,7 @@ function LegalModal({
             type="button"
             onClick={onClose}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.055] text-slate-100 transition hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
-            aria-label="약관 전문 닫기"
+            aria-label="닫기"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

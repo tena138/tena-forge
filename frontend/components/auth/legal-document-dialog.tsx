@@ -73,14 +73,10 @@ export function LegalDocumentDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="legal-dialog-title"
-        aria-describedby="legal-dialog-description"
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/10 p-4 sm:p-5">
           <div className="min-w-0">
-            <p id="legal-dialog-description" className="text-xs font-bold text-violet-200">
-              약관 전문
-            </p>
-            <h2 id="legal-dialog-title" className="mt-1 text-xl font-bold text-white">
+            <h2 id="legal-dialog-title" className="text-xl font-bold text-white">
               {activeDocument.title}
             </h2>
           </div>
@@ -89,7 +85,7 @@ export function LegalDocumentDialog({
             type="button"
             onClick={onClose}
             className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.055] px-3 text-sm font-bold text-slate-100 transition hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
-            aria-label="약관 전문 닫기"
+            aria-label="닫기"
           >
             닫기
           </button>
