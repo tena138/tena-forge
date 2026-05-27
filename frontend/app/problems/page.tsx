@@ -30,7 +30,6 @@ import { api, Batch, Problem, sourceTypeLabel, sourceTypeOptions } from "@/lib/a
 import {
   SubjectNode,
   buildSubjectTree,
-  collectSubjectNodeValues,
   makeSubjectPathValue,
   normalizeSubjectValue,
   subjectDisplayLabel,
@@ -125,6 +124,159 @@ function stopInteractiveEvent(event: SyntheticEvent) {
   event.stopPropagation();
 }
 
+function ProblemSubjectFolderBoard({
+  nodes,
+  selectedSubjects,
+  onToggleSubject,
+  onAddSubject,
+}: {
+  nodes: SubjectNode[];
+  selectedSubjects: string[];
+  onToggleSubject: (subject: string) => void;
+  onAddSubject: (subject: string) => void;
+}) {
+  const [openParent, setOpenParent] = useState("");
+  const [newRoot, setNewRoot] = useState("");
+  const [newChild, setNewChild] = useState("");
+
+  useEffect(() => {
+    if (!nodes.length) {
+      setOpenParent("");
+      return;
+    }
+    if (!openParent || !nodes.some((node) => (node.value || node.label) === openParent)) {
+      setOpenParent(nodes[0].value || nodes[0].label);
+    }
+  }, [nodes, openParent]);
+
+  function addRoot() {
+    const subject = normalizeSubjectValue(newRoot);
+    if (!subject) return;
+    onAddSubject(subject);
+    setOpenParent(subject);
+    setNewRoot("");
+  }
+
+  function addChild(parent: SubjectNode) {
+    const subject = normalizeSubjectValue(makeSubjectPathValue(parent.value || parent.label, newChild));
+    if (!subject) return;
+    onAddSubject(subject);
+    setOpenParent(parent.value || parent.label);
+    setNewChild("");
+  }
+
+  return (
+    <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+      <div className="flex min-w-max gap-3">
+        {nodes.map((node) => {
+          const nodeKey = node.value || node.label;
+          const isOpen = openParent === nodeKey;
+          const parentSelected = Boolean(node.value && selectedSubjects.includes(node.value));
+          const parentRowVisible = parentSelected || !node.children?.length;
+          return (
+            <div key={nodeKey} className="w-52 shrink-0 rounded-md border border-white/10 bg-black/15 p-2">
+              <button
+                type="button"
+                className={cn(
+                  "flex h-8 w-full items-center gap-2 rounded-md border px-2 text-left text-xs font-bold transition-colors",
+                  isOpen ? "border-[#7F77DD] bg-[#7F77DD]/18 text-white" : "border-white/10 bg-card/70 text-slate-300 hover:bg-accent"
+                )}
+                onClick={() => setOpenParent(isOpen ? "" : nodeKey)}
+              >
+                <span className="truncate">{node.label}</span>
+              </button>
+              {isOpen ? (
+                <div className="mt-2 space-y-1.5">
+                  {parentRowVisible && node.value ? (
+                    <ProblemSubjectRow
+                      label={node.label}
+                      value={node.value}
+                      selected={selectedSubjects.includes(node.value)}
+                      onToggle={onToggleSubject}
+                    />
+                  ) : null}
+                  {node.children?.map((child) => {
+                    const value = normalizeSubjectValue(child.value || child.label);
+                    return (
+                      <ProblemSubjectRow
+                        key={value}
+                        label={child.label}
+                        value={value}
+                        selected={selectedSubjects.includes(value)}
+                        onToggle={onToggleSubject}
+                      />
+                    );
+                  })}
+                  <div className="flex items-center gap-1 rounded-md border border-dashed border-white/12 bg-white/[0.025] p-1.5">
+                    <span className="px-1 text-sm font-bold text-slate-400">+</span>
+                    <Input
+                      className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
+                      value={newChild}
+                      onChange={(event) => setNewChild(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addChild(node);
+                        }
+                      }}
+                      placeholder="하위항목"
+                    />
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => addChild(node)}>+</Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        <div className="w-52 shrink-0 rounded-md border border-dashed border-white/15 bg-black/15 p-2">
+          <div className="flex h-8 items-center gap-2 rounded-md border border-white/10 bg-card/70 px-2 text-xs font-bold text-slate-300">
+            <span className="text-sm">+</span>
+            <span>상위항목</span>
+          </div>
+          <div className="mt-2 flex gap-1">
+            <Input
+              className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
+              value={newRoot}
+              onChange={(event) => setNewRoot(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addRoot();
+                }
+              }}
+              placeholder="상위항목"
+            />
+            <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={addRoot}>+</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProblemSubjectRow({
+  label,
+  value,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  value: string;
+  selected: boolean;
+  onToggle: (subject: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn("flex h-8 w-full items-center gap-2 rounded-md border px-2 text-left text-xs transition-colors", selected ? "border-[#7F77DD] bg-[#7F77DD] text-white" : "border-white/10 bg-card/70 hover:bg-accent")}
+      onClick={() => onToggle(value)}
+    >
+      <span className="text-slate-500">-</span>
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
 function ProblemsBrowser() {
   const searchParams = useSearchParams();
   const paramsKey = searchParams.toString();
@@ -134,8 +286,6 @@ function ProblemsBrowser() {
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
   const [unit, setUnit] = useState(() => searchParams.get("unit") || "");
   const [subjects, setSubjects] = useState<string[]>(() => searchParams.getAll("subject"));
-  const [customSubjectParent, setCustomSubjectParent] = useState("");
-  const [customSubject, setCustomSubject] = useState("");
   const [customSubjectFilters, setCustomSubjectFilters] = useState<string[]>([]);
   const [types, setTypes] = useState<string[]>(() => searchParams.getAll("problem_type"));
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
@@ -260,7 +410,6 @@ function ProblemsBrowser() {
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
   const subjectTree = useMemo(() => buildSubjectTree([...facets.subjects, ...customSubjectFilters, ...subjects]), [customSubjectFilters, facets.subjects, subjects]);
-  const subjectParentOptions = useMemo(() => subjectTree.map((node) => node.label), [subjectTree]);
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
@@ -291,15 +440,8 @@ function ProblemsBrowser() {
     resetPageAnd(() => setSubjects(subjects.includes(subject) ? subjects.filter((item) => item !== subject) : [...subjects, subject]));
   }
 
-  function toggleSubjectGroup(node: SubjectNode) {
-    const values = collectSubjectNodeValues(node);
-    if (!values.length) return;
-    const allSelected = values.every((value) => subjects.includes(value));
-    resetPageAnd(() => setSubjects(allSelected ? subjects.filter((item) => !values.includes(item)) : [...subjects, ...values.filter((value) => !subjects.includes(value))]));
-  }
-
-  function addCustomSubjectFilter() {
-    const subject = normalizeSubjectValue(customSubject.includes(">") || customSubject.includes("/") ? customSubject : makeSubjectPathValue(customSubjectParent, customSubject));
+  function addCustomSubjectFilter(subjectValue: string) {
+    const subject = normalizeSubjectValue(subjectValue);
     if (!subject) return;
     resetPageAnd(() => {
       setSubjects(subjects.includes(subject) ? subjects : [...subjects, subject]);
@@ -308,8 +450,6 @@ function ProblemsBrowser() {
         writeSubjectList(customSubjectFiltersStorageKey, next);
         return next;
       });
-      setCustomSubjectParent("");
-      setCustomSubject("");
     });
   }
 
@@ -673,69 +813,12 @@ function ProblemsBrowser() {
             <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
               <div className="space-y-2">
                 <label className="text-sm font-medium">과목</label>
-                <div className="max-h-64 space-y-2 overflow-auto rounded-md border border-white/10 bg-card/50 p-2 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-                  {subjectTree.map((node) => {
-                    const nodeValues = collectSubjectNodeValues(node);
-                    const allSelected = nodeValues.length > 0 && nodeValues.every((value) => subjects.includes(value));
-                    const someSelected = !allSelected && nodeValues.some((value) => subjects.includes(value));
-                    return (
-                      <div key={node.value || node.label} className="rounded-md border border-white/10 bg-black/15 p-2">
-                        <button
-                          type="button"
-                          className={cn(
-                            "flex h-8 w-full items-center justify-between gap-2 rounded-md border px-2 text-left text-xs font-bold transition-colors",
-                            allSelected ? "border-[#7F77DD] bg-[#7F77DD] text-white" : someSelected ? "border-violet-300/40 bg-violet-500/15 text-violet-100" : "border-white/10 bg-card/70 text-slate-300 hover:bg-accent"
-                          )}
-                          onClick={() => toggleSubjectGroup(node)}
-                        >
-                          <span className="truncate">{node.label}</span>
-                          <span className="shrink-0 text-[10px]">{allSelected ? "전체 선택됨" : someSelected ? "일부 선택" : "전체"}</span>
-                        </button>
-                        {node.children?.length ? (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {node.children.map((child) => {
-                              const value = normalizeSubjectValue(child.value || child.label);
-                              const selected = subjects.includes(value);
-                              return (
-                                <button
-                                  key={value}
-                                  type="button"
-                                  className={cn("rounded-md border px-2 py-1 text-xs transition-colors", selected ? "border-[#7F77DD] bg-[#7F77DD] text-white" : "border-white/10 bg-card/70 hover:bg-accent")}
-                                  onClick={() => toggleSubjectValue(value)}
-                                >
-                                  {child.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="grid gap-2 sm:grid-cols-[0.8fr_1fr_auto]">
-                  <Input
-                    value={customSubjectParent}
-                    list="problem-subject-parent-options"
-                    onChange={(event) => setCustomSubjectParent(event.target.value)}
-                    placeholder="상위 과목"
-                  />
-                  <Input
-                    value={customSubject}
-                    onChange={(event) => setCustomSubject(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addCustomSubjectFilter();
-                      }
-                    }}
-                    placeholder="하위 과목 또는 상위 > 하위"
-                  />
-                  <Button type="button" variant="outline" onClick={addCustomSubjectFilter}>추가</Button>
-                </div>
-                <datalist id="problem-subject-parent-options">
-                  {subjectParentOptions.map((subject) => <option key={subject} value={subject} />)}
-                </datalist>
+                <ProblemSubjectFolderBoard
+                  nodes={subjectTree}
+                  selectedSubjects={subjects}
+                  onToggleSubject={toggleSubjectValue}
+                  onAddSubject={addCustomSubjectFilter}
+                />
               </div>
 
               <div className="space-y-2">

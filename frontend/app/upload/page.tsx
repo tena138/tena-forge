@@ -16,7 +16,6 @@ import { getRoles, getUsageSummary, UsageSummary } from "@/lib/saas";
 import {
   SubjectNode,
   buildSubjectTree,
-  collectSubjectNodeValues,
   isKoreanSubjectValue,
   makeSubjectPathValue,
   normalizeSubjectValue,
@@ -327,66 +326,174 @@ function SubjectTreeSelector({
   selectedSubjects,
   subjectTagColors,
   onToggleSubject,
-  onToggleGroup,
+  onAddSubject,
 }: {
   nodes: SubjectNode[];
   selectedSubjects: string[];
   subjectTagColors: TagColorMap;
   onToggleSubject: (subject: string) => void;
-  onToggleGroup: (node: SubjectNode) => void;
+  onAddSubject: (subject: string, color: string) => void;
 }) {
+  const [openParent, setOpenParent] = useState("");
+  const [newRoot, setNewRoot] = useState("");
+  const [newRootColor, setNewRootColor] = useState(tagPalette[0]);
+  const [newChild, setNewChild] = useState("");
+  const [newChildColor, setNewChildColor] = useState(tagPalette[1]);
+
+  useEffect(() => {
+    if (!nodes.length) {
+      setOpenParent("");
+      return;
+    }
+    if (!openParent || !nodes.some((node) => (node.value || node.label) === openParent)) {
+      setOpenParent(nodes[0].value || nodes[0].label);
+    }
+  }, [nodes, openParent]);
+
+  function addRoot() {
+    const subject = normalizeSubjectValue(newRoot);
+    if (!subject) return;
+    onAddSubject(subject, newRootColor);
+    setOpenParent(subject);
+    setNewRoot("");
+    setNewRootColor((current) => nextPaletteColor(current));
+  }
+
+  function addChild(parent: SubjectNode) {
+    const parentValue = parent.value || parent.label;
+    const subject = normalizeSubjectValue(makeSubjectPathValue(parentValue, newChild));
+    if (!subject) return;
+    onAddSubject(subject, newChildColor);
+    setOpenParent(parentValue);
+    setNewChild("");
+    setNewChildColor((current) => nextPaletteColor(current));
+  }
+
   return (
-    <div className="grid gap-2 md:grid-cols-2">
-      {nodes.map((node) => {
-        const nodeValues = collectSubjectNodeValues(node);
-        const allSelected = nodeValues.length > 0 && nodeValues.every((value) => selectedSubjects.includes(value));
-        const someSelected = !allSelected && nodeValues.some((value) => selectedSubjects.includes(value));
-        const groupColor = tagColor(node.value || node.label, subjectTagColors, "subject");
-        return (
-          <div key={node.value || node.label} className="rounded-[8px] border border-white/10 bg-black/20 p-2">
-            <button
-              type="button"
-              className={cn(
-                "flex h-9 w-full items-center justify-between gap-2 rounded-[7px] border px-2 text-sm font-bold transition hover:brightness-110",
-                allSelected ? "text-white" : someSelected ? "text-violet-100" : "text-slate-300"
-              )}
-              style={tagToneStyle(groupColor, allSelected || someSelected)}
-              onClick={() => onToggleGroup(node)}
-            >
-              <span className="inline-flex min-w-0 items-center gap-2">
+    <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+      <div className="flex min-w-max gap-3">
+        {nodes.map((node) => {
+          const nodeKey = node.value || node.label;
+          const isOpen = openParent === nodeKey;
+          const groupColor = tagColor(nodeKey, subjectTagColors, "subject");
+          const parentSelected = Boolean(node.value && selectedSubjects.includes(node.value));
+          const parentRowVisible = parentSelected || !node.children?.length;
+          return (
+            <div key={nodeKey} className="w-56 shrink-0 rounded-[8px] border border-white/10 bg-black/20 p-2">
+              <button
+                type="button"
+                className={cn(
+                  "flex h-9 w-full items-center gap-2 rounded-[7px] border px-2 text-sm font-bold transition hover:brightness-110",
+                  isOpen ? "text-white" : "text-slate-300"
+                )}
+                style={tagToneStyle(groupColor, isOpen)}
+                onClick={() => setOpenParent(isOpen ? "" : nodeKey)}
+              >
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: groupColor }} />
                 <span className="truncate">{node.label}</span>
-              </span>
-              <span className="shrink-0 text-[11px] font-semibold text-slate-300">{allSelected ? "전체 선택됨" : someSelected ? "일부 선택" : "전체"}</span>
-            </button>
-            {node.children?.length ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {node.children.map((child) => {
-                  const value = normalizeSubjectValue(child.value || child.label);
-                  const selected = selectedSubjects.includes(value);
-                  const color = tagColor(value, subjectTagColors, "subject");
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      className={cn(
-                        "inline-flex h-8 max-w-full items-center gap-1.5 rounded-[7px] border px-2 text-xs font-semibold transition hover:brightness-110",
-                        selected ? "text-white" : "text-slate-300"
-                      )}
-                      style={tagToneStyle(color, selected)}
-                      onClick={() => onToggleSubject(value)}
-                    >
-                      <span className="h-2 w-2 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: color }} />
-                      <span className="truncate">{child.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
+              </button>
+              {isOpen ? (
+                <div className="mt-2 space-y-1.5">
+                  {parentRowVisible && node.value ? (
+                    <SubjectFolderRow
+                      label={node.label}
+                      value={node.value}
+                      color={tagColor(node.value, subjectTagColors, "subject")}
+                      selected={selectedSubjects.includes(node.value)}
+                      onToggle={onToggleSubject}
+                    />
+                  ) : null}
+                  {node.children?.map((child) => {
+                    const value = normalizeSubjectValue(child.value || child.label);
+                    return (
+                      <SubjectFolderRow
+                        key={value}
+                        label={child.label}
+                        value={value}
+                        color={tagColor(value, subjectTagColors, "subject")}
+                        selected={selectedSubjects.includes(value)}
+                        onToggle={onToggleSubject}
+                      />
+                    );
+                  })}
+                  <div className="flex items-center gap-1 rounded-[7px] border border-dashed border-white/12 bg-white/[0.025] p-1.5">
+                    <span className="px-1 text-sm font-bold text-slate-400">+</span>
+                    <Input
+                      className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
+                      placeholder="하위항목"
+                      value={newChild}
+                      onChange={(event) => setNewChild(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addChild(node);
+                        }
+                      }}
+                    />
+                    <TagColorPicker value={newChildColor} onChange={setNewChildColor} label="하위항목 색상" />
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => addChild(node)}>+</Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        <div className="w-56 shrink-0 rounded-[8px] border border-dashed border-white/15 bg-black/15 p-2">
+          <div className="flex h-9 items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.03] px-2 text-sm font-bold text-slate-300">
+            <span className="text-base">+</span>
+            <span>상위항목</span>
           </div>
-        );
-      })}
+          <div className="mt-2 space-y-2">
+            <Input
+              className="h-9 border-white/10 bg-black/25 text-sm"
+              placeholder="상위항목"
+              value={newRoot}
+              onChange={(event) => setNewRoot(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addRoot();
+                }
+              }}
+            />
+            <div className="flex items-center gap-2">
+              <TagColorPicker value={newRootColor} onChange={setNewRootColor} label="상위항목 색상" />
+              <Button type="button" size="sm" variant="outline" className="h-9 flex-1" onClick={addRoot}>+</Button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function SubjectFolderRow({
+  label,
+  value,
+  color,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  selected: boolean;
+  onToggle: (subject: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex h-8 w-full items-center gap-2 rounded-[7px] border px-2 text-left text-xs font-semibold transition hover:brightness-110",
+        selected ? "text-white" : "text-slate-300"
+      )}
+      style={tagToneStyle(color, selected)}
+      onClick={() => onToggle(value)}
+    >
+      <span className="text-slate-500">-</span>
+      <span className="h-2 w-2 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: color }} />
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 
@@ -474,10 +581,7 @@ export default function UploadPage() {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [batchAccentColor, setBatchAccentColor] = useState(() => defaultTagColor("new-batch", "batch"));
   const [batchColorTouched, setBatchColorTouched] = useState(false);
-  const [customSubjectParent, setCustomSubjectParent] = useState("");
-  const [customSubject, setCustomSubject] = useState("");
   const [customSubjectOptions, setCustomSubjectOptions] = useState<string[]>([]);
-  const [customSubjectColor, setCustomSubjectColor] = useState(tagPalette[0]);
   const [unitInput, setUnitInput] = useState("");
   const [unitInputColor, setUnitInputColor] = useState(tagPalette[1]);
   const [unitCandidates, setUnitCandidates] = useState<string[]>([]);
@@ -550,30 +654,17 @@ export default function UploadPage() {
     setSelectedSubjects((current) => (current.includes(normalized) ? current.filter((item) => item !== normalized) : [...current, normalized]));
   }
 
-  function toggleSubjectGroup(node: SubjectNode) {
-    const values = collectSubjectNodeValues(node);
-    if (!values.length) return;
-    if (values.some(isKoreanSubjectValue)) setSubjectEngine("korean");
-    setSelectedSubjects((current) => {
-      const allSelected = values.every((value) => current.includes(value));
-      return allSelected ? current.filter((item) => !values.includes(item)) : [...current, ...values.filter((value) => !current.includes(value))];
-    });
-  }
-
-  function addCustomSubject() {
-    const subject = normalizeSubjectValue(customSubject.includes(">") || customSubject.includes("/") ? customSubject : makeSubjectPathValue(customSubjectParent, customSubject));
-    if (!subject || selectedSubjects.includes(subject)) return;
-    setSelectedSubjects((current) => [...current, subject]);
+  function addCustomSubject(subjectValue: string, color: string) {
+    const subject = normalizeSubjectValue(subjectValue);
+    if (!subject) return;
+    setSelectedSubjects((current) => (current.includes(subject) ? current : [...current, subject]));
     setCustomSubjectOptions((current) => {
       const next = current.includes(subject) ? current : [...current, subject];
       writeStringList(CUSTOM_SUBJECTS_KEY, next);
       return next;
     });
     if (isKoreanSubjectValue(subject)) setSubjectEngine("korean");
-    updateSubjectTagColor(subject, customSubjectColor);
-    setCustomSubjectParent("");
-    setCustomSubject("");
-    setCustomSubjectColor((current) => nextPaletteColor(current));
+    updateSubjectTagColor(subject, color);
   }
 
   function addUnitCandidate() {
@@ -711,7 +802,6 @@ export default function UploadPage() {
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const selectedEngineLocked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(subjectEngine);
   const subjectTree = useMemo(() => buildSubjectTree([...customSubjectOptions, ...selectedSubjects]), [customSubjectOptions, selectedSubjects]);
-  const subjectParentOptions = useMemo(() => subjectTree.map((node) => node.label), [subjectTree]);
 
   useEffect(() => {
     if (isAdmin || !usageSummary || enabledSubjectEngines.includes(subjectEngine)) return;
@@ -804,34 +894,8 @@ export default function UploadPage() {
                   selectedSubjects={selectedSubjects}
                   subjectTagColors={subjectTagColors}
                   onToggleSubject={toggleSubject}
-                  onToggleGroup={toggleSubjectGroup}
+                  onAddSubject={addCustomSubject}
                 />
-                <div className="mt-2 grid gap-2 sm:grid-cols-[0.8fr_1fr_auto_auto]">
-                  <Input
-                    className="min-w-0"
-                    placeholder="상위 과목"
-                    value={customSubjectParent}
-                    list="upload-subject-parent-options"
-                    onChange={(event) => setCustomSubjectParent(event.target.value)}
-                  />
-                  <Input
-                    className="min-w-0"
-                    placeholder="하위 과목 또는 상위 > 하위"
-                    value={customSubject}
-                    onChange={(event) => setCustomSubject(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addCustomSubject();
-                      }
-                    }}
-                  />
-                  <TagColorPicker value={customSubjectColor} onChange={setCustomSubjectColor} label="과목 태그 색상" />
-                  <Button type="button" variant="outline" onClick={addCustomSubject}>추가</Button>
-                </div>
-                <datalist id="upload-subject-parent-options">
-                  {subjectParentOptions.map((subject) => <option key={subject} value={subject} />)}
-                </datalist>
                 {selectedSubjects.length ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedSubjects.map((subject) => {
