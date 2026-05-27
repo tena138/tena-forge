@@ -63,8 +63,8 @@ const sections = [
     activeIcon: "text-sky-200 group-hover:text-sky-200",
     items: [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
-      { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
+      { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
     ],
   },
   {
