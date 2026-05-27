@@ -827,7 +827,7 @@ export default function UploadPage() {
   const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting && !selectedEngineLocked);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
       <section className="hidden">
         <div className="inline-flex items-center gap-2 rounded-md border border-violet-400/20 bg-violet-400/10 px-2.5 py-1 text-xs font-semibold text-violet-100">
           <ShieldCheck className="h-4 w-4" />
@@ -840,124 +840,128 @@ export default function UploadPage() {
         <CardHeader>
           <CardTitle>새 아카이브 배치</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input className="min-w-0 flex-1" placeholder="배치 이름" value={batchName} onChange={(event) => updateBatchName(event.target.value)} />
-            <TagColorPicker value={batchAccentColor} onChange={updateBatchAccentColor} label="배치 색상" />
-          </div>
-
-          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-            <h2 className="text-sm font-bold text-white">Subject Engine</h2>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {[
-                { value: "math" as const, label: "Math" },
-                { value: "korean" as const, label: "Korean Language" },
-              ].map((engine) => {
-                const locked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(engine.value);
-                const selected = subjectEngine === engine.value;
-                return (
-                  <button
-                    key={engine.value}
-                    type="button"
-                    disabled={locked}
-                    className={cn(
-                      "rounded-[8px] border px-3 py-2 text-sm font-semibold transition",
-                      selected ? "border-violet-300/70 bg-violet-500/20 text-violet-50" : "border-white/10 bg-black/20 text-slate-300 hover:border-white/25",
-                      locked && "cursor-not-allowed opacity-45"
-                    )}
-                    onClick={() => {
-                      setSubjectEngine(engine.value);
-                      if (engine.value === "korean" && !selectedSubjects.includes("국어")) {
-                        setSelectedSubjects((current) => [...current, "국어"]);
-                      }
-                    }}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      {locked ? <LockKeyhole className="h-3.5 w-3.5" /> : null}
-                      {engine.label}{locked ? " · Locked" : ""}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {selectedEngineLocked ? <p className="mt-3 text-xs text-amber-200">선택한 엔진은 현재 플랜에서 사용할 수 없습니다.</p> : null}
-          </div>
-
-          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-            <h2 className="text-sm font-bold text-white">분류 기준</h2>
-
-            <div className="mt-4 space-y-3">
-              <div>
-                <div className="mb-2 text-xs font-semibold text-slate-400">과목 후보</div>
-                <SubjectTreeSelector
-                  nodes={subjectTree}
-                  selectedSubjects={selectedSubjects}
-                  subjectTagColors={subjectTagColors}
-                  onToggleSubject={toggleSubject}
-                  onAddSubject={addCustomSubject}
-                />
-                {selectedSubjects.length ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedSubjects.map((subject) => {
-                      const color = tagColor(subject, subjectTagColors, "subject");
-                      return (
-                        <EditableTagChip
-                          key={subject}
-                          label={subjectDisplayLabel(subject)}
-                          color={color}
-                          onColorChange={(nextColor) => updateSubjectTagColor(subject, nextColor)}
-                          onRemove={() => toggleSubject(subject)}
-                        />
-                      );
-                    })}
-                  </div>
-                ) : null}
+        <CardContent>
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.85fr)]">
+            <div className="min-w-0 space-y-5">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input className="min-w-0 flex-1" placeholder="배치 이름" value={batchName} onChange={(event) => updateBatchName(event.target.value)} />
+                <TagColorPicker value={batchAccentColor} onChange={updateBatchAccentColor} label="배치 색상" />
               </div>
 
-              <div>
-                <div className="mb-2 text-xs font-semibold text-slate-400">단원 후보</div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    className="min-w-0 flex-1"
-                    placeholder="예: 지수함수와 로그함수, 삼각함수, 수열"
-                    value={unitInput}
-                    onChange={(event) => setUnitInput(event.target.value)}
-                    onBlur={addUnitCandidate}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addUnitCandidate();
-                      }
-                    }}
-                  />
-                  <TagColorPicker value={unitInputColor} onChange={setUnitInputColor} label="단원 태그 색상" />
-                  <Button type="button" variant="outline" onClick={addUnitCandidate}>추가</Button>
+              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                <h2 className="text-sm font-bold text-white">Subject Engine</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {[
+                    { value: "math" as const, label: "Math" },
+                    { value: "korean" as const, label: "Korean Language" },
+                  ].map((engine) => {
+                    const locked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(engine.value);
+                    const selected = subjectEngine === engine.value;
+                    return (
+                      <button
+                        key={engine.value}
+                        type="button"
+                        disabled={locked}
+                        className={cn(
+                          "rounded-[8px] border px-3 py-2 text-sm font-semibold transition",
+                          selected ? "border-violet-300/70 bg-violet-500/20 text-violet-50" : "border-white/10 bg-black/20 text-slate-300 hover:border-white/25",
+                          locked && "cursor-not-allowed opacity-45"
+                        )}
+                        onClick={() => {
+                          setSubjectEngine(engine.value);
+                          if (engine.value === "korean" && !selectedSubjects.includes("국어")) {
+                            setSelectedSubjects((current) => [...current, "국어"]);
+                          }
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          {locked ? <LockKeyhole className="h-3.5 w-3.5" /> : null}
+                          {engine.label}{locked ? " · Locked" : ""}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-                <p className="mt-1 text-xs text-slate-500">쉼표로 여러 단원을 한 번에 입력할 수 있습니다. 단원 후보가 있으면 AI가 문항별로 가장 가까운 단원을 고릅니다.</p>
-                {unitCandidates.length ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {unitCandidates.map((unit) => {
-                      const color = tagColor(unit, unitTagColors, "unit");
-                      return (
-                        <EditableTagChip
-                          key={unit}
-                          label={unit}
-                          color={color}
-                          onColorChange={(nextColor) => updateUnitTagColor(unit, nextColor)}
-                          onRemove={() => removeUnitCandidate(unit)}
-                        />
-                      );
-                    })}
+                {selectedEngineLocked ? <p className="mt-3 text-xs text-amber-200">선택한 엔진은 현재 플랜에서 사용할 수 없습니다.</p> : null}
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                <h2 className="text-sm font-bold text-white">분류 기준</h2>
+
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <div className="mb-2 text-xs font-semibold text-slate-400">과목 후보</div>
+                    <SubjectTreeSelector
+                      nodes={subjectTree}
+                      selectedSubjects={selectedSubjects}
+                      subjectTagColors={subjectTagColors}
+                      onToggleSubject={toggleSubject}
+                      onAddSubject={addCustomSubject}
+                    />
+                    {selectedSubjects.length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedSubjects.map((subject) => {
+                          const color = tagColor(subject, subjectTagColors, "subject");
+                          return (
+                            <EditableTagChip
+                              key={subject}
+                              label={subjectDisplayLabel(subject)}
+                              color={color}
+                              onColorChange={(nextColor) => updateSubjectTagColor(subject, nextColor)}
+                              onRemove={() => toggleSubject(subject)}
+                            />
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
+
+                  <div>
+                    <div className="mb-2 text-xs font-semibold text-slate-400">단원 후보</div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        className="min-w-0 flex-1"
+                        placeholder="예: 지수함수와 로그함수, 삼각함수, 수열"
+                        value={unitInput}
+                        onChange={(event) => setUnitInput(event.target.value)}
+                        onBlur={addUnitCandidate}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addUnitCandidate();
+                          }
+                        }}
+                      />
+                      <TagColorPicker value={unitInputColor} onChange={setUnitInputColor} label="단원 태그 색상" />
+                      <Button type="button" variant="outline" onClick={addUnitCandidate}>추가</Button>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">쉼표로 여러 단원을 한 번에 입력할 수 있습니다. 단원 후보가 있으면 AI가 문항별로 가장 가까운 단원을 고릅니다.</p>
+                    {unitCandidates.length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {unitCandidates.map((unit) => {
+                          const color = tagColor(unit, unitTagColors, "unit");
+                          return (
+                            <EditableTagChip
+                              key={unit}
+                              label={unit}
+                              color={color}
+                              onColorChange={(nextColor) => updateUnitTagColor(unit, nextColor)}
+                              onRemove={() => removeUnitCandidate(unit)}
+                            />
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <DropZone label="문제 PDF" helper="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
-            <DropZone label="해설 PDF" helper="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
-          </div>
+            <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+                <DropZone label="문제 PDF" helper="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
+                <DropZone label="해설 PDF" helper="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
+              </div>
 
           {problemPdf ? (
             <div className="rounded-lg border border-violet-300/20 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),rgba(255,255,255,0.035)_52%,rgba(0,0,0,0.18))] p-4 shadow-[0_18px_52px_rgba(76,29,149,0.16)]">
@@ -978,7 +982,7 @@ export default function UploadPage() {
                   </div>
                 </div>
               </div>
-              <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-300 sm:grid-cols-4">
+              <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-300 sm:grid-cols-2">
                 <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
                 <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">해설 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
                 <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
@@ -1015,7 +1019,7 @@ export default function UploadPage() {
             />
           </div>
 
-          <Button onClick={submit} disabled={!canSubmit}>
+          <Button className="w-full" onClick={submit} disabled={!canSubmit}>
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             아카이빙 시작
           </Button>
@@ -1028,6 +1032,8 @@ export default function UploadPage() {
             </div>
           ) : null}
           {message ? <p className="text-sm text-slate-400">{message}</p> : null}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
