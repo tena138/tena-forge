@@ -1259,9 +1259,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                     />
                   </div>
                 ))}
-                <Button className="w-full" onClick={saveCounselingLog} disabled={counselingSaving || !counselingForm.title.trim()}>
+                <Button className="w-full" onClick={saveCounselingLog} disabled={counselingSaving || !counselingForm.title.trim()} aria-label={editingCounselingLogId ? "상담일지 수정 저장" : "상담일지 저장"}>
                   {counselingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {editingCounselingLogId ? "상담일지 수정 저장" : "상담일지 저장"}
                 </Button>
               </CardContent>
             </Card>
