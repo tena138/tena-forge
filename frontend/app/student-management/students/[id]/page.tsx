@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type AutosaveState = "pending" | "saving" | "saved" | "error";
+type CounselingDraftStatus = "idle" | "restored" | "saving" | "saved" | "error";
 type StudentTab = "calendar" | "wrong" | "counseling";
 type StudentCalendarItem = {
   id: string;
@@ -68,11 +69,26 @@ type StudentDetail = StudentCard & {
   };
 };
 
+type CounselingDraft = {
+  version: 1;
+  studentId: string;
+  editingLogId: string | null;
+  classId: string;
+  form: {
+    counseling_date: string;
+    title: string;
+  };
+  fields: CounselingFormatField[];
+  values: Record<string, string>;
+  savedAt: string;
+};
+
 const DEFAULT_COUNSELING_FIELDS: CounselingFormatField[] = [
   { id: "notes", label: "상담하면서 기록할 내용", placeholder: "상담하면서 기록할 내용", include_in_report: true },
   { id: "weekly_report", label: "주간 리포트 초안", placeholder: "주간 리포트 초안", include_in_report: false },
   { id: "next_plan", label: "다음 지도 계획", placeholder: "다음 지도 계획 / 과제 제안", include_in_report: true },
 ];
+const COUNSELING_DRAFT_KEY_PREFIX = "tena.student-management.counseling-draft";
 
 function createFieldId(label: string, existing: string[] = []) {
   const normalized = label
@@ -101,6 +117,44 @@ function normalizeCounselingFields(fields?: CounselingFormatField[] | null) {
       include_in_report: field.include_in_report !== false,
     }))
     .slice(0, 12);
+}
+
+function parseCounselingDraft(raw: string | null): CounselingDraft | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<CounselingDraft>;
+    if (parsed.version !== 1 || typeof parsed.studentId !== "string" || !Array.isArray(parsed.fields) || !parsed.form || typeof parsed.form !== "object") return null;
+    const form = parsed.form as Record<string, unknown>;
+    const values = parsed.values && typeof parsed.values === "object" ? parsed.values : {};
+    return {
+      version: 1,
+      studentId: parsed.studentId,
+      editingLogId: typeof parsed.editingLogId === "string" ? parsed.editingLogId : null,
+      classId: typeof parsed.classId === "string" ? parsed.classId : "",
+      form: {
+        counseling_date: typeof form.counseling_date === "string" ? form.counseling_date : new Date().toISOString().slice(0, 10),
+        title: typeof form.title === "string" ? form.title : "학습 상담",
+      },
+      fields: normalizeCounselingFields(parsed.fields),
+      values: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, typeof value === "string" ? value : ""])),
+      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function hasCounselingDraftContent(form: CounselingDraft["form"], values: Record<string, string>, editingLogId: string | null) {
+  if (editingLogId) return true;
+  const today = new Date().toISOString().slice(0, 10);
+  return form.counseling_date !== today || form.title !== "학습 상담" || Object.values(values).some((value) => value.trim());
+}
+
+function formatDraftSavedAt(savedAt: string | null) {
+  if (!savedAt) return "";
+  const savedDate = new Date(savedAt);
+  if (Number.isNaN(savedDate.getTime())) return "";
+  return savedDate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function reportField(fields: CounselingFormatField[]) {
@@ -298,6 +352,12 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     title: "학습 상담",
   });
   const [editingCounselingLogId, setEditingCounselingLogId] = useState<string | null>(null);
+  const [counselingDraftStatus, setCounselingDraftStatus] = useState<CounselingDraftStatus>("idle");
+  const [counselingDraftSavedAt, setCounselingDraftSavedAt] = useState<string | null>(null);
+  const counselingDraftHydratedRef = useRef<Record<string, boolean>>({});
+  const counselingDraftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextCounselingDraftSaveRef = useRef(false);
+  const skipNextCounselingFormatSyncRef = useRef(false);
 
   const calendarItems = useMemo(() => (data ? studentCalendarItems(data) : []), [data]);
   const activeReportField = useMemo(() => reportField(counselingFields), [counselingFields]);
@@ -325,6 +385,13 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       ),
     [data?.counseling_presets]
   );
+  const counselingDraftLabel = useMemo(() => {
+    if (counselingDraftStatus === "saving") return "임시 저장 중...";
+    if (counselingDraftStatus === "restored") return "임시 저장본을 불러왔습니다.";
+    if (counselingDraftStatus === "error") return "임시 저장에 실패했습니다.";
+    const savedTime = formatDraftSavedAt(counselingDraftSavedAt);
+    return savedTime ? `임시 저장됨 ${savedTime}` : "입력 내용은 자동 임시 저장됩니다.";
+  }, [counselingDraftSavedAt, counselingDraftStatus]);
   const calendarDays = useMemo(() => buildMonthDays(calendarMonth), [calendarMonth]);
   const calendarItemsByDate = useMemo(() => {
     const grouped: Record<string, StudentCalendarItem[]> = {};
@@ -353,6 +420,47 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     }
   }
 
+  function counselingDraftKey(logId: string | null = editingCounselingLogId) {
+    return `${COUNSELING_DRAFT_KEY_PREFIX}.${params.id}.${logId || "new"}`;
+  }
+
+  function readCounselingDraft(logId: string | null = editingCounselingLogId) {
+    if (typeof window === "undefined") return null;
+    const draft = parseCounselingDraft(window.localStorage.getItem(counselingDraftKey(logId)));
+    if (!draft || draft.studentId !== params.id || (draft.editingLogId || null) !== (logId || null)) return null;
+    return draft;
+  }
+
+  function clearCounselingDraft(logId: string | null = editingCounselingLogId) {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(counselingDraftKey(logId));
+      } catch {
+        undefined;
+      }
+    }
+    setCounselingDraftStatus("idle");
+    setCounselingDraftSavedAt(null);
+  }
+
+  function applyCounselingDraft(draft: CounselingDraft) {
+    const nextFields = normalizeCounselingFields(draft.fields);
+    const nextValues: Record<string, string> = {};
+    for (const field of nextFields) nextValues[field.id] = draft.values[field.id] || "";
+    const nextClassId = draft.classId && data?.class_ids.includes(draft.classId) ? draft.classId : counselingClassId;
+    if (nextClassId && nextClassId !== counselingClassId) skipNextCounselingFormatSyncRef.current = true;
+    if (nextClassId) setCounselingClassId(nextClassId);
+    setCounselingFields(nextFields);
+    setCounselingFieldValues(nextValues);
+    setCounselingForm({
+      counseling_date: draft.form.counseling_date || new Date().toISOString().slice(0, 10),
+      title: draft.form.title,
+    });
+    skipNextCounselingDraftSaveRef.current = true;
+    setCounselingDraftStatus("restored");
+    setCounselingDraftSavedAt(draft.savedAt || null);
+  }
+
   useEffect(() => {
     calendarInitializedRef.current = false;
     getStudentDetail(params.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
@@ -366,6 +474,10 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   useEffect(() => {
     if (!data) return;
     if (editingCounselingLogId) return;
+    if (skipNextCounselingFormatSyncRef.current) {
+      skipNextCounselingFormatSyncRef.current = false;
+      return;
+    }
     const format = (data.counseling_formats || []).find((item) => item.class_id === counselingClassId);
     const nextFields = normalizeCounselingFields(format?.fields);
     setCounselingFields(nextFields);
@@ -377,8 +489,75 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }, [data, counselingClassId, editingCounselingLogId]);
 
   useEffect(() => {
+    if (!data || editingCounselingLogId) return;
+    const key = counselingDraftKey(null);
+    if (counselingDraftHydratedRef.current[key]) return;
+    counselingDraftHydratedRef.current[key] = true;
+    const draft = readCounselingDraft(null);
+    if (!draft) return;
+    applyCounselingDraft(draft);
+    setMessage("임시 저장된 상담일지를 불러왔습니다.");
+  }, [data?.id, editingCounselingLogId]);
+
+  useEffect(() => {
+    if (!data) return;
+    if (counselingDraftTimerRef.current) {
+      clearTimeout(counselingDraftTimerRef.current);
+      counselingDraftTimerRef.current = null;
+    }
+    if (skipNextCounselingDraftSaveRef.current) {
+      skipNextCounselingDraftSaveRef.current = false;
+      return;
+    }
+    if (counselingSaving) return;
+    const key = counselingDraftKey();
+    if (!hasCounselingDraftContent(counselingForm, counselingFieldValues, editingCounselingLogId)) {
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(key);
+        } catch {
+          undefined;
+        }
+      }
+      setCounselingDraftStatus("idle");
+      setCounselingDraftSavedAt(null);
+      return;
+    }
+    setCounselingDraftStatus("saving");
+    counselingDraftTimerRef.current = setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      const draft: CounselingDraft = {
+        version: 1,
+        studentId: params.id,
+        editingLogId: editingCounselingLogId,
+        classId: counselingClassId,
+        form: counselingForm,
+        fields: counselingFields,
+        values: counselingFieldValues,
+        savedAt,
+      };
+      try {
+        window.localStorage.setItem(key, JSON.stringify(draft));
+        setCounselingDraftStatus("saved");
+        setCounselingDraftSavedAt(savedAt);
+      } catch {
+        setCounselingDraftStatus("error");
+      } finally {
+        counselingDraftTimerRef.current = null;
+      }
+    }, 700);
+    return () => {
+      if (counselingDraftTimerRef.current) {
+        clearTimeout(counselingDraftTimerRef.current);
+        counselingDraftTimerRef.current = null;
+      }
+    };
+  }, [data, params.id, editingCounselingLogId, counselingClassId, counselingForm, counselingFields, counselingFieldValues, counselingSaving]);
+
+  useEffect(() => {
     return () => {
       for (const timer of Object.values(autosaveTimers.current)) clearTimeout(timer);
+      if (counselingDraftTimerRef.current) clearTimeout(counselingDraftTimerRef.current);
     };
   }, []);
 
@@ -595,7 +774,10 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     };
   }
 
-  function resetCounselingEntryForm() {
+  function resetCounselingEntryForm(options: { clearDraft?: boolean } = {}) {
+    if (options.clearDraft !== false) clearCounselingDraft(editingCounselingLogId);
+    skipNextCounselingDraftSaveRef.current = true;
+    skipNextCounselingFormatSyncRef.current = false;
     setEditingCounselingLogId(null);
     setCounselingForm({ counseling_date: new Date().toISOString().slice(0, 10), title: "학습 상담" });
     setCounselingFieldValues({});
@@ -628,30 +810,40 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         return [field.id, section?.value || ""];
       })
     );
+    const draft = readCounselingDraft(log.id);
+    counselingDraftHydratedRef.current[counselingDraftKey(log.id)] = true;
     setEditingCounselingLogId(log.id);
-    setCounselingClassId(log.class_id && data?.class_ids.includes(log.class_id) ? log.class_id : "");
-    setCounselingFields(fields);
-    setCounselingFieldValues(values);
-    setCounselingForm({
-      counseling_date: dateKey(log.counseling_date) || new Date().toISOString().slice(0, 10),
-      title: log.title || "학습 상담",
-    });
+    if (draft) {
+      applyCounselingDraft(draft);
+    } else {
+      setCounselingDraftStatus("idle");
+      setCounselingDraftSavedAt(null);
+      setCounselingClassId(log.class_id && data?.class_ids.includes(log.class_id) ? log.class_id : "");
+      setCounselingFields(fields);
+      setCounselingFieldValues(values);
+      setCounselingForm({
+        counseling_date: dateKey(log.counseling_date) || new Date().toISOString().slice(0, 10),
+        title: log.title || "학습 상담",
+      });
+    }
     setFormatSettingsOpen(false);
-    setMessage("상담 기록을 편집 중입니다. 내용을 수정한 뒤 저장해 주세요.");
+    setMessage(draft ? "임시 저장된 상담 기록 편집본을 불러왔습니다." : "상담 기록을 편집 중입니다. 내용을 수정한 뒤 저장해 주세요.");
   }
 
   async function saveCounselingLog() {
     if (!data || !counselingForm.title.trim()) return;
+    const savedEditingLogId = editingCounselingLogId;
     setCounselingSaving(true);
     try {
       const payload = buildCounselingLogPayload();
-      if (editingCounselingLogId) await updateCounselingLog(data.id, editingCounselingLogId, payload);
+      if (savedEditingLogId) await updateCounselingLog(data.id, savedEditingLogId, payload);
       else await createCounselingLog(data.id, payload);
+      clearCounselingDraft(savedEditingLogId);
       await refreshStudent();
-      resetCounselingEntryForm();
-      setMessage(editingCounselingLogId ? "상담일지를 수정했습니다." : "상담일지를 저장했습니다.");
+      resetCounselingEntryForm({ clearDraft: false });
+      setMessage(savedEditingLogId ? "상담일지를 수정했습니다." : "상담일지를 저장했습니다.");
     } catch {
-      setMessage(editingCounselingLogId ? "상담일지 수정에 실패했습니다. 다시 시도해주세요." : "상담일지 저장에 실패했습니다. 다시 시도해주세요.");
+      setMessage(savedEditingLogId ? "상담일지 수정에 실패했습니다. 다시 시도해주세요." : "상담일지 저장에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setCounselingSaving(false);
     }
@@ -943,7 +1135,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                   <CardTitle className="flex items-center gap-2 text-white"><MessageSquareText className="h-5 w-5" />{editingCounselingLogId ? "상담일지 편집" : "상담일지 작성"}</CardTitle>
                   <div className="flex items-center gap-2">
                     {editingCounselingLogId ? (
-                      <Button type="button" size="sm" variant="outline" onClick={resetCounselingEntryForm}>
+                      <Button type="button" size="sm" variant="outline" onClick={() => resetCounselingEntryForm()}>
                         <X className="h-4 w-4" />
                         취소
                       </Button>
@@ -1034,6 +1226,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                     </div>
                   </div>
                 ) : null}
+                <p className={cn("text-xs", counselingDraftStatus === "error" ? "text-rose-300" : "text-slate-500")}>{counselingDraftLabel}</p>
                 <Input type="date" value={counselingForm.counseling_date} onChange={(event) => setCounselingForm((current) => ({ ...current, counseling_date: event.target.value }))} />
                 <Input placeholder="상담 제목" value={counselingForm.title} onChange={(event) => setCounselingForm((current) => ({ ...current, title: event.target.value }))} />
                 {counselingFields.map((field) => (
