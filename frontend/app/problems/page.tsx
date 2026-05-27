@@ -25,7 +25,7 @@ import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api, Problem, sourceTypeLabel, sourceTypeOptions } from "@/lib/api";
+import { api, Batch, Problem, sourceTypeLabel, sourceTypeOptions } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
@@ -105,12 +105,14 @@ function ProblemsBrowser() {
   const paramsKey = searchParams.toString();
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
   const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], problem_types: [], sources: [], source_types: [], visibilities: [], origin_types: [] });
+  const [batches, setBatches] = useState<Batch[]>([]);
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
   const [unit, setUnit] = useState(() => searchParams.get("unit") || "");
   const [subjects, setSubjects] = useState<string[]>(() => searchParams.getAll("subject"));
   const [types, setTypes] = useState<string[]>(() => searchParams.getAll("problem_type"));
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
   const [selectedSourceTypes, setSelectedSourceTypes] = useState<string[]>(() => searchParams.getAll("source_type"));
+  const [selectedBatchId, setSelectedBatchId] = useState(() => searchParams.get("batch_id") || "");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => readReviewFilter(searchParams.get("needs_review")));
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -131,10 +133,12 @@ function ProblemsBrowser() {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const loadRequestRef = useRef(0);
 
-  const batchId = searchParams.get("batch_id");
-
   useEffect(() => {
     api<Facets>("/api/problems/facets").then(setFacets).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    api<Batch[]>("/api/batches").then(setBatches).catch(() => setBatches([]));
   }, []);
 
   useEffect(() => {
@@ -153,6 +157,7 @@ function ProblemsBrowser() {
     setTypes(searchParams.getAll("problem_type"));
     setSelectedDiffs(searchParams.getAll("difficulty"));
     setSelectedSourceTypes(searchParams.getAll("source_type"));
+    setSelectedBatchId(searchParams.get("batch_id") || "");
     setReviewFilter(readReviewFilter(searchParams.get("needs_review")));
     setSort(readSort(searchParams.get("sort")));
     setPage(readPageParam(searchParams.get("page")));
@@ -166,13 +171,13 @@ function ProblemsBrowser() {
     if (reviewFilter === "needs") params.set("needs_review", "true");
     if (reviewFilter === "reviewed") params.set("needs_review", "false");
     if (sort !== "source_order") params.set("sort", sort);
-    if (batchId) params.set("batch_id", batchId);
+    if (selectedBatchId) params.set("batch_id", selectedBatchId);
     subjects.forEach((value) => params.append("subject", value));
     types.forEach((value) => params.append("problem_type", value));
     selectedDiffs.forEach((value) => params.append("difficulty", value));
     selectedSourceTypes.forEach((value) => params.append("source_type", value));
     return params.toString();
-  }, [batchId, reviewFilter, search, selectedDiffs, selectedSourceTypes, sort, subjects, types, unit]);
+  }, [reviewFilter, search, selectedBatchId, selectedDiffs, selectedSourceTypes, sort, subjects, types, unit]);
 
   const query = useMemo(() => {
     const params = new URLSearchParams(filterQuery);
@@ -224,8 +229,11 @@ function ProblemsBrowser() {
     [selectedIds, selectedProblemCache]
   );
 
+  const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
+
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
+    if (selectedBatchId) chips.push({ key: "batch", label: `배치: ${selectedBatch?.name || selectedBatchId.slice(0, 8)}`, onRemove: () => setSelectedBatchId("") });
     if (search.trim()) chips.push({ key: "search", label: `검색: ${search.trim()}`, onRemove: () => setSearch("") });
     if (unit.trim()) chips.push({ key: "unit", label: `단원: ${unit.trim()}`, onRemove: () => setUnit("") });
     subjects.forEach((value) => chips.push({ key: `subject-${value}`, label: `과목: ${value}`, onRemove: () => setSubjects(subjects.filter((item) => item !== value)) }));
@@ -234,7 +242,7 @@ function ProblemsBrowser() {
     selectedSourceTypes.forEach((value) => chips.push({ key: `source-${value}`, label: `출처: ${sourceTypeLabel(value)}`, onRemove: () => setSelectedSourceTypes(selectedSourceTypes.filter((item) => item !== value)) }));
     if (reviewFilter !== "all") chips.push({ key: "review", label: reviewFilter === "needs" ? "검토 필요" : "검토 완료", onRemove: () => setReviewFilter("all") });
     return chips;
-  }, [reviewFilter, search, selectedDiffs, selectedSourceTypes, subjects, types, unit]);
+  }, [reviewFilter, search, selectedBatch, selectedBatchId, selectedDiffs, selectedSourceTypes, subjects, types, unit]);
 
   function resetPageAnd(run: () => void) {
     setPage(1);
@@ -530,6 +538,49 @@ function ProblemsBrowser() {
 
         {filtersOpen ? (
           <div className="mt-4 space-y-4 rounded-lg border border-white/10 bg-black/15 p-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium">내가 올린 배치</label>
+                {selectedBatchId ? (
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-slate-400 transition-colors hover:text-white"
+                    onClick={() => resetPageAnd(() => setSelectedBatchId(""))}
+                  >
+                    선택 해제
+                  </button>
+                ) : null}
+              </div>
+              <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border border-white/10 bg-card/50 p-2 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+                {batches.length ? batches.map((batch) => {
+                  const selected = selectedBatchId === batch.id;
+                  const accentColor = normalizeHexColor(batch.accent_color) || "#64748b";
+                  return (
+                    <button
+                      key={batch.id}
+                      type="button"
+                      className={cn(
+                        "flex min-h-12 w-full items-center justify-between gap-3 rounded-[7px] border px-3 py-2 text-left transition-colors",
+                        selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                      )}
+                      onClick={() => resetPageAnd(() => setSelectedBatchId(selected ? "" : batch.id))}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="h-8 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold">{batch.name}</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">{batch.problem_count.toLocaleString("ko-KR")}문항 · {batch.status}</span>
+                        </span>
+                      </span>
+                      <span className={cn("shrink-0 rounded border px-2 py-1 text-[11px] font-semibold", selected ? "border-violet-300/40 bg-violet-300/15 text-violet-100" : "border-white/10 bg-white/[0.04] text-slate-400")}>
+                        {selected ? "선택됨" : "선택"}
+                      </span>
+                    </button>
+                  );
+                }) : <span className="block px-2 py-3 text-sm text-muted-foreground">업로드한 배치가 없습니다.</span>}
+              </div>
+            </div>
+
             <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
               <div className="space-y-2">
                 <label className="text-sm font-medium">과목</label>
@@ -685,9 +736,10 @@ function ProblemsBrowser() {
           <div className="mt-4 max-h-[68vh] space-y-3 overflow-auto pr-1">
             {selectedProblems.map((problem) => {
               const tone = difficultyTone(problem.tags?.difficulty);
+              const accentColor = problemAccentColor(problem, tone.color);
               return (
                 <article key={problem.id} className="relative overflow-hidden rounded-lg border border-white/10 bg-white/[0.035] p-4 pl-5">
-                  <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: tone.color }} />
+                  <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <div className="text-[13px] font-medium text-slate-200">#{problem.problem_number}</div>
                     <span className={cn("rounded border px-2 py-1 text-[11px] font-semibold", tone.badge)}>{tone.label}</span>
