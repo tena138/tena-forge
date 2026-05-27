@@ -5,7 +5,7 @@ import type { CSSProperties } from "react";
 import { FileText, Loader2, LockKeyhole, ShieldCheck, Sparkles, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ArchiveBatchHistory } from "@/components/archive/archive-batch-history";
 import { ColorPicker } from "@/components/editor/color-picker";
@@ -838,9 +838,6 @@ export default function UploadPage() {
       </section>
 
       <Card>
-        <CardHeader>
-          <CardTitle>새 아카이브 배치</CardTitle>
-        </CardHeader>
         <CardContent>
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.85fr)]">
             <div className="min-w-0 space-y-5">
@@ -884,11 +881,8 @@ export default function UploadPage() {
               </div>
 
               <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-                <h2 className="text-sm font-bold text-white">분류 기준</h2>
-
-                <div className="mt-4 space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <div className="mb-2 text-xs font-semibold text-slate-400">과목 후보</div>
                     <SubjectTreeSelector
                       nodes={subjectTree}
                       selectedSubjects={selectedSubjects}
@@ -915,7 +909,6 @@ export default function UploadPage() {
                   </div>
 
                   <div>
-                    <div className="mb-2 text-xs font-semibold text-slate-400">단원 후보</div>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Input
                         className="min-w-0 flex-1"
@@ -933,7 +926,7 @@ export default function UploadPage() {
                       <TagColorPicker value={unitInputColor} onChange={setUnitInputColor} label="단원 태그 색상" />
                       <Button type="button" variant="outline" onClick={addUnitCandidate}>추가</Button>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">쉼표로 여러 단원을 한 번에 입력할 수 있습니다. 단원 후보가 있으면 AI가 문항별로 가장 가까운 단원을 고릅니다.</p>
+                    <p className="mt-1 text-xs text-slate-500">쉼표로 여러 단원을 한 번에 입력할 수 있습니다. AI가 문항별로 가장 가까운 단원을 고릅니다.</p>
                     {unitCandidates.length ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {unitCandidates.map((unit) => {
@@ -951,6 +944,16 @@ export default function UploadPage() {
                       </div>
                     ) : null}
                   </div>
+
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-semibold text-slate-400">배치 메모</span>
+                    <textarea
+                      className="min-h-20 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400"
+                      placeholder="선택 사항: 배치에 남겨둘 메모를 입력하세요."
+                      value={rightsNote}
+                      onChange={(event) => setRightsNote(event.target.value)}
+                    />
+                  </label>
                 </div>
               </div>
             </div>
@@ -1009,12 +1012,6 @@ export default function UploadPage() {
               <input className="mt-1" type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} />
               <span>본인은 이 자료를 직접 제작했거나, Tena Forge에서 업로드·추출·저장·재구성·출력할 권리를 보유하고 있음을 확인합니다.</span>
             </label>
-            <textarea
-              className="mt-3 min-h-20 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400"
-              placeholder="선택 사항: 라이선스 범위, 제작자, 내부 관리 메모 등을 남겨두세요."
-              value={rightsNote}
-              onChange={(event) => setRightsNote(event.target.value)}
-            />
           </div>
 
           <Button className="w-full" onClick={submit} disabled={!canSubmit}>
