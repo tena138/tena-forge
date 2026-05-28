@@ -47,19 +47,11 @@ export function SocialButtons({
   redirect?: string | null;
   disabled?: boolean;
 }) {
-  if (compact) {
-    return (
-      <div className="grid grid-cols-2 gap-2">
-        <SocialButton provider="kakao" label="K" compact mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
-        <SocialButton provider="naver" label="N" compact mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
-      </div>
-    );
-  }
   const suffix = mode === "signup" ? "로 가입하기" : "로 로그인";
   return (
-    <div className="space-y-2">
-      <SocialButton provider="kakao" label={`카카오${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
-      <SocialButton provider="naver" label={`네이버${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} />
+    <div className={compact ? "flex justify-center gap-2" : "flex justify-center gap-4"}>
+      <SocialButton provider="kakao" label={`카카오${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} compact={compact} />
+      <SocialButton provider="naver" label={`네이버${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} compact={compact} />
     </div>
   );
 }
@@ -89,25 +81,37 @@ function SocialButton({
   disabled?: boolean;
 }) {
   const styles = {
-    kakao: "border-[#FEE500] bg-[#FEE500] text-black hover:bg-[#f5dc00]",
-    naver: "border-[#03C75A] bg-[#03C75A] text-white hover:bg-[#02b350]",
+    kakao: "bg-[#FEE500] text-black hover:bg-[#f5dc00]",
+    naver: "bg-[#03C75A] text-white hover:bg-[#02b350]",
   }[provider];
-  const mark = provider === "kakao" ? "K" : "N";
-  const className = `inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border text-sm font-semibold transition ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
+  const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
+  const logo = <SocialProviderLogo provider={provider} />;
   if (disabled) {
     return (
-      <button type="button" disabled className={className}>
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 text-xs font-black text-slate-900">{mark}</span>
-        {compact ? null : label}
+      <button type="button" disabled className={className} aria-label={label}>
+        {logo}
       </button>
     );
   }
   return (
-    <a href={oauthHref(provider, mode, accountType, redirect)} className={className}>
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 text-xs font-black text-slate-900">{mark}</span>
-      {compact ? null : label}
+    <a href={oauthHref(provider, mode, accountType, redirect)} className={className} aria-label={label}>
+      {logo}
     </a>
   );
+}
+
+function SocialProviderLogo({ provider }: { provider: OAuthProvider }) {
+  if (provider === "kakao") {
+    return (
+      <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M16 7C9.9 7 5 10.8 5 15.4c0 3 2.1 5.7 5.3 7.1l-.9 3.2c-.1.4.3.7.6.5l4-2.6c.7.1 1.3.2 2 .2 6.1 0 11-3.8 11-8.4S22.1 7 16 7Z"
+        />
+      </svg>
+    );
+  }
+  return <span className="text-2xl font-black leading-none tracking-normal text-white" aria-hidden="true">N</span>;
 }
 
 export function DividerText({ children = "또는" }: { children?: React.ReactNode }) {
