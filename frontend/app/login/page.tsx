@@ -63,7 +63,7 @@ function LoginPageContent() {
   }
 
   return (
-    <AuthCard>
+    <AuthCard variant="aurora">
       <div className="space-y-5">
         {visibleOauthError ? (
           <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">
@@ -74,13 +74,13 @@ function LoginPageContent() {
         <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
           <label className="block">
             <span className="sr-only">아이디</span>
-            <Input autoComplete="username" className="h-11" placeholder="ID" {...form.register("email")} />
+            <Input autoComplete="username" className="h-11 border-white/15 bg-white/[0.08] text-white placeholder:text-slate-400 focus-visible:border-violet-300/70" placeholder="ID" {...form.register("email")} />
             <FieldError message={form.formState.errors.email?.message} />
           </label>
           <label className="block">
             <span className="sr-only">비밀번호</span>
             <div className="relative">
-              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" className="h-11 pr-11" placeholder="PASSWORD" {...form.register("password")} />
+              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" className="h-11 border-white/15 bg-white/[0.08] pr-11 text-white placeholder:text-slate-400 focus-visible:border-violet-300/70" placeholder="PASSWORD" {...form.register("password")} />
               <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-white" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -110,7 +110,7 @@ function LoginPageContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<AuthCard title="로그인 준비 중..." />}>
+    <Suspense fallback={<AuthCard title="로그인 준비 중..." variant="aurora" />}>
       <LoginPageContent />
     </Suspense>
   );

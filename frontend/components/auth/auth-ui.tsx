@@ -9,11 +9,20 @@ import { Button } from "@/components/ui/button";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type OAuthProvider = "kakao" | "naver";
 type OAuthMode = "login" | "signup";
+type AuthCardVariant = "default" | "aurora";
 
-export function AuthCard({ title, subtitle, children }: { title?: string; subtitle?: string; children?: React.ReactNode }) {
+export function AuthCard({ title, subtitle, children, variant = "default" }: { title?: string; subtitle?: string; children?: React.ReactNode; variant?: AuthCardVariant }) {
+  const isAurora = variant === "aurora";
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <section className="w-full max-w-[430px] rounded-[12px] border border-white/10 bg-card/90 p-8 shadow-[0_28px_80px_rgba(0,0,0,0.40)] backdrop-blur">
+    <main className={isAurora ? "relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10 text-white" : "flex min-h-screen items-center justify-center bg-background px-4 py-10"}>
+      {isAurora ? (
+        <div className="aurora-bg" aria-hidden="true">
+          <div className="aurora-band a" />
+          <div className="aurora-band b" />
+          <div className="aurora-band c" />
+        </div>
+      ) : null}
+      <section className={isAurora ? "login-card w-full max-w-[430px] p-8" : "w-full max-w-[430px] rounded-[12px] border border-white/10 bg-card/90 p-8 shadow-[0_28px_80px_rgba(0,0,0,0.40)] backdrop-blur"}>
         <Link href="/" className="mb-8 flex flex-col items-center gap-3">
           <SiteLogoMark className="h-16 w-16 p-2" />
         </Link>
@@ -25,6 +34,80 @@ export function AuthCard({ title, subtitle, children }: { title?: string; subtit
         ) : null}
         {children}
       </section>
+      {isAurora ? (
+        <style jsx global>{`
+          .aurora-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+            background: #080612;
+          }
+
+          .aurora-band {
+            position: absolute;
+            left: -20vw;
+            width: 140vw;
+            height: 55vh;
+            border-radius: 50%;
+            filter: blur(55px);
+            opacity: 0.55;
+            will-change: transform;
+            animation: aurora-float 16s ease-in-out infinite;
+          }
+
+          .aurora-band.a {
+            top: -25%;
+            background: #6b3eff;
+          }
+
+          .aurora-band.b {
+            top: 25%;
+            background: #c046dd;
+            animation-delay: -5s;
+          }
+
+          .aurora-band.c {
+            top: 55%;
+            background: #3e6bff;
+            animation-delay: -10s;
+          }
+
+          @keyframes aurora-float {
+            0%,
+            100% {
+              transform: translate(0, 0);
+            }
+
+            50% {
+              transform: translate(8%, -5%);
+            }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .aurora-band {
+              animation: none;
+            }
+          }
+
+          .login-card {
+            position: relative;
+            z-index: 1;
+            border: 0.5px solid rgba(255, 255, 255, 0.14);
+            border-radius: 14px;
+            background: rgba(18, 16, 28, 0.45);
+            -webkit-backdrop-filter: blur(22px) saturate(140%);
+            backdrop-filter: blur(22px) saturate(140%);
+          }
+
+          @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+            .login-card {
+              background: rgba(18, 16, 28, 0.92);
+            }
+          }
+        `}</style>
+      ) : null}
     </main>
   );
 }
