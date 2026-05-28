@@ -16,7 +16,7 @@ REVIEW_EMAIL = os.getenv("PG_REVIEW_EMAIL", "pg-review@tena-forge.com").strip().
 REVIEW_PASSWORD = os.getenv("PG_REVIEW_PASSWORD", "TenaTossReview!2026").strip()
 REVIEW_NAME = os.getenv("PG_REVIEW_NAME", "Toss Payments Review").strip() or "Toss Payments Review"
 SECONDARY_REVIEW_EMAIL = os.getenv("PG_REVIEW_SECONDARY_EMAIL", "review@tena-forge.com").strip().lower()
-SECONDARY_REVIEW_PASSWORD = os.getenv("PG_REVIEW_SECONDARY_PASSWORD", "TenaForgeReview!2026").strip()
+SECONDARY_REVIEW_PASSWORD = os.getenv("PG_REVIEW_SECONDARY_PASSWORD", "LumaGate!2026").strip()
 SECONDARY_REVIEW_NAME = os.getenv("PG_REVIEW_SECONDARY_NAME", "Tena Forge Review").strip() or "Tena Forge Review"
 
 
