@@ -20,6 +20,7 @@ export function AuthCard({ title, subtitle, children, variant = "default" }: { t
           <div className="aurora-band a" />
           <div className="aurora-band b" />
           <div className="aurora-band c" />
+          <div className="aurora-shimmer" />
         </div>
       ) : null}
       <section className={isAurora ? "login-card w-full max-w-[430px] p-8" : "w-full max-w-[430px] rounded-[12px] border border-white/10 bg-card/90 p-8 shadow-[0_28px_80px_rgba(0,0,0,0.40)] backdrop-blur"}>
@@ -51,43 +52,151 @@ export function AuthCard({ title, subtitle, children, variant = "default" }: { t
             width: 140vw;
             height: 55vh;
             border-radius: 50%;
-            filter: blur(55px);
+            filter: blur(70px);
             opacity: 0.55;
             will-change: transform;
-            animation: aurora-float 16s ease-in-out infinite;
           }
 
           .aurora-band.a {
             top: -25%;
             background: #6b3eff;
+            animation:
+              aurora-a 12s ease-in-out infinite,
+              aurora-hue-a 20s ease-in-out infinite;
           }
 
           .aurora-band.b {
             top: 25%;
             background: #c046dd;
-            animation-delay: -5s;
+            animation:
+              aurora-b 14s ease-in-out infinite,
+              aurora-hue-b 24s ease-in-out infinite;
+            animation-delay: -4s, -10s;
           }
 
           .aurora-band.c {
             top: 55%;
             background: #3e6bff;
-            animation-delay: -10s;
+            animation:
+              aurora-c 16s ease-in-out infinite,
+              aurora-hue-c 28s ease-in-out infinite;
+            animation-delay: -8s, -14s;
           }
 
-          @keyframes aurora-float {
+          .aurora-shimmer {
+            position: absolute;
+            inset: -20%;
+            background:
+              radial-gradient(circle at 30% 40%, rgba(192, 132, 252, 0.15), transparent 40%),
+              radial-gradient(circle at 70% 60%, rgba(99, 102, 241, 0.15), transparent 40%);
+            filter: blur(40px);
+            mix-blend-mode: screen;
+            animation: shimmer 8s ease-in-out infinite;
+            will-change: transform;
+          }
+
+          @keyframes aurora-a {
+            0% {
+              transform: translate(0, 0) scale(1) rotate(0deg);
+            }
+
+            33% {
+              transform: translate(25vw, 12vh) scale(1.15) rotate(8deg);
+            }
+
+            66% {
+              transform: translate(10vw, -8vh) scale(0.95) rotate(-5deg);
+            }
+
+            100% {
+              transform: translate(0, 0) scale(1) rotate(0deg);
+            }
+          }
+
+          @keyframes aurora-b {
+            0% {
+              transform: translate(0, 0) scale(1) rotate(0deg);
+            }
+
+            33% {
+              transform: translate(-20vw, 15vh) scale(1.1) rotate(-10deg);
+            }
+
+            66% {
+              transform: translate(-5vw, 5vh) scale(0.9) rotate(6deg);
+            }
+
+            100% {
+              transform: translate(0, 0) scale(1) rotate(0deg);
+            }
+          }
+
+          @keyframes aurora-c {
+            0% {
+              transform: translate(0, 0) scale(1) rotate(0deg);
+            }
+
+            33% {
+              transform: translate(15vw, -18vh) scale(1.2) rotate(5deg);
+            }
+
+            66% {
+              transform: translate(-10vw, -5vh) scale(0.95) rotate(-8deg);
+            }
+
+            100% {
+              transform: translate(0, 0) scale(1) rotate(0deg);
+            }
+          }
+
+          @keyframes aurora-hue-a {
             0%,
             100% {
-              transform: translate(0, 0);
+              background: #6b3eff;
             }
 
             50% {
-              transform: translate(8%, -5%);
+              background: #7c3aed;
+            }
+          }
+
+          @keyframes aurora-hue-b {
+            0%,
+            100% {
+              background: #c046dd;
+            }
+
+            50% {
+              background: #d946ef;
+            }
+          }
+
+          @keyframes aurora-hue-c {
+            0%,
+            100% {
+              background: #3e6bff;
+            }
+
+            50% {
+              background: #6366f1;
+            }
+          }
+
+          @keyframes shimmer {
+            0%,
+            100% {
+              transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+              transform: translate(-5vw, 5vh) scale(1.1);
             }
           }
 
           @media (prefers-reduced-motion: reduce) {
-            .aurora-band {
-              animation: none;
+            .aurora-band,
+            .aurora-shimmer {
+              animation: none !important;
             }
           }
 
