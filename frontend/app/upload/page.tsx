@@ -835,7 +835,7 @@ export default function UploadPage() {
       </section>
 
       <Card>
-        <CardContent>
+        <CardContent className="pt-5">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.85fr)]">
             <div className="min-w-0 space-y-5">
               <div className="flex flex-col gap-2 sm:flex-row">
