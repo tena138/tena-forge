@@ -278,8 +278,8 @@ function UsageOverview({
     <section className="rounded-[12px] border border-border bg-card/70 p-4 shadow-sm">
       <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
         <Link
-          href="/plan"
-          aria-label="플랜 구매 페이지로 이동"
+          href="/billing"
+          aria-label="결제 및 플랜 관리로 이동"
           className="rounded-[10px] border border-violet-300/25 bg-violet-500/[0.08] p-4 transition hover:border-violet-300/45 hover:bg-violet-500/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
         >
           <div className="text-2xl font-black text-foreground">{planName}</div>
