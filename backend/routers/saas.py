@@ -41,6 +41,7 @@ class BillingCheckoutRequest(BaseModel):
     billing_cycle: str = "monthly"
     selected_package_ids: dict[str, str] = Field(default_factory=dict)
     enabled_subject_engines: list[str] | None = None
+    customer_phone: str | None = None
 
 
 class BillingKeyConfirmRequest(BaseModel):
@@ -61,6 +62,11 @@ def _portone_id(prefix: str, plan_code: str | None = None) -> str:
 def _portone_issue_id(plan_code: str | None = None) -> str:
     plan_part = "".join(ch for ch in str(plan_code or "") if ch.isascii() and ch.isalnum())[:8]
     return f"tfbill{plan_part}{int(datetime.utcnow().timestamp())}{uuid.uuid4().hex[:10]}"[:40]
+
+
+def _normalize_phone(value: str | None) -> str | None:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return digits or None
 
 
 def _period_delta(billing_cycle: str) -> timedelta:
@@ -219,6 +225,11 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
     enabled_engines = normalize_subject_engines(payload.enabled_subject_engines or ["math"])
     pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids, enabled_engines)
     academy = db.get(Academy, user_id)
+    customer_phone = _normalize_phone(payload.customer_phone) or _normalize_phone(academy.phone if academy else None)
+    if str(config.get("billing_key_method") or "").upper() == "CARD" and (not customer_phone or len(customer_phone) not in {10, 11}):
+        raise HTTPException(status_code=400, detail="KG이니시스 카드 빌링키 발급을 위해 휴대폰 번호가 필요합니다.")
+    if academy and customer_phone and not _normalize_phone(academy.phone):
+        academy.phone = customer_phone
     issue_id = _portone_issue_id(payload.plan_code)
     payment_id = _portone_id("tf-pay", payload.plan_code)
     order_name = f"Tena Forge {payload.plan_code.title()} {'annual' if pricing['billing_cycle'] == 'annual' else 'monthly'} subscription"
@@ -256,7 +267,7 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
         "customer_id": user_id,
         "customer_name": academy.academy_name if academy else None,
         "customer_email": academy.email if academy else None,
-        "customer_phone": academy.phone if academy else None,
+        "customer_phone": customer_phone,
         "billing_cycle": order.billing_cycle,
         "selected_packages": order.selected_packages,
         "enabled_subject_engines": order.enabled_subject_engines,

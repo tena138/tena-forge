@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, CreditCard, ShieldCheck } from "lucide-react";
 
 import {
@@ -24,7 +24,7 @@ import {
   resolveSelectedPackages,
   subjectEngineLabel,
 } from "@/lib/plan-pricing";
-import { authHttp, ensureAccessToken } from "@/lib/auth-client";
+import { authHttp, ensureAccessToken, readStoredAuthProfile } from "@/lib/auth-client";
 
 export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: { plan: PaidPlanType; billingCycle: BillingCycle; packages: string; engines: string }) {
   const router = useRouter();
@@ -37,10 +37,18 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
   const chargeAmount = useMemo(() => calculateChargeAmount(plan, selectedPackageIds, billingCycle, selectedSubjectEngines), [plan, selectedPackageIds, billingCycle, selectedSubjectEngines]);
   const subjectEngineDelta = useMemo(() => calculateSubjectEngineMonthlyDelta(selectedSubjectEngines), [selectedSubjectEngines]);
   const [agreed, setAgreed] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const backHref = `/plan/${plan}`;
+  const phoneReady = isValidPhoneNumber(phoneNumber);
+
+  useEffect(() => {
+    const profile = readStoredAuthProfile<{ phone?: string | null }>();
+    const storedPhone = normalizePhoneNumber(profile?.phone);
+    if (storedPhone) setPhoneNumber(storedPhone);
+  }, []);
 
   async function pay() {
     setError("");
@@ -52,11 +60,17 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
         router.push(`/login?redirect=${encodeURIComponent(current)}`);
         return;
       }
+      const customerPhone = normalizePhoneNumber(phoneNumber);
+      if (!isValidPhoneNumber(customerPhone)) {
+        setError("KG이니시스 카드 정기결제를 위해 휴대폰 번호를 입력해 주세요.");
+        return;
+      }
       const billingCheckoutResponse = await authHttp.post("/api/saas/billing/checkout", {
         plan_code: plan,
         billing_cycle: billingCycle,
         selected_package_ids: selectedPackageIds,
         enabled_subject_engines: selectedSubjectEngines,
+        customer_phone: customerPhone,
       });
       const billingCheckout = billingCheckoutResponse.data;
       if (!billingCheckout.portone?.store_id || !billingCheckout.portone?.channel_key) {
@@ -65,6 +79,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
 
       const PortOneSdk = await import("@portone/browser-sdk/v2");
       const billingKeyMethod = String(billingCheckout.portone.billing_key_method || "CARD").toUpperCase();
+      const billingCustomerPhone = normalizePhoneNumber(billingCheckout.customer_phone) || customerPhone;
       const issueRequest: Record<string, any> = {
         storeId: billingCheckout.portone.store_id,
         channelKey: billingCheckout.portone.channel_key,
@@ -77,7 +92,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
           customerId: billingCheckout.customer_id,
           fullName: billingCheckout.customer_name || undefined,
           email: billingCheckout.customer_email || undefined,
-          phoneNumber: billingCheckout.customer_phone || undefined,
+          phoneNumber: billingCustomerPhone,
         },
         displayAmount: billingCheckout.amount,
         currency: "KRW",
@@ -207,7 +222,22 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
             <p className="mt-5 text-sm font-bold text-slate-400">{billingCycle === "annual" ? "오늘 결제될 연간 금액" : "오늘 결제될 월간 금액"}</p>
             <p className="mt-2 text-4xl font-black">{formatKRW(chargeAmount)}</p>
             {billingCycle === "annual" && <p className="mt-2 text-sm font-bold text-cyan-100">{formatKRW(annual.discountedMonthly)} / 월 상당</p>}
-            <button disabled={!agreed || loading} onClick={pay} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
+            <label className="mt-6 block text-sm font-bold text-slate-200">
+              휴대폰 번호
+              <input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                value={phoneNumber}
+                onChange={(event) => setPhoneNumber(event.target.value)}
+                placeholder="01012345678"
+                className="mt-2 h-11 w-full rounded-[10px] border border-white/10 bg-white/[0.08] px-3 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/70"
+              />
+              <span className={phoneReady ? "mt-2 block text-xs font-semibold text-slate-500" : "mt-2 block text-xs font-semibold text-amber-200"}>
+                KG이니시스 카드 빌링키 발급에 필요합니다.
+              </span>
+            </label>
+            <button disabled={!agreed || loading || !phoneReady} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
               {loading ? "결제 준비 중..." : "결제하기"}
             </button>
             {error && <p className="mt-4 rounded-[12px] bg-rose-500/14 px-4 py-3 text-sm font-bold text-rose-100">{error}</p>}
@@ -247,6 +277,15 @@ function PriceLine({ label, value, positive }: { label: string; value: string; p
       <span className={positive ? "font-black text-emerald-200" : "font-black"}>{value}</span>
     </div>
   );
+}
+
+function normalizePhoneNumber(value?: string | null) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function isValidPhoneNumber(value?: string | null) {
+  const digits = normalizePhoneNumber(value);
+  return digits.length >= 10 && digits.length <= 11;
 }
 
 function paymentErrorMessage(error: any) {
