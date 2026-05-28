@@ -1337,6 +1337,20 @@ def update_counseling_log(student_id: UUID, log_id: str, payload: CounselingLogP
     return row
 
 
+@router.delete("/students/{student_id}/counseling-logs/{log_id}", status_code=204)
+def delete_counseling_log(student_id: UUID, log_id: str, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    membership = _get_membership(db, academy_id, student_id)
+    logs = _counseling_logs(membership)
+    if not any(str(row.get("id")) == log_id for row in logs):
+        raise HTTPException(status_code=404, detail="Counseling log not found.")
+    metadata = dict(membership.metadata_json or {})
+    metadata["counseling_logs"] = [row for row in logs if str(row.get("id")) != log_id][:200]
+    membership.metadata_json = metadata
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.patch("/students/{student_id}")
 def update_student(student_id: UUID, payload: StudentUpdatePayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)

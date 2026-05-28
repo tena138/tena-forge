@@ -18,6 +18,7 @@ import {
   StudentCard,
   WrongAnswer,
   createCounselingLog,
+  deleteCounselingLog,
   createReviewSet,
   deleteWrongAnswerRecord,
   getStudentDetail,
@@ -364,6 +365,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const calendarInitializedRef = useRef(false);
   const [message, setMessage] = useState("");
   const [counselingSaving, setCounselingSaving] = useState(false);
+  const [deletingCounselingLogId, setDeletingCounselingLogId] = useState("");
   const [formatSaving, setFormatSaving] = useState(false);
   const [formatAutosaveState, setFormatAutosaveState] = useState<FormatAutosaveState>("idle");
   const [formatAutosaveSavedAt, setFormatAutosaveSavedAt] = useState<string | null>(null);
@@ -968,6 +970,25 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     }
   }
 
+  async function deleteCounselingRecord(log: CounselingLog) {
+    if (!data) return;
+    if (!window.confirm(`${shortDate(log.counseling_date)} 상담 기록을 삭제할까요?`)) return;
+    setDeletingCounselingLogId(log.id);
+    try {
+      await deleteCounselingLog(data.id, log.id);
+      if (editingCounselingLogId === log.id) {
+        clearCounselingDraft(log.id);
+        resetCounselingEntryForm({ clearDraft: false });
+      }
+      await refreshStudent();
+      setMessage("상담 기록을 삭제했습니다.");
+    } catch {
+      setMessage("상담 기록 삭제에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setDeletingCounselingLogId("");
+    }
+  }
+
   function exportCounselingLogs() {
     if (!data) return;
     const content = [
@@ -1425,6 +1446,17 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                         <Button type="button" size="sm" variant="outline" onClick={() => startEditingCounselingLog(log)}>
                           <Pencil className="h-3.5 w-3.5" />
                           편집
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="border-rose-400/20 text-rose-100 hover:bg-rose-500/10"
+                          onClick={() => deleteCounselingRecord(log)}
+                          disabled={deletingCounselingLogId === log.id}
+                        >
+                          {deletingCounselingLogId === log.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          삭제
                         </Button>
                         <Badge className="border border-violet-300/20 bg-violet-500/15 text-violet-100">상담</Badge>
                       </div>

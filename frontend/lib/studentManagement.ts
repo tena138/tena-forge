@@ -402,6 +402,12 @@ export function updateCounselingLog(
   });
 }
 
+export function deleteCounselingLog(studentId: string, logId: string) {
+  return api<void>(`/api/student-management/students/${studentId}/counseling-logs/${logId}`, {
+    method: "DELETE",
+  });
+}
+
 export function updateClassCounselingFormat(classId: string, payload: { fields: CounselingFormatField[] }) {
   return api<CounselingFormat>(`/api/student-management/classes/${classId}/counseling-format`, {
     method: "PUT",
