@@ -300,8 +300,8 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             position: absolute;
             left: 50%;
             top: 50%;
-            width: min(92vw, 920px);
-            height: min(92vw, 920px);
+            width: min(88vw, 880px);
+            height: min(88vw, 880px);
             border-radius: 50%;
             background:
               radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.18), transparent 8%),
@@ -312,7 +312,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             mix-blend-mode: screen;
             opacity: 0.72;
             transform: translate3d(-50%, -50%, 0);
-            animation: halo-core 12s ease-in-out infinite;
+            animation: halo-core 16s ease-in-out infinite;
             will-change: transform;
           }
 
@@ -331,32 +331,32 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
           }
 
           .aurora-halo-ring.ring-a {
-            width: min(150vw, 1420px);
-            height: min(150vw, 1420px);
+            width: min(142vw, 1340px);
+            height: min(142vw, 1340px);
             background:
               conic-gradient(from 20deg, transparent 0deg, rgba(107, 62, 255, 0.82) 42deg, rgba(192, 70, 221, 0.56) 88deg, transparent 132deg, rgba(62, 107, 255, 0.64) 210deg, transparent 286deg, rgba(107, 62, 255, 0.52) 332deg, transparent 360deg);
-            animation: halo-ring-a 9.5s ease-in-out infinite;
+            animation: halo-ring-a 18s linear infinite;
           }
 
           .aurora-halo-ring.ring-b {
-            width: min(124vw, 1180px);
-            height: min(124vw, 1180px);
+            width: min(116vw, 1100px);
+            height: min(116vw, 1100px);
             opacity: 0.58;
             filter: blur(22px) saturate(165%);
             background:
               conic-gradient(from 180deg, rgba(62, 107, 255, 0.7), transparent 58deg, rgba(192, 70, 221, 0.54) 118deg, transparent 178deg, rgba(107, 62, 255, 0.7) 242deg, transparent 310deg, rgba(62, 107, 255, 0.36));
-            animation: halo-ring-b 13s ease-in-out infinite;
+            animation: halo-ring-b 23s linear infinite;
             animation-delay: -4s;
           }
 
           .aurora-halo-ring.ring-c {
-            width: min(178vw, 1640px);
-            height: min(178vw, 1640px);
+            width: min(168vw, 1540px);
+            height: min(168vw, 1540px);
             opacity: 0.4;
             filter: blur(28px) saturate(160%);
             background:
               conic-gradient(from 260deg, transparent 0deg, rgba(192, 70, 221, 0.45) 46deg, transparent 112deg, rgba(62, 107, 255, 0.48) 190deg, transparent 260deg, rgba(107, 62, 255, 0.42) 318deg, transparent 360deg);
-            animation: halo-ring-c 17s ease-in-out infinite;
+            animation: halo-ring-c 29s linear infinite;
             animation-delay: -7s;
           }
 
@@ -371,18 +371,18 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             filter: blur(16px);
             mix-blend-mode: screen;
             opacity: 0.72;
-            animation: halo-dust 8s ease-in-out infinite;
+            animation: halo-dust 12s ease-in-out infinite;
             will-change: transform;
           }
 
           @keyframes halo-core {
             0%,
             100% {
-              transform: translate3d(-50%, -50%, 0) scale(0.96);
+              transform: translate3d(-50%, -50%, 0) scale(0.98);
             }
 
             50% {
-              transform: translate3d(-50%, -50%, 0) scale(1.12);
+              transform: translate3d(-50%, -50%, 0) scale(1.06);
             }
           }
 
@@ -392,11 +392,11 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             }
 
             50% {
-              transform: translate3d(-50%, -50%, 0) rotate(132deg) scale(1.08);
+              transform: translate3d(-50%, -50%, 0) rotate(180deg) scale(1.04);
             }
 
             100% {
-              transform: translate3d(-50%, -50%, 0) rotate(260deg) scale(0.96);
+              transform: translate3d(-50%, -50%, 0) rotate(360deg) scale(0.96);
             }
           }
 
@@ -406,11 +406,11 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             }
 
             50% {
-              transform: translate3d(-50%, -50%, 0) rotate(-118deg) scaleX(0.92) scaleY(1.12);
+              transform: translate3d(-50%, -50%, 0) rotate(214deg) scaleX(0.94) scaleY(1.08);
             }
 
             100% {
-              transform: translate3d(-50%, -50%, 0) rotate(-250deg) scaleX(1.08) scaleY(0.9);
+              transform: translate3d(-50%, -50%, 0) rotate(394deg) scaleX(1.08) scaleY(0.9);
             }
           }
 
@@ -420,11 +420,11 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             }
 
             50% {
-              transform: translate3d(-50%, -50%, 0) rotate(96deg) scale(0.92);
+              transform: translate3d(-50%, -50%, 0) rotate(160deg) scale(0.94);
             }
 
             100% {
-              transform: translate3d(-50%, -50%, 0) rotate(210deg) scale(1.02);
+              transform: translate3d(-50%, -50%, 0) rotate(340deg) scale(1.02);
             }
           }
 
