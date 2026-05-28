@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Archive,
+  ArrowUpRight,
   BookOpenCheck,
   CalendarDays,
   ChevronLeft,
@@ -138,9 +139,10 @@ function StageCard({
         </CardTitle>
         <Link
           href={action.href}
-          className="inline-flex h-8 items-center justify-center rounded-[7px] border border-white/12 bg-white/[0.04] px-3 text-xs font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/[0.08]"
+          aria-label={action.label}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] text-slate-400 transition hover:bg-white/[0.06] hover:text-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50"
         >
-          {action.label}
+          <ArrowUpRight className="h-4 w-4" />
         </Link>
       </CardHeader>
       <CardContent className="space-y-4 p-4 pt-0">{children}</CardContent>
@@ -540,13 +542,6 @@ function AcademyConsoleHome() {
               )}
             </div>
           </div>
-          <Link
-            href="/problem-sets"
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[7px] border border-violet-400/40 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
-          >
-            <PackageCheck className="h-4 w-4" />
-            세트 제작
-          </Link>
         </StageCard>
       </section>
     </div>
