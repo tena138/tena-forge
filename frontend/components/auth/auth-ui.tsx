@@ -290,18 +290,18 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
 
           .aurora-bg-halo {
             background:
-              radial-gradient(circle at 50% 50%, rgba(107, 62, 255, 0.18), transparent 22%),
-              radial-gradient(circle at 50% 52%, rgba(62, 107, 255, 0.16), transparent 42%),
-              radial-gradient(circle at 48% 48%, rgba(192, 70, 221, 0.1), transparent 62%),
+              radial-gradient(circle at 64% 56%, rgba(107, 62, 255, 0.18), transparent 24%),
+              radial-gradient(circle at 58% 62%, rgba(62, 107, 255, 0.16), transparent 46%),
+              radial-gradient(circle at 42% 34%, rgba(192, 70, 221, 0.12), transparent 54%),
               #080612;
           }
 
           .aurora-halo-core {
             position: absolute;
-            left: 50%;
-            top: 50%;
-            width: min(72vw, 680px);
-            height: min(72vw, 680px);
+            left: 62%;
+            top: 56%;
+            width: min(86vw, 860px);
+            height: min(86vw, 860px);
             border-radius: 50%;
             background:
               radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.18), transparent 8%),
@@ -318,8 +318,8 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
 
           .aurora-halo-ring {
             position: absolute;
-            left: 50%;
-            top: 50%;
+            left: 62%;
+            top: 56%;
             border-radius: 50%;
             filter: blur(18px) saturate(170%);
             mix-blend-mode: screen;
@@ -331,16 +331,16 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
           }
 
           .aurora-halo-ring.ring-a {
-            width: min(98vw, 920px);
-            height: min(98vw, 920px);
+            width: min(132vw, 1240px);
+            height: min(132vw, 1240px);
             background:
               conic-gradient(from 20deg, transparent 0deg, rgba(107, 62, 255, 0.82) 42deg, rgba(192, 70, 221, 0.56) 88deg, transparent 132deg, rgba(62, 107, 255, 0.64) 210deg, transparent 286deg, rgba(107, 62, 255, 0.52) 332deg, transparent 360deg);
             animation: halo-ring-a 9.5s ease-in-out infinite;
           }
 
           .aurora-halo-ring.ring-b {
-            width: min(78vw, 760px);
-            height: min(78vw, 760px);
+            width: min(108vw, 1040px);
+            height: min(108vw, 1040px);
             opacity: 0.58;
             filter: blur(22px) saturate(165%);
             background:
@@ -350,8 +350,8 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
           }
 
           .aurora-halo-ring.ring-c {
-            width: min(118vw, 1080px);
-            height: min(118vw, 1080px);
+            width: min(158vw, 1460px);
+            height: min(158vw, 1460px);
             opacity: 0.4;
             filter: blur(28px) saturate(160%);
             background:
