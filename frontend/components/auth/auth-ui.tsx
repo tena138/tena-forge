@@ -449,6 +449,17 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             backdrop-filter: blur(22px) saturate(140%);
           }
 
+          .login-card input:-webkit-autofill,
+          .login-card input:-webkit-autofill:hover,
+          .login-card input:-webkit-autofill:focus,
+          .login-card input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.08) inset !important;
+            box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.08) inset !important;
+            -webkit-text-fill-color: #ffffff !important;
+            caret-color: #ffffff;
+            transition: background-color 9999s ease-out 0s;
+          }
+
           @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
             .login-card {
               background: rgba(18, 16, 28, 0.92);
