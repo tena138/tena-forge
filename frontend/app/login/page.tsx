@@ -35,7 +35,7 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
   const oauthError = searchParams.get("oauth_error");
-  const auroraStyle = searchParams.get("aurora") === "halo" ? "halo" : "ribbons";
+  const auroraStyle = searchParams.get("aurora") === "ribbons" ? "ribbons" : "halo";
   const visibleOauthError = oauthError && !hiddenOAuthErrors.has(oauthError) ? oauthError : null;
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState("");
@@ -111,7 +111,7 @@ function LoginPageContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<AuthCard title="로그인 준비 중..." variant="aurora" />}>
+    <Suspense fallback={<AuthCard title="로그인 준비 중..." variant="aurora" auroraStyle="halo" />}>
       <LoginPageContent />
     </Suspense>
   );
