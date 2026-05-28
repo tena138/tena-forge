@@ -28,14 +28,21 @@ def _store_id() -> str:
 
 
 def _channel_key() -> str:
-    nice_channel_key = _env_first(
+    settings = get_settings()
+    inicis_channel_key = settings.portone_channel_key_inicis or _env_first(
+        "PORTONE_CHANNEL_KEY_INICIS",
+        "PORTONE_INICIS_CHANNEL_KEY",
+        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_INICIS",
+    )
+    if inicis_channel_key:
+        return inicis_channel_key
+    nice_channel_key = settings.portone_channel_key_nice or _env_first(
         "PORTONE_CHANNEL_KEY_NICE",
         "PORTONE_NICE_CHANNEL_KEY",
         "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_NICE",
     )
     if nice_channel_key:
         return nice_channel_key
-    settings = get_settings()
     return settings.portone_channel_key or _env_first(
         "PORTONE_CHANNEL_KEY",
         "NEXT_PUBLIC_PORTONE_CHANNEL_KEY",

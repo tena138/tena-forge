@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     public_api_url: str = ""
     portone_store_id: str = ""
     portone_channel_key: str = ""
+    portone_channel_key_inicis: str = ""
+    portone_channel_key_nice: str = ""
     portone_api_secret: str = ""
     portone_webhook_secret: str = ""
     portone_billing_key_method: str = "CARD"
