@@ -275,7 +275,11 @@ function UsageOverview({
   return (
     <section className="rounded-[12px] border border-border bg-card/70 p-4 shadow-sm">
       <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="rounded-[10px] border border-violet-300/25 bg-violet-500/[0.08] p-4">
+        <Link
+          href="/plan"
+          aria-label="플랜 구매 페이지로 이동"
+          className="rounded-[10px] border border-violet-300/25 bg-violet-500/[0.08] p-4 transition hover:border-violet-300/45 hover:bg-violet-500/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+        >
           <div className="text-2xl font-black text-foreground">{planName}</div>
           <div className="mt-2 inline-flex rounded-full border border-violet-300/30 bg-violet-500/10 px-2 py-1 text-[11px] font-black text-violet-700 dark:bg-black/20 dark:text-violet-100">{planStatus}</div>
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -285,7 +289,7 @@ function UsageOverview({
               </span>
             ))}
           </div>
-        </div>
+        </Link>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} ratio={`${formatUsageNumber(creditsRemaining)}/${formatUsageNumber(creditsLimit)}`} />
           <UsageRing
