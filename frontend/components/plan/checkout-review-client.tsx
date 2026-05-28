@@ -233,9 +233,6 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                 placeholder="01012345678"
                 className="mt-2 h-11 w-full rounded-[10px] border border-white/10 bg-white/[0.08] px-3 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/70"
               />
-              <span className={phoneReady ? "mt-2 block text-xs font-semibold text-slate-500" : "mt-2 block text-xs font-semibold text-amber-200"}>
-                KG이니시스 카드 빌링키 발급에 필요합니다.
-              </span>
             </label>
             <button disabled={!agreed || loading || !phoneReady} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
               {loading ? "결제 준비 중..." : "결제하기"}
