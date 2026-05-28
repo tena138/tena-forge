@@ -28,6 +28,13 @@ def _store_id() -> str:
 
 
 def _channel_key() -> str:
+    nice_channel_key = _env_first(
+        "PORTONE_CHANNEL_KEY_NICE",
+        "PORTONE_NICE_CHANNEL_KEY",
+        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_NICE",
+    )
+    if nice_channel_key:
+        return nice_channel_key
     settings = get_settings()
     return settings.portone_channel_key or _env_first(
         "PORTONE_CHANNEL_KEY",
@@ -39,6 +46,16 @@ def _channel_key() -> str:
 def _billing_key_method() -> str:
     method = get_settings().portone_billing_key_method or _env_first("PORTONE_BILLING_KEY_METHOD")
     return (method or "CARD").strip().upper()
+
+
+def _easy_pay_provider() -> str:
+    provider = get_settings().portone_easy_pay_provider or _env_first("PORTONE_EASY_PAY_PROVIDER")
+    return provider.strip().upper()
+
+
+def _easy_pay_available_methods() -> list[str]:
+    raw = get_settings().portone_easy_pay_available_methods or _env_first("PORTONE_EASY_PAY_AVAILABLE_METHODS")
+    return [item.strip().upper() for item in raw.split(",") if item.strip()]
 
 
 def _is_test_channel() -> bool:
@@ -58,12 +75,19 @@ def portone_public_config() -> dict[str, Any]:
     channel_key = _channel_key()
     if not store_id or not channel_key:
         raise HTTPException(status_code=503, detail="PortOne Store ID or channel key is not configured.")
-    return {
+    config = {
         "store_id": store_id,
         "channel_key": channel_key,
         "billing_key_method": _billing_key_method(),
         "is_test_channel": _is_test_channel(),
     }
+    easy_pay_provider = _easy_pay_provider()
+    if easy_pay_provider:
+        config["easy_pay_provider"] = easy_pay_provider
+    easy_pay_available_methods = _easy_pay_available_methods()
+    if easy_pay_available_methods:
+        config["easy_pay_available_methods"] = easy_pay_available_methods
+    return config
 
 
 def _api_secret() -> str:

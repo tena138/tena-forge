@@ -58,6 +58,11 @@ def _portone_id(prefix: str, plan_code: str | None = None) -> str:
     return "-".join(parts)[:64]
 
 
+def _portone_issue_id(plan_code: str | None = None) -> str:
+    plan_part = "".join(ch for ch in str(plan_code or "") if ch.isascii() and ch.isalnum())[:8]
+    return f"tfbill{plan_part}{int(datetime.utcnow().timestamp())}{uuid.uuid4().hex[:10]}"[:40]
+
+
 def _period_delta(billing_cycle: str) -> timedelta:
     return timedelta(days=365 if billing_cycle == "annual" else 31)
 
@@ -214,7 +219,7 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
     enabled_engines = normalize_subject_engines(payload.enabled_subject_engines or ["math"])
     pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids, enabled_engines)
     academy = db.get(Academy, user_id)
-    issue_id = _portone_id("tf-bill", payload.plan_code)
+    issue_id = _portone_issue_id(payload.plan_code)
     payment_id = _portone_id("tf-pay", payload.plan_code)
     order_name = f"Tena Forge {payload.plan_code.title()} {'annual' if pricing['billing_cycle'] == 'annual' else 'monthly'} subscription"
     now = datetime.utcnow()
@@ -251,6 +256,7 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
         "customer_id": user_id,
         "customer_name": academy.academy_name if academy else None,
         "customer_email": academy.email if academy else None,
+        "customer_phone": academy.phone if academy else None,
         "billing_cycle": order.billing_cycle,
         "selected_packages": order.selected_packages,
         "enabled_subject_engines": order.enabled_subject_engines,

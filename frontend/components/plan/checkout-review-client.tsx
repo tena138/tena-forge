@@ -64,10 +64,11 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
       }
 
       const PortOneSdk = await import("@portone/browser-sdk/v2");
-      const issue = await (PortOneSdk.requestIssueBillingKey as any)({
+      const billingKeyMethod = String(billingCheckout.portone.billing_key_method || "CARD").toUpperCase();
+      const issueRequest: Record<string, any> = {
         storeId: billingCheckout.portone.store_id,
         channelKey: billingCheckout.portone.channel_key,
-        billingKeyMethod: billingCheckout.portone.billing_key_method || "CARD",
+        billingKeyMethod,
         issueId: billingCheckout.issue_id,
         issueName: billingCheckout.issue_name,
         customerId: billingCheckout.customer_id,
@@ -76,6 +77,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
           customerId: billingCheckout.customer_id,
           fullName: billingCheckout.customer_name || undefined,
           email: billingCheckout.customer_email || undefined,
+          phoneNumber: billingCheckout.customer_phone || undefined,
         },
         displayAmount: billingCheckout.amount,
         currency: "KRW",
@@ -88,7 +90,16 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
           enabledSubjectEngines: selectedSubjectEngines,
         },
         redirectUrl: `${window.location.origin}/checkout/billing-return?issueId=${encodeURIComponent(billingCheckout.issue_id)}`,
-      });
+      };
+      if (billingKeyMethod === "EASY_PAY") {
+        const easyPayProvider = billingCheckout.portone.easy_pay_provider;
+        const availablePayMethods = billingCheckout.portone.easy_pay_available_methods;
+        issueRequest.easyPay = {
+          ...(easyPayProvider ? { easyPayProvider } : {}),
+          ...(Array.isArray(availablePayMethods) && availablePayMethods.length ? { availablePayMethods } : {}),
+        };
+      }
+      const issue = await (PortOneSdk.requestIssueBillingKey as any)(issueRequest);
 
       if (!issue || "code" in issue) {
         const message = issue && "message" in issue ? issue.message : "Billing key issue failed.";

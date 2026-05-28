@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     portone_api_secret: str = ""
     portone_webhook_secret: str = ""
     portone_billing_key_method: str = "CARD"
+    portone_easy_pay_provider: str = ""
+    portone_easy_pay_available_methods: str = ""
     portone_is_test_channel: bool = False
     secret_key: str = "dev-secret-key-change-me-dev-secret-key-change-me-dev-secret-key-change-me-64"
     refresh_secret_key: str = "dev-refresh-secret-change-me-dev-refresh-secret-change-me-dev-refresh-secret-64"
