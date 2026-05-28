@@ -10,13 +10,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type OAuthProvider = "kakao" | "naver";
 type OAuthMode = "login" | "signup";
 type AuthCardVariant = "default" | "aurora";
+type AuroraStyle = "ribbons" | "halo";
 
-export function AuthCard({ title, subtitle, children, variant = "default" }: { title?: string; subtitle?: string; children?: React.ReactNode; variant?: AuthCardVariant }) {
+export function AuthCard({ title, subtitle, children, variant = "default", auroraStyle = "ribbons" }: { title?: string; subtitle?: string; children?: React.ReactNode; variant?: AuthCardVariant; auroraStyle?: AuroraStyle }) {
   const isAurora = variant === "aurora";
   return (
     <main className={isAurora ? "relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10 text-white" : "flex min-h-screen items-center justify-center bg-background px-4 py-10"}>
       {isAurora ? (
-        <div className="aurora-bg" aria-hidden="true">
+        <div className={`aurora-bg aurora-bg-${auroraStyle}`} aria-hidden="true">
           <div className="aurora-nebula nebula-a" />
           <div className="aurora-nebula nebula-b" />
           <div className="aurora-ribbon ribbon-a" />
@@ -24,6 +25,11 @@ export function AuthCard({ title, subtitle, children, variant = "default" }: { t
           <div className="aurora-ribbon ribbon-c" />
           <div className="aurora-ribbon ribbon-d" />
           <div className="aurora-ripple" />
+          <div className="aurora-halo-core" />
+          <div className="aurora-halo-ring ring-a" />
+          <div className="aurora-halo-ring ring-b" />
+          <div className="aurora-halo-ring ring-c" />
+          <div className="aurora-halo-dust" />
         </div>
       ) : null}
       <section className={isAurora ? "login-card w-full max-w-[430px] p-8" : "w-full max-w-[430px] rounded-[12px] border border-white/10 bg-card/90 p-8 shadow-[0_28px_80px_rgba(0,0,0,0.40)] backdrop-blur"}>
@@ -50,6 +56,15 @@ export function AuthCard({ title, subtitle, children, variant = "default" }: { t
               radial-gradient(circle at 50% 120%, rgba(62, 107, 255, 0.22), transparent 34%),
               radial-gradient(circle at 8% 10%, rgba(192, 70, 221, 0.14), transparent 26%),
               #080612;
+          }
+
+          .aurora-bg-halo .aurora-nebula,
+          .aurora-bg-halo .aurora-ribbon,
+          .aurora-bg-halo .aurora-ripple,
+          .aurora-bg-ribbons .aurora-halo-core,
+          .aurora-bg-ribbons .aurora-halo-ring,
+          .aurora-bg-ribbons .aurora-halo-dust {
+            display: none;
           }
 
           .aurora-nebula {
@@ -265,8 +280,162 @@ export function AuthCard({ title, subtitle, children, variant = "default" }: { t
           @media (prefers-reduced-motion: reduce) {
             .aurora-nebula,
             .aurora-ribbon,
-            .aurora-ripple {
+            .aurora-ripple,
+            .aurora-halo-core,
+            .aurora-halo-ring,
+            .aurora-halo-dust {
               animation: none !important;
+            }
+          }
+
+          .aurora-bg-halo {
+            background:
+              radial-gradient(circle at 50% 50%, rgba(107, 62, 255, 0.18), transparent 22%),
+              radial-gradient(circle at 50% 52%, rgba(62, 107, 255, 0.16), transparent 42%),
+              radial-gradient(circle at 48% 48%, rgba(192, 70, 221, 0.1), transparent 62%),
+              #080612;
+          }
+
+          .aurora-halo-core {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: min(72vw, 680px);
+            height: min(72vw, 680px);
+            border-radius: 50%;
+            background:
+              radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.18), transparent 8%),
+              radial-gradient(circle at 46% 44%, rgba(192, 70, 221, 0.42), transparent 28%),
+              radial-gradient(circle at 56% 58%, rgba(62, 107, 255, 0.36), transparent 34%),
+              radial-gradient(circle at 50% 50%, rgba(107, 62, 255, 0.28), transparent 52%);
+            filter: blur(48px) saturate(150%);
+            mix-blend-mode: screen;
+            opacity: 0.72;
+            transform: translate3d(-50%, -50%, 0);
+            animation: halo-core 12s ease-in-out infinite;
+            will-change: transform;
+          }
+
+          .aurora-halo-ring {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            border-radius: 50%;
+            filter: blur(18px) saturate(170%);
+            mix-blend-mode: screen;
+            opacity: 0.76;
+            transform-origin: 50% 50%;
+            will-change: transform;
+            -webkit-mask-image: radial-gradient(circle, transparent 0 46%, #000 50%, #000 56%, transparent 62%);
+            mask-image: radial-gradient(circle, transparent 0 46%, #000 50%, #000 56%, transparent 62%);
+          }
+
+          .aurora-halo-ring.ring-a {
+            width: min(98vw, 920px);
+            height: min(98vw, 920px);
+            background:
+              conic-gradient(from 20deg, transparent 0deg, rgba(107, 62, 255, 0.82) 42deg, rgba(192, 70, 221, 0.56) 88deg, transparent 132deg, rgba(62, 107, 255, 0.64) 210deg, transparent 286deg, rgba(107, 62, 255, 0.52) 332deg, transparent 360deg);
+            animation: halo-ring-a 9.5s ease-in-out infinite;
+          }
+
+          .aurora-halo-ring.ring-b {
+            width: min(78vw, 760px);
+            height: min(78vw, 760px);
+            opacity: 0.58;
+            filter: blur(22px) saturate(165%);
+            background:
+              conic-gradient(from 180deg, rgba(62, 107, 255, 0.7), transparent 58deg, rgba(192, 70, 221, 0.54) 118deg, transparent 178deg, rgba(107, 62, 255, 0.7) 242deg, transparent 310deg, rgba(62, 107, 255, 0.36));
+            animation: halo-ring-b 13s ease-in-out infinite;
+            animation-delay: -4s;
+          }
+
+          .aurora-halo-ring.ring-c {
+            width: min(118vw, 1080px);
+            height: min(118vw, 1080px);
+            opacity: 0.4;
+            filter: blur(28px) saturate(160%);
+            background:
+              conic-gradient(from 260deg, transparent 0deg, rgba(192, 70, 221, 0.45) 46deg, transparent 112deg, rgba(62, 107, 255, 0.48) 190deg, transparent 260deg, rgba(107, 62, 255, 0.42) 318deg, transparent 360deg);
+            animation: halo-ring-c 17s ease-in-out infinite;
+            animation-delay: -7s;
+          }
+
+          .aurora-halo-dust {
+            position: absolute;
+            inset: -18%;
+            background:
+              radial-gradient(circle at 44% 35%, rgba(255, 255, 255, 0.13), transparent 2%),
+              radial-gradient(circle at 61% 60%, rgba(255, 255, 255, 0.1), transparent 1.7%),
+              radial-gradient(circle at 32% 58%, rgba(192, 70, 221, 0.18), transparent 5%),
+              radial-gradient(circle at 68% 42%, rgba(62, 107, 255, 0.16), transparent 6%);
+            filter: blur(16px);
+            mix-blend-mode: screen;
+            opacity: 0.72;
+            animation: halo-dust 8s ease-in-out infinite;
+            will-change: transform;
+          }
+
+          @keyframes halo-core {
+            0%,
+            100% {
+              transform: translate3d(-50%, -50%, 0) scale(0.96);
+            }
+
+            50% {
+              transform: translate3d(-50%, -50%, 0) scale(1.12);
+            }
+          }
+
+          @keyframes halo-ring-a {
+            0% {
+              transform: translate3d(-50%, -50%, 0) rotate(0deg) scale(0.96);
+            }
+
+            50% {
+              transform: translate3d(-50%, -50%, 0) rotate(132deg) scale(1.08);
+            }
+
+            100% {
+              transform: translate3d(-50%, -50%, 0) rotate(260deg) scale(0.96);
+            }
+          }
+
+          @keyframes halo-ring-b {
+            0% {
+              transform: translate3d(-50%, -50%, 0) rotate(34deg) scaleX(1.08) scaleY(0.9);
+            }
+
+            50% {
+              transform: translate3d(-50%, -50%, 0) rotate(-118deg) scaleX(0.92) scaleY(1.12);
+            }
+
+            100% {
+              transform: translate3d(-50%, -50%, 0) rotate(-250deg) scaleX(1.08) scaleY(0.9);
+            }
+          }
+
+          @keyframes halo-ring-c {
+            0% {
+              transform: translate3d(-50%, -50%, 0) rotate(-20deg) scale(1.02);
+            }
+
+            50% {
+              transform: translate3d(-50%, -50%, 0) rotate(96deg) scale(0.92);
+            }
+
+            100% {
+              transform: translate3d(-50%, -50%, 0) rotate(210deg) scale(1.02);
+            }
+          }
+
+          @keyframes halo-dust {
+            0%,
+            100% {
+              transform: translate3d(0, 0, 0) rotate(0deg);
+            }
+
+            50% {
+              transform: translate3d(3vw, -4vh, 0) rotate(10deg);
             }
           }
 
