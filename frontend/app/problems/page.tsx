@@ -689,20 +689,30 @@ function ProblemsBrowser() {
   return (
     <div className="space-y-4">
       <section className="forge-panel rounded-lg p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold">문항 브라우저</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{data.total.toLocaleString("ko-KR")}개 문항</p>
+        <div className="grid gap-3 xl:grid-cols-[minmax(18rem,1fr)_auto] xl:items-center">
+          <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3 xl:max-w-4xl">
+            <Search className="h-4 w-4 shrink-0 text-[#7F77DD]" />
+            <Input
+              className="min-w-0 border-0 bg-transparent px-0 text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
+              placeholder="본문, 번호, 정답, 태그, 출처 검색"
+              value={search}
+              onChange={(event) => resetPageAnd(() => setSearch(event.target.value))}
+            />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm">
+              <span className="text-muted-foreground">문항</span>
+              <span className="font-semibold text-foreground">{data.total.toLocaleString("ko-KR")}개</span>
+            </div>
             <label className="flex h-9 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-slate-300">
               정렬
               <select
-                className="bg-transparent text-sm font-semibold text-white outline-none"
+                className="bg-transparent text-sm font-semibold text-foreground outline-none"
                 value={sort}
                 onChange={(event) => resetPageAnd(() => setSort(event.target.value as ProblemSort))}
               >
-                {sortOptions.map((option) => <option key={option.value} value={option.value} className="bg-[#111318] text-white">{option.label}</option>)}
+                {sortOptions.map((option) => <option key={option.value} value={option.value} className="bg-background text-foreground">{option.label}</option>)}
               </select>
             </label>
             <div className="flex h-9 rounded-md border border-white/10 bg-white/[0.04] p-1">
@@ -722,16 +732,6 @@ function ProblemsBrowser() {
               </button>
             </div>
           </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-2">
-          <Search className="h-4 w-4 text-[#7F77DD]" />
-          <Input
-            className="border-0 bg-transparent focus-visible:ring-0"
-            placeholder="본문, 번호, 정답, 태그, 출처 검색"
-            value={search}
-            onChange={(event) => resetPageAnd(() => setSearch(event.target.value))}
-          />
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">

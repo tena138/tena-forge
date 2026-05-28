@@ -393,7 +393,7 @@ function ProblemDetailContent() {
       <div className="sticky top-[65px] z-30 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#12101c]/95 p-3 shadow-[0_16px_44px_rgba(0,0,0,0.28)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
         <Button variant="outline" onClick={() => router.push(archiveHref)}>
           <ArrowLeft className="h-4 w-4" />
-          문항 브라우저
+          문항 아카이브
         </Button>
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <span className="rounded-md border border-white/10 bg-black/20 px-3 py-2">
