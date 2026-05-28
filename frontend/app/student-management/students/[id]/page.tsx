@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Download, FileText, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Settings, Trash2, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronLeft, ChevronRight, Download, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Settings, Trash2, UserRound, X } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -188,6 +188,26 @@ function tone(status?: string) {
   return "bg-violet-500/15 text-violet-100 border-violet-300/20";
 }
 
+function isArchiveResolved(status?: string | null) {
+  return ["completed", "correct", "mastered", "resolved"].includes((status || "").toLowerCase());
+}
+
+function archiveStatusLabel(status?: string | null) {
+  const value = (status || "").toLowerCase();
+  if (isArchiveResolved(value)) return "완료";
+  if (["unanswered", "missing"].includes(value)) return "미풀이";
+  if (["unresolved", "wrong", "needs review"].includes(value)) return "복습 필요";
+  return status || "복습 필요";
+}
+
+function archiveAccentColor(wrong: WrongAnswer) {
+  const status = (wrong.resolved_status || "").toLowerCase();
+  if (isArchiveResolved(status)) return "#34d399";
+  if (["unanswered", "missing"].includes(status)) return "#fb7185";
+  if (wrong.wrong_count > 1) return "#fb923c";
+  return "#8b5cf6";
+}
+
 function dateLabel(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -368,6 +388,11 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const skipNextCounselingFormatSyncRef = useRef(false);
 
   const calendarItems = useMemo(() => (data ? studentCalendarItems(data) : []), [data]);
+  const archivedWrongAnswers = useMemo(() => data?.wrong_answers || [], [data?.wrong_answers]);
+  const archiveReviewNeededCount = useMemo(
+    () => archivedWrongAnswers.filter((wrong) => !isArchiveResolved(wrong.resolved_status)).length,
+    [archivedWrongAnswers]
+  );
   const activeReportField = useMemo(() => reportField(counselingFields), [counselingFields]);
   const selectedClassName = useMemo(() => {
     if (!data || !counselingClassId) return "";
@@ -1009,7 +1034,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
           {[
             { id: "calendar", label: "캘린더", icon: CalendarDays },
-            { id: "wrong", label: "오답", icon: RotateCcw },
+            { id: "wrong", label: "아카이브", icon: Archive },
             { id: "counseling", label: "학습 상담", icon: MessageSquareText },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -1146,95 +1171,96 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         ) : null}
 
         {activeTab === "wrong" ? (
-          <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <section className="space-y-4">
             <Card className="border-white/[0.08] bg-white/[0.025]">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><FileText className="h-5 w-5" />오답 체크</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {data.paper_session_history.map((result) => {
-                  const count = problemCount(result);
-                  const statuses = resultStatuses[result.id] || buildStatuses(result);
-                  const orangeCount = Object.values(statuses).filter((status) => status === "wrong").length;
-                  const redCount = Object.values(statuses).filter((status) => status === "unanswered").length;
-                  const autosaveState = autosaveStates[result.id];
-                  return (
-                    <div key={result.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="font-semibold text-white">{result.session?.title || "Paper Session"}</p>
-                          <p className="mt-1 text-sm text-slate-400">
-                            {result.score == null ? "-" : `${Math.round(result.score)}점`} · 정답 {result.correct_count} · 오답/못 풂 {result.wrong_count} · {count}문항
+              <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-violet-300/25 bg-violet-500/15 text-violet-100">
+                    <Archive className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-white">아카이브</h2>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                      <span>{archivedWrongAnswers.length}문항</span>
+                      <span className="text-slate-700">·</span>
+                      <span>복습 필요 {archiveReviewNeededCount}문항</span>
+                    </div>
+                  </div>
+                </div>
+                <Button onClick={makeReviewSet} disabled={!archiveReviewNeededCount}>
+                  <RotateCcw className="h-4 w-4" />
+                  복습 세트 만들기
+                </Button>
+              </CardContent>
+            </Card>
+
+            {archivedWrongAnswers.length ? (
+              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                {archivedWrongAnswers.map((wrong) => (
+                  <article
+                    key={wrong.id}
+                    className="group relative min-h-[215px] overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-violet-300/40 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(76,29,149,0.16)]"
+                  >
+                    <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: archiveAccentColor(wrong) }} />
+                    <div className="flex h-full flex-col p-4 pl-6">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-md border border-violet-300/20 bg-violet-500/10 px-2 py-1 text-xs font-black text-violet-100">
+                              #{wrong.problem_number}
+                            </span>
+                            <Badge className={cn("border", tone(wrong.resolved_status))}>{archiveStatusLabel(wrong.resolved_status)}</Badge>
+                          </div>
+                          <p className="mt-2 line-clamp-1 text-xs font-semibold text-slate-500">
+                            {[wrong.subject, wrong.unit].filter(Boolean).join(" · ") || "분류 없음"}
                           </p>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {autosaveState ? (
-                            <span
-                              className={cn(
-                                "rounded-md border px-2 py-1 text-xs",
-                                autosaveState === "saved" && "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
-                                autosaveState === "error" && "border-rose-400/20 bg-rose-500/10 text-rose-100",
-                                autosaveState !== "saved" && autosaveState !== "error" && "border-violet-300/20 bg-violet-500/10 text-violet-100"
-                              )}
+                        <div className="flex shrink-0 items-center gap-1">
+                          {wrong.problem_id ? (
+                            <Link
+                              href={`/problems/${wrong.problem_id}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-violet-300/50 hover:bg-violet-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+                              aria-label={`${wrong.problem_number}번 상세 보기`}
                             >
-                              {autosaveState === "pending" ? "자동 저장 대기" : autosaveState === "saving" ? "자동 저장 중" : autosaveState === "saved" ? "저장됨" : "저장 실패"}
-                            </span>
+                              <ArrowUpRight className="h-4 w-4" />
+                            </Link>
                           ) : null}
-                          <Badge className={cn("border", tone(result.status))}>{result.status}</Badge>
-                          <Button size="sm" onClick={() => saveResult(result)} disabled={!count || savingResultId === result.id}>
-                            {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                            저장
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
+                            onClick={() => deleteWrongAnswer(wrong)}
+                            disabled={deletingWrongAnswerId === wrong.id}
+                            aria-label={`${wrong.problem_number}번 아카이브 항목 삭제`}
+                          >
+                            {deletingWrongAnswerId === wrong.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                           </Button>
                         </div>
                       </div>
-                      {count ? (
-                        <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
-                          {Array.from({ length: count }, (_, index) => {
-                            const number = index + 1;
-                            return <ResultCell key={number} number={number} status={statuses[number] || "correct"} onClick={() => toggleResultProblem(result, number)} />;
-                          })}
-                        </div>
-                      ) : (
-                        <p className="mt-3 rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">이 시험의 문항 수 정보가 없습니다.</p>
-                      )}
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
-                        <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답 {orangeCount}</span>
-                        <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂 {redCount}</span>
+
+                      <MathText className="mt-4 line-clamp-4 text-[14px] font-medium leading-[1.55] text-slate-200" value={wrong.problem_text || "문항 내용 없음"} />
+
+                      <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 text-[11px] font-medium text-slate-500">
+                        <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-slate-300">오답 {wrong.wrong_count}회</span>
+                        <span>{wrong.latest_wrong_at ? shortDate(wrong.latest_wrong_at) : "최근 기록 없음"}</span>
+                        {wrong.unit ? (
+                          <>
+                            <span className="text-slate-700">·</span>
+                            <span>{wrong.unit}</span>
+                          </>
+                        ) : null}
                       </div>
                     </div>
-                  );
-                })}
-                {!data.paper_session_history.length ? <p className="text-sm text-slate-500">아직 기록된 세션이 없습니다.</p> : null}
-              </CardContent>
-            </Card>
-            <Card className="border-white/[0.08] bg-white/[0.025]">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><RotateCcw className="h-5 w-5" />Wrong Answer Archive</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {data.wrong_answers.map((wrong) => (
-                  <div key={wrong.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-white">{wrong.problem_number}번</p>
-                      <div className="flex items-center gap-2">
-                        <Badge className={cn("border", tone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
-                          onClick={() => deleteWrongAnswer(wrong)}
-                          disabled={deletingWrongAnswerId === wrong.id}
-                          aria-label={`${wrong.problem_number}번 오답 기록 삭제`}
-                        >
-                          {deletingWrongAnswerId === wrong.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </div>
-                    <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300" value={wrong.problem_text} />
-                    <p className="mt-2 text-xs text-slate-500">오답 {wrong.wrong_count}회 · {wrong.unit || "단원 정보 없음"}</p>
-                  </div>
+                  </article>
                 ))}
-                {!data.wrong_answers.length ? <p className="text-sm text-slate-500">아직 오답 기록이 없습니다.</p> : null}
-              </CardContent>
-            </Card>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.025] p-10 text-center">
+                <Archive className="mx-auto h-8 w-8 text-violet-200" />
+                <p className="mt-3 text-sm font-semibold text-slate-400">아카이브에 담긴 문항이 없습니다.</p>
+              </div>
+            )}
           </section>
         ) : null}
 
