@@ -10,17 +10,19 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type OAuthProvider = "kakao" | "naver";
 type OAuthMode = "login" | "signup";
 
-export function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children?: React.ReactNode }) {
+export function AuthCard({ title, subtitle, children }: { title?: string; subtitle?: string; children?: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <section className="w-full max-w-[430px] rounded-[12px] border border-white/10 bg-card/90 p-8 shadow-[0_28px_80px_rgba(0,0,0,0.40)] backdrop-blur">
-        <Link href="/" className="mb-7 flex flex-col items-center gap-3">
-          <SiteLogoMark />
+        <Link href="/" className="mb-8 flex flex-col items-center gap-3">
+          <SiteLogoMark className="h-16 w-16 p-2" />
         </Link>
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold tracking-normal text-white">{title}</h1>
-          {subtitle ? <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p> : null}
-        </div>
+        {title || subtitle ? (
+          <div className="mb-6 text-center">
+            {title ? <h1 className="text-2xl font-bold tracking-normal text-white">{title}</h1> : null}
+            {subtitle ? <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p> : null}
+          </div>
+        ) : null}
         {children}
       </section>
     </main>

@@ -63,7 +63,7 @@ function LoginPageContent() {
   }
 
   return (
-    <AuthCard title="Tena 로그인">
+    <AuthCard>
       <div className="space-y-5">
         {visibleOauthError ? (
           <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">
@@ -72,15 +72,15 @@ function LoginPageContent() {
         ) : null}
 
         <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
-          <label className="block text-sm font-semibold text-slate-200">
-            아이디
-            <Input autoComplete="username" className="mt-1.5 h-11" {...form.register("email")} />
+          <label className="block">
+            <span className="sr-only">아이디</span>
+            <Input autoComplete="username" className="h-11" placeholder="ID" {...form.register("email")} />
             <FieldError message={form.formState.errors.email?.message} />
           </label>
-          <label className="block text-sm font-semibold text-slate-200">
-            비밀번호
-            <div className="relative mt-1.5">
-              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" className="h-11 pr-11" {...form.register("password")} />
+          <label className="block">
+            <span className="sr-only">비밀번호</span>
+            <div className="relative">
+              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" className="h-11 pr-11" placeholder="PASSWORD" {...form.register("password")} />
               <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-white" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
