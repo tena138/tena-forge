@@ -658,9 +658,42 @@ function ScrollStorySection() {
         anticipatePin: 1,
         invalidateOnRefresh: true,
         onUpdate: (self) => setProgress(clampProgress(self.progress)),
+        onRefresh: (self) => setProgress(clampProgress(self.progress)),
       });
-      cleanup = () => trigger.kill();
-      ScrollTrigger.refresh();
+      const frames: number[] = [];
+      const timeouts: number[] = [];
+      let resizeObserver: ResizeObserver | undefined;
+      const refresh = () => {
+        if (cancelled) return;
+        ScrollTrigger.refresh();
+        setProgress(clampProgress(trigger.progress));
+      };
+      const scheduleRefresh = () => {
+        if (cancelled) return;
+        const firstFrame = window.requestAnimationFrame(() => {
+          const secondFrame = window.requestAnimationFrame(refresh);
+          frames.push(secondFrame);
+        });
+        frames.push(firstFrame);
+      };
+      scheduleRefresh();
+      timeouts.push(window.setTimeout(scheduleRefresh, 180));
+      timeouts.push(window.setTimeout(scheduleRefresh, 720));
+      if (document.readyState === "complete") scheduleRefresh();
+      else window.addEventListener("load", scheduleRefresh, { once: true });
+      void document.fonts?.ready.then(scheduleRefresh).catch(() => undefined);
+      if ("ResizeObserver" in window) {
+        resizeObserver = new ResizeObserver(scheduleRefresh);
+        resizeObserver.observe(section);
+        resizeObserver.observe(pin);
+      }
+      cleanup = () => {
+        window.removeEventListener("load", scheduleRefresh);
+        resizeObserver?.disconnect();
+        timeouts.forEach((timeout) => window.clearTimeout(timeout));
+        frames.forEach((frame) => window.cancelAnimationFrame(frame));
+        trigger.kill();
+      };
     });
 
     return () => {
