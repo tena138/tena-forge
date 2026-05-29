@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronLeft, ChevronRight, Download, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Settings, Trash2, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronLeft, ChevronRight, Download, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Settings, Trash2, UserRound, X } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -379,6 +379,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [formatSettingsOpen, setFormatSettingsOpen] = useState(false);
   const [counselingClassId, setCounselingClassId] = useState("");
   const [counselingFields, setCounselingFields] = useState<CounselingFormatField[]>(DEFAULT_COUNSELING_FIELDS);
+  const [draggingCounselingFieldId, setDraggingCounselingFieldId] = useState("");
   const [counselingFieldValues, setCounselingFieldValues] = useState<Record<string, string>>({});
   const [counselingForm, setCounselingForm] = useState({
     counseling_date: new Date().toISOString().slice(0, 10),
@@ -805,6 +806,20 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
   function updateCounselingField(fieldId: string, patch: Partial<CounselingFormatField>) {
     setCounselingFields((current) => current.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)));
+    markCounselingFormatChanged();
+  }
+
+  function reorderCounselingField(targetFieldId: string) {
+    if (!draggingCounselingFieldId || draggingCounselingFieldId === targetFieldId) return;
+    setCounselingFields((current) => {
+      const fromIndex = current.findIndex((field) => field.id === draggingCounselingFieldId);
+      const toIndex = current.findIndex((field) => field.id === targetFieldId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
     markCounselingFormatChanged();
   }
 
@@ -1394,8 +1409,38 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
                     <div className="space-y-2">
                       {counselingFields.map((field) => (
-                        <div key={field.id} className="rounded-md border border-white/[0.08] bg-white/[0.025] p-2">
+                        <div
+                          key={field.id}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = "move";
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            reorderCounselingField(field.id);
+                            setDraggingCounselingFieldId("");
+                          }}
+                          className={cn(
+                            "rounded-md border border-white/[0.08] bg-white/[0.025] p-2 transition",
+                            draggingCounselingFieldId === field.id && "border-violet-300/45 bg-violet-500/10 opacity-70"
+                          )}
+                        >
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              draggable
+                              onDragStart={(event) => {
+                                setDraggingCounselingFieldId(field.id);
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("text/plain", field.id);
+                              }}
+                              onDragEnd={() => setDraggingCounselingFieldId("")}
+                              className="grid h-10 w-8 shrink-0 cursor-grab place-items-center rounded-md border border-white/[0.08] bg-black/20 text-slate-400 transition hover:border-violet-300/35 hover:text-white active:cursor-grabbing"
+                              aria-label={`${field.label} 순서 변경`}
+                              title="드래그해서 순서 변경"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </button>
                             <Input
                               value={field.label}
                               onChange={(event) => updateCounselingField(field.id, { label: event.target.value })}
