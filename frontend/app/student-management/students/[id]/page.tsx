@@ -94,6 +94,8 @@ const DEFAULT_COUNSELING_FIELDS: CounselingFormatField[] = [
   { id: "next_plan", label: "다음 지도 계획", placeholder: "다음 지도 계획 / 과제 제안", include_in_report: true },
 ];
 const COUNSELING_DRAFT_KEY_PREFIX = "tena.student-management.counseling-draft";
+const COUNSELING_FORMAT_SYNC_KEY = "tena.student-management.counseling-format-sync";
+const COUNSELING_FORMAT_SYNC_EVENT = "tena.student-management.counseling-format-sync";
 const TEMP_PAPER_SESSION_CACHE_KEY = "tena.student-management.temp-paper-session.michin-s2-review";
 const TEMP_PAPER_SESSION_SOURCE_STUDENT = "이우노";
 const TEMP_PAPER_SESSION_TARGET_STUDENTS = new Set(["이나은", "이수현"]);
@@ -102,6 +104,11 @@ const TEMP_PAPER_SESSION_DISPLAY_TITLE = "미친개념 수2 복습 문항 (2)";
 const TEMP_PAPER_SESSION_DATE = "2026-05-29T00:00:00";
 
 type CachedPaperSessionResult = StudentDetail["paper_session_history"][number];
+type CounselingFormatSyncPayload = {
+  classId: string;
+  fields: CounselingFormatField[];
+  savedAt: string;
+};
 
 function isTemporaryPaperSessionTitle(title?: string | null) {
   return Boolean(title?.includes(TEMP_PAPER_SESSION_TITLE));
@@ -165,6 +172,28 @@ function withTemporaryPaperSessionCache(student: StudentDetail): StudentDetail {
     })),
   };
   return { ...student, paper_session_history: [temporaryResult, ...student.paper_session_history] };
+}
+
+function parseCounselingFormatSyncPayload(value: string | null): CounselingFormatSyncPayload | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<CounselingFormatSyncPayload>;
+    if (!parsed.classId || !Array.isArray(parsed.fields)) return null;
+    return {
+      classId: parsed.classId,
+      fields: normalizeCounselingFields(parsed.fields),
+      savedAt: parsed.savedAt || new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function broadcastCounselingFormatSync(payload: CounselingFormatSyncPayload) {
+  if (typeof window === "undefined") return;
+  const serialized = JSON.stringify(payload);
+  window.localStorage.setItem(COUNSELING_FORMAT_SYNC_KEY, serialized);
+  window.dispatchEvent(new CustomEvent(COUNSELING_FORMAT_SYNC_EVENT, { detail: payload }));
 }
 
 function createFieldId(label: string, existing: string[] = []) {
@@ -626,6 +655,49 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }, [data, counselingClassId, editingCounselingLogId]);
 
   useEffect(() => {
+    if (!data) return;
+    function applySyncedFormat(payload: CounselingFormatSyncPayload | null) {
+      if (!payload || !data?.class_ids.includes(payload.classId)) return;
+      const syncedFormat: CounselingFormat = {
+        class_id: payload.classId,
+        fields: payload.fields,
+        updated_at: payload.savedAt,
+      };
+      setData((current) => {
+        if (!current || !current.class_ids.includes(payload.classId)) return current;
+        const others = (current.counseling_formats || []).filter((item) => item.class_id !== payload.classId);
+        return { ...current, counseling_formats: [...others, syncedFormat] };
+      });
+      if (payload.classId !== counselingClassId || editingCounselingLogId) return;
+      setCounselingFields(payload.fields);
+      setCounselingFieldValues((current) => {
+        const next: Record<string, string> = {};
+        for (const field of payload.fields) next[field.id] = current[field.id] || "";
+        return next;
+      });
+      setFormatAutosaveState("saved");
+      setFormatAutosaveSavedAt(payload.savedAt);
+    }
+
+    function handleCustomEvent(event: Event) {
+      applySyncedFormat((event as CustomEvent<CounselingFormatSyncPayload>).detail || null);
+    }
+
+    function handleStorageEvent(event: StorageEvent) {
+      if (event.key !== COUNSELING_FORMAT_SYNC_KEY) return;
+      applySyncedFormat(parseCounselingFormatSyncPayload(event.newValue));
+    }
+
+    window.addEventListener(COUNSELING_FORMAT_SYNC_EVENT, handleCustomEvent);
+    window.addEventListener("storage", handleStorageEvent);
+    applySyncedFormat(parseCounselingFormatSyncPayload(window.localStorage.getItem(COUNSELING_FORMAT_SYNC_KEY)));
+    return () => {
+      window.removeEventListener(COUNSELING_FORMAT_SYNC_EVENT, handleCustomEvent);
+      window.removeEventListener("storage", handleStorageEvent);
+    };
+  }, [data?.id, data?.class_ids.join("|"), counselingClassId, editingCounselingLogId]);
+
+  useEffect(() => {
     if (!data || editingCounselingLogId) return;
     const key = counselingDraftKey(null);
     if (counselingDraftHydratedRef.current[key]) return;
@@ -856,6 +928,11 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     setFormatAutosaveState("saving");
     try {
       const saved = await updateClassCounselingFormat(classId, { fields });
+      broadcastCounselingFormatSync({
+        classId,
+        fields: saved.fields,
+        savedAt: saved.updated_at || new Date().toISOString(),
+      });
       setData((current) => {
         if (!current) return current;
         if (!current.class_ids.includes(classId)) return current;
