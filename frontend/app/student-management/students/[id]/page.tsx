@@ -40,6 +40,7 @@ type StudentCalendarItem = {
   title: string;
   meta: string;
   description: string;
+  result_id?: string | null;
   kind: "수업" | "시험" | "상담";
 };
 
@@ -260,12 +261,14 @@ function problemCount(result: StudentDetail["paper_session_history"][number]) {
 }
 
 function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
+  const resultBySessionId = new Map(student.paper_session_history.map((result) => [result.paper_session_id, result]));
   const eventItems = (student.schedule_events || []).map((event) => ({
     id: `event-${event.id}`,
     date: event.starts_at,
     title: event.title,
     meta: event.event_type,
     description: event.description || "",
+    result_id: event.linked_paper_session_id ? resultBySessionId.get(event.linked_paper_session_id)?.id || null : null,
     kind: "수업" as const,
   }));
   const sessionItems = student.paper_session_history
@@ -275,6 +278,7 @@ function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
       date: result.session?.scheduled_at || "",
       title: result.session?.title || "Paper Session",
       meta: result.status,
+      result_id: result.id,
       description: `${result.score == null ? "-" : `${Math.round(result.score)}점`} · ${problemCount(result)}문항`,
       kind: "시험" as const,
     }));
@@ -357,6 +361,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [activeTab, setActiveTab] = useState<StudentTab>("calendar");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => dateKey(new Date()));
+  const [selectedCalendarItemId, setSelectedCalendarItemId] = useState("");
   const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
@@ -449,6 +454,14 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     return grouped;
   }, [calendarItems]);
   const selectedCalendarItems = calendarItemsByDate[selectedCalendarDate] || [];
+  const selectedCalendarItem =
+    selectedCalendarItems.find((item) => item.id === selectedCalendarItemId) ||
+    selectedCalendarItems.find((item) => item.result_id) ||
+    selectedCalendarItems[0] ||
+    null;
+  const selectedCalendarResult = selectedCalendarItem?.result_id
+    ? data?.paper_session_history.find((result) => result.id === selectedCalendarItem.result_id) || null
+    : null;
 
   function applyStudentData(student: StudentDetail) {
     setData(student);
@@ -461,6 +474,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         const targetDate = new Date(target.date);
         setCalendarMonth(new Date(targetDate.getFullYear(), targetDate.getMonth(), 1));
         setSelectedCalendarDate(dateKey(target.date));
+        setSelectedCalendarItemId(target.id);
       }
       calendarInitializedRef.current = true;
     }
@@ -1113,9 +1127,15 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             key={key}
                             role="button"
                             tabIndex={0}
-                            onClick={() => setSelectedCalendarDate(key)}
+                            onClick={() => {
+                              setSelectedCalendarDate(key);
+                              setSelectedCalendarItemId(items.find((item) => item.result_id)?.id || items[0]?.id || "");
+                            }}
                             onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") setSelectedCalendarDate(key);
+                              if (event.key === "Enter" || event.key === " ") {
+                                setSelectedCalendarDate(key);
+                                setSelectedCalendarItemId(items.find((item) => item.result_id)?.id || items[0]?.id || "");
+                              }
                             }}
                             className={cn(
                               "min-h-[138px] border-b border-r border-white/[0.08] p-2 text-left outline-none transition",
@@ -1144,10 +1164,12 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     setSelectedCalendarDate(key);
+                                    setSelectedCalendarItemId(item.id);
                                   }}
                                   className={cn(
                                     "block w-full truncate rounded border px-2 py-1 text-left text-[11px] font-semibold leading-4 transition",
-                                    calendarBlockClass(item)
+                                    calendarBlockClass(item),
+                                    selectedCalendarItemId === item.id && "ring-1 ring-white/70"
                                   )}
                                   title={`${item.title} · ${dateLabel(item.date)}`}
                                 >
@@ -1171,7 +1193,15 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               </CardHeader>
               <CardContent className="space-y-3">
                 {selectedCalendarItems.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedCalendarItemId(item.id)}
+                    className={cn(
+                      "block w-full rounded-lg border bg-white/[0.03] p-3 text-left transition hover:border-violet-300/40 hover:bg-white/[0.045]",
+                      selectedCalendarItem?.id === item.id ? "border-violet-300/50 ring-1 ring-violet-300/25" : "border-white/[0.08]"
+                    )}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold text-violet-200">{dateLabel(item.date)}</p>
@@ -1183,8 +1213,46 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                       </div>
                     </div>
                     {item.description ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{item.description}</p> : null}
-                  </div>
+                  </button>
                 ))}
+                {selectedCalendarResult ? (
+                  <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-slate-500">결과 입력</p>
+                        <h3 className="mt-1 text-sm font-black text-white">{selectedCalendarResult.session?.title || selectedCalendarItem?.title || "시험/과제"}</h3>
+                      </div>
+                      <div className="text-right text-xs font-semibold text-slate-500">
+                        {autosaveStates[selectedCalendarResult.id] === "saving" ? "저장 중" : autosaveStates[selectedCalendarResult.id] === "saved" ? "자동 저장됨" : autosaveStates[selectedCalendarResult.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                      <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
+                      <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">주황: 오답</span>
+                      <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-8">
+                      {Array.from({ length: problemCount(selectedCalendarResult) }, (_, index) => {
+                        const number = index + 1;
+                        const statuses = resultStatuses[selectedCalendarResult.id] || buildStatuses(selectedCalendarResult);
+                        return (
+                          <ResultCell
+                            key={number}
+                            number={number}
+                            status={statuses[number] || "correct"}
+                            onClick={() => toggleResultProblem(selectedCalendarResult, number)}
+                          />
+                        );
+                      })}
+                    </div>
+                    <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(selectedCalendarResult)} disabled={savingResultId === selectedCalendarResult.id}>
+                      {savingResultId === selectedCalendarResult.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      저장
+                    </Button>
+                  </div>
+                ) : selectedCalendarItem ? (
+                  <p className="rounded-lg border border-dashed border-white/10 p-3 text-sm text-slate-500">이 일정에는 아직 채점할 시험/과제 결과가 연결되어 있지 않습니다.</p>
+                ) : null}
                 {!selectedCalendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">선택한 날짜에 등록된 일정이 없습니다.</p> : null}
               </CardContent>
             </Card>
