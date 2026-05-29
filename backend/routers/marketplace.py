@@ -16,10 +16,16 @@ from schemas import (
     ReportRead,
 )
 from services.auth_security import decode_access_token
-
-router = APIRouter(prefix="/marketplace", tags=["marketplace"])
+from services.saas_security import require_admin
 
 LOCAL_OWNER_ID = "local_user"
+
+
+def require_marketplace_admin(request: Request, db: Session = Depends(get_db)) -> str:
+    return require_admin(request, db)
+
+
+router = APIRouter(prefix="/marketplace", tags=["marketplace"], dependencies=[Depends(require_marketplace_admin)])
 
 
 def current_owner_id(request: Request) -> str:

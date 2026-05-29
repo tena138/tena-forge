@@ -28,7 +28,7 @@ import { AUTH_CHANGED_EVENT, readStoredAuthProfile } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 type AccountType = "academy" | "student";
-type StoredProfile = { account_type?: AccountType };
+type StoredProfile = { account_type?: AccountType; plan?: string | null; roles?: string[] | null };
 
 const sections = [
   {
@@ -71,6 +71,7 @@ const sections = [
     title: "Marketplace",
     shortTitle: "MP",
     description: "공개 허브 및 스토어",
+    adminOnly: true,
     accent: "bg-emerald-300",
     panel: "border-emerald-300/20 bg-emerald-300/[0.045]",
     header: "text-emerald-100",
@@ -155,6 +156,7 @@ export function FloatingNav({
     () =>
       sections
         .filter((section) => !section.accountTypes || section.accountTypes.includes(accountType))
+        .filter((section) => !("adminOnly" in section) || !section.adminOnly || canManageAnnouncements)
         .map((section) => ({
           ...section,
           items: section.items.filter((item) => !("adminOnly" in item) || !item.adminOnly || canManageAnnouncements),

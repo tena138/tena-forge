@@ -22,6 +22,7 @@ from schemas import (
 from services.license_service import is_marketplace_publish_allowed
 from services.ownership import current_owner_id
 from services.private_files import sign_static_url
+from services.saas_security import require_admin
 
 router = APIRouter(prefix="/api/problem-sets", tags=["problem sets"])
 
@@ -297,6 +298,7 @@ def unpublish_problem_set(set_id: UUID, request: Request, db: Session = Depends(
 
 @router.post("/{set_id}/submit-to-marketplace")
 def submit_problem_set_to_marketplace(set_id: UUID, payload: MarketplaceSubmissionRequest, request: Request, db: Session = Depends(get_db)):
+    require_admin(request, db)
     owner_id = current_owner_id(request)
     problem_set = _get_set(db, set_id, owner_id)
     if not payload.rights_confirmed or not payload.no_unauthorized_copy:

@@ -8,8 +8,14 @@ from database import get_db
 from models import CreatorProfile, MarketplaceListing
 from routers.marketplace import current_owner_id
 from schemas import CreatorProfileCreate, CreatorProfileRead, CreatorProfileUpdate, MarketplaceListingRead
+from services.saas_security import require_admin
 
-router = APIRouter(prefix="/stores", tags=["stores"])
+
+def require_store_admin(request: Request, db: Session = Depends(get_db)) -> str:
+    return require_admin(request, db)
+
+
+router = APIRouter(prefix="/stores", tags=["stores"], dependencies=[Depends(require_store_admin)])
 
 
 @router.get("", response_model=list[CreatorProfileRead])

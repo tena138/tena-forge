@@ -10,6 +10,7 @@ from models import HubTemplate, MarketplaceListing
 from schemas import MarketplaceSubmissionRequest, TemplateCreate, TemplateForkResponse, TemplateResponse, TemplateUpdate
 from services.auth_security import decode_access_token
 from services.license_service import is_marketplace_publish_allowed
+from services.saas_security import ADMIN_ROLES, get_roles, require_admin
 from services.template_renderer import sanitize_template_css, sanitize_template_html
 
 router = APIRouter(prefix="/templates", tags=["template-hub"])
@@ -36,14 +37,20 @@ def _response(template: HubTemplate, owner_id: str) -> TemplateResponse:
     return data
 
 
-def _ensure_readable(template: HubTemplate, owner_id: str) -> None:
+def _ensure_readable(template: HubTemplate, owner_id: str, db: Session | None = None) -> None:
     if template.visibility == "private" and template.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Template not found.")
+    if template.visibility == "marketplace" and template.owner_id != owner_id and not (db and _is_marketplace_admin(db, owner_id)):
         raise HTTPException(status_code=404, detail="Template not found.")
 
 
 def _ensure_owner(template: HubTemplate, owner_id: str) -> None:
     if template.owner_id != owner_id:
         raise HTTPException(status_code=403, detail="Only the owner can modify this template.")
+
+
+def _is_marketplace_admin(db: Session, owner_id: str) -> bool:
+    return owner_id != LOCAL_OWNER_ID and bool(get_roles(db, owner_id) & ADMIN_ROLES)
 
 
 @router.post("", response_model=TemplateResponse)
@@ -90,7 +97,8 @@ def list_public_templates(
     db: Session = Depends(get_db),
 ):
     owner_id = _current_owner_id(request)
-    statement = select(HubTemplate).where(HubTemplate.visibility.in_(["public", "marketplace"]))
+    visibilities = ["public", "marketplace"] if _is_marketplace_admin(db, owner_id) else ["public"]
+    statement = select(HubTemplate).where(HubTemplate.visibility.in_(visibilities))
     if category:
         statement = statement.where(HubTemplate.category == category)
     if keyword:
@@ -111,7 +119,7 @@ def get_template(template_id: UUID, request: Request, db: Session = Depends(get_
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
-    _ensure_readable(template, owner_id)
+    _ensure_readable(template, owner_id, db)
     return _response(template, owner_id)
 
 
@@ -168,7 +176,7 @@ def fork_template(template_id: UUID, request: Request, db: Session = Depends(get
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
-    _ensure_readable(template, owner_id)
+    _ensure_readable(template, owner_id, db)
     template.use_count += 1
     copied = HubTemplate(
         owner_id=owner_id,
@@ -222,6 +230,7 @@ def unpublish_template(template_id: UUID, request: Request, db: Session = Depend
 
 @router.post("/{template_id}/submit-to-marketplace")
 def submit_template_to_marketplace(template_id: UUID, payload: MarketplaceSubmissionRequest, request: Request, db: Session = Depends(get_db)):
+    require_admin(request, db)
     owner_id = _current_owner_id(request)
     template = db.get(HubTemplate, template_id)
     if not template:

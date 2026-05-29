@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api, ProblemSet, ProblemSetListItem, sourceTypeLabel, submitProblemSetToMarketplace } from "@/lib/api";
+import { api, getDashboardAnnouncementAccess, ProblemSet, ProblemSetListItem, sourceTypeLabel, submitProblemSetToMarketplace } from "@/lib/api";
 import { PROBLEM_SET_EXPORT_HISTORY_EVENT, ProblemSetExportHistoryItem, readProblemSetExportHistory, rememberProblemSetExport } from "@/lib/exportHistory";
 
 function exportHistoryTime(value: string) {
@@ -29,6 +29,7 @@ export default function ProblemSetsPage() {
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [noUnauthorizedCopy, setNoUnauthorizedCopy] = useState(false);
   const [marketMessage, setMarketMessage] = useState("");
+  const [canManageMarketplace, setCanManageMarketplace] = useState(false);
   const [exportHistory, setExportHistory] = useState<ProblemSetExportHistoryItem[]>([]);
 
   async function load() {
@@ -37,6 +38,9 @@ export default function ProblemSetsPage() {
 
   useEffect(() => {
     load();
+    getDashboardAnnouncementAccess()
+      .then((access) => setCanManageMarketplace(access.can_manage))
+      .catch(() => setCanManageMarketplace(false));
   }, []);
 
   useEffect(() => {
@@ -65,6 +69,7 @@ export default function ProblemSetsPage() {
   }
 
   function openMarketplaceModal(set: ProblemSetListItem) {
+    if (!canManageMarketplace) return;
     setMarketTarget(set);
     setRightsConfirmed(false);
     setNoUnauthorizedCopy(false);
@@ -73,7 +78,7 @@ export default function ProblemSetsPage() {
   }
 
   async function submitMarketplace() {
-    if (!marketTarget) return;
+    if (!marketTarget || !canManageMarketplace) return;
     try {
       const result = await submitProblemSetToMarketplace(marketTarget.id, {
         rights_confirmed: rightsConfirmed,
@@ -141,7 +146,7 @@ export default function ProblemSetsPage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {sets.map((set) => {
           const restricted = set.source_type === "personal_study_only" || set.source_type === "unknown";
-          const eligible = Boolean(set.can_publish_to_marketplace) && !restricted;
+          const eligible = canManageMarketplace && Boolean(set.can_publish_to_marketplace) && !restricted;
           return (
             <Card
               key={set.id}
@@ -165,12 +170,12 @@ export default function ProblemSetsPage() {
                 <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                   <Badge variant="outline">{sourceTypeLabel(set.source_type)}</Badge>
                   <Badge variant={set.rights_confirmed ? "success" : "warning"}>{set.rights_confirmed ? "권리 확인됨" : "권리 확인 필요"}</Badge>
-                  <Badge variant={eligible ? "success" : "secondary"}>{eligible ? "마켓 등록 가능" : "비공개 유지"}</Badge>
+                  {canManageMarketplace && <Badge variant={eligible ? "success" : "secondary"}>{eligible ? "마켓 등록 가능" : "비공개 유지"}</Badge>}
                 </div>
-                {restricted && <p className="text-xs leading-5 text-amber-200">이 자료는 공개 또는 마켓플레이스 등록이 제한된 출처 유형입니다.</p>}
+                {canManageMarketplace && restricted && <p className="text-xs leading-5 text-amber-200">이 자료는 공개 또는 마켓플레이스 등록이 제한된 출처 유형입니다.</p>}
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={(event) => { event.stopPropagation(); setExportSet(set); }}><FileDown className="h-4 w-4" />내보내기</Button>
-                  <Button size="sm" variant="outline" disabled={!eligible} onClick={(event) => { event.stopPropagation(); openMarketplaceModal(set); }}><Store className="h-4 w-4" />마켓 등록 준비</Button>
+                  {canManageMarketplace && <Button size="sm" variant="outline" disabled={!eligible} onClick={(event) => { event.stopPropagation(); openMarketplaceModal(set); }}><Store className="h-4 w-4" />마켓 등록 준비</Button>}
                   <Button size="sm" variant="destructive" onClick={(event) => { event.stopPropagation(); removeSet(set); }}><Trash2 className="h-4 w-4" />삭제</Button>
                 </div>
               </CardContent>

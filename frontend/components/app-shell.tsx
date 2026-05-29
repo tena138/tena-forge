@@ -16,6 +16,16 @@ import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
 const marketingRoutes = ["/", "/plan", "/checkout", "/pricing", "/terms", "/privacy", "/copyright-policy"];
 const billingAllowedRoutes = ["/billing", "/plan", "/checkout", "/account/profile", "/account/security"];
+const marketplaceAdminRoutes = ["/marketplace", "/stores", "/creator", "/purchases"];
+
+function isAdminProfile(profile: { plan?: string | null; roles?: string[] | null }) {
+  const roles = profile.roles || [];
+  return String(profile.plan || "").toLowerCase() === "admin" || roles.includes("admin") || roles.includes("super_admin");
+}
+
+function isMarketplaceAdminRoute(pathname: string) {
+  return marketplaceAdminRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
 
 function isAuthFailure(error: unknown) {
   const status = (error as { response?: { status?: number } })?.response?.status;
@@ -67,6 +77,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }
         try {
           const profile = await fetchMe();
+          if (isMarketplaceAdminRoute(pathname) && !isAdminProfile(profile)) {
+            router.replace(profile.account_type === "student" ? "/student" : "/academy");
+            return;
+          }
           const canVisitForBilling = billingAllowedRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
           if (profile.account_type !== "student" && profile.requires_payment && !canVisitForBilling) {
             router.replace("/billing?trial=expired");

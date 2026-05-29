@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LockKeyhole, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { getDashboardAnnouncementAccess } from "@/lib/api";
 import { LicenseEntitlement, contentTypeLabels, licenseTypeLabels, listLicensedLibrary } from "@/lib/marketplace";
 
 type LibraryFilter = "all" | "subscription" | "purchased" | "expired";
@@ -28,6 +29,7 @@ export function LicensedLibraryPage() {
   const [filter, setFilter] = useState<LibraryFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [canManageMarketplace, setCanManageMarketplace] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -39,6 +41,9 @@ export function LicensedLibraryPage() {
         setError("라이선스 자료를 불러오지 못했습니다.");
       })
       .finally(() => setLoading(false));
+    getDashboardAnnouncementAccess()
+      .then((access) => setCanManageMarketplace(access.can_manage))
+      .catch(() => setCanManageMarketplace(false));
   }, []);
 
   const counts = useMemo(
@@ -127,11 +132,11 @@ export function LicensedLibraryPage() {
       ) : (
         <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-12 text-center text-sm text-slate-400">
           표시할 라이선스 자료가 없습니다.
-          <div className="mt-4">
+          {canManageMarketplace && <div className="mt-4">
             <Link href="/marketplace">
               <Button>마켓플레이스 둘러보기</Button>
             </Link>
-          </div>
+          </div>}
         </div>
       )}
     </div>
