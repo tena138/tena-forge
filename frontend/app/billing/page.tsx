@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { getUsageSummary, listPlans, Plan, UsageSummary } from "@/lib/saas";
-import { SUBJECT_ENGINES, SUBJECT_ENGINE_MONTHLY_ADDON, subjectEngineLabel } from "@/lib/plan-pricing";
+import { SUBJECT_ENGINES, subjectEngineLabel } from "@/lib/plan-pricing";
 
 const subjectEngineOptions = SUBJECT_ENGINES;
 
@@ -84,11 +84,13 @@ export default function BillingPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {plans.map((plan) => {
-          const engineDelta = Math.max(selectedEngines.length - 1, 0) * SUBJECT_ENGINE_MONTHLY_ADDON;
+          const engineCount = Math.max(selectedEngines.length, 1);
+          const engineDelta = Math.max(engineCount - 1, 0) * plan.monthly_price;
+          const monthlyPrice = plan.monthly_price * engineCount;
           return (
             <div key={plan.code} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5">
               <h2 className="text-lg font-bold text-white">{plan.name}</h2>
-              <p className="mt-2 text-2xl font-bold text-violet-200">{won(plan.monthly_price + engineDelta)}</p>
+              <p className="mt-2 text-2xl font-bold text-violet-200">{won(monthlyPrice)}</p>
               <p className="mt-1 text-xs text-slate-500">
                 Base {won(plan.monthly_price)}{engineDelta ? ` + engine ${won(engineDelta)}` : ""}
               </p>

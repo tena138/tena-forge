@@ -17,6 +17,7 @@ import {
   calculateAnnualPrice,
   calculateChargeAmount,
   calculateMonthlyPrice,
+  calculateSingleEngineMonthlyPrice,
   formatKRW,
   getResolvedSpecs,
   normalizeSubjectEngines,
@@ -32,10 +33,11 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
   const selectedSubjectEngines = useMemo<SubjectEngineCode[]>(() => normalizeSubjectEngines(engines), [engines]);
   const specs = useMemo(() => getResolvedSpecs(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
   const selectedPackages = useMemo(() => resolveSelectedPackages(plan, selectedPackageIds), [plan, selectedPackageIds]);
+  const singleEngineMonthlyPrice = useMemo(() => calculateSingleEngineMonthlyPrice(plan, selectedPackageIds), [plan, selectedPackageIds]);
   const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
   const annual = useMemo(() => calculateAnnualPrice(monthlyPrice), [monthlyPrice]);
   const chargeAmount = useMemo(() => calculateChargeAmount(plan, selectedPackageIds, billingCycle, selectedSubjectEngines), [plan, selectedPackageIds, billingCycle, selectedSubjectEngines]);
-  const subjectEngineDelta = useMemo(() => calculateSubjectEngineMonthlyDelta(selectedSubjectEngines), [selectedSubjectEngines]);
+  const subjectEngineDelta = useMemo(() => calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice, selectedSubjectEngines), [singleEngineMonthlyPrice, selectedSubjectEngines]);
   const [agreed, setAgreed] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
@@ -170,7 +172,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                   ))}
                 </div>
                 <p className="mt-3 text-sm font-bold text-slate-600">
-                  {selectedSubjectEngines.length > 1 ? "용량 관련 한도가 2배로 적용됩니다." : "선택하지 않은 엔진은 추출 탭에서 잠금 처리됩니다."}
+                  {selectedSubjectEngines.length > 1 ? "선택한 구성 금액과 용량 관련 한도가 2배로 적용됩니다." : "선택하지 않은 엔진은 추출 탭에서 잠금 처리됩니다."}
                 </p>
               </ReviewBlock>
               <ReviewBlock title="선택 패키지">
@@ -194,8 +196,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                   <SpecLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항</SpecLine>
                   <SpecLine>저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SpecLine>
                   <SpecLine>학생 키 {Number(specs.studentKeys).toLocaleString()}개</SpecLine>
-                  <SpecLine>처리 속도 {specs.processingSpeed}</SpecLine>
-                  <SpecLine>{specs.cloudProcessing ? "클라우드 처리 포함" : "클라우드 처리 별도"}</SpecLine>
+                  <SpecLine>PDF 추출은 클라우드에서 처리</SpecLine>
                   <SpecLine>워터마크 없음</SpecLine>
                   <SpecLine>PDF 추출은 AI credits 차감</SpecLine>
                   {plan === "pro" ? <SpecLine>Marketplace included</SpecLine> : <SpecLine>Marketplace unavailable</SpecLine>}

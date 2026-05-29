@@ -7,7 +7,6 @@ from typing import Any
 MATH_ENGINE = "math"
 KOREAN_ENGINE = "korean"
 DEFAULT_SUBJECT_ENGINES = [MATH_ENGINE]
-SUBJECT_ENGINE_MONTHLY_ADDON_KRW = 30_000
 
 
 @dataclass(frozen=True)
@@ -72,8 +71,9 @@ def subject_engine_pricing(base_monthly_price: int, enabled_engines: list[str] |
     engine_count = max(len(engines), 1)
     multiplier = float(engine_count)
     extra_engine_count = max(engine_count - 1, 0)
-    subject_engine_monthly_delta = extra_engine_count * SUBJECT_ENGINE_MONTHLY_ADDON_KRW
-    final_monthly_price = int(max(int(base_monthly_price or 0), 0) + subject_engine_monthly_delta)
+    single_engine_monthly_price = max(int(base_monthly_price or 0), 0)
+    subject_engine_monthly_delta = extra_engine_count * single_engine_monthly_price
+    final_monthly_price = single_engine_monthly_price * engine_count
     return {
         "enabled_subject_engines": engines,
         "subject_engine_count": engine_count,

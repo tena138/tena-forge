@@ -44,7 +44,7 @@ export const BILLING = {
   annualDiscountPercent: 20,
 } as const;
 
-export const SUBJECT_ENGINE_MONTHLY_ADDON = 30_000;
+export const STUDENT_KEY_MONTHLY_ADDON = 8_000;
 
 export const SUBJECT_ENGINES: Array<{
   code: SubjectEngineCode;
@@ -92,7 +92,6 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       "일 AI 한도 5 credits",
       "문제 DB 100문항",
       "파일 저장공간 300MB",
-      "처리 속도 Standard",
       "PDF 추출 가능, AI credits 차감",
     ],
   },
@@ -120,7 +119,6 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       "PDF 추출 가능, AI credits 차감",
       "개인 문제 DB",
       "학생별 과제 배포 가능",
-      "처리 속도 Standard",
     ],
   },
   pro: {
@@ -146,7 +144,6 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       "대량 AI credits",
       "대용량 문제 DB",
       "학생 키 대량 운영",
-      "처리 속도 Fast",
       "여러 PDF 동시 추출 가능",
       "마켓플레이스 사용 가능",
       "저작권 자료 전산화 판매 가능",
@@ -176,26 +173,35 @@ export const PLANS: Record<PlanType, PlanConfig> = {
   },
 };
 
+function createStudentKeyOptions(plan: PaidPlanType, includedKeys: number, maxKeys: number): PackageOption[] {
+  const planLabel = plan === "basic" ? "Basic" : "Pro";
+  return Array.from({ length: maxKeys - includedKeys + 1 }, (_, index) => includedKeys + index).map((studentKeys) => {
+    const monthlyPriceDelta = (studentKeys - includedKeys) * STUDENT_KEY_MONTHLY_ADDON;
+    return {
+      id: studentKeys === includedKeys ? `${plan}-student` : `${plan}-student-${studentKeys}`,
+      group: "student" as const,
+      name: `${planLabel} Student ${studentKeys}`,
+      label: monthlyPriceDelta ? `+₩${monthlyPriceDelta.toLocaleString("ko-KR")} / 월` : "포함",
+      monthlyPriceDelta,
+      specs: { studentKeys },
+      description: `${studentKeys} student keys · 추가 키 1명당 ₩8,000 / 월`,
+    };
+  });
+}
+
 export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, PackageOption[]>>> = {
   basic: {
     ai: [
       { id: "basic-ai", group: "ai", name: "Basic AI", label: "포함", monthlyPriceDelta: 0, specs: { monthlyAiCredits: 400, dailyAiLimit: 50 }, description: "400 monthly AI credits, 50 daily AI limit" },
-      { id: "basic-ai-plus", group: "ai", name: "AI Plus", label: "+₩12,000 / 월", monthlyPriceDelta: 12_000, specs: { monthlyAiCredits: 700, dailyAiLimit: 70 }, description: "700 monthly AI credits, 70 daily AI limit" },
-      { id: "basic-ai-max", group: "ai", name: "AI Max", label: "+₩29,000 / 월", monthlyPriceDelta: 29_000, specs: { monthlyAiCredits: 1_000, dailyAiLimit: 100 }, description: "1,000 monthly AI credits, 100 daily AI limit" },
+      { id: "basic-ai-plus", group: "ai", name: "AI Plus", label: "+₩28,000 / 월", monthlyPriceDelta: 28_000, specs: { monthlyAiCredits: 700, dailyAiLimit: 70 }, description: "700 monthly AI credits, 70 daily AI limit" },
+      { id: "basic-ai-max", group: "ai", name: "AI Max", label: "+₩48,000 / 월", monthlyPriceDelta: 48_000, specs: { monthlyAiCredits: 1_000, dailyAiLimit: 100 }, description: "1,000 monthly AI credits, 100 daily AI limit" },
     ],
     storage: [
       { id: "basic-storage", group: "storage", name: "Basic Storage", label: "포함", monthlyPriceDelta: 0, specs: { problemDb: 5_000, fileStorageGb: 20 }, description: "5,000 questions, 20GB file storage" },
       { id: "basic-storage-plus", group: "storage", name: "Storage Plus", label: "+₩10,000 / 월", monthlyPriceDelta: 10_000, specs: { problemDb: 10_000, fileStorageGb: 50 }, description: "10,000 questions, 50GB file storage" },
       { id: "basic-storage-max", group: "storage", name: "Storage Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { problemDb: 20_000, fileStorageGb: 100 }, description: "20,000 questions, 100GB file storage" },
     ],
-    student: [
-      { id: "basic-student", group: "student", name: "Basic Student", label: "포함", monthlyPriceDelta: 0, specs: { studentKeys: 5 }, description: "5 student keys" },
-      { id: "basic-student-plus", group: "student", name: "Student Plus", label: "+₩9,000 / 월", monthlyPriceDelta: 9_000, specs: { studentKeys: 10 }, description: "10 student keys" },
-      { id: "basic-student-max", group: "student", name: "Student Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { studentKeys: 20 }, description: "20 student keys" },
-    ],
-    processing: [
-      { id: "basic-processing-cloud", group: "processing", name: "Cloud Processing", label: "포함", monthlyPriceDelta: 0, specs: { cloudProcessing: true, processingSpeed: "Standard", concurrentJobs: 1, concurrentPdfExtractions: 1 }, description: "서버에서 PDF를 추출합니다." },
-    ],
+    student: createStudentKeyOptions("basic", 5, 10),
   },
   pro: {
     ai: [
@@ -208,15 +214,7 @@ export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, P
       { id: "pro-storage-plus", group: "storage", name: "Storage Plus", label: "+₩29,000 / 월", monthlyPriceDelta: 29_000, specs: { problemDb: 100_000, fileStorageGb: 300 }, description: "100,000 questions, 300GB file storage" },
       { id: "pro-storage-max", group: "storage", name: "Storage Max", label: "+₩79,000 / 월", monthlyPriceDelta: 79_000, specs: { problemDb: 300_000, fileStorageGb: 1_024 }, description: "300,000 questions, 1TB file storage" },
     ],
-    student: [
-      { id: "pro-student", group: "student", name: "Pro Student", label: "포함", monthlyPriceDelta: 0, specs: { studentKeys: 10 }, description: "10 student keys" },
-      { id: "pro-student-plus", group: "student", name: "Student Plus", label: "+₩39,000 / 월", monthlyPriceDelta: 39_000, specs: { studentKeys: 300 }, description: "300 student keys" },
-      { id: "pro-student-max", group: "student", name: "Student Max", label: "+₩79,000 / 월", monthlyPriceDelta: 79_000, specs: { studentKeys: 500 }, description: "500 student keys" },
-    ],
-    processing: [
-      { id: "pro-processing-cloud", group: "processing", name: "Cloud Fast Processing", label: "포함", monthlyPriceDelta: 0, specs: { cloudProcessing: true, processingSpeed: "Fast", concurrentJobs: 3, concurrentPdfExtractions: 3 }, description: "서버에서 빠르게 추출합니다." },
-      { id: "pro-processing-cloud-max", group: "processing", name: "Cloud Batch Processing", label: "+₩119,000 / 월", monthlyPriceDelta: 119_000, specs: { cloudProcessing: true, processingSpeed: "Fast", concurrentJobs: 8, concurrentPdfExtractions: 8 }, description: "대량 파일을 서버에서 병렬 처리하는 운영용 옵션입니다." },
-    ],
+    student: createStudentKeyOptions("pro", 10, 100),
   },
 };
 
@@ -285,8 +283,8 @@ export function subjectEngineLabel(code: string) {
   return engine ? `${engine.label} ${engine.version}` : code;
 }
 
-export function calculateSubjectEngineMonthlyDelta(enabledSubjectEngines: SubjectEngineCode[]) {
-  return Math.max(normalizeSubjectEngines(enabledSubjectEngines).length - 1, 0) * SUBJECT_ENGINE_MONTHLY_ADDON;
+export function calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice: number, enabledSubjectEngines: SubjectEngineCode[]) {
+  return Math.max(normalizeSubjectEngines(enabledSubjectEngines).length - 1, 0) * singleEngineMonthlyPrice;
 }
 
 function applySubjectEngineCapacity(specs: PlanSpecs, enabledSubjectEngines: SubjectEngineCode[]): PlanSpecs {
@@ -301,9 +299,14 @@ function applySubjectEngineCapacity(specs: PlanSpecs, enabledSubjectEngines: Sub
   };
 }
 
-export function calculateMonthlyPrice(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds, enabledSubjectEngines: SubjectEngineCode[] = ["math"]) {
+export function calculateSingleEngineMonthlyPrice(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds) {
   const selected = resolveSelectedPackages(plan, selectedPackageIds);
-  return Object.values(selected).reduce((total, option) => total + (option?.monthlyPriceDelta || 0), PLANS[plan].baseMonthlyPrice + calculateSubjectEngineMonthlyDelta(enabledSubjectEngines));
+  return Object.values(selected).reduce((total, option) => total + (option?.monthlyPriceDelta || 0), PLANS[plan].baseMonthlyPrice);
+}
+
+export function calculateMonthlyPrice(plan: PaidPlanType, selectedPackageIds: SelectedPackageIds, enabledSubjectEngines: SubjectEngineCode[] = ["math"]) {
+  const singleEngineMonthlyPrice = calculateSingleEngineMonthlyPrice(plan, selectedPackageIds);
+  return singleEngineMonthlyPrice + calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice, enabledSubjectEngines);
 }
 
 export function calculateAnnualPrice(monthlyPrice: number) {

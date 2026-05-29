@@ -28,8 +28,10 @@ import {
   Library,
   LockKeyhole,
   Megaphone,
+  Minus,
   PackageCheck,
   PanelLeftClose,
+  Plus,
   RefreshCcw,
   School,
   Search,
@@ -58,6 +60,7 @@ import {
   calculateSubjectEngineMonthlyDelta,
   calculateAnnualPrice,
   calculateMonthlyPrice,
+  calculateSingleEngineMonthlyPrice,
   formatKRW,
   getDefaultSelections,
   getResolvedSpecs,
@@ -86,7 +89,9 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const previousPackageIdsRef = useRef<Record<PackageGroup, string>>(selectedPackageIds);
 
   const specs = useMemo(() => getResolvedSpecs(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
+  const singleEngineMonthlyPrice = useMemo(() => calculateSingleEngineMonthlyPrice(plan, selectedPackageIds), [plan, selectedPackageIds]);
   const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
+  const subjectEngineDelta = useMemo(() => calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice, selectedSubjectEngines), [singleEngineMonthlyPrice, selectedSubjectEngines]);
   const annual = useMemo(() => calculateAnnualPrice(monthlyPrice), [monthlyPrice]);
   const planConfig = PLANS[plan];
 
@@ -156,16 +161,15 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
             </aside>
 
             <div ref={rightPanelRef} data-plan-scroll-panel className="space-y-6 pb-4">
-              <SubjectEngineSection selectedSubjectEngines={selectedSubjectEngines} onToggle={toggleSubjectEngine} register={sectionRefs} />
+              <SubjectEngineSection selectedSubjectEngines={selectedSubjectEngines} engineDelta={subjectEngineDelta} onToggle={toggleSubjectEngine} register={sectionRefs} />
               <PackageSection plan={plan} group="ai" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
               <PackageSection plan={plan} group="storage" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
-              <PackageSection plan={plan} group="student" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs}>
+              <StudentKeyPackageSection plan={plan} selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs}>
                 <p className="mt-4 text-sm font-semibold text-slate-400">
-                  {plan === "basic" ? "Basic은 학생 키 20개까지 지원합니다. 더 많은 학생 키가 필요하면 Pro를 선택하세요." : "500개를 초과하는 학생 키가 필요하면 Enterprise 문의를 이용해주세요."}
+                  {plan === "basic" ? "Basic은 학생 키 5개 포함, 최대 10개까지 1명당 월 8,000원으로 확장합니다." : "Pro는 학생 키 10개 포함, 최대 100개까지 1명당 월 8,000원으로 확장합니다."}
                 </p>
-              </PackageSection>
+              </StudentKeyPackageSection>
 
-              <PackageSection plan={plan} group="processing" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
               {plan === "basic" ? <LockedProFeatures register={sectionRefs} /> : null}
 
               {plan === "pro" && (
@@ -296,7 +300,7 @@ function PlanIntroStage({
 
         <div className="mx-auto mt-10 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <PlanIntroMetric icon={Sparkles} label="AI credits" value={`${specs.monthlyAiCredits.toLocaleString()} / 월`} />
-          <PlanIntroMetric icon={Gauge} label="처리 속도" value={specs.processingSpeed} />
+          <PlanIntroMetric icon={Gauge} label="일 AI 한도" value={`${specs.dailyAiLimit.toLocaleString()} credits`} />
           <PlanIntroMetric icon={Database} label="문제 DB" value={`${specs.problemDb.toLocaleString()}문항`} />
           <PlanIntroMetric icon={School} label="Student keys" value={`${specs.studentKeys.toLocaleString()}개`} />
         </div>
@@ -384,16 +388,79 @@ function PackageSection({ plan, group, selectedPackageIds, onSelect, register, c
   );
 }
 
+function StudentKeyPackageSection({ plan, selectedPackageIds, onSelect, register, children }: { plan: PaidPlanType; selectedPackageIds: Record<PackageGroup, string>; onSelect: (group: PackageGroup, id: string) => void; register: React.MutableRefObject<Record<string, HTMLElement | null>>; children?: React.ReactNode }) {
+  const options = PACKAGE_GROUPS[plan].student || [];
+  const matchedIndex = options.findIndex((option) => option.id === selectedPackageIds.student);
+  const selectedIndex = Math.max(matchedIndex, 0);
+  const selectedOption = options[selectedIndex] || options[0];
+  const includedKeys = Number(options[0]?.specs.studentKeys || 0);
+  const maxKeys = Number(options[options.length - 1]?.specs.studentKeys || includedKeys);
+  const studentKeys = Number(selectedOption?.specs.studentKeys || includedKeys);
+  const additionalKeys = Math.max(studentKeys - includedKeys, 0);
+  const canDecrease = selectedIndex > 0;
+  const canIncrease = selectedIndex < options.length - 1;
+
+  function selectIndex(nextIndex: number) {
+    const option = options[Math.max(0, Math.min(options.length - 1, nextIndex))];
+    if (option) onSelect("student", option.id);
+  }
+
+  return (
+    <ConfigSection id="student" register={register} eyebrow={PACKAGE_LABELS.student} title="Student Key 선택">
+      <div className="rounded-[10px] border border-white/10 bg-white/[0.04] p-5">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-slate-500">총 학생 키</p>
+            <p className="mt-2 text-4xl font-black text-white">{studentKeys.toLocaleString("ko-KR")}명</p>
+            <p className="mt-2 text-sm font-semibold text-slate-400">포함 {includedKeys}명 · 추가 {additionalKeys}명 · 최대 {maxKeys}명</p>
+          </div>
+          <div className="rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 px-4 py-3 text-right">
+            <p className="text-xs font-bold text-cyan-100">Student key addon</p>
+            <p className="mt-1 text-lg font-black text-white">{selectedOption?.label || "포함"}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center gap-3">
+          <button type="button" disabled={!canDecrease} onClick={() => selectIndex(selectedIndex - 1)} className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-white/10 bg-white/[0.05] text-white transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-35" aria-label="학생 키 1명 줄이기">
+            <Minus className="h-4 w-4" />
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(options.length - 1, 0)}
+            step={1}
+            value={selectedIndex}
+            onChange={(event) => selectIndex(Number(event.target.value))}
+            className="h-2 w-full accent-cyan-200"
+            aria-label="학생 키 수 선택"
+          />
+          <button type="button" disabled={!canIncrease} onClick={() => selectIndex(selectedIndex + 1)} className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-white/10 bg-white/[0.05] text-white transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-35" aria-label="학생 키 1명 늘리기">
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold text-slate-500">
+          <span>{includedKeys}명</span>
+          <span>1명당 ₩8,000 / 월</span>
+          <span>{maxKeys}명</span>
+        </div>
+      </div>
+      {children}
+    </ConfigSection>
+  );
+}
+
 function SubjectEngineSection({
   selectedSubjectEngines,
+  engineDelta,
   onToggle,
   register,
 }: {
   selectedSubjectEngines: SubjectEngineCode[];
+  engineDelta: number;
   onToggle: (engine: SubjectEngineCode) => void;
   register: React.MutableRefObject<Record<string, HTMLElement | null>>;
 }) {
-  const engineDelta = calculateSubjectEngineMonthlyDelta(selectedSubjectEngines);
   const capacityMultiplier = Math.max(selectedSubjectEngines.length, 1);
 
   return (
@@ -438,7 +505,7 @@ function SubjectEngineSection({
           <p className="mt-1 text-sm font-black text-white">x{capacityMultiplier} 적용</p>
         </div>
       </div>
-      <p className="mt-4 text-sm font-semibold text-slate-400">둘 다 선택하면 AI credits, 문제 DB, 저장공간과 업로드 한도가 2배로 계산됩니다.</p>
+      <p className="mt-4 text-sm font-semibold text-slate-400">엔진을 2개 선택하면 선택한 구성 금액이 정확히 2배가 되고, AI credits와 문제 DB 용량도 같은 배율로 계산됩니다.</p>
     </ConfigSection>
   );
 }
@@ -984,9 +1051,9 @@ function StorageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
 
 function StudentKeyConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: ReturnType<typeof getResolvedSpecs> }) {
   const studentKeys = numericSpec(specs.studentKeys);
-  const keyMax = plan === "basic" ? 20 : 500;
+  const keyMax = plan === "basic" ? 10 : 100;
   const animatedKeys = useAnimatedNumber(studentKeys, 760);
-  const activeRows = Math.min(8, Math.max(3, Math.ceil(studentKeys / (plan === "basic" ? 7 : 65))));
+  const activeRows = Math.min(8, Math.max(3, Math.ceil(studentKeys / (plan === "basic" ? 4 : 20))));
   const [previousRows, setPreviousRows] = useState(activeRows);
 
   useEffect(() => {
@@ -1210,6 +1277,8 @@ function FullPlanSummarySection({
 }) {
   const planConfig = PLANS[plan];
   const displayPrice = billingCycle === "annual" ? annual.discountedMonthly : monthlyPrice;
+  const singleEngineMonthlyPrice = calculateSingleEngineMonthlyPrice(plan, selectedPackageIds);
+  const subjectEngineDelta = calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice, selectedSubjectEngines);
 
   return (
     <section id="summary" data-plan-summary className="relative z-20 min-h-screen bg-transparent px-4 py-24 sm:px-6 lg:py-28">
@@ -1235,7 +1304,7 @@ function FullPlanSummarySection({
               <SummaryConsoleItem
                 label="Subject Engine"
                 value={selectedSubjectEngines.map(subjectEngineLabel).join(" + ")}
-                detail={selectedSubjectEngines.length > 1 ? "+₩30,000 / 월 · 용량 x2" : "기본 포함"}
+                detail={selectedSubjectEngines.length > 1 ? `+${formatKRW(subjectEngineDelta)} / 월 · 가격 x${selectedSubjectEngines.length}` : "기본 포함"}
               />
               {(Object.keys(PACKAGE_GROUPS[plan]) as PackageGroup[]).map((group) => {
                 const option = PACKAGE_GROUPS[plan][group]?.find((item) => item.id === selectedPackageIds[group]);
@@ -1247,16 +1316,14 @@ function FullPlanSummarySection({
             <div className="mt-6 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
               <SummaryLine>월 AI {specs.monthlyAiCredits.toLocaleString()} credits · 일 한도 {specs.dailyAiLimit.toLocaleString()} credits</SummaryLine>
               <SummaryLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항 · 저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SummaryLine>
-              <SummaryLine>학생 키 {specs.studentKeys.toLocaleString()}개 · 처리 속도 {specs.processingSpeed}</SummaryLine>
-              <SummaryLine>{specs.cloudProcessing === "custom" ? "맞춤 처리" : specs.cloudProcessing ? "클라우드 처리 포함" : "클라우드 처리 별도"}</SummaryLine>
-              <SummaryLine>PDF 추출은 AI credits를 사용합니다.</SummaryLine>
+              <SummaryLine>학생 키 {specs.studentKeys.toLocaleString()}개</SummaryLine>
+              <SummaryLine>PDF 추출은 클라우드에서 처리되며 AI credits를 사용합니다.</SummaryLine>
               {plan === "basic" ? (
                 <>
-                  <SummaryLine>여러 PDF 동시 추출은 Pro에서 확장</SummaryLine>
                   <SummaryLine>마켓플레이스는 Pro에서 사용 가능</SummaryLine>
                 </>
               ) : (
-                <SummaryLine>마켓플레이스 포함 · 여러 PDF 동시 추출 {specs.concurrentPdfExtractions}개</SummaryLine>
+                <SummaryLine>마켓플레이스 포함</SummaryLine>
               )}
             </div>
           </div>

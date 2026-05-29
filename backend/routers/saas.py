@@ -22,17 +22,17 @@ from services.usage_cost_policy import enforce_extraction_preflight, estimate_ex
 
 router = APIRouter(prefix="/api/saas", tags=["saas"])
 
+def _student_keys_by_package(prefix: str, included_keys: int, max_keys: int) -> dict[str, int]:
+    keys = {f"{prefix}-student": included_keys}
+    keys.update({f"{prefix}-student-{student_keys}": student_keys for student_keys in range(included_keys + 1, max_keys + 1)})
+    if prefix == "basic":
+        keys["basic-student-plus"] = 10
+    return keys
+
+
 STUDENT_KEYS_BY_PACKAGE = {
-    "basic": {
-        "basic-student": 5,
-        "basic-student-plus": 10,
-        "basic-student-max": 20,
-    },
-    "pro": {
-        "pro-student": 10,
-        "pro-student-plus": 300,
-        "pro-student-max": 500,
-    },
+    "basic": _student_keys_by_package("basic", 5, 10),
+    "pro": _student_keys_by_package("pro", 10, 100),
 }
 
 

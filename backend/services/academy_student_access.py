@@ -80,8 +80,8 @@ def audit(db: Session, request: Request | None, actor_id: str | None, action: st
 def ensure_default_academy_plans(db: Session) -> None:
     defaults = [
         ("free", "Free", 0, 0, 0, 5, 5, 5),
-        ("basic", "Basic", 5, 0, 6000, 10, 10, 10),
-        ("pro", "Pro", 10, 0, 6000, 20, 20, 20),
+        ("basic", "Basic", 5, 0, 8000, 10, 10, 10),
+        ("pro", "Pro", 10, 0, 8000, 20, 20, 20),
         ("tutor", "Tutor / Private Tutor", 5, 29000, 6000, 10, 10, 10),
         ("studio", "Studio", 20, 99000, 5000, 20, 20, 20),
         ("academy", "Academy", 50, 249000, 4500, 30, 30, 30),
