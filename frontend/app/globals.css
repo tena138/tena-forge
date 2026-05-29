@@ -491,72 +491,72 @@
 
 @keyframes enterpriseAuroraDriftA {
   0% {
-    transform: translate3d(-20%, -14%, 0) rotate(-12deg) scale(1.04);
-    opacity: 0.62;
+    transform: translate3d(-30%, -20%, 0) rotate(-15deg) scale(1.02);
+    opacity: 0.82;
   }
-  45% {
-    transform: translate3d(4%, 9%, 0) rotate(9deg) scale(1.22);
-    opacity: 0.9;
+  42% {
+    transform: translate3d(10%, 13%, 0) rotate(12deg) scale(1.32);
+    opacity: 1;
   }
   100% {
-    transform: translate3d(18%, -4%, 0) rotate(-4deg) scale(1.1);
-    opacity: 0.7;
+    transform: translate3d(28%, -10%, 0) rotate(-7deg) scale(1.12);
+    opacity: 0.9;
   }
 }
 
 @keyframes enterpriseAuroraDriftB {
   0% {
-    transform: translate3d(16%, 12%, 0) rotate(13deg) scale(1.12);
-    opacity: 0.54;
+    transform: translate3d(26%, 18%, 0) rotate(16deg) scale(1.12);
+    opacity: 0.72;
   }
   52% {
-    transform: translate3d(-10%, -8%, 0) rotate(-9deg) scale(1.24);
-    opacity: 0.82;
+    transform: translate3d(-18%, -14%, 0) rotate(-12deg) scale(1.36);
+    opacity: 1;
   }
   100% {
-    transform: translate3d(-20%, 5%, 0) rotate(5deg) scale(1.06);
-    opacity: 0.6;
+    transform: translate3d(-30%, 8%, 0) rotate(7deg) scale(1.08);
+    opacity: 0.78;
   }
 }
 
 .enterprise-plan-card {
   isolation: isolate;
   background:
-    radial-gradient(circle at 76% 30%, rgb(34 211 238 / 0.14), transparent 32%),
-    radial-gradient(circle at 20% 88%, rgb(139 92 246 / 0.18), transparent 42%),
+    radial-gradient(circle at 76% 30%, rgb(34 211 238 / 0.22), transparent 32%),
+    radial-gradient(circle at 20% 88%, rgb(139 92 246 / 0.28), transparent 42%),
     linear-gradient(135deg, rgb(250 245 255 / 0.92), rgb(238 242 255 / 0.86) 48%, rgb(236 253 245 / 0.64));
 }
 
 .dark .enterprise-plan-card {
   background:
-    radial-gradient(circle at 76% 30%, rgb(34 211 238 / 0.18), transparent 32%),
-    radial-gradient(circle at 20% 88%, rgb(139 92 246 / 0.25), transparent 42%),
+    radial-gradient(circle at 76% 30%, rgb(34 211 238 / 0.28), transparent 32%),
+    radial-gradient(circle at 20% 88%, rgb(139 92 246 / 0.38), transparent 42%),
     linear-gradient(135deg, rgb(35 23 57 / 0.82), rgb(18 19 33 / 0.92) 56%, rgb(12 32 36 / 0.74));
 }
 
 .enterprise-plan-card__aurora {
   position: absolute;
-  inset: -48%;
+  inset: -58%;
   z-index: 0;
   pointer-events: none;
-  filter: blur(20px) saturate(1.35);
+  filter: blur(13px) saturate(1.65);
   mix-blend-mode: screen;
 }
 
 .enterprise-plan-card__aurora--a {
   background:
-    radial-gradient(ellipse at 24% 46%, rgb(168 85 247 / 0.54), transparent 34%),
-    radial-gradient(ellipse at 66% 52%, rgb(34 211 238 / 0.42), transparent 35%),
-    linear-gradient(108deg, transparent 18%, rgb(255 255 255 / 0.14) 42%, transparent 68%);
-  animation: enterpriseAuroraDriftA 7.5s ease-in-out infinite alternate;
+    radial-gradient(ellipse at 24% 46%, rgb(168 85 247 / 0.76), transparent 31%),
+    radial-gradient(ellipse at 66% 52%, rgb(34 211 238 / 0.62), transparent 34%),
+    linear-gradient(108deg, transparent 14%, rgb(255 255 255 / 0.26) 42%, transparent 70%);
+  animation: enterpriseAuroraDriftA 4.8s ease-in-out infinite alternate;
 }
 
 .enterprise-plan-card__aurora--b {
   background:
-    radial-gradient(ellipse at 40% 34%, rgb(16 185 129 / 0.38), transparent 30%),
-    radial-gradient(ellipse at 72% 66%, rgb(99 102 241 / 0.54), transparent 38%),
-    linear-gradient(74deg, transparent 20%, rgb(139 92 246 / 0.20) 50%, transparent 74%);
-  animation: enterpriseAuroraDriftB 9.25s ease-in-out infinite alternate;
+    radial-gradient(ellipse at 40% 34%, rgb(16 185 129 / 0.56), transparent 29%),
+    radial-gradient(ellipse at 72% 66%, rgb(99 102 241 / 0.76), transparent 36%),
+    linear-gradient(74deg, transparent 18%, rgb(139 92 246 / 0.34) 50%, transparent 76%);
+  animation: enterpriseAuroraDriftB 5.6s ease-in-out infinite alternate;
 }
 
 @media (prefers-reduced-motion: reduce) {
