@@ -784,6 +784,12 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     };
   }, []);
 
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   async function refreshStudent() {
     const refreshed = await getStudentDetail(params.id);
     applyStudentData(refreshed as StudentDetail);
@@ -1188,6 +1194,14 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+      {message ? (
+        <div className="fixed right-4 top-20 z-[2100] flex max-w-md items-center gap-3 rounded-lg border border-violet-300/25 bg-[#211832]/95 px-4 py-3 text-sm font-semibold text-violet-50 shadow-[0_18px_60px_rgba(88,28,135,0.35)] backdrop-blur-xl" role="status" aria-live="polite">
+          <span className="min-w-0 flex-1">{message}</span>
+          <button type="button" onClick={() => setMessage("")} className="rounded p-1 text-violet-100/80 transition hover:bg-white/10 hover:text-white" aria-label="알림 닫기">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
       <div className="mx-auto max-w-[1600px] space-y-5">
         <div className="relative">
           <Link
@@ -1213,7 +1227,6 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               오답 복습 세트
             </Button>
             </div>
-            {message ? <div className="mt-4 rounded-lg border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-sm text-violet-100">{message}</div> : null}
           </header>
         </div>
 
