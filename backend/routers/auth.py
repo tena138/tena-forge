@@ -921,16 +921,21 @@ def me(academy: Academy = Depends(get_current_academy), db: Session = Depends(ge
 
 @router.patch("/me", response_model=AcademyProfile)
 def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
-    for field in ("academy_name", "account_type", "phone", "address", "business_number"):
-        value = getattr(payload, field)
-        if value is not None:
-            setattr(academy, field, value)
-    if payload.account_type == "student":
+    changes = payload.model_dump(exclude_unset=True)
+    if "academy_name" in changes and changes["academy_name"] is not None:
+        academy.academy_name = changes["academy_name"].strip()
+    for field in ("phone", "address", "business_number"):
+        if field in changes:
+            value = changes[field]
+            setattr(academy, field, value.strip() if isinstance(value, str) and value.strip() else None)
+    if "account_type" in changes and changes["account_type"] is not None:
+        academy.account_type = changes["account_type"]
+    if changes.get("account_type") == "student":
         academy.plan = AcademyPlan.free
         academy.plan_expires_at = None
         for subscription in db.scalars(select(Subscription).where(Subscription.user_id == str(academy.id), Subscription.status == "trialing")).all():
             subscription.status = "canceled"
-    elif payload.account_type == "academy" and _should_start_basic_trial(academy):
+    elif changes.get("account_type") == "academy" and _should_start_basic_trial(academy):
         active_sub = db.scalar(
             select(Subscription).where(
                 Subscription.user_id == str(academy.id),
