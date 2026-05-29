@@ -284,9 +284,6 @@ function UsageOverview({
         >
           <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--a" />
           <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--b" />
-          <span className="enterprise-plan-card__core" aria-hidden="true">
-            <span />
-          </span>
           <div className="relative z-10 text-2xl font-black text-foreground">{planName}</div>
           <div className="relative z-10 mt-2 inline-flex rounded-full border border-violet-300/30 bg-white/45 px-2 py-1 text-[11px] font-black text-violet-700 shadow-sm backdrop-blur dark:bg-black/20 dark:text-violet-100">{planStatus}</div>
           <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
