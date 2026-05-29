@@ -336,11 +336,11 @@ function closestCalendarItem(items: StudentCalendarItem[]) {
 }
 
 function calendarBlockClass(item: StudentCalendarItem) {
-  if (item.kind === "시험") return "border-orange-300/30 bg-orange-500/20 text-orange-50 hover:bg-orange-500/30";
-  if (item.kind === "상담") return "border-emerald-300/30 bg-emerald-500/20 text-emerald-50 hover:bg-emerald-500/30";
-  if (item.meta === "homework") return "border-sky-300/30 bg-sky-500/20 text-sky-50 hover:bg-sky-500/30";
-  if (item.meta === "review") return "border-emerald-300/30 bg-emerald-500/20 text-emerald-50 hover:bg-emerald-500/30";
-  return "border-violet-300/30 bg-violet-500/20 text-violet-50 hover:bg-violet-500/30";
+  if (item.kind === "시험") return "border-orange-300/50 bg-orange-100 text-orange-950 hover:bg-orange-200 dark:border-orange-300/30 dark:bg-orange-500/20 dark:text-orange-50 dark:hover:bg-orange-500/30";
+  if (item.kind === "상담") return "border-emerald-300/50 bg-emerald-100 text-emerald-950 hover:bg-emerald-200 dark:border-emerald-300/30 dark:bg-emerald-500/20 dark:text-emerald-50 dark:hover:bg-emerald-500/30";
+  if (item.meta === "homework") return "border-sky-300/50 bg-sky-100 text-sky-950 hover:bg-sky-200 dark:border-sky-300/30 dark:bg-sky-500/20 dark:text-sky-50 dark:hover:bg-sky-500/30";
+  if (item.meta === "review") return "border-emerald-300/50 bg-emerald-100 text-emerald-950 hover:bg-emerald-200 dark:border-emerald-300/30 dark:bg-emerald-500/20 dark:text-emerald-50 dark:hover:bg-emerald-500/30";
+  return "border-violet-300/50 bg-violet-100 text-violet-950 hover:bg-violet-200 dark:border-violet-300/30 dark:bg-violet-500/20 dark:text-violet-50 dark:hover:bg-violet-500/30";
 }
 
 function buildStatuses(result: StudentDetail["paper_session_history"][number]) {
