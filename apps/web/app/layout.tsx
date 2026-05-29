@@ -8,11 +8,13 @@ export const metadata: Metadata = {
   description: "PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.",
   icons: {
     icon: [
+      { url: "/favicon.ico?v=5", sizes: "any" },
+      { url: "/icon-192.png?v=5", type: "image/png", sizes: "192x192" },
       { url: "/tenaforge-favicon.png?v=4", type: "image/png", sizes: "512x512" },
       { url: "/tenaforge-mark-dark.png?v=4", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: "/tenaforge-favicon.png?v=4",
-    apple: "/tenaforge-favicon.png?v=4",
+    shortcut: "/favicon.ico?v=5",
+    apple: "/apple-touch-icon.png?v=5",
   },
   openGraph: {
     title: "Tena Forge",
