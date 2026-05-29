@@ -1150,9 +1150,9 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       {message ? (
-        <div className="fixed right-4 top-20 z-[2100] flex max-w-md items-center gap-3 rounded-lg border border-violet-300/25 bg-[#211832]/95 px-4 py-3 text-sm font-semibold text-violet-50 shadow-[0_18px_60px_rgba(88,28,135,0.35)] backdrop-blur-xl" role="status" aria-live="polite">
+        <div className="fixed right-4 top-20 z-[2100] flex max-w-md items-center gap-3 rounded-lg border border-violet-200 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_60px_rgba(88,28,135,0.18)] backdrop-blur-xl dark:border-violet-300/25 dark:bg-[#211832]/95 dark:text-violet-50 dark:shadow-[0_18px_60px_rgba(88,28,135,0.35)]" role="status" aria-live="polite">
           <span className="min-w-0 flex-1">{message}</span>
-          <button type="button" onClick={() => setMessage("")} className="rounded p-1 text-violet-100/80 transition hover:bg-white/10 hover:text-white" aria-label="알림 닫기">
+          <button type="button" onClick={() => setMessage("")} className="rounded p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-violet-100/80 dark:hover:bg-white/10 dark:hover:text-white" aria-label="알림 닫기">
             <X className="h-4 w-4" />
           </button>
         </div>
