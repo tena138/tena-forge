@@ -48,6 +48,7 @@ type StudentDetail = StudentCard & {
   paper_session_history: Array<{
     id: string;
     paper_session_id: string;
+    temporary_cached?: boolean;
     status: string;
     score?: number | null;
     correct_count: number;
@@ -93,6 +94,59 @@ const DEFAULT_COUNSELING_FIELDS: CounselingFormatField[] = [
   { id: "next_plan", label: "다음 지도 계획", placeholder: "다음 지도 계획 / 과제 제안", include_in_report: true },
 ];
 const COUNSELING_DRAFT_KEY_PREFIX = "tena.student-management.counseling-draft";
+const TEMP_PAPER_SESSION_CACHE_KEY = "tena.student-management.temp-paper-session.michin-s2-review";
+const TEMP_PAPER_SESSION_SOURCE_STUDENT = "이우노";
+const TEMP_PAPER_SESSION_TARGET_STUDENTS = new Set(["이나은", "이수현"]);
+const TEMP_PAPER_SESSION_TITLE = "미친개념 수2 복습 문항";
+
+type CachedPaperSessionResult = StudentDetail["paper_session_history"][number];
+
+function isTemporaryPaperSessionTitle(title?: string | null) {
+  return Boolean(title?.includes(TEMP_PAPER_SESSION_TITLE));
+}
+
+function cacheTemporaryPaperSession(student: StudentDetail) {
+  if (typeof window === "undefined" || student.name !== TEMP_PAPER_SESSION_SOURCE_STUDENT) return;
+  const result = student.paper_session_history.find((item) => isTemporaryPaperSessionTitle(item.session?.title));
+  if (!result) return;
+  window.localStorage.setItem(TEMP_PAPER_SESSION_CACHE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), result }));
+}
+
+function readTemporaryPaperSessionCache(): CachedPaperSessionResult | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(TEMP_PAPER_SESSION_CACHE_KEY) || "null");
+    return parsed?.result && typeof parsed.result === "object" ? parsed.result : null;
+  } catch {
+    return null;
+  }
+}
+
+function withTemporaryPaperSessionCache(student: StudentDetail): StudentDetail {
+  cacheTemporaryPaperSession(student);
+  if (!TEMP_PAPER_SESSION_TARGET_STUDENTS.has(student.name)) return student;
+  if (student.paper_session_history.some((item) => isTemporaryPaperSessionTitle(item.session?.title))) return student;
+  const cached = readTemporaryPaperSessionCache();
+  if (!cached || !isTemporaryPaperSessionTitle(cached.session?.title)) return student;
+  const count = problemCount(cached);
+  const temporaryResult: StudentDetail["paper_session_history"][number] = {
+    ...cached,
+    id: `temporary-cache-${student.id}-${cached.id}`,
+    temporary_cached: true,
+    status: "scheduled",
+    score: null,
+    correct_count: 0,
+    wrong_count: 0,
+    total_count: count,
+    problem_results: Array.from({ length: count }, (_, index) => ({
+      id: `temporary-cache-${student.id}-${cached.id}-${index + 1}`,
+      problem_id: cached.problem_results[index]?.problem_id || "",
+      problem_number: index + 1,
+      result_status: "unmarked" as ProblemStatus,
+    })),
+  };
+  return { ...student, paper_session_history: [temporaryResult, ...student.paper_session_history] };
+}
 
 function createFieldId(label: string, existing: string[] = []) {
   const normalized = label
@@ -465,12 +519,13 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     : null;
 
   function applyStudentData(student: StudentDetail) {
-    setData(student);
+    const visibleStudent = withTemporaryPaperSessionCache(student);
+    setData(visibleStudent);
     const next: Record<string, Record<number, ProblemStatus>> = {};
-    for (const result of student.paper_session_history) next[result.id] = buildStatuses(result);
+    for (const result of visibleStudent.paper_session_history) next[result.id] = buildStatuses(result);
     setResultStatuses(next);
     if (!calendarInitializedRef.current) {
-      const target = closestCalendarItem(studentCalendarItems(student));
+      const target = closestCalendarItem(studentCalendarItems(visibleStudent));
       if (target) {
         const targetDate = new Date(target.date);
         setCalendarMonth(new Date(targetDate.getFullYear(), targetDate.getMonth(), 1));
@@ -688,6 +743,10 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
   async function persistResult(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>, manual = false) {
     if (!data) return;
+    if (result.temporary_cached) {
+      if (manual) setMessage("임시 캐시로 표시한 일정이라 실제 저장은 하지 않습니다.");
+      return;
+    }
     const count = problemCount(result);
     if (!count) return;
     const statuses = Array.from({ length: count }, (_, index) => {
@@ -721,6 +780,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }
 
   function scheduleAutosave(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>) {
+    if (result.temporary_cached) return;
     clearAutosaveTimer(result.id);
     setAutosaveStates((current) => ({ ...current, [result.id]: "pending" }));
     autosaveTimers.current[result.id] = setTimeout(() => {
@@ -730,6 +790,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }
 
   function toggleResultProblem(result: StudentDetail["paper_session_history"][number], number: number) {
+    if (result.temporary_cached) return;
     const currentResult = resultStatuses[result.id] || buildStatuses(result);
     const nextForResult = {
       ...currentResult,
@@ -1238,7 +1299,9 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                         <h3 className="mt-1 text-sm font-black text-white">{selectedCalendarResult.session?.title || selectedCalendarItem?.title || "시험/과제"}</h3>
                       </div>
                       <div className="text-right text-xs font-semibold text-slate-500">
-                        {autosaveStates[selectedCalendarResult.id] === "saving" ? "저장 중" : autosaveStates[selectedCalendarResult.id] === "saved" ? "자동 저장됨" : autosaveStates[selectedCalendarResult.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
+                        {selectedCalendarResult.temporary_cached
+                          ? "임시 캐시 표시"
+                          : autosaveStates[selectedCalendarResult.id] === "saving" ? "저장 중" : autosaveStates[selectedCalendarResult.id] === "saved" ? "자동 저장됨" : autosaveStates[selectedCalendarResult.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
@@ -1255,12 +1318,14 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             key={number}
                             number={number}
                             status={statuses[number] || "correct"}
-                            onClick={() => toggleResultProblem(selectedCalendarResult, number)}
+                            onClick={() => {
+                              if (!selectedCalendarResult.temporary_cached) toggleResultProblem(selectedCalendarResult, number);
+                            }}
                           />
                         );
                       })}
                     </div>
-                    <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(selectedCalendarResult)} disabled={savingResultId === selectedCalendarResult.id}>
+                    <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(selectedCalendarResult)} disabled={selectedCalendarResult.temporary_cached || savingResultId === selectedCalendarResult.id}>
                       {savingResultId === selectedCalendarResult.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       저장
                     </Button>
