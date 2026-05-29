@@ -28,7 +28,7 @@ type UploadResponse = { batch_id: string; status: BatchStatus };
 type TagColorMap = Record<string, string>;
 
 const SUBJECT_TAG_COLORS_KEY = "tena-forge-upload-subject-tag-colors";
-const CUSTOM_SUBJECTS_KEY = "tena-forge-upload-custom-subjects";
+const CUSTOM_SUBJECTS_KEY = "tena-forge-upload-custom-subjects-v2";
 const MB = 1024 * 1024;
 const PDF_SAMPLE_BYTES = 16 * MB;
 const PDF_FULL_SCAN_LIMIT_BYTES = 80 * MB;
@@ -360,14 +360,36 @@ function SubjectTreeSelector({
   }
 
   return (
-    <div className="rounded-[10px] bg-white/[0.012] p-2">
-      <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-        <div className="flex min-w-max gap-4">
+    <div className="rounded-[10px] border border-white/[0.06] bg-black/10 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-slate-300">과목 분류</p>
+          <p className="mt-1 text-xs text-slate-500">업로드할 자료에 맞춰 직접 추가해 주세요.</p>
+        </div>
+        <button
+          type="button"
+          className={cn(
+            "grid h-9 w-9 shrink-0 place-items-center rounded-[8px] border transition",
+            editing ? "border-violet-300/60 bg-violet-400/20 text-violet-100 shadow-[0_0_22px_rgba(139,92,246,0.24)]" : "border-white/10 bg-black/20 text-slate-300 hover:bg-white/[0.07] hover:text-white"
+          )}
+          onClick={() => {
+            setEditing((current) => !current);
+            setAddTarget(null);
+            setDraftLabel("");
+          }}
+          aria-label={editing ? "과목 편집 종료" : "과목 편집"}
+          title={editing ? "과목 편집 종료" : "과목 편집"}
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {nodes.map((node) => {
           const nodeKey = nodeValue(node);
           const groupColor = tagColor(nodeKey, subjectTagColors, "subject");
           return (
-            <div key={nodeKey} className="w-60 shrink-0 rounded-[8px] bg-black/10 p-2">
+            <div key={nodeKey} className="min-w-0 rounded-[8px] bg-white/[0.025] p-2">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -424,7 +446,7 @@ function SubjectTreeSelector({
           );
         })}
         {editing ? (
-          <div className="w-60 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-black/10 p-2">
+          <div className="min-w-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-2">
             <button
               type="button"
               className="flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:bg-white/[0.08]"
@@ -447,23 +469,20 @@ function SubjectTreeSelector({
             ) : null}
           </div>
         ) : null}
-        <button
-          type="button"
-          className={cn(
-            "grid h-9 w-9 shrink-0 place-items-center self-start rounded-[8px] border transition",
-            editing ? "border-violet-300/60 bg-violet-400/20 text-violet-100 shadow-[0_0_22px_rgba(139,92,246,0.24)]" : "border-white/10 bg-black/20 text-slate-300 hover:bg-white/[0.07] hover:text-white"
-          )}
-          onClick={() => {
-            setEditing((current) => !current);
-            setAddTarget(null);
-            setDraftLabel("");
-          }}
-          aria-label={editing ? "과목 편집 종료" : "과목 편집"}
-          title={editing ? "과목 편집 종료" : "과목 편집"}
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-        </div>
+
+        {!nodes.length && !editing ? (
+          <button
+            type="button"
+            className="flex min-h-24 items-center justify-center gap-2 rounded-[8px] border border-dashed border-white/12 bg-white/[0.025] px-3 py-4 text-sm font-bold text-slate-300 transition hover:border-violet-300/40 hover:bg-violet-400/10 hover:text-violet-50 md:col-span-2 xl:col-span-3"
+            onClick={() => {
+              setEditing(true);
+              openDraft("root");
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            첫 과목 또는 자료 묶음 추가
+          </button>
+        ) : null}
       </div>
     </div>
   );

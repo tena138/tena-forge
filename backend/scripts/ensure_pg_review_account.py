@@ -13,11 +13,8 @@ from services.auth_security import hash_password, validate_password_policy
 
 
 REVIEW_EMAIL = os.getenv("PG_REVIEW_EMAIL", "pg-review@tena-forge.com").strip().lower()
-REVIEW_PASSWORD = os.getenv("PG_REVIEW_PASSWORD", "TenaTossReview!2026").strip()
+REVIEW_PASSWORD = os.getenv("PG_REVIEW_PASSWORD", "TenaReview!2026").strip()
 REVIEW_NAME = os.getenv("PG_REVIEW_NAME", "Toss Payments Review").strip() or "Toss Payments Review"
-SECONDARY_REVIEW_EMAIL = os.getenv("PG_REVIEW_SECONDARY_EMAIL", "review@tena-forge.com").strip().lower()
-SECONDARY_REVIEW_PASSWORD = os.getenv("PG_REVIEW_SECONDARY_PASSWORD", "LumaGate!2026").strip()
-SECONDARY_REVIEW_NAME = os.getenv("PG_REVIEW_SECONDARY_NAME", "Tena Forge Review").strip() or "Tena Forge Review"
 
 
 def ensure_review_account(db, *, email: str, password: str, name: str, now: datetime) -> None:
@@ -72,7 +69,6 @@ def main() -> None:
     try:
         now = datetime.utcnow()
         ensure_review_account(db, email=REVIEW_EMAIL, password=REVIEW_PASSWORD, name=REVIEW_NAME, now=now)
-        ensure_review_account(db, email=SECONDARY_REVIEW_EMAIL, password=SECONDARY_REVIEW_PASSWORD, name=SECONDARY_REVIEW_NAME, now=now)
         db.commit()
     finally:
         db.close()

@@ -61,15 +61,9 @@ services:
       - key: PG_REVIEW_EMAIL
         value: pg-review@tena-forge.com
       - key: PG_REVIEW_PASSWORD
-        value: TenaTossReview!2026
+        value: TenaReview!2026
       - key: PG_REVIEW_NAME
         value: Toss Payments Review
-      - key: PG_REVIEW_SECONDARY_EMAIL
-        value: review@tena-forge.com
-      - key: PG_REVIEW_SECONDARY_PASSWORD
-        value: LumaGate!2026
-      - key: PG_REVIEW_SECONDARY_NAME
-        value: Tena Forge Review
       - key: AI_MODEL_POOL
         value: gpt-5.4-mini,gpt-5-mini
       - key: AI_SOLUTION_MODEL_POOL

@@ -2,8 +2,40 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.tena-forge.com"),
   title: "Tena Forge",
-  description: "Authorized teaching materials to structured archives and polished learning outputs."
+  applicationName: "Tena Forge",
+  description: "PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.",
+  icons: {
+    icon: [
+      { url: "/tenaforge-favicon.png?v=4", type: "image/png", sizes: "512x512" },
+      { url: "/tenaforge-mark-dark.png?v=4", type: "image/png", sizes: "512x512" },
+    ],
+    shortcut: "/tenaforge-favicon.png?v=4",
+    apple: "/tenaforge-favicon.png?v=4",
+  },
+  openGraph: {
+    title: "Tena Forge",
+    description: "PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.",
+    url: "https://www.tena-forge.com",
+    siteName: "Tena Forge",
+    images: [
+      {
+        url: "/og-image.png?v=1",
+        width: 1200,
+        height: 630,
+        alt: "Tena Forge",
+      },
+    ],
+    locale: "ko_KR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Tena Forge",
+    description: "PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.",
+    images: ["/og-image.png?v=1"],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
