@@ -62,9 +62,8 @@ void main() {
   float t = u_time * 0.055;
 
   float radius = length(p);
-  float angle = atan(p.y, p.x);
-  float spiral = angle + radius * 5.6 - t * 1.15;
-  float counterSpiral = angle - radius * 4.2 + t * 0.76;
+  float spiral = p.x * 1.14 + p.y * 0.42 + radius * 4.85 - t * 1.15;
+  float counterSpiral = -p.x * 0.72 + p.y * 0.86 + radius * 3.65 + t * 0.76;
 
   float n1 = fbm(vec2(spiral * 0.34, radius * 2.35) + vec2(t * 0.54, -t * 0.18));
   float n2 = fbm(p * 2.25 + vec2(n1 * 0.48 + t * 0.22, -t * 0.34));
