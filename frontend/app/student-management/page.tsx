@@ -43,13 +43,14 @@ import { cn } from "@/lib/utils";
 type TabKey = "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type TrendChartMode = "line" | "bar";
-type TrendMetricKey = "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
+type TrendMetricKey = "selected" | "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
 type ClassSessionMetricPoint = {
   id: string;
   title: string;
   date?: string | null;
   assigned: number;
   respondents: number;
+  selected: number | null;
   average: number | null;
   highest: number | null;
   lowest: number | null;
@@ -61,15 +62,16 @@ type ClassSessionMetricPoint = {
 
 const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
 const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel: string; color: string }> = [
+  { key: "selected", label: "본인 점수", shortLabel: "본인", color: "#f8fafc" },
   { key: "average", label: "응시자 평균", shortLabel: "평균", color: "#a78bfa" },
-  { key: "highest", label: "최고점", shortLabel: "최고", color: "#34d399" },
-  { key: "lowest", label: "최저점", shortLabel: "최저", color: "#fb7185" },
-  { key: "q1", label: "Q1", shortLabel: "Q1", color: "#38bdf8" },
-  { key: "q2", label: "Q2 중앙값", shortLabel: "Q2", color: "#facc15" },
-  { key: "q3", label: "Q3", shortLabel: "Q3", color: "#f97316" },
-  { key: "stddev", label: "표준편차", shortLabel: "σ", color: "#cbd5e1" },
+  { key: "highest", label: "최고점", shortLabel: "최고", color: "#94a3b8" },
+  { key: "lowest", label: "최저점", shortLabel: "최저", color: "#64748b" },
+  { key: "q1", label: "Q1", shortLabel: "Q1", color: "#7dd3fc" },
+  { key: "q2", label: "중앙값", shortLabel: "중앙", color: "#c4b5fd" },
+  { key: "q3", label: "Q3", shortLabel: "Q3", color: "#cbd5e1" },
+  { key: "stddev", label: "표준편차", shortLabel: "σ", color: "#475569" },
 ];
-const defaultTrendMetrics: TrendMetricKey[] = ["average", "highest", "lowest", "q1", "q2", "q3"];
+const defaultTrendMetrics: TrendMetricKey[] = ["selected", "average", "q2"];
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -451,6 +453,11 @@ function ClassStatsPanel({
   const trend = firstScore != null && latestScore != null && scoredStats.length >= 2 ? latestScore - firstScore : null;
   const averageClassDelta = average(sessionStats.map((item) => item.selectedScore != null && item.classAverage != null ? item.selectedScore - item.classAverage : null));
   const bestExam = scoredStats.length ? scoredStats.reduce((best, item) => (item.selectedScore || 0) > (best.selectedScore || 0) ? item : best, scoredStats[0]) : null;
+  const latestScoredStat = scoredStats[scoredStats.length - 1] || null;
+  const latestClassDelta =
+    latestScoredStat?.selectedScore != null && latestScoredStat.classAverage != null
+      ? latestScoredStat.selectedScore - latestScoredStat.classAverage
+      : null;
   const classMetricPoints: ClassSessionMetricPoint[] = sessionStats
     .filter((item) => item.classGradedCount > 0)
     .map((item) => ({
@@ -459,6 +466,7 @@ function ClassStatsPanel({
       date: item.detail.scheduled_at || item.detail.created_at,
       assigned: item.classAssignedCount,
       respondents: item.classGradedCount,
+      selected: item.selectedScore,
       average: item.classAverage,
       highest: item.highestScore,
       lowest: item.lowestScore,
@@ -504,6 +512,30 @@ function ClassStatsPanel({
               </div>
             </div>
 
+            <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr_0.75fr_0.75fr]">
+              <div className="rounded-lg border border-white/10 bg-white/[0.055] p-4">
+                <p className="text-xs font-semibold text-slate-400">본인 최근 점수</p>
+                <div className="mt-2 flex items-end justify-between gap-4">
+                  <p className="text-4xl font-black tracking-normal text-white">{scoreLabel(latestScoredStat?.selectedScore)}</p>
+                  <p className="max-w-[220px] truncate text-right text-xs text-slate-400" title={latestScoredStat?.detail.title}>
+                    {latestScoredStat ? `${latestScoredStat.detail.title} · ${formatDate(latestScoredStat.detail.scheduled_at || latestScoredStat.detail.created_at)}` : "채점 완료 기록 없음"}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                <p className="text-xs font-semibold text-slate-500">반 평균 대비</p>
+                <p className="mt-2 text-2xl font-black text-white">{latestClassDelta == null ? "-" : `${latestClassDelta >= 0 ? "+" : ""}${latestClassDelta.toFixed(1)}`}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                <p className="text-xs font-semibold text-slate-500">최근 반 평균</p>
+                <p className="mt-2 text-2xl font-black text-white">{scoreLabel(latestScoredStat?.classAverage)}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                <p className="text-xs font-semibold text-slate-500">석차</p>
+                <p className="mt-2 text-2xl font-black text-white">{latestScoredStat?.rank == null ? "-" : `${latestScoredStat.rank}/${latestScoredStat.classGradedCount}`}</p>
+              </div>
+            </div>
+
             <ClassTrendChart points={classMetricPoints} />
 
             <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
@@ -513,11 +545,11 @@ function ClassStatsPanel({
               </div>
               <div className="rounded-md bg-white/[0.045] p-3">
                 <p className="text-xs text-slate-500">반 평균</p>
-                <p className="mt-1 text-lg font-black text-cyan-100">{scoreLabel(classAverageAcross)}</p>
+                <p className="mt-1 text-lg font-black text-white">{scoreLabel(classAverageAcross)}</p>
               </div>
               <div className="rounded-md bg-white/[0.045] p-3">
                 <p className="text-xs text-slate-500">전체 평균</p>
-                <p className="mt-1 text-lg font-black text-amber-100">{scoreLabel(overallAverageAcross)}</p>
+                <p className="mt-1 text-lg font-black text-white">{scoreLabel(overallAverageAcross)}</p>
               </div>
               <div className="rounded-md bg-white/[0.045] p-3">
                 <p className="text-xs text-slate-500">점수 표준편차</p>
@@ -525,11 +557,11 @@ function ClassStatsPanel({
               </div>
               <div className="rounded-md bg-white/[0.045] p-3">
                 <p className="text-xs text-slate-500">반 평균 대비</p>
-                <p className={cn("mt-1 text-lg font-black", (averageClassDelta || 0) >= 0 ? "text-emerald-100" : "text-rose-100")}>{averageClassDelta == null ? "-" : `${averageClassDelta >= 0 ? "+" : ""}${averageClassDelta.toFixed(1)}`}</p>
+                <p className="mt-1 text-lg font-black text-white">{averageClassDelta == null ? "-" : `${averageClassDelta >= 0 ? "+" : ""}${averageClassDelta.toFixed(1)}`}</p>
               </div>
               <div className="rounded-md bg-white/[0.045] p-3">
                 <p className="text-xs text-slate-500">추세</p>
-                <p className={cn("mt-1 text-lg font-black", (trend || 0) >= 0 ? "text-emerald-100" : "text-rose-100")}>{trend == null ? "-" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}`}</p>
+                <p className="mt-1 text-lg font-black text-white">{trend == null ? "-" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}`}</p>
               </div>
             </div>
 
