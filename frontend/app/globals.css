@@ -489,6 +489,130 @@
   }
 }
 
+@keyframes enterpriseAuroraDriftA {
+  0% {
+    transform: translate3d(-18%, -12%, 0) rotate(-10deg) scale(1);
+    opacity: 0.58;
+  }
+  45% {
+    transform: translate3d(2%, 8%, 0) rotate(8deg) scale(1.14);
+    opacity: 0.82;
+  }
+  100% {
+    transform: translate3d(16%, -2%, 0) rotate(-3deg) scale(1.06);
+    opacity: 0.64;
+  }
+}
+
+@keyframes enterpriseAuroraDriftB {
+  0% {
+    transform: translate3d(14%, 10%, 0) rotate(12deg) scale(1.08);
+    opacity: 0.45;
+  }
+  52% {
+    transform: translate3d(-8%, -6%, 0) rotate(-8deg) scale(1.18);
+    opacity: 0.74;
+  }
+  100% {
+    transform: translate3d(-18%, 4%, 0) rotate(4deg) scale(1);
+    opacity: 0.52;
+  }
+}
+
+@keyframes enterpriseCoreBeat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.92);
+    opacity: 0.72;
+    box-shadow:
+      0 0 0 0 rgb(139 92 246 / 0.14),
+      0 0 28px rgb(139 92 246 / 0.20);
+  }
+  18% {
+    transform: translate3d(0, 0, 0) scale(1.18);
+    opacity: 0.95;
+    box-shadow:
+      0 0 0 12px rgb(139 92 246 / 0.07),
+      0 0 46px rgb(34 211 238 / 0.28);
+  }
+  32% {
+    transform: translate3d(0, 0, 0) scale(0.98);
+    opacity: 0.82;
+  }
+  48% {
+    transform: translate3d(0, 0, 0) scale(1.1);
+    opacity: 0.9;
+  }
+}
+
+.enterprise-plan-card {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 76% 30%, rgb(34 211 238 / 0.14), transparent 32%),
+    radial-gradient(circle at 20% 88%, rgb(139 92 246 / 0.18), transparent 42%),
+    linear-gradient(135deg, rgb(250 245 255 / 0.92), rgb(238 242 255 / 0.86) 48%, rgb(236 253 245 / 0.64));
+}
+
+.dark .enterprise-plan-card {
+  background:
+    radial-gradient(circle at 76% 30%, rgb(34 211 238 / 0.18), transparent 32%),
+    radial-gradient(circle at 20% 88%, rgb(139 92 246 / 0.25), transparent 42%),
+    linear-gradient(135deg, rgb(35 23 57 / 0.82), rgb(18 19 33 / 0.92) 56%, rgb(12 32 36 / 0.74));
+}
+
+.enterprise-plan-card__aurora {
+  position: absolute;
+  inset: -38%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(18px) saturate(1.25);
+  mix-blend-mode: screen;
+}
+
+.enterprise-plan-card__aurora--a {
+  background:
+    radial-gradient(ellipse at 28% 42%, rgb(168 85 247 / 0.46), transparent 32%),
+    radial-gradient(ellipse at 65% 54%, rgb(34 211 238 / 0.36), transparent 34%);
+  animation: enterpriseAuroraDriftA 8.5s ease-in-out infinite alternate;
+}
+
+.enterprise-plan-card__aurora--b {
+  background:
+    radial-gradient(ellipse at 42% 36%, rgb(16 185 129 / 0.30), transparent 28%),
+    radial-gradient(ellipse at 70% 66%, rgb(99 102 241 / 0.44), transparent 36%);
+  animation: enterpriseAuroraDriftB 10.5s ease-in-out infinite alternate;
+}
+
+.enterprise-plan-card__core {
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  z-index: 1;
+  display: grid;
+  width: 2.85rem;
+  height: 2.85rem;
+  place-items: center;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle, rgb(255 255 255 / 0.92) 0 18%, rgb(167 139 250 / 0.42) 19% 42%, transparent 43%);
+  animation: enterpriseCoreBeat 2.35s ease-in-out infinite;
+}
+
+.enterprise-plan-card__core > span {
+  width: 0.78rem;
+  height: 0.78rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #8b5cf6, #22d3ee);
+  box-shadow: 0 0 22px rgb(34 211 238 / 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enterprise-plan-card__aurora,
+  .enterprise-plan-card__core {
+    animation: none;
+  }
+}
+
 .basic-plan-backdrop {
   position: fixed;
   inset: 0;

@@ -280,13 +280,18 @@ function UsageOverview({
         <Link
           href="/billing"
           aria-label="결제 및 플랜 관리로 이동"
-          className="rounded-[10px] border border-violet-300/25 bg-violet-500/[0.08] p-4 transition hover:border-violet-300/45 hover:bg-violet-500/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+          className="enterprise-plan-card group relative overflow-hidden rounded-[10px] border border-violet-300/35 bg-violet-500/[0.08] p-4 transition hover:border-violet-300/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
         >
-          <div className="text-2xl font-black text-foreground">{planName}</div>
-          <div className="mt-2 inline-flex rounded-full border border-violet-300/30 bg-violet-500/10 px-2 py-1 text-[11px] font-black text-violet-700 dark:bg-black/20 dark:text-violet-100">{planStatus}</div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--a" />
+          <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--b" />
+          <span className="enterprise-plan-card__core" aria-hidden="true">
+            <span />
+          </span>
+          <div className="relative z-10 text-2xl font-black text-foreground">{planName}</div>
+          <div className="relative z-10 mt-2 inline-flex rounded-full border border-violet-300/30 bg-white/45 px-2 py-1 text-[11px] font-black text-violet-700 shadow-sm backdrop-blur dark:bg-black/20 dark:text-violet-100">{planStatus}</div>
+          <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
-              <span key={engine} className="rounded-full border border-border bg-background/65 px-2 py-1 text-[11px] font-semibold text-foreground">
+              <span key={engine} className="rounded-full border border-border/80 bg-background/70 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur">
                 {subjectEngineLabel(engine)}
               </span>
             ))}
