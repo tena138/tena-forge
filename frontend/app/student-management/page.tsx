@@ -214,7 +214,9 @@ function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
   const plotWidth = chartWidth - padding.left - padding.right;
   const plotHeight = chartHeight - padding.top - padding.bottom;
   const baseline = padding.top + plotHeight;
-  const xFor = (index: number) => padding.left + (points.length <= 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth);
+  const edgeInset = Math.min(52, Math.max(28, plotWidth * 0.08));
+  const xFor = (index: number) =>
+    padding.left + (points.length <= 1 ? plotWidth / 2 : edgeInset + (index / (points.length - 1)) * Math.max(1, plotWidth - edgeInset * 2));
   const yFor = (value: number) => padding.top + ((100 - clampScore(value)) / 100) * plotHeight;
 
   function toggleMetric(key: TrendMetricKey) {
