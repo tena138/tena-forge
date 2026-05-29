@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Eye, LayoutTemplate, Plus, Search, Sparkles } from "lucide-react";
+import { Copy, Eye, Globe2, LayoutTemplate, Lock, MoreVertical, Plus, Search, Sparkles } from "lucide-react";
 
-import { TemplatePageView } from "@/components/templates/visual-template-renderer";
 import { TemplatePreviewFrame } from "@/components/template-hub/template-preview-frame";
+import { TemplatePageView } from "@/components/templates/visual-template-renderer";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,20 +29,47 @@ function getVisualTemplateSet(template: HubTemplate): TemplateSet | null {
   return candidate.schemaVersion && Array.isArray(candidate.pages) ? candidate : null;
 }
 
+function hasVisualSchema(template: HubTemplate) {
+  return Boolean(getVisualTemplateSet(template));
+}
+
+function openHref(template: HubTemplate) {
+  if (template.id === "starter") return "/templates/studio?type=exam";
+  return hasVisualSchema(template) ? `/templates/studio?id=${template.id}` : `/templates/${template.id}`;
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "날짜 없음";
+  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "short", day: "numeric" }).format(date);
+}
+
 function TemplateCardPreview({ template }: { template: HubTemplate }) {
   const visualSet = getVisualTemplateSet(template);
   if (visualSet?.pages[0]) {
+    const firstPage = visualSet.pages[0];
+    const size = firstPage.pageSize || visualSet.defaultPageSize;
+    const scale = Math.min(0.36, 330 / Math.max(size.width, 1), 460 / Math.max(size.height, 1));
+
     return (
-      <div className="flex h-56 items-start justify-center overflow-hidden bg-[#111318] pt-5">
-        <TemplatePageView templateSet={visualSet} page={visualSet.pages[0]} scale={0.18} selectedIds={[]} />
+      <div className="relative h-[380px] overflow-hidden border-b border-white/10 bg-[#111318]">
+        <div className="absolute left-1/2 top-6 -translate-x-1/2">
+          <TemplatePageView templateSet={visualSet} page={firstPage} scale={scale} selectedIds={[]} />
+        </div>
       </div>
     );
   }
+
   return (
-    <div className="h-56 overflow-hidden border-b border-white/10 bg-[#111318]">
+    <div className="h-[380px] overflow-hidden border-b border-white/10 bg-[#111318]">
       <TemplatePreviewFrame html={template.html} css={template.css} compact />
     </div>
   );
+}
+
+function VisibilityIcon({ visibility }: { visibility: HubTemplate["visibility"] }) {
+  if (visibility === "public" || visibility === "marketplace") return <Globe2 className="h-3.5 w-3.5" />;
+  return <Lock className="h-3.5 w-3.5" />;
 }
 
 export default function TemplateHubPage() {
@@ -50,6 +78,7 @@ export default function TemplateHubPage() {
   const [keyword, setKeyword] = useState("");
   const [sort, setSort] = useState("recent");
   const [loading, setLoading] = useState(true);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -76,7 +105,7 @@ export default function TemplateHubPage() {
       id: "starter",
       owner_id: "system",
       title: "기본 시험지 Visual Set",
-      description: "A4 시험지와 문항 자동 배치 영역이 포함된 Visual Template Studio 시작 프리셋입니다.",
+      description: "A4 시험지와 문항 자동 배치 영역을 포함한 Visual Template Studio 시작 프리셋입니다.",
       category: "exam",
       visibility: "public",
       html: defaultTemplateHtml,
@@ -100,7 +129,7 @@ export default function TemplateHubPage() {
       return;
     }
     const forked = await forkHubTemplate(template.id);
-    window.location.href = getVisualTemplateSet(forked) ? `/templates/studio?id=${forked.id}` : `/templates/editor/${forked.id}`;
+    window.location.href = hasVisualSchema(forked) ? `/templates/studio?id=${forked.id}` : `/templates/editor/${forked.id}`;
   }
 
   return (
@@ -157,7 +186,7 @@ export default function TemplateHubPage() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-80 animate-pulse rounded-[10px] border border-white/10 bg-white/[0.045]" />
+            <div key={index} className="h-[500px] animate-pulse rounded-[10px] border border-white/10 bg-white/[0.045]" />
           ))}
         </div>
       ) : (
@@ -165,30 +194,49 @@ export default function TemplateHubPage() {
           {visible.map((template) => {
             const visualSet = getVisualTemplateSet(template);
             return (
-              <article key={template.id} className="group overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:border-white/18 hover:bg-white/[0.06]">
-                <TemplateCardPreview template={template} />
-                <div className="space-y-3 p-4">
+              <article key={template.id} className="overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.065]">
+                <Link href={openHref(template)} className="block">
+                  <TemplateCardPreview template={template} />
+                </Link>
+                <div className="space-y-4 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-bold text-white">{template.title}</h2>
-                      <p className="mt-1 text-xs font-semibold text-violet-200">
-                        {visualSet ? "Visual Set" : "Legacy"} · {categoryLabel(template.category)} · {visibilityLabels[template.visibility]}
-                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <Badge variant="outline">{categoryLabel(template.category)}</Badge>
+                        <Badge variant="outline">{visualSet ? `Visual Set · ${visualSet.pages.length}p` : "HTML"}</Badge>
+                        <Badge variant="outline">{formatDate(template.updated_at || template.created_at)}</Badge>
+                        <Badge variant="outline">{template.use_count}회 사용</Badge>
+                      </div>
                     </div>
-                    <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-xs text-slate-300">{template.use_count}회 사용</span>
-                  </div>
-                  <p className="line-clamp-2 min-h-10 text-sm leading-5 text-slate-400">{template.description || "설명이 없는 템플릿입니다."}</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Link href={template.id === "starter" ? "/templates/studio?type=exam" : visualSet ? `/templates/studio?id=${template.id}` : `/templates/${template.id}`}>
-                      <Button variant="outline" className="w-full">
-                        <Eye className="h-4 w-4" />
-                        자세히
+                    <div className="relative flex shrink-0 items-center gap-2">
+                      <Badge variant={template.visibility === "public" ? "default" : "secondary"} className="gap-1">
+                        <VisibilityIcon visibility={template.visibility} />
+                        {visibilityLabels[template.visibility]}
+                      </Badge>
+                      <Button size="icon" variant="outline" aria-label="템플릿 메뉴" onClick={() => setOpenMenuId((current) => (current === template.id ? null : template.id))}>
+                        <MoreVertical className="h-4 w-4" />
                       </Button>
-                    </Link>
-                    <Button className="w-full" onClick={() => duplicate(template)}>
-                      <Copy className="h-4 w-4" />
-                      복제하기
-                    </Button>
+                      {openMenuId === template.id ? (
+                        <div className="absolute right-0 top-11 z-30 w-40 overflow-hidden rounded-[8px] border border-white/10 bg-[#151722] p-1 shadow-2xl shadow-black/50">
+                          <Link href={openHref(template)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/[0.07]" onClick={() => setOpenMenuId(null)}>
+                            <Eye className="h-4 w-4" />
+                            자세히
+                          </Link>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/[0.07]"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              duplicate(template);
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                            복제
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </article>
