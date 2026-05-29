@@ -70,7 +70,7 @@ const sections = [
   {
     title: "Marketplace",
     shortTitle: "MP",
-    description: "공개 허브 및 스토어",
+    description: "공개 허브",
     adminOnly: true,
     accent: "bg-emerald-300",
     panel: "border-emerald-300/20 bg-emerald-300/[0.045]",
@@ -82,8 +82,6 @@ const sections = [
       { href: "/templates", label: "템플릿 허브", icon: LayoutTemplate },
       { href: "/marketplace/problem-sets", label: "문항 세트 마켓", icon: Store },
       { href: "/marketplace/books", label: "교재 마켓", icon: BookOpen },
-      { href: "/stores", label: "학원 스토어", icon: GraduationCap },
-      { href: "/stores", label: "강사 스토어", icon: UserCircle },
     ],
   },
   {
