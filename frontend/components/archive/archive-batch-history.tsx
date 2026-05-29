@@ -224,17 +224,14 @@ export function ArchiveBatchHistory({
 
   return (
     <section className={cn("space-y-4", compact && "pt-1")}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className={compact ? "text-xl font-bold text-white" : "forge-section-title"}>아카이빙 기록</h2>
-        </div>
-        {!compact ? (
+      {!compact ? (
+        <div className="flex justify-end">
           <Button onClick={() => router.push("/archive/new")}>
             <UploadCloud className="h-4 w-4" />
             새 자료 아카이빙
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">
