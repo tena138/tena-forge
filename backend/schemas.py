@@ -1296,7 +1296,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 class ProfileUpdateRequest(BaseModel):
-    academy_name: str | None = Field(default=None, min_length=2, max_length=255)
+    academy_name: str | None = Field(default=None, min_length=1, max_length=255)
     account_type: str | None = None
     phone: str | None = Field(default=None, max_length=50)
     address: str | None = Field(default=None, max_length=500)

@@ -45,9 +45,9 @@ export default function AccountProfilePage() {
 
   async function save() {
     if (!profile) return;
-    if (!profile.academy_name.trim() || profile.academy_name.trim().length < 2) {
+    if (!profile.academy_name.trim()) {
       setNotice("");
-      setError("이름 또는 소속명은 2자 이상 입력해주세요.");
+      setError("이름 또는 소속명을 입력해주세요.");
       return;
     }
     setSaving(true);
