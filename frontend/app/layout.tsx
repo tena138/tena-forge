@@ -17,21 +17,21 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico?v=5",
     apple: "/apple-touch-icon.png?v=5",
   },
-  description: "PDF 추출, 문제 DB, 수업 자료 제작을 한 흐름으로 묶는 교육 콘텐츠 제작 환경입니다.",
+  description: "가장 강력한 교육 컨텐츠 툴",
   openGraph: {
     title: "Tena Forge",
-    description: "PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.",
+    description: "가장 강력한 교육 컨텐츠 툴",
     url: "https://www.tena-forge.com",
     siteName: "Tena Forge",
-    images: [{ url: "/og-image.png?v=1", width: 1200, height: 630, alt: "Tena Forge" }],
+    images: [{ url: "/og-image.png?v=2", width: 1200, height: 630, alt: "Tena Forge" }],
     locale: "ko_KR",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "Tena Forge",
-    description: "PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.",
-    images: ["/og-image.png?v=1"],
+    description: "가장 강력한 교육 컨텐츠 툴",
+    images: ["/og-image.png?v=2"],
   },
 };
 
