@@ -361,40 +361,22 @@ function SubjectTreeSelector({
   }
 
   return (
-    <div className="rounded-[10px] border border-white/10 bg-white/[0.025] p-3">
-      <div className="mb-3 flex justify-end">
-        <button
-          type="button"
-          className={cn(
-            "grid h-9 w-9 place-items-center rounded-[8px] border transition",
-            editing ? "border-violet-300/60 bg-violet-400/20 text-violet-100 shadow-[0_0_22px_rgba(139,92,246,0.24)]" : "border-white/10 bg-black/25 text-slate-300 hover:bg-white/[0.07] hover:text-white"
-          )}
-          onClick={() => {
-            setEditing((current) => !current);
-            setAddTarget(null);
-            setDraftLabel("");
-          }}
-          aria-label={editing ? "과목 편집 종료" : "과목 편집"}
-          title={editing ? "과목 편집 종료" : "과목 편집"}
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-      </div>
+    <div className="rounded-[10px] bg-white/[0.012] p-2">
       <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
         <div className="flex min-w-max gap-4">
         {nodes.map((node) => {
           const nodeKey = nodeValue(node);
           const groupColor = tagColor(nodeKey, subjectTagColors, "subject");
           return (
-            <div key={nodeKey} className="w-72 shrink-0 rounded-[8px] border border-white/10 bg-black/20 p-3">
+            <div key={nodeKey} className="w-60 shrink-0 rounded-[8px] bg-black/10 p-2">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-[8px] border px-3 text-left text-base font-black text-white transition hover:brightness-110"
+                  className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-[8px] border px-3 text-left text-sm font-black text-white transition hover:brightness-110"
                   style={tagToneStyle(groupColor, selectedSubjects.includes(nodeKey))}
                   onClick={() => onToggleSubject(nodeKey)}
                 >
-                  <span className="h-4 w-4 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: groupColor }} />
+                  <span className="h-3 w-3 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: groupColor }} />
                   <span className="truncate">{node.label}</span>
                 </button>
                 {editing ? (
@@ -443,13 +425,13 @@ function SubjectTreeSelector({
           );
         })}
         {editing ? (
-          <div className="w-72 shrink-0 rounded-[8px] border border-dashed border-white/15 bg-black/15 p-3">
+          <div className="w-60 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-black/10 p-2">
             <button
               type="button"
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.045] text-sm font-black text-slate-100 transition hover:bg-white/[0.08]"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:bg-white/[0.08]"
               onClick={() => openDraft("root")}
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-4 w-4" />
               상위항목
             </button>
             {addTarget === "root" ? (
@@ -466,6 +448,22 @@ function SubjectTreeSelector({
             ) : null}
           </div>
         ) : null}
+        <button
+          type="button"
+          className={cn(
+            "grid h-9 w-9 shrink-0 place-items-center self-start rounded-[8px] border transition",
+            editing ? "border-violet-300/60 bg-violet-400/20 text-violet-100 shadow-[0_0_22px_rgba(139,92,246,0.24)]" : "border-white/10 bg-black/20 text-slate-300 hover:bg-white/[0.07] hover:text-white"
+          )}
+          onClick={() => {
+            setEditing((current) => !current);
+            setAddTarget(null);
+            setDraftLabel("");
+          }}
+          aria-label={editing ? "과목 편집 종료" : "과목 편집"}
+          title={editing ? "과목 편집 종료" : "과목 편집"}
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
         </div>
       </div>
     </div>
