@@ -15,7 +15,19 @@ import { collectVisualTemplateManualVariables, createDynamicPreviewPages } from 
 import { PAGE_SIZES, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplate, listMyTemplates, listPublicTemplates } from "@/lib/templateHub";
 
-type ExportTemplateKind = "visual" | "legacy" | "html";
+export type ExportTemplateKind = "visual" | "legacy" | "html";
+
+export type ExportedProblemSetInfo = {
+  source: "set" | "selection";
+  problemSetId?: string | null;
+  problemIds?: string[];
+  count: number;
+  examTitle: string;
+  templateTitle?: string | null;
+  templateKind?: ExportTemplateKind;
+  output?: string;
+  includeSolution: boolean;
+};
 
 type ExportTemplateOption = {
   id: string;
@@ -148,6 +160,7 @@ export function ExportModal({
   count,
   initialTemplateId,
   hideTemplateSelection = false,
+  onExported,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -157,6 +170,7 @@ export function ExportModal({
   count: number;
   initialTemplateId?: string | null;
   hideTemplateSelection?: boolean;
+  onExported?: (item: ExportedProblemSetInfo) => void;
 }) {
   const [legacyTemplates, setLegacyTemplates] = useState<ExamTemplate[]>([]);
   const [hubTemplates, setHubTemplates] = useState<HubTemplate[]>([]);
@@ -355,6 +369,17 @@ export function ExportModal({
           create_calendar_events: true,
         });
       }
+      onExported?.({
+        source,
+        problemSetId,
+        problemIds,
+        count,
+        examTitle: examTitle.trim(),
+        templateTitle: selected.title,
+        templateKind: selected.kind,
+        output: outputLabel(selected.kind),
+        includeSolution,
+      });
       onOpenChange(false);
     } finally {
       setLoading(false);

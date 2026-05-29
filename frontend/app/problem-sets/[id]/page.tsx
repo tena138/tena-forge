@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { closestCenter, DndContext, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronLeft, ChevronRight, FileDown, GripVertical, Plus, Save, Search, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, FileDown, GripVertical, Plus, Save, Search, Trash2 } from "lucide-react";
 
 import { ExportModal } from "@/components/export-modal";
 import { MathText } from "@/components/math-text";
@@ -15,12 +15,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, Problem, ProblemSet, ProblemSetItem } from "@/lib/api";
+import { PROBLEM_SET_EXPORT_HISTORY_EVENT, ProblemSetExportHistoryItem, readProblemSetExportHistory, rememberProblemSetExport } from "@/lib/exportHistory";
 
 type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
 type Facets = { subjects: string[]; units: string[]; problem_types: string[]; sources: string[] };
 const PICKER_PAGE_LIMIT = 96;
 
 const difficulties = ["하", "중", "상", "최상"];
+
+function exportHistoryTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+}
 
 function SortableRow({ item, onRemove }: { item: ProblemSetItem; onRemove: (problemId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.problem_id });
@@ -317,6 +323,7 @@ export default function ProblemSetDetailPage() {
   const [name, setName] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportHistory, setExportHistory] = useState<ProblemSetExportHistoryItem[]>([]);
 
   async function load() {
     const data = await api<ProblemSet>(`/api/problem-sets/${params.id}`);
@@ -326,6 +333,13 @@ export default function ProblemSetDetailPage() {
 
   useEffect(() => {
     load().catch(() => router.push("/problem-sets"));
+  }, [params.id]);
+
+  useEffect(() => {
+    const refresh = () => setExportHistory(readProblemSetExportHistory(params.id));
+    refresh();
+    window.addEventListener(PROBLEM_SET_EXPORT_HISTORY_EVENT, refresh);
+    return () => window.removeEventListener(PROBLEM_SET_EXPORT_HISTORY_EVENT, refresh);
   }, [params.id]);
 
   const ids = useMemo(() => problemSet?.items.map((item) => item.problem_id) || [], [problemSet]);
@@ -406,8 +420,54 @@ export default function ProblemSetDetailPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-violet-200" />
+              <h2 className="text-base font-semibold text-white">최근 내보내기</h2>
+            </div>
+            <span className="text-xs text-muted-foreground">최근 {exportHistory.length}건</span>
+          </div>
+          {exportHistory.length ? (
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {exportHistory.slice(0, 6).map((item) => (
+                <div key={item.id} className="rounded-md border border-white/10 bg-white/[0.035] p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{item.examTitle}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{exportHistoryTime(item.exportedAt)}</p>
+                    </div>
+                    {item.output && <Badge variant="outline">{item.output}</Badge>}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary">{item.count}문항</Badge>
+                    {item.templateTitle && <Badge variant="outline">{item.templateTitle}</Badge>}
+                    <Badge variant={item.includeSolution ? "success" : "secondary"}>{item.includeSolution ? "해설 포함" : "문제만"}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-md border border-dashed border-white/10 bg-white/[0.025] p-5 text-sm text-muted-foreground">
+              이 세트를 내보내면 여기에 자동으로 기록됩니다.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <ProblemPickerModal open={addOpen} onOpenChange={setAddOpen} existingIds={ids} onAdd={addProblems} />
-      <ExportModal open={exportOpen} onOpenChange={setExportOpen} source="set" problemSetId={problemSet.id} count={problemSet.items.length} />
+      <ExportModal
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        source="set"
+        problemSetId={problemSet.id}
+        count={problemSet.items.length}
+        onExported={(item) => {
+          rememberProblemSetExport({ ...item, problemSetId: problemSet.id, problemSetName: problemSet.name });
+          setExportHistory(readProblemSetExportHistory(problemSet.id));
+        }}
+      />
     </div>
   );
 }

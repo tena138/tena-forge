@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileDown, FolderPlus, ShieldCheck, Store, Trash2 } from "lucide-react";
+import { Clock, FileDown, FolderPlus, ShieldCheck, Store, Trash2 } from "lucide-react";
 
 import { ExportModal } from "@/components/export-modal";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, ProblemSet, ProblemSetListItem, sourceTypeLabel, submitProblemSetToMarketplace } from "@/lib/api";
+import { PROBLEM_SET_EXPORT_HISTORY_EVENT, ProblemSetExportHistoryItem, readProblemSetExportHistory, rememberProblemSetExport } from "@/lib/exportHistory";
+
+function exportHistoryTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+}
 
 export default function ProblemSetsPage() {
   const router = useRouter();
@@ -23,6 +29,7 @@ export default function ProblemSetsPage() {
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [noUnauthorizedCopy, setNoUnauthorizedCopy] = useState(false);
   const [marketMessage, setMarketMessage] = useState("");
+  const [exportHistory, setExportHistory] = useState<ProblemSetExportHistoryItem[]>([]);
 
   async function load() {
     api<ProblemSetListItem[]>("/api/problem-sets").then(setSets).catch(() => setSets([]));
@@ -30,6 +37,13 @@ export default function ProblemSetsPage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setExportHistory(readProblemSetExportHistory());
+    refresh();
+    window.addEventListener(PROBLEM_SET_EXPORT_HISTORY_EVENT, refresh);
+    return () => window.removeEventListener(PROBLEM_SET_EXPORT_HISTORY_EVENT, refresh);
   }, []);
 
   async function createSet() {
@@ -83,6 +97,46 @@ export default function ProblemSetsPage() {
         </div>
         <Button onClick={() => setCreateOpen(true)}><FolderPlus className="h-4 w-4" />새 세트 만들기</Button>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4 text-violet-200" />
+            최근 내보내기
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {exportHistory.length ? (
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              {exportHistory.slice(0, 4).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-violet-300/35 hover:bg-white/[0.06]"
+                  onClick={() => item.problemSetId && router.push(`/problem-sets/${item.problemSetId}`)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{item.examTitle}</p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{item.problemSetName || "문항 세트"}</p>
+                    </div>
+                    {item.output && <Badge variant="outline">{item.output}</Badge>}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge variant="secondary">{item.count}문항</Badge>
+                    <Badge variant={item.includeSolution ? "success" : "secondary"}>{item.includeSolution ? "해설 포함" : "문제만"}</Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{exportHistoryTime(item.exportedAt)}</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed border-white/10 bg-white/[0.025] p-5 text-sm text-muted-foreground">
+              문항 세트를 내보내면 최근 기록이 여기에 자동으로 쌓입니다.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {sets.map((set) => {
@@ -166,7 +220,17 @@ export default function ProblemSetsPage() {
       </Dialog>
 
       {exportSet && (
-        <ExportModal open={!!exportSet} onOpenChange={(open) => !open && setExportSet(null)} source="set" problemSetId={exportSet.id} count={exportSet.item_count} />
+        <ExportModal
+          open={!!exportSet}
+          onOpenChange={(open) => !open && setExportSet(null)}
+          source="set"
+          problemSetId={exportSet.id}
+          count={exportSet.item_count}
+          onExported={(item) => {
+            rememberProblemSetExport({ ...item, problemSetId: exportSet.id, problemSetName: exportSet.name });
+            setExportHistory(readProblemSetExportHistory());
+          }}
+        />
       )}
     </div>
   );
