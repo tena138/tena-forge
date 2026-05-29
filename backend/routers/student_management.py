@@ -35,6 +35,9 @@ router = APIRouter(prefix="/api/student-management", tags=["student management"]
 CLASS_ORDER_METADATA_KEY = "student_management_class_order"
 COUNSELING_FORMATS_METADATA_KEY = "student_management_counseling_formats"
 COUNSELING_PRESETS_METADATA_KEY = "student_management_counseling_presets"
+TEMP_REVIEW_SESSION_TARGET_STUDENTS = {"이나은", "이수현"}
+TEMP_REVIEW_SESSION_TITLE = "미친개념 수2 복습 문항 (2)"
+TEMP_REVIEW_SESSION_DATE = "2026-05-29"
 DEFAULT_COUNSELING_FIELDS = [
     {"id": "notes", "label": "상담하면서 기록할 내용", "placeholder": "상담하면서 기록할 내용", "include_in_report": True},
     {"id": "weekly_report", "label": "주간 리포트 초안", "placeholder": "주간 리포트 초안", "include_in_report": False},
@@ -629,6 +632,26 @@ def _session_summary(db: Session, academy_id: str, session: PaperSession | None)
     }
 
 
+def _temporary_review_session_for_student(db: Session, academy_id: str, membership: StudentAcademyMembership, existing_results: list[PaperSessionResult]) -> PaperSession | None:
+    if _student_name(membership) not in TEMP_REVIEW_SESSION_TARGET_STUDENTS:
+        return None
+    sessions = db.scalars(
+        select(PaperSession)
+        .where(
+            PaperSession.academy_id == academy_id,
+            PaperSession.title == TEMP_REVIEW_SESSION_TITLE,
+        )
+        .options(joinedload(PaperSession.content_version))
+        .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
+    ).all()
+    existing_session_ids = {result.paper_session_id for result in existing_results}
+    sessions = [session for session in sessions if session.id not in existing_session_ids]
+    for session in sessions:
+        if session.scheduled_at and session.scheduled_at.date().isoformat() == TEMP_REVIEW_SESSION_DATE:
+            return session
+    return sessions[0] if sessions else None
+
+
 def _get_session(db: Session, academy_id: str, session_id: UUID) -> PaperSession:
     row = db.scalars(
         select(PaperSession)
@@ -1205,6 +1228,36 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         }
         for result in results
     ]
+    temporary_session = _temporary_review_session_for_student(db, academy_id, membership, results)
+    if temporary_session:
+        problems = _session_problems(temporary_session)
+        data["paper_session_history"].insert(
+            0,
+            {
+                "id": f"pending-{temporary_session.id}-{membership.id}",
+                "paper_session_id": str(temporary_session.id),
+                "student_membership_id": str(membership.id),
+                "student_user_id": membership.student_user_id,
+                "status": "pending_grading",
+                "score": None,
+                "correct_count": 0,
+                "wrong_count": 0,
+                "total_count": len(problems),
+                "graded_by": None,
+                "graded_at": None,
+                "updated_at": temporary_session.updated_at.isoformat() if temporary_session.updated_at else None,
+                "session": _session_summary(db, academy_id, temporary_session),
+                "problem_results": [
+                    {
+                        "id": f"pending-{temporary_session.id}-{membership.id}-{problem.get('problem_number')}",
+                        "problem_id": problem.get("problem_id"),
+                        "problem_number": int(problem.get("problem_number") or index + 1),
+                        "result_status": "unmarked",
+                    }
+                    for index, problem in enumerate(problems)
+                ],
+            },
+        )
     result_ids = [result.id for result in results]
     if result_ids:
         problem_results = db.scalars(

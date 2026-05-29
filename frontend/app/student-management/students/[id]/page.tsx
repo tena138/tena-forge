@@ -137,18 +137,10 @@ function withTemporaryPaperSessionCache(student: StudentDetail): StudentDetail {
   if (student.paper_session_history.some((item) => isTemporaryPaperSessionTitle(item.session?.title))) return student;
   const cached = readTemporaryPaperSessionCache();
   const source = cached && isTemporaryPaperSessionTitle(cached.session?.title) ? cached : null;
+  if (!source) return student;
   const count = source ? problemCount(source) : 0;
   const temporaryResult: StudentDetail["paper_session_history"][number] = {
-    ...(source || {
-      id: "temporary-cache-fallback",
-      paper_session_id: "temporary-cache-fallback",
-      status: "scheduled",
-      score: null,
-      correct_count: 0,
-      wrong_count: 0,
-      total_count: 0,
-      problem_results: [],
-    }),
+    ...source,
     id: `temporary-cache-${student.id}-${source?.id || "fallback"}`,
     paper_session_id: source?.paper_session_id || `temporary-cache-session-${student.id}`,
     temporary_cached: true,
@@ -834,10 +826,6 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
 
   async function persistResult(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>, manual = false) {
     if (!data) return;
-    if (result.temporary_cached) {
-      if (manual) setMessage("임시 캐시로 표시한 일정이라 실제 저장은 하지 않습니다.");
-      return;
-    }
     const count = problemCount(result);
     if (!count) return;
     const statuses = Array.from({ length: count }, (_, index) => {
@@ -871,7 +859,6 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }
 
   function scheduleAutosave(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>) {
-    if (result.temporary_cached) return;
     clearAutosaveTimer(result.id);
     setAutosaveStates((current) => ({ ...current, [result.id]: "pending" }));
     autosaveTimers.current[result.id] = setTimeout(() => {
@@ -881,7 +868,6 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }
 
   function toggleResultProblem(result: StudentDetail["paper_session_history"][number], number: number) {
-    if (result.temporary_cached) return;
     const currentResult = resultStatuses[result.id] || buildStatuses(result);
     const nextForResult = {
       ...currentResult,
@@ -1395,8 +1381,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                         <h3 className="mt-1 text-sm font-black text-white">{selectedCalendarResult.session?.title || selectedCalendarItem?.title || "시험/과제"}</h3>
                       </div>
                       <div className="text-right text-xs font-semibold text-slate-500">
-                        {selectedCalendarResult.temporary_cached
-                          ? "임시 캐시 표시"
+                        {selectedCalendarResult.temporary_cached && !autosaveStates[selectedCalendarResult.id]
+                          ? "임시 연결됨"
                           : autosaveStates[selectedCalendarResult.id] === "saving" ? "저장 중" : autosaveStates[selectedCalendarResult.id] === "saved" ? "자동 저장됨" : autosaveStates[selectedCalendarResult.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
                       </div>
                     </div>
@@ -1414,14 +1400,12 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             key={number}
                             number={number}
                             status={statuses[number] || "correct"}
-                            onClick={() => {
-                              if (!selectedCalendarResult.temporary_cached) toggleResultProblem(selectedCalendarResult, number);
-                            }}
+                            onClick={() => toggleResultProblem(selectedCalendarResult, number)}
                           />
                         );
                       })}
                     </div>
-                    <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(selectedCalendarResult)} disabled={selectedCalendarResult.temporary_cached || savingResultId === selectedCalendarResult.id}>
+                    <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(selectedCalendarResult)} disabled={savingResultId === selectedCalendarResult.id}>
                       {savingResultId === selectedCalendarResult.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       저장
                     </Button>
