@@ -35,9 +35,10 @@ router = APIRouter(prefix="/api/student-management", tags=["student management"]
 CLASS_ORDER_METADATA_KEY = "student_management_class_order"
 COUNSELING_FORMATS_METADATA_KEY = "student_management_counseling_formats"
 COUNSELING_PRESETS_METADATA_KEY = "student_management_counseling_presets"
-TEMP_REVIEW_SESSION_TARGET_STUDENTS = {"이나은", "이수현"}
-TEMP_REVIEW_SESSION_TITLE = "미친개념 수2 복습 문항 (2)"
-TEMP_REVIEW_SESSION_DATE = "2026-05-29"
+EXPORTED_REVIEW_SOURCE_STUDENT = "\uc774\uc6b0\ub178"
+EXPORTED_REVIEW_TARGET_STUDENTS = {"\uc774\uc6b0\ub178", "\uc774\ub098\uc740", "\uc774\uc218\ud604"}
+EXPORTED_REVIEW_TITLE_KEYWORDS = ("\ubbf8\uce5c\uac1c\ub150", "\uc2182", "\ubcf5\uc2b5", "(2)")
+EXPORTED_REVIEW_DATE = "2026-05-29"
 DEFAULT_COUNSELING_FIELDS = [
     {"id": "notes", "label": "상담하면서 기록할 내용", "placeholder": "상담하면서 기록할 내용", "include_in_report": True},
     {"id": "weekly_report", "label": "주간 리포트 초안", "placeholder": "주간 리포트 초안", "include_in_report": False},
@@ -632,24 +633,89 @@ def _session_summary(db: Session, academy_id: str, session: PaperSession | None)
     }
 
 
-def _temporary_review_session_for_student(db: Session, academy_id: str, membership: StudentAcademyMembership, existing_results: list[PaperSessionResult]) -> PaperSession | None:
-    if _student_name(membership) not in TEMP_REVIEW_SESSION_TARGET_STUDENTS:
-        return None
-    sessions = db.scalars(
-        select(PaperSession)
-        .where(
-            PaperSession.academy_id == academy_id,
-            PaperSession.title == TEMP_REVIEW_SESSION_TITLE,
+def _is_exported_review_session(session: PaperSession) -> bool:
+    title = session.title or ""
+    return all(keyword in title for keyword in EXPORTED_REVIEW_TITLE_KEYWORDS)
+
+
+def _ensure_exported_review_session_assigned(db: Session, academy_id: str) -> None:
+    memberships = db.scalars(
+        select(StudentAcademyMembership).where(
+            StudentAcademyMembership.academy_id == academy_id,
+            StudentAcademyMembership.status == "active",
         )
-        .options(joinedload(PaperSession.content_version))
-        .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
     ).all()
-    existing_session_ids = {result.paper_session_id for result in existing_results}
-    sessions = [session for session in sessions if session.id not in existing_session_ids]
-    for session in sessions:
-        if session.scheduled_at and session.scheduled_at.date().isoformat() == TEMP_REVIEW_SESSION_DATE:
-            return session
-    return sessions[0] if sessions else None
+    membership_by_name = {_student_name(row): row for row in memberships}
+    targets = [membership_by_name.get(name) for name in EXPORTED_REVIEW_TARGET_STUDENTS]
+    source = membership_by_name.get(EXPORTED_REVIEW_SOURCE_STUDENT)
+    if not source or any(target is None for target in targets):
+        return
+
+    sessions = [
+        session
+        for session in db.scalars(
+            select(PaperSession)
+            .where(PaperSession.academy_id == academy_id)
+            .options(joinedload(PaperSession.content_version))
+            .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
+        ).all()
+        if _is_exported_review_session(session)
+    ]
+    if not sessions:
+        return
+
+    source_results = db.scalars(
+        select(PaperSessionResult).where(
+            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.student_membership_id == source.id,
+            PaperSessionResult.paper_session_id.in_([session.id for session in sessions]),
+        )
+    ).all()
+    if not source_results:
+        return
+    source_session_ids = {row.paper_session_id for row in source_results}
+    candidates = [session for session in sessions if session.id in source_session_ids]
+    dated_candidates = [session for session in candidates if session.scheduled_at and session.scheduled_at.date().isoformat() == EXPORTED_REVIEW_DATE]
+    session = dated_candidates[0] if dated_candidates else candidates[0]
+    problems = _session_problems(session)
+    if not problems:
+        return
+
+    existing_results = {
+        row.student_membership_id: row
+        for row in db.scalars(
+            select(PaperSessionResult).where(
+                PaperSessionResult.academy_id == academy_id,
+                PaperSessionResult.paper_session_id == session.id,
+            )
+        ).all()
+    }
+    changed = False
+    session_student_ids = [str(value) for value in (session.student_membership_ids or [])]
+    for target in targets:
+        if target is None:
+            continue
+        target_id = str(target.id)
+        if target_id not in session_student_ids:
+            session_student_ids.append(target_id)
+            changed = True
+        if target.id not in existing_results:
+            db.add(
+                PaperSessionResult(
+                    academy_id=academy_id,
+                    paper_session_id=session.id,
+                    student_membership_id=target.id,
+                    student_user_id=target.student_user_id,
+                    status="pending_grading",
+                    total_count=len(problems),
+                )
+            )
+            changed = True
+    if changed:
+        session.student_membership_ids = session_student_ids
+        session.target_type = "mixed" if session.class_ids else "students"
+        session.updated_at = _now()
+        db.commit()
 
 
 def _get_session(db: Session, academy_id: str, session_id: UUID) -> PaperSession:
@@ -1204,6 +1270,7 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
 @router.get("/students/{student_id}")
 def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)
+    _ensure_exported_review_session_assigned(db, academy_id)
     membership = _get_membership(db, academy_id, student_id)
     data = _student_payload(db, academy_id, membership)
     results = db.scalars(
@@ -1228,36 +1295,6 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         }
         for result in results
     ]
-    temporary_session = _temporary_review_session_for_student(db, academy_id, membership, results)
-    if temporary_session:
-        problems = _session_problems(temporary_session)
-        data["paper_session_history"].insert(
-            0,
-            {
-                "id": f"pending-{temporary_session.id}-{membership.id}",
-                "paper_session_id": str(temporary_session.id),
-                "student_membership_id": str(membership.id),
-                "student_user_id": membership.student_user_id,
-                "status": "pending_grading",
-                "score": None,
-                "correct_count": 0,
-                "wrong_count": 0,
-                "total_count": len(problems),
-                "graded_by": None,
-                "graded_at": None,
-                "updated_at": temporary_session.updated_at.isoformat() if temporary_session.updated_at else None,
-                "session": _session_summary(db, academy_id, temporary_session),
-                "problem_results": [
-                    {
-                        "id": f"pending-{temporary_session.id}-{membership.id}-{problem.get('problem_number')}",
-                        "problem_id": problem.get("problem_id"),
-                        "problem_number": int(problem.get("problem_number") or index + 1),
-                        "result_status": "unmarked",
-                    }
-                    for index, problem in enumerate(problems)
-                ],
-            },
-        )
     result_ids = [result.id for result in results]
     if result_ids:
         problem_results = db.scalars(

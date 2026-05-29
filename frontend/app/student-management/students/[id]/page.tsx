@@ -48,7 +48,6 @@ type StudentDetail = StudentCard & {
   paper_session_history: Array<{
     id: string;
     paper_session_id: string;
-    temporary_cached?: boolean;
     status: string;
     score?: number | null;
     correct_count: number;
@@ -96,75 +95,12 @@ const DEFAULT_COUNSELING_FIELDS: CounselingFormatField[] = [
 const COUNSELING_DRAFT_KEY_PREFIX = "tena.student-management.counseling-draft";
 const COUNSELING_FORMAT_SYNC_KEY = "tena.student-management.counseling-format-sync";
 const COUNSELING_FORMAT_SYNC_EVENT = "tena.student-management.counseling-format-sync";
-const TEMP_PAPER_SESSION_CACHE_KEY = "tena.student-management.temp-paper-session.michin-s2-review";
-const TEMP_PAPER_SESSION_SOURCE_STUDENT = "이우노";
-const TEMP_PAPER_SESSION_TARGET_STUDENTS = new Set(["이나은", "이수현"]);
-const TEMP_PAPER_SESSION_TITLE = "미친개념 수2 복습 문항";
-const TEMP_PAPER_SESSION_DISPLAY_TITLE = "미친개념 수2 복습 문항 (2)";
-const TEMP_PAPER_SESSION_DATE = "2026-05-29T00:00:00";
 
-type CachedPaperSessionResult = StudentDetail["paper_session_history"][number];
 type CounselingFormatSyncPayload = {
   classId: string;
   fields: CounselingFormatField[];
   savedAt: string;
 };
-
-function isTemporaryPaperSessionTitle(title?: string | null) {
-  return Boolean(title?.includes(TEMP_PAPER_SESSION_TITLE));
-}
-
-function cacheTemporaryPaperSession(student: StudentDetail) {
-  if (typeof window === "undefined" || student.name !== TEMP_PAPER_SESSION_SOURCE_STUDENT) return;
-  const result = student.paper_session_history.find((item) => isTemporaryPaperSessionTitle(item.session?.title));
-  if (!result) return;
-  window.localStorage.setItem(TEMP_PAPER_SESSION_CACHE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), result }));
-}
-
-function readTemporaryPaperSessionCache(): CachedPaperSessionResult | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(TEMP_PAPER_SESSION_CACHE_KEY) || "null");
-    return parsed?.result && typeof parsed.result === "object" ? parsed.result : null;
-  } catch {
-    return null;
-  }
-}
-
-function withTemporaryPaperSessionCache(student: StudentDetail): StudentDetail {
-  cacheTemporaryPaperSession(student);
-  if (!TEMP_PAPER_SESSION_TARGET_STUDENTS.has(student.name)) return student;
-  if (student.paper_session_history.some((item) => isTemporaryPaperSessionTitle(item.session?.title))) return student;
-  const cached = readTemporaryPaperSessionCache();
-  const source = cached && isTemporaryPaperSessionTitle(cached.session?.title) ? cached : null;
-  if (!source) return student;
-  const count = source ? problemCount(source) : 0;
-  const temporaryResult: StudentDetail["paper_session_history"][number] = {
-    ...source,
-    id: `temporary-cache-${student.id}-${source?.id || "fallback"}`,
-    paper_session_id: source?.paper_session_id || `temporary-cache-session-${student.id}`,
-    temporary_cached: true,
-    status: "scheduled",
-    score: null,
-    correct_count: 0,
-    wrong_count: 0,
-    total_count: count,
-    session: {
-      ...(source?.session || {}),
-      title: source?.session?.title || TEMP_PAPER_SESSION_DISPLAY_TITLE,
-      session_type: source?.session?.session_type || "review",
-      scheduled_at: TEMP_PAPER_SESSION_DATE,
-      problem_count: count,
-    },
-    problem_results: Array.from({ length: count }, (_, index) => ({
-      id: `temporary-cache-${student.id}-${source?.id || "fallback"}-${index + 1}`,
-      problem_id: source?.problem_results[index]?.problem_id || "",
-      problem_number: index + 1,
-      result_status: "unmarked" as ProblemStatus,
-    })),
-  };
-  return { ...student, paper_session_history: [temporaryResult, ...student.paper_session_history] };
-}
 
 function parseCounselingFormatSyncPayload(value: string | null): CounselingFormatSyncPayload | null {
   if (!value) return null;
@@ -559,13 +495,12 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     : null;
 
   function applyStudentData(student: StudentDetail) {
-    const visibleStudent = withTemporaryPaperSessionCache(student);
-    setData(visibleStudent);
+    setData(student);
     const next: Record<string, Record<number, ProblemStatus>> = {};
-    for (const result of visibleStudent.paper_session_history) next[result.id] = buildStatuses(result);
+    for (const result of student.paper_session_history) next[result.id] = buildStatuses(result);
     setResultStatuses(next);
     if (!calendarInitializedRef.current) {
-      const target = closestCalendarItem(studentCalendarItems(visibleStudent));
+      const target = closestCalendarItem(studentCalendarItems(student));
       if (target) {
         const targetDate = new Date(target.date);
         setCalendarMonth(new Date(targetDate.getFullYear(), targetDate.getMonth(), 1));
@@ -1394,9 +1329,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                         <h3 className="mt-1 text-sm font-black text-white">{selectedCalendarResult.session?.title || selectedCalendarItem?.title || "시험/과제"}</h3>
                       </div>
                       <div className="text-right text-xs font-semibold text-slate-500">
-                        {selectedCalendarResult.temporary_cached && !autosaveStates[selectedCalendarResult.id]
-                          ? "임시 연결됨"
-                          : autosaveStates[selectedCalendarResult.id] === "saving" ? "저장 중" : autosaveStates[selectedCalendarResult.id] === "saved" ? "자동 저장됨" : autosaveStates[selectedCalendarResult.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
+                        {autosaveStates[selectedCalendarResult.id] === "saving" ? "저장 중" : autosaveStates[selectedCalendarResult.id] === "saved" ? "자동 저장됨" : autosaveStates[selectedCalendarResult.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
