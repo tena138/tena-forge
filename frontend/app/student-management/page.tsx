@@ -227,19 +227,19 @@ function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-black/20 dark:shadow-none">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <p className="text-sm font-black text-white">시험 통계 추이</p>
-          <p className="mt-1 text-xs text-slate-500">평균, 최고/최저, 분위수를 선택해서 시간 흐름으로 비교합니다.</p>
+          <p className="text-sm font-black text-slate-950 dark:text-white">시험 통계 추이</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">평균, 최고/최저, 분위수를 선택해서 시간 흐름으로 비교합니다.</p>
         </div>
-        <div className="flex w-fit rounded-md border border-white/10 bg-white/[0.035] p-1">
+        <div className="flex w-fit rounded-md border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.035]">
           <button
             type="button"
             aria-label="선 그래프"
             title="선 그래프"
             onClick={() => setMode("line")}
-            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:text-white", mode === "line" && "bg-violet-500/25 text-white")}
+            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "line" && "bg-violet-100 text-violet-800 dark:bg-violet-500/25 dark:text-white")}
           >
             <LineChart className="h-4 w-4" />
           </button>
@@ -248,7 +248,7 @@ function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
             aria-label="막대 그래프"
             title="막대 그래프"
             onClick={() => setMode("bar")}
-            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:text-white", mode === "bar" && "bg-violet-500/25 text-white")}
+            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "bar" && "bg-violet-100 text-violet-800 dark:bg-violet-500/25 dark:text-white")}
           >
             <BarChart3 className="h-4 w-4" />
           </button>
@@ -265,10 +265,15 @@ function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
               onClick={() => toggleMetric(metric.key)}
               className={cn(
                 "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-bold transition",
-                active ? "border-white/20 bg-white/[0.08] text-white" : "border-white/10 bg-transparent text-slate-500 hover:text-slate-200"
+                active
+                  ? "border-slate-300 bg-slate-100 text-slate-950 dark:border-white/20 dark:bg-white/[0.08] dark:text-white"
+                  : "border-slate-200 bg-transparent text-slate-500 hover:text-slate-900 dark:border-white/10 dark:text-slate-500 dark:hover:text-slate-200"
               )}
             >
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: active ? metric.color : "rgba(148, 163, 184, 0.35)" }} />
+              <span
+                className={cn("h-2.5 w-2.5 rounded-full", metric.key === "selected" && "border border-slate-300 shadow-sm dark:border-white/45")}
+                style={{ backgroundColor: active ? metric.color : "rgba(148, 163, 184, 0.35)" }}
+              />
               {metric.label}
             </button>
           );
@@ -335,25 +340,25 @@ function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
           </svg>
         </div>
       ) : (
-        <div className="mt-4 rounded-md border border-dashed border-white/10 p-6 text-center text-sm text-slate-500">통계를 낼 채점 완료 시험이 없습니다.</div>
+        <div className="mt-4 rounded-md border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-white/10">통계를 낼 채점 완료 시험이 없습니다.</div>
       )}
 
       <div className="mt-3 grid gap-2 text-xs md:grid-cols-4">
-        <div className="rounded-md bg-white/[0.04] p-3">
+        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
           <p className="text-slate-500">최근 평균</p>
-          <p className="mt-1 text-base font-black text-white">{scoreLabel(latestPoint?.average)}</p>
+          <p className="mt-1 text-base font-black text-slate-950 dark:text-white">{scoreLabel(latestPoint?.average)}</p>
         </div>
-        <div className="rounded-md bg-white/[0.04] p-3">
+        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
           <p className="text-slate-500">최근 중앙값</p>
-          <p className="mt-1 text-base font-black text-amber-100">{scoreLabel(latestPoint?.q2)}</p>
+          <p className="mt-1 text-base font-black text-amber-700 dark:text-amber-100">{scoreLabel(latestPoint?.q2)}</p>
         </div>
-        <div className="rounded-md bg-white/[0.04] p-3">
+        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
           <p className="text-slate-500">최근 범위</p>
-          <p className="mt-1 text-base font-black text-slate-100">{latestPoint ? `${scoreLabel(latestPoint.lowest)} - ${scoreLabel(latestPoint.highest)}` : "-"}</p>
+          <p className="mt-1 text-base font-black text-slate-950 dark:text-slate-100">{latestPoint ? `${scoreLabel(latestPoint.lowest)} - ${scoreLabel(latestPoint.highest)}` : "-"}</p>
         </div>
-        <div className="rounded-md bg-white/[0.04] p-3">
+        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
           <p className="text-slate-500">최근 응시</p>
-          <p className="mt-1 text-base font-black text-cyan-100">{latestPoint ? `${latestPoint.respondents}/${latestPoint.assigned}` : "-"}</p>
+          <p className="mt-1 text-base font-black text-cyan-700 dark:text-cyan-100">{latestPoint ? `${latestPoint.respondents}/${latestPoint.assigned}` : "-"}</p>
         </div>
       </div>
     </div>
@@ -479,8 +484,8 @@ function ClassStatsPanel({
     }));
 
   return (
-    <div className="border-t border-white/10 px-4 pb-4">
-      <div className="rounded-lg border border-violet-300/15 bg-violet-500/[0.06] p-4">
+    <div className="border-t border-slate-200 px-4 pb-4 dark:border-white/10">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-violet-300/15 dark:bg-violet-500/[0.06] dark:shadow-none">
         {loading ? (
           <div className="flex min-h-36 items-center justify-center text-sm text-slate-400">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -488,13 +493,13 @@ function ClassStatsPanel({
           </div>
         ) : null}
         {!loading && !sessionStats.length ? (
-          <div className="rounded-md border border-dashed border-white/10 p-6 text-center text-sm text-slate-500">아직 이 반에 연결된 시험 기록이 없습니다.</div>
+          <div className="rounded-md border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-white/10">아직 이 반에 연결된 시험 기록이 없습니다.</div>
         ) : null}
         {!loading && sessionStats.length ? (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
               <div>
-                <p className="text-sm font-black text-white">{classRow.name} 성적 통계</p>
+                <p className="text-sm font-black text-slate-950 dark:text-white">{classRow.name} 성적 통계</p>
                 <p className="mt-1 text-xs text-slate-500">학생을 선택하면 시험별 점수 추이와 평균, 표준편차, 석차를 함께 표시합니다.</p>
               </div>
               <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
@@ -505,7 +510,9 @@ function ClassStatsPanel({
                     onClick={() => setSelectedStudentId(student.id)}
                     className={cn(
                       "shrink-0 rounded-md border px-3 py-2 text-xs font-bold transition",
-                      selectedStudent?.id === student.id ? "border-violet-300/50 bg-violet-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-400 hover:text-white"
+                      selectedStudent?.id === student.id
+                        ? "border-violet-300 bg-violet-100 text-violet-900 dark:border-violet-300/50 dark:bg-violet-500/25 dark:text-white"
+                        : "border-slate-200 bg-white text-slate-500 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:text-white"
                     )}
                   >
                     {student.name}
@@ -515,59 +522,59 @@ function ClassStatsPanel({
             </div>
 
             <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr_0.75fr_0.75fr]">
-              <div className="rounded-lg border border-white/10 bg-white/[0.055] p-4">
-                <p className="text-xs font-semibold text-slate-400">본인 최근 점수</p>
+              <div className="rounded-lg border border-violet-200 bg-violet-50 p-4 dark:border-white/10 dark:bg-white/[0.055]">
+                <p className="text-xs font-semibold text-violet-700 dark:text-slate-400">본인 최근 점수</p>
                 <div className="mt-2 flex items-end justify-between gap-4">
-                  <p className="text-4xl font-black tracking-normal text-white">{scoreLabel(latestScoredStat?.selectedScore)}</p>
-                  <p className="max-w-[220px] truncate text-right text-xs text-slate-400" title={latestScoredStat?.detail.title}>
+                  <p className="text-4xl font-black tracking-normal text-slate-950 dark:text-white">{scoreLabel(latestScoredStat?.selectedScore)}</p>
+                  <p className="max-w-[220px] truncate text-right text-xs text-slate-500 dark:text-slate-400" title={latestScoredStat?.detail.title}>
                     {latestScoredStat ? `${latestScoredStat.detail.title} · ${formatDate(latestScoredStat.detail.scheduled_at || latestScoredStat.detail.created_at)}` : "채점 완료 기록 없음"}
                   </p>
                 </div>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <p className="text-xs font-semibold text-slate-500">반 평균 대비</p>
-                <p className="mt-2 text-2xl font-black text-white">{latestClassDelta == null ? "-" : `${latestClassDelta >= 0 ? "+" : ""}${latestClassDelta.toFixed(1)}`}</p>
+                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{latestClassDelta == null ? "-" : `${latestClassDelta >= 0 ? "+" : ""}${latestClassDelta.toFixed(1)}`}</p>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <p className="text-xs font-semibold text-slate-500">최근 반 평균</p>
-                <p className="mt-2 text-2xl font-black text-white">{scoreLabel(latestScoredStat?.classAverage)}</p>
+                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{scoreLabel(latestScoredStat?.classAverage)}</p>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <p className="text-xs font-semibold text-slate-500">석차</p>
-                <p className="mt-2 text-2xl font-black text-white">{latestScoredStat?.rank == null ? "-" : `${latestScoredStat.rank}/${latestScoredStat.classGradedCount}`}</p>
+                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{latestScoredStat?.rank == null ? "-" : `${latestScoredStat.rank}/${latestScoredStat.classGradedCount}`}</p>
               </div>
             </div>
 
             <ClassTrendChart points={classMetricPoints} />
 
             <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
-              <div className="rounded-md bg-white/[0.045] p-3">
+              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
                 <p className="text-xs text-slate-500">학생 평균</p>
-                <p className="mt-1 text-lg font-black text-white">{scoreLabel(selectedAverage)}</p>
+                <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{scoreLabel(selectedAverage)}</p>
               </div>
-              <div className="rounded-md bg-white/[0.045] p-3">
+              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
                 <p className="text-xs text-slate-500">반 평균</p>
-                <p className="mt-1 text-lg font-black text-white">{scoreLabel(classAverageAcross)}</p>
+                <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{scoreLabel(classAverageAcross)}</p>
               </div>
-              <div className="rounded-md bg-white/[0.045] p-3">
+              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
                 <p className="text-xs text-slate-500">전체 평균</p>
-                <p className="mt-1 text-lg font-black text-white">{scoreLabel(overallAverageAcross)}</p>
+                <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{scoreLabel(overallAverageAcross)}</p>
               </div>
-              <div className="rounded-md bg-white/[0.045] p-3">
+              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
                 <p className="text-xs text-slate-500">점수 표준편차</p>
-                <p className="mt-1 text-lg font-black text-slate-100">{selectedStdDev == null ? "-" : selectedStdDev.toFixed(1)}</p>
+                <p className="mt-1 text-lg font-black text-slate-950 dark:text-slate-100">{selectedStdDev == null ? "-" : selectedStdDev.toFixed(1)}</p>
               </div>
-              <div className="rounded-md bg-white/[0.045] p-3">
+              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
                 <p className="text-xs text-slate-500">반 평균 대비</p>
-                <p className="mt-1 text-lg font-black text-white">{averageClassDelta == null ? "-" : `${averageClassDelta >= 0 ? "+" : ""}${averageClassDelta.toFixed(1)}`}</p>
+                <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{averageClassDelta == null ? "-" : `${averageClassDelta >= 0 ? "+" : ""}${averageClassDelta.toFixed(1)}`}</p>
               </div>
-              <div className="rounded-md bg-white/[0.045] p-3">
+              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
                 <p className="text-xs text-slate-500">추세</p>
-                <p className="mt-1 text-lg font-black text-white">{trend == null ? "-" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}`}</p>
+                <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{trend == null ? "-" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}`}</p>
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/20 p-4 [scrollbar-width:thin]">
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white p-4 shadow-sm [scrollbar-width:thin] dark:border-white/10 dark:bg-black/20 dark:shadow-none">
               <div className="min-w-[860px]">
                 <div className="mb-2 grid grid-cols-[42px_minmax(0,1fr)] gap-3 text-xs text-slate-500">
                   <span>점수</span>
@@ -584,9 +591,9 @@ function ClassStatsPanel({
                       <span key={tick} className="absolute right-0 -translate-y-1/2" style={{ top: `${100 - tick}%` }}>{tick}</span>
                     ))}
                   </div>
-                  <div className="relative h-72 border-l border-b border-white/10">
+                  <div className="relative h-72 border-l border-b border-slate-200 dark:border-white/10">
                     {[100, 75, 50, 25].map((tick) => (
-                      <span key={tick} className="absolute left-0 right-0 border-t border-white/[0.06]" style={{ top: `${100 - tick}%` }} />
+                      <span key={tick} className="absolute left-0 right-0 border-t border-slate-100 dark:border-white/[0.06]" style={{ top: `${100 - tick}%` }} />
                     ))}
                     <div className="absolute inset-0 flex items-end gap-4 px-4 pb-11">
                       {sessionStats.map((item) => {
@@ -613,7 +620,7 @@ function ClassStatsPanel({
                               return (
                                 <span key={bar.key} className="relative flex h-full w-6 items-end justify-center">
                                   <i
-                                    className={cn("w-full rounded-t-sm", bar.value == null ? "h-px bg-white/10" : bar.color)}
+                                    className={cn("w-full rounded-t-sm", bar.value == null ? "h-px bg-slate-200 dark:bg-white/10" : bar.color)}
                                     style={{ height: bar.value == null ? undefined : `${height}%` }}
                                     title={`${item.detail.title} ${bar.label}: ${scoreLabel(bar.value)}`}
                                   />
@@ -621,7 +628,7 @@ function ClassStatsPanel({
                               );
                             })}
                             <div className="absolute -bottom-10 left-1/2 w-28 -translate-x-1/2 text-center">
-                              <p className="truncate text-[11px] font-bold text-slate-300" title={item.detail.title}>{item.detail.title}</p>
+                              <p className="truncate text-[11px] font-bold text-slate-700 dark:text-slate-300" title={item.detail.title}>{item.detail.title}</p>
                               <p className="mt-0.5 text-[10px] text-slate-500">{formatDate(item.detail.scheduled_at)}</p>
                             </div>
                           </div>
@@ -635,10 +642,10 @@ function ClassStatsPanel({
 
             <div className="grid gap-3 xl:grid-cols-2">
               {sessionStats.map((item) => (
-                <div key={item.detail.id} className="rounded-md border border-white/10 bg-black/20 p-3">
+                <div key={item.detail.id} className="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-black/20 dark:shadow-none">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-white">{item.detail.title}</p>
+                      <p className="truncate text-sm font-black text-slate-950 dark:text-white">{item.detail.title}</p>
                       <p className="mt-1 text-xs text-slate-500">
                         {selectedStudent?.name || "학생"} {scoreLabel(item.selectedScore)} · 반 평균 {scoreLabel(item.classAverage)}
                         {item.showOverallAverage ? ` · 전체 평균 ${scoreLabel(item.overallAverage)}` : ""}
@@ -647,17 +654,17 @@ function ClassStatsPanel({
                     <Badge className={cn("shrink-0 border", statusTone(item.selectedStatus))}>{item.selectedStatus}</Badge>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">석차 {item.rank == null ? "-" : `${item.rank}/${item.classGradedCount}`}</span>
-                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">백분위 {item.percentile == null ? "-" : `${item.percentile}`}</span>
-                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">반 σ {item.classStdDev == null ? "-" : item.classStdDev.toFixed(1)}</span>
-                    <span className="rounded bg-white/[0.04] px-2 py-1 text-slate-300">전체 n {item.overallGradedCount}</span>
+                    <span className="rounded bg-slate-50 px-2 py-1 text-slate-700 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-0">석차 {item.rank == null ? "-" : `${item.rank}/${item.classGradedCount}`}</span>
+                    <span className="rounded bg-slate-50 px-2 py-1 text-slate-700 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-0">백분위 {item.percentile == null ? "-" : `${item.percentile}`}</span>
+                    <span className="rounded bg-slate-50 px-2 py-1 text-slate-700 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-0">반 σ {item.classStdDev == null ? "-" : item.classStdDev.toFixed(1)}</span>
+                    <span className="rounded bg-slate-50 px-2 py-1 text-slate-700 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-0">전체 n {item.overallGradedCount}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
                     {item.selectedMissed.length ? item.selectedMissed.map((number) => (
-                      <span key={number} className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">{number}번</span>
-                    )) : <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">학생 오답 없음</span>}
+                      <span key={number} className="rounded bg-orange-100 px-2 py-1 text-orange-800 dark:bg-orange-500/15 dark:text-orange-100">{number}번</span>
+                    )) : <span className="rounded bg-emerald-100 px-2 py-1 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-100">학생 오답 없음</span>}
                     {item.commonMissed.slice(0, 3).map(([number, count]) => (
-                      <span key={`common-${number}`} className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">반 다빈도 {number}번 {count}명</span>
+                      <span key={`common-${number}`} className="rounded bg-rose-100 px-2 py-1 text-rose-800 dark:bg-rose-500/15 dark:text-rose-100">반 다빈도 {number}번 {count}명</span>
                     ))}
                   </div>
                 </div>
@@ -665,8 +672,8 @@ function ClassStatsPanel({
             </div>
 
             {bestExam ? (
-              <div className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-xs text-slate-400">
-                {selectedStudent?.name || "선택 학생"} 최고 기록은 <span className="font-black text-white">{bestExam.detail.title}</span>의 <span className="font-black text-violet-100">{scoreLabel(bestExam.selectedScore)}</span>입니다.
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
+                {selectedStudent?.name || "선택 학생"} 최고 기록은 <span className="font-black text-slate-950 dark:text-white">{bestExam.detail.title}</span>의 <span className="font-black text-violet-700 dark:text-violet-100">{scoreLabel(bestExam.selectedScore)}</span>입니다.
               </div>
             ) : null}
           </div>
