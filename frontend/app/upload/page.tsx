@@ -29,7 +29,6 @@ type TagColorMap = Record<string, string>;
 
 const SUBJECT_TAG_COLORS_KEY = "tena-forge-upload-subject-tag-colors";
 const CUSTOM_SUBJECTS_KEY = "tena-forge-upload-custom-subjects";
-const UNIT_TAG_COLORS_KEY = "tena-forge-upload-unit-tag-colors";
 const MB = 1024 * 1024;
 const PDF_SAMPLE_BYTES = 16 * MB;
 const PDF_FULL_SCAN_LIMIT_BYTES = 80 * MB;
@@ -685,11 +684,7 @@ export default function UploadPage() {
   const [batchAccentColor, setBatchAccentColor] = useState(() => defaultTagColor("new-batch", "batch"));
   const [batchColorTouched, setBatchColorTouched] = useState(false);
   const [customSubjectOptions, setCustomSubjectOptions] = useState<string[]>([]);
-  const [unitInput, setUnitInput] = useState("");
-  const [unitInputColor, setUnitInputColor] = useState(tagPalette[1]);
-  const [unitCandidates, setUnitCandidates] = useState<string[]>([]);
   const [subjectTagColors, setSubjectTagColors] = useState<TagColorMap>({});
-  const [unitTagColors, setUnitTagColors] = useState<TagColorMap>({});
   const sourceType: SourceType = "self_created";
   const sourceLabel = "";
   const [rightsNote, setRightsNote] = useState("");
@@ -712,7 +707,6 @@ export default function UploadPage() {
 
   useEffect(() => {
     setSubjectTagColors(readTagColors(SUBJECT_TAG_COLORS_KEY));
-    setUnitTagColors(readTagColors(UNIT_TAG_COLORS_KEY));
     setCustomSubjectOptions(readStringList(CUSTOM_SUBJECTS_KEY));
   }, []);
 
@@ -770,44 +764,10 @@ export default function UploadPage() {
     updateSubjectTagColor(subject, color);
   }
 
-  function addUnitCandidate() {
-    const units = unitInput
-      .split(/[,，\n]/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-    if (!units.length) return;
-    const newUnits = units.filter((unit) => !unitCandidates.includes(unit));
-    setUnitCandidates((current) => [...current, ...units.filter((unit) => !current.includes(unit))]);
-    if (newUnits.length) {
-      setUnitTagColors((currentColors) => {
-        const nextColors = { ...currentColors };
-        newUnits.forEach((unit) => {
-          nextColors[unit] = nextColors[unit] || unitInputColor;
-        });
-        writeTagColors(UNIT_TAG_COLORS_KEY, nextColors);
-        return nextColors;
-      });
-    }
-    setUnitInput("");
-    setUnitInputColor((current) => nextPaletteColor(current));
-  }
-
-  function removeUnitCandidate(unit: string) {
-    setUnitCandidates((current) => current.filter((item) => item !== unit));
-  }
-
   function updateSubjectTagColor(subject: string, color: string) {
     setSubjectTagColors((current) => {
       const next = { ...current, [subject]: color };
       writeTagColors(SUBJECT_TAG_COLORS_KEY, next);
-      return next;
-    });
-  }
-
-  function updateUnitTagColor(unit: string, color: string) {
-    setUnitTagColors((current) => {
-      const next = { ...current, [unit]: color };
-      writeTagColors(UNIT_TAG_COLORS_KEY, next);
       return next;
     });
   }
@@ -842,15 +802,6 @@ export default function UploadPage() {
   }
 
   async function submit() {
-    const typedUnits = unitInput
-      .split(/[,，\n]/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-    const finalUnitCandidates = [...unitCandidates, ...typedUnits.filter((unit) => !unitCandidates.includes(unit))];
-    if (typedUnits.length) {
-      setUnitCandidates(finalUnitCandidates);
-      setUnitInput("");
-    }
     if (selectedEngineLocked) {
       setMessage("선택한 과목 엔진은 현재 플랜에서 잠겨 있습니다. 결제 화면에서 엔진을 추가해주세요.");
       return;
@@ -868,7 +819,7 @@ export default function UploadPage() {
     form.append("rights_note", rightsNote);
     form.append("accent_color", batchAccentColor);
     form.append("subject_candidates", JSON.stringify(selectedSubjects));
-    form.append("unit_candidates", JSON.stringify(finalUnitCandidates));
+    form.append("unit_candidates", JSON.stringify([]));
     form.append("subject_engine", subjectEngine);
     if (solutionPdf) form.append("solution_pdf", solutionPdf);
     let data: UploadResponse;
@@ -1003,43 +954,6 @@ export default function UploadPage() {
                               color={color}
                               onColorChange={(nextColor) => updateSubjectTagColor(subject, nextColor)}
                               onRemove={() => toggleSubject(subject)}
-                            />
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        className="min-w-0 flex-1"
-                        placeholder="예: 지수함수와 로그함수, 삼각함수, 수열"
-                        value={unitInput}
-                        onChange={(event) => setUnitInput(event.target.value)}
-                        onBlur={addUnitCandidate}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            addUnitCandidate();
-                          }
-                        }}
-                      />
-                      <TagColorPicker value={unitInputColor} onChange={setUnitInputColor} label="단원 태그 색상" />
-                      <Button type="button" variant="outline" onClick={addUnitCandidate}>추가</Button>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">쉼표로 여러 단원을 한 번에 입력할 수 있습니다. AI가 문항별로 가장 가까운 단원을 고릅니다.</p>
-                    {unitCandidates.length ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {unitCandidates.map((unit) => {
-                          const color = tagColor(unit, unitTagColors, "unit");
-                          return (
-                            <EditableTagChip
-                              key={unit}
-                              label={unit}
-                              color={color}
-                              onColorChange={(nextColor) => updateUnitTagColor(unit, nextColor)}
-                              onRemove={() => removeUnitCandidate(unit)}
                             />
                           );
                         })}
