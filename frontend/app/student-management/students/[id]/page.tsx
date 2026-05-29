@@ -98,6 +98,8 @@ const TEMP_PAPER_SESSION_CACHE_KEY = "tena.student-management.temp-paper-session
 const TEMP_PAPER_SESSION_SOURCE_STUDENT = "이우노";
 const TEMP_PAPER_SESSION_TARGET_STUDENTS = new Set(["이나은", "이수현"]);
 const TEMP_PAPER_SESSION_TITLE = "미친개념 수2 복습 문항";
+const TEMP_PAPER_SESSION_DISPLAY_TITLE = "미친개념 수2 복습 문항 (2)";
+const TEMP_PAPER_SESSION_DATE = "2026-05-29T00:00:00";
 
 type CachedPaperSessionResult = StudentDetail["paper_session_history"][number];
 
@@ -127,20 +129,37 @@ function withTemporaryPaperSessionCache(student: StudentDetail): StudentDetail {
   if (!TEMP_PAPER_SESSION_TARGET_STUDENTS.has(student.name)) return student;
   if (student.paper_session_history.some((item) => isTemporaryPaperSessionTitle(item.session?.title))) return student;
   const cached = readTemporaryPaperSessionCache();
-  if (!cached || !isTemporaryPaperSessionTitle(cached.session?.title)) return student;
-  const count = problemCount(cached);
+  const source = cached && isTemporaryPaperSessionTitle(cached.session?.title) ? cached : null;
+  const count = source ? problemCount(source) : 0;
   const temporaryResult: StudentDetail["paper_session_history"][number] = {
-    ...cached,
-    id: `temporary-cache-${student.id}-${cached.id}`,
+    ...(source || {
+      id: "temporary-cache-fallback",
+      paper_session_id: "temporary-cache-fallback",
+      status: "scheduled",
+      score: null,
+      correct_count: 0,
+      wrong_count: 0,
+      total_count: 0,
+      problem_results: [],
+    }),
+    id: `temporary-cache-${student.id}-${source?.id || "fallback"}`,
+    paper_session_id: source?.paper_session_id || `temporary-cache-session-${student.id}`,
     temporary_cached: true,
     status: "scheduled",
     score: null,
     correct_count: 0,
     wrong_count: 0,
     total_count: count,
+    session: {
+      ...(source?.session || {}),
+      title: source?.session?.title || TEMP_PAPER_SESSION_DISPLAY_TITLE,
+      session_type: source?.session?.session_type || "review",
+      scheduled_at: TEMP_PAPER_SESSION_DATE,
+      problem_count: count,
+    },
     problem_results: Array.from({ length: count }, (_, index) => ({
-      id: `temporary-cache-${student.id}-${cached.id}-${index + 1}`,
-      problem_id: cached.problem_results[index]?.problem_id || "",
+      id: `temporary-cache-${student.id}-${source?.id || "fallback"}-${index + 1}`,
+      problem_id: source?.problem_results[index]?.problem_id || "",
       problem_number: index + 1,
       result_status: "unmarked" as ProblemStatus,
     })),
