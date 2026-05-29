@@ -243,10 +243,11 @@
 
   .landing-webgl-fallback {
     background:
-      radial-gradient(ellipse at 22% 20%, rgba(59, 111, 245, 0.30), transparent 42%),
-      radial-gradient(ellipse at 66% 22%, rgba(124, 92, 255, 0.34), transparent 40%),
-      radial-gradient(ellipse at 48% 52%, rgba(45, 212, 191, 0.06), transparent 36%),
-      linear-gradient(180deg, var(--landing-bg-deep), var(--landing-bg-base) 58%, #07070b);
+      radial-gradient(circle at 54% 50%, rgba(5, 6, 18, 0.96) 0 17%, rgba(18, 12, 48, 0.84) 24%, transparent 34%),
+      radial-gradient(circle at 54% 50%, transparent 0 27%, rgba(103, 46, 224, 0.54) 38%, rgba(37, 82, 210, 0.40) 52%, transparent 68%),
+      conic-gradient(from 220deg at 54% 50%, rgba(8, 8, 24, 0.96), rgba(100, 45, 218, 0.72), rgba(194, 36, 153, 0.50), rgba(27, 82, 202, 0.72), rgba(92, 41, 190, 0.62), rgba(8, 8, 24, 0.96)),
+      radial-gradient(ellipse at 18% 26%, rgba(74, 43, 173, 0.40), transparent 42%),
+      linear-gradient(180deg, #050611, var(--landing-bg-base) 58%, #05050a);
   }
 
   .landing-film-grain {
