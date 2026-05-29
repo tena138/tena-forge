@@ -59,12 +59,7 @@ export function buildSubjectTree(extraValues: string[] = []): SubjectNode[] {
     if (!value || hasSubjectValue(roots, value)) continue;
     const path = splitSubjectPath(value);
     if (path.length > 1) {
-      const parent = ensureRootNode(roots, path[0]);
-      parent.children = parent.children || [];
-      parent.children.push({
-        label: path.slice(1).join(SUBJECT_PATH_SEPARATOR),
-        value,
-      });
+      ensureSubjectPath(roots, path, value);
     } else {
       roots.push({ label: value, value, children: [] });
     }
@@ -91,10 +86,29 @@ function ensureRootNode(roots: SubjectNode[], label: string) {
   return next;
 }
 
+function ensureSubjectPath(roots: SubjectNode[], path: string[], fullValue: string) {
+  let current = ensureRootNode(roots, path[0]);
+  for (let index = 1; index < path.length; index += 1) {
+    const partialValue = path.slice(0, index + 1).join(SUBJECT_PATH_SEPARATOR);
+    current.children = current.children || [];
+    let child = current.children.find((node) => normalizeSubjectValue(node.value || node.label) === partialValue || node.label === path[index]);
+    if (!child) {
+      child = {
+        label: path[index],
+        value: partialValue,
+        children: [],
+      };
+      current.children.push(child);
+    }
+    current = child;
+  }
+  current.value = fullValue;
+}
+
 function sortSubjectNode(node: SubjectNode): SubjectNode {
   if (!node.children?.length) return node;
   return {
     ...node,
-    children: [...node.children].sort((left, right) => left.label.localeCompare(right.label, "ko-KR")),
+    children: [...node.children].map(sortSubjectNode).sort((left, right) => left.label.localeCompare(right.label, "ko-KR")),
   };
 }

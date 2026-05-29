@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { FileText, Loader2, LockKeyhole, ShieldCheck, Sparkles, UploadCloud, X } from "lucide-react";
+import { FileText, Loader2, LockKeyhole, Pencil, Plus, ShieldCheck, Sparkles, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -335,133 +335,137 @@ function SubjectTreeSelector({
   onToggleSubject: (subject: string) => void;
   onAddSubject: (subject: string, color: string) => void;
 }) {
-  const [openParent, setOpenParent] = useState("");
-  const [newRoot, setNewRoot] = useState("");
-  const [newRootColor, setNewRootColor] = useState(tagPalette[0]);
-  const [newChild, setNewChild] = useState("");
-  const [newChildColor, setNewChildColor] = useState(tagPalette[1]);
+  const [editing, setEditing] = useState(false);
+  const [addTarget, setAddTarget] = useState<"root" | string | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [draftColor, setDraftColor] = useState(tagPalette[0]);
 
-  useEffect(() => {
-    if (!nodes.length) {
-      setOpenParent("");
-      return;
-    }
-    if (!openParent || !nodes.some((node) => (node.value || node.label) === openParent)) {
-      setOpenParent(nodes[0].value || nodes[0].label);
-    }
-  }, [nodes, openParent]);
-
-  function addRoot() {
-    const subject = normalizeSubjectValue(newRoot);
-    if (!subject) return;
-    onAddSubject(subject, newRootColor);
-    setOpenParent(subject);
-    setNewRoot("");
-    setNewRootColor((current) => nextPaletteColor(current));
+  function nodeValue(node: SubjectNode) {
+    return normalizeSubjectValue(node.value || node.label);
   }
 
-  function addChild(parent: SubjectNode) {
-    const parentValue = parent.value || parent.label;
-    const subject = normalizeSubjectValue(makeSubjectPathValue(parentValue, newChild));
+  function openDraft(target: "root" | string) {
+    setAddTarget(target);
+    setDraftLabel("");
+  }
+
+  function commitDraft(target: "root" | string) {
+    const label = normalizeSubjectValue(draftLabel);
+    if (!label) return;
+    const subject = target === "root" ? label : normalizeSubjectValue(makeSubjectPathValue(target, label));
     if (!subject) return;
-    onAddSubject(subject, newChildColor);
-    setOpenParent(parentValue);
-    setNewChild("");
-    setNewChildColor((current) => nextPaletteColor(current));
+    onAddSubject(subject, draftColor);
+    setAddTarget(null);
+    setDraftLabel("");
+    setDraftColor((current) => nextPaletteColor(current));
   }
 
   return (
-    <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-      <div className="flex min-w-max gap-3">
+    <div className="rounded-[10px] border border-white/10 bg-white/[0.025] p-3">
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          className={cn(
+            "grid h-9 w-9 place-items-center rounded-[8px] border transition",
+            editing ? "border-violet-300/60 bg-violet-400/20 text-violet-100 shadow-[0_0_22px_rgba(139,92,246,0.24)]" : "border-white/10 bg-black/25 text-slate-300 hover:bg-white/[0.07] hover:text-white"
+          )}
+          onClick={() => {
+            setEditing((current) => !current);
+            setAddTarget(null);
+            setDraftLabel("");
+          }}
+          aria-label={editing ? "과목 편집 종료" : "과목 편집"}
+          title={editing ? "과목 편집 종료" : "과목 편집"}
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+        <div className="flex min-w-max gap-4">
         {nodes.map((node) => {
-          const nodeKey = node.value || node.label;
-          const isOpen = openParent === nodeKey;
+          const nodeKey = nodeValue(node);
           const groupColor = tagColor(nodeKey, subjectTagColors, "subject");
-          const parentSelected = Boolean(node.value && selectedSubjects.includes(node.value));
-          const parentRowVisible = parentSelected || !node.children?.length;
           return (
-            <div key={nodeKey} className="w-56 shrink-0 rounded-[8px] border border-white/10 bg-black/20 p-2">
-              <button
-                type="button"
-                className={cn(
-                  "flex h-9 w-full items-center gap-2 rounded-[7px] border px-2 text-sm font-bold transition hover:brightness-110",
-                  isOpen ? "text-white" : "text-slate-300"
-                )}
-                style={tagToneStyle(groupColor, isOpen)}
-                onClick={() => setOpenParent(isOpen ? "" : nodeKey)}
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: groupColor }} />
-                <span className="truncate">{node.label}</span>
-              </button>
-              {isOpen ? (
-                <div className="mt-2 space-y-1.5">
-                  {parentRowVisible && node.value ? (
-                    <SubjectFolderRow
-                      label={node.label}
-                      value={node.value}
-                      color={tagColor(node.value, subjectTagColors, "subject")}
-                      selected={selectedSubjects.includes(node.value)}
-                      onToggle={onToggleSubject}
-                    />
-                  ) : null}
-                  {node.children?.map((child) => {
-                    const value = normalizeSubjectValue(child.value || child.label);
-                    return (
-                      <SubjectFolderRow
-                        key={value}
-                        label={child.label}
-                        value={value}
-                        color={tagColor(value, subjectTagColors, "subject")}
-                        selected={selectedSubjects.includes(value)}
-                        onToggle={onToggleSubject}
-                      />
-                    );
-                  })}
-                  <div className="flex items-center gap-1 rounded-[7px] border border-dashed border-white/12 bg-white/[0.025] p-1.5">
-                    <span className="px-1 text-sm font-bold text-slate-400">+</span>
-                    <Input
-                      className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
-                      placeholder="하위항목"
-                      value={newChild}
-                      onChange={(event) => setNewChild(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          addChild(node);
-                        }
-                      }}
-                    />
-                    <TagColorPicker value={newChildColor} onChange={setNewChildColor} label="하위항목 색상" />
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => addChild(node)}>+</Button>
-                  </div>
-                </div>
-              ) : null}
+            <div key={nodeKey} className="w-72 shrink-0 rounded-[8px] border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-[8px] border px-3 text-left text-base font-black text-white transition hover:brightness-110"
+                  style={tagToneStyle(groupColor, selectedSubjects.includes(nodeKey))}
+                  onClick={() => onToggleSubject(nodeKey)}
+                >
+                  <span className="h-4 w-4 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: groupColor }} />
+                  <span className="truncate">{node.label}</span>
+                </button>
+                {editing ? (
+                  <button
+                    type="button"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:bg-white/10 hover:text-white"
+                    onClick={() => openDraft(nodeKey)}
+                    aria-label={`${node.label} 하위 항목 추가`}
+                    title={`${node.label} 하위 항목 추가`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-3 space-y-1.5 border-l-4 pl-3" style={{ borderColor: groupColor }}>
+                {node.children?.map((child) => (
+                  <SubjectFolderRow
+                    key={nodeValue(child)}
+                    node={child}
+                    level={1}
+                    subjectTagColors={subjectTagColors}
+                    selectedSubjects={selectedSubjects}
+                    editing={editing}
+                    addTarget={addTarget}
+                    draftLabel={draftLabel}
+                    draftColor={draftColor}
+                    onToggle={onToggleSubject}
+                    onOpenDraft={openDraft}
+                    onDraftLabelChange={setDraftLabel}
+                    onDraftColorChange={setDraftColor}
+                    onCommitDraft={commitDraft}
+                  />
+                ))}
+                {editing && addTarget === nodeKey ? (
+                  <SubjectDraftRow
+                    value={draftLabel}
+                    color={draftColor}
+                    placeholder="하위항목"
+                    onChange={setDraftLabel}
+                    onColorChange={setDraftColor}
+                    onSubmit={() => commitDraft(nodeKey)}
+                  />
+                ) : null}
+              </div>
             </div>
           );
         })}
-        <div className="w-56 shrink-0 rounded-[8px] border border-dashed border-white/15 bg-black/15 p-2">
-          <div className="flex h-9 items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.03] px-2 text-sm font-bold text-slate-300">
-            <span className="text-base">+</span>
-            <span>상위항목</span>
+        {editing ? (
+          <div className="w-72 shrink-0 rounded-[8px] border border-dashed border-white/15 bg-black/15 p-3">
+            <button
+              type="button"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.045] text-sm font-black text-slate-100 transition hover:bg-white/[0.08]"
+              onClick={() => openDraft("root")}
+            >
+              <Plus className="h-5 w-5" />
+              상위항목
+            </button>
+            {addTarget === "root" ? (
+              <div className="mt-3">
+                <SubjectDraftRow
+                  value={draftLabel}
+                  color={draftColor}
+                  placeholder="상위항목"
+                  onChange={setDraftLabel}
+                  onColorChange={setDraftColor}
+                  onSubmit={() => commitDraft("root")}
+                />
+              </div>
+            ) : null}
           </div>
-          <div className="mt-2 space-y-2">
-            <Input
-              className="h-9 border-white/10 bg-black/25 text-sm"
-              placeholder="상위항목"
-              value={newRoot}
-              onChange={(event) => setNewRoot(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addRoot();
-                }
-              }}
-            />
-            <div className="flex items-center gap-2">
-              <TagColorPicker value={newRootColor} onChange={setNewRootColor} label="상위항목 색상" />
-              <Button type="button" size="sm" variant="outline" className="h-9 flex-1" onClick={addRoot}>+</Button>
-            </div>
-          </div>
+        ) : null}
         </div>
       </div>
     </div>
@@ -469,32 +473,135 @@ function SubjectTreeSelector({
 }
 
 function SubjectFolderRow({
-  label,
+  node,
+  level,
+  subjectTagColors,
+  selectedSubjects,
+  editing,
+  addTarget,
+  draftLabel,
+  draftColor,
+  onToggle,
+  onOpenDraft,
+  onDraftLabelChange,
+  onDraftColorChange,
+  onCommitDraft,
+}: {
+  node: SubjectNode;
+  level: number;
+  subjectTagColors: TagColorMap;
+  selectedSubjects: string[];
+  editing: boolean;
+  addTarget: "root" | string | null;
+  draftLabel: string;
+  draftColor: string;
+  onToggle: (subject: string) => void;
+  onOpenDraft: (target: string) => void;
+  onDraftLabelChange: (value: string) => void;
+  onDraftColorChange: (color: string) => void;
+  onCommitDraft: (target: string) => void;
+}) {
+  const value = normalizeSubjectValue(node.value || node.label);
+  const color = tagColor(value, subjectTagColors, "subject");
+  const selected = selectedSubjects.includes(value);
+  const indent = Math.min(level - 1, 2) * 0.85;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5" style={{ marginLeft: `${indent}rem`, width: `calc(100% - ${indent}rem)` }}>
+        <button
+          type="button"
+          className={cn(
+            "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[7px] border px-2 text-left text-xs font-semibold transition hover:brightness-110",
+            selected ? "text-white" : "text-slate-300"
+          )}
+          style={tagToneStyle(color, selected)}
+          onClick={() => onToggle(value)}
+        >
+          <span className="text-slate-500">-</span>
+          <span className="h-2 w-2 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: color }} />
+          <span className="truncate">{node.label}</span>
+        </button>
+        {editing ? (
+          <button
+            type="button"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:bg-white/10 hover:text-white"
+            onClick={() => onOpenDraft(value)}
+            aria-label={`${node.label} 하위 항목 추가`}
+            title={`${node.label} 하위 항목 추가`}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+      {editing && addTarget === value ? (
+        <div style={{ marginLeft: `${Math.min(level, 3) * 0.85}rem` }}>
+          <SubjectDraftRow
+            value={draftLabel}
+            color={draftColor}
+            placeholder={level === 1 ? "하하위항목" : "하위항목"}
+            onChange={onDraftLabelChange}
+            onColorChange={onDraftColorChange}
+            onSubmit={() => onCommitDraft(value)}
+          />
+        </div>
+      ) : null}
+      {node.children?.map((child) => (
+        <SubjectFolderRow
+          key={normalizeSubjectValue(child.value || child.label)}
+          node={child}
+          level={level + 1}
+          subjectTagColors={subjectTagColors}
+          selectedSubjects={selectedSubjects}
+          editing={editing}
+          addTarget={addTarget}
+          draftLabel={draftLabel}
+          draftColor={draftColor}
+          onToggle={onToggle}
+          onOpenDraft={onOpenDraft}
+          onDraftLabelChange={onDraftLabelChange}
+          onDraftColorChange={onDraftColorChange}
+          onCommitDraft={onCommitDraft}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SubjectDraftRow({
   value,
   color,
-  selected,
-  onToggle,
+  placeholder,
+  onChange,
+  onColorChange,
+  onSubmit,
 }: {
-  label: string;
   value: string;
   color: string;
-  selected: boolean;
-  onToggle: (subject: string) => void;
+  placeholder: string;
+  onChange: (value: string) => void;
+  onColorChange: (color: string) => void;
+  onSubmit: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex h-8 w-full items-center gap-2 rounded-[7px] border px-2 text-left text-xs font-semibold transition hover:brightness-110",
-        selected ? "text-white" : "text-slate-300"
-      )}
-      style={tagToneStyle(color, selected)}
-      onClick={() => onToggle(value)}
-    >
-      <span className="text-slate-500">-</span>
-      <span className="h-2 w-2 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: color }} />
-      <span className="truncate">{label}</span>
-    </button>
+    <div className="flex items-center gap-1.5 rounded-[7px] border border-dashed border-white/12 bg-white/[0.025] p-1.5">
+      <Input
+        className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onSubmit();
+          }
+        }}
+      />
+      <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
+      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={onSubmit}>
+        <Plus className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   );
 }
 
