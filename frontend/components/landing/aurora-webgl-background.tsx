@@ -77,28 +77,28 @@ void main() {
   vec3 violet = vec3(0.455, 0.205, 0.940);
   vec3 magenta = vec3(0.780, 0.140, 0.680);
 
-  float ringA = exp(-pow((radius - (0.34 + 0.035 * sin(t * 0.92 + n1 * 2.2))) / 0.145, 2.0));
-  float ringB = exp(-pow((radius - (0.58 + 0.045 * cos(t * 0.70 + n2 * 2.6))) / 0.190, 2.0));
-  float ringC = exp(-pow((radius - (0.82 + 0.035 * sin(t * 0.46 + n3 * 2.0))) / 0.230, 2.0));
-  float armA = smoothstep(0.16, 0.92, sin(spiral * 2.15 + n2 * 2.7) * 0.5 + 0.5);
-  float armB = smoothstep(0.22, 0.88, sin(counterSpiral * 1.72 + n3 * 2.3) * 0.5 + 0.5);
-  float aurora = ringA * (0.58 + armA * 0.42) + ringB * (0.38 + armB * 0.46) + ringC * 0.28;
-  aurora *= 0.76 + n1 * 0.32 + n2 * 0.22;
+  float ringA = exp(-pow((radius - (0.34 + 0.035 * sin(t * 0.92 + n1 * 2.2))) / 0.245, 2.0));
+  float ringB = exp(-pow((radius - (0.58 + 0.045 * cos(t * 0.70 + n2 * 2.6))) / 0.320, 2.0));
+  float ringC = exp(-pow((radius - (0.82 + 0.035 * sin(t * 0.46 + n3 * 2.0))) / 0.380, 2.0));
+  float armA = smoothstep(0.10, 0.95, sin(spiral * 1.74 + n2 * 2.2) * 0.5 + 0.5);
+  float armB = smoothstep(0.12, 0.92, sin(counterSpiral * 1.38 + n3 * 2.0) * 0.5 + 0.5);
+  float aurora = ringA * (0.52 + armA * 0.24) + ringB * (0.36 + armB * 0.28) + ringC * 0.18;
+  aurora *= 0.66 + n1 * 0.24 + n2 * 0.18;
 
   vec3 bandColor = mix(blue, violet, smoothstep(-0.58, 0.62, sin(spiral + n1)));
   bandColor = mix(bandColor, magenta, smoothstep(0.56, 1.0, sin(counterSpiral * 0.84 + n3) * 0.5 + 0.5) * 0.52);
   bandColor = mix(bandColor, indigo, smoothstep(0.52, 1.0, radius) * 0.34);
 
-  float centerShadow = smoothstep(0.44, 0.12, radius);
+  float centerShadow = smoothstep(0.36, 0.02, radius);
   float outerFalloff = smoothstep(1.18, 0.28, radius);
   vec3 color = mix(deep, base, outerFalloff * 0.62);
   color += bandColor * aurora * (0.74 + outerFalloff * 0.42);
-  color = mix(color, deep, centerShadow * 0.72);
+  color = mix(color, deep, centerShadow * 0.34);
 
   float sideFade = smoothstep(1.46, 0.22, length(p * vec2(0.74, 1.04)));
   color *= 0.52 + sideFade * 0.66;
-  color = mix(color, deep, smoothstep(0.76, 1.18, abs(p.x)) * 0.42);
-  color = mix(color, deep, smoothstep(0.60, 1.02, abs(p.y)) * 0.30);
+  color = mix(color, deep, smoothstep(0.82, 1.24, abs(p.x)) * 0.34);
+  color = mix(color, deep, smoothstep(0.70, 1.12, abs(p.y)) * 0.22);
 
   float grain = hash(gl_FragCoord.xy + u_time * 11.0) - 0.5;
   color += grain * 0.026;
@@ -271,7 +271,7 @@ export function AuroraWebGLBackground() {
       <canvas ref={canvasRef} className={fallback ? "absolute inset-0 h-full w-full opacity-0" : "absolute inset-0 h-full w-full opacity-100"} />
       <div className="landing-film-grain absolute inset-0" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(10,10,15,0.08)_0%,rgba(10,10,15,0.38)_54%,rgba(10,10,15,0.96)_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-80 bg-[linear-gradient(180deg,transparent,var(--landing-bg-base)_84%)]" />
+      <div className="absolute inset-x-0 bottom-0 h-[42vh] bg-[linear-gradient(180deg,transparent,rgba(5,5,10,0.34)_100%)]" />
     </div>
   );
 }

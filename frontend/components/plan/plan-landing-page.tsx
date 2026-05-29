@@ -710,7 +710,7 @@ function ScrollStorySection() {
       <MobileWorkflowSection />
 
       <div ref={pinRef} className="relative hidden h-screen min-h-[46rem] overflow-hidden lg:block">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(45,212,191,0.09),transparent_28rem),radial-gradient(circle_at_80%_42%,rgba(124,92,255,0.18),transparent_34rem),linear-gradient(180deg,rgba(6,7,13,0.10),rgba(6,7,13,0.78))]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(45,212,191,0.07),transparent_30rem),radial-gradient(circle_at_80%_42%,rgba(124,92,255,0.13),transparent_38rem),linear-gradient(180deg,rgba(6,7,13,0.04),rgba(6,7,13,0.34))]" />
         <div className="absolute inset-0">
             <StoryStageScene active={activeIndex === 0}>
               <DigitizeScene progress={progressByScene[0]} />
@@ -1629,7 +1629,7 @@ function ProblemCard({ number, selected, style }: { number: number; selected: bo
 function PlanSection() {
   return (
     <section id="plans" className="landing-plan-section relative overflow-hidden px-4 py-20 sm:px-6">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[linear-gradient(180deg,rgba(8,8,15,0),rgba(8,8,15,0.86)_72%,rgba(8,8,15,0))]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[linear-gradient(180deg,rgba(8,8,15,0),rgba(8,8,15,0.30)_64%,rgba(8,8,15,0))]" />
       <div className="pointer-events-none absolute left-[-12rem] top-16 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(45,212,191,0.14),transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute right-[-9rem] top-8 h-[38rem] w-[38rem] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.26),transparent_70%)] blur-3xl" />
       <div className="pointer-events-none absolute inset-x-0 top-28 h-px bg-[linear-gradient(90deg,transparent,rgba(45,212,191,0.24),rgba(124,92,255,0.42),transparent)]" />
