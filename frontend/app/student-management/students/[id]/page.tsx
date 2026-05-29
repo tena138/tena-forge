@@ -21,6 +21,7 @@ import {
   deleteCounselingLog,
   createReviewSet,
   deleteWrongAnswerRecord,
+  deleteScheduleEvent,
   getStudentDetail,
   savePaperSessionGrade,
   saveCounselingPreset,
@@ -36,6 +37,7 @@ type CounselingDraftStatus = "idle" | "restored" | "saving" | "saved" | "error";
 type StudentTab = "calendar" | "wrong" | "counseling";
 type StudentCalendarItem = {
   id: string;
+  event_id?: string;
   date: string;
   title: string;
   meta: string;
@@ -294,6 +296,7 @@ function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
   const resultBySessionId = new Map(student.paper_session_history.map((result) => [result.paper_session_id, result]));
   const eventItems = (student.schedule_events || []).map((event) => ({
     id: `event-${event.id}`,
+    event_id: event.id,
     date: event.starts_at,
     title: event.title,
     meta: event.event_type,
@@ -400,6 +403,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const calendarInitializedRef = useRef(false);
   const [message, setMessage] = useState("");
   const [counselingSaving, setCounselingSaving] = useState(false);
+  const [deletingScheduleEventId, setDeletingScheduleEventId] = useState("");
   const [deletingCounselingLogId, setDeletingCounselingLogId] = useState("");
   const [formatSaving, setFormatSaving] = useState(false);
   const [formatAutosaveState, setFormatAutosaveState] = useState<FormatAutosaveState>("idle");
@@ -821,6 +825,22 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   async function saveResult(result: StudentDetail["paper_session_history"][number]) {
     clearAutosaveTimer(result.id);
     await persistResult(result, resultStatuses[result.id] || buildStatuses(result), true);
+  }
+
+  async function removeCalendarEvent(item: StudentCalendarItem) {
+    if (!item.event_id) return;
+    if (!window.confirm(`'${item.title}' 일정을 삭제할까요?`)) return;
+    setDeletingScheduleEventId(item.event_id);
+    try {
+      await deleteScheduleEvent(item.event_id);
+      setSelectedCalendarItemId((current) => (current === item.id ? "" : current));
+      await refreshStudent();
+      setMessage("일정을 삭제했습니다.");
+    } catch {
+      setMessage("일정 삭제에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setDeletingScheduleEventId("");
+    }
   }
 
   async function deleteWrongAnswer(wrong: WrongAnswer) {
@@ -1299,27 +1319,38 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               </CardHeader>
               <CardContent className="space-y-3">
                 {selectedCalendarItems.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => setSelectedCalendarItemId(item.id)}
                     className={cn(
-                      "block w-full rounded-lg border bg-white/[0.03] p-3 text-left transition hover:border-violet-300/40 hover:bg-white/[0.045]",
+                      "rounded-lg border bg-white/[0.03] p-3 transition hover:border-violet-300/40 hover:bg-white/[0.045]",
                       selectedCalendarItem?.id === item.id ? "border-violet-300/50 ring-1 ring-violet-300/25" : "border-white/[0.08]"
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <button type="button" onClick={() => setSelectedCalendarItemId(item.id)} className="min-w-0 flex-1 text-left">
                         <p className="text-xs font-semibold text-violet-200">{dateLabel(item.date)}</p>
                         <p className="mt-1 font-black text-white">{item.title}</p>
-                      </div>
-                      <div className="flex shrink-0 gap-1">
+                      </button>
+                      <div className="flex shrink-0 items-start gap-1">
                         <Badge className="border border-white/10 bg-white/[0.06] text-slate-200">{item.kind}</Badge>
                         <Badge className={cn("border", tone(item.meta))}>{item.meta}</Badge>
+                        {item.event_id ? (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
+                            onClick={() => removeCalendarEvent(item)}
+                            disabled={deletingScheduleEventId === item.event_id}
+                            aria-label={`${item.title} 일정 삭제`}
+                          >
+                            {deletingScheduleEventId === item.event_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                     {item.description ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{item.description}</p> : null}
-                  </button>
+                  </div>
                 ))}
                 {selectedCalendarResult ? (
                   <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
