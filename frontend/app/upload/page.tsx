@@ -344,6 +344,7 @@ function SubjectTreeSelector({
   }
 
   function openDraft(target: "root" | string) {
+    setEditing(true);
     setAddTarget(target);
     setDraftLabel("");
   }
@@ -406,10 +407,14 @@ function SubjectTreeSelector({
                 {editing ? (
                   <button
                     type="button"
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
+                    className={cn(
+                      "grid h-7 w-7 shrink-0 place-items-center rounded-full border transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white",
+                      addTarget === nodeKey ? "border-violet-300/70 bg-violet-400/20 text-violet-50" : "border-white/12 bg-black/25 text-slate-200"
+                    )}
                     onClick={() => openDraft(nodeKey)}
                     aria-label={`${node.label} 하위 항목 추가`}
                     title={`${node.label} 하위 항목 추가`}
+                    aria-pressed={addTarget === nodeKey}
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>
@@ -442,6 +447,7 @@ function SubjectTreeSelector({
                       value={draftLabel}
                       color={draftColor}
                       placeholder="하위항목"
+                      label={`${node.label} 하위 항목`}
                       onChange={setDraftLabel}
                       onColorChange={setDraftColor}
                       onSubmit={() => commitDraft(nodeKey)}
@@ -459,8 +465,12 @@ function SubjectTreeSelector({
           <div className="w-52 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
             <button
               type="button"
-              className="flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:border-violet-300/40 hover:bg-violet-400/10"
+              className={cn(
+                "flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border text-sm font-black transition hover:border-violet-300/40 hover:bg-violet-400/10",
+                addTarget === "root" ? "border-violet-300/60 bg-violet-400/15 text-violet-50" : "border-white/10 bg-white/[0.035] text-slate-100"
+              )}
               onClick={() => openDraft("root")}
+              aria-pressed={addTarget === "root"}
             >
               <Plus className="h-5 w-5" />
               상위 항목 추가
@@ -471,6 +481,7 @@ function SubjectTreeSelector({
                   value={draftLabel}
                   color={draftColor}
                   placeholder="상위항목"
+                  label="새 상위 항목"
                   onChange={setDraftLabel}
                   onColorChange={setDraftColor}
                   onSubmit={() => commitDraft("root")}
@@ -485,7 +496,6 @@ function SubjectTreeSelector({
             type="button"
             className="flex min-h-24 items-center justify-center gap-2 rounded-[8px] border border-dashed border-white/12 bg-white/[0.025] px-3 py-4 text-sm font-bold text-slate-300 transition hover:border-violet-300/40 hover:bg-violet-400/10 hover:text-violet-50 md:col-span-2 xl:col-span-3"
             onClick={() => {
-              setEditing(true);
               openDraft("root");
             }}
           >
@@ -568,6 +578,7 @@ function SubjectFolderRow({
             value={draftLabel}
             color={draftColor}
             placeholder={level === 1 ? "하하위항목" : "하위항목"}
+            label={level === 1 ? `${node.label} 하하위 항목` : `${node.label} 하위 항목`}
             onChange={onDraftLabelChange}
             onColorChange={onDraftColorChange}
             onSubmit={() => onCommitDraft(value)}
@@ -601,6 +612,7 @@ function SubjectDraftRow({
   value,
   color,
   placeholder,
+  label,
   onChange,
   onColorChange,
   onSubmit,
@@ -608,28 +620,33 @@ function SubjectDraftRow({
   value: string;
   color: string;
   placeholder: string;
+  label: string;
   onChange: (value: string) => void;
   onColorChange: (color: string) => void;
   onSubmit: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-[7px] border border-dashed border-white/12 bg-white/[0.025] p-1.5">
-      <Input
-        className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
-        placeholder={placeholder}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            onSubmit();
-          }
-        }}
-      />
-      <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
-      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={onSubmit}>
-        <Plus className="h-3.5 w-3.5" />
-      </Button>
+    <div className="rounded-[7px] border border-dashed border-violet-300/30 bg-violet-400/[0.055] p-2 shadow-[0_12px_26px_rgba(76,29,149,0.12)]">
+      <p className="mb-2 text-[11px] font-bold text-violet-100">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <Input
+          autoFocus
+          className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onSubmit();
+            }
+          }}
+        />
+        <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
+        <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={onSubmit}>
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 }
