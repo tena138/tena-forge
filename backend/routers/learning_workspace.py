@@ -22,8 +22,6 @@ from models import (
     LearningAssignment,
     LearningAssignmentTarget,
     LearningSubmission,
-    PaperSession,
-    PaperSessionResult,
     Problem,
     ProblemAttempt,
     ProblemSet,
@@ -47,8 +45,6 @@ from services.academy_student_access import (
 from services.ownership import current_owner_id
 
 router = APIRouter(prefix="/api/learning", tags=["learning-workspace"])
-
-TEMP_STUDENT_ARCHIVE_SESSION_TITLES = {"미친개념 수2 복습 문항 (2)"}
 
 CHOICE_MAP = {
     "\u2460": "1",
@@ -334,77 +330,6 @@ def _student_grants(db: Session, student_id: str, academy_id: str | None = None,
             query = query.where(_active_grant_filter(now))
         grants.extend(db.scalars(query.order_by(ArchiveAccessGrant.updated_at.desc())).all())
     return grants
-
-
-def _paper_session_history_archives(db: Session, student_id: str, academy_id: str | None = None) -> list[dict[str, Any]]:
-    query = (
-        select(PaperSessionResult, PaperSession)
-        .join(PaperSession, PaperSession.id == PaperSessionResult.paper_session_id)
-        .where(
-            PaperSessionResult.student_user_id == student_id,
-            PaperSession.title.in_(TEMP_STUDENT_ARCHIVE_SESSION_TITLES),
-        )
-        .order_by(PaperSessionResult.updated_at.desc())
-    )
-    if academy_id:
-        query = query.where(PaperSessionResult.academy_id == academy_id)
-
-    rows = db.execute(query).all()
-    result: list[dict[str, Any]] = []
-    for session_result, session in rows:
-        content = session.content_version
-        problems = content.snapshot.get("problems", []) if content and isinstance(content.snapshot, dict) else []
-        result.append(
-            {
-                "id": str(session_result.id),
-                "academy_id": session_result.academy_id,
-                "academy_name": get_academy_name(db, session_result.academy_id),
-                "student_id": student_id,
-                "group_id": None,
-                "source_type": "paperSessionHistory",
-                "source_id": str(session.id),
-                "access_scope": "problemSet",
-                "can_view_problems": True,
-                "can_solve_freely": False,
-                "can_save_to_my_archive": False,
-                "can_create_custom_sets": False,
-                "can_see_answer_immediately": False,
-                "can_see_solution": False,
-                "can_retry": False,
-                "timed_only": False,
-                "starts_at": None,
-                "expires_at": None,
-                "revoked_at": None,
-                "created_by": session.created_by,
-                "created_at": session.created_at,
-                "updated_at": session_result.updated_at,
-                "title": session.title,
-                "problem_count": len(problems) or session_result.total_count,
-                "locked_reason": None,
-            }
-        )
-    return result
-
-
-def _paper_session_history_detail(db: Session, student_id: str, result_id: UUID) -> dict[str, Any] | None:
-    session_result = db.get(PaperSessionResult, result_id)
-    if not session_result or session_result.student_user_id != student_id:
-        return None
-    session = db.get(PaperSession, session_result.paper_session_id)
-    if not session or session.title not in TEMP_STUDENT_ARCHIVE_SESSION_TITLES:
-        return None
-    content = session.content_version
-    problems = content.snapshot.get("problems", []) if content and isinstance(content.snapshot, dict) else []
-    grant = _paper_session_history_archives(db, student_id, academy_id=session_result.academy_id)
-    archive_payload = next((item for item in grant if item["id"] == str(session_result.id)), None)
-    if not archive_payload:
-        return None
-    return {
-        "grant": archive_payload,
-        "academy_name": get_academy_name(db, session_result.academy_id),
-        "title": session.title,
-        "problems": [_problem_for_student(problem, show_answer=False, show_solution=False) for problem in problems],
-    }
 
 
 def _grant_allows_problem(db: Session, grant: ArchiveAccessGrant, problem_id: UUID) -> bool:
@@ -808,7 +733,6 @@ def student_archives(request: Request, academy_id: str | None = None, db: Sessio
                 "locked_reason": locked_reason,
             }
         )
-    result.extend(_paper_session_history_archives(db, student_id, academy_id=academy_id))
     return result
 
 
@@ -816,10 +740,6 @@ def student_archives(request: Request, academy_id: str | None = None, db: Sessio
 def student_archive_problems(grant_id: UUID, request: Request, db: Session = Depends(get_db)):
     student_id = current_owner_id(request)
     grant = next((item for item in _student_grants(db, student_id) if item.id == grant_id), None)
-    if not grant:
-        history_detail = _paper_session_history_detail(db, student_id, grant_id)
-        if history_detail:
-            return history_detail
     if not grant or not grant.can_view_problems:
         raise HTTPException(status_code=404, detail="Archive access not found.")
     title, problems = _source_title_and_problems(db, grant.academy_id, grant.source_type, grant.source_id)

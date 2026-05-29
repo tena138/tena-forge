@@ -315,7 +315,7 @@ export default function StudentAppPage() {
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-200">{problem.problem_text}</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                     <Input value={archiveAnswers[problem.id] || ""} onChange={(event) => setArchiveAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
-                    <Button variant="outline" disabled={!selectedArchive.grant.can_solve_freely} onClick={() => void solveArchiveProblem(problem.id, selectedArchive.grant.id)}>풀이 저장</Button>
+                    <Button variant="outline" onClick={() => void solveArchiveProblem(problem.id, selectedArchive.grant.id)}>풀이 저장</Button>
                     <Button variant="outline" disabled={!selectedArchive.grant.can_save_to_my_archive} onClick={() => void saveProblemToSet(problem.id, selectedArchive.grant.id)}>세트 저장</Button>
                   </div>
                 </div>
