@@ -826,7 +826,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   function addCounselingField() {
     setCounselingFields((current) => {
       const id = createFieldId("새 항목", current.map((field) => field.id));
-      return [...current, { id, label: "새 항목", placeholder: "기록할 내용을 입력하세요", include_in_report: true }];
+      return [...current, { id, label: "", placeholder: "", include_in_report: true }];
     });
     markCounselingFormatChanged();
   }
@@ -1444,7 +1444,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             <Input
                               value={field.label}
                               onChange={(event) => updateCounselingField(field.id, { label: event.target.value })}
-                              placeholder="항목 이름"
+                              placeholder="새 항목"
                             />
                             <Button type="button" size="icon" variant="outline" onClick={() => removeCounselingField(field.id)} disabled={counselingFields.length <= 1} aria-label="항목 삭제">
                               <Trash2 className="h-4 w-4" />
@@ -1454,7 +1454,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             className="mt-2"
                             value={field.placeholder || ""}
                             onChange={(event) => updateCounselingField(field.id, { placeholder: event.target.value })}
-                            placeholder="입력창 안내문"
+                            placeholder="기록할 내용을 입력하세요"
                           />
                           <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
                             <input
