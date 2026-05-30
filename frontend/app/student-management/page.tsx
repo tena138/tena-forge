@@ -149,7 +149,7 @@ function errorMessage(error: unknown, fallback: string) {
 
 function ClassStudentCard({ student }: { student: StudentCard }) {
   return (
-    <Link href={`/student-management/students/${student.id}`} className="block min-w-0 rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
+    <Link href={`/student-management/students/${student.id}`} className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{student.name}</p>
@@ -1194,7 +1194,7 @@ export default function StudentManagementPage() {
                         </form>
                       ) : null}
                       {classRow.students.length ? (
-                        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+                        <div className="flex min-h-[136px] items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
                           {classRow.students.map((student) => (
                             <ClassStudentCard key={student.id} student={student} />
                           ))}

@@ -294,7 +294,7 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
                   <h2 className="flex items-center gap-2 text-sm font-black text-white"><Users className="h-4 w-4" />학생</h2>
                   <span className="text-xs font-semibold text-slate-500">{classStudents.length}명</span>
                 </div>
-                <div className="grid gap-2 p-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+                <div className="grid gap-2 p-3 md:grid-cols-2">
                   {classStudents.map((student) => (
                     <Link
                       key={student.id}
