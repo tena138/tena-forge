@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     siteName: "Tena Forge",
     images: [
       {
-        url: "/og-image.png?v=1",
+        url: "/og-image.png?v=2",
         width: 1200,
         height: 630,
         alt: "Tena Forge",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Tena Forge",
     description: "PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.",
-    images: ["/og-image.png?v=1"],
+    images: ["/og-image.png?v=2"],
   },
 };
 
