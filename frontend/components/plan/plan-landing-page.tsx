@@ -347,7 +347,15 @@ function clampProgress(value: number) {
 
 function sceneProgress(progress: number, index: number) {
   const timing = storyTiming[index];
-  return clampProgress((progress - timing.start) / Math.max(0.01, timing.end - timing.start));
+  const linearProgress = clampProgress((progress - timing.start) / Math.max(0.01, timing.end - timing.start));
+  return pacedSceneProgress(linearProgress);
+}
+
+function pacedSceneProgress(progress: number) {
+  const value = clampProgress(progress);
+  if (value < 0.74) return clampProgress(value / 0.74) * 0.9;
+  if (value < 0.9) return 0.9;
+  return 0.9 + clampProgress((value - 0.9) / 0.1) * 0.1;
 }
 
 function interpolateTimeline(progress: number, points: Array<{ at: number; x: number; y: number }>) {
@@ -644,7 +652,7 @@ function ScrollStorySection() {
         pin,
         scrub: 1,
         start: "top top",
-        end: "+=360%",
+        end: "+=430%",
         anticipatePin: 1,
         invalidateOnRefresh: true,
         onUpdate: (self) => setProgress(clampProgress(self.progress)),
@@ -776,7 +784,7 @@ function StoryCaption({
   progress: number;
   className: string;
 }) {
-  const visible = clampProgress((progress - 0.55) / 0.12) * (1 - clampProgress((progress - 0.96) / 0.04));
+  const visible = clampProgress((progress - 0.46) / 0.14) * (1 - clampProgress((progress - 0.985) / 0.015));
   return (
     <div
       className={cn("landing-keep-words pointer-events-none absolute z-30", className)}
