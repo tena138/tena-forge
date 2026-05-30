@@ -236,7 +236,7 @@
   }
 
   .landing-mock-frame {
-    transform: translate(-50%, -50%) rotateY(-4deg) rotateX(2deg);
+    transform: rotateY(-3deg) rotateX(1.5deg);
     transform-origin: center;
     mask-image: linear-gradient(180deg, black 0%, black 82%, transparent 100%);
   }
@@ -416,7 +416,7 @@
 
     .landing-mock-frame {
       transition: none !important;
-      transform: translate(-50%, -50%) !important;
+      transform: none !important;
     }
 
     .landing-motion-safe,
@@ -431,7 +431,7 @@
 
   @media (max-width: 767px) {
     .landing-hero-title {
-      font-size: 2.35rem;
+      font-size: 2rem;
       line-height: 1.08;
     }
 

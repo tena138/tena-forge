@@ -381,15 +381,14 @@ export function PlanLandingPage() {
 
       <section className="relative min-h-[100svh] overflow-hidden pt-16 lg:min-h-screen">
         <div className="relative z-10 mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-[104rem] flex-col items-center justify-start px-4 pb-10 pt-10 text-center sm:px-6 sm:pt-14 lg:min-h-[calc(100vh-4rem)] lg:justify-center lg:py-12 xl:px-8">
-          <div className="mx-auto flex w-full max-w-4xl flex-col items-center">
+          <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
             <div className="flex w-full flex-col items-center">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
-              <h1 className="landing-hero-title landing-keep-words mt-4 bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
-                <span className="block">혼자서도 빠르고,</span>
-                <span className="block">강력하게</span>
+              <h1 className="landing-hero-title landing-keep-words mt-4 whitespace-nowrap bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
+                혼자서도 빠르고, 강력하게
               </h1>
-              <p className="landing-keep-words mt-4 max-w-2xl text-base leading-7 text-[var(--landing-text-secondary)] sm:mt-5 sm:text-lg sm:leading-8">
-                PDF 추출부터 문항 보관, 시험지 제작, 학생 오답 기록까지 이어지는 제작 콘솔.
+              <p className="landing-keep-words mt-4 max-w-4xl text-base leading-7 text-[var(--landing-text-secondary)] sm:mt-5 sm:text-lg sm:leading-8">
+                자체 제작한 교재 PDF, 시험지 PDF 자료를 업로드하면 문항을 추출하고, 문제 DB로 정리한 뒤 시험지 제작과 학생 오답 기록까지 이어지는 제작 콘솔.
               </p>
               <div className="mt-6 flex w-full flex-wrap items-center justify-center gap-3 sm:mt-8 sm:w-auto sm:gap-4">
                 <Link
@@ -486,11 +485,11 @@ function LandingFooter() {
 
 function ProductPreview() {
   return (
-    <div className="landing-mock-perspective relative mx-auto min-h-[32rem] w-full max-w-[86rem] lg:min-h-[42rem]">
-      <div className="absolute left-1/2 top-1/2 h-[26rem] w-[min(72rem,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.36),transparent_68%)] blur-3xl" />
-      <div className="landing-mock-frame absolute left-1/2 top-1/2 w-[min(100%,74rem)] rounded-2xl border border-white/[0.09] bg-[rgba(7,8,13,0.74)] shadow-[0_38px_140px_rgba(0,0,0,0.56),0_0_90px_rgba(124,92,255,0.18)] backdrop-blur-xl">
+    <div className="landing-mock-perspective relative mx-auto w-full max-w-[72rem]">
+      <div className="absolute left-1/2 top-1/2 h-[22rem] w-[min(64rem,88vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.34),transparent_68%)] blur-3xl" />
+      <div className="landing-mock-frame relative mx-auto h-[32rem] w-full overflow-hidden rounded-2xl border border-white/[0.09] bg-[rgba(7,8,13,0.74)] shadow-[0_34px_110px_rgba(0,0,0,0.52),0_0_76px_rgba(124,92,255,0.18)] backdrop-blur-xl">
         <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_18%_4%,rgba(124,92,255,0.18),transparent_20rem),radial-gradient(circle_at_92%_16%,rgba(139,107,255,0.12),transparent_22rem),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(7,8,13,0.94)_44%,rgba(8,10,16,0.98))]" />
-        <div className="relative z-10 overflow-hidden rounded-2xl">
+        <div className="relative z-10 h-full overflow-hidden rounded-2xl">
           <div className="flex h-14 items-center justify-between border-b border-white/10 bg-black/55 px-4 backdrop-blur-xl">
             <div className="flex min-w-0 items-center gap-3">
               <SiteLogo className="h-9 sm:h-9" />
@@ -510,7 +509,7 @@ function ProductPreview() {
             </div>
           </div>
 
-          <div className="grid min-h-[35rem] grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[12rem_minmax(0,1fr)]">
+          <div className="grid h-[calc(32rem-3.5rem)] min-h-0 grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)]">
             <aside className="border-r border-white/10 bg-black/45 px-1.5 py-3 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-2">
               <SidebarGroup
                 title="Private Studio"
@@ -535,7 +534,7 @@ function ProductPreview() {
               />
             </aside>
 
-            <section className="min-w-0 bg-[#090b10]/[0.92]">
+            <section className="min-h-0 min-w-0 overflow-hidden bg-[#090b10]/[0.92]">
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Private Studio</p>
