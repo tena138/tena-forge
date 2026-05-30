@@ -294,7 +294,7 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
                   <h2 className="flex items-center gap-2 text-sm font-black text-white"><Users className="h-4 w-4" />학생</h2>
                   <span className="text-xs font-semibold text-slate-500">{classStudents.length}명</span>
                 </div>
-                <div className="grid gap-2 p-3 md:grid-cols-2">
+                <div className="grid gap-2 p-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
                   {classStudents.map((student) => (
                     <Link
                       key={student.id}
@@ -306,7 +306,6 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
                           <p className="truncate text-sm font-black text-white">{student.name}</p>
                           <p className="mt-1 truncate text-xs text-slate-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
                         </div>
-                        <Badge className={cn("shrink-0 border", tone(student.status_chip))}>{student.status_chip}</Badge>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         <div className="rounded bg-white/[0.045] px-2 py-2">

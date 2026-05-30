@@ -149,13 +149,12 @@ function errorMessage(error: unknown, fallback: string) {
 
 function ClassStudentCard({ student }: { student: StudentCard }) {
   return (
-    <Link href={`/student-management/students/${student.id}`} className="block w-[210px] shrink-0 rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
+    <Link href={`/student-management/students/${student.id}`} className="block min-w-0 rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{student.name}</p>
           <p className="mt-1 truncate text-xs text-slate-400">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 미입력"}</p>
         </div>
-        <Badge className={cn("shrink-0 border", statusTone(student.status_chip))}>{student.status_chip}</Badge>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
         <div className="rounded-md bg-white/[0.04] p-2">
@@ -183,7 +182,6 @@ function StudentDirectoryCard({ student }: { student: StudentCard }) {
           <p className="truncate text-sm font-black text-white">{student.name}</p>
           <p className="mt-1 truncate text-xs text-slate-400">{meta}</p>
         </div>
-        <Badge className={cn("shrink-0 border", statusTone(student.status_chip))}>{student.status_chip}</Badge>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
         <div className="rounded bg-white/[0.045] px-2 py-2">
@@ -1196,7 +1194,7 @@ export default function StudentManagementPage() {
                         </form>
                       ) : null}
                       {classRow.students.length ? (
-                        <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+                        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
                           {classRow.students.map((student) => (
                             <ClassStudentCard key={student.id} student={student} />
                           ))}
