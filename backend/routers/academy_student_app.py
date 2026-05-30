@@ -167,6 +167,7 @@ class WrongAnswerPayload(BaseModel):
     academy_id: str | None = None
     source_type: str = "manual_entry"
     source_ref_id: str | None = None
+    original_image_asset_id: str | None = None
     extracted_problem_text: str | None = None
     extracted_choices: list[Any] = Field(default_factory=list)
     extracted_answer: str | None = None

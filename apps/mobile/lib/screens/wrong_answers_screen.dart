@@ -18,7 +18,7 @@ class WrongAnswersScreen extends StatelessWidget {
     final items = state.wrongAnswers;
     return AppScaffold(
       title: '오답노트',
-      subtitle: '개인 오답은 기본적으로 비공개이고, 학원 자료 기반 오답은 권한 정책에 따라 연결됩니다.',
+      subtitle: '교재 PDF 추출 없이 사진으로 찍은 오답을 개인 아카이브에 저장하고 복습에 활용합니다.',
       children: [
         PremiumCard(
           title: '복습 큐',
@@ -32,12 +32,11 @@ class WrongAnswersScreen extends StatelessWidget {
                 ),
                 if (item != items.last) const SizedBox(height: 10),
               ],
-              if (items.isEmpty) const EmptyState(title: '오답 항목이 없습니다', body: '사진, 1페이지 PDF, 학원 과제/자료에서 오답을 추가할 수 있습니다.'),
+              if (items.isEmpty) const EmptyState(title: '오답 항목이 없습니다', body: '틀린 문제를 사진으로 찍고, 간단한 메모를 남겨 개인 복습 목록을 만드세요.'),
             ],
           ),
         ),
         FilledButton.icon(onPressed: () => context.push('/add-wrong-answer'), icon: const Icon(Icons.camera_alt), label: const Text('사진으로 추가')),
-        OutlinedButton.icon(onPressed: () => context.push('/add-pdf'), icon: const Icon(Icons.picture_as_pdf), label: const Text('1페이지 PDF 추가')),
         OutlinedButton.icon(
           onPressed: items.isEmpty
               ? null
@@ -58,4 +57,3 @@ class WrongAnswersScreen extends StatelessWidget {
     );
   }
 }
-

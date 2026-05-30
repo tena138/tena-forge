@@ -7,7 +7,6 @@ import '../state/student_app_state.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/context_switcher.dart';
 import '../widgets/list_item_card.dart';
-import '../widgets/metric_tile.dart';
 import '../widgets/premium_card.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -16,25 +15,15 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<StudentAppState>();
-    final quota = state.quota;
     final assignments = state.assignments.take(3).toList();
     return AppScaffold(
       title: '오늘의 학습 운영',
-      subtitle: '개인 오답과 학원별 과제, 자료, quota를 한 화면에서 확인합니다.',
+      subtitle: '사진으로 저장한 개인 오답과 학원별 과제, 복습 흐름을 한 화면에서 확인합니다.',
       actions: [
         IconButton(onPressed: () => context.push('/profile'), icon: const Icon(Icons.person_outline)),
       ],
       children: [
         const ContextSwitcher(),
-        Row(
-          children: [
-            MetricTile(label: '업로드', value: '${quota?.remaining['upload'] ?? 5}', helper: '남은 횟수'),
-            const SizedBox(width: 10),
-            MetricTile(label: '추출', value: '${quota?.remaining['extraction'] ?? 5}', helper: '오늘 가능'),
-            const SizedBox(width: 10),
-            MetricTile(label: '내보내기', value: '${quota?.remaining['export'] ?? 5}', helper: '워터마크'),
-          ],
-        ),
         PremiumCard(
           title: '다음 액션',
           eyebrow: state.selectedContextLabel,
@@ -89,4 +78,3 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 }
-

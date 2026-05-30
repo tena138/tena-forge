@@ -1,5 +1,5 @@
 name: tena_forge_student
-description: "Student-focused Tena Forge mobile app for academy access, assignments, materials, calendar, and wrong-answer learning."
+description: "Student-focused Tena Forge mobile app for academy access, assignments, calendar, and photo wrong-answer review."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -32,10 +32,10 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  file_picker: ^10.3.7
   flutter_secure_storage: ^10.0.0
   go_router: ^17.0.1
   http: ^1.6.0
+  http_parser: ^4.1.2
   image_picker: ^1.2.1
   intl: ^0.20.2
   provider: ^6.1.5+1

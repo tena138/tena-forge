@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'session_store.dart';
 
@@ -30,6 +31,34 @@ class ApiClient {
     return decode(_decode(response));
   }
 
+  Future<T> uploadFile<T>(
+    String path, {
+    required String fieldName,
+    required String filePath,
+    String? filename,
+    required T Function(Object? json) decode,
+  }) async {
+    final token = await sessionStore.readAccessToken();
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'));
+    request.headers.addAll({
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+      'X-Requested-With': 'XMLHttpRequest',
+    });
+    request.files.add(await http.MultipartFile.fromPath(
+      fieldName,
+      filePath,
+      filename: filename,
+      contentType: _contentTypeFor(filename ?? filePath),
+    ));
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.body.isEmpty ? 'Request failed' : response.body, statusCode: response.statusCode);
+    }
+    return decode(_decode(response));
+  }
+
   Future<http.Response> _send(String method, String path, {Object? body}) async {
     final token = await sessionStore.readAccessToken();
     final uri = Uri.parse('$baseUrl$path');
@@ -55,5 +84,11 @@ class ApiClient {
     if (response.body.isEmpty) return null;
     return jsonDecode(utf8.decode(response.bodyBytes));
   }
-}
 
+  MediaType _contentTypeFor(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.png')) return MediaType('image', 'png');
+    if (lower.endsWith('.webp')) return MediaType('image', 'webp');
+    return MediaType('image', 'jpeg');
+  }
+}

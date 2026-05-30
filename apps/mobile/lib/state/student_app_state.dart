@@ -23,17 +23,22 @@ class StudentAppState extends ChangeNotifier {
 
   String get selectedContextLabel {
     if (selectedContextId == 'personal') return 'Personal';
-    return academies.firstWhere(
-      (academy) => academy.academyId == selectedContextId,
-      orElse: () => academies.isNotEmpty ? academies.first : AcademyMembership(
-        id: 'none',
-        studentUserId: 'none',
-        academyId: selectedContextId,
-        academySeatId: 'none',
-        status: 'active',
-        joinedAt: DateTime.now(),
-      ),
-    ).academyName ?? 'Academy';
+    return academies
+            .firstWhere(
+              (academy) => academy.academyId == selectedContextId,
+              orElse: () => academies.isNotEmpty
+                  ? academies.first
+                  : AcademyMembership(
+                      id: 'none',
+                      studentUserId: 'none',
+                      academyId: selectedContextId,
+                      academySeatId: 'none',
+                      status: 'active',
+                      joinedAt: DateTime.now(),
+                    ),
+            )
+            .academyName ??
+        'Academy';
   }
 
   Future<void> bootstrap() async {
@@ -72,18 +77,16 @@ class StudentAppState extends ChangeNotifier {
     try {
       final results = await Future.wait<Object>([
         repository.listAcademies(),
-        repository.getQuota(),
         repository.listAssignments(academyId: selectedContextId == 'personal' ? null : selectedContextId),
-        repository.listMaterials(),
         repository.listWrongAnswers(),
         repository.listCalendar(),
       ]);
       academies = results[0] as List<AcademyMembership>;
-      quota = results[1] as StudentQuota;
-      assignments = results[2] as List<Assignment>;
-      materials = results[3] as List<StudentMaterial>;
-      wrongAnswers = results[4] as List<WrongAnswerItem>;
-      calendar = results[5] as CalendarResponse;
+      assignments = results[1] as List<Assignment>;
+      wrongAnswers = results[2] as List<WrongAnswerItem>;
+      calendar = results[3] as CalendarResponse;
+      materials = const [];
+      quota = null;
     } catch (exception) {
       error = '학생 앱 정보를 불러오지 못했습니다.';
     } finally {
@@ -118,14 +121,27 @@ class StudentAppState extends ChangeNotifier {
     required String sourceType,
     required String problemText,
     String? memo,
+    String? imagePath,
+    String? imageName,
   }) async {
-    await repository.createWrongAnswer({
+    final imageAssetId = imagePath == null
+        ? null
+        : await repository.uploadWrongAnswerImage(
+            filePath: imagePath,
+            filename: imageName,
+          );
+    final payload = <String, dynamic>{
       'source_type': sourceType,
       'extracted_problem_text': problemText,
       'visibility': 'private',
       'memo': memo,
       'tags': [sourceType],
-    });
+    };
+    if (imageAssetId != null) {
+      payload['source_ref_id'] = imageAssetId;
+      payload['original_image_asset_id'] = imageAssetId;
+    }
+    await repository.createWrongAnswer(payload);
     await refresh();
   }
 
@@ -134,4 +150,3 @@ class StudentAppState extends ChangeNotifier {
     await refresh();
   }
 }
-

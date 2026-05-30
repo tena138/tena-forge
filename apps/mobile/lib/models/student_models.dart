@@ -228,6 +228,7 @@ class WrongAnswerItem {
     required this.tags,
     required this.createdAt,
     this.academyId,
+    this.originalImageAssetId,
     this.problemText,
     this.answer,
     this.explanation,
@@ -240,6 +241,7 @@ class WrongAnswerItem {
   final String id;
   final String studentUserId;
   final String? academyId;
+  final String? originalImageAssetId;
   final String sourceType;
   final String? problemText;
   final String? answer;
@@ -257,6 +259,7 @@ class WrongAnswerItem {
       id: '${json['id']}',
       studentUserId: '${json['student_user_id']}',
       academyId: json['academy_id']?.toString(),
+      originalImageAssetId: json['original_image_asset_id']?.toString(),
       sourceType: '${json['source_type'] ?? 'manual_entry'}',
       problemText: json['extracted_problem_text']?.toString(),
       answer: json['extracted_answer']?.toString(),
@@ -307,4 +310,3 @@ class AssignmentDueDate {
     );
   }
 }
-

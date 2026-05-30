@@ -127,6 +127,17 @@ class StudentRepository {
     );
   }
 
+  Future<String> uploadWrongAnswerImage({required String filePath, String? filename}) async {
+    final asset = await apiClient.uploadFile<Map<String, dynamic>>(
+      '/api/assets',
+      fieldName: 'file',
+      filePath: filePath,
+      filename: filename,
+      decode: (json) => Map<String, dynamic>.from(json as Map),
+    );
+    return '${asset['id']}';
+  }
+
   Future<void> exportWrongAnswers(List<String> itemIds, {String? academyId}) {
     return apiClient.post<void>(
       '/api/student/wrong-answers/export',
@@ -147,4 +158,3 @@ class StudentRepository {
     }
   }
 }
-
