@@ -77,21 +77,21 @@ const packOptions: Record<PackKey, PackOption[]> = {
       name: "AI Pack S",
       label: "가벼운 주간 제작",
       description: "소량 PDF 추출과 문제 정리에 맞춘 시작 패키지",
-      detail: "월 AI credits와 낮은 일 AI 한도"
+      detail: "월 AI credits 중심의 시작 패키지"
     },
     {
       id: "ai-m",
       name: "AI Pack M",
       label: "정기 수업 제작",
       description: "매주 여러 수업 자료를 만들고 검수하는 표준 패키지",
-      detail: "월 AI credits와 균형 잡힌 일 AI 한도"
+      detail: "정기 제작에 맞춘 월 AI credits"
     },
     {
       id: "ai-l",
       name: "AI Pack L",
       label: "집중 제작 기간",
       description: "문제 DB 구축, 대량 PDF 추출, 재가공이 잦은 운영용",
-      detail: "높은 월 AI credits와 높은 일 AI 한도"
+      detail: "집중 제작 기간을 위한 높은 월 AI credits"
     }
   ],
   storage: [
@@ -202,7 +202,7 @@ const productSignals: Array<[string, string, IconComponent]> = [
 ];
 
 const enterpriseFeatures: Array<[string, string, IconComponent]> = [
-  ["AI 운영량", "월 credits와 일 한도 커스텀", Sparkles],
+  ["AI 운영량", "월 credits 커스텀", Sparkles],
   ["문제 DB", "기관형 아카이브와 검수 정책", Layers3],
   ["학생 키", "대규모 학생 접근 권한 설계", Users],
   ["처리 인프라", "동시 작업 수와 우선 처리 속도", Rocket],
@@ -492,7 +492,7 @@ export function MarketingSubscriptionSite() {
             </h2>
             <p className="mt-4 text-base leading-7 text-slate-400">
               Basic과 Pro는 패키지 단위로 빠르게 시작하고, Enterprise는 월 AI credits,
-              일 AI 한도, 문제 DB, 저장공간, 학생 키, 동시 작업 수, 처리 속도까지 맞춤 구성합니다.
+              문제 DB, 저장공간, 학생 키, 동시 작업 수, 처리 속도까지 맞춤 구성합니다.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

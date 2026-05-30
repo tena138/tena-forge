@@ -192,7 +192,6 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
               <ReviewBlock title="전체 사양">
                 <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
                   <SpecLine>월 AI {Number(specs.monthlyAiCredits).toLocaleString()} credits</SpecLine>
-                  <SpecLine>일 AI 한도 {Number(specs.dailyAiLimit).toLocaleString()} credits</SpecLine>
                   <SpecLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항</SpecLine>
                   <SpecLine>저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SpecLine>
                   <SpecLine>학생 키 {Number(specs.studentKeys).toLocaleString()}개</SpecLine>

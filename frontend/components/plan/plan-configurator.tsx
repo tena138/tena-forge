@@ -300,8 +300,8 @@ function PlanIntroStage({
 
         <div className="mx-auto mt-10 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <PlanIntroMetric icon={Sparkles} label="AI credits" value={`${specs.monthlyAiCredits.toLocaleString()} / 월`} />
-          <PlanIntroMetric icon={Gauge} label="일 AI 한도" value={`${specs.dailyAiLimit.toLocaleString()} credits`} />
           <PlanIntroMetric icon={Database} label="문제 DB" value={`${specs.problemDb.toLocaleString()}문항`} />
+          <PlanIntroMetric icon={HardDrive} label="Storage" value={Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb.toLocaleString()}GB`} />
           <PlanIntroMetric icon={School} label="Student keys" value={`${specs.studentKeys.toLocaleString()}개`} />
         </div>
 
@@ -844,15 +844,13 @@ function ConsoleSection({
 
 function AiUsageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: ReturnType<typeof getResolvedSpecs> }) {
   const creditLimit = numericSpec(specs.monthlyAiCredits);
-  const dailyLimit = numericSpec(specs.dailyAiLimit);
   const creditMax = plan === "basic" ? 2000 : 10000;
   const animatedCredits = useAnimatedNumber(creditLimit, 820);
-  const animatedDaily = useAnimatedNumber(dailyLimit, 720);
   const animatedRemaining = useAnimatedNumber(Math.round(creditLimit * 0.62), 760);
   const animatedRequests = useAnimatedNumber(Math.round(creditLimit * 1.72), 700);
   const animatedProblems = useAnimatedNumber(Math.round(creditLimit * 9.8), 820);
-  const animatedReview = useAnimatedNumber(Math.max(2, Math.round(dailyLimit * 0.42)), 720);
-  const animatedUntagged = useAnimatedNumber(Math.max(1, Math.round(dailyLimit * 0.28)), 720);
+  const animatedReview = useAnimatedNumber(Math.max(2, Math.round(creditLimit * 0.08)), 720);
+  const animatedUntagged = useAnimatedNumber(Math.max(1, Math.round(creditLimit * 0.05)), 720);
   const animatedTemplates = useAnimatedNumber(Math.max(3, Math.round(creditLimit / 260)), 700);
   const capacityPercent = percentage(creditLimit, creditMax);
   const chartBars = [0.38, 0.62, 0.46, 0.72, 0.58, 0.84, 0.68];
@@ -898,7 +896,7 @@ function AiUsageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
           <ConsoleMiniCard label="Remaining this month" value={`${formatNumber(animatedRemaining)} credits`} tone="emerald" />
-          <ConsoleMiniCard label="Daily safety limit" value={`${formatNumber(animatedDaily)} credits`} tone="cyan" />
+          <ConsoleMiniCard label="Monthly production scale" value={`${formatNumber(animatedRequests)} requests`} tone="cyan" />
         </div>
 
         <div className="rounded-[10px] border border-white/10 bg-black/30 p-4 xl:col-span-2">
@@ -918,9 +916,9 @@ function AiUsageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
           </div>
           <div className="mt-4 overflow-hidden rounded-[8px] border border-white/10">
             {[
-              ["algebra_midterm.pdf", "processing", Math.round(animatedDaily * 1.4), "AI credits 차감"],
-              ["reading_set.pdf", "needs_review", Math.round(animatedDaily * 0.9), "검토 필요"],
-              ["extract_042.pdf", "done", Math.round(animatedDaily * 0.62), "태깅 완료"],
+              ["algebra_midterm.pdf", "processing", Math.round(creditLimit * 0.18), "AI credits 차감"],
+              ["reading_set.pdf", "needs_review", Math.round(creditLimit * 0.12), "검토 필요"],
+              ["extract_042.pdf", "done", Math.round(creditLimit * 0.08), "태깅 완료"],
             ].map(([file, status, count, stage], index) => (
               <ConsoleBatchRow key={String(file)} index={index} file={String(file)} status={String(status)} count={Number(count)} stage={String(stage)} />
             ))}
@@ -1314,7 +1312,7 @@ function FullPlanSummarySection({
             </div>
 
             <div className="mt-6 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-              <SummaryLine>월 AI {specs.monthlyAiCredits.toLocaleString()} credits · 일 한도 {specs.dailyAiLimit.toLocaleString()} credits</SummaryLine>
+              <SummaryLine>월 AI {specs.monthlyAiCredits.toLocaleString()} credits</SummaryLine>
               <SummaryLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항 · 저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SummaryLine>
               <SummaryLine>학생 키 {specs.studentKeys.toLocaleString()}개</SummaryLine>
               <SummaryLine>PDF 추출은 클라우드에서 처리되며 AI credits를 사용합니다.</SummaryLine>
