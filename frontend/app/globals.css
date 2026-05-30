@@ -236,8 +236,8 @@
   }
 
   .landing-mock-frame {
-    transform: rotateY(-7deg) rotateX(3deg);
-    transform-origin: center right;
+    transform: translate(-50%, -50%) rotateY(-4deg) rotateX(2deg);
+    transform-origin: center;
     mask-image: linear-gradient(180deg, black 0%, black 82%, transparent 100%);
   }
 
@@ -414,7 +414,11 @@
       animation: none !important;
     }
 
-    .landing-mock-frame,
+    .landing-mock-frame {
+      transition: none !important;
+      transform: translate(-50%, -50%) !important;
+    }
+
     .landing-motion-safe,
     .landing-story-copy,
     .landing-story-visual,
