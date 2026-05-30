@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     description: "가장 강력한 교육 컨텐츠 툴",
     url: "https://www.tena-forge.com",
     siteName: "Tena Forge",
-    images: [{ url: "/og-image.png?v=2", width: 1200, height: 630, alt: "Tena Forge" }],
+    images: [{ url: "/og-image.png?v=3", width: 1200, height: 630, alt: "Tena Forge" }],
     locale: "ko_KR",
     type: "website",
   },
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Tena Forge",
     description: "가장 강력한 교육 컨텐츠 툴",
-    images: ["/og-image.png?v=2"],
+    images: ["/og-image.png?v=3"],
   },
 };
 
