@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronLeft, ChevronRight, Download, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Settings, Trash2, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronLeft, ChevronRight, Download, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
 
+import { AddToSetModal } from "@/components/add-to-set-modal";
+import { ExportModal } from "@/components/export-modal";
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -491,6 +493,9 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
   const [deletingWrongAnswerId, setDeletingWrongAnswerId] = useState("");
+  const [selectedWrongAnswerIds, setSelectedWrongAnswerIds] = useState<string[]>([]);
+  const [wrongArchiveAddModalOpen, setWrongArchiveAddModalOpen] = useState(false);
+  const [wrongArchiveExportOpen, setWrongArchiveExportOpen] = useState(false);
   const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const calendarInitializedRef = useRef(false);
   const [message, setMessage] = useState("");
@@ -527,6 +532,15 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     () => archivedWrongAnswers.filter((wrong) => !isArchiveResolved(wrong.resolved_status)).length,
     [archivedWrongAnswers]
   );
+  const selectedWrongAnswers = useMemo(
+    () => archivedWrongAnswers.filter((wrong) => selectedWrongAnswerIds.includes(wrong.id)),
+    [archivedWrongAnswers, selectedWrongAnswerIds]
+  );
+  const selectedWrongProblemIds = useMemo(
+    () => Array.from(new Set(selectedWrongAnswers.map((wrong) => wrong.problem_id).filter(Boolean))),
+    [selectedWrongAnswers]
+  );
+  const selectableWrongAnswerCount = useMemo(() => archivedWrongAnswers.filter((wrong) => wrong.problem_id).length, [archivedWrongAnswers]);
   const activeReportField = useMemo(() => reportField(counselingFields), [counselingFields]);
   const selectedClassName = useMemo(() => {
     if (!data || !counselingClassId) return "";
@@ -657,8 +671,14 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     calendarInitializedRef.current = false;
     setFormatAutosaveState("idle");
     setFormatAutosaveSavedAt(null);
+    setSelectedWrongAnswerIds([]);
     getStudentDetail(params.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
   }, [params.id]);
+
+  useEffect(() => {
+    const validIds = new Set(archivedWrongAnswers.map((wrong) => wrong.id));
+    setSelectedWrongAnswerIds((current) => current.filter((id) => validIds.has(id)));
+  }, [archivedWrongAnswers]);
 
   useEffect(() => {
     if (!data) return;
@@ -837,6 +857,24 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     setMessage(`복습 세트를 만들었습니다: ${review.name}`);
   }
 
+  function toggleWrongAnswerSelection(wrong: WrongAnswer, checked?: boolean) {
+    if (!wrong.problem_id) return;
+    setSelectedWrongAnswerIds((current) => {
+      const shouldSelect = checked ?? !current.includes(wrong.id);
+      if (shouldSelect) return current.includes(wrong.id) ? current : [...current, wrong.id];
+      return current.filter((id) => id !== wrong.id);
+    });
+  }
+
+  function toggleAllWrongAnswers() {
+    const allIds = archivedWrongAnswers.filter((wrong) => wrong.problem_id).map((wrong) => wrong.id);
+    setSelectedWrongAnswerIds((current) => (current.length >= allIds.length ? [] : allIds));
+  }
+
+  function selectReviewNeededWrongAnswers() {
+    setSelectedWrongAnswerIds(archivedWrongAnswers.filter((wrong) => wrong.problem_id && !isArchiveResolved(wrong.resolved_status)).map((wrong) => wrong.id));
+  }
+
   function clearAutosaveTimer(resultId: string) {
     const timer = autosaveTimers.current[resultId];
     if (timer) clearTimeout(timer);
@@ -962,6 +1000,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     setDeletingWrongAnswerId(wrong.id);
     try {
       await deleteWrongAnswerRecord(wrong.id);
+      setSelectedWrongAnswerIds((current) => current.filter((id) => id !== wrong.id));
       await refreshStudent();
       setMessage("오답 기록을 삭제했습니다.");
     } catch {
@@ -1604,6 +1643,16 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                     </div>
                   </div>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={toggleAllWrongAnswers} disabled={!selectableWrongAnswerCount}>
+                    <CheckSquare className="h-4 w-4" />
+                    {selectedWrongAnswerIds.length >= selectableWrongAnswerCount && selectableWrongAnswerCount ? "전체 해제" : "전체 선택"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={selectReviewNeededWrongAnswers} disabled={!archiveReviewNeededCount}>
+                    <RotateCcw className="h-4 w-4" />
+                    미해결 선택
+                  </Button>
+                </div>
                 <Button onClick={makeReviewSet} disabled={!archiveReviewNeededCount}>
                   <RotateCcw className="h-4 w-4" />
                   복습 세트 만들기
@@ -1611,15 +1660,59 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               </CardContent>
             </Card>
 
+            {selectedWrongProblemIds.length ? (
+              <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
+                <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
+                  <CheckSquare className="h-4 w-4 text-[#7F77DD]" />
+                  {selectedWrongProblemIds.length}개 선택됨
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" onClick={() => setWrongArchiveAddModalOpen(true)}>
+                    <FolderPlus className="h-4 w-4" />
+                    세트에 담기
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setWrongArchiveExportOpen(true)}>
+                    <Send className="h-4 w-4" />
+                    바로 내보내기
+                  </Button>
+                  <button type="button" className="px-2 text-sm font-semibold text-slate-400 hover:text-white" onClick={() => setSelectedWrongAnswerIds([])}>
+                    선택 해제
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {archivedWrongAnswers.length ? (
               <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {archivedWrongAnswers.map((wrong) => (
+                {archivedWrongAnswers.map((wrong) => {
+                  const selected = selectedWrongAnswerIds.includes(wrong.id);
+                  return (
                   <article
                     key={wrong.id}
-                    className="group relative min-h-[215px] overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-violet-300/40 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(76,29,149,0.16)]"
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selected}
+                    onClick={() => toggleWrongAnswerSelection(wrong)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      toggleWrongAnswerSelection(wrong);
+                    }}
+                    className={cn(
+                      "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg border bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-violet-300/40 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(76,29,149,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60",
+                      selected ? "border-violet-300/70 bg-violet-500/10 shadow-[0_0_0_1px_rgba(167,139,250,0.24)]" : "border-white/[0.08]"
+                    )}
                   >
                     <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: archiveAccentColor(wrong) }} />
-                    <div className="flex h-full flex-col p-4 pl-6">
+                    <span
+                      className={cn(
+                        "absolute left-3 top-3 grid h-5 w-5 place-items-center rounded border transition",
+                        selected ? "border-violet-200 bg-violet-500 text-white" : "border-white/15 bg-black/20 text-transparent group-hover:border-violet-300/50"
+                      )}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="flex h-full flex-col p-4 pl-10">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1637,6 +1730,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             <Link
                               href={`/problems/${wrong.problem_id}`}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-violet-300/50 hover:bg-violet-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+                              onClick={(event) => event.stopPropagation()}
                               aria-label={`${wrong.problem_number}번 상세 보기`}
                             >
                               <ArrowUpRight className="h-4 w-4" />
@@ -1647,7 +1741,10 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             size="icon"
                             variant="ghost"
                             className="h-8 w-8 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
-                            onClick={() => deleteWrongAnswer(wrong)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              deleteWrongAnswer(wrong);
+                            }}
                             disabled={deletingWrongAnswerId === wrong.id}
                             aria-label={`${wrong.problem_number}번 아카이브 항목 삭제`}
                           >
@@ -1670,7 +1767,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                       </div>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.025] p-10 text-center">
@@ -1905,6 +2003,20 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
           </section>
         ) : null}
       </div>
+      <AddToSetModal
+        open={wrongArchiveAddModalOpen}
+        onOpenChange={setWrongArchiveAddModalOpen}
+        problemIds={selectedWrongProblemIds}
+        onDone={() => setSelectedWrongAnswerIds([])}
+      />
+      <ExportModal
+        open={wrongArchiveExportOpen}
+        onOpenChange={setWrongArchiveExportOpen}
+        source="selection"
+        problemIds={selectedWrongProblemIds}
+        count={selectedWrongProblemIds.length}
+        onExported={() => setSelectedWrongAnswerIds([])}
+      />
     </main>
   );
 }
