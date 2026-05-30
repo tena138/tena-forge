@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Copy, Eye, Globe2, LayoutTemplate, Lock, MoreVertical, Plus, Search, Sparkles } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
 import { TemplatePreviewFrame } from "@/components/template-hub/template-preview-frame";
 import { TemplatePageView } from "@/components/templates/visual-template-renderer";
@@ -12,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import {
   HubTemplate,
   categoryLabel,
+  createHubTemplate,
   defaultTemplateCss,
   defaultTemplateHtml,
   forkHubTemplate,
@@ -78,7 +80,7 @@ export default function TemplateHubPage() {
   const [keyword, setKeyword] = useState("");
   const [sort, setSort] = useState("recent");
   const [loading, setLoading] = useState(true);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -124,12 +126,30 @@ export default function TemplateHubPage() {
   const visible = templates.length ? templates : [starter];
 
   async function duplicate(template: HubTemplate) {
-    if (template.id === "starter") {
-      window.location.href = "/templates/studio?type=exam";
-      return;
+    if (duplicatingId) return;
+    setDuplicatingId(template.id);
+    try {
+      const duplicated =
+        template.id === "starter"
+          ? await createHubTemplate({
+              title: `${template.title} 사본`,
+              description: template.description,
+              category: template.category,
+              visibility: "private",
+              html: template.html,
+              css: template.css,
+              schema_json: template.schema_json,
+              thumbnail_url: template.thumbnail_url,
+              source_type: template.source_type,
+              rights_confirmed: true,
+            })
+          : await forkHubTemplate(template.id);
+      setTemplates((current) => [duplicated, ...current.filter((item) => item.id !== duplicated.id)]);
+    } catch {
+      window.alert("템플릿을 복제하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDuplicatingId(null);
     }
-    const forked = await forkHubTemplate(template.id);
-    window.location.href = hasVisualSchema(forked) ? `/templates/studio?id=${forked.id}` : `/templates/editor/${forked.id}`;
   }
 
   return (
@@ -209,33 +229,36 @@ export default function TemplateHubPage() {
                         <Badge variant="outline">{template.use_count}회 사용</Badge>
                       </div>
                     </div>
-                    <div className="relative flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                       <Badge variant={template.visibility === "public" ? "default" : "secondary"} className="gap-1">
                         <VisibilityIcon visibility={template.visibility} />
                         {visibilityLabels[template.visibility]}
                       </Badge>
-                      <Button size="icon" variant="outline" aria-label="템플릿 메뉴" onClick={() => setOpenMenuId((current) => (current === template.id ? null : template.id))}>
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                      {openMenuId === template.id ? (
-                        <div className="absolute right-0 top-11 z-30 w-40 overflow-hidden rounded-[8px] border border-white/10 bg-[#151722] p-1 shadow-2xl shadow-black/50">
-                          <Link href={openHref(template)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/[0.07]" onClick={() => setOpenMenuId(null)}>
-                            <Eye className="h-4 w-4" />
-                            자세히
-                          </Link>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/[0.07]"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              duplicate(template);
-                            }}
-                          >
-                            <Copy className="h-4 w-4" />
-                            복제
-                          </button>
-                        </div>
-                      ) : null}
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <Button size="icon" variant="outline" aria-label="템플릿 메뉴">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] border border-white/10 bg-[#151722] p-1 shadow-2xl shadow-black/60">
+                            <DropdownMenu.Item asChild>
+                              <Link href={openHref(template)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07]">
+                                <Eye className="h-4 w-4" />
+                                자세히
+                              </Link>
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              disabled={duplicatingId === template.id}
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                              onSelect={() => duplicate(template)}
+                            >
+                              <Copy className="h-4 w-4" />
+                              {duplicatingId === template.id ? "복제 중" : "복제"}
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     </div>
                   </div>
                 </div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Copy, Globe2, Lock, MoreVertical, Plus, Trash2 } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
 import { TemplatePreviewFrame } from "@/components/template-hub/template-preview-frame";
 import { TemplatePageView } from "@/components/templates/visual-template-renderer";
@@ -73,7 +74,7 @@ function VisibilityIcon({ visibility }: { visibility: HubTemplate["visibility"] 
 export default function MyTemplatesPage() {
   const [templates, setTemplates] = useState<HubTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -94,8 +95,16 @@ export default function MyTemplatesPage() {
   }
 
   async function duplicate(template: HubTemplate) {
-    const forked = await forkHubTemplate(template.id);
-    window.location.href = hasVisualSchema(forked) ? `/templates/studio?id=${forked.id}` : `/templates/editor/${forked.id}`;
+    if (duplicatingId) return;
+    setDuplicatingId(template.id);
+    try {
+      const forked = await forkHubTemplate(template.id);
+      setTemplates((current) => [forked, ...current.filter((item) => item.id !== forked.id)]);
+    } catch {
+      window.alert("템플릿을 복제하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDuplicatingId(null);
+    }
   }
 
   async function togglePublish(template: HubTemplate) {
@@ -141,56 +150,44 @@ export default function MyTemplatesPage() {
                         <Badge variant="outline">{template.use_count}회 사용</Badge>
                       </div>
                     </div>
-                    <div className="relative flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                       <Badge variant={template.visibility === "public" ? "default" : "secondary"} className="gap-1">
                         <VisibilityIcon visibility={template.visibility} />
                         {visibilityLabels[template.visibility]}
                       </Badge>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        aria-label="템플릿 메뉴"
-                        onClick={() => setOpenMenuId((current) => (current === template.id ? null : template.id))}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                      {openMenuId === template.id ? (
-                        <div className="absolute right-0 top-11 z-30 w-40 overflow-hidden rounded-[8px] border border-white/10 bg-[#151722] p-1 shadow-2xl shadow-black/50">
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/[0.07]"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              togglePublish(template);
-                            }}
-                          >
-                            <Globe2 className="h-4 w-4" />
-                            {template.visibility === "public" ? "게시 취소" : "공개 게시"}
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/[0.07]"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              duplicate(template);
-                            }}
-                          >
-                            <Copy className="h-4 w-4" />
-                            복제
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-200 hover:bg-red-500/10"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              remove(template);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            삭제
-                          </button>
-                        </div>
-                      ) : null}
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <Button size="icon" variant="outline" aria-label="템플릿 메뉴">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] border border-white/10 bg-[#151722] p-1 shadow-2xl shadow-black/60">
+                            <DropdownMenu.Item
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07]"
+                              onSelect={() => togglePublish(template)}
+                            >
+                              <Globe2 className="h-4 w-4" />
+                              {template.visibility === "public" ? "게시 취소" : "공개 게시"}
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              disabled={duplicatingId === template.id}
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                              onSelect={() => duplicate(template)}
+                            >
+                              <Copy className="h-4 w-4" />
+                              {duplicatingId === template.id ? "복제 중" : "복제"}
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-200 outline-none hover:bg-red-500/10 focus:bg-red-500/10"
+                              onSelect={() => remove(template)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              삭제
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     </div>
                   </div>
 

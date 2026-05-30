@@ -19,6 +19,8 @@ import {
 export default function TemplateDetailPage({ params }: { params: { id: string } }) {
   const [template, setTemplate] = useState<HubTemplate | null>(null);
   const [loading, setLoading] = useState(true);
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateMessage, setDuplicateMessage] = useState("");
 
   async function load() {
     setLoading(true);
@@ -32,9 +34,17 @@ export default function TemplateDetailPage({ params }: { params: { id: string } 
   }, [params.id]);
 
   async function duplicate() {
-    if (!template) return;
-    const forked = await forkHubTemplate(template.id);
-    window.location.href = `/templates/editor/${forked.id}`;
+    if (!template || duplicating) return;
+    setDuplicating(true);
+    setDuplicateMessage("");
+    try {
+      const forked = await forkHubTemplate(template.id);
+      setDuplicateMessage(`'${forked.title}' 복제본이 내 템플릿에 생성되었습니다.`);
+    } catch {
+      window.alert("템플릿을 복제하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDuplicating(false);
+    }
   }
 
   async function togglePublish() {
@@ -64,12 +74,17 @@ export default function TemplateDetailPage({ params }: { params: { id: string } 
                 </>
               ) : (
                 <>
-                  <Button onClick={duplicate}><Copy className="h-4 w-4" />복제하기</Button>
-                  <Button variant="outline" onClick={duplicate}><Send className="h-4 w-4" />이 템플릿 사용</Button>
+                  <Button onClick={duplicate} disabled={duplicating}><Copy className="h-4 w-4" />{duplicating ? "복제 중" : "복제하기"}</Button>
+                  <Button variant="outline" onClick={duplicate} disabled={duplicating}><Send className="h-4 w-4" />이 템플릿 사용</Button>
                 </>
               )}
             </div>
           </div>
+          {duplicateMessage ? (
+            <div className="mt-4 rounded-[8px] border border-violet-300/20 bg-violet-400/10 px-3 py-2 text-sm font-semibold text-violet-100">
+              {duplicateMessage}
+            </div>
+          ) : null}
           <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
             <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-3">
               <div className="text-slate-500">사용 수</div>
