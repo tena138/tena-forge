@@ -292,6 +292,7 @@ function ProblemsBrowser() {
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => readReviewFilter(searchParams.get("needs_review")));
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [batchFilterOpen, setBatchFilterOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -757,51 +758,80 @@ function ProblemsBrowser() {
           </button>
         </div>
 
+        <div className="mt-3 rounded-lg border border-white/10 bg-card/60 p-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              className={cn(
+                "inline-flex min-h-10 min-w-0 flex-1 items-center justify-between gap-3 rounded-md border px-3 text-left transition-colors",
+                batchFilterOpen || selectedBatchId ? "border-[#7F77DD]/45 bg-[#7F77DD]/12 text-white" : "border-white/10 bg-black/10 text-slate-300 hover:bg-white/[0.05]"
+              )}
+              aria-expanded={batchFilterOpen}
+              onClick={() => setBatchFilterOpen((value) => !value)}
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[11px] font-semibold text-muted-foreground">내가 올린 배치</span>
+                <span className="truncate text-sm font-bold">{selectedBatch?.name || "전체 배치"}</span>
+              </span>
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", batchFilterOpen && "rotate-180")} />
+            </button>
+            {selectedBatchId ? (
+              <button
+                type="button"
+                className="inline-flex h-10 items-center rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
+                onClick={() => resetPageAnd(() => {
+                  setSelectedBatchId("");
+                  setBatchFilterOpen(false);
+                })}
+              >
+                선택 해제
+              </button>
+            ) : null}
+          </div>
+
+          {batchFilterOpen ? (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-10 shrink-0 items-center rounded-md border px-3 text-sm font-semibold transition-colors",
+                  !selectedBatchId ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                )}
+                onClick={() => resetPageAnd(() => {
+                  setSelectedBatchId("");
+                  setBatchFilterOpen(false);
+                })}
+              >
+                전체 배치
+              </button>
+              {batches.length ? batches.map((batch) => {
+                const selected = selectedBatchId === batch.id;
+                const accentColor = normalizeHexColor(batch.accent_color) || "#64748b";
+                return (
+                  <button
+                    key={batch.id}
+                    type="button"
+                    className={cn(
+                      "inline-flex h-10 max-w-[18rem] shrink-0 items-center gap-2 rounded-md border px-3 text-left transition-colors",
+                      selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                    )}
+                    onClick={() => resetPageAnd(() => {
+                      setSelectedBatchId(selected ? "" : batch.id);
+                      setBatchFilterOpen(false);
+                    })}
+                  >
+                    <span className="h-5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
+                    <span className="min-w-0 truncate text-sm font-semibold">{batch.name}</span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">{batch.problem_count.toLocaleString("ko-KR")}</span>
+                  </button>
+                );
+              }) : <span className="px-2 py-2 text-sm text-muted-foreground">업로드한 배치가 없습니다.</span>}
+            </div>
+          ) : null}
+        </div>
+
         {filtersOpen ? (
           <div className="mt-4 space-y-4 rounded-lg border border-white/10 bg-black/15 p-3">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <label className="text-sm font-medium">내가 올린 배치</label>
-                {selectedBatchId ? (
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-slate-400 transition-colors hover:text-white"
-                    onClick={() => resetPageAnd(() => setSelectedBatchId(""))}
-                  >
-                    선택 해제
-                  </button>
-                ) : null}
-              </div>
-              <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border border-white/10 bg-card/50 p-2 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-                {batches.length ? batches.map((batch) => {
-                  const selected = selectedBatchId === batch.id;
-                  const accentColor = normalizeHexColor(batch.accent_color) || "#64748b";
-                  return (
-                    <button
-                      key={batch.id}
-                      type="button"
-                      className={cn(
-                        "flex min-h-12 w-full items-center justify-between gap-3 rounded-[7px] border px-3 py-2 text-left transition-colors",
-                        selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
-                      )}
-                      onClick={() => resetPageAnd(() => setSelectedBatchId(selected ? "" : batch.id))}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="h-8 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold">{batch.name}</span>
-                          <span className="block truncate text-[11px] text-muted-foreground">{batch.problem_count.toLocaleString("ko-KR")}문항 · {batch.status}</span>
-                        </span>
-                      </span>
-                      <span className={cn("shrink-0 rounded border px-2 py-1 text-[11px] font-semibold", selected ? "border-violet-300/40 bg-violet-300/15 text-violet-100" : "border-white/10 bg-white/[0.04] text-slate-400")}>
-                        {selected ? "선택됨" : "선택"}
-                      </span>
-                    </button>
-                  );
-                }) : <span className="block px-2 py-3 text-sm text-muted-foreground">업로드한 배치가 없습니다.</span>}
-              </div>
-            </div>
-
             <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
               <div className="space-y-2">
                 <label className="text-sm font-medium">과목</label>
