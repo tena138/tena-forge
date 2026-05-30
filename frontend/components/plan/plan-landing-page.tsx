@@ -1126,7 +1126,7 @@ function ContentCreationScene({ progress }: { progress: number }) {
       <div className="landing-story-cursor" style={cursorStyle} />
 
       <div
-        className="absolute right-[4vw] top-[13%] h-[78vh] w-[23rem]"
+        className="absolute right-[5vw] top-[10%] w-fit"
         style={{
           opacity: sheetIntro,
           transform: `perspective(1500px) rotateY(${-12 + sheetIntro * 8}deg) scale(${0.9 + sheetIntro * 0.1})`,
@@ -1134,8 +1134,8 @@ function ContentCreationScene({ progress }: { progress: number }) {
         }}
       >
         <div className="absolute -inset-8 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.18),transparent_70%)] blur-2xl" />
-        <div className="relative h-full overflow-hidden rounded-[18px] bg-[#d9d8e7]/95 shadow-[0_40px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(124,92,255,0.20)] ring-1 ring-white/20">
-          <DemoExamPreview reveal={templateProgress} scale={0.47} />
+        <div className="relative overflow-hidden rounded-[18px] bg-[#f2f1f8] shadow-[0_40px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(124,92,255,0.20)] ring-1 ring-white/20">
+          <DemoExamPreview reveal={templateProgress} scale={0.46} />
           <span
             className="pointer-events-none absolute inset-y-0 w-1/2 bg-[linear-gradient(100deg,transparent,rgba(255,255,255,0.68),transparent)]"
             style={{
@@ -1162,11 +1162,14 @@ function DemoExamPreview({ reveal, scale = 0.34 }: { reveal: number; scale?: num
       "region-problems": demoProblems.slice(0, visibleCount),
     },
   };
+  const size = page.pageSize || demoTemplateSet.defaultPageSize || PAGE_SIZES.A4_PORTRAIT;
 
   return (
     <div
-      className="transition"
+      className="relative overflow-hidden transition"
       style={{
+        width: size.width * scale,
+        height: size.height * scale,
         opacity: 1,
         transform: `translateY(${(1 - clampProgress(reveal)) * 5}px)`,
       }}
