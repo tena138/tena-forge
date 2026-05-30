@@ -1926,6 +1926,17 @@ def delete_schedule_event(event_id: UUID, request: Request, db: Session = Depend
     row = db.get(ClassScheduleEvent, event_id)
     if not row or row.academy_id != academy_id:
         raise HTTPException(status_code=404, detail="Schedule event not found.")
+    linked_session_id = row.linked_paper_session_id
+    starts_at = row.starts_at
+    ends_at = row.ends_at
     db.delete(row)
+    if linked_session_id:
+        session = db.get(PaperSession, linked_session_id)
+        if session and session.academy_id == academy_id:
+            if session.scheduled_at == starts_at:
+                session.scheduled_at = None
+            if ends_at and session.due_at == ends_at:
+                session.due_at = None
+            session.updated_at = _now()
     db.commit()
     return Response(status_code=204)

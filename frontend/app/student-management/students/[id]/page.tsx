@@ -38,6 +38,7 @@ type StudentTab = "calendar" | "wrong" | "counseling";
 type StudentCalendarItem = {
   id: string;
   event_id?: string;
+  linked_paper_session_id?: string | null;
   date: string;
   title: string;
   meta: string;
@@ -297,6 +298,7 @@ function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
   const eventItems = (student.schedule_events || []).map((event) => ({
     id: `event-${event.id}`,
     event_id: event.id,
+    linked_paper_session_id: event.linked_paper_session_id || null,
     date: event.starts_at,
     title: event.title,
     meta: event.event_type,
@@ -833,6 +835,23 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     setDeletingScheduleEventId(item.event_id);
     try {
       await deleteScheduleEvent(item.event_id);
+      setData((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          schedule_events: current.schedule_events.filter((event) => event.id !== item.event_id),
+          paper_session_history: item.linked_paper_session_id
+            ? current.paper_session_history.map((result) =>
+                result.paper_session_id === item.linked_paper_session_id
+                  ? {
+                      ...result,
+                      session: result.session ? { ...result.session, scheduled_at: null } : result.session,
+                    }
+                  : result
+              )
+            : current.paper_session_history,
+        };
+      });
       setSelectedCalendarItemId((current) => (current === item.id ? "" : current));
       await refreshStudent();
       setMessage("일정을 삭제했습니다.");
