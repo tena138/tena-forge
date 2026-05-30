@@ -203,11 +203,21 @@ function StudentDirectoryCard({ student }: { student: StudentCard }) {
   );
 }
 
-function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
+function ClassTrendChart({
+  points,
+  selectedPointId,
+  onSelectPoint,
+}: {
+  points: ClassSessionMetricPoint[];
+  selectedPointId?: string | null;
+  onSelectPoint?: (pointId: string) => void;
+}) {
   const [mode, setMode] = useState<TrendChartMode>("line");
   const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(defaultTrendMetrics);
   const visibleMetrics = trendMetricOptions.filter((metric) => selectedMetrics.includes(metric.key));
   const latestPoint = [...points].reverse().find((point) => point.respondents > 0);
+  const selectedPoint = selectedPointId ? points.find((point) => point.id === selectedPointId) || null : null;
+  const summaryPoint = selectedPoint || latestPoint;
   const chartWidth = Math.max(760, points.length * 118);
   const chartHeight = 300;
   const padding = { top: 22, right: 26, bottom: 58, left: 44 };
@@ -328,8 +338,30 @@ function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
             }) : null}
 
             {points.map((point, index) => (
-              <g key={point.id}>
-                <text x={xFor(index)} y={chartHeight - 32} textAnchor="middle" fontSize="11" fontWeight="700" fill="rgb(203, 213, 225)">
+              <g
+                key={point.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${point.title} 선택`}
+                onClick={() => onSelectPoint?.(point.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectPoint?.(point.id);
+                  }
+                }}
+                style={{ cursor: onSelectPoint ? "pointer" : "default" }}
+              >
+                <rect
+                  x={xFor(index) - Math.max(44, Math.min(76, plotWidth / Math.max(1, points.length))) / 2}
+                  y={padding.top}
+                  width={Math.max(44, Math.min(76, plotWidth / Math.max(1, points.length)))}
+                  height={chartHeight - padding.top - 7}
+                  rx="8"
+                  fill={selectedPointId === point.id ? "rgba(139, 92, 246, 0.12)" : "transparent"}
+                  stroke={selectedPointId === point.id ? "rgba(167, 139, 250, 0.48)" : "transparent"}
+                />
+                <text x={xFor(index)} y={chartHeight - 32} textAnchor="middle" fontSize="11" fontWeight="700" fill={selectedPointId === point.id ? "rgb(255, 255, 255)" : "rgb(203, 213, 225)"}>
                   {point.title.length > 11 ? `${point.title.slice(0, 11)}…` : point.title}
                 </text>
                 <text x={xFor(index)} y={chartHeight - 15} textAnchor="middle" fontSize="10" fill="rgb(100, 116, 139)">
@@ -345,20 +377,20 @@ function ClassTrendChart({ points }: { points: ClassSessionMetricPoint[] }) {
 
       <div className="mt-3 grid gap-2 text-xs md:grid-cols-4">
         <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
-          <p className="text-slate-500">최근 평균</p>
-          <p className="mt-1 text-base font-black text-slate-950 dark:text-white">{scoreLabel(latestPoint?.average)}</p>
+          <p className="text-slate-500">{selectedPoint ? "선택 평균" : "최근 평균"}</p>
+          <p className="mt-1 text-base font-black text-slate-950 dark:text-white">{scoreLabel(summaryPoint?.average)}</p>
         </div>
         <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
-          <p className="text-slate-500">최근 중앙값</p>
-          <p className="mt-1 text-base font-black text-amber-700 dark:text-amber-100">{scoreLabel(latestPoint?.q2)}</p>
+          <p className="text-slate-500">{selectedPoint ? "선택 중앙값" : "최근 중앙값"}</p>
+          <p className="mt-1 text-base font-black text-amber-700 dark:text-amber-100">{scoreLabel(summaryPoint?.q2)}</p>
         </div>
         <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
-          <p className="text-slate-500">최근 범위</p>
-          <p className="mt-1 text-base font-black text-slate-950 dark:text-slate-100">{latestPoint ? `${scoreLabel(latestPoint.lowest)} - ${scoreLabel(latestPoint.highest)}` : "-"}</p>
+          <p className="text-slate-500">{selectedPoint ? "선택 범위" : "최근 범위"}</p>
+          <p className="mt-1 text-base font-black text-slate-950 dark:text-slate-100">{summaryPoint ? `${scoreLabel(summaryPoint.lowest)} - ${scoreLabel(summaryPoint.highest)}` : "-"}</p>
         </div>
         <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
-          <p className="text-slate-500">최근 응시</p>
-          <p className="mt-1 text-base font-black text-cyan-700 dark:text-cyan-100">{latestPoint ? `${latestPoint.respondents}/${latestPoint.assigned}` : "-"}</p>
+          <p className="text-slate-500">{selectedPoint ? "선택 응시" : "최근 응시"}</p>
+          <p className="mt-1 text-base font-black text-cyan-700 dark:text-cyan-100">{summaryPoint ? `${summaryPoint.respondents}/${summaryPoint.assigned}` : "-"}</p>
         </div>
       </div>
     </div>
@@ -375,6 +407,7 @@ function ClassStatsPanel({
   loading: boolean;
 }) {
   const [selectedStudentId, setSelectedStudentId] = useState(classRow.students[0]?.id || "");
+  const [selectedStatsId, setSelectedStatsId] = useState("");
 
   useEffect(() => {
     if (!classRow.students.length) {
@@ -461,9 +494,11 @@ function ClassStatsPanel({
   const averageClassDelta = average(sessionStats.map((item) => item.selectedScore != null && item.classAverage != null ? item.selectedScore - item.classAverage : null));
   const bestExam = scoredStats.length ? scoredStats.reduce((best, item) => (item.selectedScore || 0) > (best.selectedScore || 0) ? item : best, scoredStats[0]) : null;
   const latestScoredStat = scoredStats[scoredStats.length - 1] || null;
-  const latestClassDelta =
-    latestScoredStat?.selectedScore != null && latestScoredStat.classAverage != null
-      ? latestScoredStat.selectedScore - latestScoredStat.classAverage
+  const selectedSessionStat = selectedStatsId ? sessionStats.find((item) => item.detail.id === selectedStatsId) || null : null;
+  const focusedStat = selectedSessionStat || latestScoredStat;
+  const focusedClassDelta =
+    focusedStat?.selectedScore != null && focusedStat.classAverage != null
+      ? focusedStat.selectedScore - focusedStat.classAverage
       : null;
   const classMetricPoints: ClassSessionMetricPoint[] = sessionStats
     .filter((item) => item.classGradedCount > 0)
@@ -482,6 +517,7 @@ function ClassStatsPanel({
       q3: item.q3Score,
       stddev: item.classStdDev,
     }));
+  const focusedPointId = focusedStat?.detail.id || classMetricPoints[classMetricPoints.length - 1]?.id || null;
 
   return (
     <div className="border-t border-slate-200 px-4 pb-4 dark:border-white/10">
@@ -523,29 +559,29 @@ function ClassStatsPanel({
 
             <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr_0.75fr_0.75fr]">
               <div className="rounded-lg border border-violet-200 bg-violet-50 p-4 dark:border-white/10 dark:bg-white/[0.055]">
-                <p className="text-xs font-semibold text-violet-700 dark:text-slate-400">본인 최근 점수</p>
+                <p className="text-xs font-semibold text-violet-700 dark:text-slate-400">{selectedSessionStat ? "본인 선택 점수" : "본인 최근 점수"}</p>
                 <div className="mt-2 flex items-end justify-between gap-4">
-                  <p className="text-4xl font-black tracking-normal text-slate-950 dark:text-white">{scoreLabel(latestScoredStat?.selectedScore)}</p>
-                  <p className="max-w-[220px] truncate text-right text-xs text-slate-500 dark:text-slate-400" title={latestScoredStat?.detail.title}>
-                    {latestScoredStat ? `${latestScoredStat.detail.title} · ${formatDate(latestScoredStat.detail.scheduled_at || latestScoredStat.detail.created_at)}` : "채점 완료 기록 없음"}
+                  <p className="text-4xl font-black tracking-normal text-slate-950 dark:text-white">{scoreLabel(focusedStat?.selectedScore)}</p>
+                  <p className="max-w-[220px] truncate text-right text-xs text-slate-500 dark:text-slate-400" title={focusedStat?.detail.title}>
+                    {focusedStat ? `${focusedStat.detail.title} · ${formatDate(focusedStat.detail.scheduled_at || focusedStat.detail.created_at)}` : "채점 완료 기록 없음"}
                   </p>
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <p className="text-xs font-semibold text-slate-500">반 평균 대비</p>
-                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{latestClassDelta == null ? "-" : `${latestClassDelta >= 0 ? "+" : ""}${latestClassDelta.toFixed(1)}`}</p>
+                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{focusedClassDelta == null ? "-" : `${focusedClassDelta >= 0 ? "+" : ""}${focusedClassDelta.toFixed(1)}`}</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
-                <p className="text-xs font-semibold text-slate-500">최근 반 평균</p>
-                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{scoreLabel(latestScoredStat?.classAverage)}</p>
+                <p className="text-xs font-semibold text-slate-500">{selectedSessionStat ? "선택 반 평균" : "최근 반 평균"}</p>
+                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{scoreLabel(focusedStat?.classAverage)}</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <p className="text-xs font-semibold text-slate-500">석차</p>
-                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{latestScoredStat?.rank == null ? "-" : `${latestScoredStat.rank}/${latestScoredStat.classGradedCount}`}</p>
+                <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{focusedStat?.rank == null ? "-" : `${focusedStat.rank}/${focusedStat.classGradedCount}`}</p>
               </div>
             </div>
 
-            <ClassTrendChart points={classMetricPoints} />
+            <ClassTrendChart points={classMetricPoints} selectedPointId={focusedPointId} onSelectPoint={setSelectedStatsId} />
 
             <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
               <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
