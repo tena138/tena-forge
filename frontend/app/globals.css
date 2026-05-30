@@ -236,7 +236,7 @@
   }
 
   .landing-mock-frame {
-    transform: rotateY(-3deg) rotateX(1.5deg);
+    transform: none;
     transform-origin: center;
     mask-image: linear-gradient(180deg, black 0%, black 82%, transparent 100%);
   }
