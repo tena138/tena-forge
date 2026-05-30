@@ -14,7 +14,7 @@ import { AUTH_CHANGED_EVENT, clearAuthState, ensureAccessToken, readStoredAuthPr
 import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
-const marketingRoutes = ["/", "/plan", "/checkout", "/pricing", "/terms", "/privacy", "/copyright-policy"];
+const marketingRoutes = ["/", "/plan", "/checkout", "/pricing", "/terms", "/privacy", "/refund-policy", "/copyright-policy"];
 const billingAllowedRoutes = ["/billing", "/plan", "/checkout", "/account/profile", "/account/security"];
 const marketplaceAdminRoutes = ["/marketplace", "/stores", "/creator", "/purchases"];
 

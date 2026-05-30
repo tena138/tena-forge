@@ -17,6 +17,7 @@ export function isMarketingOrAuthPath(pathname: string) {
     "/verify-email",
     "/terms",
     "/privacy",
+    "/refund-policy",
     "/copyright-policy",
   ].some((prefix) => pathname.startsWith(prefix));
 }

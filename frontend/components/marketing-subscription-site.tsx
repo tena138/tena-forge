@@ -517,6 +517,7 @@ export function MarketingSubscriptionSite() {
             <div className="flex flex-wrap gap-4">
               <Link href="/terms" className="hover:text-slate-300">이용약관</Link>
               <Link href="/privacy" className="hover:text-slate-300">개인정보처리방침</Link>
+              <Link href="/refund-policy" className="hover:text-slate-300">환불 및 취소 정책</Link>
               <Link href="/copyright-policy" className="hover:text-slate-300">저작권 정책</Link>
             </div>
           </div>

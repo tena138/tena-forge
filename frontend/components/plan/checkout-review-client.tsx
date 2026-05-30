@@ -204,7 +204,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
               <label className="flex gap-3 rounded-[16px] border border-slate-950/10 bg-slate-50 p-4 text-sm font-semibold text-slate-700">
                 <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-0.5 h-4 w-4 accent-slate-950" />
                 <span>
-                  <Link href="/terms" className="font-black underline">이용약관</Link> 및 <Link href="/privacy" className="font-black underline">개인정보처리방침</Link>을 확인했으며, 구독 갱신 조건에 동의합니다.
+                  <Link href="/terms" className="font-black underline">이용약관</Link>, <Link href="/privacy" className="font-black underline">개인정보처리방침</Link>, <Link href="/refund-policy" className="font-black underline">환불 및 취소 정책</Link>을 확인했으며, 구독 갱신 조건에 동의합니다.
                 </span>
               </label>
             </div>

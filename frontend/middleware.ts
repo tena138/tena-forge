@@ -16,6 +16,7 @@ const publicRoutes = [
   "/reset-password",
   "/terms",
   "/privacy",
+  "/refund-policy",
   "/copyright-policy",
 ];
 
