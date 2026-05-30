@@ -1169,7 +1169,7 @@ export default function StudentManagementPage() {
                         </button>
                       </div>
                     </aside>
-                    <div className="col-start-2 min-w-0 space-y-3 p-4 lg:col-start-auto">
+                    <div className="col-start-2 flex min-w-0 flex-col gap-3 p-4 lg:col-start-auto">
                       {addingStudentClassId === classRow.id ? (
                         <form
                           className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3"
@@ -1194,7 +1194,7 @@ export default function StudentManagementPage() {
                         </form>
                       ) : null}
                       {classRow.students.length ? (
-                        <div className="flex min-h-[136px] items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+                        <div className="flex min-h-[136px] flex-1 items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
                           {classRow.students.map((student) => (
                             <ClassStudentCard key={student.id} student={student} />
                           ))}
