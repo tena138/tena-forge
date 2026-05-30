@@ -60,7 +60,7 @@ type TimelineCalendarItem = {
   laneCount: number;
 };
 
-const TIMELINE_HOUR_HEIGHT = 58;
+const TIMELINE_HOUR_HEIGHT = 34;
 const TIMELINE_DAY_HEIGHT = TIMELINE_HOUR_HEIGHT * 24;
 
 type StudentDetail = StudentCard & {
@@ -403,7 +403,7 @@ function layoutTimelineItems(items: StudentCalendarItem[]): TimelineCalendarItem
       rawStart: start,
       rawEnd: end,
       top: (start / 60) * TIMELINE_HOUR_HEIGHT,
-      height: Math.max(42, ((end - start) / 60) * TIMELINE_HOUR_HEIGHT - 4),
+      height: Math.max(30, ((end - start) / 60) * TIMELINE_HOUR_HEIGHT - 4),
       lane,
       laneCount: 1,
     });
@@ -1471,7 +1471,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 <CardTitle className="text-white">{shortDate(`${selectedCalendarDate}T00:00:00`)}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="max-h-[64vh] overflow-y-auto pr-1 [scrollbar-color:#3b334d_transparent] [scrollbar-width:thin]">
+                <div className="pr-1">
                   <div className="relative pl-16" style={{ height: TIMELINE_DAY_HEIGHT }}>
                     <div className="absolute bottom-0 left-0 top-0 w-14">
                       {Array.from({ length: 24 }, (_, hour) => (
