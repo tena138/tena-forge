@@ -40,12 +40,26 @@ type StudentCalendarItem = {
   event_id?: string;
   linked_paper_session_id?: string | null;
   date: string;
+  end_date?: string | null;
   title: string;
   meta: string;
   description: string;
   result_id?: string | null;
   kind: "수업" | "시험" | "상담";
 };
+
+type TimelineCalendarItem = {
+  item: StudentCalendarItem;
+  start: number;
+  end: number;
+  top: number;
+  height: number;
+  lane: number;
+  laneCount: number;
+};
+
+const TIMELINE_HOUR_HEIGHT = 58;
+const TIMELINE_DAY_HEIGHT = TIMELINE_HOUR_HEIGHT * 24;
 
 type StudentDetail = StudentCard & {
   paper_session_history: Array<{
@@ -56,7 +70,7 @@ type StudentDetail = StudentCard & {
     correct_count: number;
     wrong_count: number;
     total_count: number;
-    session?: { title?: string; session_type?: string; scheduled_at?: string | null; problem_count?: number } | null;
+    session?: { title?: string; session_type?: string; scheduled_at?: string | null; due_at?: string | null; problem_count?: number } | null;
     problem_results: Array<{
       id: string;
       problem_id: string;
@@ -300,6 +314,7 @@ function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
     event_id: event.id,
     linked_paper_session_id: event.linked_paper_session_id || null,
     date: event.starts_at,
+    end_date: event.ends_at || null,
     title: event.title,
     meta: event.event_type,
     description: event.description || "",
@@ -311,6 +326,7 @@ function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
     .map((result) => ({
       id: `session-${result.id}`,
       date: result.session?.scheduled_at || "",
+      end_date: result.session?.due_at || null,
       title: result.session?.title || "Paper Session",
       meta: result.status,
       result_id: result.id,
@@ -343,6 +359,80 @@ function calendarBlockClass(item: StudentCalendarItem) {
   if (item.meta === "homework") return "border-sky-300/50 bg-sky-100 text-sky-950 hover:bg-sky-200 dark:border-sky-300/30 dark:bg-sky-500/20 dark:text-sky-50 dark:hover:bg-sky-500/30";
   if (item.meta === "review") return "border-emerald-300/50 bg-emerald-100 text-emerald-950 hover:bg-emerald-200 dark:border-emerald-300/30 dark:bg-emerald-500/20 dark:text-emerald-50 dark:hover:bg-emerald-500/30";
   return "border-violet-300/50 bg-violet-100 text-violet-950 hover:bg-violet-200 dark:border-violet-300/30 dark:bg-violet-500/20 dark:text-violet-50 dark:hover:bg-violet-500/30";
+}
+
+function hasExplicitTime(value?: string | null) {
+  return Boolean(value && value.includes("T"));
+}
+
+function timelineMinutes(value?: string | null, fallbackMinutes = 9 * 60) {
+  if (!value || !hasExplicitTime(value)) return fallbackMinutes;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallbackMinutes;
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function timelineBounds(item: StudentCalendarItem) {
+  const start = Math.max(0, Math.min(1439, timelineMinutes(item.date, item.result_id ? 10 * 60 : 9 * 60)));
+  let end: number | null = null;
+  if (item.end_date) {
+    const startKey = dateKey(item.date);
+    const endKey = dateKey(item.end_date);
+    end = startKey && endKey && startKey !== endKey ? 24 * 60 : timelineMinutes(item.end_date, start + 60);
+  }
+  const defaultDuration = item.result_id ? 90 : 60;
+  if (end == null || end <= start) end = start + defaultDuration;
+  end = Math.max(start + 30, Math.min(24 * 60, end));
+  return { start, end };
+}
+
+function layoutTimelineItems(items: StudentCalendarItem[]): TimelineCalendarItem[] {
+  const placed: Array<TimelineCalendarItem & { rawStart: number; rawEnd: number }> = [];
+  for (const item of [...items].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime() || left.title.localeCompare(right.title))) {
+    const { start, end } = timelineBounds(item);
+    const active = placed.filter((entry) => entry.rawEnd > start && entry.rawStart < end);
+    const usedLanes = new Set(active.map((entry) => entry.lane));
+    let lane = 0;
+    while (usedLanes.has(lane)) lane += 1;
+    placed.push({
+      item,
+      start,
+      end,
+      rawStart: start,
+      rawEnd: end,
+      top: (start / 60) * TIMELINE_HOUR_HEIGHT,
+      height: Math.max(42, ((end - start) / 60) * TIMELINE_HOUR_HEIGHT - 4),
+      lane,
+      laneCount: 1,
+    });
+  }
+  return placed.map((entry) => {
+    const laneCount = Math.max(
+      1,
+      ...placed.filter((other) => other.rawStart < entry.rawEnd && entry.rawStart < other.rawEnd).map((other) => other.lane + 1)
+    );
+    const { rawStart, rawEnd, ...rest } = entry;
+    return { ...rest, laneCount };
+  });
+}
+
+function timelineHourLabel(hour: number) {
+  if (hour === 0) return "자정";
+  if (hour === 12) return "정오";
+  return hour < 12 ? `오전 ${hour}시` : `오후 ${hour - 12}시`;
+}
+
+function timelineTimeLabel(value?: string | null) {
+  if (!value || !hasExplicitTime(value)) return "시간 미정";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "시간 미정";
+  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function timelineRangeLabel(item: StudentCalendarItem) {
+  const startLabel = timelineTimeLabel(item.date);
+  const endLabel = item.end_date ? timelineTimeLabel(item.end_date) : "";
+  return endLabel && endLabel !== "시간 미정" ? `${startLabel} - ${endLabel}` : startLabel;
 }
 
 function buildStatuses(result: StudentDetail["paper_session_history"][number]) {
@@ -499,6 +589,11 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const selectedCalendarResult = selectedCalendarItem?.result_id
     ? data?.paper_session_history.find((result) => result.id === selectedCalendarItem.result_id) || null
     : null;
+  const selectedTimelineItems = useMemo(() => layoutTimelineItems(selectedCalendarItems), [selectedCalendarItems]);
+  const currentTimelineMinutes = useMemo(() => {
+    const now = new Date();
+    return selectedCalendarDate === dateKey(now) ? now.getHours() * 60 + now.getMinutes() : null;
+  }, [selectedCalendarDate]);
 
   function applyStudentData(student: StudentDetail) {
     setData(student);
@@ -1336,8 +1431,85 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               <CardHeader>
                 <CardTitle className="text-white">{shortDate(`${selectedCalendarDate}T00:00:00`)}</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {selectedCalendarItems.map((item) => (
+              <CardContent className="space-y-4">
+                <div className="max-h-[64vh] overflow-y-auto pr-1 [scrollbar-color:#3b334d_transparent] [scrollbar-width:thin]">
+                  <div className="relative pl-16" style={{ height: TIMELINE_DAY_HEIGHT }}>
+                    <div className="absolute bottom-0 left-0 top-0 w-14">
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <div key={hour} className="absolute right-2 -translate-y-1/2 text-right text-[11px] font-bold text-slate-500" style={{ top: hour * TIMELINE_HOUR_HEIGHT }}>
+                          {timelineHourLabel(hour)}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="absolute bottom-0 left-16 right-0 top-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/15">
+                      {Array.from({ length: 25 }, (_, hour) => (
+                        <span key={hour} className="absolute left-0 right-0 border-t border-white/[0.08]" style={{ top: hour * TIMELINE_HOUR_HEIGHT }} />
+                      ))}
+                      {currentTimelineMinutes != null ? (
+                        <div className="pointer-events-none absolute left-0 right-0 z-20" style={{ top: (currentTimelineMinutes / 60) * TIMELINE_HOUR_HEIGHT }}>
+                          <span className="absolute -left-[3.25rem] -translate-y-1/2 rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-black text-white shadow-lg shadow-rose-950/35">
+                            {timelineTimeLabel(new Date().toISOString())}
+                          </span>
+                          <span className="block border-t border-rose-400 shadow-[0_0_14px_rgba(251,113,133,0.45)]" />
+                        </div>
+                      ) : null}
+                      {selectedTimelineItems.map(({ item, top, height, lane, laneCount }) => (
+                        <div
+                          key={item.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelectedCalendarItemId(item.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelectedCalendarItemId(item.id);
+                            }
+                          }}
+                          className={cn(
+                            "absolute z-10 overflow-hidden rounded-lg border p-2 text-left shadow-[0_14px_34px_rgba(0,0,0,0.22)] outline-none transition hover:z-20 hover:brightness-110",
+                            calendarBlockClass(item),
+                            selectedCalendarItem?.id === item.id && "ring-2 ring-white/70"
+                          )}
+                          style={{
+                            top,
+                            height,
+                            left: `calc(${(lane / laneCount) * 100}% + 0.25rem)`,
+                            width: `calc(${100 / laneCount}% - 0.5rem)`,
+                          }}
+                          title={`${item.title} · ${timelineRangeLabel(item)}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-[11px] font-black">{item.title}</p>
+                              <p className="mt-0.5 truncate text-[10px] opacity-80">{timelineRangeLabel(item)}</p>
+                            </div>
+                            {item.event_id ? (
+                              <button
+                                type="button"
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-black/15 text-current opacity-75 transition hover:bg-rose-500/20 hover:opacity-100 disabled:opacity-50"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void removeCalendarEvent(item);
+                                }}
+                                disabled={deletingScheduleEventId === item.event_id}
+                                aria-label={`${item.title} 일정 삭제`}
+                              >
+                                {deletingScheduleEventId === item.event_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              </button>
+                            ) : null}
+                          </div>
+                          {height > 70 && item.description ? <p className="mt-1 max-h-10 overflow-hidden text-[10px] leading-4 opacity-80">{item.description}</p> : null}
+                        </div>
+                      ))}
+                      {!selectedTimelineItems.length ? (
+                        <div className="absolute left-4 right-4 top-4 rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">
+                          선택한 날짜에 등록된 일정이 없습니다.
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+                {false && selectedCalendarItems.map((item) => (
                   <div
                     key={item.id}
                     className={cn(
@@ -1409,7 +1581,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 ) : selectedCalendarItem ? (
                   <p className="rounded-lg border border-dashed border-white/10 p-3 text-sm text-slate-500">이 일정에는 아직 채점할 시험/과제 결과가 연결되어 있지 않습니다.</p>
                 ) : null}
-                {!selectedCalendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">선택한 날짜에 등록된 일정이 없습니다.</p> : null}
+                {false && !selectedCalendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">선택한 날짜에 등록된 일정이 없습니다.</p> : null}
               </CardContent>
             </Card>
           </section>
