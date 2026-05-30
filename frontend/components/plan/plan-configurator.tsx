@@ -614,9 +614,6 @@ function ProductStage({
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
-            <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">
-              가장 강력한 교육 콘텐츠 인프라
-            </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[11px] font-bold text-slate-300 sm:inline-flex">{consoleSectionMeta[scene].route}</span>

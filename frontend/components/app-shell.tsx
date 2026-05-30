@@ -144,9 +144,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href={homeHref} className="inline-flex shrink-0 items-center" aria-label="Tena Forge">
               <SiteLogo />
             </Link>
-            <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">
-              가장 강력한 교육 콘텐츠 인프라
-            </span>
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <HeaderNotifications />
