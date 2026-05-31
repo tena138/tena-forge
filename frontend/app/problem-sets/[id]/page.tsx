@@ -387,37 +387,23 @@ export default function ProblemSetDetailPage() {
   if (!problemSet) return <div className="py-20 text-center text-muted-foreground">세트를 불러오는 중입니다.</div>;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-24">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="forge-section-title">문항 세트 편집</h1>
-            <Badge variant="secondary">{itemCount.toLocaleString("ko-KR")}문항</Badge>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4" />문항 추가
-          </Button>
-          <Button onClick={() => setExportOpen(true)}>
-            <FileDown className="h-4 w-4" />내보내기
-          </Button>
+          <h1 className="forge-section-title">문항 세트 편집</h1>
         </div>
       </div>
 
       <Card>
         <CardContent className="space-y-4 pt-5">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="shrink-0 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-muted-foreground">
+              총 <strong className="text-white">{itemCount.toLocaleString("ko-KR")}</strong>문항
+            </div>
             <Input value={name} onChange={(event) => setName(event.target.value)} />
             <Button disabled={!name.trim() || name === problemSet.name} onClick={saveName}>
               <Save className="h-4 w-4" />저장
             </Button>
-          </div>
-          <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2">
-            <span className="text-sm font-semibold text-slate-200">세트 문항</span>
-            <span className="text-sm text-muted-foreground">
-              총 <strong className="text-white">{itemCount.toLocaleString("ko-KR")}</strong>문항
-            </span>
           </div>
           <DndContext collisionDetection={closestCenter} onDragEnd={reorder}>
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
@@ -478,6 +464,14 @@ export default function ProblemSetDetailPage() {
           setExportHistory(readProblemSetExportHistory(problemSet.id));
         }}
       />
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-2 sm:flex-row">
+        <Button className="h-12 shadow-[0_18px_50px_rgba(0,0,0,0.34)]" variant="outline" onClick={() => setAddOpen(true)}>
+          <Plus className="h-4 w-4" />문항 추가
+        </Button>
+        <Button className="h-12 shadow-[0_18px_50px_rgba(91,33,182,0.34)]" onClick={() => setExportOpen(true)}>
+          <FileDown className="h-4 w-4" />내보내기
+        </Button>
+      </div>
     </div>
   );
 }
