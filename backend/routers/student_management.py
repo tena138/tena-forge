@@ -378,7 +378,6 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
             select(AcademyClass)
             .join(ClassStudent, ClassStudent.class_id == AcademyClass.id)
             .where(
-                AcademyClass.academy_id.in_([academy_id, membership.academy_id]),
                 ClassStudent.student_membership_id == membership.id,
                 ClassStudent.left_at.is_(None),
             )
@@ -595,24 +594,33 @@ def _safe_session_summary(db: Session, academy_id: str, session: PaperSession) -
         return None
 
 
-def _get_class(db: Session, academy_id: str, class_id: UUID) -> AcademyClass:
+def _get_class(db: Session, academy_id: str, class_id: UUID, academy_ids: set[str] | None = None) -> AcademyClass:
+    visible_academy_ids = set(academy_ids or {academy_id})
+    visible_academy_ids.add(academy_id)
     row = db.get(AcademyClass, class_id)
-    if not row or row.academy_id != academy_id:
+    if not row or row.academy_id not in visible_academy_ids:
         raise HTTPException(status_code=404, detail="Class not found.")
     return row
 
 
-def _get_membership(db: Session, academy_id: str, student_id: UUID) -> StudentAcademyMembership:
+def _get_membership(
+    db: Session,
+    academy_id: str,
+    student_id: UUID,
+    academy_ids: set[str] | None = None,
+) -> StudentAcademyMembership:
+    visible_academy_ids = set(academy_ids or {academy_id})
+    visible_academy_ids.add(academy_id)
     row = db.get(StudentAcademyMembership, student_id)
     if not row:
         raise HTTPException(status_code=404, detail="Student not found.")
-    if row.academy_id == academy_id:
+    if row.academy_id in visible_academy_ids:
         return row
     linked_class = db.scalar(
         select(AcademyClass.id)
         .join(ClassStudent, ClassStudent.class_id == AcademyClass.id)
         .where(
-            AcademyClass.academy_id == academy_id,
+            AcademyClass.academy_id.in_(list(visible_academy_ids)),
             ClassStudent.student_membership_id == row.id,
             ClassStudent.left_at.is_(None),
         )
@@ -1347,7 +1355,8 @@ def get_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
 @router.patch("/classes/{class_id}")
 def update_class(class_id: UUID, payload: ClassUpdatePayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    row = _get_class(db, academy_id, class_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    row = _get_class(db, academy_id, class_id, visible_academy_ids)
     for key, value in payload.model_dump(exclude_unset=True).items():
         if key == "name" and value is not None:
             value = value.strip()
@@ -1363,7 +1372,8 @@ def update_class(class_id: UUID, payload: ClassUpdatePayload, request: Request, 
 @router.put("/classes/{class_id}/counseling-format")
 def update_class_counseling_format(class_id: UUID, payload: CounselingFormatPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    _get_class(db, academy_id, class_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    _get_class(db, academy_id, class_id, visible_academy_ids)
     subscription = ensure_academy_subscription(db, academy_id)
     metadata = dict(subscription.billing_metadata or {})
     formats = metadata.get(COUNSELING_FORMATS_METADATA_KEY)
@@ -1417,7 +1427,8 @@ def save_counseling_preset(slot: int, payload: CounselingPresetPayload, request:
 @router.delete("/classes/{class_id}", status_code=204)
 def delete_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    row = _get_class(db, academy_id, class_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    row = _get_class(db, academy_id, class_id, visible_academy_ids)
     db.delete(row)
     db.commit()
     return Response(status_code=204)
@@ -1426,8 +1437,9 @@ def delete_class(class_id: UUID, request: Request, db: Session = Depends(get_db)
 @router.post("/classes/{class_id}/students")
 def add_student_to_class(class_id: UUID, payload: ClassStudentPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    class_row = _get_class(db, academy_id, class_id)
-    membership = _get_membership(db, academy_id, payload.student_membership_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    class_row = _get_class(db, academy_id, class_id, visible_academy_ids)
+    membership = _get_membership(db, academy_id, payload.student_membership_id, visible_academy_ids)
     link = db.scalar(
         select(ClassStudent).where(
             ClassStudent.class_id == class_id,
@@ -1445,8 +1457,9 @@ def add_student_to_class(class_id: UUID, payload: ClassStudentPayload, request: 
 @router.delete("/classes/{class_id}/students/{student_id}", status_code=204)
 def remove_student_from_class(class_id: UUID, student_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    _get_class(db, academy_id, class_id)
-    _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    _get_class(db, academy_id, class_id, visible_academy_ids)
+    _get_membership(db, academy_id, student_id, visible_academy_ids)
     link = db.scalar(select(ClassStudent).where(ClassStudent.class_id == class_id, ClassStudent.student_membership_id == student_id))
     if link:
         link.left_at = _now()
@@ -1462,7 +1475,7 @@ def list_students(request: Request, db: Session = Depends(get_db)):
         select(ClassStudent.student_membership_id)
         .join(AcademyClass, AcademyClass.id == ClassStudent.class_id)
         .where(
-            AcademyClass.academy_id == academy_id,
+            AcademyClass.academy_id.in_(list(visible_academy_ids)),
             ClassStudent.left_at.is_(None),
         )
     ).all()
@@ -1509,10 +1522,11 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
 @router.post("/students/{student_id}/invite-code")
 def ensure_student_invite_code(student_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     seat = db.scalar(
         select(AcademySeat).where(
-            AcademySeat.academy_id == academy_id,
+            AcademySeat.academy_id.in_(list(visible_academy_ids)),
             AcademySeat.id == membership.academy_seat_id,
             AcademySeat.is_active.is_(True),
         )
@@ -1532,27 +1546,28 @@ def ensure_student_invite_code(student_id: UUID, request: Request, db: Session =
 @router.get("/students/{student_id}")
 def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     _ensure_exported_review_session_assigned(db, academy_id)
-    membership = _get_membership(db, academy_id, student_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     data = _student_payload(db, academy_id, membership)
     results = db.scalars(
         select(PaperSessionResult)
-        .where(PaperSessionResult.academy_id == academy_id, PaperSessionResult.student_membership_id == student_id)
+        .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)), PaperSessionResult.student_membership_id == student_id)
         .order_by(PaperSessionResult.created_at.desc())
     ).all()
     sessions = {
         row.id: row
         for row in db.scalars(
             select(PaperSession)
-            .where(PaperSession.academy_id == academy_id, PaperSession.id.in_([result.paper_session_id for result in results] or [uuid.uuid4()]))
+            .where(PaperSession.academy_id.in_(list(visible_academy_ids)), PaperSession.id.in_([result.paper_session_id for result in results] or [uuid.uuid4()]))
             .options(joinedload(PaperSession.content_version))
         ).all()
     }
-    wrongs = _wrong_answer_rows(db, academy_id, student_user_ids=[membership.student_user_id])
+    wrongs = _wrong_answer_rows(db, academy_id, student_user_ids=[membership.student_user_id], academy_ids=visible_academy_ids)
     data["paper_session_history"] = [
         {
             **_result_payload(result),
-            "session": _session_summary(db, academy_id, sessions.get(result.paper_session_id)),
+            "session": _session_summary(db, sessions[result.paper_session_id].academy_id, sessions.get(result.paper_session_id)) if result.paper_session_id in sessions else None,
             "problem_results": [],
         }
         for result in results
@@ -1562,7 +1577,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         problem_results = db.scalars(
             select(ProblemResult)
             .where(
-                ProblemResult.academy_id == academy_id,
+                ProblemResult.academy_id.in_(list(visible_academy_ids)),
                 ProblemResult.paper_session_result_id.in_(result_ids),
             )
             .order_by(ProblemResult.problem_number)
@@ -1583,7 +1598,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
     if class_ids:
         events = db.scalars(
             select(ClassScheduleEvent)
-            .where(ClassScheduleEvent.academy_id == academy_id, ClassScheduleEvent.class_id.in_(class_ids))
+            .where(ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)), ClassScheduleEvent.class_id.in_(class_ids))
             .order_by(ClassScheduleEvent.starts_at.asc())
             .limit(500)
         ).all()
@@ -1609,14 +1624,15 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
 @router.get("/students/{student_id}/exam-stats-series")
 def student_exam_stats_series(student_id: UUID, request: Request, start_date: str | None = None, end_date: str | None = None, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     start = _date_boundary(start_date)
     end = _date_boundary(end_date, end=True)
     rows = db.execute(
         select(PaperSessionResult, PaperSession)
         .join(PaperSession, PaperSession.id == PaperSessionResult.paper_session_id)
         .where(
-            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.academy_id.in_(list(visible_academy_ids)),
             PaperSessionResult.student_membership_id == membership.id,
             PaperSessionResult.status == "graded",
             PaperSessionResult.score.is_not(None),
@@ -1634,7 +1650,7 @@ def student_exam_stats_series(student_id: UUID, request: Request, start_date: st
             continue
         session_results = db.scalars(
             select(PaperSessionResult).where(
-                PaperSessionResult.academy_id == academy_id,
+                PaperSessionResult.academy_id.in_(list(visible_academy_ids)),
                 PaperSessionResult.paper_session_id == session.id,
             )
         ).all()
@@ -1661,7 +1677,8 @@ def student_exam_stats_series(student_id: UUID, request: Request, start_date: st
 @router.post("/students/{student_id}/counseling-logs")
 def create_counseling_log(student_id: UUID, payload: CounselingLogPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     class_row = _resolve_counseling_class(db, academy_id, membership, payload.class_id)
     row = _counseling_log_row(payload, request, membership, class_row)
     metadata = dict(membership.metadata_json or {})
@@ -1675,7 +1692,8 @@ def create_counseling_log(student_id: UUID, payload: CounselingLogPayload, reque
 @router.put("/students/{student_id}/counseling-logs/{log_id}")
 def update_counseling_log(student_id: UUID, log_id: str, payload: CounselingLogPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     logs = _counseling_logs(membership)
     existing = next((row for row in logs if str(row.get("id")) == log_id), None)
     if not existing:
@@ -1692,7 +1710,8 @@ def update_counseling_log(student_id: UUID, log_id: str, payload: CounselingLogP
 @router.delete("/students/{student_id}/counseling-logs/{log_id}", status_code=204)
 def delete_counseling_log(student_id: UUID, log_id: str, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     logs = _counseling_logs(membership)
     if not any(str(row.get("id")) == log_id for row in logs):
         raise HTTPException(status_code=404, detail="Counseling log not found.")
@@ -1763,7 +1782,8 @@ def _counseling_export_values(membership: StudentAcademyMembership, logs: list[d
 @router.post("/students/{student_id}/counseling-logs/export")
 def export_counseling_logs(student_id: UUID, payload: CounselingExportPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     logs = _counseling_logs(membership)
     if payload.log_ids:
         selected_ids = {str(item) for item in payload.log_ids}
@@ -1810,7 +1830,8 @@ def export_counseling_logs(student_id: UUID, payload: CounselingExportPayload, r
 @router.patch("/students/{student_id}")
 def update_student(student_id: UUID, payload: StudentUpdatePayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     changes = payload.model_dump(exclude_unset=True)
     metadata = dict(membership.metadata_json or {})
     if "name" in changes and changes["name"] is not None:
@@ -1829,7 +1850,7 @@ def update_student(student_id: UUID, payload: StudentUpdatePayload, request: Req
     if class_ids is not None:
         db.execute(delete(ClassStudent).where(ClassStudent.student_membership_id == membership.id))
         for class_id in class_ids:
-            _get_class(db, academy_id, class_id)
+            _get_class(db, academy_id, class_id, visible_academy_ids)
             db.add(ClassStudent(class_id=class_id, student_membership_id=membership.id))
     db.commit()
     return _student_payload(db, academy_id, membership)
@@ -1838,7 +1859,8 @@ def update_student(student_id: UUID, payload: StudentUpdatePayload, request: Req
 @router.delete("/students/{student_id}", status_code=204)
 def delete_student(student_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    membership = _get_membership(db, academy_id, student_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     membership.status = "inactive"
     membership.ended_at = _now()
     seat = db.get(AcademySeat, membership.academy_seat_id)
@@ -1852,13 +1874,14 @@ def delete_student(student_id: UUID, request: Request, db: Session = Depends(get
 @router.get("/paper-sessions")
 def list_paper_sessions(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     sessions = db.scalars(
         select(PaperSession)
-        .where(PaperSession.academy_id == academy_id)
+        .where(PaperSession.academy_id.in_(list(visible_academy_ids)))
         .options(joinedload(PaperSession.content_version))
         .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
     ).all()
-    return [_session_summary(db, academy_id, session) for session in sessions]
+    return [_session_summary(db, session.academy_id, session) for session in sessions]
 
 
 @router.post("/paper-sessions")
@@ -2072,19 +2095,20 @@ def delete_paper_session_result(result_id: UUID, request: Request, db: Session =
 @router.post("/paper-sessions/{session_id}/grade")
 def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     actor_id = current_owner_id(request)
-    session = _get_session(db, academy_id, session_id)
-    membership = _get_membership(db, academy_id, payload.student_membership_id)
+    session = _get_visible_session(db, visible_academy_ids, session_id)
+    membership = _get_membership(db, academy_id, payload.student_membership_id, visible_academy_ids)
     result = db.scalar(
         select(PaperSessionResult).where(
-            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.academy_id.in_(list(visible_academy_ids)),
             PaperSessionResult.paper_session_id == session.id,
             PaperSessionResult.student_membership_id == membership.id,
         )
     )
     if not result:
         result = PaperSessionResult(
-            academy_id=academy_id,
+            academy_id=session.academy_id,
             paper_session_id=session.id,
             student_membership_id=membership.id,
             student_user_id=membership.student_user_id,
@@ -2112,7 +2136,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
         row.problem_id: row
         for row in db.scalars(
             select(ProblemResult).where(
-                ProblemResult.academy_id == academy_id,
+                ProblemResult.academy_id.in_(list(visible_academy_ids)),
                 ProblemResult.paper_session_result_id == result.id,
             )
         ).all()
@@ -2128,7 +2152,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
         was_wrong = bool(row and _is_wrong_result_status(row.result_status))
         if not row:
             row = ProblemResult(
-                academy_id=academy_id,
+                academy_id=session.academy_id,
                 paper_session_id=session.id,
                 paper_session_result_id=result.id,
                 student_membership_id=membership.id,
@@ -2152,7 +2176,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
             unmarked_count += 1
         _sync_wrong_answer(
             db,
-            academy_id=academy_id,
+            academy_id=session.academy_id,
             student_user_id=membership.student_user_id,
             problem_id=problem_id,
             problem_version_id=session.content_version_id,
@@ -2175,7 +2199,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
     if graded_count == total_count:
         all_results = db.scalars(
             select(PaperSessionResult).where(
-                PaperSessionResult.academy_id == academy_id,
+                PaperSessionResult.academy_id.in_(list(visible_academy_ids)),
                 PaperSessionResult.paper_session_id == session.id,
             )
         ).all()
@@ -2183,14 +2207,21 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
             session.status = "completed"
     session.updated_at = _now()
     db.commit()
-    return _paper_session_detail(db, academy_id, _get_session(db, academy_id, session.id))
+    return _paper_session_detail(db, session.academy_id, _get_visible_session(db, visible_academy_ids, session.id))
 
 
-def _wrong_answer_rows(db: Session, academy_id: str, student_user_ids: list[str] | None = None) -> list[dict]:
+def _wrong_answer_rows(
+    db: Session,
+    academy_id: str,
+    student_user_ids: list[str] | None = None,
+    academy_ids: set[str] | None = None,
+) -> list[dict]:
+    visible_academy_ids = set(academy_ids or {academy_id})
+    visible_academy_ids.add(academy_id)
     stmt = (
         select(WrongAnswerRecord, Problem)
         .join(Problem, Problem.id == WrongAnswerRecord.problem_id)
-        .where(WrongAnswerRecord.academy_id == academy_id)
+        .where(WrongAnswerRecord.academy_id.in_(list(visible_academy_ids)))
         .order_by(WrongAnswerRecord.latest_wrong_at.desc())
     )
     if student_user_ids:
@@ -2200,7 +2231,7 @@ def _wrong_answer_rows(db: Session, academy_id: str, student_user_ids: list[str]
         row.student_user_id: row
         for row in db.scalars(
             select(StudentAcademyMembership).where(
-                StudentAcademyMembership.academy_id == academy_id,
+                StudentAcademyMembership.academy_id.in_(list(visible_academy_ids)),
                 StudentAcademyMembership.student_user_id.in_([record.student_id for record, _ in rows] or [""]),
             )
         ).all()
@@ -2242,13 +2273,14 @@ def list_wrong_answers(
     db: Session = Depends(get_db),
 ):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     student_user_ids: list[str] | None = None
     if student_membership_id:
-        student_user_ids = [_get_membership(db, academy_id, student_membership_id).student_user_id]
+        student_user_ids = [_get_membership(db, academy_id, student_membership_id, visible_academy_ids).student_user_id]
     elif class_id:
-        _get_class(db, academy_id, class_id)
+        _get_class(db, academy_id, class_id, visible_academy_ids)
         student_user_ids = [membership.student_user_id for membership in _active_memberships_for_class(db, academy_id, class_id)]
-    rows = _wrong_answer_rows(db, academy_id, student_user_ids=student_user_ids)
+    rows = _wrong_answer_rows(db, academy_id, student_user_ids=student_user_ids, academy_ids=visible_academy_ids)
     if status:
         rows = [row for row in rows if row["resolved_status"] == status]
     return rows
@@ -2257,10 +2289,11 @@ def list_wrong_answers(
 @router.delete("/wrong-answers/{wrong_answer_id}", status_code=204)
 def delete_wrong_answer(wrong_answer_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     row = db.scalar(
         select(WrongAnswerRecord).where(
             WrongAnswerRecord.id == wrong_answer_id,
-            WrongAnswerRecord.academy_id == academy_id,
+            WrongAnswerRecord.academy_id.in_(list(visible_academy_ids)),
         )
     )
     if not row:
@@ -2273,17 +2306,18 @@ def delete_wrong_answer(wrong_answer_id: UUID, request: Request, db: Session = D
 @router.post("/wrong-answers/review-set")
 def create_review_set(payload: ReviewSetPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     owner_id = current_owner_id(request)
-    stmt = select(WrongAnswerRecord).where(WrongAnswerRecord.academy_id == academy_id)
+    stmt = select(WrongAnswerRecord).where(WrongAnswerRecord.academy_id.in_(list(visible_academy_ids)))
     if payload.wrong_answer_ids:
         stmt = stmt.where(WrongAnswerRecord.id.in_(payload.wrong_answer_ids))
     if payload.unresolved_only:
         stmt = stmt.where(WrongAnswerRecord.resolved_status.in_(["unresolved", "reviewing"]))
     if payload.student_membership_id:
-        membership = _get_membership(db, academy_id, payload.student_membership_id)
+        membership = _get_membership(db, academy_id, payload.student_membership_id, visible_academy_ids)
         stmt = stmt.where(WrongAnswerRecord.student_id == membership.student_user_id)
     if payload.class_id:
-        _get_class(db, academy_id, payload.class_id)
+        _get_class(db, academy_id, payload.class_id, visible_academy_ids)
         user_ids = [membership.student_user_id for membership in _active_memberships_for_class(db, academy_id, payload.class_id)]
         stmt = stmt.where(WrongAnswerRecord.student_id.in_(user_ids or [""]))
     records = db.scalars(stmt.order_by(WrongAnswerRecord.latest_wrong_at.desc())).all()
@@ -2334,11 +2368,12 @@ def list_schedule_events(request: Request, class_id: UUID | None = None, db: Ses
 @router.post("/schedule-events")
 def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    _get_class(db, academy_id, payload.class_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    class_row = _get_class(db, academy_id, payload.class_id, visible_academy_ids)
     if payload.linked_paper_session_id:
-        _get_session(db, academy_id, payload.linked_paper_session_id)
+        _get_visible_session(db, visible_academy_ids, payload.linked_paper_session_id)
     row = ClassScheduleEvent(
-        academy_id=academy_id,
+        academy_id=class_row.academy_id,
         class_id=payload.class_id,
         title=payload.title.strip(),
         description=payload.description,
@@ -2355,8 +2390,9 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
 @router.delete("/schedule-events/{event_id}", status_code=204)
 def delete_schedule_event(event_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     row = db.get(ClassScheduleEvent, event_id)
-    if not row or row.academy_id != academy_id:
+    if not row or row.academy_id not in visible_academy_ids:
         raise HTTPException(status_code=404, detail="Schedule event not found.")
     linked_session_id = row.linked_paper_session_id
     starts_at = row.starts_at
@@ -2364,7 +2400,7 @@ def delete_schedule_event(event_id: UUID, request: Request, db: Session = Depend
     db.delete(row)
     if linked_session_id:
         session = db.get(PaperSession, linked_session_id)
-        if session and session.academy_id == academy_id:
+        if session and session.academy_id in visible_academy_ids:
             if session.scheduled_at == starts_at:
                 session.scheduled_at = None
             if ends_at and session.due_at == ends_at:
