@@ -789,12 +789,13 @@ def _session_summary(db: Session, academy_id: str, session: PaperSession | None)
     if not session:
         return None
     session_academy_id = session.academy_id or academy_id
-    results = db.scalars(
+    results = _safe_scalars(
+        db,
         select(PaperSessionResult).where(
             PaperSessionResult.academy_id == session_academy_id,
             PaperSessionResult.paper_session_id == session.id,
         )
-    ).all()
+    )
     graded = [row for row in results if row.status == "graded"]
     score_stats = _score_distribution(results)
     return {
@@ -1965,22 +1966,25 @@ def _result_payload(result: PaperSessionResult) -> dict:
 
 def _paper_session_detail(db: Session, academy_id: str, session: PaperSession) -> dict:
     session_academy_id = session.academy_id or academy_id
-    results = db.scalars(
+    results = _safe_scalars(
+        db,
         select(PaperSessionResult)
         .where(PaperSessionResult.academy_id == session_academy_id, PaperSessionResult.paper_session_id == session.id)
         .order_by(PaperSessionResult.created_at)
-    ).all()
+    )
     memberships = {
         row.id: row
-        for row in db.scalars(
+        for row in _safe_scalars(
+            db,
             select(StudentAcademyMembership).where(
                 StudentAcademyMembership.id.in_([result.student_membership_id for result in results] or [uuid.uuid4()]),
             )
-        ).all()
+        )
     }
-    problem_results = db.scalars(
-        select(ProblemResult).where(ProblemResult.academy_id == session_academy_id, ProblemResult.paper_session_id == session.id)
-    ).all()
+    problem_results = _safe_scalars(
+        db,
+        select(ProblemResult).where(ProblemResult.academy_id == session_academy_id, ProblemResult.paper_session_id == session.id),
+    )
     by_result: dict[str, list[dict]] = {}
     for row in problem_results:
         by_result.setdefault(str(row.paper_session_result_id), []).append(
@@ -1993,7 +1997,7 @@ def _paper_session_detail(db: Session, academy_id: str, session: PaperSession) -
         )
     students = []
     for result in results:
-        base = _student_payload(db, academy_id, memberships[result.student_membership_id]) if result.student_membership_id in memberships else {}
+        base = _safe_student_payload(db, academy_id, memberships[result.student_membership_id]) if result.student_membership_id in memberships else {}
         students.append(
             {
                 **base,
