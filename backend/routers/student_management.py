@@ -1590,35 +1590,84 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     _ensure_exported_review_session_assigned(db, academy_id)
-    membership = _visible_membership_by_id(db, visible_academy_ids, student_id)
-    data = _student_payload(db, academy_id, membership)
-    results = _safe_scalars(
-        db,
-        select(PaperSessionResult)
-        .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)))
-        .order_by(PaperSessionResult.created_at.desc()),
-    )
-    results = [result for result in results if str(result.student_membership_id) == str(student_id)]
-    result_session_ids = {str(result.paper_session_id) for result in results}
-    sessions = {
-        row.id: row
-        for row in _safe_scalars(
-            db,
-            select(PaperSession)
-            .where(PaperSession.academy_id.in_(list(visible_academy_ids)))
-            .options(joinedload(PaperSession.content_version)),
-        )
-        if str(row.id) in result_session_ids
-    }
-    wrongs = _wrong_answer_rows(db, academy_id, student_user_ids=[membership.student_user_id], academy_ids=visible_academy_ids)
-    data["paper_session_history"] = [
-        {
-            **_result_payload(result),
-            "session": _session_summary(db, sessions[result.paper_session_id].academy_id, sessions.get(result.paper_session_id)) if result.paper_session_id in sessions else None,
-            "problem_results": [],
+    try:
+        membership = _visible_membership_by_id(db, visible_academy_ids, student_id)
+    except SQLAlchemyError:
+        db.rollback()
+        membership = next((row for row in _visible_student_memberships(db, visible_academy_ids) if str(row.id) == str(student_id)), None)
+        if not membership:
+            raise HTTPException(status_code=404, detail="Student not found.")
+
+    try:
+        data = _student_payload(db, academy_id, membership)
+    except Exception:
+        db.rollback()
+        metadata = membership.metadata_json or {}
+        data = {
+            "id": str(membership.id),
+            "student_user_id": membership.student_user_id,
+            "academy_seat_id": str(membership.academy_seat_id),
+            "invite_code": metadata.get("invite_code"),
+            "invite_code_preview": None,
+            "name": _student_name(membership),
+            "grade_level": metadata.get("grade_level") or metadata.get("grade"),
+            "school": metadata.get("school"),
+            "status": membership.status or "active",
+            "status_chip": "Active",
+            "memo": metadata.get("memo"),
+            "class_ids": [],
+            "class_names": [],
+            "class_subjects": [],
+            "recent_score": None,
+            "recent_completion_status": "not_started",
+            "unresolved_wrong_count": 0,
+            "recent_weakness_label": None,
+            "joined_at": membership.joined_at.isoformat() if membership.joined_at else None,
         }
-        for result in results
-    ]
+
+    results: list[PaperSessionResult] = []
+    sessions: dict[UUID, PaperSession] = {}
+    try:
+        results = _safe_scalars(
+            db,
+            select(PaperSessionResult)
+            .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)))
+            .order_by(PaperSessionResult.created_at.desc()),
+        )
+        results = [result for result in results if str(result.student_membership_id) == str(student_id)]
+        result_session_ids = {str(result.paper_session_id) for result in results}
+        sessions = {
+            row.id: row
+            for row in _safe_scalars(
+                db,
+                select(PaperSession)
+                .where(PaperSession.academy_id.in_(list(visible_academy_ids)))
+                .options(joinedload(PaperSession.content_version)),
+            )
+            if str(row.id) in result_session_ids
+        }
+    except Exception:
+        db.rollback()
+        results = []
+        sessions = {}
+
+    try:
+        wrongs = _wrong_answer_rows(db, academy_id, student_user_ids=[membership.student_user_id], academy_ids=visible_academy_ids)
+    except Exception:
+        db.rollback()
+        wrongs = []
+
+    history = []
+    for result in results:
+        session = sessions.get(result.paper_session_id)
+        history.append(
+            {
+                **_result_payload(result),
+                "session": _safe_session_summary(db, session.academy_id, session) if session else None,
+                "problem_results": [],
+            }
+        )
+    data["paper_session_history"] = history
     result_ids = [result.id for result in results]
     result_id_set = {str(result_id) for result_id in result_ids}
     if result_ids:
@@ -1643,7 +1692,13 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
             )
         for item in data["paper_session_history"]:
             item["problem_results"] = by_result.get(item["id"], [])
-    class_ids = [UUID(value) for value in data.get("class_ids", [])]
+
+    class_ids = []
+    for value in data.get("class_ids", []):
+        try:
+            class_ids.append(UUID(str(value)))
+        except (TypeError, ValueError):
+            continue
     class_id_set = {str(value) for value in class_ids}
     if class_ids:
         events = _safe_scalars(
@@ -1657,8 +1712,17 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         data["schedule_events"] = [_schedule_event_payload(event) for event in events]
     else:
         data["schedule_events"] = []
-    data["counseling_formats"] = [_counseling_format_for_class(db, academy_id, class_id) for class_id in class_ids]
-    data["counseling_presets"] = _counseling_presets(db, academy_id)
+
+    try:
+        data["counseling_formats"] = [_counseling_format_for_class(db, academy_id, class_id) for class_id in class_ids]
+    except Exception:
+        db.rollback()
+        data["counseling_formats"] = []
+    try:
+        data["counseling_presets"] = _counseling_presets(db, academy_id)
+    except Exception:
+        db.rollback()
+        data["counseling_presets"] = []
     data["counseling_logs"] = _counseling_logs(membership)
     data["wrong_answers"] = wrongs
     data["analytics"] = {
