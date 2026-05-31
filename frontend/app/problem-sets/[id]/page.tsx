@@ -388,12 +388,6 @@ export default function ProblemSetDetailPage() {
 
   return (
     <div className="space-y-5 pb-24">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="forge-section-title">문항 세트 편집</h1>
-        </div>
-      </div>
-
       <Card>
         <CardContent className="space-y-4 pt-5">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
