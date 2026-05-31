@@ -72,6 +72,13 @@ def _student_management_academy_id(request: Request, db: Session) -> str:
     return owner_id
 
 
+def _student_management_academy_ids(request: Request, db: Session, academy_id: str | None = None) -> set[str]:
+    owner_ids = current_owner_ids(request, db)
+    if academy_id:
+        owner_ids.add(academy_id)
+    return owner_ids
+
+
 def _now() -> datetime:
     return datetime.utcnow()
 
@@ -415,6 +422,18 @@ def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) 
         )
         .order_by(StudentAcademyMembership.display_name_in_academy)
     ).all()
+
+
+def _visible_student_memberships(db: Session, academy_ids: set[str], linked_student_ids: list[UUID] | None = None) -> list[StudentAcademyMembership]:
+    linked_ids = linked_student_ids or []
+    rows = db.scalars(
+        select(StudentAcademyMembership).where(
+            (StudentAcademyMembership.academy_id.in_(list(academy_ids)))
+            | (StudentAcademyMembership.id.in_(linked_ids or [uuid.uuid4()]))
+        )
+    ).all()
+    rows_by_id = {row.id: row for row in rows}
+    return sorted(rows_by_id.values(), key=lambda row: (row.status or "", (_student_name(row) or "").lower()))
 
 
 def _session_belongs_to_class(session: PaperSession, class_row: AcademyClass, memberships: list[StudentAcademyMembership]) -> bool:
@@ -1147,14 +1166,33 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             StudentAcademyMembership.status == "active",
         )
     ) or 0
+    class_payloads = [_safe_class_payload(db, academy_id, row, include_students=True) for row in classes]
+    attached_student_ids = {
+        str(student.get("id"))
+        for class_row in class_payloads
+        for student in (class_row.get("students") or [])
+        if student.get("id")
+    }
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    visible_students = _visible_student_memberships(db, visible_academy_ids)
+    recovered_students = [
+        _student_payload(db, academy_id, membership)
+        for membership in visible_students
+        if str(membership.id) not in attached_student_ids and (membership.status or "active") == "active"
+    ]
+    if recovered_students and class_payloads:
+        class_payloads[0]["students"] = [*(class_payloads[0].get("students") or []), *recovered_students]
+        class_payloads[0]["student_count"] = len(class_payloads[0]["students"])
+        class_payloads[0]["student_membership_ids"] = [student["id"] for student in class_payloads[0]["students"]]
+    student_count = max(students, len(attached_student_ids) + len(recovered_students))
     return {
         "summary": {
             "class_count": len(classes),
-            "student_count": students,
+            "student_count": student_count,
             "active_session_count": len([session for session in sessions if session.status in {"scheduled", "exported", "grading"}]),
             "unresolved_wrong_count": unresolved,
         },
-        "classes": [_safe_class_payload(db, academy_id, row, include_students=True) for row in classes],
+        "classes": class_payloads,
         "recent_sessions": [summary for summary in (_safe_session_summary(db, academy_id, session) for session in sessions) if summary],
     }
 
@@ -1341,6 +1379,7 @@ def remove_student_from_class(class_id: UUID, student_id: UUID, request: Request
 @router.get("/students")
 def list_students(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     linked_student_ids = db.scalars(
         select(ClassStudent.student_membership_id)
         .join(AcademyClass, AcademyClass.id == ClassStudent.class_id)
@@ -1349,19 +1388,7 @@ def list_students(request: Request, db: Session = Depends(get_db)):
             ClassStudent.left_at.is_(None),
         )
     ).all()
-    rows_by_id = {
-        row.id: row
-        for row in db.scalars(
-            select(StudentAcademyMembership).where(
-                (StudentAcademyMembership.academy_id == academy_id)
-                | (StudentAcademyMembership.id.in_(linked_student_ids or [uuid.uuid4()]))
-            )
-        ).all()
-    }
-    rows = sorted(
-        rows_by_id.values(),
-        key=lambda row: (row.status or "", (_student_name(row) or "").lower()),
-    )
+    rows = _visible_student_memberships(db, visible_academy_ids, linked_student_ids)
     return [_student_payload(db, academy_id, row) for row in rows]
 
 @router.post("/students")
