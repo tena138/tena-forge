@@ -7,6 +7,7 @@ from models import Academy, UserRole
 
 LOCAL_OWNER_ID = "local_user"
 ADMIN_ROLES = {"admin", "super_admin"}
+BUILTIN_ADMIN_EMAILS = {"admin@tenaforge.com", "admin@tena-forge.com", "admin@tena.local"}
 
 
 def current_owner_id(request: Request) -> str:
@@ -26,7 +27,7 @@ def current_owner_ids(request: Request, db: Session, *, include_legacy_for_admin
 
     roles = set(db.scalars(select(UserRole.role).where(UserRole.user_id == owner_id)).all())
     academy = db.get(Academy, owner_id)
-    admin_emails = {email.strip().lower() for email in get_settings().admin_emails.split(",") if email.strip()}
+    admin_emails = BUILTIN_ADMIN_EMAILS | {email.strip().lower() for email in get_settings().admin_emails.split(",") if email.strip()}
     if roles & ADMIN_ROLES or (academy and academy.email.lower() in admin_emails):
         owner_ids.add(LOCAL_OWNER_ID)
     return owner_ids

@@ -2239,9 +2239,12 @@ def create_review_set(payload: ReviewSetPayload, request: Request, db: Session =
 @router.get("/schedule-events")
 def list_schedule_events(request: Request, class_id: UUID | None = None, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    stmt = select(ClassScheduleEvent).where(ClassScheduleEvent.academy_id == academy_id)
+    academy_ids = _student_management_academy_ids(request, db, academy_id)
+    stmt = select(ClassScheduleEvent).where(ClassScheduleEvent.academy_id.in_(list(academy_ids)))
     if class_id:
-        _get_class(db, academy_id, class_id)
+        class_row = db.get(AcademyClass, class_id)
+        if not class_row or class_row.academy_id not in academy_ids:
+            raise HTTPException(status_code=404, detail="Class not found.")
         stmt = stmt.where(ClassScheduleEvent.class_id == class_id)
     rows = db.scalars(stmt.order_by(ClassScheduleEvent.starts_at.asc()).limit(500)).all()
     return [_schedule_event_payload(row) for row in rows]
