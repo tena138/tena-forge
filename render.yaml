@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head && python scripts/ensure_admin_account.py && python scripts/ensure_admin_templates.py && python scripts/ensure_pg_review_account.py
+    preDeployCommand: python scripts/repair_alembic_version.py && alembic upgrade head && python scripts/ensure_admin_account.py && python scripts/repair_admin_student_management_owner.py && python scripts/ensure_admin_templates.py && python scripts/ensure_pg_review_account.py
     plan: standard
     healthCheckPath: /health
     disk:
@@ -53,7 +53,7 @@ services:
       - key: EMAIL_FROM_NAME
         value: Tena Forge
       - key: BOOTSTRAP_ADMIN_EMAIL
-        value: admin@tenaforge.com
+        value: admin@tena-forge.com
       - key: BOOTSTRAP_ADMIN_PASSWORD
         sync: false
       - key: BOOTSTRAP_ADMIN_NAME
