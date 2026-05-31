@@ -1181,7 +1181,7 @@ def get_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
 
 @router.patch("/classes/{class_id}")
 def update_class(class_id: UUID, payload: ClassUpdatePayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     row = _get_class(db, academy_id, class_id)
     for key, value in payload.model_dump(exclude_unset=True).items():
         if key == "name" and value is not None:
@@ -1197,7 +1197,7 @@ def update_class(class_id: UUID, payload: ClassUpdatePayload, request: Request, 
 
 @router.put("/classes/{class_id}/counseling-format")
 def update_class_counseling_format(class_id: UUID, payload: CounselingFormatPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     _get_class(db, academy_id, class_id)
     subscription = ensure_academy_subscription(db, academy_id)
     metadata = dict(subscription.billing_metadata or {})
@@ -1221,7 +1221,7 @@ def update_class_counseling_format(class_id: UUID, payload: CounselingFormatPayl
 def save_counseling_preset(slot: int, payload: CounselingPresetPayload, request: Request, db: Session = Depends(get_db)):
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Preset slot must be between 1 and 4.")
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     subscription = ensure_academy_subscription(db, academy_id)
     metadata = dict(subscription.billing_metadata or {})
     rows = metadata.get(COUNSELING_PRESETS_METADATA_KEY)
@@ -1251,7 +1251,7 @@ def save_counseling_preset(slot: int, payload: CounselingPresetPayload, request:
 
 @router.delete("/classes/{class_id}", status_code=204)
 def delete_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     row = _get_class(db, academy_id, class_id)
     db.delete(row)
     db.commit()
@@ -1260,7 +1260,7 @@ def delete_class(class_id: UUID, request: Request, db: Session = Depends(get_db)
 
 @router.post("/classes/{class_id}/students")
 def add_student_to_class(class_id: UUID, payload: ClassStudentPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     class_row = _get_class(db, academy_id, class_id)
     membership = _get_membership(db, academy_id, payload.student_membership_id)
     link = db.scalar(
@@ -1279,7 +1279,7 @@ def add_student_to_class(class_id: UUID, payload: ClassStudentPayload, request: 
 
 @router.delete("/classes/{class_id}/students/{student_id}", status_code=204)
 def remove_student_from_class(class_id: UUID, student_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     _get_class(db, academy_id, class_id)
     _get_membership(db, academy_id, student_id)
     link = db.scalar(select(ClassStudent).where(ClassStudent.class_id == class_id, ClassStudent.student_membership_id == student_id))
@@ -1291,7 +1291,7 @@ def remove_student_from_class(class_id: UUID, student_id: UUID, request: Request
 
 @router.get("/students")
 def list_students(request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     rows = db.scalars(
         select(StudentAcademyMembership)
         .where(StudentAcademyMembership.academy_id == academy_id)
@@ -1302,7 +1302,7 @@ def list_students(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/students")
 def create_student(payload: StudentPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     actor_id = current_owner_id(request)
     name = payload.name.strip()
     if not name:
@@ -1339,7 +1339,7 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
 
 @router.post("/students/{student_id}/invite-code")
 def ensure_student_invite_code(student_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     seat = db.scalar(
         select(AcademySeat).where(
@@ -1362,7 +1362,7 @@ def ensure_student_invite_code(student_id: UUID, request: Request, db: Session =
 
 @router.get("/students/{student_id}")
 def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     _ensure_exported_review_session_assigned(db, academy_id)
     membership = _get_membership(db, academy_id, student_id)
     data = _student_payload(db, academy_id, membership)
@@ -1439,7 +1439,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
 
 @router.get("/students/{student_id}/exam-stats-series")
 def student_exam_stats_series(student_id: UUID, request: Request, start_date: str | None = None, end_date: str | None = None, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     start = _date_boundary(start_date)
     end = _date_boundary(end_date, end=True)
@@ -1491,7 +1491,7 @@ def student_exam_stats_series(student_id: UUID, request: Request, start_date: st
 
 @router.post("/students/{student_id}/counseling-logs")
 def create_counseling_log(student_id: UUID, payload: CounselingLogPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     class_row = _resolve_counseling_class(db, academy_id, membership, payload.class_id)
     row = _counseling_log_row(payload, request, membership, class_row)
@@ -1505,7 +1505,7 @@ def create_counseling_log(student_id: UUID, payload: CounselingLogPayload, reque
 
 @router.put("/students/{student_id}/counseling-logs/{log_id}")
 def update_counseling_log(student_id: UUID, log_id: str, payload: CounselingLogPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     logs = _counseling_logs(membership)
     existing = next((row for row in logs if str(row.get("id")) == log_id), None)
@@ -1522,7 +1522,7 @@ def update_counseling_log(student_id: UUID, log_id: str, payload: CounselingLogP
 
 @router.delete("/students/{student_id}/counseling-logs/{log_id}", status_code=204)
 def delete_counseling_log(student_id: UUID, log_id: str, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     logs = _counseling_logs(membership)
     if not any(str(row.get("id")) == log_id for row in logs):
@@ -1593,7 +1593,7 @@ def _counseling_export_values(membership: StudentAcademyMembership, logs: list[d
 
 @router.post("/students/{student_id}/counseling-logs/export")
 def export_counseling_logs(student_id: UUID, payload: CounselingExportPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     logs = _counseling_logs(membership)
     if payload.log_ids:
@@ -1640,7 +1640,7 @@ def export_counseling_logs(student_id: UUID, payload: CounselingExportPayload, r
 
 @router.patch("/students/{student_id}")
 def update_student(student_id: UUID, payload: StudentUpdatePayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     changes = payload.model_dump(exclude_unset=True)
     metadata = dict(membership.metadata_json or {})
@@ -1668,7 +1668,7 @@ def update_student(student_id: UUID, payload: StudentUpdatePayload, request: Req
 
 @router.delete("/students/{student_id}", status_code=204)
 def delete_student(student_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     membership = _get_membership(db, academy_id, student_id)
     membership.status = "inactive"
     membership.ended_at = _now()
@@ -1682,7 +1682,7 @@ def delete_student(student_id: UUID, request: Request, db: Session = Depends(get
 
 @router.get("/paper-sessions")
 def list_paper_sessions(request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     sessions = db.scalars(
         select(PaperSession)
         .where(PaperSession.academy_id == academy_id)
@@ -1694,7 +1694,7 @@ def list_paper_sessions(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/paper-sessions")
 def create_paper_session(payload: PaperSessionPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     owner_id = current_owner_id(request)
     if payload.source_problem_set_id:
         version = _problem_set_snapshot(db, owner_id, academy_id, payload.source_problem_set_id, owner_id)
@@ -1766,14 +1766,14 @@ def create_paper_session(payload: PaperSessionPayload, request: Request, db: Ses
 
 @router.get("/paper-sessions/{session_id}")
 def get_paper_session(session_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     session = _get_session(db, academy_id, session_id)
     return _paper_session_detail(db, academy_id, session)
 
 
 @router.get("/paper-sessions/{session_id}/grading")
 def get_grading_state(session_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     session = _get_session(db, academy_id, session_id)
     return _paper_session_detail(db, academy_id, session)
 
@@ -1842,7 +1842,7 @@ def _paper_session_detail(db: Session, academy_id: str, session: PaperSession) -
 
 @router.delete("/paper-session-results/{result_id}", status_code=204)
 def delete_paper_session_result(result_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     result = db.scalar(
         select(PaperSessionResult).where(
             PaperSessionResult.academy_id == academy_id,
@@ -1899,7 +1899,7 @@ def delete_paper_session_result(result_id: UUID, request: Request, db: Session =
 
 @router.post("/paper-sessions/{session_id}/grade")
 def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     actor_id = current_owner_id(request)
     session = _get_session(db, academy_id, session_id)
     membership = _get_membership(db, academy_id, payload.student_membership_id)
@@ -2069,7 +2069,7 @@ def list_wrong_answers(
     status: str | None = None,
     db: Session = Depends(get_db),
 ):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     student_user_ids: list[str] | None = None
     if student_membership_id:
         student_user_ids = [_get_membership(db, academy_id, student_membership_id).student_user_id]
@@ -2084,7 +2084,7 @@ def list_wrong_answers(
 
 @router.delete("/wrong-answers/{wrong_answer_id}", status_code=204)
 def delete_wrong_answer(wrong_answer_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     row = db.scalar(
         select(WrongAnswerRecord).where(
             WrongAnswerRecord.id == wrong_answer_id,
@@ -2100,7 +2100,7 @@ def delete_wrong_answer(wrong_answer_id: UUID, request: Request, db: Session = D
 
 @router.post("/wrong-answers/review-set")
 def create_review_set(payload: ReviewSetPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     owner_id = current_owner_id(request)
     stmt = select(WrongAnswerRecord).where(WrongAnswerRecord.academy_id == academy_id)
     if payload.wrong_answer_ids:
