@@ -841,38 +841,47 @@ def _is_exported_review_session(session: PaperSession) -> bool:
 
 
 def _ensure_exported_review_session_assigned(db: Session, academy_id: str) -> None:
-    memberships = db.scalars(
-        select(StudentAcademyMembership).where(
-            StudentAcademyMembership.academy_id == academy_id,
-            StudentAcademyMembership.status == "active",
-        )
-    ).all()
+    try:
+        memberships = db.scalars(
+            select(StudentAcademyMembership).where(
+                StudentAcademyMembership.academy_id == academy_id,
+                StudentAcademyMembership.status == "active",
+            )
+        ).all()
+    except SQLAlchemyError:
+        db.rollback()
+        return
     membership_by_name = {_student_name(row): row for row in memberships}
     targets = [membership_by_name.get(name) for name in EXPORTED_REVIEW_TARGET_STUDENTS]
     source = membership_by_name.get(EXPORTED_REVIEW_SOURCE_STUDENT)
     if not source or any(target is None for target in targets):
         return
 
-    sessions = [
-        session
-        for session in db.scalars(
-            select(PaperSession)
-            .where(PaperSession.academy_id == academy_id)
-            .options(joinedload(PaperSession.content_version))
-            .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
-        ).all()
-        if _is_exported_review_session(session)
-    ]
+    try:
+        sessions = [
+            session
+            for session in db.scalars(
+                select(PaperSession)
+                .where(PaperSession.academy_id == academy_id)
+                .options(joinedload(PaperSession.content_version))
+                .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
+            ).all()
+            if _is_exported_review_session(session)
+        ]
+    except SQLAlchemyError:
+        db.rollback()
+        return
     if not sessions:
         return
 
-    source_results = db.scalars(
+    source_results = _safe_scalars(
+        db,
         select(PaperSessionResult).where(
             PaperSessionResult.academy_id == academy_id,
             PaperSessionResult.student_membership_id == source.id,
             PaperSessionResult.paper_session_id.in_([session.id for session in sessions]),
-        )
-    ).all()
+        ),
+    )
     if not source_results:
         return
     source_session_ids = {row.paper_session_id for row in source_results}
@@ -885,12 +894,13 @@ def _ensure_exported_review_session_assigned(db: Session, academy_id: str) -> No
 
     existing_results = {
         row.student_membership_id: row
-        for row in db.scalars(
+        for row in _safe_scalars(
+            db,
             select(PaperSessionResult).where(
                 PaperSessionResult.academy_id == academy_id,
                 PaperSessionResult.paper_session_id == session.id,
-            )
-        ).all()
+            ),
+        )
     }
     changed = False
     session_student_ids = [str(value) for value in (session.student_membership_ids or [])]
@@ -1550,18 +1560,20 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
     _ensure_exported_review_session_assigned(db, academy_id)
     membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
     data = _student_payload(db, academy_id, membership)
-    results = db.scalars(
+    results = _safe_scalars(
+        db,
         select(PaperSessionResult)
         .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)), PaperSessionResult.student_membership_id == student_id)
-        .order_by(PaperSessionResult.created_at.desc())
-    ).all()
+        .order_by(PaperSessionResult.created_at.desc()),
+    )
     sessions = {
         row.id: row
-        for row in db.scalars(
+        for row in _safe_scalars(
+            db,
             select(PaperSession)
             .where(PaperSession.academy_id.in_(list(visible_academy_ids)), PaperSession.id.in_([result.paper_session_id for result in results] or [uuid.uuid4()]))
-            .options(joinedload(PaperSession.content_version))
-        ).all()
+            .options(joinedload(PaperSession.content_version)),
+        )
     }
     wrongs = _wrong_answer_rows(db, academy_id, student_user_ids=[membership.student_user_id], academy_ids=visible_academy_ids)
     data["paper_session_history"] = [
@@ -1574,14 +1586,15 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
     ]
     result_ids = [result.id for result in results]
     if result_ids:
-        problem_results = db.scalars(
+        problem_results = _safe_scalars(
+            db,
             select(ProblemResult)
             .where(
                 ProblemResult.academy_id.in_(list(visible_academy_ids)),
                 ProblemResult.paper_session_result_id.in_(result_ids),
             )
-            .order_by(ProblemResult.problem_number)
-        ).all()
+            .order_by(ProblemResult.problem_number),
+        )
         by_result: dict[str, list[dict]] = {}
         for row in problem_results:
             by_result.setdefault(str(row.paper_session_result_id), []).append(
@@ -1596,12 +1609,13 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
             item["problem_results"] = by_result.get(item["id"], [])
     class_ids = [UUID(value) for value in data.get("class_ids", [])]
     if class_ids:
-        events = db.scalars(
+        events = _safe_scalars(
+            db,
             select(ClassScheduleEvent)
             .where(ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)), ClassScheduleEvent.class_id.in_(class_ids))
             .order_by(ClassScheduleEvent.starts_at.asc())
-            .limit(500)
-        ).all()
+            .limit(500),
+        )
         data["schedule_events"] = [_schedule_event_payload(event) for event in events]
     else:
         data["schedule_events"] = []
@@ -2226,15 +2240,20 @@ def _wrong_answer_rows(
     )
     if student_user_ids:
         stmt = stmt.where(WrongAnswerRecord.student_id.in_(student_user_ids))
-    rows = db.execute(stmt).all()
+    try:
+        rows = db.execute(stmt).all()
+    except SQLAlchemyError:
+        db.rollback()
+        return []
     membership_by_user = {
         row.student_user_id: row
-        for row in db.scalars(
+        for row in _safe_scalars(
+            db,
             select(StudentAcademyMembership).where(
                 StudentAcademyMembership.academy_id.in_(list(visible_academy_ids)),
                 StudentAcademyMembership.student_user_id.in_([record.student_id for record, _ in rows] or [""]),
-            )
-        ).all()
+            ),
+        )
     }
     result = []
     for record, problem in rows:
