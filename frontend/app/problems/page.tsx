@@ -2,13 +2,14 @@
 
 import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   CheckSquare,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Eye,
   Folder,
   FolderOpen,
@@ -332,6 +333,7 @@ function ProblemSubjectRow({
 }
 
 function ProblemsBrowser() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const paramsKey = searchParams.toString();
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
@@ -358,6 +360,7 @@ function ProblemsBrowser() {
   const [quickExportOpen, setQuickExportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState("");
   const [dragBox, setDragBox] = useState<DragBox | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [suppressClick, setSuppressClick] = useState(false);
@@ -664,6 +667,20 @@ function ProblemsBrowser() {
     }
   }
 
+  async function duplicateProblem(problem: Problem) {
+    if (duplicatingId) return;
+    setDuplicatingId(problem.id);
+    try {
+      const duplicated = await api<Problem>(`/api/problems/${problem.id}/duplicate`, { method: "POST" });
+      setSelectedProblemCache((current) => ({ ...current, [duplicated.id]: duplicated }));
+      router.push(`/problems/${duplicated.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`);
+    } catch {
+      window.alert("문항을 복제하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDuplicatingId("");
+    }
+  }
+
   function selectCardsInBox(box: DragBox) {
     const list = listRef.current;
     if (!list) return;
@@ -773,6 +790,20 @@ function ProblemsBrowser() {
         >
           <ArrowUpRight className="h-4 w-4" />
         </Link>
+        <button
+          type="button"
+          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+          onPointerDown={stopInteractiveEvent}
+          onClick={(event) => {
+            stopInteractiveEvent(event);
+            void duplicateProblem(problem);
+          }}
+          disabled={duplicatingId === problem.id}
+          aria-label={`${problem.problem_number}번 문항 복제`}
+          title="복제해서 숫자 바꾸기"
+        >
+          <Copy className="h-4 w-4" />
+        </button>
         <div className="flex h-full flex-col px-4 pb-4 pl-6 pr-12 pt-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -822,7 +853,7 @@ function ProblemsBrowser() {
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-        <div className="grid min-h-[66px] grid-cols-[70px_minmax(0,1fr)_auto_auto_36px] items-start gap-3 py-3 pl-6 pr-3">
+        <div className="grid min-h-[66px] grid-cols-[70px_minmax(0,1fr)_auto_auto_36px_36px] items-start gap-3 py-3 pl-6 pr-3">
           <div className="pt-1 text-[13px] font-medium text-slate-200">
             #{problem.problem_number}
           </div>
@@ -847,6 +878,20 @@ function ProblemsBrowser() {
           >
             <ArrowUpRight className="h-4 w-4" />
           </Link>
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+            onPointerDown={stopInteractiveEvent}
+            onClick={(event) => {
+              stopInteractiveEvent(event);
+              void duplicateProblem(problem);
+            }}
+            disabled={duplicatingId === problem.id}
+            aria-label={`${problem.problem_number}번 문항 복제`}
+            title="복제해서 숫자 바꾸기"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
         </div>
       </article>
     );

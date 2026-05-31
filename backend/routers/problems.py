@@ -1,4 +1,5 @@
 import base64
+import copy
 import math
 import io
 import json
@@ -460,6 +461,64 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
     db.commit()
     db.refresh(problem)
     return _serialize_problem(problem)
+
+
+@router.post("/{problem_id}/duplicate", response_model=ProblemRead)
+def duplicate_problem(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
+    problem = db.scalars(
+        select(Problem)
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
+    ).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
+
+    duplicated = Problem(
+        problem_number=problem.problem_number,
+        problem_text=problem.problem_text,
+        choices=copy.deepcopy(problem.choices or []),
+        has_visual=problem.has_visual,
+        visual_url=problem.visual_url,
+        review_page_image_url=problem.review_page_image_url,
+        review_page_number=problem.review_page_number,
+        answer=problem.answer,
+        solution_steps=problem.solution_steps,
+        key_concept=problem.key_concept,
+        needs_review=True,
+        source_batch_id=problem.source_batch_id,
+        source_type=problem.source_type,
+        source_label=problem.source_label,
+        rights_confirmed=False,
+        rights_confirmed_at=None,
+        rights_note="Duplicated for manual variation.",
+        visibility="private",
+        origin_type="derived",
+        owner_id=owner_id,
+        academy_id=problem.academy_id,
+    )
+    db.add(duplicated)
+    db.flush()
+
+    if problem.tags:
+        db.add(
+            Tag(
+                problem_id=duplicated.id,
+                subject=problem.tags.subject,
+                unit=problem.tags.unit,
+                difficulty=problem.tags.difficulty,
+                problem_type=problem.tags.problem_type,
+                source=problem.tags.source,
+            )
+        )
+
+    db.commit()
+    duplicated = db.scalars(
+        select(Problem)
+        .where(Problem.id == duplicated.id)
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
+    ).first()
+    return _serialize_problem(duplicated)
 
 
 @router.post("/{problem_id}/reextract", response_model=ProblemRead)
