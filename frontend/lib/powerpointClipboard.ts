@@ -344,6 +344,36 @@ function isInsideProcessed(element: Element, processed: Set<Element>) {
   return false;
 }
 
+function closestAncestorTable(element: Element) {
+  let current = element.parentElement;
+  while (current) {
+    if (current.tagName.toLowerCase() === "table") return current;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function elementDepth(element: Element) {
+  let depth = 0;
+  let current = element.parentElement;
+  while (current) {
+    depth += 1;
+    current = current.parentElement;
+  }
+  return depth;
+}
+
+function directTableRows(table: HTMLTableElement) {
+  return Array.from(table.querySelectorAll("tr")).filter((row) => closestAncestorTable(row) === table);
+}
+
+function tableItemSignature(item: Extract<ClipboardEditableItem, { kind: "table" }>) {
+  const text = item.rows
+    .map((row) => row.map((cell) => `${cell.text}:${cell.colSpan}x${cell.rowSpan}`).join("|"))
+    .join("\n");
+  return [Math.round(item.x), Math.round(item.y), Math.round(item.width), Math.round(item.height), text].join("::");
+}
+
 function htmlFragment(html: string) {
   const fragmentMatch = /<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/i.exec(html);
   return fragmentMatch?.[1] || html;
@@ -373,8 +403,8 @@ function createTextItem(element: Element, fallbackIndex: number, name = "PowerPo
   };
 }
 
-function parseTableItem(table: HTMLTableElement, fallbackIndex: number): ClipboardEditableItem | null {
-  const rows = Array.from(table.querySelectorAll("tr")).map((row) =>
+function parseTableItem(table: HTMLTableElement, fallbackIndex: number): Extract<ClipboardEditableItem, { kind: "table" }> | null {
+  const rows = directTableRows(table).map((row) =>
     Array.from(row.children)
       .filter((cell) => ["td", "th"].includes(cell.tagName.toLowerCase()))
       .map((cell) => ({
@@ -482,13 +512,20 @@ function clipboardEditableItemsFromHtml(html: string): ClipboardEditableItem[] {
 
   const processed = new Set<Element>();
   const items: ClipboardEditableItem[] = [];
+  const tableSignatures = new Set<string>();
 
-  Array.from(doc.querySelectorAll("table")).forEach((table, index) => {
-    const item = parseTableItem(table as HTMLTableElement, index);
-    if (!item) return;
-    items.push(item);
-    markProcessed(table, processed);
-  });
+  Array.from(doc.querySelectorAll("table"))
+    .sort((a, b) => elementDepth(b) - elementDepth(a))
+    .forEach((table, index) => {
+      if (isInsideProcessed(table, processed) || descendantsProcessed(table, processed)) return;
+      const item = parseTableItem(table as HTMLTableElement, index);
+      if (!item) return;
+      const signature = tableItemSignature(item);
+      if (tableSignatures.has(signature)) return;
+      tableSignatures.add(signature);
+      items.push(item);
+      markProcessed(table, processed);
+    });
 
   Array.from(doc.querySelectorAll("img")).forEach((image, index) => {
     if (isInsideProcessed(image, processed)) return;
