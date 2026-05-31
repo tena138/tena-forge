@@ -2022,10 +2022,15 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-white">상담 기록</CardTitle>
-                  <Button size="sm" variant="outline" onClick={() => { setCounselingExportLogIds([]); setCounselingExportOpen(true); }} disabled={!data.counseling_logs.length}>
-                    <Download className="h-4 w-4" />
-                    내보내기
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={exportCounselingLogs} disabled={!data.counseling_logs.length}>
+                      TXT
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setCounselingExportLogIds([]); setCounselingExportOpen(true); }} disabled={!data.counseling_logs.length}>
+                      <Download className="h-4 w-4" />
+                      내보내기
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
