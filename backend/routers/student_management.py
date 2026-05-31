@@ -485,6 +485,42 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
     }
 
 
+def _fallback_class_payload(row: AcademyClass) -> dict:
+    return {
+        "id": str(row.id),
+        "name": row.name,
+        "description": row.description,
+        "subject": row.subject,
+        "grade_level": row.grade_level,
+        "is_active": row.is_active,
+        "student_count": 0,
+        "upcoming_count": 0,
+        "recent_session": None,
+        "average_recent_score": None,
+        "unresolved_wrong_count": 0,
+        "students": [],
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "student_membership_ids": [],
+    }
+
+
+def _safe_class_payload(db: Session, academy_id: str, row: AcademyClass, include_students: bool = True) -> dict:
+    try:
+        return _class_payload(db, academy_id, row, include_students=include_students)
+    except Exception:
+        db.rollback()
+        return _fallback_class_payload(row)
+
+
+def _safe_session_summary(db: Session, academy_id: str, session: PaperSession) -> dict | None:
+    try:
+        return _session_summary(db, academy_id, session)
+    except Exception:
+        db.rollback()
+        return None
+
+
 def _get_class(db: Session, academy_id: str, class_id: UUID) -> AcademyClass:
     row = db.get(AcademyClass, class_id)
     if not row or row.academy_id != academy_id:
@@ -1111,8 +1147,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "active_session_count": len([session for session in sessions if session.status in {"scheduled", "exported", "grading"}]),
             "unresolved_wrong_count": unresolved,
         },
-        "classes": [_class_payload(db, academy_id, row, include_students=True) for row in classes],
-        "recent_sessions": [_session_summary(db, academy_id, session) for session in sessions],
+        "classes": [_safe_class_payload(db, academy_id, row, include_students=True) for row in classes],
+        "recent_sessions": [summary for summary in (_safe_session_summary(db, academy_id, session) for session in sessions) if summary],
     }
 
 

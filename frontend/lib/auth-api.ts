@@ -32,6 +32,9 @@ export type LoginResult = {
   academy_id?: string;
 };
 
+let fetchMePromise: Promise<AcademyProfile> | null = null;
+let fetchMeCache: { profile: AcademyProfile; expiresAt: number } | null = null;
+
 export async function registerAcademy(payload: unknown) {
   const response = await authHttp.post("/api/auth/register", payload);
   return response.data as { message: string; email: string };
@@ -108,15 +111,27 @@ export async function logout() {
 }
 
 export async function fetchMe() {
-  const response = await authHttp.get("/api/auth/me");
-  const profile = response.data as AcademyProfile;
-  storeAuthProfile(profile);
-  return profile;
+  const now = Date.now();
+  if (fetchMeCache && fetchMeCache.expiresAt > now) return fetchMeCache.profile;
+  if (fetchMePromise) return fetchMePromise;
+  fetchMePromise = authHttp
+    .get("/api/auth/me")
+    .then((response) => {
+      const profile = response.data as AcademyProfile;
+      fetchMeCache = { profile, expiresAt: Date.now() + 15000 };
+      storeAuthProfile(profile);
+      return profile;
+    })
+    .finally(() => {
+      fetchMePromise = null;
+    });
+  return fetchMePromise;
 }
 
 export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "account_type" | "phone" | "address" | "business_number">>) {
   const response = await authHttp.patch("/api/auth/me", payload);
   const profile = response.data as AcademyProfile;
+  fetchMeCache = { profile, expiresAt: Date.now() + 15000 };
   storeAuthProfile(profile);
   return profile;
 }
