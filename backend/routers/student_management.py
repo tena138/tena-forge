@@ -404,11 +404,11 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
 
 
 def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) -> list[StudentAcademyMembership]:
+    _get_class(db, academy_id, class_id)
     return db.scalars(
         select(StudentAcademyMembership)
         .join(ClassStudent, ClassStudent.student_membership_id == StudentAcademyMembership.id)
         .where(
-            StudentAcademyMembership.academy_id == academy_id,
             ClassStudent.class_id == class_id,
             ClassStudent.left_at.is_(None),
             StudentAcademyMembership.status == "active",
@@ -523,7 +523,21 @@ def _get_class(db: Session, academy_id: str, class_id: UUID) -> AcademyClass:
 
 def _get_membership(db: Session, academy_id: str, student_id: UUID) -> StudentAcademyMembership:
     row = db.get(StudentAcademyMembership, student_id)
-    if not row or row.academy_id != academy_id:
+    if not row:
+        raise HTTPException(status_code=404, detail="Student not found.")
+    if row.academy_id == academy_id:
+        return row
+    linked_class = db.scalar(
+        select(AcademyClass.id)
+        .join(ClassStudent, ClassStudent.class_id == AcademyClass.id)
+        .where(
+            AcademyClass.academy_id == academy_id,
+            ClassStudent.student_membership_id == row.id,
+            ClassStudent.left_at.is_(None),
+        )
+        .limit(1)
+    )
+    if not linked_class:
         raise HTTPException(status_code=404, detail="Student not found.")
     return row
 
@@ -1327,13 +1341,28 @@ def remove_student_from_class(class_id: UUID, student_id: UUID, request: Request
 @router.get("/students")
 def list_students(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    rows = db.scalars(
-        select(StudentAcademyMembership)
-        .where(StudentAcademyMembership.academy_id == academy_id)
-        .order_by(StudentAcademyMembership.status, StudentAcademyMembership.display_name_in_academy)
+    linked_student_ids = db.scalars(
+        select(ClassStudent.student_membership_id)
+        .join(AcademyClass, AcademyClass.id == ClassStudent.class_id)
+        .where(
+            AcademyClass.academy_id == academy_id,
+            ClassStudent.left_at.is_(None),
+        )
     ).all()
+    rows_by_id = {
+        row.id: row
+        for row in db.scalars(
+            select(StudentAcademyMembership).where(
+                (StudentAcademyMembership.academy_id == academy_id)
+                | (StudentAcademyMembership.id.in_(linked_student_ids or [uuid.uuid4()]))
+            )
+        ).all()
+    }
+    rows = sorted(
+        rows_by_id.values(),
+        key=lambda row: (row.status or "", (_student_name(row) or "").lower()),
+    )
     return [_student_payload(db, academy_id, row) for row in rows]
-
 
 @router.post("/students")
 def create_student(payload: StudentPayload, request: Request, db: Session = Depends(get_db)):
