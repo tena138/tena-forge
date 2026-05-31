@@ -3,16 +3,12 @@
 import type { PointerEvent } from "react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Code2, Crop, Eye, RefreshCcw, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Crop, RefreshCcw, Save, Trash2, X } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, assetUrl, Problem, Tag } from "@/lib/api";
 
 type Facets = { subjects: string[]; units: string[]; problem_types: string[]; sources: string[] };
@@ -389,134 +385,50 @@ function ProblemDetailContent() {
         : "위치 계산 중";
 
   return (
-    <div className="space-y-4">
-      <div className="sticky top-[65px] z-30 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#12101c]/95 p-3 shadow-[0_16px_44px_rgba(0,0,0,0.28)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0 space-y-4">
+      <div className="sticky top-[65px] z-30 flex min-h-14 flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-[#0b0a12]/95 px-3 py-2 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl">
         <Button variant="outline" onClick={() => router.push(archiveHref)}>
           <ArrowLeft className="h-4 w-4" />
           문항 아카이브
         </Button>
-        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-          <span className="rounded-md border border-white/10 bg-black/20 px-3 py-2">
-            {hasFilterContext ? "현재 검색 조건 기준" : "전체 문항 기준"} {navigationLabel}
-          </span>
+        <div className="rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-slate-200">
+          {hasFilterContext ? "현재 검색 조건 기준" : "전체 문항 기준"} {navigationLabel}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <Badge variant={problem.needs_review ? "error" : "success"}>{problem.needs_review ? "검토 필요" : "검토 완료"}</Badge>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => openProblem(navigation?.previous_id || null)} disabled={!navigation?.previous_id}>
             <ChevronLeft className="h-4 w-4" />
-            이전 문항
+            이전
           </Button>
           <Button variant="outline" onClick={() => openProblem(navigation?.next_id || null)} disabled={!navigation?.next_id}>
-            다음 문항
+            다음
             <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button onClick={completeReview} disabled={!problem.needs_review}>
+            검토 완료
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <section className="min-w-0 space-y-4">
-        {problem.needs_review && (
-          <div className="flex flex-col gap-3 rounded-lg border border-violet-500/40 bg-violet-500/15 p-4 text-violet-100 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              검토가 필요한 문항입니다.
-            </div>
-            <Button variant="outline" onClick={completeReview}>
-              검토 완료
-            </Button>
-          </div>
-        )}
+      {actionError ? (
+        <div className="flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <AlertTriangle className="h-4 w-4" />
+          {actionError}
+        </div>
+      ) : null}
 
-        <Card className="overflow-hidden border-violet-300/25 bg-white/[0.045]">
-          <CardHeader className="border-b border-violet-300/15 bg-violet-300/[0.035]">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-2xl">
-                  <Eye className="h-5 w-5 text-violet-200" />
-                  문항 미리보기
-                </CardTitle>
-              </div>
-              <Badge variant="secondary">읽기 전용</Badge>
+      <div className="grid min-h-[calc(100vh-190px)] gap-4 xl:grid-cols-2">
+        <section className="flex min-h-[680px] flex-col rounded-lg border border-white/10 bg-white/[0.035]">
+          <div className="flex h-14 items-center justify-between gap-3 border-b border-white/10 px-4">
+            <div>
+              <h2 className="text-sm font-bold text-white">원본 페이지 p.{problem.review_page_number || "-"}</h2>
+              <p className="mt-0.5 text-xs text-slate-500">{sourceLabel}</p>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-5 pt-5">
-            <div className="rounded-md border border-violet-300/20 bg-black/25 p-4 text-base leading-8">
-              <MathText className="tena-math-review" value={draftText} />
-            </div>
-
-            {problem.review_page_image_url && (
-              <div className="space-y-3 rounded-lg border border-violet-300/20 bg-white/[0.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-100">원본 페이지 비교</h2>
-                  </div>
-                  <Badge variant="warning">검토용</Badge>
-                </div>
-                <div className="max-h-[720px] overflow-auto rounded-md border border-white/10 bg-black/35 p-2">
-                  <img
-                    src={assetUrl(problem.review_page_image_url)}
-                    alt={`원본 ${problem.review_page_number || ""}페이지`}
-                    className="mx-auto w-full max-w-3xl rounded-sm"
-                    draggable={false}
-                  />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden border-sky-300/30 bg-sky-300/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.22)]">
-          <CardHeader className="border-b border-sky-300/20 bg-sky-300/[0.05]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-2xl">
-                  <Code2 className="h-5 w-5 text-sky-200" />
-                  문항 수정
-                </CardTitle>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {draftText !== problem.problem_text && <Badge variant="warning">수정 중</Badge>}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={reextractProblem}
-                  disabled={reextracting || !problem.review_page_image_url}
-                  title={!problem.review_page_image_url ? "검토용 원본 페이지 이미지가 있는 문항만 재추출할 수 있습니다." : undefined}
-                >
-                  <RefreshCcw className={`h-4 w-4 ${reextracting ? "animate-spin" : ""}`} />
-                  {reextracting ? "재추출 중" : "AI로 다시 추출"}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-5">
-            <div className="space-y-3 rounded-lg border border-sky-300/20 bg-black/30 p-4">
-              <textarea
-                aria-label="문항 수정 입력"
-                className="min-h-56 w-full rounded-md border border-white/10 bg-black/40 p-4 font-mono text-sm leading-7 text-slate-100 outline-none focus-visible:border-sky-300/70 focus-visible:ring-2 focus-visible:ring-sky-400/20"
-                value={draftText}
-                onChange={(event) => setDraftText(event.target.value)}
-              />
-              {actionError && <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">{actionError}</p>}
-              <Button onClick={() => void saveProblemText()} disabled={savingText || !draftText.trim() || draftText === problem.problem_text}>
-                <Save className="h-4 w-4" />
-                문항 저장
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {cropSourceUrl && (
-          <Card className="border-white/10 bg-white/[0.035]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Crop className="h-5 w-5 text-violet-200" />
-                시각 자료 편집
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {cropSourceUrl ? (
+                <>
                   <Button
+                    size="sm"
                     variant={cropMode ? "secondary" : "outline"}
                     onClick={() => {
                       setCropMode(!cropMode);
@@ -526,12 +438,13 @@ function ProblemDetailContent() {
                     <Crop className="h-4 w-4" />
                     영역 자르기
                   </Button>
-                  <Button onClick={saveCrop} disabled={!selection || selection.width < 10 || selection.height < 10 || savingCrop}>
+                  <Button size="sm" onClick={saveCrop} disabled={!selection || selection.width < 10 || selection.height < 10 || savingCrop}>
                     <Save className="h-4 w-4" />
-                    자른 영역 저장
+                    저장
                   </Button>
-                  {cropMode && (
+                  {cropMode ? (
                     <Button
+                      size="sm"
                       variant="ghost"
                       onClick={() => {
                         setCropMode(false);
@@ -539,126 +452,156 @@ function ProblemDetailContent() {
                       }}
                     >
                       <X className="h-4 w-4" />
-                      취소
                     </Button>
-                  )}
-                </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          </div>
 
-                <div
-                  className={`relative select-none overflow-hidden rounded-lg border bg-muted ${cropMode ? "cursor-crosshair" : ""}`}
-                  onPointerDown={startCrop}
-                  onPointerMove={moveCrop}
-                  onPointerUp={() => setDragStart(null)}
-                  onPointerCancel={() => setDragStart(null)}
-                >
-                  <img ref={imageRef} src={assetUrl(cropSourceUrl)} alt={`${problem.problem_number}번 시각 자료`} className="block w-full" draggable={false} />
-                  {cropMode && <div className="absolute inset-0 bg-black/20" />}
-                  {selection && <div className="absolute border-2 border-primary bg-primary/15" style={{ left: selection.x, top: selection.y, width: selection.width, height: selection.height }} />}
-                </div>
-
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">원본 크게 보기</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <div className="max-h-[75vh] overflow-auto">
-                      <img src={assetUrl(cropSourceUrl)} alt={`${problem.problem_number}번 시각 자료 확대`} className="mx-auto max-w-full" />
-                    </div>
-                  </DialogContent>
-                </Dialog>
+          <div
+            className={`relative flex flex-1 items-start justify-center overflow-auto bg-[#07070c] p-4 ${cropMode ? "cursor-crosshair" : ""}`}
+            onPointerDown={startCrop}
+            onPointerMove={moveCrop}
+            onPointerUp={() => setDragStart(null)}
+            onPointerCancel={() => setDragStart(null)}
+          >
+            {cropSourceUrl ? (
+              <div className="relative">
+                <img
+                  ref={imageRef}
+                  src={assetUrl(cropSourceUrl)}
+                  alt={`${problem.problem_number}번 원본 페이지`}
+                  className="select-none rounded bg-white shadow-[0_18px_55px_rgba(0,0,0,0.42)]"
+                  draggable={false}
+                />
+                {cropMode ? <div className="absolute inset-0 bg-black/20" /> : null}
+                {selection ? (
+                  <div
+                    className="absolute border-2 border-dashed border-violet-400 bg-violet-400/15"
+                    style={{ left: selection.x, top: selection.y, width: selection.width, height: selection.height }}
+                  />
+                ) : null}
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+            ) : (
+              <div className="flex min-h-[560px] w-full items-center justify-center rounded-lg border border-dashed border-white/10 text-center text-sm text-slate-500">
+                검토용 원본 페이지 이미지가 없습니다.
+              </div>
+            )}
+          </div>
+        </section>
 
-      <aside className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>문항 정보</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <InfoRow label="출처" value={sourceLabel} />
-            <InfoRow label="문항 번호" value={`${problem.problem_number}번`} />
-            <InfoRow label="원본 페이지" value={problem.review_page_number ? `${problem.review_page_number}페이지` : "미기록"} />
-            <InfoRow label="검토 상태" value={problem.needs_review ? "검토 필요" : "검토 완료"} />
-          </CardContent>
-        </Card>
+        <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+          <div className="rounded-lg border border-white/10 bg-[#11101a]">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-white">본문</h2>
+                {draftText !== problem.problem_text ? <Badge variant="warning">수정 중</Badge> : null}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={reextractProblem}
+                disabled={reextracting || !problem.review_page_image_url}
+                title={!problem.review_page_image_url ? "검토용 원본 페이지 이미지가 있는 문항만 재추출할 수 있습니다." : undefined}
+              >
+                <RefreshCcw className={`h-3.5 w-3.5 ${reextracting ? "animate-spin" : ""}`} />
+                재추출
+              </Button>
+            </div>
+            <div className="min-h-[220px] bg-white p-5 text-slate-950">
+              <div className="mb-3 text-sm font-semibold text-slate-500">문항 {problem.problem_number}</div>
+              <MathText className="tena-math-review text-[15px] leading-8" value={draftText || "문항 내용이 비어 있습니다."} />
+            </div>
+            <div className="border-t border-white/10 bg-[#0c0b13] p-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-white">문항 텍스트</span>
+                <Button size="sm" variant="outline" onClick={() => void saveProblemText()} disabled={savingText || !draftText.trim() || draftText === problem.problem_text}>
+                  <Save className="h-3.5 w-3.5" />
+                  저장
+                </Button>
+              </div>
+              <textarea
+                aria-label="문항 텍스트 수정"
+                className="min-h-36 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15"
+                value={draftText}
+                onChange={(event) => setDraftText(event.target.value)}
+                placeholder="문항 내용이 비어 있습니다."
+              />
+            </div>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>태그 편집</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <TagInput label="출처" listId="sources" value={tags.source || ""} options={facets.sources} onChange={(value) => setTags({ ...tags, source: value })} />
-            <TagInput label="과목" listId="subjects" value={tags.subject || ""} options={facets.subjects} onChange={(value) => setTags({ ...tags, subject: value })} />
-            <TagInput label="단원" listId="units" value={tags.unit || ""} options={facets.units} onChange={(value) => setTags({ ...tags, unit: value })} />
-            <div className="space-y-2">
-              <label className="text-sm font-medium">난이도</label>
-              <div className="grid grid-cols-4 gap-1">
-                {difficulties.map((difficulty) => (
-                  <button
-                    key={difficulty}
-                    type="button"
-                    className={`h-9 rounded-md border text-sm transition-colors ${
-                      tags.difficulty === difficulty ? "border-primary bg-primary text-primary-foreground" : "bg-card/70 hover:bg-accent"
-                    }`}
-                    onClick={() => setTags({ ...tags, difficulty })}
-                  >
-                    {difficulty}
-                  </button>
-                ))}
+          <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+              <h3 className="mb-3 text-sm font-bold text-white">정답</h3>
+              <div className="text-lg font-bold text-white">
+                <MathText value={problem.answer || "정답 데이터 없음"} />
               </div>
             </div>
-            <TagInput label="문항 유형" listId="types" value={tags.problem_type || ""} options={facets.problem_types} onChange={(value) => setTags({ ...tags, problem_type: value })} />
-            <Button className="w-full" onClick={() => void saveTags()} disabled={savingTags}>
-              <Save className="h-4 w-4" />
-              태그 저장
-            </Button>
-          </CardContent>
-        </Card>
+            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+              <h3 className="mb-3 text-sm font-bold text-white">해설</h3>
+              <div className="max-h-32 overflow-auto text-sm leading-7 text-slate-200">
+                <MathText value={problem.solution_steps || "해설 데이터 없음"} />
+              </div>
+            </div>
+          </div>
 
-        <Tabs defaultValue="hidden">
-          <TabsList className="w-full">
-            <TabsTrigger className="flex-1" value="hidden">
-              <Eye className="mr-2 h-4 w-4" />
-              정답 숨김
-            </TabsTrigger>
-            <TabsTrigger className="flex-1" value="answer">정답 보기</TabsTrigger>
-          </TabsList>
-          <TabsContent value="hidden" className="mt-3" />
-          <TabsContent value="answer" className="mt-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>정답 및 해설</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <span className="text-sm text-muted-foreground">정답</span>
-                  <div className="text-xl font-bold">
-                    <MathText value={problem.answer || "미확인"} />
-                  </div>
+          <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-white">메타데이터</h3>
+                <p className="mt-1 text-xs text-slate-500">문항 정보와 태그를 검토 화면과 같은 위치에서 수정합니다.</p>
+              </div>
+              <Button size="sm" onClick={() => void saveTags()} disabled={savingTags}>
+                <Save className="h-3.5 w-3.5" />
+                태그 저장
+              </Button>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <TagInput label="과목" listId="subjects" value={tags.subject || ""} options={facets.subjects} onChange={(value) => setTags({ ...tags, subject: value })} />
+              <TagInput label="단원" listId="units" value={tags.unit || ""} options={facets.units} onChange={(value) => setTags({ ...tags, unit: value })} />
+              <TagInput label="문항 유형" listId="types" value={tags.problem_type || ""} options={facets.problem_types} onChange={(value) => setTags({ ...tags, problem_type: value })} />
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_2fr]">
+              <TagInput label="출처" listId="sources" value={tags.source || ""} options={facets.sources} onChange={(value) => setTags({ ...tags, source: value })} />
+              <div>
+                <div className="mb-2 text-xs font-semibold text-slate-400">난이도</div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {difficulties.map((difficulty) => (
+                    <button
+                      key={difficulty}
+                      type="button"
+                      className={`h-10 rounded-[7px] border text-sm font-bold transition ${
+                        tags.difficulty === difficulty
+                          ? "border-violet-300/60 bg-violet-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.26)]"
+                          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
+                      }`}
+                      onClick={() => setTags({ ...tags, difficulty })}
+                    >
+                      {difficulty}
+                    </button>
+                  ))}
                 </div>
-                <Separator />
-                <div className="text-sm leading-7">
-                  <MathText value={problem.solution_steps || "해설이 없습니다."} />
-                </div>
-                {problem.key_concept && (
-                  <Badge variant="secondary">
-                    <MathText value={problem.key_concept} />
-                  </Badge>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </div>
+            </div>
+          </div>
 
-        <Button variant="destructive" className="w-full" onClick={removeProblem}>
-          <Trash2 className="h-4 w-4" />
-          문항 삭제
-        </Button>
-      </aside>
-    </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4 text-sm">
+              <h3 className="mb-3 text-sm font-bold text-white">문항 정보</h3>
+              <InfoRow label="문항 번호" value={`${problem.problem_number}번`} />
+              <InfoRow label="원본 페이지" value={problem.review_page_number ? `${problem.review_page_number}페이지` : "미기록"} />
+            </div>
+            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+              <h3 className="mb-3 text-sm font-bold text-white">관리</h3>
+              <Button variant="destructive" className="w-full" onClick={removeProblem}>
+                <Trash2 className="h-4 w-4" />
+                문항 삭제
+              </Button>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
