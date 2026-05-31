@@ -212,7 +212,7 @@ def teacher_can_access_class(db: Session, user_id: str, academy_id: str, class_i
     return False
 
 
-def create_seat(db: Session, academy_id: str, display_name: str | None = None) -> tuple[AcademySeat, str]:
+def create_seat(db: Session, academy_id: str, display_name: str | None = None, class_id: UUID | None = None) -> tuple[AcademySeat, str]:
     subscription = ensure_academy_subscription(db, academy_id)
     plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == subscription.plan_code))
     entitled = (plan.included_seats if plan else 0) + subscription.purchased_additional_seats
@@ -222,6 +222,7 @@ def create_seat(db: Session, academy_id: str, display_name: str | None = None) -
     code = generate_invite_code()
     seat = AcademySeat(
         academy_id=academy_id,
+        class_id=class_id,
         seat_number=f"S-{active_seats + 1:03d}",
         display_name=display_name,
         invite_code_hash=hash_invite_code(code),
@@ -247,21 +248,34 @@ def claim_invite_code(db: Session, request: Request, code: str) -> StudentAcadem
     seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(code), AcademySeat.is_active.is_(True)))
     if not seat:
         raise HTTPException(status_code=404, detail="Invalid or inactive academy key.")
-    existing_same = db.scalar(
-        select(StudentAcademyMembership).where(
-            StudentAcademyMembership.student_user_id == student_id,
-            StudentAcademyMembership.academy_id == seat.academy_id,
-            StudentAcademyMembership.status == "active",
-        )
-    )
-    if existing_same:
-        if existing_same.academy_seat_id == seat.id:
-            return existing_same
-        raise HTTPException(status_code=409, detail="This academy is already connected to your account.")
     if seat.current_student_membership_id:
         assigned = db.get(StudentAcademyMembership, seat.current_student_membership_id)
         if assigned and assigned.status == "active":
+            if assigned.student_user_id == student_id:
+                return assigned
             raise HTTPException(status_code=409, detail="This academy key is already assigned to another student.")
+    existing_same = list(
+        db.scalars(
+            select(StudentAcademyMembership).where(
+                StudentAcademyMembership.student_user_id == student_id,
+                StudentAcademyMembership.academy_id == seat.academy_id,
+                StudentAcademyMembership.status == "active",
+            )
+        )
+    )
+    if seat.class_id:
+        already_in_class = db.scalar(
+            select(ClassStudent)
+            .where(
+                ClassStudent.class_id == seat.class_id,
+                ClassStudent.left_at.is_(None),
+                ClassStudent.student_membership_id.in_([membership.id for membership in existing_same] or [UUID(int=0)]),
+            )
+        )
+        if already_in_class:
+            raise HTTPException(status_code=409, detail="This class is already connected to your account.")
+    elif existing_same:
+        raise HTTPException(status_code=409, detail="This academy is already connected to your account.")
     membership = StudentAcademyMembership(
         student_user_id=student_id,
         academy_id=seat.academy_id,
@@ -272,6 +286,8 @@ def claim_invite_code(db: Session, request: Request, code: str) -> StudentAcadem
     db.flush()
     seat.current_student_membership_id = membership.id
     seat.released_at = None
+    if seat.class_id:
+        db.add(ClassStudent(class_id=seat.class_id, student_membership_id=membership.id))
     db.add(SeatAssignmentHistory(academy_seat_id=seat.id, academy_id=seat.academy_id, student_user_id=student_id, membership_id=membership.id))
     db.add(
         StudentNotification(

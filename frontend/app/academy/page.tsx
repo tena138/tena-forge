@@ -561,6 +561,7 @@ function AcademyOperationsPanel() {
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignment[]>([]);
   const [learningReport, setLearningReport] = useState<LearningAssignmentReport | null>(null);
   const [newCodes, setNewCodes] = useState<string[]>([]);
+  const [seatClassId, setSeatClassId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [className, setClassName] = useState("");
@@ -592,6 +593,7 @@ function AcademyOperationsPanel() {
     setLearningAssignments(learningAssignmentData);
     if (!selectedProblemSetId && setData[0]) setSelectedProblemSetId(setData[0].id);
     if (!selectedGroupId && classData[0]) setSelectedGroupId(classData[0].id);
+    if (!seatClassId && classData[0]) setSeatClassId(classData[0].id);
     if (!selectedStudentId && studentData[0]) setSelectedStudentId(studentData[0].student_user_id);
   }
 
@@ -617,7 +619,7 @@ function AcademyOperationsPanel() {
   async function addSeats() {
     if (!academyId) return;
     setError("");
-    const created = await issueLearningStudentKeys(academyId, { count: 1 });
+    const created = await issueLearningStudentKeys(academyId, { count: 1, class_id: seatClassId || null });
     setNewCodes(created.keys.map((seat) => seat.key_code || "").filter(Boolean));
     setNotice("좌석을 만들었습니다. 초대 코드는 지금 한 번만 전체 표시됩니다.");
     await load();
@@ -724,9 +726,19 @@ function AcademyOperationsPanel() {
             <p className="text-sm font-semibold text-violet-200">Academy Operations</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">학생 좌석, 과제, 클래스 운영</h1>
           </div>
-          <Button onClick={addSeats}>
-            <Plus className="h-4 w-4" /> 좌석 추가
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              className="h-10 min-w-[180px] rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white"
+              value={seatClassId}
+              onChange={(event) => setSeatClassId(event.target.value)}
+            >
+              <option value="">클래스 선택</option>
+              {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
+            </select>
+            <Button onClick={addSeats} disabled={!seatClassId}>
+              <Plus className="h-4 w-4" /> 클래스 키 추가
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -780,6 +792,7 @@ function AcademyOperationsPanel() {
                     코드 미리보기: ****{seat.invite_code_preview} · 학생: {seat.assigned_student_user_id || "-"}
                   </p>
                 </div>
+                <p className="text-xs text-violet-200">클래스: {seat.class_name || "-"}</p>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => rotateCode(seat)}><RefreshCcw className="h-4 w-4" /> 코드 회전</Button>
                   <Button variant="outline" size="sm" disabled={!seat.assigned} onClick={() => releaseSeat(seat)}><UserMinus className="h-4 w-4" /> 해제</Button>

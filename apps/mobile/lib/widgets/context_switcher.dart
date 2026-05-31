@@ -12,7 +12,11 @@ class ContextSwitcher extends StatelessWidget {
     final state = context.watch<StudentAppState>();
     final items = [
       const _ContextItem(id: 'personal', label: 'Personal'),
-      ...state.academies.map((academy) => _ContextItem(id: academy.academyId, label: academy.academyName ?? 'Academy')),
+      ...state.academies.map((academy) {
+        final academyName = academy.academyName ?? 'Academy';
+        final label = academy.className == null ? academyName : '$academyName · ${academy.className}';
+        return _ContextItem(id: academy.id, label: label);
+      }),
     ];
     return SizedBox(
       height: 42,

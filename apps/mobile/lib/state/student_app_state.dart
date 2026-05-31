@@ -21,24 +21,23 @@ class StudentAppState extends ChangeNotifier {
 
   bool get isAuthenticated => profile != null;
 
+  AcademyMembership? get selectedAcademy {
+    if (selectedContextId == 'personal') return null;
+    for (final academy in academies) {
+      if (academy.id == selectedContextId) return academy;
+    }
+    return academies.isNotEmpty ? academies.first : null;
+  }
+
+  String? get selectedAcademyId =>
+      selectedContextId == 'personal' ? null : selectedAcademy?.academyId;
+
   String get selectedContextLabel {
     if (selectedContextId == 'personal') return 'Personal';
-    return academies
-            .firstWhere(
-              (academy) => academy.academyId == selectedContextId,
-              orElse: () => academies.isNotEmpty
-                  ? academies.first
-                  : AcademyMembership(
-                      id: 'none',
-                      studentUserId: 'none',
-                      academyId: selectedContextId,
-                      academySeatId: 'none',
-                      status: 'active',
-                      joinedAt: DateTime.now(),
-                    ),
-            )
-            .academyName ??
-        'Academy';
+    final academy = selectedAcademy;
+    if (academy == null) return 'Academy';
+    final academyName = academy.academyName ?? 'Academy';
+    return academy.className == null ? academyName : '$academyName · ${academy.className}';
   }
 
   Future<void> bootstrap() async {
@@ -77,7 +76,9 @@ class StudentAppState extends ChangeNotifier {
     try {
       final results = await Future.wait<Object>([
         repository.listAcademies(),
-        repository.listAssignments(academyId: selectedContextId == 'personal' ? null : selectedContextId),
+        repository.listAssignments(
+          academyId: selectedAcademyId,
+        ),
         repository.listWrongAnswers(),
         repository.listCalendar(),
       ]);
@@ -146,7 +147,10 @@ class StudentAppState extends ChangeNotifier {
   }
 
   Future<void> exportWrongAnswerSheet(List<String> itemIds) async {
-    await repository.exportWrongAnswers(itemIds, academyId: selectedContextId == 'personal' ? null : selectedContextId);
+    await repository.exportWrongAnswers(
+      itemIds,
+      academyId: selectedAcademyId,
+    );
     await refresh();
   }
 }

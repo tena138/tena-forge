@@ -67,6 +67,7 @@ router = APIRouter(prefix="/api", tags=["academy-student-app"])
 class SeatCreate(BaseModel):
     count: int = Field(default=1, ge=1, le=200)
     display_name_prefix: str | None = None
+    class_id: UUID | None = None
 
 
 class SeatReleaseRequest(BaseModel):
@@ -206,12 +207,50 @@ def serialize(obj: Any) -> dict:
 
 def seat_payload(db: Session, seat: AcademySeat) -> dict:
     membership = db.get(StudentAcademyMembership, seat.current_student_membership_id) if seat.current_student_membership_id else None
+    class_row = db.get(AcademyClass, seat.class_id) if seat.class_id else None
     return {
         **serialize(seat),
+        "class_name": class_row.name if class_row else None,
         "assigned": bool(membership and membership.status == "active"),
         "assigned_student_user_id": membership.student_user_id if membership else None,
         "assigned_membership_id": str(membership.id) if membership else None,
     }
+
+
+def _class_id_for_seat(db: Session, academy_id: str, class_id: UUID | None) -> UUID | None:
+    if not class_id:
+        return None
+    class_row = db.scalar(select(AcademyClass).where(AcademyClass.id == class_id, AcademyClass.academy_id == academy_id, AcademyClass.is_active.is_(True)))
+    if not class_row:
+        raise HTTPException(status_code=404, detail="Class not found.")
+    return class_row.id
+
+
+def _student_membership_for_assignment(db: Session, student_id: str, assignment: Assignment) -> StudentAcademyMembership:
+    memberships = [membership for membership in student_memberships(db, student_id) if membership.academy_id == assignment.academy_id]
+    if not memberships:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+    by_id = {str(membership.id): membership for membership in memberships}
+    targets = db.scalars(select(AssignmentTarget).where(AssignmentTarget.assignment_id == assignment.id)).all()
+    for target in targets:
+        if target.target_type == "student" and target.target_id in by_id:
+            return by_id[target.target_id]
+    class_targets = [UUID(target.target_id) for target in targets if target.target_type == "class"]
+    if class_targets:
+        row = db.scalar(
+            select(ClassStudent)
+            .where(
+                ClassStudent.class_id.in_(class_targets),
+                ClassStudent.student_membership_id.in_([membership.id for membership in memberships]),
+                ClassStudent.left_at.is_(None),
+            )
+        )
+        if row:
+            return by_id[str(row.student_membership_id)]
+    for target in targets:
+        if target.target_type == "academy" and target.target_id == assignment.academy_id:
+            return memberships[0]
+    return memberships[0]
 
 
 @router.get("/academy/plans")
@@ -275,12 +314,13 @@ def list_seats(academy_id: str, request: Request, db: Session = Depends(get_db))
 @router.post("/academy/{academy_id}/seats")
 def create_seats(academy_id: str, payload: SeatCreate, request: Request, db: Session = Depends(get_db)):
     actor = require_manage_seats(db, request, academy_id)
+    class_id = _class_id_for_seat(db, academy_id, payload.class_id)
     created = []
     for index in range(payload.count):
         display = f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None
-        seat, code = create_seat(db, academy_id, display)
+        seat, code = create_seat(db, academy_id, display, class_id=class_id)
         created.append({**seat_payload(db, seat), "invite_code": code})
-    audit(db, request, actor, "academy.seats_created", "academy", academy_id, {"count": payload.count})
+    audit(db, request, actor, "academy.seats_created", "academy", academy_id, {"count": payload.count, "class_id": str(class_id) if class_id else None})
     db.commit()
     return created
 
@@ -319,14 +359,21 @@ def seat_history(academy_id: str, seat_id: UUID, request: Request, db: Session =
 def claim_academy_key(payload: InviteCodeRequest, request: Request, db: Session = Depends(get_db)):
     membership = claim_invite_code(db, request, payload.invite_code)
     db.commit()
-    return {**serialize(membership), "academy_name": get_academy_name(db, membership.academy_id)}
+    seat = db.get(AcademySeat, membership.academy_seat_id)
+    class_row = db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
+    return {**serialize(membership), "academy_name": get_academy_name(db, membership.academy_id), "class_id": str(class_row.id) if class_row else None, "class_name": class_row.name if class_row else None}
 
 
 @router.get("/student/academies")
 def connected_academies(request: Request, db: Session = Depends(get_db)):
     user_id = current_owner_id(request)
     memberships = student_memberships(db, user_id)
-    return [{**serialize(m), "academy_name": get_academy_name(db, m.academy_id)} for m in memberships]
+    rows = []
+    for membership in memberships:
+        seat = db.get(AcademySeat, membership.academy_seat_id)
+        class_row = db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
+        rows.append({**serialize(membership), "academy_name": get_academy_name(db, membership.academy_id), "class_id": str(class_row.id) if class_row else None, "class_name": class_row.name if class_row else None})
+    return rows
 
 
 @router.get("/student/quotas")
@@ -486,7 +533,7 @@ def submit_assignment(assignment_id: UUID, payload: AssignmentSubmitPayload, req
     assignment = db.get(Assignment, assignment_id)
     if not assignment or assignment_id not in student_assignment_ids(db, student_id, assignment.academy_id):
         raise HTTPException(status_code=404, detail="Assignment not found.")
-    membership = can_student_access_academy(db, student_id, assignment.academy_id)
+    membership = _student_membership_for_assignment(db, student_id, assignment)
     now = datetime.utcnow()
     if assignment.close_at and now > assignment.close_at and not assignment.allow_late_submission:
         raise HTTPException(status_code=403, detail="Assignment is closed.")
@@ -546,7 +593,7 @@ def start_test(assignment_id: UUID, request: Request, db: Session = Depends(get_
         raise HTTPException(status_code=403, detail="Test has not opened yet.")
     if assignment.close_at and now > assignment.close_at:
         raise HTTPException(status_code=403, detail="Test is closed.")
-    membership = can_student_access_academy(db, student_id, assignment.academy_id)
+    membership = _student_membership_for_assignment(db, student_id, assignment)
     attempts = db.scalar(select(func.count(TestSession.id)).where(TestSession.assignment_id == assignment_id, TestSession.student_membership_id == membership.id)) or 0
     if attempts >= assignment.max_attempts:
         raise HTTPException(status_code=403, detail="Attempt limit reached.")

@@ -63,6 +63,7 @@ CHOICE_MAP = {
 class StudentKeyCreate(BaseModel):
     count: int = Field(default=1, ge=1, le=200)
     display_name_prefix: str | None = None
+    class_id: UUID | None = None
 
 
 class AcademyKeyActivate(BaseModel):
@@ -574,14 +575,21 @@ def _assignment_payload(db: Session, assignment: LearningAssignment, student_id:
 def activate_academy_key(payload: AcademyKeyActivate, request: Request, db: Session = Depends(get_db)):
     membership = claim_invite_code(db, request, payload.key_code)
     db.commit()
-    return {**_serialize(membership), "academy_name": get_academy_name(db, membership.academy_id)}
+    seat = db.get(AcademySeat, membership.academy_seat_id)
+    class_row = db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
+    return {**_serialize(membership), "academy_name": get_academy_name(db, membership.academy_id), "class_id": str(class_row.id) if class_row else None, "class_name": class_row.name if class_row else None}
 
 
 @router.get("/student/academies")
 def learning_connected_academies(request: Request, db: Session = Depends(get_db)):
     student_id = current_owner_id(request)
     rows = student_memberships(db, student_id)
-    return [{**_serialize(row), "academy_name": get_academy_name(db, row.academy_id)} for row in rows]
+    result = []
+    for row in rows:
+        seat = db.get(AcademySeat, row.academy_seat_id)
+        class_row = db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
+        result.append({**_serialize(row), "academy_name": get_academy_name(db, row.academy_id), "class_id": str(class_row.id) if class_row else None, "class_name": class_row.name if class_row else None})
+    return result
 
 
 @router.get("/student/today")
@@ -1018,11 +1026,19 @@ def academy_students(academy_id: str, request: Request, db: Session = Depends(ge
 @router.post("/academy/{academy_id}/student-keys")
 def issue_student_keys(academy_id: str, payload: StudentKeyCreate, request: Request, db: Session = Depends(get_db)):
     actor = require_manage_seats(db, request, academy_id)
+    class_id = None
+    class_name = None
+    if payload.class_id:
+        class_row = db.scalar(select(AcademyClass).where(AcademyClass.id == payload.class_id, AcademyClass.academy_id == academy_id, AcademyClass.is_active.is_(True)))
+        if not class_row:
+            raise HTTPException(status_code=404, detail="Class not found.")
+        class_id = class_row.id
+        class_name = class_row.name
     created = []
     for index in range(payload.count):
         display = f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None
-        seat, code = create_seat(db, academy_id, display)
-        created.append({**_serialize(seat), "key_code": code, "status": "unused"})
+        seat, code = create_seat(db, academy_id, display, class_id=class_id)
+        created.append({**_serialize(seat), "class_name": class_name, "key_code": code, "status": "unused"})
     db.commit()
     return {"created_by": actor, "keys": created}
 

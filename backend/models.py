@@ -1076,6 +1076,7 @@ class AcademySeat(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    class_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("academy_classes.id", ondelete="SET NULL"), nullable=True, index=True)
     seat_number: Mapped[str] = mapped_column(String(80), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     invite_code_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)

@@ -21,6 +21,8 @@ class AcademyMembership {
     required this.status,
     required this.joinedAt,
     this.academyName,
+    this.classId,
+    this.className,
   });
 
   final String id;
@@ -30,6 +32,8 @@ class AcademyMembership {
   final String status;
   final DateTime joinedAt;
   final String? academyName;
+  final String? classId;
+  final String? className;
 
   factory AcademyMembership.fromJson(Map<String, dynamic> json) {
     return AcademyMembership(
@@ -39,6 +43,8 @@ class AcademyMembership {
       academySeatId: '${json['academy_seat_id']}',
       status: '${json['status'] ?? 'active'}',
       academyName: json['academy_name']?.toString(),
+      classId: json['class_id']?.toString(),
+      className: json['class_name']?.toString(),
       joinedAt: DateTime.tryParse('${json['joined_at']}') ?? DateTime.now(),
     );
   }

@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 export type AcademySeat = {
   id: string;
   academy_id: string;
+  class_id: string | null;
+  class_name?: string | null;
   seat_number: string;
   display_name: string | null;
   invite_code_preview: string;
@@ -19,6 +21,8 @@ export type StudentMembership = {
   student_user_id: string;
   academy_id: string;
   academy_seat_id: string;
+  class_id?: string | null;
+  class_name?: string | null;
   status: "active" | "ended" | "suspended";
   academy_name?: string;
   joined_at: string;
@@ -111,11 +115,11 @@ export function listAcademySeats(academyId: string) {
   return api<AcademySeat[]>(`/api/academy/${academyId}/seats`);
 }
 
-export function createAcademySeats(academyId: string, count = 1) {
+export function createAcademySeats(academyId: string, count = 1, classId?: string) {
   return api<AcademySeat[]>(`/api/academy/${academyId}/seats`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ count }),
+    body: JSON.stringify({ count, class_id: classId || null }),
   });
 }
 
@@ -507,7 +511,7 @@ export function listAcademyLearningStudents(academyId: string) {
   return api<AcademyLearningStudent[]>(`/api/learning/academy/${academyId}/students`);
 }
 
-export function issueLearningStudentKeys(academyId: string, payload: { count: number; display_name_prefix?: string }) {
+export function issueLearningStudentKeys(academyId: string, payload: { count: number; display_name_prefix?: string; class_id?: string | null }) {
   return api<{ created_by: string; keys: Array<AcademySeat & { key_code: string; status: string }> }>(`/api/learning/academy/${academyId}/student-keys`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
