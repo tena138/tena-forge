@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
@@ -353,33 +354,52 @@ def _student_name(membership: StudentAcademyMembership) -> str:
     return membership.display_name_in_academy or metadata.get("name") or metadata.get("display_name") or "Unnamed student"
 
 
+def _safe_scalar(db: Session, statement, fallback=None):
+    try:
+        return db.scalar(statement)
+    except SQLAlchemyError:
+        db.rollback()
+        return fallback
+
+
+def _safe_scalars(db: Session, statement) -> list:
+    try:
+        return db.scalars(statement).all()
+    except SQLAlchemyError:
+        db.rollback()
+        return []
+
+
 def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMembership, class_rows: list[AcademyClass] | None = None) -> dict:
     classes = class_rows
     if classes is None:
-        classes = db.scalars(
+        classes = _safe_scalars(
+            db,
             select(AcademyClass)
             .join(ClassStudent, ClassStudent.class_id == AcademyClass.id)
             .where(
-                AcademyClass.academy_id == academy_id,
+                AcademyClass.academy_id.in_([academy_id, membership.academy_id]),
                 ClassStudent.student_membership_id == membership.id,
                 ClassStudent.left_at.is_(None),
             )
             .order_by(AcademyClass.name)
-        ).all()
+        )
     metadata = membership.metadata_json or {}
-    latest_result = db.scalar(
+    latest_result = _safe_scalar(
+        db,
         select(PaperSessionResult)
         .where(
-            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.academy_id.in_([academy_id, membership.academy_id]),
             PaperSessionResult.student_membership_id == membership.id,
             PaperSessionResult.status == "graded",
         )
         .order_by(PaperSessionResult.graded_at.desc().nullslast(), PaperSessionResult.updated_at.desc())
         .limit(1)
     )
-    unresolved = db.scalar(
+    unresolved = _safe_scalar(
+        db,
         select(func.count(WrongAnswerRecord.id)).where(
-            WrongAnswerRecord.academy_id == academy_id,
+            WrongAnswerRecord.academy_id.in_([academy_id, membership.academy_id]),
             WrongAnswerRecord.student_id == membership.student_user_id,
             WrongAnswerRecord.resolved_status.in_(["unresolved", "reviewing"]),
         )
@@ -415,8 +435,43 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
     }
 
 
+def _safe_student_payload(
+    db: Session,
+    academy_id: str,
+    membership: StudentAcademyMembership,
+    class_rows: list[AcademyClass] | None = None,
+) -> dict:
+    try:
+        return _student_payload(db, academy_id, membership, class_rows)
+    except Exception:
+        db.rollback()
+        metadata = membership.metadata_json or {}
+        return {
+            "id": str(membership.id),
+            "student_user_id": membership.student_user_id,
+            "academy_seat_id": str(membership.academy_seat_id) if membership.academy_seat_id else None,
+            "invite_code": metadata.get("invite_code"),
+            "invite_code_preview": None,
+            "name": _student_name(membership),
+            "grade_level": metadata.get("grade_level") or metadata.get("grade"),
+            "school": metadata.get("school"),
+            "status": membership.status or "active",
+            "status_chip": "Active" if (membership.status or "active") == "active" else "Inactive",
+            "memo": metadata.get("memo"),
+            "class_ids": [str(row.id) for row in class_rows or []],
+            "class_names": [row.name for row in class_rows or []],
+            "class_subjects": [row.subject for row in class_rows or []],
+            "recent_score": None,
+            "recent_completion_status": "not_started",
+            "unresolved_wrong_count": 0,
+            "recent_weakness_label": None,
+            "joined_at": membership.joined_at.isoformat() if membership.joined_at else None,
+        }
+
+
 def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) -> list[StudentAcademyMembership]:
-    return db.scalars(
+    return _safe_scalars(
+        db,
         select(StudentAcademyMembership)
         .join(ClassStudent, ClassStudent.student_membership_id == StudentAcademyMembership.id)
         .where(
@@ -425,7 +480,7 @@ def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) 
             StudentAcademyMembership.status == "active",
         )
         .order_by(StudentAcademyMembership.display_name_in_academy)
-    ).all()
+    )
 
 
 def _visible_student_memberships(db: Session, academy_ids: set[str], linked_student_ids: list[UUID] | None = None) -> list[StudentAcademyMembership]:
@@ -454,14 +509,16 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
     unresolved = 0
     avg_score = None
     if student_ids:
-        unresolved = db.scalar(
+        unresolved = _safe_scalar(
+            db,
             select(func.count(WrongAnswerRecord.id)).where(
                 WrongAnswerRecord.academy_id == academy_id,
                 WrongAnswerRecord.student_id.in_(student_ids),
                 WrongAnswerRecord.resolved_status.in_(["unresolved", "reviewing"]),
             )
         ) or 0
-        avg_score = db.scalar(
+        avg_score = _safe_scalar(
+            db,
             select(func.avg(PaperSessionResult.score)).where(
                 PaperSessionResult.academy_id == academy_id,
                 PaperSessionResult.student_membership_id.in_([membership.id for membership in memberships]),
@@ -469,9 +526,10 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
                 PaperSessionResult.score.is_not(None),
             )
         )
-    sessions = db.scalars(
-        select(PaperSession).where(PaperSession.academy_id == academy_id).order_by(PaperSession.created_at.desc())
-    ).all()
+    sessions = _safe_scalars(
+        db,
+        select(PaperSession).where(PaperSession.academy_id == academy_id).order_by(PaperSession.created_at.desc()),
+    )
     now = _now()
     class_sessions = [session for session in sessions if _session_belongs_to_class(session, row, memberships)]
     upcoming_count = sum(
@@ -481,7 +539,7 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
         and ((session.scheduled_at and session.scheduled_at >= now) or (session.due_at and session.due_at >= now))
     )
     recent_session = class_sessions[0] if class_sessions else None
-    students = [_student_payload(db, academy_id, membership, [row]) for membership in memberships] if include_students else []
+    students = [_safe_student_payload(db, academy_id, membership, [row]) for membership in memberships] if include_students else []
     return {
         "id": str(row.id),
         "name": row.name,
@@ -1180,7 +1238,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     }
     visible_students = _visible_student_memberships(db, visible_academy_ids)
     recovered_students = [
-        _student_payload(db, academy_id, membership)
+        _safe_student_payload(db, academy_id, membership)
         for membership in visible_students
         if str(membership.id) not in attached_student_ids and (membership.status or "active") == "active"
     ]
@@ -1205,7 +1263,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 def list_classes(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     rows = _ordered_classes_for_academies(db, _student_management_academy_ids(request, db, academy_id), academy_id)
-    return [_class_payload(db, academy_id, row, include_students=True) for row in rows]
+    return [_safe_class_payload(db, academy_id, row, include_students=True) for row in rows]
 
 
 @router.post("/classes")
@@ -1396,7 +1454,7 @@ def list_students(request: Request, db: Session = Depends(get_db)):
         )
     ).all()
     rows = _visible_student_memberships(db, visible_academy_ids, linked_student_ids)
-    return [_student_payload(db, academy_id, row) for row in rows]
+    return [_safe_student_payload(db, academy_id, row) for row in rows]
 
 @router.post("/students")
 def create_student(payload: StudentPayload, request: Request, db: Session = Depends(get_db)):
