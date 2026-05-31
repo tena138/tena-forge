@@ -275,6 +275,7 @@ def _problem_filter_conditions(
     origin_type: list[str] | None = None,
     search: str | None = None,
     batch_id: UUID | None = None,
+    batch_ids: list[UUID] | None = None,
 ):
     filters = [Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None)]
     if subject:
@@ -295,7 +296,9 @@ def _problem_filter_conditions(
         filters.append(Problem.origin_type.in_(origin_type))
     for term in _search_terms(search):
         filters.append(_problem_search_condition(term))
-    if batch_id:
+    if batch_ids:
+        filters.append(Problem.source_batch_id.in_(batch_ids))
+    elif batch_id:
         filters.append(Problem.source_batch_id == batch_id)
     return filters
 
@@ -313,6 +316,7 @@ def list_problems(
     origin_type: list[str] | None = Query(default=None),
     search: str | None = None,
     batch_id: UUID | None = None,
+    batch_ids: list[UUID] | None = Query(default=None),
     sort: str = "source_order",
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
@@ -331,6 +335,7 @@ def list_problems(
         origin_type=origin_type,
         search=search,
         batch_id=batch_id,
+        batch_ids=batch_ids,
     )
 
     base = select(Problem).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id).options(joinedload(Problem.tags), joinedload(Problem.batch))
@@ -363,6 +368,7 @@ def problem_navigation(
     origin_type: list[str] | None = Query(default=None),
     search: str | None = None,
     batch_id: UUID | None = None,
+    batch_ids: list[UUID] | None = Query(default=None),
     sort: str = "source_order",
     db: Session = Depends(get_db),
 ):
@@ -385,6 +391,7 @@ def problem_navigation(
         origin_type=origin_type,
         search=search,
         batch_id=batch_id,
+        batch_ids=batch_ids,
     )
     ids = db.scalars(
         select(Problem.id)

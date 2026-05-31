@@ -10,9 +10,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Folder,
+  FolderOpen,
   FolderPlus,
   Grid3X3,
   List,
+  Minus,
+  Plus,
   Search,
   Send,
   SlidersHorizontal,
@@ -42,12 +46,14 @@ type DragBox = { left: number; top: number; width: number; height: number };
 type ReviewFilter = "all" | "needs" | "reviewed";
 type ViewMode = "grid" | "list";
 type ProblemSort = "source_order" | "newest" | "oldest" | "number_asc" | "number_desc";
+type BatchFolder = { id: string; name: string; batchIds: string[]; createdAt: string };
 
 const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24, pages: 1 };
 const difficulties = ["하", "중", "상", "최상"];
 const defaultReviewFilter: ReviewFilter = "reviewed";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
 const customSubjectFiltersStorageKey = "tena.problemBrowser.customSubjects";
+const batchFoldersStorageKey = "tena.problemBrowser.batchFolders";
 const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "all", label: "전체" },
   { value: "needs", label: "검토 필요" },
@@ -74,6 +80,33 @@ function readSubjectList(key: string) {
 function writeSubjectList(key: string, values: string[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, JSON.stringify([...new Set(values.map(normalizeSubjectValue).filter(Boolean))]));
+}
+
+function readBatchFolders() {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(batchFoldersStorageKey) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((folder): BatchFolder | null => {
+        if (!folder || typeof folder !== "object") return null;
+        const name = String((folder as BatchFolder).name || "").trim();
+        const id = String((folder as BatchFolder).id || "");
+        const batchIds = Array.isArray((folder as BatchFolder).batchIds)
+          ? [...new Set((folder as BatchFolder).batchIds.map((value) => String(value)).filter(Boolean))]
+          : [];
+        if (!id || !name) return null;
+        return { id, name, batchIds, createdAt: String((folder as BatchFolder).createdAt || new Date().toISOString()) };
+      })
+      .filter((folder): folder is BatchFolder => Boolean(folder));
+  } catch {
+    return [];
+  }
+}
+
+function writeBatchFolders(folders: BatchFolder[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(batchFoldersStorageKey, JSON.stringify(folders));
 }
 
 function readPageParam(value: string | null) {
@@ -289,10 +322,12 @@ function ProblemsBrowser() {
   const [customSubjectFilters, setCustomSubjectFilters] = useState<string[]>([]);
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
   const [selectedBatchId, setSelectedBatchId] = useState(() => searchParams.get("batch_id") || "");
+  const [selectedBatchFolderId, setSelectedBatchFolderId] = useState(() => searchParams.get("batch_folder_id") || "");
+  const [batchFolders, setBatchFolders] = useState<BatchFolder[]>([]);
+  const [folderNameDraft, setFolderNameDraft] = useState("");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => readReviewFilter(searchParams.get("needs_review")));
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [batchFilterOpen, setBatchFilterOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -322,6 +357,7 @@ function ProblemsBrowser() {
     const saved = window.localStorage.getItem(viewModeStorageKey);
     if (saved === "grid" || saved === "list") setViewMode(saved);
     setCustomSubjectFilters(readSubjectList(customSubjectFiltersStorageKey));
+    setBatchFolders(readBatchFolders());
   }, []);
 
   useEffect(() => {
@@ -334,10 +370,14 @@ function ProblemsBrowser() {
     setSubjects(searchParams.getAll("subject"));
     setSelectedDiffs(searchParams.getAll("difficulty"));
     setSelectedBatchId(searchParams.get("batch_id") || "");
+    setSelectedBatchFolderId(searchParams.get("batch_folder_id") || "");
     setReviewFilter(readReviewFilter(searchParams.get("needs_review")));
     setSort(readSort(searchParams.get("sort")));
     setPage(readPageParam(searchParams.get("page")));
   }, [paramsKey]);
+
+  const selectedBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === selectedBatchFolderId) || null, [batchFolders, selectedBatchFolderId]);
+  const selectedFolderBatchIds = useMemo(() => selectedBatchFolder?.batchIds.filter((batchId) => batches.some((batch) => batch.id === batchId)) || [], [batches, selectedBatchFolder]);
 
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -347,11 +387,18 @@ function ProblemsBrowser() {
     if (reviewFilter === "needs") params.set("needs_review", "true");
     if (reviewFilter === "reviewed") params.set("needs_review", "false");
     if (sort !== "source_order") params.set("sort", sort);
-    if (selectedBatchId) params.set("batch_id", selectedBatchId);
+    if (selectedBatchFolderId) params.set("batch_folder_id", selectedBatchFolderId);
+    if (selectedFolderBatchIds.length) {
+      selectedFolderBatchIds.forEach((batchId) => params.append("batch_ids", batchId));
+    } else if (selectedBatchFolderId) {
+      params.append("batch_ids", "00000000-0000-0000-0000-000000000000");
+    } else if (selectedBatchId) {
+      params.set("batch_id", selectedBatchId);
+    }
     subjects.forEach((value) => params.append("subject", value));
     selectedDiffs.forEach((value) => params.append("difficulty", value));
     return params.toString();
-  }, [reviewFilter, search, selectedBatchId, selectedDiffs, sort, subjects, unit]);
+  }, [reviewFilter, search, selectedBatchFolderId, selectedBatchId, selectedDiffs, selectedFolderBatchIds, sort, subjects, unit]);
 
   const query = useMemo(() => {
     const params = new URLSearchParams(filterQuery);
@@ -408,14 +455,15 @@ function ProblemsBrowser() {
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
-    if (selectedBatchId) chips.push({ key: "batch", label: `배치: ${selectedBatch?.name || selectedBatchId.slice(0, 8)}`, onRemove: () => setSelectedBatchId("") });
+    if (selectedBatchFolderId) chips.push({ key: "batch-folder", label: `폴더: ${selectedBatchFolder?.name || "배치 폴더"}`, onRemove: () => setSelectedBatchFolderId("") });
+    if (!selectedBatchFolderId && selectedBatchId) chips.push({ key: "batch", label: `배치: ${selectedBatch?.name || selectedBatchId.slice(0, 8)}`, onRemove: () => setSelectedBatchId("") });
     if (search.trim()) chips.push({ key: "search", label: `검색: ${search.trim()}`, onRemove: () => setSearch("") });
     if (unit.trim()) chips.push({ key: "unit", label: `단원: ${unit.trim()}`, onRemove: () => setUnit("") });
     subjects.forEach((value) => chips.push({ key: `subject-${value}`, label: `과목: ${subjectDisplayLabel(value)}`, onRemove: () => setSubjects(subjects.filter((item) => item !== value)) }));
     selectedDiffs.forEach((value) => chips.push({ key: `difficulty-${value}`, label: `난이도: ${value}`, onRemove: () => setSelectedDiffs(selectedDiffs.filter((item) => item !== value)) }));
     if (reviewFilter !== "all") chips.push({ key: "review", label: reviewFilter === "needs" ? "검토 필요" : "검토 완료", onRemove: () => setReviewFilter("all") });
     return chips;
-  }, [reviewFilter, search, selectedBatch, selectedBatchId, selectedDiffs, subjects, unit]);
+  }, [reviewFilter, search, selectedBatch, selectedBatchFolder, selectedBatchFolderId, selectedBatchId, selectedDiffs, subjects, unit]);
 
   function resetPageAnd(run: () => void) {
     loadRequestRef.current += 1;
@@ -444,6 +492,69 @@ function ProblemsBrowser() {
         return next;
       });
     });
+  }
+
+  function persistBatchFolders(nextFolders: BatchFolder[]) {
+    setBatchFolders(nextFolders);
+    writeBatchFolders(nextFolders);
+  }
+
+  function selectAllBatches() {
+    resetPageAnd(() => {
+      setSelectedBatchId("");
+      setSelectedBatchFolderId("");
+    });
+  }
+
+  function selectBatch(batchId: string) {
+    resetPageAnd(() => {
+      setSelectedBatchFolderId("");
+      setSelectedBatchId(selectedBatchId === batchId ? "" : batchId);
+    });
+  }
+
+  function selectBatchFolder(folderId: string) {
+    resetPageAnd(() => {
+      setSelectedBatchId("");
+      setSelectedBatchFolderId(selectedBatchFolderId === folderId ? "" : folderId);
+    });
+  }
+
+  function createBatchFolder() {
+    const name = folderNameDraft.trim();
+    if (!name) return;
+    const folder: BatchFolder = {
+      id: `folder-${Date.now()}`,
+      name,
+      batchIds: selectedBatchId ? [selectedBatchId] : [],
+      createdAt: new Date().toISOString(),
+    };
+    persistBatchFolders([...batchFolders, folder]);
+    setFolderNameDraft("");
+    resetPageAnd(() => {
+      setSelectedBatchId("");
+      setSelectedBatchFolderId(folder.id);
+    });
+  }
+
+  function deleteBatchFolder(folderId: string) {
+    persistBatchFolders(batchFolders.filter((folder) => folder.id !== folderId));
+    if (selectedBatchFolderId === folderId) {
+      resetPageAnd(() => setSelectedBatchFolderId(""));
+    }
+  }
+
+  function toggleBatchInSelectedFolder(batchId: string) {
+    if (!selectedBatchFolder) return;
+    const nextFolders = batchFolders.map((folder) => {
+      if (folder.id !== selectedBatchFolder.id) return folder;
+      const hasBatch = folder.batchIds.includes(batchId);
+      return {
+        ...folder,
+        batchIds: hasBatch ? folder.batchIds.filter((id) => id !== batchId) : [...folder.batchIds, batchId],
+      };
+    });
+    persistBatchFolders(nextFolders);
   }
 
   function toggleProblemSelection(problem: Problem, checked?: boolean) {
@@ -758,76 +869,137 @@ function ProblemsBrowser() {
           </button>
         </div>
 
-        <div className="mt-3 rounded-lg border border-white/10 bg-card/60 p-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-3 rounded-lg border border-white/10 bg-card/60 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Batch folders</div>
+              <h2 className="mt-1 text-sm font-bold text-foreground">문항 아카이브 폴더</h2>
+            </div>
+            <div className="flex min-w-[16rem] flex-1 items-center gap-2 sm:flex-none">
+              <Input
+                className="h-9 min-w-0 border-white/10 bg-black/20 text-sm"
+                value={folderNameDraft}
+                onChange={(event) => setFolderNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    createBatchFolder();
+                  }
+                }}
+                placeholder="새 폴더 이름"
+              />
+              <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={createBatchFolder}>
+                <FolderPlus className="h-4 w-4" />새 폴더
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(170px,1fr))]">
             <button
               type="button"
               className={cn(
-                "inline-flex min-h-10 min-w-0 flex-1 items-center justify-between gap-3 rounded-md border px-3 text-left transition-colors",
-                batchFilterOpen || selectedBatchId ? "border-[#7F77DD]/45 bg-[#7F77DD]/12 text-white" : "border-white/10 bg-black/10 text-slate-300 hover:bg-white/[0.05]"
+                "flex min-h-[82px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                !selectedBatchId && !selectedBatchFolderId ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
               )}
-              aria-expanded={batchFilterOpen}
-              onClick={() => setBatchFilterOpen((value) => !value)}
+              onClick={selectAllBatches}
             >
-              <span className="flex min-w-0 flex-col">
-                <span className="text-[11px] font-semibold text-muted-foreground">내가 올린 배치</span>
-                <span className="truncate text-sm font-bold">{selectedBatch?.name || "전체 배치"}</span>
+              <FolderOpen className="mt-0.5 h-5 w-5 shrink-0 text-[#9b8cff]" />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-bold">전체 문항</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{data.total.toLocaleString("ko-KR")}개 표시</span>
               </span>
-              <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", batchFilterOpen && "rotate-180")} />
             </button>
-            {selectedBatchId ? (
-              <button
-                type="button"
-                className="inline-flex h-10 items-center rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
-                onClick={() => resetPageAnd(() => {
-                  setSelectedBatchId("");
-                  setBatchFilterOpen(false);
-                })}
-              >
-                선택 해제
-              </button>
-            ) : null}
-          </div>
 
-          {batchFilterOpen ? (
-            <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-              <button
-                type="button"
-                className={cn(
-                  "inline-flex h-10 shrink-0 items-center rounded-md border px-3 text-sm font-semibold transition-colors",
-                  !selectedBatchId ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
-                )}
-                onClick={() => resetPageAnd(() => {
-                  setSelectedBatchId("");
-                  setBatchFilterOpen(false);
-                })}
-              >
-                전체 배치
-              </button>
-              {batches.length ? batches.map((batch) => {
-                const selected = selectedBatchId === batch.id;
-                const accentColor = normalizeHexColor(batch.accent_color) || "#64748b";
-                return (
-                  <button
-                    key={batch.id}
-                    type="button"
-                    className={cn(
-                      "inline-flex h-10 max-w-[18rem] shrink-0 items-center gap-2 rounded-md border px-3 text-left transition-colors",
-                      selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
-                    )}
-                    onClick={() => resetPageAnd(() => {
-                      setSelectedBatchId(selected ? "" : batch.id);
-                      setBatchFilterOpen(false);
-                    })}
+            {batchFolders.map((folder) => {
+              const selected = selectedBatchFolderId === folder.id;
+              const folderBatches = folder.batchIds.map((batchId) => batches.find((batch) => batch.id === batchId)).filter((batch): batch is Batch => Boolean(batch));
+              const problemCount = folderBatches.reduce((sum, batch) => sum + batch.problem_count, 0);
+              return (
+                <button
+                  key={folder.id}
+                  type="button"
+                  className={cn(
+                    "group flex min-h-[82px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                    selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                  )}
+                  onClick={() => selectBatchFolder(folder.id)}
+                >
+                  <Folder className="mt-0.5 h-5 w-5 shrink-0 text-[#8be9ff]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold">{folder.name}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{folderBatches.length}개 배치 · {problemCount.toLocaleString("ko-KR")}문항</span>
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-400 opacity-0 transition hover:text-white group-hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      deleteBatchFolder(folder.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      deleteBatchFolder(folder.id);
+                    }}
+                    aria-label={`${folder.name} 폴더 삭제`}
                   >
-                    <span className="h-5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
-                    <span className="min-w-0 truncate text-sm font-semibold">{batch.name}</span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">{batch.problem_count.toLocaleString("ko-KR")}</span>
-                  </button>
-                );
-              }) : <span className="px-2 py-2 text-sm text-muted-foreground">업로드한 배치가 없습니다.</span>}
-            </div>
-          ) : null}
+                    <X className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              );
+            })}
+
+            {batches.map((batch) => {
+              const selected = selectedBatchId === batch.id && !selectedBatchFolderId;
+              const inSelectedFolder = selectedBatchFolder?.batchIds.includes(batch.id) || false;
+              const accentColor = normalizeHexColor(batch.accent_color) || "#64748b";
+              return (
+                <button
+                  key={batch.id}
+                  type="button"
+                  className={cn(
+                    "group flex min-h-[82px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                    selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                  )}
+                  onClick={() => selectBatch(batch.id)}
+                >
+                  <span className="relative mt-0.5 shrink-0">
+                    <Folder className="h-5 w-5" style={{ color: accentColor }} />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#111022]" style={{ backgroundColor: accentColor }} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold">{batch.name}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{batch.problem_count.toLocaleString("ko-KR")}문항</span>
+                  </span>
+                  {selectedBatchFolder ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className={cn(
+                        "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition",
+                        inSelectedFolder ? "border-rose-300/25 bg-rose-500/10 text-rose-100" : "border-white/10 bg-black/20 text-slate-300 opacity-0 group-hover:opacity-100"
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleBatchInSelectedFolder(batch.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleBatchInSelectedFolder(batch.id);
+                      }}
+                      aria-label={`${batch.name} ${inSelectedFolder ? "폴더에서 제거" : "폴더에 추가"}`}
+                    >
+                      {inSelectedFolder ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {filtersOpen ? (
