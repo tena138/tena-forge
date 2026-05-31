@@ -442,6 +442,12 @@ export function savePaperSessionGrade(
   });
 }
 
+export function deletePaperSessionResult(id: string) {
+  return api<void>(`/api/student-management/paper-session-results/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export function listWrongAnswers(params?: { class_id?: string; student_membership_id?: string; status?: string }) {
   const search = new URLSearchParams();
   if (params?.class_id) search.set("class_id", params.class_id);

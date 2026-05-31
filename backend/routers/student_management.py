@@ -1680,6 +1680,63 @@ def _paper_session_detail(db: Session, academy_id: str, session: PaperSession) -
     }
 
 
+@router.delete("/paper-session-results/{result_id}", status_code=204)
+def delete_paper_session_result(result_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    result = db.scalar(
+        select(PaperSessionResult).where(
+            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.id == result_id,
+        )
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Paper session result not found.")
+
+    session = _get_session(db, academy_id, result.paper_session_id)
+    marker = f"paper_session:{result.paper_session_id}"
+    wrong_rows = db.scalars(
+        select(ProblemResult).where(
+            ProblemResult.academy_id == academy_id,
+            ProblemResult.paper_session_result_id == result.id,
+            ProblemResult.result_status.in_(["wrong", "unanswered"]),
+        )
+    ).all()
+    for row in wrong_rows:
+        record = db.scalar(
+            select(WrongAnswerRecord).where(
+                WrongAnswerRecord.academy_id == academy_id,
+                WrongAnswerRecord.student_id == result.student_user_id,
+                WrongAnswerRecord.problem_id == row.problem_id,
+            )
+        )
+        if not record:
+            continue
+        source_ids = [source for source in (record.source_assignment_ids or []) if source != marker]
+        if source_ids:
+            record.source_assignment_ids = source_ids
+            record.wrong_count = max(1, record.wrong_count - 1)
+            record.updated_at = _now()
+        else:
+            db.delete(record)
+
+    db.execute(delete(ProblemResult).where(ProblemResult.academy_id == academy_id, ProblemResult.paper_session_result_id == result.id))
+    db.delete(result)
+    remaining_results = db.scalars(
+        select(PaperSessionResult).where(
+            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.paper_session_id == session.id,
+            PaperSessionResult.id != result.id,
+        )
+    ).all()
+    if not remaining_results and session.status in {"grading", "completed"}:
+        session.status = "exported" if session.exported_file_url else "scheduled"
+    elif session.status == "completed" and any(row.status != "graded" for row in remaining_results):
+        session.status = "grading"
+    session.updated_at = _now()
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.post("/paper-sessions/{session_id}/grade")
 def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _academy_id(request)

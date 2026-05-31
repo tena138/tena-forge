@@ -21,6 +21,7 @@ import {
   WrongAnswer,
   createCounselingLog,
   deleteCounselingLog,
+  deletePaperSessionResult,
   createReviewSet,
   deleteWrongAnswerRecord,
   deleteScheduleEvent,
@@ -490,6 +491,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
+  const [deletingResultId, setDeletingResultId] = useState("");
   const [deletingWrongAnswerId, setDeletingWrongAnswerId] = useState("");
   const [selectedWrongAnswerIds, setSelectedWrongAnswerIds] = useState<string[]>([]);
   const [wrongArchiveAddModalOpen, setWrongArchiveAddModalOpen] = useState(false);
@@ -955,6 +957,40 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   async function saveResult(result: StudentDetail["paper_session_history"][number]) {
     clearAutosaveTimer(result.id);
     await persistResult(result, resultStatuses[result.id] || buildStatuses(result), true);
+  }
+
+  async function removeResult(result: StudentDetail["paper_session_history"][number]) {
+    const title = result.session?.title || "시험/과제";
+    if (!window.confirm(`'${title}' 결과 입력 항목을 삭제할까요? 연결된 채점 기록도 함께 삭제됩니다.`)) return;
+    clearAutosaveTimer(result.id);
+    setDeletingResultId(result.id);
+    try {
+      await deletePaperSessionResult(result.id);
+      setData((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          paper_session_history: current.paper_session_history.filter((item) => item.id !== result.id),
+        };
+      });
+      setResultStatuses((current) => {
+        const next = { ...current };
+        delete next[result.id];
+        return next;
+      });
+      setAutosaveStates((current) => {
+        const next = { ...current };
+        delete next[result.id];
+        return next;
+      });
+      setSelectedCalendarItemId((current) => (current === `session-${result.id}` ? "" : current));
+      await refreshStudent();
+      setMessage("결과 입력 항목을 삭제했습니다.");
+    } catch {
+      setMessage("결과 입력 항목 삭제에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setDeletingResultId("");
+    }
   }
 
   async function removeCalendarEvent(item: StudentCalendarItem) {
@@ -1608,8 +1644,21 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                               {counts.correct} 정답 · {counts.wrong} 오답/못 풂
                             </p>
                           </div>
-                          <div className="text-left text-xs font-semibold text-slate-500 sm:text-right">
-                            {autosaveStates[result.id] === "saving" ? "저장 중" : autosaveStates[result.id] === "saved" ? "자동 저장됨" : autosaveStates[result.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
+                          <div className="flex items-center gap-2 sm:justify-end">
+                            <div className="text-left text-xs font-semibold text-slate-500 sm:text-right">
+                              {autosaveStates[result.id] === "saving" ? "저장 중" : autosaveStates[result.id] === "saved" ? "자동 저장됨" : autosaveStates[result.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
+                            </div>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
+                              onClick={() => removeResult(result)}
+                              disabled={deletingResultId === result.id || savingResultId === result.id}
+                              aria-label={`${result.session?.title || "시험/과제"} 결과 입력 항목 삭제`}
+                            >
+                              {deletingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
@@ -1630,7 +1679,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                             );
                           })}
                         </div>
-                        <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(result)} disabled={savingResultId === result.id}>
+                        <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(result)} disabled={savingResultId === result.id || deletingResultId === result.id}>
                           {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                           저장
                         </Button>
