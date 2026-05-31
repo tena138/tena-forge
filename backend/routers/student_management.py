@@ -507,6 +507,25 @@ def _visible_student_memberships(db: Session, academy_ids: set[str], linked_stud
     return sorted(rows_by_id.values(), key=lambda row: (row.status or "", (_student_name(row) or "").lower()))
 
 
+def _visible_membership_by_id(db: Session, academy_ids: set[str], student_id: UUID) -> StudentAcademyMembership:
+    for row in _visible_student_memberships(db, academy_ids):
+        if str(row.id) == str(student_id):
+            return row
+    linked_row = db.scalar(
+        select(StudentAcademyMembership)
+        .join(ClassStudent, _id_columns_equal(ClassStudent.student_membership_id, StudentAcademyMembership.id))
+        .join(AcademyClass, _id_columns_equal(AcademyClass.id, ClassStudent.class_id))
+        .where(
+            AcademyClass.academy_id.in_(list(academy_ids)),
+            _id_equals(StudentAcademyMembership.id, student_id),
+            ClassStudent.left_at.is_(None),
+        )
+    )
+    if linked_row:
+        return linked_row
+    raise HTTPException(status_code=404, detail="Student not found.")
+
+
 def _session_belongs_to_class(session: PaperSession, class_row: AcademyClass, memberships: list[StudentAcademyMembership]) -> bool:
     if str(class_row.id) in {str(value) for value in (session.class_ids or [])}:
         return True
@@ -1571,22 +1590,25 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     _ensure_exported_review_session_assigned(db, academy_id)
-    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
+    membership = _visible_membership_by_id(db, visible_academy_ids, student_id)
     data = _student_payload(db, academy_id, membership)
     results = _safe_scalars(
         db,
         select(PaperSessionResult)
-        .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)), _id_equals(PaperSessionResult.student_membership_id, student_id))
+        .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)))
         .order_by(PaperSessionResult.created_at.desc()),
     )
+    results = [result for result in results if str(result.student_membership_id) == str(student_id)]
+    result_session_ids = {str(result.paper_session_id) for result in results}
     sessions = {
         row.id: row
         for row in _safe_scalars(
             db,
             select(PaperSession)
-            .where(PaperSession.academy_id.in_(list(visible_academy_ids)), _id_in(PaperSession.id, [result.paper_session_id for result in results]))
+            .where(PaperSession.academy_id.in_(list(visible_academy_ids)))
             .options(joinedload(PaperSession.content_version)),
         )
+        if str(row.id) in result_session_ids
     }
     wrongs = _wrong_answer_rows(db, academy_id, student_user_ids=[membership.student_user_id], academy_ids=visible_academy_ids)
     data["paper_session_history"] = [
@@ -1598,16 +1620,17 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         for result in results
     ]
     result_ids = [result.id for result in results]
+    result_id_set = {str(result_id) for result_id in result_ids}
     if result_ids:
         problem_results = _safe_scalars(
             db,
             select(ProblemResult)
             .where(
                 ProblemResult.academy_id.in_(list(visible_academy_ids)),
-                _id_in(ProblemResult.paper_session_result_id, result_ids),
             )
             .order_by(ProblemResult.problem_number),
         )
+        problem_results = [row for row in problem_results if str(row.paper_session_result_id) in result_id_set]
         by_result: dict[str, list[dict]] = {}
         for row in problem_results:
             by_result.setdefault(str(row.paper_session_result_id), []).append(
@@ -1621,14 +1644,16 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         for item in data["paper_session_history"]:
             item["problem_results"] = by_result.get(item["id"], [])
     class_ids = [UUID(value) for value in data.get("class_ids", [])]
+    class_id_set = {str(value) for value in class_ids}
     if class_ids:
         events = _safe_scalars(
             db,
             select(ClassScheduleEvent)
-            .where(ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)), _id_in(ClassScheduleEvent.class_id, class_ids))
+            .where(ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)))
             .order_by(ClassScheduleEvent.starts_at.asc())
             .limit(500),
         )
+        events = [event for event in events if str(event.class_id) in class_id_set]
         data["schedule_events"] = [_schedule_event_payload(event) for event in events]
     else:
         data["schedule_events"] = []
