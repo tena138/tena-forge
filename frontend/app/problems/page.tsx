@@ -2,7 +2,7 @@
 
 import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   CheckSquare,
@@ -333,7 +333,6 @@ function ProblemSubjectRow({
 }
 
 function ProblemsBrowser() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const paramsKey = searchParams.toString();
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
@@ -361,6 +360,7 @@ function ProblemsBrowser() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [duplicatingId, setDuplicatingId] = useState("");
+  const [duplicateNotice, setDuplicateNotice] = useState("");
   const [dragBox, setDragBox] = useState<DragBox | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [suppressClick, setSuppressClick] = useState(false);
@@ -670,10 +670,12 @@ function ProblemsBrowser() {
   async function duplicateProblem(problem: Problem) {
     if (duplicatingId) return;
     setDuplicatingId(problem.id);
+    setDuplicateNotice("");
     try {
       const duplicated = await api<Problem>(`/api/problems/${problem.id}/duplicate`, { method: "POST" });
       setSelectedProblemCache((current) => ({ ...current, [duplicated.id]: duplicated }));
-      router.push(`/problems/${duplicated.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`);
+      setDuplicateNotice("문항을 복제했습니다.");
+      await loadProblems();
     } catch {
       window.alert("문항을 복제하지 못했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -800,7 +802,7 @@ function ProblemsBrowser() {
           }}
           disabled={duplicatingId === problem.id}
           aria-label={`${problem.problem_number}번 문항 복제`}
-          title="복제해서 숫자 바꾸기"
+          title="문항 복제"
         >
           <Copy className="h-4 w-4" />
         </button>
@@ -888,7 +890,7 @@ function ProblemsBrowser() {
             }}
             disabled={duplicatingId === problem.id}
             aria-label={`${problem.problem_number}번 문항 복제`}
-            title="복제해서 숫자 바꾸기"
+            title="문항 복제"
           >
             <Copy className="h-4 w-4" />
           </button>
@@ -946,6 +948,11 @@ function ProblemsBrowser() {
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          {duplicateNotice ? (
+            <span className="inline-flex h-7 items-center rounded-md border border-emerald-300/25 bg-emerald-400/10 px-2 text-xs font-semibold text-emerald-100">
+              {duplicateNotice}
+            </span>
+          ) : null}
           {activeFilterChips.length ? activeFilterChips.map((chip) => (
             <button
               key={chip.key}
