@@ -30,7 +30,7 @@ from models import (
     WrongAnswerRecord,
 )
 from services.academy_student_access import create_seat, ensure_academy_subscription, hash_invite_code, rotate_seat_code
-from services.ownership import current_owner_id
+from services.ownership import LOCAL_OWNER_ID, current_owner_id, current_owner_ids
 
 router = APIRouter(prefix="/api/student-management", tags=["student management"])
 CLASS_ORDER_METADATA_KEY = "student_management_class_order"
@@ -49,6 +49,24 @@ DEFAULT_COUNSELING_FIELDS = [
 
 def _academy_id(request: Request) -> str:
     return current_owner_id(request)
+
+
+def _student_management_academy_id(request: Request, db: Session) -> str:
+    owner_id = current_owner_id(request)
+    owner_ids = current_owner_ids(request, db)
+    if owner_id == LOCAL_OWNER_ID or LOCAL_OWNER_ID not in owner_ids:
+        return owner_id
+
+    current_count = db.scalar(select(func.count(AcademyClass.id)).where(AcademyClass.academy_id == owner_id)) or 0
+    current_count += db.scalar(select(func.count(StudentAcademyMembership.id)).where(StudentAcademyMembership.academy_id == owner_id)) or 0
+    current_count += db.scalar(select(func.count(PaperSession.id)).where(PaperSession.academy_id == owner_id)) or 0
+    if current_count:
+        return owner_id
+
+    legacy_count = db.scalar(select(func.count(AcademyClass.id)).where(AcademyClass.academy_id == LOCAL_OWNER_ID)) or 0
+    legacy_count += db.scalar(select(func.count(StudentAcademyMembership.id)).where(StudentAcademyMembership.academy_id == LOCAL_OWNER_ID)) or 0
+    legacy_count += db.scalar(select(func.count(PaperSession.id)).where(PaperSession.academy_id == LOCAL_OWNER_ID)) or 0
+    return LOCAL_OWNER_ID if legacy_count else owner_id
 
 
 def _now() -> datetime:
@@ -1049,7 +1067,7 @@ class ReviewSetPayload(BaseModel):
 
 @router.get("/dashboard")
 def dashboard(request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     classes = _ordered_classes(db, academy_id)
     sessions = db.scalars(
         select(PaperSession)
@@ -1084,14 +1102,14 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/classes")
 def list_classes(request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     rows = _ordered_classes(db, academy_id)
     return [_class_payload(db, academy_id, row, include_students=True) for row in rows]
 
 
 @router.post("/classes")
 def create_class(payload: ClassPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Class name is required.")
@@ -1113,7 +1131,7 @@ def create_class(payload: ClassPayload, request: Request, db: Session = Depends(
 
 @router.put("/classes/order")
 def update_class_order(payload: ClassOrderPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     requested_ids = _uuid_list(payload.class_ids)
     rows = db.scalars(select(AcademyClass).where(AcademyClass.academy_id == academy_id)).all()
     valid_ids = {str(row.id) for row in rows}
@@ -1130,7 +1148,7 @@ def update_class_order(payload: ClassOrderPayload, request: Request, db: Session
 
 @router.get("/classes/{class_id}")
 def get_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     row = _get_class(db, academy_id, class_id)
     sessions = db.scalars(
         select(PaperSession)
@@ -2015,7 +2033,7 @@ def create_review_set(payload: ReviewSetPayload, request: Request, db: Session =
 
 @router.get("/schedule-events")
 def list_schedule_events(request: Request, class_id: UUID | None = None, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     stmt = select(ClassScheduleEvent).where(ClassScheduleEvent.academy_id == academy_id)
     if class_id:
         _get_class(db, academy_id, class_id)
@@ -2026,7 +2044,7 @@ def list_schedule_events(request: Request, class_id: UUID | None = None, db: Ses
 
 @router.post("/schedule-events")
 def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     _get_class(db, academy_id, payload.class_id)
     if payload.linked_paper_session_id:
         _get_session(db, academy_id, payload.linked_paper_session_id)
@@ -2047,7 +2065,7 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
 
 @router.delete("/schedule-events/{event_id}", status_code=204)
 def delete_schedule_event(event_id: UUID, request: Request, db: Session = Depends(get_db)):
-    academy_id = _academy_id(request)
+    academy_id = _student_management_academy_id(request, db)
     row = db.get(ClassScheduleEvent, event_id)
     if not row or row.academy_id != academy_id:
         raise HTTPException(status_code=404, detail="Schedule event not found.")
