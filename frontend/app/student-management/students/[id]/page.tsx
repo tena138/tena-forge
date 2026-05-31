@@ -36,7 +36,7 @@ type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type AutosaveState = "pending" | "saving" | "saved" | "error";
 type FormatAutosaveState = "idle" | "pending" | "saving" | "saved" | "error";
 type CounselingDraftStatus = "idle" | "restored" | "saving" | "saved" | "error";
-type StudentTab = "calendar" | "wrong" | "counseling";
+type StudentTab = "calendar" | "results" | "wrong" | "counseling";
 type StudentCalendarItem = {
   id: string;
   event_id?: string;
@@ -598,9 +598,6 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     selectedCalendarItems.find((item) => item.result_id) ||
     selectedCalendarItems[0] ||
     null;
-  const selectedCalendarResult = selectedCalendarItem?.result_id
-    ? data?.paper_session_history.find((result) => result.id === selectedCalendarItem.result_id) || null
-    : null;
   const selectedTimelineItems = useMemo(() => layoutTimelineItems(selectedCalendarItems), [selectedCalendarItems]);
   const currentTimelineMinutes = useMemo(() => {
     const now = new Date();
@@ -1346,6 +1343,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
           {[
             { id: "calendar", label: "캘린더", icon: CalendarDays },
+            { id: "results", label: "결과 입력", icon: CheckSquare },
             { id: "wrong", label: "아카이브", icon: Archive },
             { id: "counseling", label: "학습 상담", icon: MessageSquareText },
           ].map((tab) => {
@@ -1580,45 +1578,68 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                     {item.description ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{item.description}</p> : null}
                   </div>
                 ))}
-                {selectedCalendarResult ? (
-                  <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold text-slate-500">결과 입력</p>
-                        <h3 className="mt-1 text-sm font-black text-white">{selectedCalendarResult.session?.title || selectedCalendarItem?.title || "시험/과제"}</h3>
-                      </div>
-                      <div className="text-right text-xs font-semibold text-slate-500">
-                        {autosaveStates[selectedCalendarResult.id] === "saving" ? "저장 중" : autosaveStates[selectedCalendarResult.id] === "saved" ? "자동 저장됨" : autosaveStates[selectedCalendarResult.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
-                      <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
-                      <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">주황: 오답</span>
-                      <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-8">
-                      {Array.from({ length: problemCount(selectedCalendarResult) }, (_, index) => {
-                        const number = index + 1;
-                        const statuses = resultStatuses[selectedCalendarResult.id] || buildStatuses(selectedCalendarResult);
-                        return (
-                          <ResultCell
-                            key={number}
-                            number={number}
-                            status={statuses[number] || "correct"}
-                            onClick={() => toggleResultProblem(selectedCalendarResult, number)}
-                          />
-                        );
-                      })}
-                    </div>
-                    <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(selectedCalendarResult)} disabled={savingResultId === selectedCalendarResult.id}>
-                      {savingResultId === selectedCalendarResult.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                      저장
-                    </Button>
-                  </div>
-                ) : selectedCalendarItem ? (
-                  <p className="rounded-lg border border-dashed border-white/10 p-3 text-sm text-slate-500">이 일정에는 아직 채점할 시험/과제 결과가 연결되어 있지 않습니다.</p>
-                ) : null}
                 {false && !selectedCalendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">선택한 날짜에 등록된 일정이 없습니다.</p> : null}
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
+
+        {activeTab === "results" ? (
+          <section className="space-y-4">
+            <Card className="border-white/[0.08] bg-white/[0.025]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <CheckSquare className="h-5 w-5" />
+                  결과 입력
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {data.paper_session_history.length ? (
+                  data.paper_session_history.map((result) => {
+                    const statuses = resultStatuses[result.id] || buildStatuses(result);
+                    const counts = statusCounts(statuses, problemCount(result));
+                    return (
+                      <div key={result.id} className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-slate-500">{shortDate(result.session?.scheduled_at || result.session?.due_at)}</p>
+                            <h3 className="mt-1 text-sm font-black text-white">{result.session?.title || "시험/과제"}</h3>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              {counts.correct} 정답 · {counts.wrong} 오답/못 풂
+                            </p>
+                          </div>
+                          <div className="text-left text-xs font-semibold text-slate-500 sm:text-right">
+                            {autosaveStates[result.id] === "saving" ? "저장 중" : autosaveStates[result.id] === "saved" ? "자동 저장됨" : autosaveStates[result.id] === "error" ? "저장 실패" : "클릭하면 자동 저장"}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                          <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
+                          <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">주황: 오답</span>
+                          <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-10 lg:grid-cols-12">
+                          {Array.from({ length: problemCount(result) }, (_, index) => {
+                            const number = index + 1;
+                            return (
+                              <ResultCell
+                                key={number}
+                                number={number}
+                                status={statuses[number] || "correct"}
+                                onClick={() => toggleResultProblem(result, number)}
+                              />
+                            );
+                          })}
+                        </div>
+                        <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(result)} disabled={savingResultId === result.id}>
+                          {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          저장
+                        </Button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">아직 결과를 입력할 시험/과제가 없습니다.</p>
+                )}
               </CardContent>
             </Card>
           </section>
