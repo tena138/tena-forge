@@ -206,7 +206,7 @@ export function resolveTemplateText(value: string, data = visualTemplateSampleDa
 }
 
 export function isRegionElement(element: TemplateElement): element is ContentRegionElement {
-  return element.type === "problemRegion" || element.type === "solutionRegion" || element.type === "answerRegion" || element.type === "contentRegion";
+  return element.type === "problemRegion" || element.type === "solutionRegion" || element.type === "answerRegion" || element.type === "contentRegion" || element.type === "counselingRegion";
 }
 
 export function estimateProblemHeight(problem: SampleProblem, region: ContentRegionElement) {

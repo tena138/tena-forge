@@ -156,7 +156,7 @@ def render_problems_with_hub_template(template: HubTemplate, problems: list[Prob
     return wrap_rendered_html(joined, template.css)
 
 
-REGION_TYPES = {"problemRegion", "solutionRegion", "answerRegion", "contentRegion"}
+REGION_TYPES = {"problemRegion", "solutionRegion", "answerRegion", "contentRegion", "counselingRegion"}
 VISUAL_DOUBLE_TOKEN_PATTERN = re.compile(r"\{\{\s*([^{}\n]+?)\s*\}\}")
 VISUAL_SINGLE_TOKEN_PATTERN = re.compile(r"(^|[^{])\{\s*([^{}\n]+?)\s*\}(?!\})")
 VISUAL_TOKEN_ALIASES = {
@@ -448,6 +448,8 @@ def _region_capacity(region: dict[str, Any], problem_data: list[dict[str, Any]])
 
 def _binding_key(region: dict[str, Any]) -> str:
     binding = region.get("binding")
+    if binding == "counseling" or region.get("type") == "counselingRegion":
+        return "counseling"
     if binding == "solutions" or region.get("type") == "solutionRegion":
         return "solutions"
     if binding == "answers" or region.get("type") == "answerRegion":
@@ -508,6 +510,22 @@ def _render_problem_card(problem: dict[str, Any], region: dict[str, Any], base_d
 </article>"""
 
 
+def _render_counseling_card(section: dict[str, Any], region: dict[str, Any], base_data: dict[str, Any]) -> str:
+    number_style = _style_to_css(region.get("numberStyle") if isinstance(region.get("numberStyle"), dict) else {})
+    body_style = _style_to_css(region.get("bodyStyle") if isinstance(region.get("bodyStyle"), dict) else {})
+    padding = max(10, _num(region.get("padding"), 12) * 0.75)
+    min_height = _num(region.get("minItemHeight"), 96)
+    fixed_slot = int(_num(region.get("rows"), 0)) > 0
+    slot_css = "height:100%;min-height:0;display:flex;flex-direction:column" if fixed_slot else f"min-height:{min_height:g}px"
+    label = escape(str(section.get("label") or "상담 항목"))
+    value = escape(str(section.get("value") or "-"))
+    return f"""
+<article class="counseling-card" style="{_card_style_css(region.get('cardStyle') if isinstance(region.get('cardStyle'), dict) else {})};{slot_css};padding:{padding:g}px">
+  <div class="problem-heading"><span class="problem-number" style="{number_style}">{label}</span></div>
+  <div class="problem-text counseling-value" style="{body_style};white-space:pre-wrap">{value}</div>
+</article>"""
+
+
 def _render_region(element: dict[str, Any], items: list[dict[str, Any]], base_data: dict[str, Any]) -> str:
     columns = max(1, int(_num(element.get("columns"), 1)))
     rows = max(0, int(_num(element.get("rows"), 0)))
@@ -516,7 +534,10 @@ def _render_region(element: dict[str, Any], items: list[dict[str, Any]], base_da
     padding = _css_px(element.get("padding"), 12)
     row_template = f"grid-template-rows:repeat({rows}, minmax(0, 1fr));" if rows else ""
     grid_flow = "column" if rows and element.get("fillDirection") == "column-first" else "row"
-    cards = "\n".join(_render_problem_card(problem, element, base_data) for problem in items)
+    if element.get("type") == "counselingRegion" or _binding_key(element) == "counseling":
+        cards = "\n".join(_render_counseling_card(section, element, base_data) for section in items)
+    else:
+        cards = "\n".join(_render_problem_card(problem, element, base_data) for problem in items)
     dividers = _render_column_dividers(element, columns)
     return f"""
 <div class="dynamic-region" style="position:relative;display:grid;grid-template-columns:repeat({columns}, minmax(0, 1fr));{row_template}grid-auto-flow:{grid_flow};gap:{row_gap} {column_gap};padding:{padding};height:100%;box-sizing:border-box;align-content:{'stretch' if rows else 'start'};align-items:{'stretch' if rows else 'start'};overflow:hidden">
@@ -835,10 +856,16 @@ def _consume_region(region: dict[str, Any], remaining: dict[str, list[dict[str, 
 def build_visual_template_export_pages(template_set: dict[str, Any], problems: list[Problem], base_data: dict[str, Any]) -> list[dict[str, Any]]:
     total = max(1, len(problems))
     problem_data = [_problem_export_data(problem, index, total, base_data) for index, problem in enumerate(problems, start=1)]
+    counseling_data = [
+        item
+        for item in (base_data.get("counseling_sections") if isinstance(base_data.get("counseling_sections"), list) else [])
+        if isinstance(item, dict)
+    ]
     remaining = {
         "problems": list(problem_data),
         "solutions": list(problem_data) if base_data.get("include_solution") else [],
         "answers": list(problem_data),
+        "counseling": list(counseling_data),
     }
     rendered_pages: list[tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]] = []
 
@@ -849,7 +876,7 @@ def build_visual_template_export_pages(template_set: dict[str, Any], problems: l
             _consume_region(region, remaining, placements)
         rendered_pages.append((page, placements))
 
-    for role, key in (("problem", "problems"), ("solution", "solutions"), ("answer", "answers")):
+    for role, key in (("problem", "problems"), ("solution", "solutions"), ("answer", "answers"), ("report", "counseling")):
         safety = 0
         while remaining.get(key) and safety < 80:
             page = _choose_template_page(template_set, role)
@@ -862,6 +889,50 @@ def build_visual_template_export_pages(template_set: dict[str, Any], problems: l
             if not consumed:
                 break
             rendered_pages.append((page, placements))
+            safety += 1
+
+    if remaining.get("counseling"):
+        base_page = _choose_template_page(template_set, "report") or (pages[0] if pages else None)
+        size = _page_size(base_page or {}, template_set)
+        fallback_region = {
+            "id": "__auto_counseling_region__",
+            "type": "counselingRegion",
+            "binding": "counseling",
+            "x": 56,
+            "y": 120,
+            "width": max(240, _num(size.get("width"), 794) - 112),
+            "height": max(360, _num(size.get("height"), 1123) - 190),
+            "columns": 1,
+            "rows": 6,
+            "columnGap": 14,
+            "rowGap": 12,
+            "padding": 12,
+            "minItemHeight": 96,
+            "numberFormat": "{n}",
+            "columnDividerStyle": {"stroke": "#d8dee9", "strokeWidth": 0, "borderStyle": "none"},
+            "style": {"fill": "#ffffff", "stroke": "#c4b5fd", "strokeWidth": 1, "borderStyle": "dashed", "radius": 10},
+            "cardStyle": {"fill": "#ffffff", "stroke": "#e5e7eb", "strokeWidth": 1, "borderStyle": "solid", "radius": 10},
+            "numberStyle": {"color": "#4c1d95", "fontSize": 12, "fontWeight": "bold"},
+            "bodyStyle": {"color": "#111827", "fontSize": 12, "lineHeight": 1.65},
+            "answerSpaceStyle": {"fill": "#ffffff", "stroke": "#cbd5e1", "strokeWidth": 1, "borderStyle": "dashed", "radius": 8},
+        }
+        if base_page:
+            fallback_page = {**base_page, "elements": [*base_page.get("elements", []), fallback_region]}
+        else:
+            fallback_page = {
+                "id": "__auto_counseling_page__",
+                "name": "Counseling Page",
+                "role": "report",
+                "pageSize": size,
+                "background": {"color": "#ffffff"},
+                "elements": [fallback_region],
+            }
+        safety = 0
+        while remaining.get("counseling") and safety < 80:
+            placements: dict[str, list[dict[str, Any]]] = {}
+            if not _consume_region(fallback_region, remaining, placements):
+                break
+            rendered_pages.append((fallback_page, placements))
             safety += 1
 
     if remaining.get("problems"):
@@ -1119,6 +1190,13 @@ def render_hub_template_for_export(template: HubTemplate, problems: list[Problem
     if visual:
         return _render_visual_template_document(visual, problems, base_data)
     return render_problems_with_hub_template(template, problems, base_data)
+
+
+def render_hub_template_for_context(template: HubTemplate, base_data: dict[str, Any]) -> str:
+    visual = _visual_schema(template)
+    if visual:
+        return _render_visual_template_document(visual, [], base_data)
+    return render_template_document(template, base_data)
 
 
 def safe_preview_text(value: Any) -> str:

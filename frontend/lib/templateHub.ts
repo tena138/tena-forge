@@ -8,6 +8,7 @@ export type TemplateCategory =
   | "wrong_answer_note"
   | "solution_book"
   | "concept_note"
+  | "counseling_log"
   | "unit_test"
   | "cover";
 

@@ -3,9 +3,11 @@ import re
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
@@ -19,6 +21,7 @@ from models import (
     ClassScheduleEvent,
     ClassStudent,
     ContentVersion,
+    HubTemplate,
     PaperSession,
     PaperSessionResult,
     Problem,
@@ -29,8 +32,10 @@ from models import (
     StudentAcademyMembership,
     WrongAnswerRecord,
 )
+from services.export_service import generate_hub_context_pdf
 from services.academy_student_access import create_seat, ensure_academy_subscription, hash_invite_code, rotate_seat_code
 from services.ownership import LOCAL_OWNER_ID, current_owner_id, current_owner_ids
+from services.template_renderer import render_hub_template_for_context
 
 router = APIRouter(prefix="/api/student-management", tags=["student management"])
 CLASS_ORDER_METADATA_KEY = "student_management_class_order"
@@ -1012,6 +1017,12 @@ class CounselingLogPayload(BaseModel):
     sections: list[CounselingLogSectionPayload] = []
 
 
+class CounselingExportPayload(BaseModel):
+    log_ids: list[str] = []
+    hub_template_id: UUID
+    title: str | None = Field(default=None, max_length=255)
+
+
 def _resolve_counseling_class(db: Session, academy_id: str, membership: StudentAcademyMembership, class_id: UUID | None) -> AcademyClass | None:
     if not class_id:
         return None
@@ -1521,6 +1532,110 @@ def delete_counseling_log(student_id: UUID, log_id: str, request: Request, db: S
     membership.metadata_json = metadata
     db.commit()
     return Response(status_code=204)
+
+
+def _safe_export_filename(value: str) -> str:
+    return re.sub(r"[\\/:*?\"<>|]+", "_", value).strip() or "counseling-log"
+
+
+def _short_export_date(value: str | None) -> str:
+    if not value:
+        return ""
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).strftime("%Y.%m.%d")
+    except ValueError:
+        return str(value)[:10]
+
+
+def _counseling_export_sections(logs: list[dict]) -> list[dict]:
+    sections: list[dict] = []
+    multiple = len(logs) > 1
+    for log_index, log in enumerate(logs, start=1):
+        title = str(log.get("title") or "학습 상담")
+        date = _short_export_date(str(log.get("counseling_date") or ""))
+        if multiple:
+            sections.append({"label": f"{log_index}. {date} {title}".strip(), "value": str(log.get("class_name") or "")})
+        raw_sections = _normalize_counseling_sections(log.get("sections") if isinstance(log.get("sections"), list) else None)
+        if not raw_sections:
+            raw_sections = [
+                {"field_id": "notes", "label": "상담 내용", "value": str(log.get("notes") or ""), "include_in_report": True},
+                {"field_id": "weekly_report", "label": "주간 리포트", "value": str(log.get("weekly_report") or ""), "include_in_report": False},
+                {"field_id": "next_plan", "label": "다음 지도 계획", "value": str(log.get("next_plan") or ""), "include_in_report": True},
+            ]
+        sections.extend([section for section in raw_sections if str(section.get("value") or "").strip()])
+    return sections
+
+
+def _counseling_export_values(membership: StudentAcademyMembership, logs: list[dict], title: str) -> dict:
+    first = logs[0]
+    sections = _counseling_export_sections(logs)
+    values = {
+        "exam_title": title,
+        "test_title": title,
+        "counseling_title": str(first.get("title") or title),
+        "counseling_date": _short_export_date(str(first.get("counseling_date") or "")),
+        "date": str(first.get("counseling_date") or "")[:10],
+        "student_name": _student_name(membership),
+        "class_name": str(first.get("class_name") or ""),
+        "counseling_notes": str(first.get("notes") or ""),
+        "counseling_weekly_report": str(first.get("weekly_report") or ""),
+        "counseling_next_plan": str(first.get("next_plan") or ""),
+        "counseling_sections": sections,
+        "printed_at": datetime.now().strftime("%Y.%m.%d %H:%M"),
+        "include_solution": False,
+    }
+    for section in _normalize_counseling_sections(first.get("sections") if isinstance(first.get("sections"), list) else None):
+        key = str(section.get("field_id") or "").strip()
+        if key:
+            values[f"counseling_{key}"] = str(section.get("value") or "")
+    return values
+
+
+@router.post("/students/{student_id}/counseling-logs/export")
+def export_counseling_logs(student_id: UUID, payload: CounselingExportPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    membership = _get_membership(db, academy_id, student_id)
+    logs = _counseling_logs(membership)
+    if payload.log_ids:
+        selected_ids = {str(item) for item in payload.log_ids}
+        selected_logs = [row for row in logs if str(row.get("id")) in selected_ids]
+        missing = selected_ids - {str(row.get("id")) for row in selected_logs}
+        if missing:
+            raise HTTPException(status_code=404, detail="Counseling log not found.")
+    else:
+        selected_logs = logs
+    if not selected_logs:
+        raise HTTPException(status_code=400, detail="No counseling logs selected.")
+
+    template = db.get(HubTemplate, payload.hub_template_id)
+    owner_id = current_owner_id(request)
+    if not template or (template.visibility == "private" and template.owner_id != owner_id):
+        raise HTTPException(status_code=404, detail="Counseling template not found.")
+    if template.category != "counseling_log":
+        raise HTTPException(status_code=400, detail="상담일지 템플릿만 선택할 수 있습니다.")
+
+    title = (payload.title or selected_logs[0].get("title") or "상담일지").strip()
+    values = _counseling_export_values(membership, selected_logs, title)
+    template.use_count += 1
+    db.commit()
+
+    filename = f"{_safe_export_filename(_student_name(membership))}_{_safe_export_filename(title)}"
+    encoded_pdf = quote(f"{filename}.pdf", safe="")
+    if isinstance(template.schema_json, dict) and isinstance(template.schema_json.get("visualTemplateSet"), dict):
+        buffer = generate_hub_context_pdf(template, values)
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=counseling.pdf; filename*=UTF-8''{encoded_pdf}"},
+        )
+
+    html = render_hub_template_for_context(template, values)
+    encoded_html = quote(f"{filename}.html", safe="")
+    return StreamingResponse(
+        iter([html.encode("utf-8")]),
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=counseling.html; filename*=UTF-8''{encoded_html}"},
+    )
 
 
 @router.patch("/students/{student_id}")

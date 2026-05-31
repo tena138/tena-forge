@@ -26,7 +26,7 @@ from reportlab.platypus import HRFlowable, Image, PageBreak, Paragraph, SimpleDo
 from database import get_settings
 from models import ExamTemplate, HubTemplate, Problem
 from services.math_normalization import normalize_geometry_notation
-from services.template_renderer import build_visual_template_export_pages, render_hub_template_for_export
+from services.template_renderer import build_visual_template_export_pages, render_hub_template_for_context, render_hub_template_for_export
 
 FONT_NAME = "Helvetica"
 MIKTEX_BIN = Path.home() / "AppData" / "Local" / "Programs" / "MiKTeX" / "miktex" / "bin" / "x64"
@@ -1416,6 +1416,14 @@ def generate_hub_template_pdf(template: HubTemplate, problems: list[Problem], ex
     if not visual:
         raise ValueError("Hub template does not contain a visual template set.")
     html_doc = render_hub_template_for_export(template, problems, export_values)
+    return _render_html_pdf_with_chrome(html_doc)
+
+
+def generate_hub_context_pdf(template: HubTemplate, export_values: dict) -> BytesIO:
+    visual = _hub_visual_schema(template)
+    if not visual:
+        raise ValueError("Hub template does not contain a visual template set.")
+    html_doc = render_hub_template_for_context(template, export_values)
     return _render_html_pdf_with_chrome(html_doc)
 
 

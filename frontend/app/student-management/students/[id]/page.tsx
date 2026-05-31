@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronLeft, ChevronRight, Download, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
+import { CounselingExportModal } from "@/components/counseling-export-modal";
 import { ExportModal } from "@/components/export-modal";
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -496,6 +497,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   const [selectedWrongAnswerIds, setSelectedWrongAnswerIds] = useState<string[]>([]);
   const [wrongArchiveAddModalOpen, setWrongArchiveAddModalOpen] = useState(false);
   const [wrongArchiveExportOpen, setWrongArchiveExportOpen] = useState(false);
+  const [counselingExportOpen, setCounselingExportOpen] = useState(false);
+  const [counselingExportLogIds, setCounselingExportLogIds] = useState<string[]>([]);
   const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const calendarInitializedRef = useRef(false);
   const [message, setMessage] = useState("");
@@ -2019,9 +2022,9 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-white">상담 기록</CardTitle>
-                  <Button size="sm" variant="outline" onClick={exportCounselingLogs} disabled={!data.counseling_logs.length}>
+                  <Button size="sm" variant="outline" onClick={() => { setCounselingExportLogIds([]); setCounselingExportOpen(true); }} disabled={!data.counseling_logs.length}>
                     <Download className="h-4 w-4" />
-                    Export
+                    내보내기
                   </Button>
                 </div>
               </CardHeader>
@@ -2035,6 +2038,10 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                         {log.class_name ? <p className="mt-1 text-xs text-slate-500">{log.class_name}</p> : null}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => { setCounselingExportLogIds([log.id]); setCounselingExportOpen(true); }}>
+                          <Download className="h-3.5 w-3.5" />
+                          내보내기
+                        </Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => startEditingCounselingLog(log)}>
                           <Pencil className="h-3.5 w-3.5" />
                           편집
@@ -2084,6 +2091,14 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         problemIds={selectedWrongProblemIds}
         count={selectedWrongProblemIds.length}
         onExported={() => setSelectedWrongAnswerIds([])}
+      />
+      <CounselingExportModal
+        open={counselingExportOpen}
+        onOpenChange={setCounselingExportOpen}
+        studentId={data.id}
+        studentName={data.name}
+        logs={data.counseling_logs}
+        initialLogIds={counselingExportLogIds}
       />
     </main>
   );

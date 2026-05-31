@@ -1,4 +1,4 @@
-export type TemplateCategory = "exam" | "textbook" | "solution" | "worksheet" | "answerSheet" | "report" | "custom";
+export type TemplateCategory = "exam" | "textbook" | "solution" | "worksheet" | "answerSheet" | "report" | "counseling" | "custom";
 export type TemplateVisibility = "private" | "academy" | "public" | "marketplace";
 
 export type PageRole =
@@ -106,6 +106,11 @@ export type TemplateVariableKey =
   | "exam_stats_q2"
   | "exam_stats_q3"
   | "exam_stats_standard_deviation"
+  | "counseling_title"
+  | "counseling_date"
+  | "counseling_notes"
+  | "counseling_weekly_report"
+  | "counseling_next_plan"
   | "qr_code";
 
 export type TextElement = ElementBase & { type: "text"; text: string };
@@ -140,11 +145,11 @@ export type ExamStatsChartElement = ElementBase & {
   yAxisMax: number;
 };
 
-export type RegionBinding = "problems" | "solutions" | "answers" | "passages" | "generic";
+export type RegionBinding = "problems" | "solutions" | "answers" | "passages" | "generic" | "counseling";
 export type RegionOverflowStrategy = "create-next-page" | "clip" | "warn";
 
 export type ContentRegionElement = ElementBase & {
-  type: "problemRegion" | "solutionRegion" | "answerRegion" | "contentRegion";
+  type: "problemRegion" | "solutionRegion" | "answerRegion" | "contentRegion" | "counselingRegion";
   binding: RegionBinding;
   columns: number;
   rows?: number;
@@ -199,6 +204,7 @@ export type TemplateElementType =
   | "solutionRegion"
   | "answerRegion"
   | "contentRegion"
+  | "counselingRegion"
   | "qr"
   | "watermark"
   | "examStatsChart"

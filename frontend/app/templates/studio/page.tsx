@@ -26,6 +26,7 @@ import {
   Layers,
   LineChart,
   Lock,
+  MessageSquareText,
   PanelBottom,
   PanelTop,
   Plus,
@@ -72,6 +73,7 @@ const panelTabs: Array<{ key: StudioPanel; label: string; icon: typeof Type }> =
 ];
 
 const elementPalette: Array<{ type: TemplateElementType; label: string; description: string; group: PaletteGroup; icon: typeof Type }> = [
+  { type: "counselingRegion", label: "상담 항목 영역", description: "상담 항목 자동 배치", group: "?숈쟻 ?곸뿭" as PaletteGroup, icon: MessageSquareText },
   { type: "text", label: "텍스트", description: "자유 텍스트 박스", group: "기본 요소", icon: Type },
   { type: "richText", label: "리치 텍스트", description: "강조와 줄바꿈 텍스트", group: "기본 요소", icon: FileText },
   { type: "image", label: "이미지", description: "로고, 표지, 사진", group: "기본 요소", icon: ImageIcon },
@@ -146,6 +148,7 @@ function mapToHubCategory(category: TemplateCategory): HubTemplateCategory {
   if (category === "solution") return "solution_book";
   if (category === "answerSheet") return "worksheet";
   if (category === "report") return "concept_note";
+  if (category === "counseling") return "counseling_log";
   if (category === "custom") return "exam";
   return category;
 }
@@ -562,7 +565,7 @@ function RegionDividerControls({ style, onChange }: { style?: ElementStyle; onCh
   );
 }
 
-function RegionNumberControls({ region, onChange }: { region: Extract<TemplateElement, { type: "problemRegion" | "solutionRegion" | "answerRegion" | "contentRegion" }>; onChange: (patch: Partial<typeof region>) => void }) {
+function RegionNumberControls({ region, onChange }: { region: Extract<TemplateElement, { type: "problemRegion" | "solutionRegion" | "answerRegion" | "contentRegion" | "counselingRegion" }>; onChange: (patch: Partial<typeof region>) => void }) {
   const currentFormat = region.numberFormat || "문 {n}.";
   const selectedPreset = numberFormatOptions.some((option) => option.value === currentFormat) ? currentFormat : "custom";
   return (

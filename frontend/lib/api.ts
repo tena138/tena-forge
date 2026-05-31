@@ -309,6 +309,34 @@ export async function downloadExport(payload: {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadCounselingExport(payload: {
+  student_id: string;
+  log_ids: string[];
+  hub_template_id: string;
+  title?: string | null;
+}) {
+  const response = await authHttp.post(`/api/student-management/students/${payload.student_id}/counseling-logs/export`, {
+    log_ids: payload.log_ids,
+    hub_template_id: payload.hub_template_id,
+    title: payload.title || null,
+  }, { responseType: "blob" });
+  const blob = response.data as Blob;
+  const disposition = response.headers["content-disposition"] || "";
+  const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+  const fallbackMatch = disposition.match(/filename="?([^";]+)"?/);
+  const filename = encodedMatch
+    ? decodeURIComponent(encodedMatch[1])
+    : fallbackMatch?.[1] || `${payload.title || "counseling-log"}.pdf`;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await authHttp.request<T>({
     url: path,

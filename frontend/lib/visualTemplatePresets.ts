@@ -16,6 +16,7 @@ import {
 const now = () => new Date().toISOString();
 
 export const visualTemplateCategories: Array<{ value: TemplateCategory; label: string; description: string }> = [
+  { value: "counseling", label: "상담일지", description: "상담 항목과 학습 계획 자동 삽입" },
   { value: "exam", label: "시험지", description: "문항 영역과 답안 공간 중심" },
   { value: "textbook", label: "교재", description: "표지와 좌우 내지 페이지" },
   { value: "solution", label: "해설지", description: "문항별 해설과 정답 중심" },
@@ -26,6 +27,11 @@ export const visualTemplateCategories: Array<{ value: TemplateCategory; label: s
 ];
 
 export const variableOptions: Array<{ key: TemplateVariableKey; label: string; group: string }> = [
+  { key: "counseling_title", label: "상담 제목", group: "상담" },
+  { key: "counseling_date", label: "상담 일자", group: "상담" },
+  { key: "counseling_notes", label: "상담 내용", group: "상담" },
+  { key: "counseling_weekly_report", label: "주간 리포트", group: "상담" },
+  { key: "counseling_next_plan", label: "다음 계획", group: "상담" },
   { key: "test_title", label: "시험명", group: "문서" },
   { key: "book_title", label: "교재명", group: "문서" },
   { key: "subject", label: "과목", group: "문서" },
@@ -182,6 +188,24 @@ export function createAnswerRegion(x = 64, y = 200, width = 666, height = 360): 
   };
 }
 
+export function createCounselingRegion(x = 64, y = 170, width = 666, height = 760): ContentRegionElement {
+  return {
+    ...createProblemRegion(x, y, width, height, 1, 6),
+    id: nanoid(),
+    type: "counselingRegion",
+    name: "상담 항목 영역",
+    binding: "counseling",
+    nextPageRolePreference: "report",
+    minItemHeight: 96,
+    maxItemHeight: 240,
+    numberFormat: "{n}",
+    style: { fill: "#ffffff", stroke: "#a78bfa", strokeWidth: 1, borderStyle: "dashed", radius: 10 },
+    cardStyle: { fill: "#ffffff", stroke: "#e5e7eb", strokeWidth: 1, borderStyle: "solid", radius: 10 },
+    numberStyle: { color: "#5b21b6", fontWeight: "bold", fontSize: 12 },
+    bodyStyle: { color: "#111827", fontSize: 12, lineHeight: 1.7 },
+  };
+}
+
 export function createExamStatsChart(x = 64, y = 180, width = 666, height = 320): ExamStatsChartElement {
   return baseElement("examStatsChart", "시험 통계 차트", x, y, width, height, {
     title: "시험 통계",
@@ -246,6 +270,7 @@ export function createElement(type: TemplateElementType, x = 120, y = 140): Temp
   if (type === "problemRegion") return createProblemRegion(x, y);
   if (type === "solutionRegion") return createSolutionRegion(x, y);
   if (type === "answerRegion") return createAnswerRegion(x, y);
+  if (type === "counselingRegion") return createCounselingRegion(x, y);
   if (type === "examStatsChart") return createExamStatsChart(x, y);
   if (type === "contentRegion") {
     return {
@@ -326,6 +351,17 @@ export function createTemplateSet(category: TemplateCategory): TemplateSet {
         createVariable("student_name", "학생명", 64, 130),
         createExamStatsChart(64, 205, 666, 310),
         createElement("contentRegion", 64, 565),
+      ]),
+    ];
+  } else if (category === "counseling") {
+    baseSet.pages = [
+      createPage("상담일지", "report", [
+        createText("{{counseling_title}}", 64, 62, 420, 48, 28),
+        createVariable("student_name", "학생명", 510, 64),
+        createVariable("counseling_date", "상담일", 510, 104),
+        createElement("line", 64, 136),
+        createCounselingRegion(64, 170, 666, 820),
+        createElement("pageNumber", 337, 1054),
       ]),
     ];
   } else if (category === "custom") {

@@ -393,8 +393,39 @@ function ProblemCard({ problem, region }: { problem: SampleProblem; region: Cont
   );
 }
 
+const sampleCounselingSections = [
+  { id: "notes", label: "개선 포인트", value: "최근 풀이 과정에서 계산 실수를 줄이는 연습이 필요합니다." },
+  { id: "weekly_report", label: "다음주 관리 계획", value: "수2 복습 문항을 풀고 오답 문항은 다시 설명하도록 합니다." },
+  { id: "next_plan", label: "과제", value: "미친개념 수2 복습 문항 1회독" },
+];
+
+function CounselingCard({ section, region }: { section: { id: string; label: string; value: string }; region: ContentRegionElement }) {
+  const fixedSlot = Boolean(region.rows && region.rows > 0);
+  return (
+    <div
+      className="overflow-hidden"
+      style={{
+        height: fixedSlot ? "100%" : undefined,
+        minHeight: fixedSlot ? 0 : region.minItemHeight,
+        display: fixedSlot ? "flex" : undefined,
+        flexDirection: fixedSlot ? "column" : undefined,
+        ...boxStyle(region.cardStyle, { fill: "#ffffff", stroke: "#e5e7eb", strokeWidth: 1, borderStyle: "solid", radius: 10 }),
+        padding: Math.max(10, region.padding * 0.75),
+      }}
+    >
+      <div className="mb-2" style={{ color: region.numberStyle.color, fontSize: region.numberStyle.fontSize, fontWeight: fontWeight(region.numberStyle.fontWeight || "bold") }}>
+        {section.label}
+      </div>
+      <div className="whitespace-pre-wrap" style={{ color: region.bodyStyle.color, fontSize: region.bodyStyle.fontSize, lineHeight: region.bodyStyle.lineHeight }}>
+        {section.value}
+      </div>
+    </div>
+  );
+}
+
 function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = [], showChrome = false) {
-  const label = region.binding === "problems" ? "Problem Region" : region.binding === "solutions" ? "Solution Region" : region.binding === "answers" ? "Answer Region" : "Content Region";
+  const isCounseling = region.type === "counselingRegion" || region.binding === "counseling";
+  const label = isCounseling ? "Counseling Region" : region.binding === "problems" ? "Problem Region" : region.binding === "solutions" ? "Solution Region" : region.binding === "answers" ? "Answer Region" : "Content Region";
   const rowCount = region.rows ? Math.max(1, region.rows) : 0;
   const dividerStyle = columnDividerLineStyle(region);
   const dividers = dividerStyle
