@@ -310,6 +310,7 @@ export function createPaperSession(payload: {
   title: string;
   description?: string;
   source_problem_set_id?: string | null;
+  source_batch_id?: string | null;
   problem_ids?: string[];
   session_type: string;
   target_type?: string | null;

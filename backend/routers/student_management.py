@@ -15,6 +15,7 @@ from models import (
     AcademyClass,
     AcademySeat,
     AcademyStudentSubscription,
+    Batch,
     ClassScheduleEvent,
     ClassStudent,
     ContentVersion,
@@ -588,6 +589,41 @@ def _problem_selection_snapshot(
     return version
 
 
+def _batch_snapshot(db: Session, owner_id: str, academy_id: str, batch_id: UUID, created_by: str | None) -> ContentVersion:
+    batch = db.scalar(select(Batch).where(Batch.id == batch_id, Batch.owner_id == owner_id))
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    problems = list(
+        db.scalars(
+            select(Problem)
+            .where(Problem.source_batch_id == batch.id, Problem.owner_id == owner_id, Problem.deleted_at.is_(None))
+            .options(joinedload(Problem.tags))
+            .order_by(Problem.problem_number, Problem.created_at)
+        ).all()
+    )
+    if not problems:
+        raise HTTPException(status_code=400, detail="PaperSession requires at least one problem.")
+    rows = _snapshot_problem_rows(problems)
+    version = ContentVersion(
+        academy_id=academy_id,
+        source_type="paper_session_batch",
+        source_id=str(batch.id),
+        title=batch.name,
+        version_label=f"paper-session-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+        snapshot={
+            "source_type": "batch",
+            "batch_id": str(batch.id),
+            "title": batch.name,
+            "problem_count": len(rows),
+            "problems": rows,
+        },
+        created_by=created_by,
+    )
+    db.add(version)
+    db.flush()
+    return version
+
+
 def _session_problems(session: PaperSession) -> list[dict]:
     snapshot = session.content_version.snapshot if session.content_version else {}
     return list((snapshot or {}).get("problems") or [])
@@ -886,6 +922,7 @@ class PaperSessionPayload(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     source_problem_set_id: UUID | None = None
+    source_batch_id: UUID | None = None
     problem_ids: list[UUID] = []
     session_type: str = "test"
     target_type: str | None = None
@@ -1501,10 +1538,12 @@ def create_paper_session(payload: PaperSessionPayload, request: Request, db: Ses
     owner_id = current_owner_id(request)
     if payload.source_problem_set_id:
         version = _problem_set_snapshot(db, owner_id, academy_id, payload.source_problem_set_id, owner_id)
+    elif payload.source_batch_id:
+        version = _batch_snapshot(db, owner_id, academy_id, payload.source_batch_id, owner_id)
     elif payload.problem_ids:
         version = _problem_selection_snapshot(db, owner_id, academy_id, payload.problem_ids, payload.title.strip(), owner_id)
     else:
-        raise HTTPException(status_code=400, detail="Select a problem set or at least one problem.")
+        raise HTTPException(status_code=400, detail="Select a problem set, batch, or at least one problem.")
     targets = _target_memberships(db, academy_id, payload.class_ids, payload.student_membership_ids)
     if not targets:
         raise HTTPException(status_code=400, detail="Select at least one class or student with active students.")
@@ -1521,6 +1560,7 @@ def create_paper_session(payload: PaperSessionPayload, request: Request, db: Ses
         title=payload.title.strip(),
         description=payload.description,
         source_problem_set_id=payload.source_problem_set_id,
+        source_archive_id=str(payload.source_batch_id) if payload.source_batch_id else None,
         content_version_id=version.id,
         content_version=version,
         session_type=payload.session_type,

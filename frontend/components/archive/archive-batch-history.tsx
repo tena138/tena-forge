@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, Batch } from "@/lib/api";
 import { rememberActiveBatch } from "@/lib/batch-progress";
+import { ClassCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 function fileName(path: string | null) {
@@ -24,6 +25,11 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function localDateTimeInputValue(value = new Date()) {
+  const pad = (number: number) => String(number).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
 function statusLabel(status: Batch["status"]) {
@@ -124,6 +130,14 @@ export function ArchiveBatchHistory({
   const [batches, setBatches] = useState<Batch[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [assignBatch, setAssignBatch] = useState<Batch | null>(null);
+  const [classes, setClasses] = useState<ClassCard[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [scheduledAt, setScheduledAt] = useState(() => localDateTimeInputValue());
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState("");
+  const [assignNotice, setAssignNotice] = useState("");
 
   const fetchActiveBatch = useCallback(async () => {
     if (!activeBatchId) return null;
@@ -157,6 +171,12 @@ export function ArchiveBatchHistory({
   useEffect(() => {
     void loadBatches();
   }, [loadBatches, refreshKey]);
+
+  useEffect(() => {
+    getStudentManagementDashboard()
+      .then((dashboard) => setClasses(dashboard.classes || []))
+      .catch(() => setClasses([]));
+  }, []);
 
   useEffect(() => {
     if (!batches.some((batch) => batch.status === "pending" || batch.status === "processing")) return;
@@ -222,6 +242,52 @@ export function ArchiveBatchHistory({
     }
   }
 
+  function openAssignModal(batch: Batch) {
+    setAssignBatch(batch);
+    setAssignError("");
+    setAssignNotice("");
+    setSelectedClassIds([]);
+    setSelectedStudentIds([]);
+    setScheduledAt(localDateTimeInputValue());
+  }
+
+  function toggleClass(classId: string) {
+    setSelectedClassIds((current) => (current.includes(classId) ? current.filter((id) => id !== classId) : [...current, classId]));
+  }
+
+  function toggleStudent(studentId: string) {
+    setSelectedStudentIds((current) => (current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]));
+  }
+
+  async function assignSelectedBatch() {
+    if (!assignBatch || assigning) return;
+    if (!selectedClassIds.length && !selectedStudentIds.length) {
+      setAssignError("할당할 클래스 또는 학생을 선택해주세요.");
+      return;
+    }
+    setAssigning(true);
+    setAssignError("");
+    try {
+      await createPaperSession({
+        title: assignBatch.name,
+        description: "교재 배치 할당: 학생별 오답 및 복습 관리를 위해 생성되었습니다.",
+        source_batch_id: assignBatch.id,
+        session_type: "homework",
+        class_ids: selectedClassIds,
+        student_membership_ids: selectedStudentIds,
+        scheduled_at: scheduledAt ? `${scheduledAt}:00` : null,
+        status: "scheduled",
+        create_calendar_events: true,
+      });
+      setAssignNotice("클래스/학생에게 할당했습니다. 학생 캘린더에서 문항별 결과 입력이 가능합니다.");
+      setAssignBatch(null);
+    } catch {
+      setAssignError("배치를 할당하지 못했습니다. 선택한 학생과 배치 문항을 확인해주세요.");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
   return (
     <section className={cn("space-y-4", compact && "pt-1")}>
       {!compact ? (
@@ -236,6 +302,12 @@ export function ArchiveBatchHistory({
       {loadError ? (
         <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">
           {loadError}
+        </div>
+      ) : null}
+
+      {assignNotice ? (
+        <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-4 text-sm text-emerald-100">
+          {assignNotice}
         </div>
       ) : null}
 
@@ -273,10 +345,10 @@ export function ArchiveBatchHistory({
                     variant="outline"
                     size="sm"
                     disabled={batch.status !== "done" || !batch.problem_count}
-                    onClick={() => router.push(`/academy?panel=classes&source_type=archive&source_id=${batch.id}`)}
+                    onClick={() => openAssignModal(batch)}
                   >
                     <BookOpenCheck className="h-4 w-4" />
-                    학생에게 할당
+                    클래스/학생에게 할당
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => router.push(`/problems?batch_id=${batch.id}`)}>
                     <Eye className="h-4 w-4" />
@@ -336,6 +408,87 @@ export function ArchiveBatchHistory({
           아직 아카이빙 기록이 없습니다.
           <div className="mt-4">
             <Button onClick={() => router.push("/archive/new")}>자료 아카이빙 시작</Button>
+          </div>
+        </div>
+      ) : null}
+      {assignBatch ? (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl overflow-hidden rounded-[14px] border border-white/10 bg-[#12111a] shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Batch Assignment</p>
+                <h2 className="mt-1 text-xl font-black text-white">클래스/학생에게 할당</h2>
+                <p className="mt-1 text-sm text-slate-400">{assignBatch.name} · {assignBatch.problem_count}문항</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssignBatch(null)}
+                className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-slate-400 transition hover:bg-white/[0.06] hover:text-white"
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-5">
+              <label className="block text-sm font-bold text-slate-300">
+                할당 날짜
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(event) => setScheduledAt(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none focus:border-violet-300/50"
+                />
+              </label>
+
+              <div className="mt-5 space-y-3">
+                {classes.map((classRow) => (
+                  <div key={classRow.id} className="rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
+                    <label className="flex cursor-pointer items-center justify-between gap-3">
+                      <span>
+                        <span className="block font-bold text-white">{classRow.name}</span>
+                        <span className="mt-0.5 block text-xs text-slate-500">{classRow.students.length}명</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={selectedClassIds.includes(classRow.id)}
+                        onChange={() => toggleClass(classRow.id)}
+                        className="h-5 w-5 accent-violet-500"
+                      />
+                    </label>
+                    {classRow.students.length ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {classRow.students.map((student) => (
+                          <label key={student.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 px-3 py-2">
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-semibold text-slate-100">{student.name}</span>
+                              <span className="mt-0.5 block truncate text-xs text-slate-500">{student.grade_level || "-"} · 오답 {student.unresolved_wrong_count}</span>
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={selectedStudentIds.includes(student.id)}
+                              onChange={() => toggleStudent(student.id)}
+                              className="h-4 w-4 shrink-0 accent-violet-500"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                {!classes.length ? (
+                  <div className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">표시할 클래스가 없습니다.</div>
+                ) : null}
+              </div>
+
+              {assignError ? <p className="mt-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{assignError}</p> : null}
+            </div>
+            <div className="flex flex-col gap-2 border-t border-white/10 p-5 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setAssignBatch(null)}>취소</Button>
+              <Button type="button" onClick={assignSelectedBatch} disabled={assigning || (!selectedClassIds.length && !selectedStudentIds.length)}>
+                <BookOpenCheck className="h-4 w-4" />
+                {assigning ? "할당 중" : "할당하기"}
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}
