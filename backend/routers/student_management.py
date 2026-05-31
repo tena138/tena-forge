@@ -788,9 +788,10 @@ def _session_problems(session: PaperSession) -> list[dict]:
 def _session_summary(db: Session, academy_id: str, session: PaperSession | None) -> dict | None:
     if not session:
         return None
+    session_academy_id = session.academy_id or academy_id
     results = db.scalars(
         select(PaperSessionResult).where(
-            PaperSessionResult.academy_id == academy_id,
+            PaperSessionResult.academy_id == session_academy_id,
             PaperSessionResult.paper_session_id == session.id,
         )
     ).all()
@@ -914,6 +915,17 @@ def _get_session(db: Session, academy_id: str, session_id: UUID) -> PaperSession
     row = db.scalars(
         select(PaperSession)
         .where(PaperSession.id == session_id, PaperSession.academy_id == academy_id)
+        .options(joinedload(PaperSession.content_version))
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Paper session not found.")
+    return row
+
+
+def _get_visible_session(db: Session, academy_ids: set[str], session_id: UUID) -> PaperSession:
+    row = db.scalars(
+        select(PaperSession)
+        .where(PaperSession.id == session_id, PaperSession.academy_id.in_(list(academy_ids)))
         .options(joinedload(PaperSession.content_version))
     ).first()
     if not row:
@@ -1923,14 +1935,14 @@ def create_paper_session(payload: PaperSessionPayload, request: Request, db: Ses
 @router.get("/paper-sessions/{session_id}")
 def get_paper_session(session_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    session = _get_session(db, academy_id, session_id)
+    session = _get_visible_session(db, _student_management_academy_ids(request, db, academy_id), session_id)
     return _paper_session_detail(db, academy_id, session)
 
 
 @router.get("/paper-sessions/{session_id}/grading")
 def get_grading_state(session_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    session = _get_session(db, academy_id, session_id)
+    session = _get_visible_session(db, _student_management_academy_ids(request, db, academy_id), session_id)
     return _paper_session_detail(db, academy_id, session)
 
 
@@ -1952,22 +1964,22 @@ def _result_payload(result: PaperSessionResult) -> dict:
 
 
 def _paper_session_detail(db: Session, academy_id: str, session: PaperSession) -> dict:
+    session_academy_id = session.academy_id or academy_id
     results = db.scalars(
         select(PaperSessionResult)
-        .where(PaperSessionResult.academy_id == academy_id, PaperSessionResult.paper_session_id == session.id)
+        .where(PaperSessionResult.academy_id == session_academy_id, PaperSessionResult.paper_session_id == session.id)
         .order_by(PaperSessionResult.created_at)
     ).all()
     memberships = {
         row.id: row
         for row in db.scalars(
             select(StudentAcademyMembership).where(
-                StudentAcademyMembership.academy_id == academy_id,
                 StudentAcademyMembership.id.in_([result.student_membership_id for result in results] or [uuid.uuid4()]),
             )
         ).all()
     }
     problem_results = db.scalars(
-        select(ProblemResult).where(ProblemResult.academy_id == academy_id, ProblemResult.paper_session_id == session.id)
+        select(ProblemResult).where(ProblemResult.academy_id == session_academy_id, ProblemResult.paper_session_id == session.id)
     ).all()
     by_result: dict[str, list[dict]] = {}
     for row in problem_results:
