@@ -51,10 +51,11 @@ type BatchFolderContextMenu = { folderId: string; x: number; y: number } | null;
 
 const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24, pages: 1 };
 const difficulties = ["하", "중", "상", "최상"];
-const defaultReviewFilter: ReviewFilter = "reviewed";
+const defaultReviewFilter: ReviewFilter = "all";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
 const customSubjectFiltersStorageKey = "tena.problemBrowser.customSubjects";
 const batchFoldersStorageKey = "tena.problemBrowser.batchFolders";
+const selectedProblemsStorageKey = "tena.problemBrowser.selectedIds";
 const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "all", label: "전체" },
   { value: "needs", label: "검토 필요" },
@@ -108,6 +109,25 @@ function readBatchFolders() {
 function writeBatchFolders(folders: BatchFolder[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(batchFoldersStorageKey, JSON.stringify(folders));
+}
+
+function readSelectedProblemIds() {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(selectedProblemsStorageKey) || "[]");
+    return Array.isArray(parsed) ? [...new Set(parsed.map((value) => String(value)).filter(Boolean))] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSelectedProblemIds(ids: string[]) {
+  if (typeof window === "undefined") return;
+  if (!ids.length) {
+    window.sessionStorage.removeItem(selectedProblemsStorageKey);
+    return;
+  }
+  window.sessionStorage.setItem(selectedProblemsStorageKey, JSON.stringify([...new Set(ids)]));
 }
 
 function readPageParam(value: string | null) {
@@ -332,7 +352,7 @@ function ProblemsBrowser() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => readSelectedProblemIds());
   const [selectedProblemCache, setSelectedProblemCache] = useState<Record<string, Problem>>({});
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [quickExportOpen, setQuickExportOpen] = useState(false);
@@ -365,6 +385,10 @@ function ProblemsBrowser() {
   useEffect(() => {
     window.localStorage.setItem(viewModeStorageKey, viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    writeSelectedProblemIds(selectedIds);
+  }, [selectedIds]);
 
   useEffect(() => {
     if (!batchFolderContextMenu) return;
