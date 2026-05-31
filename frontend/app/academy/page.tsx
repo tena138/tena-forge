@@ -551,12 +551,14 @@ function AcademyConsoleHome() {
 }
 
 function AcademyOperationsPanel() {
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
   const [billing, setBilling] = useState<AcademyBilling | null>(null);
   const [seats, setSeats] = useState<AcademySeat[]>([]);
   const [classes, setClasses] = useState<AcademyClass[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [problemSets, setProblemSets] = useState<ProblemSetListItem[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
   const [learningStudents, setLearningStudents] = useState<AcademyLearningStudent[]>([]);
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignment[]>([]);
   const [learningReport, setLearningReport] = useState<LearningAssignmentReport | null>(null);
@@ -567,7 +569,13 @@ function AcademyOperationsPanel() {
   const [className, setClassName] = useState("");
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
+  const [selectedLearningSourceType, setSelectedLearningSourceType] = useState<"problemSet" | "archive">(
+    searchParams.get("source_type") === "archive" || searchParams.get("source_type") === "batch" ? "archive" : "problemSet"
+  );
   const [selectedProblemSetId, setSelectedProblemSetId] = useState("");
+  const [selectedBatchId, setSelectedBatchId] = useState(
+    searchParams.get("source_type") === "archive" || searchParams.get("source_type") === "batch" ? searchParams.get("source_id") || "" : ""
+  );
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
 
@@ -575,12 +583,13 @@ function AcademyOperationsPanel() {
 
   async function load(id = academyId) {
     if (!id) return;
-    const [billingData, seatData, classData, assignmentData, setData, studentData, learningAssignmentData] = await Promise.all([
+    const [billingData, seatData, classData, assignmentData, setData, batchData, studentData, learningAssignmentData] = await Promise.all([
       getAcademyBilling(id),
       listAcademySeats(id),
       listAcademyClasses(id),
       listAcademyAssignments(id),
       api<ProblemSetListItem[]>("/api/problem-sets"),
+      api<Batch[]>("/api/batches"),
       listAcademyLearningStudents(id),
       listAcademyLearningAssignments(id),
     ]);
@@ -589,9 +598,18 @@ function AcademyOperationsPanel() {
     setClasses(classData);
     setAssignments(assignmentData);
     setProblemSets(setData);
+    setBatches(batchData);
     setLearningStudents(studentData);
     setLearningAssignments(learningAssignmentData);
     if (!selectedProblemSetId && setData[0]) setSelectedProblemSetId(setData[0].id);
+    if (!selectedBatchId) {
+      const requestedSourceId = searchParams.get("source_id");
+      const requestedBatch = requestedSourceId ? batchData.find((batch) => batch.id === requestedSourceId) : null;
+      const fallbackBatch = batchData.find((batch) => batch.status === "done" && batch.problem_count > 0);
+      const nextBatch = requestedBatch || fallbackBatch;
+      if (nextBatch) setSelectedBatchId(nextBatch.id);
+      if (requestedBatch && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(requestedBatch.name);
+    }
     if (!selectedGroupId && classData[0]) setSelectedGroupId(classData[0].id);
     if (!seatClassId && classData[0]) setSeatClassId(classData[0].id);
     if (!selectedStudentId && studentData[0]) setSelectedStudentId(studentData[0].student_user_id);
@@ -604,6 +622,10 @@ function AcademyOperationsPanel() {
   }, []);
 
   const assigned = useMemo(() => seats.filter((seat) => seat.assigned).length, [seats]);
+  const assignableBatches = useMemo(() => batches.filter((batch) => batch.status === "done" && batch.problem_count > 0), [batches]);
+  const selectedProblemSet = useMemo(() => problemSets.find((set) => set.id === selectedProblemSetId) || null, [problemSets, selectedProblemSetId]);
+  const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
+  const selectedLearningSourceId = selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId;
 
   if (profile?.account_type === "student") {
     return (
@@ -668,15 +690,15 @@ function AcademyOperationsPanel() {
   async function submitLearningAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!academyId || !learningAssignmentTitle.trim()) return;
-    const sourceId = selectedProblemSetId || problemSets[0]?.id;
+    const sourceId = selectedLearningSourceId || (selectedLearningSourceType === "archive" ? assignableBatches[0]?.id : problemSets[0]?.id);
     if (!sourceId) {
-      setError("먼저 문제 세트를 만들어 주세요.");
+      setError("먼저 배포할 문항 세트 또는 배치를 선택해주세요.");
       return;
     }
     const created = await createLearningAssignment(academyId, {
       title: learningAssignmentTitle.trim(),
-      description: "아카이브 문제 세트를 기반으로 생성한 학생 풀이 과제입니다.",
-      source_type: "problemSet",
+      description: selectedLearningSourceType === "archive" ? "배치 교재를 기반으로 생성한 학생 풀이 과제입니다." : "아카이브 문제 세트를 기반으로 생성한 학생 풀이 과제입니다.",
+      source_type: selectedLearningSourceType,
       source_id: sourceId,
       group_ids: selectedGroupId ? [selectedGroupId] : [],
       student_ids: selectedGroupId ? [] : selectedStudentId ? [selectedStudentId] : [],
@@ -690,13 +712,13 @@ function AcademyOperationsPanel() {
 
   async function grantSelectedArchiveAccess() {
     if (!academyId) return;
-    const sourceId = selectedProblemSetId || problemSets[0]?.id;
+    const sourceId = selectedLearningSourceId || (selectedLearningSourceType === "archive" ? assignableBatches[0]?.id : problemSets[0]?.id);
     if (!sourceId) {
-      setError("권한을 부여할 문제 세트가 없습니다.");
+      setError("권한을 부여할 문항 세트 또는 배치가 없습니다.");
       return;
     }
     await createLearningAccessGrant(academyId, {
-      source_type: "problemSet",
+      source_type: selectedLearningSourceType,
       source_id: sourceId,
       group_id: selectedGroupId || null,
       student_id: selectedGroupId ? null : selectedStudentId || null,
@@ -855,10 +877,39 @@ function AcademyOperationsPanel() {
             <CardTitle className="flex items-center gap-2"><BookOpenCheck className="h-5 w-5" /> 학습 과제 / 접근 권한</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-2 md:grid-cols-3">
-              <select className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={selectedProblemSetId} onChange={(event) => setSelectedProblemSetId(event.target.value)}>
-                <option value="">문제 세트 선택</option>
-                {problemSets.map((set) => <option key={set.id} value={set.id}>{set.name}</option>)}
+            <div className="grid gap-2 md:grid-cols-4">
+              <select
+                className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                value={selectedLearningSourceType}
+                onChange={(event) => {
+                  const nextType = event.target.value === "archive" ? "archive" : "problemSet";
+                  setSelectedLearningSourceType(nextType);
+                  const nextTitle = nextType === "archive" ? selectedBatch?.name || assignableBatches[0]?.name : selectedProblemSet?.name || problemSets[0]?.name;
+                  if (!learningAssignmentTitle.trim() && nextTitle) setLearningAssignmentTitle(nextTitle);
+                }}
+              >
+                <option value="problemSet">문항 세트</option>
+                <option value="archive">배치 / 교재</option>
+              </select>
+              <select
+                className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                value={selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId}
+                onChange={(event) => {
+                  if (selectedLearningSourceType === "archive") {
+                    setSelectedBatchId(event.target.value);
+                    const batch = batches.find((item) => item.id === event.target.value);
+                    if (!learningAssignmentTitle.trim() && batch) setLearningAssignmentTitle(batch.name);
+                  } else {
+                    setSelectedProblemSetId(event.target.value);
+                    const set = problemSets.find((item) => item.id === event.target.value);
+                    if (!learningAssignmentTitle.trim() && set) setLearningAssignmentTitle(set.name);
+                  }
+                }}
+              >
+                <option value="">{selectedLearningSourceType === "archive" ? "배치 선택" : "문제 세트 선택"}</option>
+                {selectedLearningSourceType === "archive"
+                  ? assignableBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name} · {batch.problem_count}문항</option>)
+                  : problemSets.map((set) => <option key={set.id} value={set.id}>{set.name}</option>)}
               </select>
               <select className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)}>
                 <option value="">개별 학생</option>
@@ -1335,7 +1386,8 @@ function AcademySchedulePanel() {
 function AcademyPageContent() {
   const searchParams = useSearchParams();
   const panel = searchParams.get("panel");
-  if (panel === "operations" || panel === "seats" || panel === "classes") return <AcademySchedulePanel />;
+  if (panel === "seats" || panel === "classes") return <AcademyOperationsPanel />;
+  if (panel === "operations") return <AcademySchedulePanel />;
   return <AcademyConsoleHome />;
 }
 

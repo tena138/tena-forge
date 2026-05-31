@@ -238,10 +238,10 @@ def _source_title_and_problems(db: Session, academy_id: str, source_type: str, s
         ).all()
         problems = [item.problem for item in items if item.problem and not item.problem.deleted_at]
         return problem_set.name, problems
-    if source_type in {"archive", "paper"}:
+    if source_type in {"archive", "paper", "batch"}:
         batch = db.scalar(select(Batch).where(Batch.id == UUID(source_id), or_(Batch.academy_id == academy_id, Batch.owner_id == academy_id)))
         if not batch:
-            raise HTTPException(status_code=404, detail="Archive not found for this academy.")
+            raise HTTPException(status_code=404, detail="Batch not found for this academy.")
         problems = list(
             db.scalars(
                 select(Problem)

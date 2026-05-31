@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ClipboardCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, ClipboardCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -269,6 +269,15 @@ export function ArchiveBatchHistory({
                       해설만 재처리
                     </Button>
                   ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={batch.status !== "done" || !batch.problem_count}
+                    onClick={() => router.push(`/academy?panel=classes&source_type=archive&source_id=${batch.id}`)}
+                  >
+                    <BookOpenCheck className="h-4 w-4" />
+                    학생에게 할당
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => router.push(`/problems?batch_id=${batch.id}`)}>
                     <Eye className="h-4 w-4" />
                     문항 보기
