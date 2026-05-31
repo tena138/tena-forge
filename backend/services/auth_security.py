@@ -246,10 +246,27 @@ def set_refresh_cookie(response: Response, token: str, remember: bool = True) ->
         samesite=same_site,
         path="/",
     )
+    if settings.refresh_cookie_secure and same_site == "none":
+        cookie_header = response.headers.get("set-cookie")
+        if cookie_header and "partitioned" not in cookie_header.lower():
+            response.headers["set-cookie"] = f"{cookie_header}; Partitioned"
 
 
 def clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(settings.refresh_cookie_name, path="/")
+    same_site = (settings.refresh_cookie_samesite or "strict").lower()
+    if same_site not in {"strict", "lax", "none"}:
+        same_site = "strict"
+    response.delete_cookie(
+        settings.refresh_cookie_name,
+        path="/",
+        secure=settings.refresh_cookie_secure,
+        httponly=True,
+        samesite=same_site,
+    )
+    if settings.refresh_cookie_secure and same_site == "none":
+        cookie_header = response.headers.get("set-cookie")
+        if cookie_header and "partitioned" not in cookie_header.lower():
+            response.headers["set-cookie"] = f"{cookie_header}; Partitioned"
 
 
 def get_refresh_token_from_cookie(request: Request) -> str:

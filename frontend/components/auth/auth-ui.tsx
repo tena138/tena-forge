@@ -73,7 +73,6 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             filter: blur(90px) saturate(140%);
             mix-blend-mode: screen;
             opacity: 0.36;
-            will-change: transform;
           }
 
           .aurora-nebula.nebula-a {
@@ -110,7 +109,6 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             mix-blend-mode: screen;
             opacity: 0.76;
             transform-origin: 50% 50%;
-            will-change: transform;
             -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 82%, transparent 100%);
             mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 82%, transparent 100%);
           }
@@ -167,7 +165,6 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             mix-blend-mode: screen;
             opacity: 0.5;
             animation: ripple 6.5s ease-in-out infinite;
-            will-change: transform;
           }
 
           @keyframes ribbon-a {
@@ -313,7 +310,6 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             opacity: 0.72;
             transform: translate3d(-50%, -50%, 0);
             animation: halo-core 16s ease-in-out infinite;
-            will-change: transform;
           }
 
           .aurora-halo-ring {
@@ -325,7 +321,6 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             mix-blend-mode: screen;
             opacity: 0.76;
             transform-origin: 50% 50%;
-            will-change: transform;
             -webkit-mask-image: radial-gradient(circle, transparent 0 42%, #000 47%, #000 63%, transparent 70%);
             mask-image: radial-gradient(circle, transparent 0 42%, #000 47%, #000 63%, transparent 70%);
           }
@@ -372,7 +367,6 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             mix-blend-mode: screen;
             opacity: 0.72;
             animation: halo-dust 12s ease-in-out infinite;
-            will-change: transform;
           }
 
           @keyframes halo-core {

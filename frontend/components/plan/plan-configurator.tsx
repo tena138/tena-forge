@@ -686,7 +686,7 @@ function ProductStage({
               <div
                 ref={contentRef}
                 data-console-camera
-                className="will-change-transform px-3 py-8 sm:px-5"
+                className="px-3 py-8 sm:px-5"
                 style={{
                   transform: `translate3d(0, ${cameraY}px, 0)`,
                   transition: "transform 900ms cubic-bezier(0.18, 0.92, 0.22, 1)",
