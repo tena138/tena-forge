@@ -57,16 +57,15 @@ def _student_management_academy_id(request: Request, db: Session) -> str:
     if owner_id == LOCAL_OWNER_ID or LOCAL_OWNER_ID not in owner_ids:
         return owner_id
 
-    current_count = db.scalar(select(func.count(AcademyClass.id)).where(AcademyClass.academy_id == owner_id)) or 0
-    current_count += db.scalar(select(func.count(StudentAcademyMembership.id)).where(StudentAcademyMembership.academy_id == owner_id)) or 0
-    current_count += db.scalar(select(func.count(PaperSession.id)).where(PaperSession.academy_id == owner_id)) or 0
-    if current_count:
+    current_class_count = db.scalar(select(func.count(AcademyClass.id)).where(AcademyClass.academy_id == owner_id)) or 0
+    current_student_count = db.scalar(select(func.count(StudentAcademyMembership.id)).where(StudentAcademyMembership.academy_id == owner_id)) or 0
+    legacy_class_count = db.scalar(select(func.count(AcademyClass.id)).where(AcademyClass.academy_id == LOCAL_OWNER_ID)) or 0
+    legacy_student_count = db.scalar(select(func.count(StudentAcademyMembership.id)).where(StudentAcademyMembership.academy_id == LOCAL_OWNER_ID)) or 0
+
+    if current_class_count or current_student_count:
         return owner_id
 
-    legacy_count = db.scalar(select(func.count(AcademyClass.id)).where(AcademyClass.academy_id == LOCAL_OWNER_ID)) or 0
-    legacy_count += db.scalar(select(func.count(StudentAcademyMembership.id)).where(StudentAcademyMembership.academy_id == LOCAL_OWNER_ID)) or 0
-    legacy_count += db.scalar(select(func.count(PaperSession.id)).where(PaperSession.academy_id == LOCAL_OWNER_ID)) or 0
-    return LOCAL_OWNER_ID if legacy_count else owner_id
+    return LOCAL_OWNER_ID if legacy_class_count or legacy_student_count else owner_id
 
 
 def _now() -> datetime:
