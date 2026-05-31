@@ -503,6 +503,11 @@ progress_states: dict[str, dict[str, float | int | str]] = {}
 PAGE_CHUNK_SIZE = 16
 LARGE_FILE_DPI = 160
 DEFAULT_RENDER_DPI = 180
+CANCEL_FAILURE_STAGE = "사용자 중단"
+
+
+class BatchCancelled(RuntimeError):
+    pass
 
 
 @dataclass
@@ -515,7 +520,14 @@ class RenderedPage:
     source_page_index: int | None = None
 
 
-def set_progress(batch_id: UUID, message: str, current: int | None = None, total: int | None = None, reset: bool = False) -> None:
+def set_progress(
+    batch_id: UUID,
+    message: str,
+    current: int | None = None,
+    total: int | None = None,
+    reset: bool = False,
+    allow_inactive: bool = False,
+) -> None:
     key = str(batch_id)
     now = datetime.utcnow()
     progress_messages[key] = message
@@ -534,6 +546,8 @@ def set_progress(batch_id: UUID, message: str, current: int | None = None, total
     try:
         batch = db.get(Batch, batch_id)
         if batch:
+            if not allow_inactive and batch.status not in {BatchStatus.pending, BatchStatus.processing}:
+                raise BatchCancelled(f"Batch {batch_id} is no longer active.")
             batch.progress_message = message
             if next_current is not None:
                 batch.progress_current = next_current
@@ -550,8 +564,20 @@ def set_progress(batch_id: UUID, message: str, current: int | None = None, total
 def persist_progress(db: Session, batch: Batch, message: str, current: int | None = None, total: int | None = None) -> None:
     set_progress(batch.id, message, current, total)
     db.refresh(batch)
+    if batch.status not in {BatchStatus.pending, BatchStatus.processing}:
+        raise BatchCancelled(f"Batch {batch.id} is no longer active.")
     batch.progress_message = message
     db.commit()
+
+
+def ensure_batch_active(batch_id: UUID) -> None:
+    db = SessionLocal()
+    try:
+        batch = db.get(Batch, batch_id)
+        if batch and batch.status not in {BatchStatus.pending, BatchStatus.processing}:
+            raise BatchCancelled(f"Batch {batch_id} is no longer active.")
+    finally:
+        db.close()
 
 
 def explain_failure(exc: Exception) -> tuple[str, str]:
@@ -1722,7 +1748,9 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
         _write_batch_artifact(batch_id, "korean_extraction_with_answers.json", document)
 
     set_progress(batch_id, "국어 지문/문항 저장 중", total_units, total_units)
+    ensure_batch_active(batch_id)
     _save_korean_document_results(db, batch, document)
+    ensure_batch_active(batch_id)
     batch.status = BatchStatus.done
     batch.processing_task = "full"
     batch.progress_message = "완료"
@@ -1730,7 +1758,7 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     batch.progress_total = total_units
     batch.progress_updated_at = datetime.utcnow()
     db.commit()
-    set_progress(batch_id, "완료", total_units, total_units)
+    set_progress(batch_id, "완료", total_units, total_units, allow_inactive=True)
 
 
 def get_progress_message(batch: Batch) -> str:
@@ -1961,9 +1989,11 @@ def process_batch(batch_id: UUID) -> None:
         _write_batch_artifact(batch_id, "matches_by_section.json", matching_result.get("matches_by_section", {}))
         _write_batch_artifact(batch_id, "validation_report.json", _validation_with_structure(matching_result, structure_report))
         set_progress(batch_id, "문항 저장 중", total_units, total_units)
+        ensure_batch_active(batch_id)
         save_results(db, batch, matched_problems)
         db.commit()
 
+        ensure_batch_active(batch_id)
         batch.status = BatchStatus.done
         batch.processing_task = "full"
         batch.progress_message = "완료"
@@ -1971,7 +2001,9 @@ def process_batch(batch_id: UUID) -> None:
         batch.progress_total = total_units
         batch.progress_updated_at = datetime.utcnow()
         db.commit()
-        set_progress(batch_id, "완료", total_units, total_units)
+        set_progress(batch_id, "완료", total_units, total_units, allow_inactive=True)
+    except BatchCancelled:
+        db.rollback()
     except Exception as exc:
         traceback.print_exc()
         db.rollback()
@@ -1987,9 +2019,9 @@ def process_batch(batch_id: UUID) -> None:
             failed.failure_hint = hint
             failed.failed_at = datetime.utcnow()
             db.commit()
-            set_progress(batch_id, failed.progress_message)
+            set_progress(batch_id, failed.progress_message, allow_inactive=True)
         else:
-            set_progress(batch_id, f"오류: {exc}")
+            set_progress(batch_id, f"오류: {exc}", allow_inactive=True)
     finally:
         db.close()
         try:
@@ -2125,6 +2157,7 @@ def process_solutions_only(batch_id: UUID) -> None:
             raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
 
         set_progress(batch_id, "기존 문항과 해설 재매칭 중", total_units, total_units)
+        ensure_batch_active(batch_id)
         stats = apply_solutions_to_existing_problems(
             db,
             batch,
@@ -2149,6 +2182,7 @@ def process_solutions_only(batch_id: UUID) -> None:
                 "stats": stats,
             },
         )
+        ensure_batch_active(batch_id)
         batch.status = BatchStatus.done
         batch.processing_task = "solution_only"
         batch.progress_message = (
@@ -2164,7 +2198,9 @@ def process_solutions_only(batch_id: UUID) -> None:
         batch.failure_hint = None
         batch.failed_at = None
         db.commit()
-        set_progress(batch_id, batch.progress_message, total_units, total_units)
+        set_progress(batch_id, batch.progress_message, total_units, total_units, allow_inactive=True)
+    except BatchCancelled:
+        db.rollback()
     except Exception as exc:
         traceback.print_exc()
         db.rollback()
@@ -2181,9 +2217,9 @@ def process_solutions_only(batch_id: UUID) -> None:
             failed.failed_at = datetime.utcnow()
             failed.progress_updated_at = failed.failed_at
             db.commit()
-            set_progress(batch_id, failed.progress_message)
+            set_progress(batch_id, failed.progress_message, allow_inactive=True)
         else:
-            set_progress(batch_id, f"오류: {exc}")
+            set_progress(batch_id, f"오류: {exc}", allow_inactive=True)
     finally:
         db.close()
         try:
@@ -2974,7 +3010,10 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
 
 def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> None:
     batch_name = (batch.name or "이름 없는 배치").strip()
-    for item in problems:
+    ensure_batch_active(batch.id)
+    for index, item in enumerate(problems):
+        if index and index % 20 == 0:
+            ensure_batch_active(batch.id)
         solution = item.get("solution") or {
             "answer": item.get("answer"),
             "solution_steps": item.get("solution_steps"),
@@ -3010,3 +3049,4 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
             source=f"{batch_name} / p.{page_number} / {item['problem_number']}번",
         )
         db.add(problem)
+    ensure_batch_active(batch.id)

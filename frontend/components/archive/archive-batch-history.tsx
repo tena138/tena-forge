@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, BookOpenCheck, ClipboardCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, Ban, BookOpenCheck, ClipboardCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -215,6 +215,21 @@ export function ArchiveBatchHistory({
     }
   }
 
+  async function cancelBatch(batch: Batch) {
+    if (batch.status !== "pending" && batch.status !== "processing") return;
+    const ok = window.confirm(`'${batch.name}' 배치 추출을 중단할까요? 지금까지 생성된 캐시와 일부 문항은 삭제됩니다.`);
+    if (!ok) return;
+    setBusyId(batch.id);
+    try {
+      const updated = await api<Batch>(`/api/batches/${batch.id}/cancel`, { method: "POST" });
+      setBatches((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      if (activeBatchId === updated.id) onActiveBatchSnapshot?.(updated);
+      await loadBatches();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function reprocessSolutions(batch: Batch) {
     if (!batch.problem_count || !batch.solution_pdf_filename || batch.status === "pending" || batch.status === "processing" || busyId === batch.id) return;
     const ok = window.confirm(`'${batch.name}' 배치의 해설 PDF만 다시 추출할까요? 기존 문항은 유지하고 정답/해설만 새로 매칭합니다.`);
@@ -358,6 +373,12 @@ export function ArchiveBatchHistory({
                     <RotateCcw className="h-4 w-4" />
                     재처리
                   </Button>
+                  {batch.status === "pending" || batch.status === "processing" ? (
+                    <Button variant="outline" size="sm" disabled={busyId === batch.id} onClick={() => cancelBatch(batch)}>
+                      <Ban className="h-4 w-4" />
+                      중단
+                    </Button>
+                  ) : null}
                   <Button variant="destructive" size="sm" disabled={busyId === batch.id} onClick={() => deleteBatch(batch)}>
                     <Trash2 className="h-4 w-4" />
                     삭제

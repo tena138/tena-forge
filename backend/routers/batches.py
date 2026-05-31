@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -9,14 +10,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import get_db, get_settings
 from limiter import limiter
 from models import Batch, BatchStatus, KoreanExtractionDocument, Problem, Tag
 from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, KoreanExtractionRead, SOURCE_TYPES
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids
-from services.pipeline import count_pdf_pages, get_progress_detail
+from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progress_detail
 from services.saas_security import ensure_subject_engine_access
 from services.storage import save_upload
 from services.subject_engines import infer_subject_engine_from_subjects, normalize_subject_engine
@@ -67,6 +68,23 @@ def _file_size_mb(path: str | None) -> float:
         return os.path.getsize(path) / (1024 * 1024)
     except OSError:
         return 0.0
+
+
+def _clear_batch_artifacts(batch_id: UUID) -> None:
+    root = Path(get_settings().uploads_dir).resolve()
+    target = (root / "batch_artifacts" / str(batch_id)).resolve()
+    if root not in target.parents:
+        return
+    if target.exists() and target.is_dir():
+        shutil.rmtree(target, ignore_errors=True)
+
+
+def _clear_batch_outputs(db: Session, batch: Batch) -> None:
+    for problem in list(batch.problems):
+        db.delete(problem)
+    for document in db.scalars(select(KoreanExtractionDocument).where(KoreanExtractionDocument.batch_id == batch.id)).all():
+        db.delete(document)
+    _clear_batch_artifacts(batch.id)
 
 
 def _tagged_expression():
@@ -251,6 +269,13 @@ def upload_batch(
 @router.get("", response_model=list[BatchRead])
 @limiter.exempt
 def list_batches(request: Request, db: Session = Depends(get_db)):
+    if mark_stale_processing_batches(db):
+        db.commit()
+        try:
+            schedule_next_batch()
+        except Exception:
+            traceback.print_exc()
+        db.expire_all()
     owner_ids = current_owner_ids(request, db)
     tagged_expression = _tagged_expression()
     rows = db.execute(
@@ -375,8 +400,7 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
         usage_type="batch_retry_estimate",
     )
     enforce_extraction_preflight(db, owner_id, estimate, file_size_mb=total_upload_mb, page_count=problem_pages + solution_pages, upload_mb_to_add=0)
-    for problem in list(batch.problems):
-        db.delete(problem)
+    _clear_batch_outputs(db, batch)
     batch.status = BatchStatus.pending
     batch.processing_task = "full"
     batch.progress_message = "처리 대기 중"
@@ -404,6 +428,35 @@ def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db))
         raise HTTPException(status_code=500, detail="처리 작업을 시작하지 못했습니다.")
     db.refresh(batch)
     return {"batch_id": batch.id, "status": batch.status}
+
+
+@router.post("/{batch_id}/cancel", response_model=BatchRead)
+def cancel_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    if batch.status not in {BatchStatus.pending, BatchStatus.processing}:
+        return _batch_read(db, batch)
+
+    _clear_batch_outputs(db, batch)
+    now = datetime.utcnow()
+    batch.status = BatchStatus.error
+    batch.processing_task = batch.processing_task or "full"
+    batch.progress_message = "사용자 요청으로 중단했습니다."
+    batch.progress_current = 0
+    batch.progress_total = None
+    batch.progress_updated_at = now
+    batch.failure_stage = CANCEL_FAILURE_STAGE
+    batch.failure_reason = "사용자가 배치 추출을 중단했습니다."
+    batch.failure_hint = "재처리를 누르면 기존 캐시 없이 처음부터 다시 추출합니다."
+    batch.failed_at = now
+    db.commit()
+    db.refresh(batch)
+    try:
+        schedule_next_batch()
+    except Exception:
+        traceback.print_exc()
+    return _batch_read(db, batch)
 
 
 @router.post("/{batch_id}/reprocess-solutions", response_model=BatchUploadResponse)
@@ -491,6 +544,7 @@ def delete_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    _clear_batch_artifacts(batch.id)
     db.delete(batch)
     db.commit()
     return Response(status_code=204)
