@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import String, cast, delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
@@ -98,6 +98,19 @@ def _date_boundary(value: str | None, end: bool = False) -> datetime | None:
 
 def _uuid_list(values: list[UUID | str] | None) -> list[str]:
     return [str(value) for value in values or [] if value]
+
+
+def _id_equals(column, value):
+    return cast(column, String) == str(value)
+
+
+def _id_columns_equal(left, right):
+    return cast(left, String) == cast(right, String)
+
+
+def _id_in(column, values) -> object:
+    normalized = [str(value) for value in values or [] if value]
+    return cast(column, String).in_(normalized or [str(uuid.uuid4())])
 
 
 def _decimal_float(value) -> float | None:
@@ -376,9 +389,9 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
         classes = _safe_scalars(
             db,
             select(AcademyClass)
-            .join(ClassStudent, ClassStudent.class_id == AcademyClass.id)
+            .join(ClassStudent, _id_columns_equal(ClassStudent.class_id, AcademyClass.id))
             .where(
-                ClassStudent.student_membership_id == membership.id,
+                _id_equals(ClassStudent.student_membership_id, membership.id),
                 ClassStudent.left_at.is_(None),
             )
             .order_by(AcademyClass.name)
@@ -389,7 +402,7 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
         select(PaperSessionResult)
         .where(
             PaperSessionResult.academy_id.in_([academy_id, membership.academy_id]),
-            PaperSessionResult.student_membership_id == membership.id,
+            _id_equals(PaperSessionResult.student_membership_id, membership.id),
             PaperSessionResult.status == "graded",
         )
         .order_by(PaperSessionResult.graded_at.desc().nullslast(), PaperSessionResult.updated_at.desc())
@@ -472,9 +485,9 @@ def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) 
     return _safe_scalars(
         db,
         select(StudentAcademyMembership)
-        .join(ClassStudent, ClassStudent.student_membership_id == StudentAcademyMembership.id)
+        .join(ClassStudent, _id_columns_equal(ClassStudent.student_membership_id, StudentAcademyMembership.id))
         .where(
-            ClassStudent.class_id == class_id,
+            _id_equals(ClassStudent.class_id, class_id),
             ClassStudent.left_at.is_(None),
             StudentAcademyMembership.status == "active",
         )
@@ -487,7 +500,7 @@ def _visible_student_memberships(db: Session, academy_ids: set[str], linked_stud
     rows = db.scalars(
         select(StudentAcademyMembership).where(
             (StudentAcademyMembership.academy_id.in_(list(academy_ids)))
-            | (StudentAcademyMembership.id.in_(linked_ids or [uuid.uuid4()]))
+            | (_id_in(StudentAcademyMembership.id, linked_ids))
         )
     ).all()
     rows_by_id = {row.id: row for row in rows}
@@ -597,7 +610,7 @@ def _safe_session_summary(db: Session, academy_id: str, session: PaperSession) -
 def _get_class(db: Session, academy_id: str, class_id: UUID, academy_ids: set[str] | None = None) -> AcademyClass:
     visible_academy_ids = set(academy_ids or {academy_id})
     visible_academy_ids.add(academy_id)
-    row = db.get(AcademyClass, class_id)
+    row = db.scalar(select(AcademyClass).where(_id_equals(AcademyClass.id, class_id)))
     if not row or row.academy_id not in visible_academy_ids:
         raise HTTPException(status_code=404, detail="Class not found.")
     return row
@@ -611,17 +624,17 @@ def _get_membership(
 ) -> StudentAcademyMembership:
     visible_academy_ids = set(academy_ids or {academy_id})
     visible_academy_ids.add(academy_id)
-    row = db.get(StudentAcademyMembership, student_id)
+    row = db.scalar(select(StudentAcademyMembership).where(_id_equals(StudentAcademyMembership.id, student_id)))
     if not row:
         raise HTTPException(status_code=404, detail="Student not found.")
     if row.academy_id in visible_academy_ids:
         return row
     linked_class = db.scalar(
         select(AcademyClass.id)
-        .join(ClassStudent, ClassStudent.class_id == AcademyClass.id)
+        .join(ClassStudent, _id_columns_equal(ClassStudent.class_id, AcademyClass.id))
         .where(
             AcademyClass.academy_id.in_(list(visible_academy_ids)),
-            ClassStudent.student_membership_id == row.id,
+            _id_equals(ClassStudent.student_membership_id, row.id),
             ClassStudent.left_at.is_(None),
         )
         .limit(1)
@@ -933,7 +946,7 @@ def _ensure_exported_review_session_assigned(db: Session, academy_id: str) -> No
 def _get_session(db: Session, academy_id: str, session_id: UUID) -> PaperSession:
     row = db.scalars(
         select(PaperSession)
-        .where(PaperSession.id == session_id, PaperSession.academy_id == academy_id)
+        .where(_id_equals(PaperSession.id, session_id), PaperSession.academy_id == academy_id)
         .options(joinedload(PaperSession.content_version))
     ).first()
     if not row:
@@ -944,7 +957,7 @@ def _get_session(db: Session, academy_id: str, session_id: UUID) -> PaperSession
 def _get_visible_session(db: Session, academy_ids: set[str], session_id: UUID) -> PaperSession:
     row = db.scalars(
         select(PaperSession)
-        .where(PaperSession.id == session_id, PaperSession.academy_id.in_(list(academy_ids)))
+        .where(_id_equals(PaperSession.id, session_id), PaperSession.academy_id.in_(list(academy_ids)))
         .options(joinedload(PaperSession.content_version))
     ).first()
     if not row:
@@ -1563,7 +1576,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
     results = _safe_scalars(
         db,
         select(PaperSessionResult)
-        .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)), PaperSessionResult.student_membership_id == student_id)
+        .where(PaperSessionResult.academy_id.in_(list(visible_academy_ids)), _id_equals(PaperSessionResult.student_membership_id, student_id))
         .order_by(PaperSessionResult.created_at.desc()),
     )
     sessions = {
@@ -1571,7 +1584,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         for row in _safe_scalars(
             db,
             select(PaperSession)
-            .where(PaperSession.academy_id.in_(list(visible_academy_ids)), PaperSession.id.in_([result.paper_session_id for result in results] or [uuid.uuid4()]))
+            .where(PaperSession.academy_id.in_(list(visible_academy_ids)), _id_in(PaperSession.id, [result.paper_session_id for result in results]))
             .options(joinedload(PaperSession.content_version)),
         )
     }
@@ -1591,7 +1604,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
             select(ProblemResult)
             .where(
                 ProblemResult.academy_id.in_(list(visible_academy_ids)),
-                ProblemResult.paper_session_result_id.in_(result_ids),
+                _id_in(ProblemResult.paper_session_result_id, result_ids),
             )
             .order_by(ProblemResult.problem_number),
         )
@@ -1612,7 +1625,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         events = _safe_scalars(
             db,
             select(ClassScheduleEvent)
-            .where(ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)), ClassScheduleEvent.class_id.in_(class_ids))
+            .where(ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)), _id_in(ClassScheduleEvent.class_id, class_ids))
             .order_by(ClassScheduleEvent.starts_at.asc())
             .limit(500),
         )
@@ -1644,7 +1657,7 @@ def student_exam_stats_series(student_id: UUID, request: Request, start_date: st
     end = _date_boundary(end_date, end=True)
     rows = db.execute(
         select(PaperSessionResult, PaperSession)
-        .join(PaperSession, PaperSession.id == PaperSessionResult.paper_session_id)
+        .join(PaperSession, _id_columns_equal(PaperSession.id, PaperSessionResult.paper_session_id))
         .where(
             PaperSessionResult.academy_id.in_(list(visible_academy_ids)),
             PaperSessionResult.student_membership_id == membership.id,
