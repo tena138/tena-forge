@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, type KeyboardEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -47,6 +47,7 @@ type ReviewFilter = "all" | "needs" | "reviewed";
 type ViewMode = "grid" | "list";
 type ProblemSort = "source_order" | "newest" | "oldest" | "number_asc" | "number_desc";
 type BatchFolder = { id: string; name: string; batchIds: string[]; createdAt: string };
+type BatchFolderContextMenu = { folderId: string; x: number; y: number } | null;
 
 const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24, pages: 1 };
 const difficulties = ["하", "중", "상", "최상"];
@@ -325,6 +326,7 @@ function ProblemsBrowser() {
   const [selectedBatchFolderId, setSelectedBatchFolderId] = useState(() => searchParams.get("batch_folder_id") || "");
   const [batchFolders, setBatchFolders] = useState<BatchFolder[]>([]);
   const [folderNameDraft, setFolderNameDraft] = useState("");
+  const [batchFolderContextMenu, setBatchFolderContextMenu] = useState<BatchFolderContextMenu>(null);
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => readReviewFilter(searchParams.get("needs_review")));
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -365,6 +367,19 @@ function ProblemsBrowser() {
   }, [viewMode]);
 
   useEffect(() => {
+    if (!batchFolderContextMenu) return;
+    const closeMenu = () => setBatchFolderContextMenu(null);
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("keydown", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("keydown", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [batchFolderContextMenu]);
+
+  useEffect(() => {
     setSearch(searchParams.get("search") || "");
     setUnit(searchParams.get("unit") || "");
     setSubjects(searchParams.getAll("subject"));
@@ -378,6 +393,7 @@ function ProblemsBrowser() {
 
   const selectedBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === selectedBatchFolderId) || null, [batchFolders, selectedBatchFolderId]);
   const selectedFolderBatchIds = useMemo(() => selectedBatchFolder?.batchIds.filter((batchId) => batches.some((batch) => batch.id === batchId)) || [], [batches, selectedBatchFolder]);
+  const contextMenuBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === batchFolderContextMenu?.folderId) || null, [batchFolderContextMenu, batchFolders]);
 
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -539,9 +555,23 @@ function ProblemsBrowser() {
 
   function deleteBatchFolder(folderId: string) {
     persistBatchFolders(batchFolders.filter((folder) => folder.id !== folderId));
+    setBatchFolderContextMenu(null);
     if (selectedBatchFolderId === folderId) {
       resetPageAnd(() => setSelectedBatchFolderId(""));
     }
+  }
+
+  function clearBatchFolder(folderId: string) {
+    persistBatchFolders(batchFolders.map((folder) => (folder.id === folderId ? { ...folder, batchIds: [] } : folder)));
+    setBatchFolderContextMenu(null);
+    if (selectedBatchFolderId === folderId) {
+      resetPageAnd(() => setSelectedBatchFolderId(folderId));
+    }
+  }
+
+  function handleBatchFolderContextMenu(event: MouseEvent, folderId: string) {
+    event.preventDefault();
+    setBatchFolderContextMenu({ folderId, x: event.clientX, y: event.clientY });
   }
 
   function toggleBatchInSelectedFolder(batchId: string) {
@@ -923,6 +953,7 @@ function ProblemsBrowser() {
                     selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
                   )}
                   onClick={() => selectBatchFolder(folder.id)}
+                  onContextMenu={(event) => handleBatchFolderContextMenu(event, folder.id)}
                 >
                   <Folder className="mt-0.5 h-5 w-5 shrink-0 text-[#8be9ff]" />
                   <span className="min-w-0 flex-1">
@@ -1001,6 +1032,42 @@ function ProblemsBrowser() {
             })}
           </div>
         </div>
+
+        {batchFolderContextMenu && contextMenuBatchFolder ? (
+          <div
+            className="fixed z-50 w-44 overflow-hidden rounded-lg border border-white/10 bg-[#111022]/98 p-1 shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur"
+            style={{ left: batchFolderContextMenu.x, top: batchFolderContextMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06] hover:text-white"
+              onClick={() => {
+                selectBatchFolder(contextMenuBatchFolder.id);
+                setBatchFolderContextMenu(null);
+              }}
+            >
+              <FolderOpen className="h-4 w-4 text-[#9b8cff]" />
+              열기
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06] hover:text-white"
+              onClick={() => clearBatchFolder(contextMenuBatchFolder.id)}
+            >
+              <Minus className="h-4 w-4 text-slate-400" />
+              폴더 비우기
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-100 transition hover:bg-rose-500/10"
+              onClick={() => deleteBatchFolder(contextMenuBatchFolder.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+              폴더 삭제
+            </button>
+          </div>
+        ) : null}
 
         {filtersOpen ? (
           <div className="mt-4 space-y-4 rounded-lg border border-white/10 bg-black/15 p-3">
