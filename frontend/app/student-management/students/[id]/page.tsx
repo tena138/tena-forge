@@ -419,16 +419,14 @@ function layoutTimelineItems(items: StudentCalendarItem[]): TimelineCalendarItem
 }
 
 function timelineHourLabel(hour: number) {
-  if (hour === 0) return "자정";
-  if (hour === 12) return "정오";
-  return hour < 12 ? `오전 ${hour}시` : `오후 ${hour - 12}시`;
+  return `${hour}`;
 }
 
 function timelineTimeLabel(value?: string | null) {
   if (!value || !hasExplicitTime(value)) return "시간 미정";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "시간 미정";
-  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" }).format(date);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function timelineRangeLabel(item: StudentCalendarItem) {
@@ -1474,7 +1472,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
                 <div className="pr-1">
                   <div className="relative pl-16" style={{ height: TIMELINE_DAY_HEIGHT }}>
                     <div className="absolute bottom-0 left-0 top-0 w-14">
-                      {Array.from({ length: 24 }, (_, hour) => (
+                      {Array.from({ length: 25 }, (_, hour) => (
                         <div key={hour} className="absolute right-2 -translate-y-1/2 text-right text-[11px] font-bold text-slate-500" style={{ top: hour * TIMELINE_HOUR_HEIGHT }}>
                           {timelineHourLabel(hour)}
                         </div>
