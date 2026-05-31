@@ -29,7 +29,7 @@ from models import (
     StudentAcademyMembership,
     WrongAnswerRecord,
 )
-from services.academy_student_access import create_seat, ensure_academy_subscription
+from services.academy_student_access import create_seat, ensure_academy_subscription, hash_invite_code, rotate_seat_code
 from services.ownership import current_owner_id
 
 router = APIRouter(prefix="/api/student-management", tags=["student management"])
@@ -358,9 +358,13 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
         status_chip = "Inactive"
     else:
         status_chip = "Active"
+    seat = db.get(AcademySeat, membership.academy_seat_id) if membership.academy_seat_id else None
     return {
         "id": str(membership.id),
         "student_user_id": membership.student_user_id,
+        "academy_seat_id": str(membership.academy_seat_id),
+        "invite_code": metadata.get("invite_code"),
+        "invite_code_preview": seat.invite_code_preview if seat else None,
         "name": _student_name(membership),
         "grade_level": metadata.get("grade_level") or metadata.get("grade"),
         "school": metadata.get("school"),
@@ -1281,6 +1285,7 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
         "grade_level": _clean_optional_text(payload.grade_level),
         "school": _clean_optional_text(payload.school),
         "memo": _clean_optional_text(payload.memo),
+        "invite_code": invite_code,
     }
     membership = StudentAcademyMembership(
         student_user_id=student_user_id,
@@ -1302,6 +1307,29 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
     data = _student_payload(db, academy_id, membership)
     data["invite_code"] = invite_code
     return data
+
+
+@router.post("/students/{student_id}/invite-code")
+def ensure_student_invite_code(student_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _academy_id(request)
+    membership = _get_membership(db, academy_id, student_id)
+    seat = db.scalar(
+        select(AcademySeat).where(
+            AcademySeat.academy_id == academy_id,
+            AcademySeat.id == membership.academy_seat_id,
+            AcademySeat.is_active.is_(True),
+        )
+    )
+    if not seat:
+        raise HTTPException(status_code=404, detail="Student key seat not found.")
+    metadata = dict(membership.metadata_json or {})
+    code = metadata.get("invite_code")
+    if not code or hash_invite_code(code) != seat.invite_code_hash:
+        code = rotate_seat_code(db, seat)
+        metadata["invite_code"] = code
+        membership.metadata_json = metadata
+        db.commit()
+    return {"invite_code": code, "invite_code_preview": seat.invite_code_preview}
 
 
 @router.get("/students/{student_id}")

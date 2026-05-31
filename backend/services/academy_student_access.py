@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, Request
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from database import get_settings
@@ -20,10 +20,13 @@ from models import (
     ClassStudent,
     ClassTeacher,
     DailyStudentQuotaUsage,
+    PaperSessionResult,
+    ProblemResult,
     SeatAssignmentHistory,
     StudentAcademyMembership,
     StudentNotification,
     WatermarkedExport,
+    WrongAnswerRecord,
 )
 from services.ownership import current_owner_id
 
@@ -252,6 +255,38 @@ def claim_invite_code(db: Session, request: Request, code: str) -> StudentAcadem
         assigned = db.get(StudentAcademyMembership, seat.current_student_membership_id)
         if assigned and assigned.status == "active":
             if assigned.student_user_id == student_id:
+                return assigned
+            if str(assigned.student_user_id).startswith("manual-"):
+                previous_student_id = assigned.student_user_id
+                assigned.student_user_id = student_id
+                assigned.claimed_by = student_id
+                if seat.class_id:
+                    existing_link = db.scalar(
+                        select(ClassStudent).where(
+                            ClassStudent.class_id == seat.class_id,
+                            ClassStudent.student_membership_id == assigned.id,
+                            ClassStudent.left_at.is_(None),
+                        )
+                    )
+                    if not existing_link:
+                        db.add(ClassStudent(class_id=seat.class_id, student_membership_id=assigned.id))
+                db.add(SeatAssignmentHistory(academy_seat_id=seat.id, academy_id=seat.academy_id, student_user_id=student_id, membership_id=assigned.id))
+                db.execute(
+                    update(WrongAnswerRecord)
+                    .where(WrongAnswerRecord.academy_id == seat.academy_id, WrongAnswerRecord.student_id == previous_student_id)
+                    .values(student_id=student_id, updated_at=datetime.utcnow())
+                )
+                db.execute(
+                    update(ProblemResult)
+                    .where(ProblemResult.academy_id == seat.academy_id, ProblemResult.student_membership_id == assigned.id)
+                    .values(student_user_id=student_id, updated_at=datetime.utcnow())
+                )
+                db.execute(
+                    update(PaperSessionResult)
+                    .where(PaperSessionResult.academy_id == seat.academy_id, PaperSessionResult.student_membership_id == assigned.id)
+                    .values(student_user_id=student_id, updated_at=datetime.utcnow())
+                )
+                audit(db, request, student_id, "student.academy_key_claimed", "academy_seat", str(seat.id), {"academy_id": seat.academy_id, "manual_membership": True})
                 return assigned
             raise HTTPException(status_code=409, detail="This academy key is already assigned to another student.")
     existing_same = list(

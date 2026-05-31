@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Check,
+  Copy,
   GripVertical,
   LineChart,
   Loader2,
@@ -31,6 +32,7 @@ import {
   createPaperSession,
   createReviewSet,
   createStudent,
+  ensureStudentInviteCode,
   getPaperSessionDetail,
   getStudentManagementDashboard,
   listPaperSessions,
@@ -170,18 +172,36 @@ function ClassStudentCard({ student }: { student: StudentCard }) {
   );
 }
 
-function StudentDirectoryCard({ student }: { student: StudentCard }) {
+function StudentDirectoryCard({ student, copying, onCopyKey }: { student: StudentCard; copying?: boolean; onCopyKey: (student: StudentCard) => void }) {
   const meta = [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "학생 정보 미입력";
+  const keyLabel = student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "키 없음");
   return (
-    <Link
-      href={`/student-management/students/${student.id}`}
-      className="group block min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-violet-300/35 hover:bg-violet-500/[0.08]"
-    >
+    <article className="group min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-violet-300/35 hover:bg-violet-500/[0.08]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-black text-white">{student.name}</p>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Link href={`/student-management/students/${student.id}`} className="truncate text-sm font-black text-white hover:text-violet-100">
+              {student.name}
+            </Link>
+            <span className="inline-flex max-w-full items-center gap-1 rounded border border-violet-300/20 bg-violet-500/10 px-1.5 py-0.5 font-mono text-[11px] font-bold text-violet-100">
+              <span className="text-slate-400">Key</span>
+              <span className="truncate">{keyLabel}</span>
+            </span>
+          </div>
           <p className="mt-1 truncate text-xs text-slate-400">{meta}</p>
         </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 shrink-0 text-slate-400 hover:bg-violet-500/10 hover:text-violet-100"
+          onClick={() => onCopyKey(student)}
+          disabled={copying}
+          aria-label={`${student.name} 학생 키 복사`}
+          title="학생 키 복사"
+        >
+          {copying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+        </Button>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
         <div className="rounded bg-white/[0.045] px-2 py-2">
@@ -197,7 +217,7 @@ function StudentDirectoryCard({ student }: { student: StudentCard }) {
           <p className="mt-1 truncate font-bold text-cyan-100">{student.class_names.length || "-"}</p>
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -764,6 +784,7 @@ export default function StudentManagementPage() {
   const [showClassCreator, setShowClassCreator] = useState(false);
   const [addingStudentClassId, setAddingStudentClassId] = useState("");
   const [classStudentSavingId, setClassStudentSavingId] = useState("");
+  const [copyingStudentKeyId, setCopyingStudentKeyId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -872,6 +893,29 @@ export default function StudentManagementPage() {
     setStudentForm(emptyStudentForm);
     setMessage(created.invite_code ? `학생을 추가했습니다. 연결 키: ${created.invite_code}` : "학생을 추가했습니다.");
     await refresh();
+  }
+
+  async function copyStudentKey(student: StudentCard) {
+    setCopyingStudentKeyId(student.id);
+    try {
+      const response = await ensureStudentInviteCode(student.id);
+      await navigator.clipboard.writeText(response.invite_code);
+      setClasses((current) =>
+        current.map((classRow) => ({
+          ...classRow,
+          students: classRow.students.map((item) =>
+            item.id === student.id
+              ? { ...item, invite_code: response.invite_code, invite_code_preview: response.invite_code_preview || item.invite_code_preview }
+              : item
+          ),
+        }))
+      );
+      setMessage(`${student.name} 학생 키를 복사했습니다.`);
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 키를 복사하지 못했습니다. 잠시 후 다시 시도해주세요."));
+    } finally {
+      setCopyingStudentKeyId("");
+    }
   }
 
   function startClassStudentAdd(classRow: ClassCard) {
@@ -1246,7 +1290,14 @@ export default function StudentManagementPage() {
                   <span className="text-xs font-semibold text-slate-500">{allStudents.length}명</span>
                 </div>
                 <div className="grid gap-2 p-3 sm:grid-cols-2 2xl:grid-cols-3">
-                  {allStudents.map((student) => <StudentDirectoryCard key={student.id} student={student} />)}
+                  {allStudents.map((student) => (
+                    <StudentDirectoryCard
+                      key={student.id}
+                      student={student}
+                      copying={copyingStudentKeyId === student.id}
+                      onCopyKey={copyStudentKey}
+                    />
+                  ))}
                   {!allStudents.length ? (
                     <div className="rounded-lg border border-dashed border-white/[0.1] p-8 text-center text-sm text-slate-500 sm:col-span-2 2xl:col-span-3">
                       아직 등록된 학생이 없습니다.

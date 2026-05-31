@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 export type StudentCard = {
   id: string;
   student_user_id: string;
+  academy_seat_id?: string | null;
+  invite_code_preview?: string | null;
   name: string;
   grade_level?: string | null;
   school?: string | null;
@@ -273,6 +275,12 @@ export function createStudent(payload: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(normalized),
+  });
+}
+
+export function ensureStudentInviteCode(id: string) {
+  return api<{ invite_code: string; invite_code_preview?: string | null }>(`/api/student-management/students/${id}/invite-code`, {
+    method: "POST",
   });
 }
 
