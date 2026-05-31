@@ -308,6 +308,11 @@ def _ordered_classes(db: Session, academy_id: str) -> list[AcademyClass]:
     return _sort_class_rows(rows, _stored_class_order(db, academy_id))
 
 
+def _ordered_classes_for_academies(db: Session, academy_ids: set[str], primary_academy_id: str) -> list[AcademyClass]:
+    rows = db.scalars(select(AcademyClass).where(AcademyClass.academy_id.in_(list(academy_ids)))).all()
+    return _sort_class_rows(rows, _stored_class_order(db, primary_academy_id))
+
+
 def _schedule_event_payload(row: ClassScheduleEvent) -> dict:
     return {
         "id": str(row.id),
@@ -411,7 +416,6 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
 
 
 def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) -> list[StudentAcademyMembership]:
-    _get_class(db, academy_id, class_id)
     return db.scalars(
         select(StudentAcademyMembership)
         .join(ClassStudent, ClassStudent.student_membership_id == StudentAcademyMembership.id)
@@ -1146,23 +1150,24 @@ class ReviewSetPayload(BaseModel):
 @router.get("/dashboard")
 def dashboard(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    classes = _ordered_classes(db, academy_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    classes = _ordered_classes_for_academies(db, visible_academy_ids, academy_id)
     sessions = db.scalars(
         select(PaperSession)
-        .where(PaperSession.academy_id == academy_id)
+        .where(PaperSession.academy_id.in_(list(visible_academy_ids)))
         .options(joinedload(PaperSession.content_version))
         .order_by(PaperSession.created_at.desc())
         .limit(8)
     ).all()
     unresolved = db.scalar(
         select(func.count(WrongAnswerRecord.id)).where(
-            WrongAnswerRecord.academy_id == academy_id,
+            WrongAnswerRecord.academy_id.in_(list(visible_academy_ids)),
             WrongAnswerRecord.resolved_status.in_(["unresolved", "reviewing"]),
         )
     ) or 0
     students = db.scalar(
         select(func.count(StudentAcademyMembership.id)).where(
-            StudentAcademyMembership.academy_id == academy_id,
+            StudentAcademyMembership.academy_id.in_(list(visible_academy_ids)),
             StudentAcademyMembership.status == "active",
         )
     ) or 0
@@ -1173,7 +1178,6 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         for student in (class_row.get("students") or [])
         if student.get("id")
     }
-    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     visible_students = _visible_student_memberships(db, visible_academy_ids)
     recovered_students = [
         _student_payload(db, academy_id, membership)
@@ -1200,7 +1204,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 @router.get("/classes")
 def list_classes(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    rows = _ordered_classes(db, academy_id)
+    rows = _ordered_classes_for_academies(db, _student_management_academy_ids(request, db, academy_id), academy_id)
     return [_class_payload(db, academy_id, row, include_students=True) for row in rows]
 
 
@@ -1246,16 +1250,19 @@ def update_class_order(payload: ClassOrderPayload, request: Request, db: Session
 @router.get("/classes/{class_id}")
 def get_class(class_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    row = _get_class(db, academy_id, class_id)
+    academy_ids = _student_management_academy_ids(request, db, academy_id)
+    row = db.get(AcademyClass, class_id)
+    if not row or row.academy_id not in academy_ids:
+        raise HTTPException(status_code=404, detail="Class not found.")
     sessions = db.scalars(
         select(PaperSession)
-        .where(PaperSession.academy_id == academy_id)
+        .where(PaperSession.academy_id.in_(list(academy_ids)))
         .options(joinedload(PaperSession.content_version))
         .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
     ).all()
     events = db.scalars(
         select(ClassScheduleEvent)
-        .where(ClassScheduleEvent.academy_id == academy_id, ClassScheduleEvent.class_id == class_id)
+        .where(ClassScheduleEvent.academy_id.in_(list(academy_ids)), ClassScheduleEvent.class_id == class_id)
         .order_by(ClassScheduleEvent.starts_at.asc())
         .limit(500)
     ).all()

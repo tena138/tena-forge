@@ -30,4 +30,8 @@ def current_owner_ids(request: Request, db: Session, *, include_legacy_for_admin
     admin_emails = BUILTIN_ADMIN_EMAILS | {email.strip().lower() for email in get_settings().admin_emails.split(",") if email.strip()}
     if roles & ADMIN_ROLES or (academy and academy.email.lower() in admin_emails):
         owner_ids.add(LOCAL_OWNER_ID)
+        owner_ids.update(
+            str(academy_id)
+            for academy_id in db.scalars(select(Academy.id).where(Academy.email.in_(admin_emails))).all()
+        )
     return owner_ids
