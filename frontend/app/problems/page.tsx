@@ -20,6 +20,7 @@ import {
   Plus,
   Search,
   Send,
+  Shuffle,
   SlidersHorizontal,
   Trash2,
   X,
@@ -361,6 +362,8 @@ function ProblemsBrowser() {
   const [deleting, setDeleting] = useState(false);
   const [duplicatingId, setDuplicatingId] = useState("");
   const [duplicateNotice, setDuplicateNotice] = useState("");
+  const [randomCount, setRandomCount] = useState("10");
+  const [randomSelecting, setRandomSelecting] = useState(false);
   const [dragBox, setDragBox] = useState<DragBox | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [suppressClick, setSuppressClick] = useState(false);
@@ -683,6 +686,37 @@ function ProblemsBrowser() {
     }
   }
 
+  async function selectRandomProblems() {
+    if (randomSelecting) return;
+    const count = Math.max(1, Math.min(500, Number.parseInt(randomCount, 10) || 0));
+    if (!count) {
+      window.alert("랜덤 추출할 문항 개수를 입력해주세요.");
+      return;
+    }
+    setRandomSelecting(true);
+    setDuplicateNotice("");
+    try {
+      const params = new URLSearchParams(filterQuery);
+      params.set("count", String(count));
+      const response = await api<{ items: Problem[]; total: number; requested: number }>(`/api/problems/random?${params.toString()}`);
+      if (!response.items.length) {
+        window.alert("현재 검색 조건에 맞는 문항이 없습니다.");
+        return;
+      }
+      setSelectedProblemCache((current) => {
+        const next = { ...current };
+        for (const problem of response.items) next[problem.id] = problem;
+        return next;
+      });
+      setSelectedIds(response.items.map((problem) => problem.id));
+      setDuplicateNotice(`${response.items.length}개 문항을 랜덤 추출했습니다.`);
+    } catch {
+      window.alert("문항을 랜덤 추출하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setRandomSelecting(false);
+    }
+  }
+
   function selectCardsInBox(box: DragBox) {
     const list = listRef.current;
     if (!list) return;
@@ -964,9 +998,33 @@ function ProblemsBrowser() {
               <X className="h-3 w-3" />
             </button>
           )) : <span className="text-xs text-muted-foreground">적용된 필터 없음</span>}
+          <div className="ml-auto flex h-8 items-center overflow-hidden rounded-md border border-white/10 bg-white/[0.04]">
+            <label className="flex h-full items-center gap-1.5 border-r border-white/10 px-2 text-xs font-semibold text-slate-300">
+              랜덤
+              <Input
+                type="number"
+                min={1}
+                max={500}
+                value={randomCount}
+                onChange={(event) => setRandomCount(event.target.value)}
+                className="h-6 w-14 border-white/10 bg-black/20 px-1.5 text-center text-xs font-bold"
+                aria-label="랜덤 추출 문항 개수"
+              />
+              개
+            </label>
+            <button
+              type="button"
+              className="inline-flex h-full items-center gap-1.5 px-2.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={selectRandomProblems}
+              disabled={randomSelecting || !data.total}
+            >
+              <Shuffle className="h-3.5 w-3.5" />
+              추출
+            </button>
+          </div>
           <button
             type="button"
-            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
             onClick={() => setFiltersOpen((value) => !value)}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />

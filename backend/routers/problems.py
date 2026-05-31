@@ -38,6 +38,12 @@ class BulkProblemDeleteResponse(BaseModel):
     deleted_count: int
 
 
+class RandomProblemSelectionResponse(BaseModel):
+    items: list[ProblemListItem]
+    total: int
+    requested: int
+
+
 def _trim_visual_whitespace(image: Image.Image, padding: int = 16, threshold: int = 18) -> Image.Image:
     """Tighten manual visual crops while preserving a small readable margin."""
     if image.width < 20 or image.height < 20:
@@ -353,6 +359,51 @@ def list_problems(
         .limit(limit)
     ).unique().all()
     return {"items": [_serialize_problem(item, ProblemListItem) for item in items], "total": total, "page": page, "limit": limit, "pages": math.ceil(total / limit) if total else 1}
+
+
+@router.get("/random", response_model=RandomProblemSelectionResponse)
+def random_problems(
+    request: Request,
+    subject: list[str] | None = Query(default=None),
+    unit: str | None = None,
+    difficulty: list[str] | None = Query(default=None),
+    problem_type: list[str] | None = Query(default=None),
+    needs_review: bool | None = None,
+    source_type: list[str] | None = Query(default=None),
+    visibility: list[str] | None = Query(default=None),
+    origin_type: list[str] | None = Query(default=None),
+    search: str | None = None,
+    batch_id: UUID | None = None,
+    batch_ids: list[UUID] | None = Query(default=None),
+    count: int = Query(default=10, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    filters = _problem_filter_conditions(
+        request,
+        db,
+        subject=subject,
+        unit=unit,
+        difficulty=difficulty,
+        problem_type=problem_type,
+        needs_review=needs_review,
+        source_type=source_type,
+        visibility=visibility,
+        origin_type=origin_type,
+        search=search,
+        batch_id=batch_id,
+        batch_ids=batch_ids,
+    )
+
+    base = select(Problem).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id).options(joinedload(Problem.tags), joinedload(Problem.batch))
+    count_query = select(func.count(distinct(Problem.id))).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id)
+    if filters:
+        condition = and_(*filters)
+        base = base.where(condition)
+        count_query = count_query.where(condition)
+
+    total = db.scalar(count_query) or 0
+    items = db.scalars(base.order_by(func.random()).limit(min(count, total))).unique().all() if total else []
+    return {"items": [_serialize_problem(item, ProblemListItem) for item in items], "total": total, "requested": count}
 
 
 @router.get("/{problem_id}/navigation", response_model=ProblemNavigation)
