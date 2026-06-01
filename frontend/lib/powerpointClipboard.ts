@@ -540,6 +540,92 @@ function parsePlainTextTableItem(text: string): Extract<ClipboardEditableItem, {
   };
 }
 
+function rtfDecodeEscapes(value: string) {
+  return value
+    .replace(/\\'[0-9a-fA-F]{2}/g, (match) => String.fromCharCode(Number.parseInt(match.slice(2), 16)))
+    .replace(/\\u(-?\d+)\??/g, (_, code) => {
+      const parsed = Number.parseInt(code, 10);
+      if (!Number.isFinite(parsed)) return "";
+      return String.fromCharCode(parsed < 0 ? parsed + 65536 : parsed);
+    });
+}
+
+function rtfPlainText(value: string) {
+  return rtfDecodeEscapes(value)
+    .replace(/\\(?:cell|row|par|line)\b/g, "\n")
+    .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
+    .replace(/[{}]/g, "")
+    .replace(/\n+/g, "\n")
+    .replace(/[ \t\f\v]+/g, " ")
+    .trim();
+}
+
+function parseRtfTableItem(rtf: string): Extract<ClipboardEditableItem, { kind: "table" }> | null {
+  if (!/\\trowd\b/.test(rtf) || !/\\cellx-?\d+/.test(rtf)) return null;
+  type RtfParsedRow = {
+    cellX: number[];
+    rowHeightTwips: number;
+    cells: Array<{ text: string; colSpan: number; rowSpan: number; style: ElementStyle }>;
+  };
+  const rowBlocks = rtf.match(/\\trowd[\s\S]*?\\row\b/g) || [];
+  const parsedRows: RtfParsedRow[] = [];
+  rowBlocks.forEach((rowBlock) => {
+    const cellX = Array.from(rowBlock.matchAll(/\\cellx(-?\d+)/g))
+      .map((match) => Number.parseInt(match[1], 10))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (cellX.length < 2) return;
+
+    const rowHeightTwips = Math.abs(Number.parseInt(/\\trrh(-?\d+)/.exec(rowBlock)?.[1] || "", 10)) || 0;
+    const contentStart = rowBlock.search(/\\cellx-?\d+/);
+    const content = contentStart >= 0 ? rowBlock.slice(contentStart).replace(/^(?:[\s\S]*?\\cellx-?\d+)+/, "") : rowBlock;
+    const parts = content.split(/\\cell\b/).slice(0, cellX.length);
+    const cells = parts.map((part) => ({
+      text: rtfPlainText(part),
+      colSpan: 1,
+      rowSpan: 1,
+      style: {
+        fill: "#ffffff",
+        stroke: "#d8dee9",
+        strokeWidth: 1,
+        borderStyle: "solid" as const,
+        color: "#111827",
+        fontFamily: "Pretendard, Noto Sans KR, sans-serif",
+        fontSize: 12,
+        lineHeight: 1.25,
+        textAlign: "left" as const,
+      },
+    }));
+    while (cells.length < cellX.length) {
+      cells.push({ ...cells[cells.length - 1], text: "" });
+    }
+    parsedRows.push({ cellX, rowHeightTwips, cells });
+  });
+
+  if (!parsedRows.length) return null;
+  const columnCount = Math.max(...parsedRows.map((row) => row.cellX.length));
+  if (columnCount < 2) return null;
+  const twipToPx = 96 / 1440;
+  const referenceCellX = parsedRows.reduce((best, row) => (row.cellX.length > best.length ? row.cellX : best), parsedRows[0].cellX);
+  const columnWidths = referenceCellX.map((right, index) => Math.max(8, (right - (referenceCellX[index - 1] || 0)) * twipToPx));
+  const rowHeights = parsedRows.map((row) => Math.max(24, row.rowHeightTwips ? row.rowHeightTwips * twipToPx : 32));
+  const rows = parsedRows.map((row) => Array.from({ length: columnCount }, (_, index) => row.cells[index] || { ...row.cells[row.cells.length - 1], text: "" }));
+  const width = columnWidths.reduce((sum, value) => sum + value, 0);
+  const height = rowHeights.reduce((sum, value) => sum + value, 0);
+  return {
+    kind: "table",
+    name: "PowerPoint RTF 표",
+    x: 0,
+    y: 0,
+    width,
+    height,
+    rows,
+    columnWidths,
+    rowHeights,
+    style: { fill: "#ffffff", stroke: "#d8dee9", strokeWidth: 1, borderStyle: "solid" },
+    explicitPosition: false,
+  };
+}
+
 function parseSvgItem(svg: SVGElement, fallbackIndex: number): ClipboardEditableItem | null {
   const svgText = new XMLSerializer().serializeToString(svg);
   const size = svgSize(svgText);
@@ -867,6 +953,10 @@ function editableGroupScale(items: ClipboardEditableItem[], page: TemplatePage, 
 
 export async function createClipboardEditableElements(data: DataTransfer | null, page: TemplatePage, x: number, y: number, maxZ: number) {
   const items = clipboardEditableItemsFromHtml(data?.getData("text/html") || "");
+  if (!items.length) {
+    const tableItem = parseRtfTableItem(data?.getData("text/rtf") || "");
+    if (tableItem) items.push(tableItem);
+  }
   if (!items.length) {
     const tableItem = parsePlainTextTableItem(data?.getData("text/plain") || "");
     if (tableItem) items.push(tableItem);

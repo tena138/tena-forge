@@ -55,10 +55,12 @@ const { PAGE_SIZES } = compileModule("frontend/lib/visualTemplateTypes.ts");
 const { createClipboardEditableElements } = compileModule("frontend/lib/powerpointClipboard.ts");
 
 function clipboardData(html, plain = "") {
+  const rtf = arguments[2] || "";
   return {
     getData(type) {
       if (type === "text/html") return html;
       if (type === "text/plain") return plain;
+      if (type === "text/rtf") return rtf;
       return "";
     },
   };
@@ -129,4 +131,24 @@ test("PowerPoint image plus tab-separated table text still pastes as editable ce
   assert.equal(texts.length, 9);
   assert.equal(Math.max(...cells.map((element) => element.x + element.width)) - Math.min(...cells.map((element) => element.x)), 288);
   assert.equal(Math.max(...cells.map((element) => element.y + element.height)) - Math.min(...cells.map((element) => element.y)), 96);
+});
+
+test("PowerPoint RTF table data wins over image fallback and preserves cell geometry", async () => {
+  const rtf = String.raw`{\rtf1\ansi
+{\trowd\trrh480\cellx1440\cellx3600\cellx5040
+\intbl 단원\cell 유형\cell 점수\cell\row}
+{\trowd\trrh720\cellx1440\cellx3600\cellx5040
+\intbl 미적분\cell 극한\cell 12\cell\row}
+{\trowd\trrh720\cellx1440\cellx3600\cellx5040
+\intbl 수열\cell 복합 문항\cell 8\cell\row}}`;
+  const { elements } = await createClipboardEditableElements(clipboardData("", "", rtf), page, 100, 120, 0);
+  const images = elements.filter((element) => element.type === "image");
+  const cells = elements.filter((element) => element.type === "shape" && element.name === "표 셀");
+  const texts = elements.filter((element) => element.type === "text" && element.name === "표 셀 텍스트");
+
+  assert.equal(images.length, 0);
+  assert.equal(cells.length, 9);
+  assert.equal(texts.length, 9);
+  assert.equal(Math.max(...cells.map((element) => element.x + element.width)) - Math.min(...cells.map((element) => element.x)), 336);
+  assert.equal(Math.max(...cells.map((element) => element.y + element.height)) - Math.min(...cells.map((element) => element.y)), 128);
 });

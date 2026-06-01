@@ -2179,9 +2179,10 @@ function VisualTemplateEditorPageInner() {
       if (isEditableClipboardTarget(event.target)) return;
 
       const hasHtml = Boolean(event.clipboardData?.getData("text/html"));
+      const hasRtf = Boolean(event.clipboardData?.getData("text/rtf"));
       const plainText = event.clipboardData?.getData("text/plain") || "";
       const hasPlainTextTable = plainText.includes("\t") && plainText.includes("\n");
-      if (hasHtml || hasPlainTextTable) {
+      if (hasHtml || hasRtf || hasPlainTextTable) {
         event.preventDefault();
         void addClipboardEditableContent(event.clipboardData).then((handled) => {
           if (handled) return;

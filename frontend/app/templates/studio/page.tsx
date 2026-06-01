@@ -1449,9 +1449,10 @@ function VisualTemplateStudioPageContent() {
       const clipboardImages = getClipboardDesignImages(event.clipboardData);
       const plainText = getClipboardPlainText(event.clipboardData);
       const hasHtml = Boolean(event.clipboardData?.getData("text/html"));
+      const hasRtf = Boolean(event.clipboardData?.getData("text/rtf"));
       const hasPlainTextTable = plainText.includes("\t") && plainText.includes("\n");
 
-      if ((hasHtml || hasPlainTextTable) && selectedPage) {
+      if ((hasHtml || hasRtf || hasPlainTextTable) && selectedPage) {
         event.preventDefault();
         void addClipboardEditableContent(event.clipboardData, selectedPage.id, x, y).then((handled) => {
           if (handled) return;
