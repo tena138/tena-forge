@@ -200,7 +200,7 @@ export async function listLoginHistory() {
 
 export type OAuthAccountItem = {
   id: string;
-  provider: "google" | "kakao" | "naver";
+  provider: "google" | "kakao";
   provider_email: string | null;
   created_at: string;
 };

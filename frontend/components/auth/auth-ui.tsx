@@ -7,7 +7,7 @@ import { SiteLogoMark } from "@/components/site-logo";
 import { Button } from "@/components/ui/button";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-type OAuthProvider = "kakao" | "naver";
+type OAuthProvider = "kakao";
 type OAuthMode = "login" | "signup";
 type AuthCardVariant = "default" | "aurora";
 type AuroraStyle = "ribbons" | "halo";
@@ -487,7 +487,6 @@ export function SocialButtons({
   return (
     <div className={compact ? "flex justify-center gap-2" : "flex justify-center gap-4"}>
       <SocialButton provider="kakao" label={`카카오${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} compact={compact} />
-      <SocialButton provider="naver" label={`네이버${suffix}`} mode={mode} accountType={accountType} redirect={redirect} disabled={disabled} compact={compact} />
     </div>
   );
 }
@@ -518,7 +517,6 @@ function SocialButton({
 }) {
   const styles = {
     kakao: "bg-[#FEE500] text-black hover:bg-[#f5dc00]",
-    naver: "bg-[#03C75A] text-white hover:bg-[#02b350]",
   }[provider];
   const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
   const logo = <SocialProviderLogo provider={provider} />;
@@ -547,7 +545,7 @@ function SocialProviderLogo({ provider }: { provider: OAuthProvider }) {
       </svg>
     );
   }
-  return <span className="text-2xl font-black leading-none tracking-normal text-white" aria-hidden="true">N</span>;
+  return null;
 }
 
 export function DividerText({ children = "또는" }: { children?: React.ReactNode }) {

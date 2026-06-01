@@ -123,16 +123,6 @@ if settings.kakao_client_id:
         },
     )
 
-if settings.naver_client_id and settings.naver_client_secret:
-    oauth.register(
-        name="naver",
-        client_id=settings.naver_client_id,
-        client_secret=settings.naver_client_secret,
-        authorize_url="https://nid.naver.com/oauth2.0/authorize",
-        access_token_url="https://nid.naver.com/oauth2.0/token",
-        client_kwargs={"token_endpoint_auth_method": "client_secret_post"},
-    )
-
 
 def _active_subscription_for_profile(db: Session, academy: Academy) -> Subscription | None:
     if academy.account_type != "academy":
@@ -273,7 +263,7 @@ def _decode_social_signup_token(token: str) -> dict:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError:
         raise HTTPException(status_code=400, detail="소셜 인증이 만료되었습니다. 다시 회원가입을 시작해주세요.")
-    if payload.get("type") != "social_signup" or payload.get("provider") not in {"kakao", "naver", "google"} or not payload.get("provider_account_id"):
+    if payload.get("type") != "social_signup" or payload.get("provider") not in {"kakao", "google"} or not payload.get("provider_account_id"):
         raise HTTPException(status_code=400, detail="소셜 인증 정보가 올바르지 않습니다.")
     return payload
 
@@ -1042,29 +1032,6 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     account = data.get("kakao_account", {})
     profile = account.get("profile", {})
     return _oauth_finalize(db, request, "kakao", str(data["id"]), profile.get("nickname") or "Kakao Academy", token, intent)
-
-
-@router.get("/naver")
-async def naver_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
-    _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
-    redirect_uri = _oauth_callback_url(request, "naver_callback")
-    return await _oauth_client("naver").authorize_redirect(request, redirect_uri)
-
-
-@router.get("/naver/callback", name="naver_callback")
-async def naver_callback(request: Request, db: Session = Depends(get_db)):
-    intent = _consume_oauth_intent(request)
-    try:
-        token = await _oauth_client("naver").authorize_access_token(request)
-        response = await _oauth_client("naver").get("https://openapi.naver.com/v1/nid/me", token=token)
-    except OAuthError as exc:
-        _log_oauth_error("naver", exc)
-        return _oauth_error_redirect(_oauth_error_code(exc), mode=intent.get("mode", "login"))
-    if response.status_code >= 400:
-        print(f"naver OAuth profile failed: {response.status_code} {response.text[:500]}", flush=True)
-        return _oauth_error_redirect("oauth_profile_failed", mode=intent.get("mode", "login"))
-    data = response.json().get("response", {})
-    return _oauth_finalize(db, request, "naver", str(data["id"]), data.get("nickname") or "Naver 사용자", token, intent)
 
 
 def _oauth_finalize(db: Session, request: Request, provider: str, provider_account_id: str, name: str, token: dict, intent: dict | None = None):

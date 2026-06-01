@@ -133,7 +133,7 @@ export default function AccountSecurityPage() {
       <Card>
         <CardHeader><CardTitle>연결된 소셜 계정</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
-          {["카카오", "네이버"].map((provider) => {
+          {["카카오"].map((provider) => {
             const connected = oauthAccounts.some((item) => providerName(item.provider) === provider);
             return (
               <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
@@ -211,7 +211,7 @@ export default function AccountSecurityPage() {
             {setupStep === 1 && (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">인증 앱 설치</h2>
-                <p className="text-sm text-slate-400">Google Authenticator, Naver OTP, Authy 같은 인증 앱을 준비해주세요.</p>
+                <p className="text-sm text-slate-400">Google Authenticator, Authy 같은 인증 앱을 준비해주세요.</p>
                 <Button onClick={() => setSetupStep(2)}>다음</Button>
               </div>
             )}
@@ -262,9 +262,9 @@ function downloadBackupCodes(codes: string[]) {
 }
 
 function providerName(provider: string) {
-  return provider === "kakao" ? "카카오" : "네이버";
+  return provider === "kakao" ? "카카오" : provider;
 }
 
 function providerKey(name: string) {
-  return name === "카카오" ? "kakao" : "naver";
+  return "kakao";
 }
