@@ -49,6 +49,8 @@ type ClipboardEditableItem =
       width: number;
       height: number;
       rows: Array<Array<{ text: string; colSpan: number; rowSpan: number; style: ElementStyle }>>;
+      columnWidths: number[];
+      rowHeights: number[];
       style: ElementStyle;
       explicitPosition: boolean;
     };
@@ -374,6 +376,59 @@ function tableItemSignature(item: Extract<ClipboardEditableItem, { kind: "table"
   return [Math.round(item.x), Math.round(item.y), Math.round(item.width), Math.round(item.height), text].join("::");
 }
 
+function distributeEvenly(total: number, count: number) {
+  const safeCount = Math.max(1, count);
+  const size = Math.max(1, total) / safeCount;
+  return Array.from({ length: safeCount }, () => size);
+}
+
+function scaleLengths(lengths: number[], total: number, count: number) {
+  const safeCount = Math.max(1, count);
+  const normalized = Array.from({ length: safeCount }, (_, index) => Math.max(0, lengths[index] || 0));
+  const known = normalized.filter((length) => length > 0);
+  if (known.length && known.length < safeCount) {
+    const fallback = known.reduce((sum, length) => sum + length, 0) / known.length;
+    normalized.forEach((length, index) => {
+      if (length <= 0) normalized[index] = fallback;
+    });
+  }
+  const sum = normalized.reduce((value, length) => value + length, 0);
+  if (sum <= 0) return distributeEvenly(total, safeCount);
+  const scale = Math.max(1, total) / sum;
+  return normalized.map((length) => length * scale);
+}
+
+function tableColumnWidths(table: HTMLTableElement, columnCount: number) {
+  const widths = Array.from(table.querySelectorAll("col"))
+    .map((col) => cssNumber(cssDeclaration(col, "width")) ?? cssNumber(col.getAttribute("width")))
+    .filter((width): width is number => typeof width === "number" && width > 0);
+  if (widths.length >= columnCount) return widths.slice(0, columnCount);
+
+  const firstUsefulRow = Array.from(table.querySelectorAll("tr")).find((row) => Array.from(row.children).some((cell) => cssNumber(cssDeclaration(cell, "width")) || cssNumber(cell.getAttribute("width"))));
+  if (!firstUsefulRow) return widths;
+
+  const inferred = [...widths];
+  Array.from(firstUsefulRow.children)
+    .filter((cell) => ["td", "th"].includes(cell.tagName.toLowerCase()))
+    .forEach((cell) => {
+      const width = cssNumber(cssDeclaration(cell, "width")) ?? cssNumber(cell.getAttribute("width"));
+      const span = Math.max(1, Number((cell as HTMLTableCellElement).colSpan || cell.getAttribute("colspan") || 1));
+      if (!width || width <= 0) {
+        for (let index = 0; index < span; index += 1) inferred.push(0);
+        return;
+      }
+      for (let index = 0; index < span; index += 1) inferred.push(width / span);
+    });
+  return inferred.slice(0, columnCount);
+}
+
+function tableRowHeights(rows: HTMLTableRowElement[], rowCount: number) {
+  const heights = rows
+    .map((row) => cssNumber(cssDeclaration(row, "height")) ?? cssNumber(row.getAttribute("height")))
+    .filter((height): height is number => typeof height === "number" && height > 0);
+  return heights.slice(0, rowCount);
+}
+
 function htmlFragment(html: string) {
   const fragmentMatch = /<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/i.exec(html);
   return fragmentMatch?.[1] || html;
@@ -404,7 +459,8 @@ function createTextItem(element: Element, fallbackIndex: number, name = "PowerPo
 }
 
 function parseTableItem(table: HTMLTableElement, fallbackIndex: number): Extract<ClipboardEditableItem, { kind: "table" }> | null {
-  const rows = directTableRows(table).map((row) =>
+  const directRows = directTableRows(table);
+  const rows = directRows.map((row) =>
     Array.from(row.children)
       .filter((cell) => ["td", "th"].includes(cell.tagName.toLowerCase()))
       .map((cell) => ({
@@ -416,9 +472,13 @@ function parseTableItem(table: HTMLTableElement, fallbackIndex: number): Extract
   );
   if (!rows.length) return null;
   const columnCount = Math.max(1, ...rows.map((row) => row.reduce((sum, cell) => sum + Math.max(1, cell.colSpan || 1), 0)));
+  const explicitColumnWidths = tableColumnWidths(table, columnCount);
+  const explicitRowHeights = tableRowHeights(directRows, rows.length);
+  const inferredWidth = explicitColumnWidths.reduce((sum, width) => sum + width, 0);
+  const inferredHeight = explicitRowHeights.reduce((sum, height) => sum + height, 0);
   const geometry = elementGeometry(table, fallbackIndex);
-  const width = Math.max(180, geometry.width);
-  const height = Math.max(48, geometry.height || rows.length * 36);
+  const width = Math.max(48, geometry.width || inferredWidth || columnCount * 72);
+  const height = Math.max(24, geometry.height || inferredHeight || rows.length * 36);
   return {
     kind: "table",
     name: "PowerPoint 표",
@@ -427,6 +487,8 @@ function parseTableItem(table: HTMLTableElement, fallbackIndex: number): Extract
     width,
     height,
     rows,
+    columnWidths: explicitColumnWidths.length ? scaleLengths(explicitColumnWidths, width, columnCount) : distributeEvenly(width, columnCount),
+    rowHeights: explicitRowHeights.length ? scaleLengths(explicitRowHeights, height, rows.length) : distributeEvenly(height, rows.length),
     style: visualStyleFromElement(table),
     explicitPosition: geometry.explicitPosition,
   };
@@ -527,13 +589,16 @@ function clipboardEditableItemsFromHtml(html: string): ClipboardEditableItem[] {
       markProcessed(table, processed);
     });
 
-  Array.from(doc.querySelectorAll("img")).forEach((image, index) => {
-    if (isInsideProcessed(image, processed)) return;
-    const item = parseImageItem(image as HTMLImageElement, index);
-    if (!item) return;
-    items.push(item);
-    markProcessed(image, processed);
-  });
+  const hasStructuredTable = items.some((item) => item.kind === "table");
+  if (!hasStructuredTable) {
+    Array.from(doc.querySelectorAll("img")).forEach((image, index) => {
+      if (isInsideProcessed(image, processed)) return;
+      const item = parseImageItem(image as HTMLImageElement, index);
+      if (!item) return;
+      items.push(item);
+      markProcessed(image, processed);
+    });
+  }
 
   Array.from(doc.querySelectorAll("svg")).forEach((svg, index) => {
     if (isInsideProcessed(svg, processed)) return;
@@ -729,6 +794,16 @@ function normalizedItemFrame(item: ClipboardEditableItem, minX: number, minY: nu
   };
 }
 
+function lengthOffsets(lengths: number[]) {
+  const offsets = [0];
+  lengths.forEach((length) => offsets.push(offsets[offsets.length - 1] + length));
+  return offsets;
+}
+
+function sumSpan(lengths: number[], start: number, span: number) {
+  return lengths.slice(start, start + Math.max(1, span)).reduce((sum, length) => sum + length, 0);
+}
+
 function editableGroupScale(items: ClipboardEditableItem[], page: TemplatePage, pasteX: number, pasteY: number) {
   const bounds = items.map(itemBounds);
   const minX = Math.min(...bounds.map((bound) => bound.left));
@@ -807,40 +882,67 @@ export async function createClipboardEditableElements(data: DataTransfer | null,
     }
 
     const columns = itemColumnCount(item);
-    const tableBase = createElement("table", frame.x, frame.y);
-    if (tableBase.type !== "table") continue;
-    const tableId = nanoid();
-    elements.push({
-      ...tableBase,
-      ...frame,
-      id: tableId,
-      name: item.name,
-      rows: Math.max(1, item.rows.length),
-      columns,
-      headerRow: false,
-      style: scaleStyle({ fill: "#ffffff", stroke: "#d8dee9", strokeWidth: 1, borderStyle: "solid", ...item.style }, scale),
-      zIndex: ++zIndex,
-      groupId,
-    });
+    const rowCount = Math.max(1, item.rows.length);
+    const columnWidths = scaleLengths(item.columnWidths, frame.width, columns);
+    const rowHeights = scaleLengths(item.rowHeights, frame.height, rowCount);
+    const columnOffsets = lengthOffsets(columnWidths);
+    const rowOffsets = lengthOffsets(rowHeights);
+    const occupied: boolean[][] = Array.from({ length: rowCount }, () => Array.from({ length: columns }, () => false));
 
-    const cellWidth = frame.width / columns;
-    const cellHeight = frame.height / Math.max(1, item.rows.length);
     item.rows.forEach((row, rowIndex) => {
       let columnIndex = 0;
       row.forEach((cell) => {
+        while (columnIndex < columns && occupied[rowIndex]?.[columnIndex]) columnIndex += 1;
         const colSpan = Math.max(1, cell.colSpan || 1);
         const rowSpan = Math.max(1, cell.rowSpan || 1);
+        const cellX = Math.round(frame.x + columnOffsets[columnIndex]);
+        const cellY = Math.round(frame.y + rowOffsets[rowIndex]);
+        const cellWidth = Math.max(1, Math.round(sumSpan(columnWidths, columnIndex, colSpan)));
+        const cellHeight = Math.max(1, Math.round(sumSpan(rowHeights, rowIndex, rowSpan)));
+        for (let r = rowIndex; r < Math.min(rowCount, rowIndex + rowSpan); r += 1) {
+          for (let c = columnIndex; c < Math.min(columns, columnIndex + colSpan); c += 1) {
+            occupied[r][c] = true;
+          }
+        }
+
+        const cellShape = createElement("shape", cellX, cellY);
+        if (cellShape.type === "shape") {
+          elements.push({
+            ...cellShape,
+            id: nanoid(),
+            name: "표 셀",
+            x: cellX,
+            y: cellY,
+            width: cellWidth,
+            height: cellHeight,
+            shape: "rect",
+            style: scaleStyle(
+              {
+                fill: cell.style.fill && cell.style.fill !== "transparent" ? cell.style.fill : item.style.fill || "#ffffff",
+                stroke: cell.style.stroke && cell.style.stroke !== "transparent" ? cell.style.stroke : item.style.stroke || "#d8dee9",
+                strokeWidth: cell.style.strokeWidth || item.style.strokeWidth || 1,
+                borderStyle: cell.style.borderStyle || item.style.borderStyle || "solid",
+                radius: 0,
+              },
+              scale
+            ),
+            zIndex: ++zIndex,
+            groupId,
+          });
+        }
+
         if (cell.text) {
-          const textBase = createElement("text", frame.x + columnIndex * cellWidth + 4, frame.y + rowIndex * cellHeight + 4);
+          const padding = Math.max(2, Math.round(4 * scale));
+          const textBase = createElement("text", cellX + padding, cellY + padding);
           if (textBase.type === "text") {
             elements.push({
               ...textBase,
               id: nanoid(),
               name: "표 셀 텍스트",
-              x: Math.round(frame.x + columnIndex * cellWidth + 4),
-              y: Math.round(frame.y + rowIndex * cellHeight + 4),
-              width: Math.max(16, Math.round(cellWidth * colSpan - 8)),
-              height: Math.max(14, Math.round(cellHeight * rowSpan - 8)),
+              x: cellX + padding,
+              y: cellY + padding,
+              width: Math.max(12, cellWidth - padding * 2),
+              height: Math.max(12, cellHeight - padding * 2),
               text: cell.text,
               style: scaleStyle({ ...cell.style, fill: "transparent", stroke: "transparent", strokeWidth: 0, borderStyle: "none" }, scale),
               zIndex: ++zIndex,
