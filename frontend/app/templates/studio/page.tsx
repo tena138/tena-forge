@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { CSSProperties, ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AlignmentGuide, ResizeHandleDirection, TemplatePageView } from "@/components/templates/visual-template-renderer";
+import { AlignmentGuide, ResizeHandleDirection, TemplatePageView, TemplateSelectionBox } from "@/components/templates/visual-template-renderer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget, readFileAsDataUrl } from "@/lib/clipboardImages";
@@ -627,6 +627,10 @@ function getBoundingBox(elements: TemplateElement[]): ElementBox {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
+function boxesIntersect(a: ElementBox, b: ElementBox) {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
 function getBoxAnchors(box: ElementBox) {
   return {
     x: [box.x, box.x + box.width / 2, box.x + box.width],
@@ -862,6 +866,15 @@ type DragState =
       centerY: number;
     };
 
+type MarqueeSelectionState = {
+  pageId: string;
+  startX: number;
+  startY: number;
+  pageLeft: number;
+  pageTop: number;
+  baseIds: string[];
+};
+
 function VisualTemplateStudioPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -875,6 +888,7 @@ function VisualTemplateStudioPageContent() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingTextElementId, setEditingTextElementId] = useState<string | null>(null);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
+  const [selectionBox, setSelectionBox] = useState<(TemplateSelectionBox & { pageId: string }) | null>(null);
   const [zoom, setZoom] = useState(0.84);
   const [leftPanel, setLeftPanel] = useState<StudioPanel>("elements");
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -888,6 +902,8 @@ function VisualTemplateStudioPageContent() {
   const [redoStack, setRedoStack] = useState<TemplateSet[]>([]);
   const clipboardRef = useRef<TemplateElement[]>([]);
   const dragRef = useRef<DragState | null>(null);
+  const marqueeSelectionRef = useRef<MarqueeSelectionState | null>(null);
+  const templateSetRef = useRef(templateSet);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pptxInputRef = useRef<HTMLInputElement | null>(null);
   const persistedTemplateIdRef = useRef<string | null>(requestedId);
@@ -915,6 +931,10 @@ function VisualTemplateStudioPageContent() {
     }
     return "변경 시 자동 저장";
   }, [autoSaveStatus, lastSavedAt, saving]);
+
+  useEffect(() => {
+    templateSetRef.current = templateSet;
+  }, [templateSet]);
 
   const filteredPalette = useMemo(() => {
     const query = paletteQuery.trim().toLowerCase();
@@ -1143,6 +1163,29 @@ function VisualTemplateStudioPageContent() {
 
   useEffect(() => {
     function onPointerMove(event: PointerEvent) {
+      const marquee = marqueeSelectionRef.current;
+      if (marquee) {
+        const currentTemplateSet = templateSetRef.current;
+        const page = currentTemplateSet.pages.find((item) => item.id === marquee.pageId);
+        if (!page) return;
+        const size = page.pageSize || currentTemplateSet.defaultPageSize || PAGE_SIZES.A4_PORTRAIT;
+        const pointerX = clampNumber((event.clientX - marquee.pageLeft) / zoom, 0, size.width);
+        const pointerY = clampNumber((event.clientY - marquee.pageTop) / zoom, 0, size.height);
+        const box = {
+          x: Math.min(marquee.startX, pointerX),
+          y: Math.min(marquee.startY, pointerY),
+          width: Math.abs(pointerX - marquee.startX),
+          height: Math.abs(pointerY - marquee.startY),
+        };
+        setSelectionBox({ pageId: marquee.pageId, ...box });
+        if (box.width >= 3 || box.height >= 3) {
+          const hitIds = page.elements
+            .filter((element) => !element.locked && boxesIntersect(getElementBox(element), box))
+            .map((element) => element.id);
+          setSelectedIds(Array.from(new Set([...marquee.baseIds, ...hitIds])));
+        }
+        return;
+      }
       const drag = dragRef.current;
       if (!drag) return;
       const dx = (event.clientX - ("startX" in drag ? drag.startX : event.clientX)) / zoom;
@@ -1178,6 +1221,8 @@ function VisualTemplateStudioPageContent() {
     }
 
     function onPointerUp() {
+      marqueeSelectionRef.current = null;
+      setSelectionBox(null);
       dragRef.current = null;
       setAlignmentGuides([]);
     }
@@ -1246,6 +1291,29 @@ function VisualTemplateStudioPageContent() {
       setSelectedIds([]);
       return current.slice(0, -1);
     });
+  }
+
+  function startMarqueeSelection(event: ReactPointerEvent<HTMLDivElement>, page: TemplatePage) {
+    if (event.button !== 0 || event.pointerType === "touch") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const frame = event.currentTarget.getBoundingClientRect();
+    const size = page.pageSize || templateSet.defaultPageSize || PAGE_SIZES.A4_PORTRAIT;
+    const startX = clampNumber((event.clientX - frame.left) / zoom, 0, size.width);
+    const startY = clampNumber((event.clientY - frame.top) / zoom, 0, size.height);
+    setSelectedPageId(page.id);
+    setEditingTextElementId(null);
+    setAlignmentGuides([]);
+    marqueeSelectionRef.current = {
+      pageId: page.id,
+      startX,
+      startY,
+      pageLeft: frame.left,
+      pageTop: frame.top,
+      baseIds: event.shiftKey && page.id === selectedPageId ? selectedIds : [],
+    };
+    setSelectionBox({ pageId: page.id, x: startX, y: startY, width: 0, height: 0 });
+    if (!event.shiftKey) setSelectedIds([]);
   }
 
   function selectElement(event: ReactPointerEvent<HTMLDivElement>, element: TemplateElement, page: TemplatePage) {
@@ -2073,6 +2141,7 @@ function VisualTemplateStudioPageContent() {
                       page={renderedPage}
                       scale={zoom}
                       selectedIds={page.id === selectedPageId ? selectedIds : []}
+                      selectionBox={selectionBox?.pageId === page.id ? selectionBox : null}
                       interactive={page.id === selectedPageId}
                       alignmentGuides={page.id === selectedPageId ? alignmentGuides : []}
                       renderElementContent={(element, defaultContent: ReactNode) =>
@@ -2092,6 +2161,7 @@ function VisualTemplateStudioPageContent() {
                         setEditingTextElementId(null);
                         setAlignmentGuides([]);
                       }}
+                      onPagePointerDown={(event) => startMarqueeSelection(event, page)}
                       onElementPointerDown={(event, element) => {
                         setSelectedPageId(page.id);
                         selectElement(event, element, page);

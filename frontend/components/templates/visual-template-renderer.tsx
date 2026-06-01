@@ -15,6 +15,8 @@ export type AlignmentGuide = {
   position: number;
 };
 
+export type TemplateSelectionBox = { x: number; y: number; width: number; height: number };
+
 function px(value?: number) {
   return typeof value === "number" ? `${value}px` : undefined;
 }
@@ -585,6 +587,7 @@ type TemplatePageViewProps = {
   scale?: number;
   scaleOrigin?: "top" | "top-left";
   selectedIds?: string[];
+  selectionBox?: TemplateSelectionBox | null;
   interactive?: boolean;
   alignmentGuides?: AlignmentGuide[];
   renderElementContent?: (element: TemplateElement, defaultContent: ReactNode) => ReactNode;
@@ -592,6 +595,7 @@ type TemplatePageViewProps = {
   onResizePointerDown?: (event: PointerEvent<HTMLDivElement>, element: TemplateElement, direction: ResizeHandleDirection) => void;
   onRotatePointerDown?: (event: PointerEvent<HTMLDivElement>, element: TemplateElement) => void;
   onSelectPage?: () => void;
+  onPagePointerDown?: (event: PointerEvent<HTMLDivElement>) => void;
 };
 
 const resizeHandles: Array<{ direction: ResizeHandleDirection; className: string }> = [
@@ -611,6 +615,7 @@ export function TemplatePageView({
   scale = 1,
   scaleOrigin = "top",
   selectedIds = [],
+  selectionBox = null,
   interactive = false,
   alignmentGuides = [],
   renderElementContent,
@@ -618,6 +623,7 @@ export function TemplatePageView({
   onResizePointerDown,
   onRotatePointerDown,
   onSelectPage,
+  onPagePointerDown,
 }: TemplatePageViewProps) {
   const size = page.pageSize || templateSet.defaultPageSize || PAGE_SIZES.A4_PORTRAIT;
   const sorted = [...page.elements].sort((a, b) => a.zIndex - b.zIndex);
@@ -632,10 +638,15 @@ export function TemplatePageView({
         background: page.background.color,
       }}
       onPointerDown={(event) => {
-        if (event.target === event.currentTarget) onSelectPage?.();
+        if (event.target !== event.currentTarget) return;
+        if (onPagePointerDown) {
+          onPagePointerDown(event);
+        } else {
+          onSelectPage?.();
+        }
       }}
     >
-      {page.background.imageUrl ? <img src={page.background.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ opacity: page.background.opacity ?? 1 }} /> : null}
+      {page.background.imageUrl ? <img src={page.background.imageUrl} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ opacity: page.background.opacity ?? 1 }} /> : null}
       {interactive && page.safeArea ? <div className="pointer-events-none absolute border border-dashed border-slate-300/70" style={{ left: page.safeArea.x, top: page.safeArea.y, width: page.safeArea.width, height: page.safeArea.height }} /> : null}
       {interactive && page.guides?.map((guide) => (
         <div
@@ -651,6 +662,12 @@ export function TemplatePageView({
           style={guide.axis === "x" ? { left: guide.position, top: 0, width: 1, height: "100%" } : { left: 0, top: guide.position, height: 1, width: "100%" }}
         />
       ))}
+      {interactive && selectionBox ? (
+        <div
+          className="pointer-events-none absolute z-[1500] rounded-[6px] border border-violet-300 bg-violet-400/15 shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
+          style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.width, height: selectionBox.height }}
+        />
+      ) : null}
       {sorted.map((element) => {
         const selected = selectedIds.includes(element.id);
         const defaultContent = renderVisualElement(element, page.dynamicPlacements?.[element.id], interactive);
