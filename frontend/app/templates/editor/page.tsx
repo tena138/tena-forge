@@ -86,8 +86,10 @@ import { api, assetUrl, ExamTemplate, previewCanvasExport, saveVisualTemplate } 
 import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget, readFileAsDataUrl } from "@/lib/clipboardImages";
 import { rememberElementUse } from "@/lib/elementPresets";
 import { A4_CANVAS, CanvasDocument, CanvasDocumentPage, CanvasElement, CanvasElementType, DrawingTool, DynamicFieldKey, EMPTY_DOCUMENT, Guide, SidebarTab, getCanvasDocumentPages } from "@/lib/editorTypes";
+import { createClipboardEditableElements } from "@/lib/powerpointClipboard";
 import { getStarterTemplate } from "@/lib/starterTemplates";
 import { legacyTemplateDocument } from "@/lib/templateFallback";
+import { TemplateElement } from "@/lib/visualTemplateTypes";
 import { Alignment, LayerDirection, useEditorStore } from "@/store/editorStore";
 
 const fontFamilies = ["NanumGothic", "NanumMyeongjo", "NanumBarunGothic", "NanumSquare", "Malgun Gothic", "Dotum", "Gulim", "Batang", "Arial", "Georgia", "Times New Roman", "Courier New", "Helvetica"];
@@ -239,6 +241,49 @@ function normalizePoints(points: Array<{ x: number; y: number }>) {
     height: Math.max(1, maxY - minY),
     points: points.map((point) => ({ x: Math.round(point.x - minX), y: Math.round(point.y - minY) })),
   };
+}
+
+function canvasElementFromClipboardElement(element: TemplateElement): CanvasElement | null {
+  const style = element.style || {};
+  const rawElement = element as TemplateElement & { visible?: boolean; locked?: boolean };
+  const common = {
+    id: nanoid(),
+    name: element.name,
+    x: Math.round(element.x),
+    y: Math.round(element.y),
+    width: Math.max(1, Math.round(element.width)),
+    height: Math.max(1, Math.round(element.height)),
+    rotation: element.rotation || 0,
+    opacity: element.opacity ?? 1,
+    visible: rawElement.visible ?? true,
+    locked: rawElement.locked ?? false,
+    zIndex: element.zIndex || 0,
+    groupId: element.groupId,
+    fill: style.fill || "transparent",
+    stroke: style.stroke || "transparent",
+    strokeWidth: style.strokeWidth || 0,
+    strokeStyle: style.borderStyle === "dashed" || style.borderStyle === "dotted" ? style.borderStyle : "solid",
+    color: style.color || "#111827",
+    fontFamily: style.fontFamily || "NanumGothic",
+    fontSize: style.fontSize || 14,
+    fontWeight: style.fontWeight === "medium" ? "bold" : style.fontWeight || "normal",
+    fontStyle: style.fontStyle || "normal",
+    textAlign: style.textAlign || "left",
+    lineHeight: style.lineHeight || 1.25,
+    letterSpacing: style.letterSpacing || 0,
+    borderRadius: style.radius || 0,
+  } satisfies Partial<CanvasElement>;
+
+  if (element.type === "text") {
+    return { ...baseElement("text", element.name, common.x!, common.y!, common), text: element.text };
+  }
+  if (element.type === "shape") {
+    return { ...baseElement("rect", element.name, common.x!, common.y!, common) };
+  }
+  if (element.type === "image") {
+    return { ...baseElement("image", element.name, common.x!, common.y!, common), src: element.src || undefined, objectFit: element.objectFit || "contain" };
+  }
+  return null;
 }
 
 function arrowPath(width: number, height: number) {
@@ -1937,6 +1982,37 @@ function VisualTemplateEditorPageInner() {
     [addElement]
   );
 
+  const addClipboardEditableContent = useCallback(
+    async (data: DataTransfer | null) => {
+      if (!data) return false;
+      const state = useEditorStore.getState();
+      const page = state.canvasJson.page;
+      const templatePage = {
+        id: "legacy-editor-page",
+        name: "Page",
+        role: "custom" as const,
+        pageSize: { preset: "CUSTOM" as const, width: page.width, height: page.height, unit: "px" as const },
+        background: { color: page.backgroundColor || "#ffffff" },
+        safeArea: {
+          x: page.margins.left,
+          y: page.margins.top,
+          width: Math.max(80, page.width - page.margins.left - page.margins.right),
+          height: Math.max(80, page.height - page.margins.top - page.margins.bottom),
+        },
+        elements: [],
+      };
+      const maxZ = Math.max(0, ...state.canvasJson.elements.map((item) => item.zIndex || 0));
+      const { elements } = await createClipboardEditableElements(data, templatePage, 120, 140, maxZ);
+      const canvasElements = elements.map(canvasElementFromClipboardElement).filter((element): element is CanvasElement => Boolean(element));
+      if (!canvasElements.length) return false;
+
+      canvasElements.forEach((element) => addElement(element));
+      setNotice(`PowerPoint 표를 ${canvasElements.length}개의 편집 가능한 요소로 붙여넣었습니다.`);
+      return true;
+    },
+    [addElement]
+  );
+
   const writeDraft = useCallback(() => {
     if (typeof window === "undefined") return;
     const state = useEditorStore.getState();
@@ -2102,6 +2178,19 @@ function VisualTemplateEditorPageInner() {
     function onPaste(event: ClipboardEvent) {
       if (isEditableClipboardTarget(event.target)) return;
 
+      const hasHtml = Boolean(event.clipboardData?.getData("text/html"));
+      const plainText = event.clipboardData?.getData("text/plain") || "";
+      const hasPlainTextTable = plainText.includes("\t") && plainText.includes("\n");
+      if (hasHtml || hasPlainTextTable) {
+        event.preventDefault();
+        void addClipboardEditableContent(event.clipboardData).then((handled) => {
+          if (handled) return;
+          const imageFiles = getClipboardImageFiles(event.clipboardData);
+          if (imageFiles.length) void addClipboardImages(imageFiles);
+        });
+        return;
+      }
+
       const imageFiles = getClipboardImageFiles(event.clipboardData);
       if (imageFiles.length) {
         event.preventDefault();
@@ -2117,7 +2206,7 @@ function VisualTemplateEditorPageInner() {
 
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [addClipboardImages, pasteFromClipboard]);
+  }, [addClipboardEditableContent, addClipboardImages, pasteFromClipboard]);
 
   useEffect(() => {
     hotkeys("ctrl+s,command+s", (event) => { event.preventDefault(); save(); });

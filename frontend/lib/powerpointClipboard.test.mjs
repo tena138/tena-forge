@@ -116,3 +116,17 @@ test("PowerPoint-style complex HTML table pastes as editable cells without image
   assert.ok(Math.abs(headerCell.width - 293) <= 1);
   assert.ok(Math.abs(headerCell.height - 40) <= 1);
 });
+
+test("PowerPoint image plus tab-separated table text still pastes as editable cells", async () => {
+  const plain = ["단원\t유형\t점수", "미적분\t극한\t12", "수열\t복합 문항\t8"].join("\n");
+  const { elements } = await createClipboardEditableElements(clipboardData("", plain), page, 100, 120, 0);
+  const images = elements.filter((element) => element.type === "image");
+  const cells = elements.filter((element) => element.type === "shape" && element.name === "표 셀");
+  const texts = elements.filter((element) => element.type === "text" && element.name === "표 셀 텍스트");
+
+  assert.equal(images.length, 0);
+  assert.equal(cells.length, 9);
+  assert.equal(texts.length, 9);
+  assert.equal(Math.max(...cells.map((element) => element.x + element.width)) - Math.min(...cells.map((element) => element.x)), 288);
+  assert.equal(Math.max(...cells.map((element) => element.y + element.height)) - Math.min(...cells.map((element) => element.y)), 96);
+});

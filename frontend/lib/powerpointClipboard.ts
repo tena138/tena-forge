@@ -494,6 +494,52 @@ function parseTableItem(table: HTMLTableElement, fallbackIndex: number): Extract
   };
 }
 
+function parsePlainTextTableItem(text: string): Extract<ClipboardEditableItem, { kind: "table" }> | null {
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim());
+  if (lines.length < 2 || !lines.some((line) => line.includes("\t"))) return null;
+
+  const cells = lines.map((line) => line.split("\t").map((cell) => cell.trim()));
+  const columnCount = Math.max(1, ...cells.map((row) => row.length));
+  if (columnCount < 2) return null;
+
+  const rows = cells.map((row) =>
+    Array.from({ length: columnCount }, (_, index) => ({
+      text: row[index] || "",
+      colSpan: 1,
+      rowSpan: 1,
+      style: {
+        fill: "#ffffff",
+        stroke: "#d8dee9",
+        strokeWidth: 1,
+        borderStyle: "solid" as const,
+        color: "#111827",
+        fontFamily: "Pretendard, Noto Sans KR, sans-serif",
+        fontSize: 12,
+        lineHeight: 1.25,
+        textAlign: "left" as const,
+      },
+    }))
+  );
+  return {
+    kind: "table",
+    name: "PowerPoint 표",
+    x: 0,
+    y: 0,
+    width: columnCount * 96,
+    height: rows.length * 32,
+    rows,
+    columnWidths: distributeEvenly(columnCount * 96, columnCount),
+    rowHeights: distributeEvenly(rows.length * 32, rows.length),
+    style: { fill: "#ffffff", stroke: "#d8dee9", strokeWidth: 1, borderStyle: "solid" },
+    explicitPosition: false,
+  };
+}
+
 function parseSvgItem(svg: SVGElement, fallbackIndex: number): ClipboardEditableItem | null {
   const svgText = new XMLSerializer().serializeToString(svg);
   const size = svgSize(svgText);
@@ -821,6 +867,10 @@ function editableGroupScale(items: ClipboardEditableItem[], page: TemplatePage, 
 
 export async function createClipboardEditableElements(data: DataTransfer | null, page: TemplatePage, x: number, y: number, maxZ: number) {
   const items = clipboardEditableItemsFromHtml(data?.getData("text/html") || "");
+  if (!items.length) {
+    const tableItem = parsePlainTextTableItem(data?.getData("text/plain") || "");
+    if (tableItem) items.push(tableItem);
+  }
   if (!items.length) return { elements: [] as TemplateElement[], assets: [] as TemplateAsset[] };
 
   const { minX, minY, scale } = editableGroupScale(items, page, x, y);
