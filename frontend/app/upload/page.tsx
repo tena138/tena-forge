@@ -462,33 +462,30 @@ function SubjectTreeSelector({
           );
         })}
         {editing ? (
-          <div className="w-52 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
-            <button
-              type="button"
-              className={cn(
-                "flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border text-sm font-black transition hover:border-violet-300/40 hover:bg-violet-400/10",
-                addTarget === "root" ? "border-violet-300/60 bg-violet-400/15 text-violet-50" : "border-white/10 bg-white/[0.035] text-slate-100"
-              )}
-              onClick={() => openDraft("root")}
-              aria-pressed={addTarget === "root"}
-            >
-              <Plus className="h-5 w-5" />
-              상위 항목 추가
-            </button>
-            {addTarget === "root" ? (
-              <div className="mt-3">
-                <SubjectDraftRow
-                  value={draftLabel}
-                  color={draftColor}
-                  placeholder="상위항목"
-                  label="새 상위 항목"
-                  onChange={setDraftLabel}
-                  onColorChange={setDraftColor}
-                  onSubmit={() => commitDraft("root")}
-                />
-              </div>
-            ) : null}
-          </div>
+          addTarget === "root" ? (
+            <div className="w-52 shrink-0 rounded-[8px] border border-dashed border-violet-300/40 bg-violet-400/[0.06] p-3">
+              <SubjectDraftRow
+                value={draftLabel}
+                color={draftColor}
+                placeholder="상위 항목 이름"
+                label="상위 항목 이름"
+                onChange={setDraftLabel}
+                onColorChange={setDraftColor}
+                onSubmit={() => commitDraft("root")}
+              />
+            </div>
+          ) : (
+            <div className="w-52 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
+              <button
+                type="button"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:border-violet-300/40 hover:bg-violet-400/10"
+                onClick={() => openDraft("root")}
+              >
+                <Plus className="h-5 w-5" />
+                상위 항목 추가
+              </button>
+            </div>
+          )
         ) : null}
 
         {!nodes.length && !editing ? (
