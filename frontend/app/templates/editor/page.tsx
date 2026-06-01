@@ -471,8 +471,8 @@ function CanvaLeftPanel({
   );
 
   return (
-    <aside className="group/sidebar relative flex h-full w-[108px] shrink-0 text-slate-100">
-      <nav className="relative z-40 flex h-full w-[108px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-white/10 bg-black/35 px-2 py-3 forge-panel" aria-label="편집 도구">
+    <aside className="group/sidebar relative flex h-full w-14 shrink-0 text-slate-100">
+      <nav className="relative z-40 flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-white/10 bg-black/35 px-1.5 py-3 forge-panel" aria-label="편집 도구">
         {tabs.map((tab) => {
           const active = normalizedTab === tab.key;
           return (
@@ -483,12 +483,13 @@ function CanvaLeftPanel({
                   onClick={() => setSidebarTab(tab.key)}
                   aria-label={tab.label}
                   aria-pressed={active}
-                  className={`flex min-h-[72px] w-full flex-col items-center justify-center gap-1.5 rounded-md px-1 text-center text-[11px] leading-tight transition ${
+                  className={`relative flex h-11 w-11 items-center justify-center rounded-[11px] transition ${
                     active ? "bg-white/[0.10] text-white shadow-sm ring-1 ring-white/12" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
                   }`}
                 >
+                  {active ? <span className="absolute -left-1.5 h-6 w-0.5 rounded-full bg-violet-300" /> : null}
                   {tab.icon}
-                  <span className="w-full break-keep">{tab.label}</span>
+                  <span className="sr-only">{tab.label}</span>
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Portal>
@@ -502,7 +503,7 @@ function CanvaLeftPanel({
         })}
       </nav>
 
-      <div className="pointer-events-none absolute left-[108px] top-0 z-30 flex h-full w-[312px] min-w-0 -translate-x-2 flex-col border-r border-white/10 bg-[#0b0d13] opacity-0 shadow-[18px_0_54px_rgba(0,0,0,0.28)] transition duration-150 ease-out group-hover/sidebar:pointer-events-auto group-hover/sidebar:translate-x-0 group-hover/sidebar:opacity-100 group-focus-within/sidebar:pointer-events-auto group-focus-within/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100">
+      <div className="pointer-events-none absolute left-14 top-0 z-30 flex h-full w-[312px] min-w-0 -translate-x-2 flex-col border-r border-white/10 bg-[#0b0d13] opacity-0 shadow-[18px_0_54px_rgba(0,0,0,0.28)] transition duration-150 ease-out group-hover/sidebar:pointer-events-auto group-hover/sidebar:translate-x-0 group-hover/sidebar:opacity-100 group-focus-within/sidebar:pointer-events-auto group-focus-within/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100">
         <div className="border-b border-white/10 bg-black/25 px-4 py-3">
           <div className="text-sm font-semibold text-white">{activeMeta.label}</div>
           <p className="mt-0.5 text-xs text-slate-400">{activeMeta.hint}</p>
