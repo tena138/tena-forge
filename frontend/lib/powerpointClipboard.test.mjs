@@ -152,3 +152,24 @@ test("PowerPoint RTF table data wins over image fallback and preserves cell geom
   assert.equal(Math.max(...cells.map((element) => element.x + element.width)) - Math.min(...cells.map((element) => element.x)), 336);
   assert.equal(Math.max(...cells.map((element) => element.y + element.height)) - Math.min(...cells.map((element) => element.y)), 128);
 });
+
+test("PowerPoint positioned table fragments suppress fallback images", async () => {
+  const html = `<!--StartFragment-->
+    <div style="position:absolute;left:12pt;top:18pt;width:90pt;height:28pt;border:1pt solid #111827;background-color:#ddebf7;font-size:11pt">단원</div>
+    <div style="position:absolute;left:102pt;top:18pt;width:150pt;height:28pt;border:1pt solid #111827;background-color:#ddebf7;font-size:11pt">유형</div>
+    <div style="position:absolute;left:252pt;top:18pt;width:70pt;height:28pt;border:1pt solid #111827;background-color:#ddebf7;font-size:11pt">점수</div>
+    <div style="position:absolute;left:12pt;top:46pt;width:90pt;height:42pt;border:1pt solid #111827;background-color:#e2f0d9;font-size:10pt">미적분</div>
+    <div style="position:absolute;left:102pt;top:46pt;width:150pt;height:42pt;border:1pt solid #111827;background-color:#ffffff;font-size:10pt">극한과 연속</div>
+    <div style="position:absolute;left:252pt;top:46pt;width:70pt;height:42pt;border:1pt solid #111827;background-color:#ffffff;font-size:10pt">12</div>
+    <img src="data:image/png;base64,iVBORw0KGgo=" width="900" height="360" alt="PowerPoint fallback image">
+  <!--EndFragment-->`;
+  const { elements } = await createClipboardEditableElements(clipboardData(html), page, 100, 120, 0);
+  const images = elements.filter((element) => element.type === "image");
+  const shapes = elements.filter((element) => element.type === "shape");
+  const texts = elements.filter((element) => element.type === "text");
+
+  assert.equal(images.length, 0);
+  assert.equal(shapes.length, 6);
+  assert.equal(texts.length, 6);
+  assert.equal(Math.max(...shapes.map((element) => element.x + element.width)) - Math.min(...shapes.map((element) => element.x)), 413);
+});

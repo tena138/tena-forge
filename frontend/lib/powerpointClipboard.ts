@@ -721,25 +721,6 @@ function clipboardEditableItemsFromHtml(html: string): ClipboardEditableItem[] {
       markProcessed(table, processed);
     });
 
-  const hasStructuredTable = items.some((item) => item.kind === "table");
-  if (!hasStructuredTable) {
-    Array.from(doc.querySelectorAll("img")).forEach((image, index) => {
-      if (isInsideProcessed(image, processed)) return;
-      const item = parseImageItem(image as HTMLImageElement, index);
-      if (!item) return;
-      items.push(item);
-      markProcessed(image, processed);
-    });
-  }
-
-  Array.from(doc.querySelectorAll("svg")).forEach((svg, index) => {
-    if (isInsideProcessed(svg, processed)) return;
-    const item = parseSvgItem(svg as unknown as SVGElement, index);
-    if (!item) return;
-    items.push(item);
-    markProcessed(svg, processed);
-  });
-
   Array.from(doc.body.querySelectorAll("*")).forEach((element, index) => {
     if (isInsideProcessed(element, processed)) return;
     const tag = element.tagName.toLowerCase();
@@ -767,6 +748,14 @@ function clipboardEditableItemsFromHtml(html: string): ClipboardEditableItem[] {
     }
     const childBlocks = Array.from(element.children).filter((child) => /^(div|p|section|article|h[1-6]|table)$/i.test(child.tagName));
     if (childBlocks.some((child) => collapsedText(child))) return;
+    if (hasMeaningfulBox(element)) {
+      const shapeItems = parseShapeItems(element, index);
+      if (shapeItems.length) {
+        items.push(...shapeItems);
+        markProcessed(element, processed);
+        return;
+      }
+    }
     const item = createTextItem(element, index);
     if (!item) return;
     items.push(item);
@@ -780,6 +769,26 @@ function clipboardEditableItemsFromHtml(html: string): ClipboardEditableItem[] {
       if (!item) return;
       items.push(item);
       markProcessed(element, processed);
+    });
+  }
+
+  if (!items.length) {
+    Array.from(doc.querySelectorAll("svg")).forEach((svg, index) => {
+      if (isInsideProcessed(svg, processed)) return;
+      const item = parseSvgItem(svg as unknown as SVGElement, index);
+      if (!item) return;
+      items.push(item);
+      markProcessed(svg, processed);
+    });
+  }
+
+  if (!items.length) {
+    Array.from(doc.querySelectorAll("img")).forEach((image, index) => {
+      if (isInsideProcessed(image, processed)) return;
+      const item = parseImageItem(image as HTMLImageElement, index);
+      if (!item) return;
+      items.push(item);
+      markProcessed(image, processed);
     });
   }
 
