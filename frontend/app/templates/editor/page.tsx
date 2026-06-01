@@ -1952,9 +1952,31 @@ function VisualTemplateEditorPageInner() {
   const [notice, setNotice] = useState("");
   const [mounted, setMounted] = useState(false);
   const saveInFlight = useRef(false);
+  const editorHistoryUrlRef = useRef("");
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    editorHistoryUrlRef.current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  }, [searchParams]);
+
+  useEffect(() => {
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    editorHistoryUrlRef.current = currentUrl;
+    const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    window.history.replaceState({ ...currentState, __tenaTemplateEditorEntry: true }, "", currentUrl);
+    window.history.pushState({ ...currentState, __tenaTemplateEditorGuard: true }, "", currentUrl);
+
+    function keepEditorOpenOnBack() {
+      if (!window.location.pathname.startsWith("/templates/editor")) return;
+      window.history.pushState({ __tenaTemplateEditorGuard: true }, "", editorHistoryUrlRef.current || `${window.location.pathname}${window.location.search}${window.location.hash}`);
+      setNotice("템플릿 편집 중에는 브라우저 뒤로가기로 허브로 나가지 않습니다.");
+    }
+
+    window.addEventListener("popstate", keepEditorOpenOnBack);
+    return () => window.removeEventListener("popstate", keepEditorOpenOnBack);
   }, []);
 
   const addClipboardImages = useCallback(

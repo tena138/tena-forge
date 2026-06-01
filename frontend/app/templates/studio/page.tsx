@@ -895,6 +895,7 @@ function VisualTemplateStudioPageContent() {
   const saveInFlightRef = useRef(false);
   const pendingSaveRef = useRef<{ templateSet: TemplateSet; mode: SaveMode } | null>(null);
   const saveTemplateSetRef = useRef<((source: TemplateSet, mode: SaveMode) => Promise<void>) | null>(null);
+  const editorHistoryUrlRef = useRef("");
 
   const selectedPage = useMemo(() => templateSet.pages.find((page) => page.id === selectedPageId) || templateSet.pages[0], [selectedPageId, templateSet.pages]);
   const selectedElements = useMemo(() => selectedPage?.elements.filter((element) => selectedIds.includes(element.id)) || [], [selectedIds, selectedPage]);
@@ -1057,6 +1058,27 @@ function VisualTemplateStudioPageContent() {
   useEffect(() => {
     persistedTemplateIdRef.current = persistedTemplateId;
   }, [persistedTemplateId]);
+
+  useEffect(() => {
+    editorHistoryUrlRef.current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  }, [searchParams]);
+
+  useEffect(() => {
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    editorHistoryUrlRef.current = currentUrl;
+    const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    window.history.replaceState({ ...currentState, __tenaTemplateEditorEntry: true }, "", currentUrl);
+    window.history.pushState({ ...currentState, __tenaTemplateEditorGuard: true }, "", currentUrl);
+
+    function keepEditorOpenOnBack() {
+      if (!window.location.pathname.startsWith("/templates/studio")) return;
+      window.history.pushState({ __tenaTemplateEditorGuard: true }, "", editorHistoryUrlRef.current || `${window.location.pathname}${window.location.search}${window.location.hash}`);
+      setNotice("템플릿 편집 중에는 브라우저 뒤로가기로 허브로 나가지 않습니다.");
+    }
+
+    window.addEventListener("popstate", keepEditorOpenOnBack);
+    return () => window.removeEventListener("popstate", keepEditorOpenOnBack);
+  }, []);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
