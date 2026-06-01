@@ -27,8 +27,25 @@ def _store_id() -> str:
     return settings.portone_store_id or _env_first("PORTONE_STORE_ID", "NEXT_PUBLIC_PORTONE_STORE_ID")
 
 
-def _channel_key() -> str:
+def _channel_key(purpose: str = "billing") -> str:
     settings = get_settings()
+    purpose = (purpose or "billing").strip().lower()
+    if purpose == "general":
+        general_channel_key = settings.portone_general_channel_key_inicis or _env_first(
+            "PORTONE_GENERAL_CHANNEL_KEY_INICIS",
+            "PORTONE_INICIS_GENERAL_CHANNEL_KEY",
+            "NEXT_PUBLIC_PORTONE_GENERAL_CHANNEL_KEY_INICIS",
+        )
+        if general_channel_key:
+            return general_channel_key
+    else:
+        billing_channel_key = settings.portone_billing_channel_key_inicis or _env_first(
+            "PORTONE_BILLING_CHANNEL_KEY_INICIS",
+            "PORTONE_INICIS_BILLING_CHANNEL_KEY",
+            "NEXT_PUBLIC_PORTONE_BILLING_CHANNEL_KEY_INICIS",
+        )
+        if billing_channel_key:
+            return billing_channel_key
     inicis_channel_key = settings.portone_channel_key_inicis or _env_first(
         "PORTONE_CHANNEL_KEY_INICIS",
         "PORTONE_INICIS_CHANNEL_KEY",
@@ -77,14 +94,15 @@ def _normalize_payment_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return payment if isinstance(payment, dict) else payload
 
 
-def portone_public_config() -> dict[str, Any]:
+def portone_public_config(purpose: str = "billing") -> dict[str, Any]:
     store_id = _store_id()
-    channel_key = _channel_key()
+    channel_key = _channel_key(purpose)
     if not store_id or not channel_key:
         raise HTTPException(status_code=503, detail="PortOne Store ID or channel key is not configured.")
     config = {
         "store_id": store_id,
         "channel_key": channel_key,
+        "purpose": purpose,
         "billing_key_method": _billing_key_method(),
         "is_test_channel": _is_test_channel(),
     }
@@ -130,7 +148,7 @@ def pay_with_billing_key(
 ) -> dict[str, Any]:
     payload = {
         "storeId": _store_id(),
-        "channelKey": _channel_key(),
+        "channelKey": _channel_key("billing"),
         "billingKey": billing_key,
         "orderName": order_name,
         "customer": {"id": user_id},
@@ -160,7 +178,7 @@ def schedule_billing_key_payment(
     payload = {
         "payment": {
             "storeId": _store_id(),
-            "channelKey": _channel_key(),
+            "channelKey": _channel_key("billing"),
             "billingKey": billing_key,
             "orderName": order_name,
             "customer": {"id": user_id},

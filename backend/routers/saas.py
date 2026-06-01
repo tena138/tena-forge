@@ -50,6 +50,10 @@ class BillingKeyConfirmRequest(BaseModel):
     billing_issue_token: str | None = None
 
 
+class OneTimePaymentConfirmRequest(BaseModel):
+    payment_id: str
+
+
 def _portone_id(prefix: str, plan_code: str | None = None) -> str:
     parts = [prefix]
     if plan_code:
@@ -188,6 +192,67 @@ def _mark_attempt_from_payment(attempt: SubscriptionPaymentAttempt, payment: dic
         attempt.status = status.lower() or attempt.status
 
 
+def _activate_paid_one_time_order(
+    db: Session,
+    user_id: str,
+    order: SubscriptionOrder,
+    attempt: SubscriptionPaymentAttempt,
+    payment: dict[str, Any],
+) -> Subscription:
+    if order.status == "paid" and order.subscription_id:
+        subscription = db.get(Subscription, order.subscription_id)
+        if subscription:
+            return subscription
+    status = payment_status(payment)
+    paid_amount = payment_amount(payment)
+    currency = payment_currency(payment)
+    if status != "PAID" or paid_amount != order.amount_krw or currency not in {"KRW", "CURRENCY_KRW"}:
+        order.status = "failed"
+        order.failure_reason = f"Unexpected PortOne payment state: status={status}, amount={paid_amount}, currency={currency}"
+        order.payment_snapshot = payment
+        attempt.raw_payload = payment
+        attempt.status = "failed"
+        attempt.failed_at = datetime.utcnow()
+        attempt.failure_reason = order.failure_reason
+        raise HTTPException(status_code=400, detail=order.failure_reason)
+
+    subscription = _activate_subscription(
+        db,
+        user_id,
+        plan_code=order.plan_code,
+        billing_cycle=order.billing_cycle,
+        enabled_subject_engines=order.enabled_subject_engines,
+        provider="portone",
+        provider_subscription_id=attempt.provider_payment_id,
+        monthly_price_krw=order.monthly_price_krw,
+        period_amount_krw=order.amount_krw,
+        selected_packages=order.selected_packages,
+    )
+    db.flush()
+    order.status = "paid"
+    order.subscription_id = subscription.id
+    order.payment_snapshot = payment
+    order.failure_reason = None
+    attempt.subscription_id = subscription.id
+    _mark_attempt_from_payment(attempt, payment)
+
+    event_payload = {
+        "plan_code": order.plan_code,
+        "billing_cycle": order.billing_cycle,
+        "payment_id": attempt.provider_payment_id,
+        "payment_type": "one_time_license",
+        "enabled_subject_engines": subscription.enabled_subject_engines,
+        "selected_packages": order.selected_packages,
+        "final_monthly_price": subscription.final_monthly_price,
+        "final_annual_price": subscription.final_annual_price,
+    }
+    event_id = _provider_event_id("activate", attempt.provider_payment_id)
+    if not db.scalar(select(SubscriptionEvent).where(SubscriptionEvent.provider == "portone", SubscriptionEvent.provider_event_id == event_id)):
+        db.add(SubscriptionEvent(provider="portone", provider_event_id=event_id, event_type="subscription.activated", payload=event_payload, processed_at=datetime.utcnow()))
+    audit(db, user_id, "subscription.activated", "subscription", str(subscription.id), event_payload)
+    return subscription
+
+
 @router.get("/roles")
 def roles(request: Request, db: Session = Depends(get_db)):
     return {"roles": sorted(get_roles(db, current_owner_id(request)))}
@@ -221,9 +286,11 @@ def list_plans(db: Session = Depends(get_db)):
 def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Session = Depends(get_db)):
     user_id = current_owner_id(request)
     ensure_default_plans(db)
-    config = portone_public_config()
     enabled_engines = normalize_subject_engines(payload.enabled_subject_engines or ["math"])
     pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids, enabled_engines)
+    if pricing["billing_cycle"] != "monthly":
+        raise HTTPException(status_code=400, detail="Annual plans must use one-time payment checkout.")
+    config = portone_public_config("billing")
     academy = db.get(Academy, user_id)
     customer_phone = _normalize_phone(payload.customer_phone) or _normalize_phone(academy.phone if academy else None)
     if str(config.get("billing_key_method") or "").upper() == "CARD" and (not customer_phone or len(customer_phone) not in {10, 11}):
@@ -281,6 +348,78 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
     }
 
 
+@router.post("/billing/one-time-checkout")
+def create_one_time_checkout(payload: BillingCheckoutRequest, request: Request, db: Session = Depends(get_db)):
+    user_id = current_owner_id(request)
+    ensure_default_plans(db)
+    enabled_engines = normalize_subject_engines(payload.enabled_subject_engines or ["math"])
+    pricing = calculate_subscription_price(payload.plan_code, payload.billing_cycle, payload.selected_package_ids, enabled_engines)
+    if pricing["billing_cycle"] != "annual":
+        raise HTTPException(status_code=400, detail="One-time checkout is only available for annual licenses.")
+    config = portone_public_config("general")
+    academy = db.get(Academy, user_id)
+    customer_phone = _normalize_phone(payload.customer_phone) or _normalize_phone(academy.phone if academy else None)
+    if academy and customer_phone and not _normalize_phone(academy.phone):
+        academy.phone = customer_phone
+    payment_id = _portone_id("tf-onetime", payload.plan_code)
+    order_name = f"Tena Forge {payload.plan_code.title()} 1-year license"
+    now = datetime.utcnow()
+
+    order = SubscriptionOrder(
+        user_id=user_id,
+        plan_code=payload.plan_code,
+        billing_cycle=pricing["billing_cycle"],
+        selected_packages=pricing["selected_packages"],
+        enabled_subject_engines=enabled_engines,
+        monthly_price_krw=int(pricing["monthly_price_krw"]),
+        amount_krw=int(pricing["amount_krw"]),
+        currency="KRW",
+        status="ready",
+        provider="portone",
+        provider_payment_id=payment_id,
+        provider_issue_id=None,
+        order_name=order_name,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(order)
+    db.flush()
+    attempt = SubscriptionPaymentAttempt(
+        user_id=user_id,
+        order_id=order.id,
+        provider="portone",
+        provider_payment_id=payment_id,
+        billing_cycle=order.billing_cycle,
+        amount_krw=order.amount_krw,
+        currency=order.currency,
+        status="ready",
+    )
+    db.add(attempt)
+    audit(db, user_id, "subscription.one_time_checkout.created", "subscription_order", str(order.id), {"provider_payment_id": payment_id, "amount_krw": order.amount_krw})
+    db.commit()
+    return {
+        "provider": "portone",
+        "order_id": str(order.id),
+        "payment_id": payment_id,
+        "order_name": order_name,
+        "amount": order.amount_krw,
+        "currency": "KRW",
+        "customer_id": user_id,
+        "customer_name": academy.academy_name if academy else None,
+        "customer_email": academy.email if academy else None,
+        "customer_phone": customer_phone,
+        "billing_cycle": order.billing_cycle,
+        "selected_packages": order.selected_packages,
+        "enabled_subject_engines": order.enabled_subject_engines,
+        "subject_engine_monthly_delta_krw": pricing["subject_engine_monthly_delta_krw"],
+        "portone": {
+            "store_id": config["store_id"],
+            "channel_key": config["channel_key"],
+            "is_test_channel": config["is_test_channel"],
+        },
+    }
+
+
 @router.post("/billing/confirm-billing-key")
 def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db: Session = Depends(get_db)):
     user_id = current_owner_id(request)
@@ -294,6 +433,8 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
     )
     if not order:
         raise HTTPException(status_code=404, detail="Subscription order not found.")
+    if order.billing_cycle != "monthly":
+        raise HTTPException(status_code=400, detail="Use one-time payment confirmation for annual licenses.")
     if order.status == "paid" and order.subscription_id:
         return {"ok": True, "subscription_id": str(order.subscription_id), "payment_id": order.provider_payment_id, "idempotent": True}
     if order.status not in {"ready", "failed"}:
@@ -413,6 +554,62 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
     }
 
 
+@router.post("/billing/confirm-payment")
+def confirm_one_time_payment(payload: OneTimePaymentConfirmRequest, request: Request, db: Session = Depends(get_db)):
+    user_id = current_owner_id(request)
+    ensure_default_plans(db)
+    payment_id = payload.payment_id.strip()
+    if not payment_id:
+        raise HTTPException(status_code=400, detail="payment_id is required.")
+    order = db.scalar(
+        select(SubscriptionOrder).where(
+            SubscriptionOrder.user_id == user_id,
+            SubscriptionOrder.provider == "portone",
+            SubscriptionOrder.provider_payment_id == payment_id,
+            SubscriptionOrder.billing_cycle == "annual",
+        )
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Subscription order not found.")
+    attempt = db.scalar(
+        select(SubscriptionPaymentAttempt).where(
+            SubscriptionPaymentAttempt.user_id == user_id,
+            SubscriptionPaymentAttempt.provider == "portone",
+            SubscriptionPaymentAttempt.provider_payment_id == payment_id,
+        )
+    )
+    if not attempt:
+        attempt = SubscriptionPaymentAttempt(
+            user_id=user_id,
+            order_id=order.id,
+            provider="portone",
+            provider_payment_id=payment_id,
+            billing_cycle=order.billing_cycle,
+            amount_krw=order.amount_krw,
+            currency=order.currency,
+            status="ready",
+        )
+        db.add(attempt)
+        db.flush()
+    if order.status == "paid" and order.subscription_id:
+        return {"ok": True, "subscription_id": str(order.subscription_id), "payment_id": payment_id, "idempotent": True}
+    if order.status not in {"ready", "failed"}:
+        raise HTTPException(status_code=409, detail=f"Subscription order is not payable: {order.status}")
+
+    payment = get_payment(payment_id)
+    if not payment:
+        raise HTTPException(status_code=404, detail="PortOne payment not found.")
+    subscription = _activate_paid_one_time_order(db, user_id, order, attempt, payment)
+    db.commit()
+    return {
+        "ok": True,
+        "subscription_id": str(subscription.id),
+        "plan_code": subscription.plan_code,
+        "payment_id": payment_id,
+        "next_payment_id": None,
+    }
+
+
 @router.post("/billing/webhook")
 async def portone_billing_webhook(request: Request, db: Session = Depends(get_db)):
     event = await read_verified_webhook(request)
@@ -432,7 +629,11 @@ async def portone_billing_webhook(request: Request, db: Session = Depends(get_db
 
     previous_status = attempt.status
     _mark_attempt_from_payment(attempt, payment)
-    if attempt.status == "paid" and previous_status == "scheduled" and attempt.subscription_id:
+    if attempt.status == "paid" and previous_status in {"ready", "failed"} and attempt.order_id and not attempt.subscription_id:
+        order = db.get(SubscriptionOrder, attempt.order_id)
+        if order and order.billing_cycle == "annual" and order.provider_issue_id is None:
+            _activate_paid_one_time_order(db, order.user_id, order, attempt, payment)
+    elif attempt.status == "paid" and previous_status == "scheduled" and attempt.subscription_id:
         subscription = db.get(Subscription, attempt.subscription_id)
         if subscription:
             now = datetime.utcnow()

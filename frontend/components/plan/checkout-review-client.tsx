@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -43,6 +44,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const isAnnualLicense = billingCycle === "annual";
   const backHref = `/plan/${plan}`;
   const phoneReady = isValidPhoneNumber(phoneNumber);
 
@@ -62,85 +64,136 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
         router.push(`/login?redirect=${encodeURIComponent(current)}`);
         return;
       }
+
       const customerPhone = normalizePhoneNumber(phoneNumber);
-      if (!isValidPhoneNumber(customerPhone)) {
-        setError("KG이니시스 카드 정기결제를 위해 휴대폰 번호를 입력해 주세요.");
+      if (!isAnnualLicense && !isValidPhoneNumber(customerPhone)) {
+        setError("월 자동결제를 위해 휴대폰 번호를 입력해 주세요.");
         return;
       }
-      const billingCheckoutResponse = await authHttp.post("/api/saas/billing/checkout", {
+
+      const checkoutResponse = await authHttp.post(isAnnualLicense ? "/api/saas/billing/one-time-checkout" : "/api/saas/billing/checkout", {
         plan_code: plan,
         billing_cycle: billingCycle,
         selected_package_ids: selectedPackageIds,
         enabled_subject_engines: selectedSubjectEngines,
-        customer_phone: customerPhone,
+        customer_phone: customerPhone || null,
       });
-      const billingCheckout = billingCheckoutResponse.data;
-      if (!billingCheckout.portone?.store_id || !billingCheckout.portone?.channel_key) {
+      const checkout = checkoutResponse.data;
+      if (!checkout.portone?.store_id || !checkout.portone?.channel_key) {
         throw new Error("PortOne Store ID or channel key is not configured.");
       }
 
       const PortOneSdk = await import("@portone/browser-sdk/v2");
-      const billingKeyMethod = String(billingCheckout.portone.billing_key_method || "CARD").toUpperCase();
-      const billingCustomerPhone = normalizePhoneNumber(billingCheckout.customer_phone) || customerPhone;
-      const issueRequest: Record<string, any> = {
-        storeId: billingCheckout.portone.store_id,
-        channelKey: billingCheckout.portone.channel_key,
-        billingKeyMethod,
-        issueId: billingCheckout.issue_id,
-        issueName: billingCheckout.issue_name,
-        customerId: billingCheckout.customer_id,
-        customer: {
-          id: billingCheckout.customer_id,
-          customerId: billingCheckout.customer_id,
-          fullName: billingCheckout.customer_name || undefined,
-          email: billingCheckout.customer_email || undefined,
-          phoneNumber: billingCustomerPhone,
-        },
-        displayAmount: billingCheckout.amount,
-        currency: "KRW",
-        locale: "KO_KR",
-        isTestChannel: Boolean(billingCheckout.portone.is_test_channel),
-        customData: {
-          orderId: billingCheckout.order_id,
-          planCode: plan,
-          billingCycle,
-          enabledSubjectEngines: selectedSubjectEngines,
-        },
-        redirectUrl: `${window.location.origin}/checkout/billing-return?issueId=${encodeURIComponent(billingCheckout.issue_id)}`,
-      };
-      if (billingKeyMethod === "EASY_PAY") {
-        const easyPayProvider = billingCheckout.portone.easy_pay_provider;
-        const availablePayMethods = billingCheckout.portone.easy_pay_available_methods;
-        issueRequest.easyPay = {
-          ...(easyPayProvider ? { easyPayProvider } : {}),
-          ...(Array.isArray(availablePayMethods) && availablePayMethods.length ? { availablePayMethods } : {}),
-        };
-      }
-      const issue = await (PortOneSdk.requestIssueBillingKey as any)(issueRequest);
-
-      if (!issue || "code" in issue) {
-        const message = issue && "message" in issue ? issue.message : "Billing key issue failed.";
-        router.push(`/checkout/fail?message=${encodeURIComponent(String(message))}`);
+      if (isAnnualLicense) {
+        await payAnnualLicense(PortOneSdk, checkout, customerPhone);
         return;
       }
-      const billingKey = issue.billingKey || issue.billing_key;
-      if (!billingKey) throw new Error("PortOne did not return a billingKey.");
-      if (billingKey === "NEEDS_CONFIRMATION" || issue.billingIssueToken || issue.billing_issue_token) {
-        throw new Error("이 PortOne 채널은 빌링키 수동 승인이 필요합니다. 포트원 채널 설정을 자동 발급으로 바꿔주세요.");
-      }
 
-      const confirmResponse = await authHttp.post("/api/saas/billing/confirm-billing-key", {
-        issue_id: billingCheckout.issue_id,
-        billing_key: billingKey,
-        billing_issue_token: issue.billingIssueToken || issue.billing_issue_token || null,
-      });
-      router.push(`/checkout/success?paymentId=${encodeURIComponent(confirmResponse.data.payment_id || billingCheckout.payment_id)}`);
-      return;
+      await payMonthlySubscription(PortOneSdk, checkout, customerPhone);
     } catch (error: any) {
       setError(paymentErrorMessage(error));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function payAnnualLicense(PortOneSdk: any, checkout: any, customerPhone: string) {
+    const paymentCustomerPhone = normalizePhoneNumber(checkout.customer_phone) || customerPhone || undefined;
+    const payment = await (PortOneSdk.requestPayment as any)({
+      storeId: checkout.portone.store_id,
+      channelKey: checkout.portone.channel_key,
+      paymentId: checkout.payment_id,
+      orderName: checkout.order_name,
+      totalAmount: checkout.amount,
+      currency: "KRW",
+      payMethod: "CARD",
+      customer: {
+        id: checkout.customer_id,
+        customerId: checkout.customer_id,
+        fullName: checkout.customer_name || undefined,
+        email: checkout.customer_email || undefined,
+        phoneNumber: paymentCustomerPhone,
+      },
+      locale: "KO_KR",
+      productType: "DIGITAL",
+      offerPeriod: { interval: "1y" },
+      isTestChannel: Boolean(checkout.portone.is_test_channel),
+      customData: {
+        orderId: checkout.order_id,
+        planCode: plan,
+        billingCycle,
+        paymentType: "one_time_license",
+        enabledSubjectEngines: selectedSubjectEngines,
+      },
+      redirectUrl: `${window.location.origin}/checkout/payment-return?paymentId=${encodeURIComponent(checkout.payment_id)}`,
+    });
+    if (!payment || "code" in payment) {
+      const message = payment && "message" in payment ? payment.message : "Payment failed.";
+      router.push(`/checkout/fail?message=${encodeURIComponent(String(message))}`);
+      return;
+    }
+    const confirmResponse = await authHttp.post("/api/saas/billing/confirm-payment", {
+      payment_id: payment.paymentId || checkout.payment_id,
+    });
+    router.push(`/checkout/success?paymentId=${encodeURIComponent(confirmResponse.data.payment_id || checkout.payment_id)}&type=annual`);
+  }
+
+  async function payMonthlySubscription(PortOneSdk: any, checkout: any, customerPhone: string) {
+    const billingKeyMethod = String(checkout.portone.billing_key_method || "CARD").toUpperCase();
+    const billingCustomerPhone = normalizePhoneNumber(checkout.customer_phone) || customerPhone;
+    const issueRequest: Record<string, any> = {
+      storeId: checkout.portone.store_id,
+      channelKey: checkout.portone.channel_key,
+      billingKeyMethod,
+      issueId: checkout.issue_id,
+      issueName: checkout.issue_name,
+      customerId: checkout.customer_id,
+      customer: {
+        id: checkout.customer_id,
+        customerId: checkout.customer_id,
+        fullName: checkout.customer_name || undefined,
+        email: checkout.customer_email || undefined,
+        phoneNumber: billingCustomerPhone,
+      },
+      displayAmount: checkout.amount,
+      currency: "KRW",
+      locale: "KO_KR",
+      isTestChannel: Boolean(checkout.portone.is_test_channel),
+      customData: {
+        orderId: checkout.order_id,
+        planCode: plan,
+        billingCycle,
+        enabledSubjectEngines: selectedSubjectEngines,
+      },
+      redirectUrl: `${window.location.origin}/checkout/billing-return?issueId=${encodeURIComponent(checkout.issue_id)}`,
+    };
+    if (billingKeyMethod === "EASY_PAY") {
+      const easyPayProvider = checkout.portone.easy_pay_provider;
+      const availablePayMethods = checkout.portone.easy_pay_available_methods;
+      issueRequest.easyPay = {
+        ...(easyPayProvider ? { easyPayProvider } : {}),
+        ...(Array.isArray(availablePayMethods) && availablePayMethods.length ? { availablePayMethods } : {}),
+      };
+    }
+    const issue = await (PortOneSdk.requestIssueBillingKey as any)(issueRequest);
+
+    if (!issue || "code" in issue) {
+      const message = issue && "message" in issue ? issue.message : "Billing key issue failed.";
+      router.push(`/checkout/fail?message=${encodeURIComponent(String(message))}`);
+      return;
+    }
+    const billingKey = issue.billingKey || issue.billing_key;
+    if (!billingKey) throw new Error("PortOne did not return a billingKey.");
+    if (billingKey === "NEEDS_CONFIRMATION" || issue.billingIssueToken || issue.billing_issue_token) {
+      throw new Error("PortOne channel requires manual billing-key confirmation. Use an automatic billing-key issue channel.");
+    }
+
+    const confirmResponse = await authHttp.post("/api/saas/billing/confirm-billing-key", {
+      issue_id: checkout.issue_id,
+      billing_key: billingKey,
+      billing_issue_token: issue.billingIssueToken || issue.billing_issue_token || null,
+    });
+    router.push(`/checkout/success?paymentId=${encodeURIComponent(confirmResponse.data.payment_id || checkout.payment_id)}&type=monthly`);
   }
 
   return (
@@ -152,14 +205,16 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_24rem]">
           <section className="rounded-[28px] border border-slate-950/10 bg-white p-6 shadow-[0_24px_90px_rgba(15,23,42,0.10)] sm:p-8">
             <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Checkout Review</p>
-            <h1 className="mt-3 text-4xl font-black tracking-normal">구성을 확인하세요.</h1>
-            <p className="mt-3 text-base leading-7 text-slate-600">결제 전 선택한 플랜, 패키지, 사용 조건을 다시 확인합니다.</p>
+            <h1 className="mt-3 text-4xl font-black tracking-normal">결제 구성을 확인하세요</h1>
+            <p className="mt-3 text-base leading-7 text-slate-600">
+              {isAnnualLicense ? "연간 상품은 1년 이용권 단건결제로 처리되며 자동 갱신되지 않습니다." : "월 상품은 billing key 기반 자동결제로 처리됩니다."}
+            </p>
 
             <div className="mt-8 grid gap-4">
               <ReviewBlock title="플랜">
                 <div className="flex items-center justify-between">
                   <span>{PLANS[plan].name}</span>
-                  <span>{billingCycle === "annual" ? "연간 결제" : "월간 결제"}</span>
+                  <span>{isAnnualLicense ? "1년 이용권 / 단건결제" : "월 자동결제"}</span>
                 </div>
               </ReviewBlock>
               <ReviewBlock title="선택 엔진">
@@ -172,7 +227,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                   ))}
                 </div>
                 <p className="mt-3 text-sm font-bold text-slate-600">
-                  {selectedSubjectEngines.length > 1 ? "선택한 구성 금액과 용량 관련 한도가 2배로 적용됩니다." : "선택하지 않은 엔진은 추출 탭에서 잠금 처리됩니다."}
+                  {selectedSubjectEngines.length > 1 ? "엔진을 2개 선택하면 구성 금액과 사용량 한도가 2배로 적용됩니다." : "선택한 엔진 기준으로 추출 기능이 제공됩니다."}
                 </p>
               </ReviewBlock>
               <ReviewBlock title="선택 패키지">
@@ -204,7 +259,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
               <label className="flex gap-3 rounded-[16px] border border-slate-950/10 bg-slate-50 p-4 text-sm font-semibold text-slate-700">
                 <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-0.5 h-4 w-4 accent-slate-950" />
                 <span>
-                  <Link href="/terms" className="font-black underline">이용약관</Link>, <Link href="/privacy" className="font-black underline">개인정보처리방침</Link>, <Link href="/refund-policy" className="font-black underline">환불 및 취소 정책</Link>을 확인했으며, 구독 갱신 조건에 동의합니다.
+                  <Link href="/terms" className="font-black underline">이용약관</Link>, <Link href="/privacy" className="font-black underline">개인정보처리방침</Link>, <Link href="/refund-policy" className="font-black underline">환불 및 취소 정책</Link>을 확인했으며 결제 조건에 동의합니다.
                 </span>
               </label>
             </div>
@@ -217,13 +272,13 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
               <PriceLine label="기본 플랜" value={`${formatKRW(PLANS[plan].baseMonthlyPrice)} / 월`} />
               {subjectEngineDelta > 0 ? <PriceLine label="엔진 추가" value={`+${formatKRW(subjectEngineDelta)} / 월`} /> : null}
               {Object.values(selectedPackages).map((option) => option && option.monthlyPriceDelta > 0 ? <PriceLine key={option.id} label={option.name} value={`+${formatKRW(option.monthlyPriceDelta)} / 월`} /> : null)}
-              {billingCycle === "annual" && <PriceLine label="연간 할인" value={`-${formatKRW(annual.discountAmount)}`} positive />}
+              {isAnnualLicense && <PriceLine label="연간 할인" value={`-${formatKRW(annual.discountAmount)}`} positive />}
             </div>
-            <p className="mt-5 text-sm font-bold text-slate-400">{billingCycle === "annual" ? "오늘 결제될 연간 금액" : "오늘 결제될 월간 금액"}</p>
+            <p className="mt-5 text-sm font-bold text-slate-400">{isAnnualLicense ? "오늘 결제할 1년 이용권 금액" : "오늘 결제할 월 자동결제 금액"}</p>
             <p className="mt-2 text-4xl font-black">{formatKRW(chargeAmount)}</p>
-            {billingCycle === "annual" && <p className="mt-2 text-sm font-bold text-cyan-100">{formatKRW(annual.discountedMonthly)} / 월 상당</p>}
+            {isAnnualLicense && <p className="mt-2 text-sm font-bold text-cyan-100">{formatKRW(annual.discountedMonthly)} / 월 상당 · 자동갱신 없음</p>}
             <label className="mt-6 block text-sm font-bold text-slate-200">
-              휴대폰 번호
+              휴대폰 번호{isAnnualLicense ? " (선택)" : ""}
               <input
                 type="tel"
                 inputMode="numeric"
@@ -234,13 +289,18 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                 className="mt-2 h-11 w-full rounded-[10px] border border-white/10 bg-white/[0.08] px-3 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/70"
               />
             </label>
-            <button disabled={!agreed || loading || !phoneReady} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
-              {loading ? "결제 준비 중..." : "결제하기"}
+            <button disabled={!agreed || loading || (!isAnnualLicense && !phoneReady)} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
+              {loading ? "결제 준비 중..." : isAnnualLicense ? "1년 이용권 결제하기" : "월 자동결제 시작하기"}
             </button>
             {error && <p className="mt-4 rounded-[12px] bg-rose-500/14 px-4 py-3 text-sm font-bold text-rose-100">{error}</p>}
+            {isAnnualLicense ? (
+              <p className="mt-4 rounded-[12px] bg-cyan-400/10 px-4 py-3 text-xs font-bold leading-5 text-cyan-100">
+                연간 결제는 1년 이용권 단건결제이며 자동 갱신되지 않습니다.
+              </p>
+            ) : null}
             <p className="mt-5 flex gap-2 text-xs leading-5 text-slate-400">
               <ShieldCheck className="h-4 w-4 shrink-0" />
-              서버가 가격과 패키지를 다시 검증한 뒤 PortOne V2 빌링키로 정기결제를 처리합니다.
+              {isAnnualLicense ? "서버가 금액과 상품을 검증한 뒤 PortOne V2 일반결제로 1년 이용권을 처리합니다." : "서버가 금액과 패키지를 검증한 뒤 PortOne V2 billing key로 월 자동결제를 처리합니다."}
             </p>
           </aside>
         </div>
@@ -249,7 +309,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
   );
 }
 
-function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
+function ReviewBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-[18px] border border-slate-950/10 p-5">
       <h2 className="mb-4 text-sm font-black text-slate-500">{title}</h2>
@@ -258,7 +318,7 @@ function ReviewBlock({ title, children }: { title: string; children: React.React
   );
 }
 
-function SpecLine({ children }: { children: React.ReactNode }) {
+function SpecLine({ children }: { children: ReactNode }) {
   return (
     <div className="flex gap-2">
       <Check className="mt-0.5 h-4 w-4 shrink-0 text-slate-950" />

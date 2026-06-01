@@ -26,6 +26,7 @@ function isAllowedPostLoginPath(pathname: string) {
   return [
     "/checkout/review",
     "/checkout/billing-return",
+    "/checkout/payment-return",
     "/billing",
     "/account/profile",
     "/account/security",
