@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { FileText, Loader2, LockKeyhole, Pencil, Plus, ShieldCheck, Sparkles, UploadCloud, X } from "lucide-react";
+import { Check, FileText, Loader2, LockKeyhole, Pencil, Plus, ShieldCheck, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   isKoreanSubjectValue,
   makeSubjectPathValue,
   normalizeSubjectValue,
+  splitSubjectPath,
   subjectDisplayLabel,
 } from "@/lib/subjectHierarchy";
 import { cn } from "@/lib/utils";
@@ -111,6 +112,20 @@ function readStringList(key: string) {
 function writeStringList(key: string, values: string[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, JSON.stringify([...new Set(values.map(normalizeSubjectValue).filter(Boolean))]));
+}
+
+function isSubjectPathMatch(value: string, target: string) {
+  const normalizedValue = normalizeSubjectValue(value);
+  const normalizedTarget = normalizeSubjectValue(target);
+  return normalizedValue === normalizedTarget || normalizedValue.startsWith(`${normalizedTarget} > `);
+}
+
+function replaceSubjectPathPrefix(value: string, oldPrefix: string, newPrefix: string) {
+  const normalizedValue = normalizeSubjectValue(value);
+  const normalizedOld = normalizeSubjectValue(oldPrefix);
+  const normalizedNew = normalizeSubjectValue(newPrefix);
+  if (!isSubjectPathMatch(normalizedValue, normalizedOld)) return normalizedValue;
+  return normalizeSubjectValue(`${normalizedNew}${normalizedValue.slice(normalizedOld.length)}`);
 }
 
 function tagColor(value: string, colors: TagColorMap, group: "subject" | "unit") {
@@ -327,17 +342,24 @@ function SubjectTreeSelector({
   subjectTagColors,
   onToggleSubject,
   onAddSubject,
+  onRenameSubject,
+  onDeleteSubject,
 }: {
   nodes: SubjectNode[];
   selectedSubjects: string[];
   subjectTagColors: TagColorMap;
   onToggleSubject: (subject: string) => void;
   onAddSubject: (subject: string, color: string) => void;
+  onRenameSubject: (oldSubject: string, newSubject: string, color: string) => void;
+  onDeleteSubject: (subject: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [addTarget, setAddTarget] = useState<"root" | string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
   const [draftColor, setDraftColor] = useState(tagPalette[0]);
+  const [editTarget, setEditTarget] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editColor, setEditColor] = useState(tagPalette[0]);
 
   function nodeValue(node: SubjectNode) {
     return normalizeSubjectValue(node.value || node.label);
@@ -346,7 +368,16 @@ function SubjectTreeSelector({
   function openDraft(target: "root" | string) {
     setEditing(true);
     setAddTarget(target);
+    setEditTarget(null);
     setDraftLabel("");
+  }
+
+  function openEdit(subject: string, label: string, color: string) {
+    setEditing(true);
+    setAddTarget(null);
+    setEditTarget(subject);
+    setEditLabel(label);
+    setEditColor(color);
   }
 
   function commitDraft(target: "root" | string) {
@@ -358,6 +389,24 @@ function SubjectTreeSelector({
     setAddTarget(null);
     setDraftLabel("");
     setDraftColor((current) => nextPaletteColor(current));
+  }
+
+  function commitEdit(subject: string) {
+    const label = normalizeSubjectValue(editLabel);
+    if (!label) return;
+    const path = splitSubjectPath(subject);
+    const parent = path.slice(0, -1).join(" > ");
+    const nextSubject = parent ? makeSubjectPathValue(parent, label) : label;
+    onRenameSubject(subject, nextSubject, editColor);
+    setEditTarget(null);
+    setEditLabel("");
+  }
+
+  function deleteSubject(subject: string, label: string) {
+    if (!window.confirm(`${label} 항목과 하위 항목을 삭제할까요?`)) return;
+    onDeleteSubject(subject);
+    if (addTarget && isSubjectPathMatch(addTarget, subject)) setAddTarget(null);
+    if (editTarget && isSubjectPathMatch(editTarget, subject)) setEditTarget(null);
   }
 
   return (
@@ -377,6 +426,8 @@ function SubjectTreeSelector({
             setEditing((current) => !current);
             setAddTarget(null);
             setDraftLabel("");
+            setEditTarget(null);
+            setEditLabel("");
           }}
           aria-label={editing ? "과목 편집 종료" : "과목 편집"}
           title={editing ? "과목 편집 종료" : "과목 편집"}
@@ -392,34 +443,67 @@ function SubjectTreeSelector({
           const groupColor = tagColor(nodeKey, subjectTagColors, "subject");
           return (
             <div key={nodeKey} className="w-64 shrink-0 rounded-[8px] bg-white/[0.018] p-3">
-              <div className="flex items-center gap-2">
-                <span className="h-5 w-5 shrink-0 rounded-full border border-white/25" style={{ backgroundColor: groupColor }} />
-                <button
-                  type="button"
-                  className={cn(
-                    "min-w-0 flex-1 truncate text-left text-base font-black transition hover:text-white",
-                    selectedSubjects.includes(nodeKey) ? "text-white" : "text-slate-100"
-                  )}
-                  onClick={() => onToggleSubject(nodeKey)}
-                >
-                  {node.label}
-                </button>
-                {editing ? (
+              {editing && editTarget === nodeKey ? (
+                <SubjectEditRow
+                  value={editLabel}
+                  color={editColor}
+                  placeholder="상위 항목 이름"
+                  label="상위 항목 수정"
+                  onChange={setEditLabel}
+                  onColorChange={setEditColor}
+                  onSubmit={() => commitEdit(nodeKey)}
+                  onCancel={() => setEditTarget(null)}
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="h-5 w-5 shrink-0 rounded-full border border-white/25" style={{ backgroundColor: groupColor }} />
                   <button
                     type="button"
                     className={cn(
-                      "grid h-7 w-7 shrink-0 place-items-center rounded-full border transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white",
-                      addTarget === nodeKey ? "border-violet-300/70 bg-violet-400/20 text-violet-50" : "border-white/12 bg-black/25 text-slate-200"
+                      "min-w-0 flex-1 truncate text-left text-base font-black transition hover:text-white",
+                      selectedSubjects.includes(nodeKey) ? "text-white" : "text-slate-100"
                     )}
-                    onClick={() => openDraft(nodeKey)}
-                    aria-label={`${node.label} 하위 항목 추가`}
-                    title={`${node.label} 하위 항목 추가`}
-                    aria-pressed={addTarget === nodeKey}
+                    onClick={() => onToggleSubject(nodeKey)}
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    {node.label}
                   </button>
-                ) : null}
-              </div>
+                  {editing ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
+                        onClick={() => openEdit(nodeKey, node.label, groupColor)}
+                        aria-label={`${node.label} 수정`}
+                        title={`${node.label} 수정`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          "grid h-7 w-7 place-items-center rounded-full border transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white",
+                          addTarget === nodeKey ? "border-violet-300/70 bg-violet-400/20 text-violet-50" : "border-white/12 bg-black/25 text-slate-200"
+                        )}
+                        onClick={() => openDraft(nodeKey)}
+                        aria-label={`${node.label} 하위 항목 추가`}
+                        title={`${node.label} 하위 항목 추가`}
+                        aria-pressed={addTarget === nodeKey}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/15 hover:text-rose-50"
+                        onClick={() => deleteSubject(nodeKey, node.label)}
+                        aria-label={`${node.label} 삭제`}
+                        title={`${node.label} 삭제`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
               <div className="relative mt-3 min-h-16 pl-5">
                 <span className="absolute left-[9px] top-0 h-full w-1 rounded-full opacity-80" style={{ backgroundColor: groupColor }} />
                 <div className="space-y-2">
@@ -437,9 +521,18 @@ function SubjectTreeSelector({
                       draftColor={draftColor}
                       onToggle={onToggleSubject}
                       onOpenDraft={openDraft}
+                      onOpenEdit={openEdit}
+                      onDelete={deleteSubject}
                       onDraftLabelChange={setDraftLabel}
                       onDraftColorChange={setDraftColor}
                       onCommitDraft={commitDraft}
+                      editTarget={editTarget}
+                      editLabel={editLabel}
+                      editColor={editColor}
+                      onEditLabelChange={setEditLabel}
+                      onEditColorChange={setEditColor}
+                      onCommitEdit={commitEdit}
+                      onCancelEdit={() => setEditTarget(null)}
                     />
                   ))}
                   {editing && addTarget === nodeKey ? (
@@ -516,11 +609,20 @@ function SubjectFolderRow({
   addTarget,
   draftLabel,
   draftColor,
+  editTarget,
+  editLabel,
+  editColor,
   onToggle,
   onOpenDraft,
+  onOpenEdit,
+  onDelete,
   onDraftLabelChange,
   onDraftColorChange,
   onCommitDraft,
+  onEditLabelChange,
+  onEditColorChange,
+  onCommitEdit,
+  onCancelEdit,
 }: {
   node: SubjectNode;
   level: number;
@@ -531,11 +633,20 @@ function SubjectFolderRow({
   addTarget: "root" | string | null;
   draftLabel: string;
   draftColor: string;
+  editTarget: string | null;
+  editLabel: string;
+  editColor: string;
   onToggle: (subject: string) => void;
   onOpenDraft: (target: string) => void;
+  onOpenEdit: (subject: string, label: string, color: string) => void;
+  onDelete: (subject: string, label: string) => void;
   onDraftLabelChange: (value: string) => void;
   onDraftColorChange: (color: string) => void;
   onCommitDraft: (target: string) => void;
+  onEditLabelChange: (value: string) => void;
+  onEditColorChange: (color: string) => void;
+  onCommitEdit: (subject: string) => void;
+  onCancelEdit: () => void;
 }) {
   const value = normalizeSubjectValue(node.value || node.label);
   const color = tagColor(value, subjectTagColors, "subject");
@@ -544,31 +655,67 @@ function SubjectFolderRow({
 
   return (
     <div className="space-y-2">
-      <div className="relative flex items-center gap-1.5" style={{ marginLeft: `${indent}rem`, width: `calc(100% - ${indent}rem)` }}>
-        <span className="absolute -left-[15px] top-1/2 h-0.5 w-3 -translate-y-1/2 rounded-full opacity-80" style={{ backgroundColor: branchColor }} />
-        <button
-          type="button"
-          className={cn(
-            "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[7px] px-2 text-left text-sm font-bold transition hover:bg-white/[0.04]",
-            selected ? "text-white" : "text-slate-300 hover:text-white"
-          )}
-          onClick={() => onToggle(value)}
-        >
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/25" style={{ backgroundColor: color }} />
-          <span className="truncate">{node.label}</span>
-        </button>
-        {editing ? (
+      {editing && editTarget === value ? (
+        <div className="relative" style={{ marginLeft: `${indent}rem`, width: `calc(100% - ${indent}rem)` }}>
+          <span className="absolute -left-[15px] top-5 h-0.5 w-3 rounded-full opacity-80" style={{ backgroundColor: branchColor }} />
+          <SubjectEditRow
+            value={editLabel}
+            color={editColor}
+            placeholder="항목 이름"
+            label={`${node.label} 수정`}
+            onChange={onEditLabelChange}
+            onColorChange={onEditColorChange}
+            onSubmit={() => onCommitEdit(value)}
+            onCancel={onCancelEdit}
+          />
+        </div>
+      ) : (
+        <div className="relative flex items-center gap-1.5" style={{ marginLeft: `${indent}rem`, width: `calc(100% - ${indent}rem)` }}>
+          <span className="absolute -left-[15px] top-1/2 h-0.5 w-3 -translate-y-1/2 rounded-full opacity-80" style={{ backgroundColor: branchColor }} />
           <button
             type="button"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
-            onClick={() => onOpenDraft(value)}
-            aria-label={`${node.label} 하위 항목 추가`}
-            title={`${node.label} 하위 항목 추가`}
+            className={cn(
+              "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[7px] px-2 text-left text-sm font-bold transition hover:bg-white/[0.04]",
+              selected ? "text-white" : "text-slate-300 hover:text-white"
+            )}
+            onClick={() => onToggle(value)}
           >
-            <Plus className="h-3.5 w-3.5" />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/25" style={{ backgroundColor: color }} />
+            <span className="truncate">{node.label}</span>
           </button>
-        ) : null}
-      </div>
+          {editing ? (
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
+                onClick={() => onOpenEdit(value, node.label, color)}
+                aria-label={`${node.label} 수정`}
+                title={`${node.label} 수정`}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
+                onClick={() => onOpenDraft(value)}
+                aria-label={`${node.label} 하위 항목 추가`}
+                title={`${node.label} 하위 항목 추가`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/15 hover:text-rose-50"
+                onClick={() => onDelete(value, node.label)}
+                aria-label={`${node.label} 삭제`}
+                title={`${node.label} 삭제`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
       {editing && addTarget === value ? (
         <div style={{ marginLeft: `${Math.min(level, 3) * 0.85}rem` }}>
           <SubjectDraftRow
@@ -594,11 +741,20 @@ function SubjectFolderRow({
           addTarget={addTarget}
           draftLabel={draftLabel}
           draftColor={draftColor}
+          editTarget={editTarget}
+          editLabel={editLabel}
+          editColor={editColor}
           onToggle={onToggle}
           onOpenDraft={onOpenDraft}
+          onOpenEdit={onOpenEdit}
+          onDelete={onDelete}
           onDraftLabelChange={onDraftLabelChange}
           onDraftColorChange={onDraftColorChange}
           onCommitDraft={onCommitDraft}
+          onEditLabelChange={onEditLabelChange}
+          onEditColorChange={onEditColorChange}
+          onCommitEdit={onCommitEdit}
+          onCancelEdit={onCancelEdit}
         />
       ))}
     </div>
@@ -642,6 +798,58 @@ function SubjectDraftRow({
         <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
         <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={onSubmit}>
           <Plus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SubjectEditRow({
+  value,
+  color,
+  placeholder,
+  label,
+  onChange,
+  onColorChange,
+  onSubmit,
+  onCancel,
+}: {
+  value: string;
+  color: string;
+  placeholder: string;
+  label: string;
+  onChange: (value: string) => void;
+  onColorChange: (color: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="rounded-[7px] border border-violet-300/35 bg-violet-400/[0.07] p-2 shadow-[0_12px_26px_rgba(76,29,149,0.12)]">
+      <p className="mb-2 text-[11px] font-bold text-violet-100">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <Input
+          autoFocus
+          className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onSubmit();
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onCancel();
+            }
+          }}
+        />
+        <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
+        <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={onSubmit}>
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+        <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={onCancel}>
+          <X className="h-3.5 w-3.5" />
         </Button>
       </div>
     </div>
@@ -808,6 +1016,53 @@ export default function UploadPage() {
     });
     if (isKoreanSubjectValue(subject)) setSubjectEngine("korean");
     updateSubjectTagColor(subject, color);
+  }
+
+  function renameCustomSubject(oldSubjectValue: string, newSubjectValue: string, color: string) {
+    const oldSubject = normalizeSubjectValue(oldSubjectValue);
+    const newSubject = normalizeSubjectValue(newSubjectValue);
+    if (!oldSubject || !newSubject) return;
+
+    setSelectedSubjects((current) => {
+      const next = current.map((subject) => (isSubjectPathMatch(subject, oldSubject) ? replaceSubjectPathPrefix(subject, oldSubject, newSubject) : subject));
+      return [...new Set(next)];
+    });
+    setCustomSubjectOptions((current) => {
+      const hasTarget = current.some((subject) => isSubjectPathMatch(subject, oldSubject));
+      const next = (hasTarget ? current : [...current, oldSubject]).map((subject) => (isSubjectPathMatch(subject, oldSubject) ? replaceSubjectPathPrefix(subject, oldSubject, newSubject) : subject));
+      writeStringList(CUSTOM_SUBJECTS_KEY, next);
+      return [...new Set(next)];
+    });
+    setSubjectTagColors((current) => {
+      const next: TagColorMap = {};
+      Object.entries(current).forEach(([subject, subjectColor]) => {
+        if (isSubjectPathMatch(subject, oldSubject)) {
+          const nextSubject = replaceSubjectPathPrefix(subject, oldSubject, newSubject);
+          next[nextSubject] = subject === oldSubject ? color : subjectColor;
+          return;
+        }
+        next[subject] = subjectColor;
+      });
+      next[newSubject] = color;
+      writeTagColors(SUBJECT_TAG_COLORS_KEY, next);
+      return next;
+    });
+  }
+
+  function deleteCustomSubject(subjectValue: string) {
+    const subject = normalizeSubjectValue(subjectValue);
+    if (!subject) return;
+    setSelectedSubjects((current) => current.filter((item) => !isSubjectPathMatch(item, subject)));
+    setCustomSubjectOptions((current) => {
+      const next = current.filter((item) => !isSubjectPathMatch(item, subject));
+      writeStringList(CUSTOM_SUBJECTS_KEY, next);
+      return next;
+    });
+    setSubjectTagColors((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([item]) => !isSubjectPathMatch(item, subject)));
+      writeTagColors(SUBJECT_TAG_COLORS_KEY, next);
+      return next;
+    });
   }
 
   function updateSubjectTagColor(subject: string, color: string) {
@@ -988,6 +1243,8 @@ export default function UploadPage() {
                       subjectTagColors={subjectTagColors}
                       onToggleSubject={toggleSubject}
                       onAddSubject={addCustomSubject}
+                      onRenameSubject={renameCustomSubject}
+                      onDeleteSubject={deleteCustomSubject}
                     />
                     {selectedSubjects.length ? (
                       <div className="mt-2 flex flex-wrap gap-2">
