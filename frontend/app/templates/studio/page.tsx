@@ -1989,8 +1989,9 @@ function VisualTemplateStudioPageContent() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[56px_300px_minmax(0,1fr)_300px]">
-          <nav className="relative z-40 flex min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#080a0f] px-1.5 py-2">
+      <div className="grid min-h-0 flex-1 grid-cols-[56px_minmax(0,1fr)_300px]">
+        <div className="group/sidebar relative z-40 h-full min-h-0">
+          <nav className="relative z-40 flex h-full min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#080a0f] px-1.5 py-2">
             {panelTabs.map((tab) => {
               const Icon = tab.icon;
               const active = leftPanel === tab.key;
@@ -2012,9 +2013,10 @@ function VisualTemplateStudioPageContent() {
             })}
           </nav>
 
-          <aside className="relative z-30 min-h-0 border-r border-white/10 bg-[#090b10]/98 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur">
+          <aside className="pointer-events-none absolute left-14 top-0 z-30 h-full w-[300px] -translate-x-2 border-r border-white/10 bg-[#090b10]/98 opacity-0 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur transition duration-150 ease-out group-hover/sidebar:pointer-events-auto group-hover/sidebar:translate-x-0 group-hover/sidebar:opacity-100 group-focus-within/sidebar:pointer-events-auto group-focus-within/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100">
             <div className="h-full overflow-y-auto p-3 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">{renderLeftPanel()}</div>
           </aside>
+        </div>
 
         <main className="min-h-0 overflow-auto bg-[radial-gradient(circle_at_top,#1c2130_0,#0b0e15_42%,#07080b_100%)] [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
           <div className="mx-auto flex w-fit flex-col gap-7 p-5 pb-20">

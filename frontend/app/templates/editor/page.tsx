@@ -426,8 +426,8 @@ function CanvaLeftPanel({
   );
 
   return (
-    <aside className="flex h-full w-[420px] shrink-0 forge-panel text-slate-100">
-      <nav className="flex w-[108px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-white/10 bg-black/35 px-2 py-3" aria-label="편집 도구">
+    <aside className="group/sidebar relative flex h-full w-[108px] shrink-0 text-slate-100">
+      <nav className="relative z-40 flex h-full w-[108px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-white/10 bg-black/35 px-2 py-3 forge-panel" aria-label="편집 도구">
         {tabs.map((tab) => {
           const active = normalizedTab === tab.key;
           return (
@@ -457,7 +457,7 @@ function CanvaLeftPanel({
         })}
       </nav>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-[#0b0d13]">
+      <div className="pointer-events-none absolute left-[108px] top-0 z-30 flex h-full w-[312px] min-w-0 -translate-x-2 flex-col border-r border-white/10 bg-[#0b0d13] opacity-0 shadow-[18px_0_54px_rgba(0,0,0,0.28)] transition duration-150 ease-out group-hover/sidebar:pointer-events-auto group-hover/sidebar:translate-x-0 group-hover/sidebar:opacity-100 group-focus-within/sidebar:pointer-events-auto group-focus-within/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100">
         <div className="border-b border-white/10 bg-black/25 px-4 py-3">
           <div className="text-sm font-semibold text-white">{activeMeta.label}</div>
           <p className="mt-0.5 text-xs text-slate-400">{activeMeta.hint}</p>
