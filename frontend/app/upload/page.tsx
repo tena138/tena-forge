@@ -932,6 +932,7 @@ export default function UploadPage() {
   const [problemPdfEstimate, setProblemPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
   const [solutionPdfEstimate, setSolutionPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
   const [subjectEngine, setSubjectEngine] = useState<"math" | "korean">("math");
+  const [subjectEngineTouched, setSubjectEngineTouched] = useState(false);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -998,10 +999,19 @@ export default function UploadPage() {
     };
   }, [solutionPdf]);
 
+  function applyInferredSubjectEngine(engine: "math" | "korean") {
+    if (!subjectEngineTouched) setSubjectEngine(engine);
+  }
+
+  function selectSubjectEngine(engine: "math" | "korean") {
+    setSubjectEngineTouched(true);
+    setSubjectEngine(engine);
+  }
+
   function toggleSubject(subject: string) {
     const normalized = normalizeSubjectValue(subject);
     if (!normalized) return;
-    if (isKoreanSubjectValue(normalized)) setSubjectEngine("korean");
+    if (isKoreanSubjectValue(normalized)) applyInferredSubjectEngine("korean");
     setSelectedSubjects((current) => (current.includes(normalized) ? current.filter((item) => item !== normalized) : [...current, normalized]));
   }
 
@@ -1014,7 +1024,7 @@ export default function UploadPage() {
       writeStringList(CUSTOM_SUBJECTS_KEY, next);
       return next;
     });
-    if (isKoreanSubjectValue(subject)) setSubjectEngine("korean");
+    if (isKoreanSubjectValue(subject)) applyInferredSubjectEngine("korean");
     updateSubjectTagColor(subject, color);
   }
 
@@ -1097,7 +1107,7 @@ export default function UploadPage() {
     if (inferredSubjects.length) {
       const nextSubjects = inferredSubjects.map(normalizeSubjectValue).filter(Boolean);
       setSelectedSubjects((current) => [...current, ...nextSubjects.filter((subject) => !current.includes(subject))]);
-      if (nextSubjects.some(isKoreanSubjectValue)) setSubjectEngine("korean");
+      if (nextSubjects.some(isKoreanSubjectValue)) applyInferredSubjectEngine("korean");
     }
     setAutoBatchName(nextAutoBatchName);
   }
@@ -1162,6 +1172,7 @@ export default function UploadPage() {
     if (isAdmin || !usageSummary || enabledSubjectEngines.includes(subjectEngine)) return;
     const nextEngine = enabledSubjectEngines.find((engine): engine is "math" | "korean" => engine === "math" || engine === "korean") || "math";
     setSubjectEngine(nextEngine);
+    setSubjectEngineTouched(false);
   }, [enabledSubjectEngines, isAdmin, subjectEngine, usageSummary]);
 
   const creditEstimate = useMemo(
@@ -1217,7 +1228,7 @@ export default function UploadPage() {
                           locked && "cursor-not-allowed opacity-45"
                         )}
                         onClick={() => {
-                          setSubjectEngine(engine.code);
+                          selectSubjectEngine(engine.code);
                           if (engine.code === "korean" && !selectedSubjects.includes("국어")) {
                             setSelectedSubjects((current) => [...current, "국어"]);
                           }
