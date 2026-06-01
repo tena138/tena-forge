@@ -173,3 +173,63 @@ test("PowerPoint positioned table fragments suppress fallback images", async () 
   assert.equal(texts.length, 6);
   assert.equal(Math.max(...shapes.map((element) => element.x + element.width)) - Math.min(...shapes.map((element) => element.x)), 413);
 });
+
+test("PowerPoint conditional VML table fragments suppress fallback images", async () => {
+  const html = `<!--StartFragment-->
+    <!--[if gte vml 1]>
+      <v:rect style="position:absolute;left:12pt;top:18pt;width:90pt;height:28pt" fillcolor="#ddebf7" strokecolor="#111827" strokeweight="1pt"><v:textbox><div>Header A</div></v:textbox></v:rect>
+      <v:rect style="position:absolute;left:102pt;top:18pt;width:150pt;height:28pt" fillcolor="#ddebf7" strokecolor="#111827" strokeweight="1pt"><v:textbox><div>Header B</div></v:textbox></v:rect>
+      <v:rect style="position:absolute;left:252pt;top:18pt;width:70pt;height:28pt" fillcolor="#ddebf7" strokecolor="#111827" strokeweight="1pt"><v:textbox><div>Score</div></v:textbox></v:rect>
+      <v:rect style="position:absolute;left:12pt;top:46pt;width:90pt;height:42pt" fillcolor="#e2f0d9" strokecolor="#111827" strokeweight="1pt"><v:textbox><div>Unit</div></v:textbox></v:rect>
+      <v:rect style="position:absolute;left:102pt;top:46pt;width:150pt;height:42pt" fillcolor="#ffffff" strokecolor="#111827" strokeweight="1pt"><v:textbox><div>Limit</div></v:textbox></v:rect>
+      <v:rect style="position:absolute;left:252pt;top:46pt;width:70pt;height:42pt" fillcolor="#ffffff" strokecolor="#111827" strokeweight="1pt"><v:textbox><div>12</div></v:textbox></v:rect>
+    <![endif]-->
+    <img src="data:image/png;base64,iVBORw0KGgo=" width="900" height="360" alt="PowerPoint fallback image">
+  <!--EndFragment-->`;
+  const { elements } = await createClipboardEditableElements(clipboardData(html), page, 100, 120, 0);
+  const images = elements.filter((element) => element.type === "image");
+  const shapes = elements.filter((element) => element.type === "shape");
+  const texts = elements.filter((element) => element.type === "text");
+
+  assert.equal(images.length, 0);
+  assert.equal(shapes.length, 6);
+  assert.equal(texts.length, 6);
+  assert.equal(Math.max(...shapes.map((element) => element.x + element.width)) - Math.min(...shapes.map((element) => element.x)), 413);
+  assert.equal(Math.max(...shapes.map((element) => element.y + element.height)) - Math.min(...shapes.map((element) => element.y)), 93);
+});
+
+test("PowerPoint class-based table styling preserves cell fill and borders", async () => {
+  const html = `<!--StartFragment-->
+    <style>
+      .leftBand { background: #9aa8b4; border: .75pt solid #737373; color: #000000; font-size: 12pt; }
+      .grayCell { background: #b7b7b7; border: .75pt solid #737373; color: #000000; font-size: 12pt; }
+      .whiteCell { background: #ffffff; border: .75pt solid #737373; color: #000000; font-size: 12pt; }
+    </style>
+    <table style="position:absolute;left:0pt;top:0pt;width:600pt;height:270pt;border-collapse:collapse">
+      <tr style="height:32pt">
+        <td class="leftBand" style="width:90pt">학습태도<br>관리평가</td>
+        <td class="grayCell" style="width:170pt">집중도</td>
+        <td class="grayCell" style="width:340pt">높음□ 보통□ 낮음□</td>
+      </tr>
+      <tr style="height:120pt">
+        <td class="leftBand">멘토<br>종합의견</td>
+        <td class="grayCell">개선 포인트</td>
+        <td class="whiteCell">시험지 3번 문항은 이전 수업에서 다룬 문항이었으나 다시 해결하지 못했음.</td>
+      </tr>
+    </table>
+    <img src="data:image/png;base64,iVBORw0KGgo=" width="900" height="360" alt="PowerPoint fallback image">
+  <!--EndFragment-->`;
+  const { elements } = await createClipboardEditableElements(clipboardData(html), page, 100, 120, 0);
+  const images = elements.filter((element) => element.type === "image");
+  const shapes = elements.filter((element) => element.type === "shape");
+  const texts = elements.filter((element) => element.type === "text");
+  const fills = shapes.map((element) => String(element.style?.fill || "").toLowerCase());
+
+  assert.equal(images.length, 0);
+  assert.equal(shapes.length, 6);
+  assert.equal(texts.length, 6);
+  assert.ok(fills.some((fill) => fill === "#9aa8b4" || fill === "rgb(154, 168, 180)"));
+  assert.ok(fills.some((fill) => fill === "#b7b7b7" || fill === "rgb(183, 183, 183)"));
+  assert.ok(fills.some((fill) => fill === "#ffffff" || fill === "rgb(255, 255, 255)" || fill === "white"));
+  assert.ok(shapes.every((element) => (element.style?.strokeWidth || 0) > 0));
+});

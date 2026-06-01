@@ -199,6 +199,23 @@ function cssDeclaration(element: Element, property: string) {
   return pattern.exec(style)?.[1]?.trim() || "";
 }
 
+function cssShorthandColor(value: string | null | undefined) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  const hex = /#[0-9a-fA-F]{3,8}\b/.exec(trimmed)?.[0];
+  if (hex) return hex;
+  const rgb = /rgba?\([^)]+\)/i.exec(trimmed)?.[0];
+  if (rgb) return rgb;
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  return parts.find((part) => !/^(?:none|solid|dashed|dotted|double|groove|ridge|inset|outset|thin|medium|thick|currentcolor|-?\d)/i.test(part));
+}
+
+function cssShorthandWidth(value: string | null | undefined) {
+  if (!value) return undefined;
+  const width = /(?:^|\s)(-?\d+(?:\.\d+)?(?:px|pt|in|cm|mm|pc)?)(?=\s|$)/i.exec(value)?.[1];
+  return cssNumber(width);
+}
+
 function cssLength(value: string | null | undefined) {
   if (!value) return undefined;
   const trimmed = String(value).trim();
@@ -229,25 +246,36 @@ function cssColor(value: string | null | undefined) {
 }
 
 function borderWidth(element: Element) {
+  const border = cssDeclaration(element, "border");
   return (
     cssNumber(cssDeclaration(element, "border-width")) ??
     cssNumber(cssDeclaration(element, "border-left-width")) ??
     cssNumber(cssDeclaration(element, "border-top-width")) ??
-    (cssDeclaration(element, "border") ? 1 : 0)
+    cssShorthandWidth(border) ??
+    cssNumber(element.getAttribute("strokeweight")) ??
+    (border ? 1 : 0)
   );
 }
 
 function borderColor(element: Element) {
+  const border = cssDeclaration(element, "border");
   return (
     cssColor(cssDeclaration(element, "border-color")) ||
     cssColor(cssDeclaration(element, "border-left-color")) ||
     cssColor(cssDeclaration(element, "border-top-color")) ||
+    cssColor(cssShorthandColor(border)) ||
+    cssColor(element.getAttribute("bordercolor")) ||
     cssColor(element.getAttribute("strokecolor"))
   );
 }
 
 function backgroundColor(element: Element) {
-  return cssColor(cssDeclaration(element, "background-color")) || cssColor(cssDeclaration(element, "background")) || cssColor(element.getAttribute("fillcolor"));
+  return (
+    cssColor(cssDeclaration(element, "background-color")) ||
+    cssColor(cssShorthandColor(cssDeclaration(element, "background"))) ||
+    cssColor(element.getAttribute("bgcolor")) ||
+    cssColor(element.getAttribute("fillcolor"))
+  );
 }
 
 function elementGeometry(element: Element, fallbackIndex: number) {
@@ -432,6 +460,57 @@ function tableRowHeights(rows: HTMLTableRowElement[], rowCount: number) {
 function htmlFragment(html: string) {
   const fragmentMatch = /<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/i.exec(html);
   return fragmentMatch?.[1] || html;
+}
+
+function exposeOfficeConditionalMarkup(html: string) {
+  return html.replace(/<!--([\s\S]*?)-->/g, (match, body) => {
+    if (!/(<\s*(?:v|o|w):|urn:schemas-microsoft-com|mso-)/i.test(body)) return match;
+    return body
+      .replace(/^\s*\[if[^\]]*]\s*>?/i, "")
+      .replace(/<!\s*\[endif]\s*>?/gi, "")
+      .trim();
+  });
+}
+
+function inlineClipboardCss(doc: Document) {
+  const rules: Array<{ selector: string; declarations: string[] }> = [];
+  doc.querySelectorAll("style").forEach((style) => {
+    const css = (style.textContent || "")
+      .replace(/<!--|-->/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const ruleMatches = css.matchAll(/([^{}]+)\{([^{}]+)\}/g);
+    for (const match of ruleMatches) {
+      const declarations = match[2]
+        .split(";")
+        .map((declaration) => declaration.trim())
+        .filter((declaration) => declaration && safeCssValue(declaration));
+      if (!declarations.length) continue;
+      match[1]
+        .split(",")
+        .map((selector) => selector.trim())
+        .filter((selector) => /^([a-z][\w-]*)?([.#][\w-]+)$/i.test(selector) || /^[a-z][\w-]*$/i.test(selector))
+        .forEach((selector) => rules.push({ selector, declarations }));
+    }
+  });
+
+  rules.forEach(({ selector, declarations }) => {
+    let elements: Element[] = [];
+    try {
+      elements = Array.from(doc.querySelectorAll(selector));
+    } catch {
+      return;
+    }
+    elements.forEach((element) => {
+      const htmlElement = element as HTMLElement;
+      declarations.forEach((declaration) => {
+        const [rawName, ...rawValue] = declaration.split(":");
+        const name = rawName?.trim();
+        const value = rawValue.join(":").trim();
+        if (!name || !value || htmlElement.style.getPropertyValue(name)) return;
+        htmlElement.style.setProperty(name, value);
+      });
+    });
+  });
 }
 
 function textHeight(text: string, style: ElementStyle, fallback = 48) {
@@ -701,7 +780,8 @@ function parseShapeItems(element: Element, fallbackIndex: number): ClipboardEdit
 
 function clipboardEditableItemsFromHtml(html: string): ClipboardEditableItem[] {
   if (!html.trim() || typeof DOMParser === "undefined") return [];
-  const doc = new DOMParser().parseFromString(htmlFragment(html), "text/html");
+  const doc = new DOMParser().parseFromString(exposeOfficeConditionalMarkup(htmlFragment(html)), "text/html");
+  inlineClipboardCss(doc);
   doc.querySelectorAll("script, style, meta, link, xml").forEach((node) => node.remove());
 
   const processed = new Set<Element>();
