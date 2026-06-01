@@ -556,7 +556,7 @@ function SubjectTreeSelector({
         })}
         {editing ? (
           addTarget === "root" ? (
-            <div className="w-52 shrink-0 rounded-[8px] border border-dashed border-violet-300/40 bg-violet-400/[0.06] p-3">
+            <div className="w-80 shrink-0 rounded-[8px] border border-dashed border-violet-300/40 bg-violet-400/[0.06] p-3">
               <SubjectDraftRow
                 value={draftLabel}
                 color={draftColor}
@@ -568,7 +568,7 @@ function SubjectTreeSelector({
               />
             </div>
           ) : (
-            <div className="w-52 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
+            <div className="w-64 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
               <button
                 type="button"
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:border-violet-300/40 hover:bg-violet-400/10"
@@ -780,23 +780,25 @@ function SubjectDraftRow({
 }) {
   return (
     <div className="rounded-[7px] border border-dashed border-violet-300/30 bg-violet-400/[0.055] p-2 shadow-[0_12px_26px_rgba(76,29,149,0.12)]">
-      <p className="mb-2 text-[11px] font-bold text-violet-100">{label}</p>
-      <div className="flex items-center gap-1.5">
-        <Input
-          autoFocus
-          className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              onSubmit();
-            }
-          }}
-        />
-        <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
-        <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={onSubmit}>
+      <Input
+        autoFocus
+        aria-label={label}
+        className="h-10 w-full border-white/10 bg-black/30 text-sm font-semibold text-white placeholder:text-slate-500"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onSubmit();
+          }
+        }}
+      />
+      <div className="mt-2 flex min-w-0 items-center gap-1.5">
+        <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
+        </div>
+        <Button type="button" size="sm" variant="outline" className="h-10 w-10 shrink-0 px-0" onClick={onSubmit}>
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -825,30 +827,32 @@ function SubjectEditRow({
 }) {
   return (
     <div className="rounded-[7px] border border-violet-300/35 bg-violet-400/[0.07] p-2 shadow-[0_12px_26px_rgba(76,29,149,0.12)]">
-      <p className="mb-2 text-[11px] font-bold text-violet-100">{label}</p>
-      <div className="flex items-center gap-1.5">
-        <Input
-          autoFocus
-          className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              onSubmit();
-            }
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onCancel();
-            }
-          }}
-        />
-        <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
-        <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={onSubmit}>
+      <Input
+        autoFocus
+        aria-label={label}
+        className="h-10 w-full border-white/10 bg-black/30 text-sm font-semibold text-white placeholder:text-slate-500"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onSubmit();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+      <div className="mt-2 flex min-w-0 items-center gap-1.5">
+        <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TagColorPicker value={color} onChange={onColorChange} label={`${placeholder} 색상`} />
+        </div>
+        <Button type="button" size="sm" variant="outline" className="h-10 w-10 shrink-0 px-0" onClick={onSubmit}>
           <Check className="h-3.5 w-3.5" />
         </Button>
-        <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={onCancel}>
+        <Button type="button" size="sm" variant="ghost" className="h-10 w-10 shrink-0 px-0" onClick={onCancel}>
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
