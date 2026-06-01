@@ -228,6 +228,7 @@ test("PowerPoint class-based table styling preserves cell fill and borders", asy
   assert.equal(images.length, 0);
   assert.equal(shapes.length, 6);
   assert.equal(texts.length, 6);
+  assert.ok(texts.some((element) => String(element.text || "").includes("학습태도\n관리평가")));
   assert.ok(fills.some((fill) => fill === "#9aa8b4" || fill === "rgb(154, 168, 180)"));
   assert.ok(fills.some((fill) => fill === "#b7b7b7" || fill === "rgb(183, 183, 183)"));
   assert.ok(fills.some((fill) => fill === "#ffffff" || fill === "rgb(255, 255, 255)" || fill === "white"));

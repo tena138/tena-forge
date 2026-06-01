@@ -336,7 +336,9 @@ function visualStyleFromElement(element: Element): ElementStyle {
 }
 
 function collapsedText(element: Element) {
-  return (element.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t\f\v]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
+  const clone = element.cloneNode(true) as Element;
+  clone.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+  return (clone.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t\f\v]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
 }
 
 function lineCount(text: string) {

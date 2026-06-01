@@ -482,9 +482,13 @@ function variablePlaceholder(element: Extract<TemplateElement, { type: "variable
 
 function AutoFitVariable({ element }: { element: VariableElement }) {
   const text = variablePlaceholder(element);
+  return <AutoFitTextBox element={element} text={text} minFontSize={5} />;
+}
+
+function AutoFitTextBox({ element, text, minFontSize: minFontSizeOverride }: { element: Extract<TemplateElement, { type: "text" | "variable" }>; text: string; minFontSize?: number }) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const baseFontSize = Math.max(1, element.style?.fontSize ?? 14);
-  const minFontSize = Math.min(baseFontSize, 5);
+  const minFontSize = Math.min(baseFontSize, minFontSizeOverride ?? Math.max(6, Math.min(9, baseFontSize * 0.72)));
   const [fontSize, setFontSize] = useState(baseFontSize);
   const color = !element.style?.color || element.style.color === "transparent" ? "#111827" : element.style.color;
 
@@ -554,7 +558,7 @@ function AutoFitVariable({ element }: { element: VariableElement }) {
 }
 
 export function renderVisualElement(element: TemplateElement, dynamicProblems?: SampleProblem[], showRegionChrome = false): ReactNode {
-  if (element.type === "text") return <div className="h-full w-full whitespace-pre-wrap p-1">{resolveTemplateText(element.text)}</div>;
+  if (element.type === "text") return <AutoFitTextBox element={element} text={resolveTemplateText(element.text)} />;
   if (element.type === "richText") return <div className="h-full w-full p-2" dangerouslySetInnerHTML={{ __html: resolveTemplateText(element.html) }} />;
   if (element.type === "variable") {
     return <AutoFitVariable element={element} />;
