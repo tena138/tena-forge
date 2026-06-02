@@ -147,10 +147,12 @@ export type ExamStatsChartElement = ElementBase & {
 
 export type RegionBinding = "problems" | "solutions" | "answers" | "passages" | "generic" | "counseling";
 export type RegionOverflowStrategy = "create-next-page" | "clip" | "warn";
+export type RegionLayoutMode = "grid" | "korean-passage-flow";
 
 export type ContentRegionElement = ElementBase & {
   type: "problemRegion" | "solutionRegion" | "answerRegion" | "contentRegion" | "counselingRegion";
   binding: RegionBinding;
+  layoutMode?: RegionLayoutMode;
   columns: number;
   rows?: number;
   columnGap: number;

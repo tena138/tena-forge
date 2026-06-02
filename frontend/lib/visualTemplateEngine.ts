@@ -224,13 +224,28 @@ export function estimateProblemHeight(problem: SampleProblem, region: ContentReg
 export function estimateRegionCapacity(region: ContentRegionElement, problems: SampleProblem[]) {
   const columnCount = Math.max(1, region.columns || 1);
   const rowCount = region.rows ? Math.max(1, region.rows) : 0;
-  if (rowCount) return Math.min(problems.length, columnCount * rowCount);
+  const koreanFlow = region.layoutMode === "korean-passage-flow";
+  if (rowCount && !koreanFlow) return Math.min(problems.length, columnCount * rowCount);
 
   const usableHeight = Math.max(1, region.height - region.padding * 2);
   const heights = problems.map((problem) => estimateProblemHeight(problem, region) + region.rowGap);
   let placed = 0;
-  const columnHeights = Array.from({ length: columnCount }, () => 0);
+  if (koreanFlow) {
+    let columnIndex = 0;
+    let currentHeight = 0;
+    for (const itemHeight of heights) {
+      if (currentHeight > 0 && currentHeight + itemHeight > usableHeight) {
+        columnIndex += 1;
+        currentHeight = 0;
+      }
+      if (columnIndex >= columnCount) break;
+      currentHeight += itemHeight;
+      placed += 1;
+    }
+    return Math.max(1, placed);
+  }
 
+  const columnHeights = Array.from({ length: columnCount }, () => 0);
   for (const itemHeight of heights) {
     const targetIndex = region.fillDirection === "row-first" ? placed % columnCount : columnHeights.indexOf(Math.min(...columnHeights));
     if (columnHeights[targetIndex] + itemHeight > usableHeight) break;

@@ -10,9 +10,10 @@ from typing import Any
 
 from jinja2 import Environment, StrictUndefined, TemplateError
 from PIL import Image, ImageChops
+from sqlalchemy.orm import object_session
 
 from database import get_settings
-from models import HubTemplate, Problem
+from models import HubTemplate, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem
 from services.math_normalization import normalize_geometry_notation
 
 
@@ -395,10 +396,12 @@ def _problem_export_data(problem: Problem, index: int, total: int, base_data: di
     tag_values = [value for value in ([tags.subject, tags.unit, tags.difficulty, tags.problem_type, tags.source] if tags else []) if value]
     return {
         "id": str(problem.id),
+        "source_batch_id": str(problem.source_batch_id),
         "number": index,
         "problem_number": problem.problem_number,
         "text": normalize_geometry_notation(problem.problem_text),
         "problem_text": normalize_geometry_notation(problem.problem_text),
+        "choices": problem.choices or [],
         "answer": problem.answer or "",
         "solution": problem.solution_steps or "",
         "solution_text": problem.solution_steps or "",
@@ -414,10 +417,153 @@ def _problem_export_data(problem: Problem, index: int, total: int, base_data: di
     }
 
 
+def _question_number_int(value: Any) -> int | None:
+    match = re.search(r"\d+", str(value or ""))
+    if not match:
+        return None
+    try:
+        return int(match.group(0))
+    except ValueError:
+        return None
+
+
+def _choice_label_text(choice: Any, fallback_index: int) -> str:
+    if isinstance(choice, dict):
+        label = str(choice.get("choice_label") or choice.get("label") or fallback_index).strip()
+        text = str(choice.get("choice_text") or choice.get("text") or choice.get("value") or "").strip()
+        return f"{label} {text}".strip()
+    return str(choice or "").strip()
+
+
+def _choice_lines(choices: Any) -> list[str]:
+    if not isinstance(choices, list):
+        return []
+    return [line for index, choice in enumerate(choices, start=1) if (line := _choice_label_text(choice, index))]
+
+
+def _korean_question_export_data(question: KoreanQuestion, order: int, total: int) -> dict[str, Any]:
+    parts = [str(question.question_stem or "").strip(), str(question.additional_material or "").strip()]
+    text = "\n\n".join(part for part in parts if part)
+    return {
+        "id": str(question.id),
+        "layout_type": "korean_question",
+        "number": order,
+        "problem_number": question.question_number or order,
+        "text": normalize_geometry_notation(text),
+        "problem_text": normalize_geometry_notation(text),
+        "choices": question.choices or [],
+        "answer": question.answer or "",
+        "solution": question.solution or "",
+        "solution_text": question.solution or "",
+        "visual_url": "",
+        "page_number": order,
+        "total_pages": total,
+    }
+
+
+def _build_korean_passage_flow_items(problems: list[Problem], problem_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not problems:
+        return []
+    session = object_session(problems[0])
+    if session is None:
+        return []
+    batch_ids = sorted({problem.source_batch_id for problem in problems if problem.source_batch_id}, key=str)
+    if not batch_ids:
+        return []
+
+    documents = session.query(KoreanExtractionDocument).filter(KoreanExtractionDocument.batch_id.in_(batch_ids)).all()
+    if not documents:
+        return []
+    document_ids = [document.id for document in documents]
+    passages = session.query(KoreanPassageGroup).filter(KoreanPassageGroup.document_id.in_(document_ids)).all()
+    questions = session.query(KoreanQuestion).filter(KoreanQuestion.document_id.in_(document_ids)).all()
+
+    selected_by_batch_number: dict[tuple[str, int], tuple[int, dict[str, Any]]] = {}
+    for index, problem in enumerate(problems):
+        key_number = _question_number_int(problem.problem_number)
+        if key_number is not None:
+            selected_by_batch_number[(str(problem.source_batch_id), key_number)] = (index, problem_data[index])
+
+    question_entries: list[tuple[int, KoreanQuestion, dict[str, Any]]] = []
+    used_problem_ids: set[str] = set()
+    for question in questions:
+        document = next((item for item in documents if item.id == question.document_id), None)
+        if document is None:
+            continue
+        number = _question_number_int(question.question_number)
+        if number is None:
+            continue
+        selected = selected_by_batch_number.get((str(document.batch_id), number))
+        if not selected:
+            continue
+        order, fallback_problem = selected
+        question_entries.append((order, question, _korean_question_export_data(question, fallback_problem.get("number") or order + 1, len(problem_data))))
+        used_problem_ids.add(str(fallback_problem.get("id") or ""))
+
+    if not question_entries:
+        return []
+
+    passage_by_document_and_id = {(str(passage.document_id), str(passage.passage_id)): passage for passage in passages}
+    questions_by_passage: dict[tuple[str, str], list[tuple[int, dict[str, Any]]]] = {}
+    standalone: list[tuple[int, dict[str, Any]]] = []
+    for order, question, item in question_entries:
+        key = (str(question.document_id), str(question.linked_passage_id or ""))
+        if question.linked_passage_id and key in passage_by_document_and_id:
+            questions_by_passage.setdefault(key, []).append((order, item))
+        else:
+            standalone.append((order, item))
+
+    items: list[tuple[int, dict[str, Any]]] = []
+    for key, question_items in questions_by_passage.items():
+        passage = passage_by_document_and_id[key]
+        question_items.sort(key=lambda item: item[0])
+        first_order = question_items[0][0]
+        first_number = question_items[0][1].get("problem_number")
+        last_number = question_items[-1][1].get("problem_number")
+        items.append(
+            (
+                first_order,
+                {
+                    "id": f"korean-passage-{passage.id}",
+                    "layout_type": "korean_passage_group",
+                    "number": f"{first_number}~{last_number}" if first_number != last_number else str(first_number),
+                    "passage_instruction": passage.passage_instruction or "",
+                    "passage_title": passage.passage_title or "",
+                    "passage_text": passage.passage_text or "",
+                    "passage_type": passage.passage_type or "",
+                    "questions": [item for _, item in question_items],
+                },
+            )
+        )
+
+    items.extend(standalone)
+    items.sort(key=lambda item: item[0])
+
+    for problem in problem_data:
+        if str(problem.get("id") or "") not in used_problem_ids:
+            items.append((int(problem.get("number") or 10**9), problem))
+    return [item for _, item in items]
+
+
 def _estimate_problem_height(problem_data: dict[str, Any], region: dict[str, Any]) -> int:
     body_style = region.get("bodyStyle") if isinstance(region.get("bodyStyle"), dict) else {}
     font_size = int(_num(body_style.get("fontSize"), 12))
     line_height = _num(body_style.get("lineHeight"), 1.6)
+    if problem_data.get("layout_type") == "korean_passage_group":
+        passage_text = " ".join(
+            [
+                str(problem_data.get("passage_instruction") or ""),
+                str(problem_data.get("passage_title") or ""),
+                str(problem_data.get("passage_text") or ""),
+            ]
+        )
+        passage_lines = max(4, int(len(passage_text) / 34) + 1)
+        question_lines = 0
+        for question in problem_data.get("questions") if isinstance(problem_data.get("questions"), list) else []:
+            if isinstance(question, dict):
+                question_lines += max(2, int(len(str(question.get("text") or "")) / 36) + 1)
+                question_lines += max(0, int(len(" ".join(_choice_lines(question.get("choices")))) / 42) + 1)
+        return max(int(_num(region.get("minItemHeight"), 120)), 56 + int((passage_lines + question_lines) * font_size * line_height) + int(_num(region.get("padding"), 12)) * 2)
     text_lines = max(2, int(len(str(problem_data.get("text", ""))) / 38) + 1)
     solution_lines = int(len(str(problem_data.get("solution", ""))) / 48) + 1 if region.get("type") == "solutionRegion" else 0
     answer_space = 0 if region.get("type") in {"answerRegion", "solutionRegion"} else 42
@@ -429,13 +575,28 @@ def _estimate_problem_height(problem_data: dict[str, Any], region: dict[str, Any
 def _region_capacity(region: dict[str, Any], problem_data: list[dict[str, Any]]) -> int:
     columns = max(1, int(_num(region.get("columns"), 1)))
     rows = max(0, int(_num(region.get("rows"), 0)))
-    if rows:
+    korean_flow = region.get("layoutMode") == "korean-passage-flow"
+    if rows and not korean_flow:
         return min(len(problem_data), columns * rows)
 
     usable_height = max(1, _num(region.get("height"), 100) - _num(region.get("padding"), 0) * 2)
     row_gap = _num(region.get("rowGap"), 10)
-    column_heights = [0.0 for _ in range(columns)]
     placed = 0
+    if korean_flow:
+        column_index = 0
+        current_height = 0.0
+        for problem in problem_data:
+            item_height = _estimate_problem_height(problem, region) + row_gap
+            if current_height > 0 and current_height + item_height > usable_height:
+                column_index += 1
+                current_height = 0.0
+            if column_index >= columns:
+                break
+            current_height += item_height
+            placed += 1
+        return max(1, placed) if problem_data else 0
+
+    column_heights = [0.0 for _ in range(columns)]
     for problem in problem_data:
         item_height = _estimate_problem_height(problem, region) + row_gap
         target = placed % columns if region.get("fillDirection") == "row-first" else column_heights.index(min(column_heights))
@@ -491,6 +652,10 @@ def _render_problem_card(problem: dict[str, Any], region: dict[str, Any], base_d
     visual = ""
     if problem.get("visual_url"):
         visual = f'<img class="problem-visual" src="{escape(str(problem["visual_url"]), quote=True)}" alt="" />'
+    choices = ""
+    choice_lines = _choice_lines(problem.get("choices"))
+    if choice_lines:
+        choices = '<div class="problem-choices">' + "".join(f"<span>{escape(line)}</span>" for line in choice_lines) + "</div>"
     solution = ""
     if region.get("type") == "solutionRegion" or base_data.get("include_solution"):
         solution = f'<div class="problem-solution math-text">{escape(str(problem.get("solution") or ""))}</div>'
@@ -503,10 +668,50 @@ def _render_problem_card(problem: dict[str, Any], region: dict[str, Any], base_d
 <article class="problem-card{visual_class}" style="{_card_style_css(region.get('cardStyle') if isinstance(region.get('cardStyle'), dict) else {})};{slot_css};padding:{padding:g}px">
   <div class="problem-heading"><span class="problem-number" style="{number_style}">{number_label}</span></div>
   <div class="problem-text math-text" style="{body_style};{body_slot_css}">{escape(str(problem.get('text') or ''))}</div>
+  {choices}
   {visual}
   {solution}
   {answer}
   {answer_space}
+</article>"""
+
+
+def _render_korean_passage_group_card(item: dict[str, Any], region: dict[str, Any], base_data: dict[str, Any]) -> str:
+    number_style = _style_to_css(region.get("numberStyle") if isinstance(region.get("numberStyle"), dict) else {})
+    body_style = _style_to_css(region.get("bodyStyle") if isinstance(region.get("bodyStyle"), dict) else {})
+    padding = max(10, _num(region.get("padding"), 12) * 0.75)
+    passage_parts = [
+        str(item.get("passage_instruction") or "").strip(),
+        str(item.get("passage_title") or "").strip(),
+        str(item.get("passage_text") or "").strip(),
+    ]
+    passage_html = "\n\n".join(part for part in passage_parts if part)
+    questions: list[str] = []
+    for question in item.get("questions") if isinstance(item.get("questions"), list) else []:
+        if not isinstance(question, dict):
+            continue
+        number_label = escape(_problem_number_label(question, region))
+        choices = "".join(f"<span>{escape(line)}</span>" for line in _choice_lines(question.get("choices")))
+        choices_html = f'<div class="problem-choices korean-question-choices">{choices}</div>' if choices else ""
+        solution = f'<div class="problem-solution math-text">{escape(str(question.get("solution") or ""))}</div>' if region.get("type") == "solutionRegion" or base_data.get("include_solution") else ""
+        answer = f'<div class="problem-answer"><span>{number_label} </span><span class="math-text">{escape(str(question.get("answer") or ""))}</span></div>' if region.get("type") == "answerRegion" else ""
+        answer_space = "" if region.get("type") in {"answerRegion", "solutionRegion"} else '<div class="answer-space korean-answer-space"></div>'
+        questions.append(
+            f"""
+<section class="korean-question">
+  <div class="problem-heading"><span class="problem-number" style="{number_style}">{number_label}</span></div>
+  <div class="problem-text math-text" style="{body_style}">{escape(str(question.get("text") or ""))}</div>
+  {choices_html}
+  {solution}
+  {answer}
+  {answer_space}
+</section>"""
+        )
+    passage_block = f'<div class="korean-passage math-text" style="{body_style}">{escape(passage_html)}</div>' if passage_html else ""
+    return f"""
+<article class="problem-card korean-passage-card" style="{_card_style_css(region.get('cardStyle') if isinstance(region.get('cardStyle'), dict) else {})};min-height:{_num(region.get('minItemHeight'), 128):g}px;padding:{padding:g}px">
+  {passage_block}
+  {"".join(questions)}
 </article>"""
 
 
@@ -526,6 +731,48 @@ def _render_counseling_card(section: dict[str, Any], region: dict[str, Any], bas
 </article>"""
 
 
+def _pack_korean_flow_columns(items: list[dict[str, Any]], region: dict[str, Any]) -> list[list[dict[str, Any]]]:
+    columns = max(1, int(_num(region.get("columns"), 1)))
+    usable_height = max(1, _num(region.get("height"), 100) - _num(region.get("padding"), 0) * 2)
+    row_gap = _num(region.get("rowGap"), 10)
+    packed: list[list[dict[str, Any]]] = [[] for _ in range(columns)]
+    column_index = 0
+    current_height = 0.0
+    for item in items:
+        item_height = _estimate_problem_height(item, region) + row_gap
+        if current_height > 0 and current_height + item_height > usable_height:
+            column_index += 1
+            current_height = 0.0
+        if column_index >= columns:
+            break
+        packed[column_index].append(item)
+        current_height += item_height
+    return packed
+
+
+def _render_korean_flow_region(element: dict[str, Any], items: list[dict[str, Any]], base_data: dict[str, Any]) -> str:
+    columns = max(1, int(_num(element.get("columns"), 1)))
+    column_gap = _css_px(element.get("columnGap"), 12)
+    row_gap = _css_px(element.get("rowGap"), 12)
+    padding = _css_px(element.get("padding"), 12)
+    packed = _pack_korean_flow_columns(items, element)
+    column_html = []
+    for column_items in packed:
+        cards = []
+        for item in column_items:
+            if item.get("layout_type") == "korean_passage_group":
+                cards.append(_render_korean_passage_group_card(item, element, base_data))
+            else:
+                cards.append(_render_problem_card(item, element, base_data))
+        column_html.append(f'<div class="korean-flow-column" style="display:flex;flex-direction:column;gap:{row_gap};min-width:0;flex:1;overflow:hidden">{"".join(cards)}</div>')
+    dividers = _render_column_dividers(element, columns)
+    return f"""
+<div class="dynamic-region korean-flow-region" style="position:relative;display:flex;gap:{column_gap};padding:{padding};height:100%;box-sizing:border-box;overflow:hidden">
+  {"".join(column_html)}
+  {dividers}
+</div>"""
+
+
 def _render_region(element: dict[str, Any], items: list[dict[str, Any]], base_data: dict[str, Any]) -> str:
     columns = max(1, int(_num(element.get("columns"), 1)))
     rows = max(0, int(_num(element.get("rows"), 0)))
@@ -534,6 +781,8 @@ def _render_region(element: dict[str, Any], items: list[dict[str, Any]], base_da
     padding = _css_px(element.get("padding"), 12)
     row_template = f"grid-template-rows:repeat({rows}, minmax(0, 1fr));" if rows else ""
     grid_flow = "column" if rows and element.get("fillDirection") == "column-first" else "row"
+    if element.get("layoutMode") == "korean-passage-flow" and _binding_key(element) == "problems":
+        return _render_korean_flow_region(element, items, base_data)
     if element.get("type") == "counselingRegion" or _binding_key(element) == "counseling":
         cards = "\n".join(_render_counseling_card(section, element, base_data) for section in items)
     else:
@@ -856,20 +1105,29 @@ def _consume_region(region: dict[str, Any], remaining: dict[str, list[dict[str, 
 def build_visual_template_export_pages(template_set: dict[str, Any], problems: list[Problem], base_data: dict[str, Any]) -> list[dict[str, Any]]:
     total = max(1, len(problems))
     problem_data = [_problem_export_data(problem, index, total, base_data) for index, problem in enumerate(problems, start=1)]
+    pages = [page for page in template_set.get("pages", []) if isinstance(page, dict)]
+    uses_korean_flow = any(
+        isinstance(element, dict)
+        and element.get("type") in REGION_TYPES
+        and _binding_key(element) == "problems"
+        and element.get("layoutMode") == "korean-passage-flow"
+        for page in pages
+        for element in page.get("elements", [])
+    )
+    korean_problem_data = _build_korean_passage_flow_items(problems, problem_data) if uses_korean_flow else []
     counseling_data = [
         item
         for item in (base_data.get("counseling_sections") if isinstance(base_data.get("counseling_sections"), list) else [])
         if isinstance(item, dict)
     ]
     remaining = {
-        "problems": list(problem_data),
+        "problems": list(korean_problem_data or problem_data),
         "solutions": list(problem_data) if base_data.get("include_solution") else [],
         "answers": list(problem_data),
         "counseling": list(counseling_data),
     }
     rendered_pages: list[tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]] = []
 
-    pages = [page for page in template_set.get("pages", []) if isinstance(page, dict)]
     for page in pages:
         placements: dict[str, list[dict[str, Any]]] = {}
         for region in [element for element in page.get("elements", []) if isinstance(element, dict) and element.get("type") in REGION_TYPES]:
@@ -1152,10 +1410,15 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
     .problem-heading {{ margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }}
     .problem-number {{ font-weight: 700; }}
     .problem-text {{ white-space: pre-wrap; line-height: 1.65; overflow-wrap: break-word; }}
+    .problem-choices {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 8px; font-size: 11px; color: #334155; }}
     .problem-visual {{ display: block; width: min(100%, 420px); height: auto; max-height: 320px; object-fit: contain; margin: 12px auto 0; flex: 0 0 auto; }}
     .problem-solution {{ margin-top: 10px; padding: 10px; border-radius: 8px; background: #f8fafc; color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }}
     .problem-answer {{ margin-top: 8px; font-weight: 700; }}
     .answer-space {{ height: 40px; margin-top: 12px; border: 1px dashed #cbd5e1; background: #fff; }}
+    .korean-passage {{ margin-bottom: 12px; padding: 10px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; white-space: pre-wrap; }}
+    .korean-question {{ padding-top: 10px; margin-top: 10px; border-top: 1px solid #e5e7eb; break-inside: avoid; page-break-inside: avoid; }}
+    .korean-answer-space {{ height: 32px; }}
+    .korean-flow-column > .problem-card {{ break-inside: avoid; page-break-inside: avoid; }}
     .column-divider {{ position: absolute; width: 0; pointer-events: none; z-index: 2; }}
     .math-text {{ white-space: pre-wrap; overflow-wrap: break-word; }}
     .math-text .katex {{ color: currentColor; }}

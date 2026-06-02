@@ -5,7 +5,7 @@ import { CSSProperties, PointerEvent, ReactNode, useLayoutEffect, useRef, useSta
 import { MathText } from "@/components/math-text";
 import { assetUrl } from "@/lib/api";
 import { isRegionElement, resolveTemplateText, visualTemplateSampleData } from "@/lib/visualTemplateEngine";
-import { ContentRegionElement, ExamStatsChartElement, ExamStatsMetricKey, PAGE_SIZES, SampleProblem, TemplateElement, TemplatePage, TemplateSet, VariableElement } from "@/lib/visualTemplateTypes";
+import { ContentRegionElement, ExamStatsChartElement, ExamStatsMetricKey, PAGE_SIZES, SampleProblem, TemplateElement, TemplatePage, TemplateSet, VariableElement, sampleProblems } from "@/lib/visualTemplateTypes";
 
 export type ResizeHandleDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
@@ -395,6 +395,81 @@ function ProblemCard({ problem, region }: { problem: SampleProblem; region: Cont
   );
 }
 
+function estimatePreviewProblemHeight(problem: SampleProblem, region: ContentRegionElement) {
+  const fontSize = region.bodyStyle.fontSize || 12;
+  const lineHeight = region.bodyStyle.lineHeight || 1.6;
+  const textLines = Math.max(3, Math.ceil((problem.text || "").length / 32));
+  const choicesLines = problem.choices?.length ? Math.ceil(problem.choices.join("   ").length / 40) : 0;
+  const visualSpace = problem.visualUrl || problem.visual_url ? 210 : 0;
+  return Math.max(region.minItemHeight, 52 + textLines * fontSize * lineHeight + choicesLines * (fontSize + 8) + visualSpace + region.padding);
+}
+
+function packKoreanFlowColumns(problems: SampleProblem[], region: ContentRegionElement) {
+  const columnCount = Math.max(1, region.columns || 1);
+  const usableHeight = Math.max(1, region.height - region.padding * 2);
+  const columns: SampleProblem[][] = Array.from({ length: columnCount }, () => []);
+  let columnIndex = 0;
+  let currentHeight = 0;
+  for (const problem of problems) {
+    const itemHeight = estimatePreviewProblemHeight(problem, region) + region.rowGap;
+    if (currentHeight > 0 && currentHeight + itemHeight > usableHeight) {
+      columnIndex += 1;
+      currentHeight = 0;
+    }
+    if (columnIndex >= columnCount) break;
+    columns[columnIndex].push(problem);
+    currentHeight += itemHeight;
+  }
+  return columns;
+}
+
+function KoreanPassageFlowCard({ problem, region, firstInColumn }: { problem: SampleProblem; region: ContentRegionElement; firstInColumn: boolean }) {
+  const flowRegion = { ...region, rows: undefined };
+  return (
+    <div
+      className="overflow-hidden"
+      style={{
+        minHeight: region.minItemHeight,
+        ...boxStyle(region.cardStyle, { fill: "#ffffff", stroke: "#e5e7eb", strokeWidth: 1, borderStyle: "solid", radius: 10 }),
+        padding: Math.max(10, region.padding * 0.75),
+      }}
+    >
+      {firstInColumn ? (
+        <div className="mb-3 rounded-[8px] border border-slate-200 bg-slate-50 p-2 text-[11px] leading-relaxed text-slate-700">
+          <div className="mb-1 font-bold text-slate-900">[1~3] 다음 글을 읽고 물음에 답하시오.</div>
+          <div className="line-clamp-5">국어 지문은 하나의 묶음으로 배치되고, 연결된 문항들이 같은 흐름 안에서 이어집니다. 첫 번째 열을 위에서 아래로 채운 뒤 두 번째 열 상단부터 계속 배치됩니다.</div>
+        </div>
+      ) : null}
+      <ProblemCard problem={problem} region={flowRegion} />
+    </div>
+  );
+}
+
+function renderKoreanPassageFlowRegion(region: ContentRegionElement, problems: SampleProblem[], showChrome: boolean, label: string, dividers: ReactNode) {
+  const items = problems.length ? problems : sampleProblems;
+  const columns = packKoreanFlowColumns(items, region);
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <div className="flex h-full w-full overflow-hidden" style={{ gap: region.columnGap, padding: region.padding }}>
+        {columns.map((column, columnIndex) => (
+          <div key={columnIndex} className="min-w-0 flex-1 space-y-3 overflow-hidden">
+            {column.map((problem, index) => (
+              <KoreanPassageFlowCard key={problem.id} problem={problem} region={region} firstInColumn={index === 0} />
+            ))}
+          </div>
+        ))}
+      </div>
+      {dividers}
+      {showChrome ? (
+        <div className="pointer-events-none absolute left-2 top-2 z-10 flex items-center gap-2 rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-violet-700 shadow-sm ring-1 ring-violet-200/70">
+          <span>{label}</span>
+          <span>{region.columns}열 국어형</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const sampleCounselingSections = [
   { id: "notes", label: "개선 포인트", value: "최근 풀이 과정에서 계산 실수를 줄이는 연습이 필요합니다." },
   { id: "weekly_report", label: "다음주 관리 계획", value: "수2 복습 문항을 풀고 오답 문항은 다시 설명하도록 합니다." },
@@ -444,6 +519,9 @@ function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = 
         />
       ))
     : null;
+  if (!isCounseling && region.layoutMode === "korean-passage-flow") {
+    return renderKoreanPassageFlowRegion(region, problems, showChrome, label, dividers);
+  }
   const grid = (
     <div
       className="grid h-full w-full overflow-hidden"

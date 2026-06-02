@@ -142,6 +142,7 @@ export function createVariable(variableKey: TemplateVariableKey, label: string, 
 export function createProblemRegion(x = 64, y = 190, width = 666, height = 760, columns = 2, rows = 2): ContentRegionElement {
   return baseElement("problemRegion", "문항 자동 배치 영역", x, y, width, height, {
     binding: "problems",
+    layoutMode: "grid",
     columns,
     rows,
     columnGap: 24,

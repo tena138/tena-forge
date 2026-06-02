@@ -2253,15 +2253,40 @@ function VisualTemplateStudioPageContent() {
 
                 {isRegionElement(selectedElement) ? (
                   <InspectorSection title="동적 영역">
+                    {selectedElement.binding === "problems" ? (
+                      <FieldLabel label="배치 방식">
+                        <select
+                          className="h-9 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-white outline-none"
+                          value={selectedElement.layoutMode || "grid"}
+                          onChange={(event) => {
+                            const layoutMode = event.target.value as "grid" | "korean-passage-flow";
+                            updateSelectedElement((element) => {
+                              if (!isRegionElement(element)) return element;
+                              if (layoutMode === "korean-passage-flow") {
+                                return { ...element, layoutMode, columns: Math.max(2, element.columns || 2), rows: undefined, fillDirection: "column-first" };
+                              }
+                              return { ...element, layoutMode, rows: element.rows || 2 };
+                            });
+                          }}
+                        >
+                          <option value="grid">일반 문항 배치</option>
+                          <option value="korean-passage-flow">국어 지문형</option>
+                        </select>
+                      </FieldLabel>
+                    ) : null}
                     <div className="grid grid-cols-2 gap-2">
                       <FieldLabel label="열 수"><Input className="h-8" type="number" min={1} max={8} value={selectedElement.columns} onChange={(event) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, columns: clampNumber(Math.round(Number(event.target.value)), 1, 8) } : element))} /></FieldLabel>
-                      <FieldLabel label="행 수"><Input className="h-8" type="number" min={1} max={20} value={selectedElement.rows || 2} onChange={(event) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, rows: clampNumber(Math.round(Number(event.target.value)), 1, 20) } : element))} /></FieldLabel>
+                      {selectedElement.binding === "problems" && selectedElement.layoutMode === "korean-passage-flow" ? null : (
+                        <FieldLabel label="행 수"><Input className="h-8" type="number" min={1} max={20} value={selectedElement.rows || 2} onChange={(event) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, rows: clampNumber(Math.round(Number(event.target.value)), 1, 20) } : element))} /></FieldLabel>
+                      )}
                       <FieldLabel label="열 간격"><Input className="h-8" type="number" value={selectedElement.columnGap} onChange={(event) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, columnGap: Number(event.target.value) } : element))} /></FieldLabel>
                       <FieldLabel label="행 간격"><Input className="h-8" type="number" value={selectedElement.rowGap} onChange={(event) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, rowGap: Number(event.target.value) } : element))} /></FieldLabel>
                       <FieldLabel label="패딩"><Input className="h-8" type="number" value={selectedElement.padding} onChange={(event) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, padding: Number(event.target.value) } : element))} /></FieldLabel>
                     </div>
                     <p className="mt-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-slate-400">
-                      이 영역에는 최대 {(selectedElement.columns || 1) * (selectedElement.rows || 2)}개 항목이 배치됩니다.
+                      {selectedElement.binding === "problems" && selectedElement.layoutMode === "korean-passage-flow"
+                        ? "국어 지문형은 행 없이 1열 위에서 아래로 채운 뒤 다음 열로 이어집니다."
+                        : `이 영역에는 최대 ${(selectedElement.columns || 1) * (selectedElement.rows || 2)}개 항목이 배치됩니다.`}
                     </p>
                     <FieldLabel label="오버플로">
                       <select className="h-9 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-white outline-none" value={selectedElement.overflowStrategy} onChange={(event) => updateSelectedElement((element) => (isRegionElement(element) ? { ...element, overflowStrategy: event.target.value as typeof element.overflowStrategy } : element))}>
