@@ -48,7 +48,6 @@ import {
 
 import { SiteLogo } from "@/components/site-logo";
 import {
-  BILLING,
   BillingCycle,
   PACKAGE_GROUPS,
   PACKAGE_LABELS,
@@ -58,7 +57,6 @@ import {
   SubjectEngineCode,
   SUBJECT_ENGINES,
   calculateSubjectEngineMonthlyDelta,
-  calculateAnnualPrice,
   calculateMonthlyPrice,
   calculateSingleEngineMonthlyPrice,
   formatKRW,
@@ -81,7 +79,7 @@ const sectionScenes: Partial<Record<string, SceneKey>> = {
 export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const [selectedPackageIds, setSelectedPackageIds] = useState<Record<PackageGroup, string>>(getDefaultSelections(plan));
   const [selectedSubjectEngines, setSelectedSubjectEngines] = useState<SubjectEngineCode[]>(["math"]);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual");
+  const [billingCycle] = useState<BillingCycle>("monthly");
   const [activeScene, setActiveScene] = useState<SceneKey>("ai");
   const transitionSceneRef = useRef<HTMLElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -92,7 +90,6 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const singleEngineMonthlyPrice = useMemo(() => calculateSingleEngineMonthlyPrice(plan, selectedPackageIds), [plan, selectedPackageIds]);
   const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
   const subjectEngineDelta = useMemo(() => calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice, selectedSubjectEngines), [singleEngineMonthlyPrice, selectedSubjectEngines]);
-  const annual = useMemo(() => calculateAnnualPrice(monthlyPrice), [monthlyPrice]);
   const planConfig = PLANS[plan];
 
   useEffect(() => {
@@ -146,7 +143,6 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
             specs={specs}
             selectedSubjectEngines={selectedSubjectEngines}
             monthlyPrice={monthlyPrice}
-            annual={annual}
             billingCycle={billingCycle}
             progress={1}
             style={{ opacity: 1 }}
@@ -196,17 +192,9 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
                 </ConfigSection>
               )}
 
-              <ConfigSection id="billing" register={sectionRefs} eyebrow="Billing" title="결제 주기 선택">
+              <ConfigSection id="billing" register={sectionRefs} eyebrow="Billing" title="월 자동결제">
                 <div className="grid gap-3">
-                  <BillingCard active={billingCycle === "monthly"} title="월간 결제" price={`${formatKRW(monthlyPrice)} / 월`} detail="매월 결제" onClick={() => setBillingCycle("monthly")} />
-                  <BillingCard
-                    active={billingCycle === "annual"}
-                    title="연간 결제"
-                    price={`${formatKRW(annual.discountedMonthly)} / 월`}
-                    detail={`연 ${formatKRW(annual.annualTotal)} 결제`}
-                    badge={`${BILLING.annualDiscountPercent}% 할인 · 추천`}
-                    onClick={() => setBillingCycle("annual")}
-                  />
+                  <BillingCard active title="월간 결제" price={`${formatKRW(monthlyPrice)} / 월`} detail="매월 자동결제" onClick={() => {}} />
                 </div>
               </ConfigSection>
 
@@ -221,7 +209,6 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
         selectedSubjectEngines={selectedSubjectEngines}
         billingCycle={billingCycle}
         monthlyPrice={monthlyPrice}
-        annual={annual}
         reviewHref={reviewHref}
       />
     </main>
@@ -272,7 +259,6 @@ function PlanIntroStage({
   specs,
   selectedSubjectEngines,
   monthlyPrice,
-  annual,
   billingCycle,
   progress,
   style,
@@ -281,13 +267,12 @@ function PlanIntroStage({
   specs: ReturnType<typeof getResolvedSpecs>;
   selectedSubjectEngines: SubjectEngineCode[];
   monthlyPrice: number;
-  annual: ReturnType<typeof calculateAnnualPrice>;
   billingCycle: BillingCycle;
   progress: number;
   style: React.CSSProperties;
 }) {
   const planConfig = PLANS[plan];
-  const displayPrice = billingCycle === "annual" ? annual.discountedMonthly : monthlyPrice;
+  const displayPrice = monthlyPrice;
 
   return (
     <section className="relative z-10 flex min-h-screen items-center px-4 pt-16 sm:px-6">
@@ -312,7 +297,6 @@ function PlanIntroStage({
               {selectedSubjectEngines.map(subjectEngineLabel).join(" + ")}
             </span>
             <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1.5 text-white">{formatKRW(displayPrice)} / 월</span>
-            {billingCycle === "annual" && <span data-plan-discount-badge className="rounded-[7px] bg-emerald-200 px-3 py-1.5 text-slate-950">연간 결제 {BILLING.annualDiscountPercent}% 할인</span>}
           </div>
         </div>
 
@@ -1154,45 +1138,40 @@ function StudentKeyConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: 
   );
 }
 
-function BillingConsoleSection({ billingCycle, monthlyPrice, annual }: { billingCycle: BillingCycle; monthlyPrice: number; annual: ReturnType<typeof calculateAnnualPrice> }) {
-  const annualActive = billingCycle === "annual";
-  const animatedMonthly = useAnimatedNumber(annualActive ? annual.discountedMonthly : monthlyPrice, 720);
-  const animatedAnnualTotal = useAnimatedNumber(annual.annualTotal, 760);
-  const animatedSavings = useAnimatedNumber(annual.discountAmount, 760);
+function BillingConsoleSection({ monthlyPrice }: { billingCycle: BillingCycle; monthlyPrice: number }) {
+  const animatedMonthly = useAnimatedNumber(monthlyPrice, 720);
 
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <ConsoleStat label="오늘 결제" value={annualActive ? formatKRW(Math.round(animatedAnnualTotal)) : formatKRW(Math.round(animatedMonthly))} icon={CreditCard} tone="violet" />
+        <ConsoleStat label="오늘 결제" value={formatKRW(Math.round(animatedMonthly))} icon={CreditCard} tone="violet" />
         <ConsoleStat label="월 환산" value={formatKRW(Math.round(animatedMonthly))} icon={Gauge} />
-        <ConsoleStat label="할인" value={annualActive ? `-${formatKRW(Math.round(animatedSavings))}` : "-"} icon={PackageCheck} />
-        <ConsoleStat label="주기" value={annualActive ? "Annual" : "Monthly"} icon={ClipboardCheck} />
+        <ConsoleStat label="결제 방식" value="자동결제" icon={PackageCheck} />
+        <ConsoleStat label="주기" value="Monthly" icon={ClipboardCheck} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-[10px] border border-white/10 bg-black/30 p-4">
           <p className="text-xs font-bold text-slate-400">Billing cycle</p>
-          <div className="mt-4 grid grid-cols-2 gap-2 rounded-[8px] border border-white/10 bg-black/20 p-1.5">
-            <div className={cn("rounded-[6px] px-3 py-2 text-center text-xs font-black transition-all duration-500", !annualActive ? "bg-white text-slate-950 shadow-lg" : "text-slate-500")}>Monthly</div>
-            <div className={cn("rounded-[6px] px-3 py-2 text-center text-xs font-black transition-all duration-500", annualActive ? "bg-emerald-200 text-slate-950 shadow-[0_12px_34px_rgba(110,231,183,0.18)]" : "text-slate-500")}>Annual</div>
+          <div className="mt-4 rounded-[8px] border border-white/10 bg-black/20 p-1.5">
+            <div className="rounded-[6px] bg-white px-3 py-2 text-center text-xs font-black text-slate-950 shadow-lg">Monthly</div>
           </div>
           <div className="mt-5 rounded-[8px] border border-white/10 bg-white/[0.035] p-4">
             <p className="text-xs font-bold text-slate-500">현재 구독 상태</p>
             <p className="mt-1 text-3xl font-black text-white">{formatKRW(Math.round(animatedMonthly))}</p>
-            <p className="mt-2 text-xs font-bold text-slate-500">{annualActive ? "연간 결제가 billing 영역에 반영되었습니다." : "월간 결제가 billing 영역에 반영되었습니다."}</p>
+            <p className="mt-2 text-xs font-bold text-slate-500">월간 결제가 billing 영역에 반영되었습니다.</p>
           </div>
         </div>
 
         <div className="rounded-[10px] border border-white/10 bg-black/30 p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-black text-white">Invoice preview</p>
-            <span className={cn("rounded-[6px] px-2.5 py-1 text-xs font-black transition-all duration-500", annualActive ? "bg-emerald-200 text-slate-950" : "bg-white/[0.06] text-slate-400")}>{annualActive ? "Annual billing" : "Monthly billing"}</span>
+            <span className="rounded-[6px] bg-white/[0.06] px-2.5 py-1 text-xs font-black text-slate-400">Monthly billing</span>
           </div>
           <div className="mt-4 grid gap-2">
             <InvoiceRow label="Payment method" value="Card ending 2048" />
-            <InvoiceRow label="Billing period" value={annualActive ? "12 months" : "1 month"} />
-            <InvoiceRow label="Annual total" value={formatKRW(Math.round(animatedAnnualTotal))} highlighted={annualActive} />
-            <InvoiceRow label="Savings" value={`-${formatKRW(Math.round(animatedSavings))}`} highlighted={annualActive} positive />
+            <InvoiceRow label="Billing period" value="1 month" />
+            <InvoiceRow label="Monthly amount" value={formatKRW(Math.round(animatedMonthly))} highlighted />
           </div>
         </div>
       </div>
@@ -1206,19 +1185,17 @@ function SummaryConsoleSection({
   selectedPackageIds,
   billingCycle,
   monthlyPrice,
-  annual,
 }: {
   plan: PaidPlanType;
   specs: ReturnType<typeof getResolvedSpecs>;
   selectedPackageIds: Record<PackageGroup, string>;
   billingCycle: BillingCycle;
   monthlyPrice: number;
-  annual: ReturnType<typeof calculateAnnualPrice>;
 }) {
   const animatedAi = useAnimatedNumber(numericSpec(specs.monthlyAiCredits), 700);
   const animatedStorage = useAnimatedNumber(numericSpec(specs.fileStorageGb), 700);
   const animatedKeys = useAnimatedNumber(numericSpec(specs.studentKeys), 700);
-  const animatedPrice = useAnimatedNumber(billingCycle === "annual" ? annual.discountedMonthly : monthlyPrice, 700);
+  const animatedPrice = useAnimatedNumber(monthlyPrice, 700);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
@@ -1228,7 +1205,7 @@ function SummaryConsoleSection({
             <p className="text-xs font-bold text-slate-400">Checkout review</p>
             <p className="mt-1 text-3xl font-black text-white">{formatKRW(Math.round(animatedPrice))} / 월</p>
           </div>
-          <span className="rounded-[6px] bg-cyan-200/[0.12] px-2.5 py-1 text-xs font-black text-cyan-100">{billingCycle === "annual" ? "Annual" : "Monthly"}</span>
+          <span className="rounded-[6px] bg-cyan-200/[0.12] px-2.5 py-1 text-xs font-black text-cyan-100">Monthly</span>
         </div>
         <div className="mt-5 rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 p-3 text-xs font-bold leading-5 text-cyan-100">
           결제 전 마지막 단계에서 선택한 Basic Plan 옵션이 한 번 더 정리됩니다.
@@ -1244,7 +1221,7 @@ function SummaryConsoleSection({
           <SummaryConsoleItem label="AI Pack" value={selectedOptionName(plan, selectedPackageIds, "ai")} detail={`${formatNumber(animatedAi)} credits`} />
           <SummaryConsoleItem label="Storage Pack" value={selectedOptionName(plan, selectedPackageIds, "storage")} detail={`${formatStorageLabel(animatedStorage)} storage`} />
           <SummaryConsoleItem label="Student Pack" value={selectedOptionName(plan, selectedPackageIds, "student")} detail={`${formatNumber(animatedKeys)} keys`} />
-          <SummaryConsoleItem label="Billing" value={billingCycle === "annual" ? "Annual billing" : "Monthly billing"} detail={billingCycle === "annual" ? `${formatKRW(annual.annualTotal)} / year` : "monthly renewal"} />
+          <SummaryConsoleItem label="Billing" value="Monthly billing" detail="monthly renewal" />
         </div>
       </div>
     </div>
@@ -1258,7 +1235,6 @@ function FullPlanSummarySection({
   selectedSubjectEngines,
   billingCycle,
   monthlyPrice,
-  annual,
   reviewHref,
 }: {
   plan: PaidPlanType;
@@ -1267,11 +1243,10 @@ function FullPlanSummarySection({
   selectedSubjectEngines: SubjectEngineCode[];
   billingCycle: BillingCycle;
   monthlyPrice: number;
-  annual: ReturnType<typeof calculateAnnualPrice>;
   reviewHref: string;
 }) {
   const planConfig = PLANS[plan];
-  const displayPrice = billingCycle === "annual" ? annual.discountedMonthly : monthlyPrice;
+  const displayPrice = monthlyPrice;
   const singleEngineMonthlyPrice = calculateSingleEngineMonthlyPrice(plan, selectedPackageIds);
   const subjectEngineDelta = calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice, selectedSubjectEngines);
 
@@ -1290,9 +1265,8 @@ function FullPlanSummarySection({
               <div>
                 <p className="text-sm font-bold text-slate-400">{planConfig.name}</p>
                 <p className="mt-2 text-4xl font-black text-white">{formatKRW(displayPrice)} / 월</p>
-                {billingCycle === "annual" && <p className="mt-2 text-sm font-bold text-emerald-200">연 {formatKRW(annual.annualTotal)} 결제 · {formatKRW(annual.discountAmount)} 절감</p>}
               </div>
-              <span data-plan-cycle-badge className="w-fit rounded-[7px] bg-cyan-200 px-3 py-1.5 text-xs font-black text-slate-950">{billingCycle === "annual" ? "Annual" : "Monthly"}</span>
+              <span data-plan-cycle-badge className="w-fit rounded-[7px] bg-cyan-200 px-3 py-1.5 text-xs font-black text-slate-950">Monthly</span>
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2">
@@ -1328,10 +1302,9 @@ function FullPlanSummarySection({
             <h3 className="mt-3 text-2xl font-black text-white">마지막 확인</h3>
             <div className="mt-6 space-y-3 text-sm">
               <InvoiceRow label="Subject engines" value={selectedSubjectEngines.map(subjectEngineLabel).join(" + ")} highlighted />
-              <InvoiceRow label="Billing cycle" value={billingCycle === "annual" ? "Annual billing" : "Monthly billing"} highlighted />
+              <InvoiceRow label="Billing cycle" value="Monthly billing" highlighted />
               <InvoiceRow label="Monthly equivalent" value={formatKRW(displayPrice)} />
-              <InvoiceRow label="Today" value={billingCycle === "annual" ? formatKRW(annual.annualTotal) : formatKRW(monthlyPrice)} highlighted={billingCycle === "annual"} />
-              <InvoiceRow label="Savings" value={billingCycle === "annual" ? `-${formatKRW(annual.discountAmount)}` : "-"} positive={billingCycle === "annual"} highlighted={billingCycle === "annual"} />
+              <InvoiceRow label="Today" value={formatKRW(monthlyPrice)} highlighted />
             </div>
             <Link href={reviewHref} data-plan-checkout-link className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] bg-cyan-200 text-sm font-black text-slate-950 transition hover:bg-white">
               구성 확인하기 <ArrowRight className="h-4 w-4" />

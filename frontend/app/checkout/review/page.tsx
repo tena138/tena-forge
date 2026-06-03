@@ -6,6 +6,5 @@ export default function CheckoutReviewPage({
   searchParams: { plan?: string; billing?: string; packages?: string; engines?: string };
 }) {
   const plan = searchParams.plan === "basic" || searchParams.plan === "pro" ? searchParams.plan : "basic";
-  const billingCycle = searchParams.billing === "monthly" || searchParams.billing === "annual" ? searchParams.billing : "annual";
-  return <CheckoutReviewClient plan={plan} billingCycle={billingCycle} packages={searchParams.packages || ""} engines={searchParams.engines || ""} />;
+  return <CheckoutReviewClient plan={plan} billingCycle="monthly" packages={searchParams.packages || ""} engines={searchParams.engines || ""} />;
 }
