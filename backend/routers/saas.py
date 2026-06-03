@@ -294,7 +294,7 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
     academy = db.get(Academy, user_id)
     customer_phone = _normalize_phone(payload.customer_phone) or _normalize_phone(academy.phone if academy else None)
     if str(config.get("billing_key_method") or "").upper() == "CARD" and (not customer_phone or len(customer_phone) not in {10, 11}):
-        raise HTTPException(status_code=400, detail="KG이니시스 카드 빌링키 발급을 위해 휴대폰 번호가 필요합니다.")
+        raise HTTPException(status_code=400, detail="정기결제 카드 등록을 위해 휴대폰 번호가 필요합니다.")
     if academy and customer_phone and not _normalize_phone(academy.phone):
         academy.phone = customer_phone
     issue_id = _portone_issue_id(payload.plan_code)

@@ -31,38 +31,16 @@ def _channel_key(purpose: str = "billing") -> str:
     settings = get_settings()
     purpose = (purpose or "billing").strip().lower()
     if purpose == "general":
-        general_channel_key = settings.portone_general_channel_key_inicis or _env_first(
-            "PORTONE_GENERAL_CHANNEL_KEY_INICIS",
-            "PORTONE_INICIS_GENERAL_CHANNEL_KEY",
-            "NEXT_PUBLIC_PORTONE_GENERAL_CHANNEL_KEY_INICIS",
+        return settings.portone_general_channel_key_toss or _env_first(
+            "PORTONE_GENERAL_CHANNEL_KEY_TOSS",
+            "PORTONE_TOSS_GENERAL_CHANNEL_KEY",
+            "NEXT_PUBLIC_PORTONE_GENERAL_CHANNEL_KEY_TOSS",
+            "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS",
         )
-        if general_channel_key:
-            return general_channel_key
-    else:
-        billing_channel_key = settings.portone_billing_channel_key_inicis or _env_first(
-            "PORTONE_BILLING_CHANNEL_KEY_INICIS",
-            "PORTONE_INICIS_BILLING_CHANNEL_KEY",
-            "NEXT_PUBLIC_PORTONE_BILLING_CHANNEL_KEY_INICIS",
-        )
-        if billing_channel_key:
-            return billing_channel_key
-    inicis_channel_key = settings.portone_channel_key_inicis or _env_first(
-        "PORTONE_CHANNEL_KEY_INICIS",
-        "PORTONE_INICIS_CHANNEL_KEY",
-        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_INICIS",
-    )
-    if inicis_channel_key:
-        return inicis_channel_key
-    nice_channel_key = settings.portone_channel_key_nice or _env_first(
-        "PORTONE_CHANNEL_KEY_NICE",
-        "PORTONE_NICE_CHANNEL_KEY",
-        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_NICE",
-    )
-    if nice_channel_key:
-        return nice_channel_key
-    return settings.portone_channel_key or _env_first(
-        "PORTONE_CHANNEL_KEY",
-        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY",
+    return settings.portone_billing_channel_key_toss or _env_first(
+        "PORTONE_BILLING_CHANNEL_KEY_TOSS",
+        "PORTONE_TOSS_BILLING_CHANNEL_KEY",
+        "NEXT_PUBLIC_PORTONE_BILLING_CHANNEL_KEY_TOSS",
         "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS",
     )
 

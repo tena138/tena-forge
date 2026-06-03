@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     portone_channel_key_nice: str = ""
     portone_billing_channel_key_inicis: str = ""
     portone_general_channel_key_inicis: str = ""
+    portone_billing_channel_key_toss: str = ""
+    portone_general_channel_key_toss: str = ""
     portone_api_secret: str = ""
     portone_webhook_secret: str = ""
     portone_billing_key_method: str = "CARD"
