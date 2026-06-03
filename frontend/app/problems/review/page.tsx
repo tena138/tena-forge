@@ -961,12 +961,24 @@ function ReviewProblemSelector({
   const [dragBox, setDragBox] = useState<SelectionBox | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [suppressClick, setSuppressClick] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const currentIndex = useMemo(() => problems.findIndex((problem) => problem.id === currentId), [problems, currentId]);
+  const currentProblem = currentIndex >= 0 ? problems[currentIndex] : null;
   const selectedNeedsReviewCount = useMemo(
     () => problems.filter((problem) => selectedSet.has(problem.id) && problem.needs_review).length,
     [problems, selectedSet],
   );
+  const pendingCount = useMemo(() => problems.filter((problem) => problem.needs_review).length, [problems]);
+
+  function moveBy(delta: number) {
+    if (!problems.length) return;
+    const baseIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = Math.min(problems.length - 1, Math.max(0, baseIndex + delta));
+    const next = problems[nextIndex];
+    if (next) onOpenProblem(next.id);
+  }
 
   useEffect(() => {
     selectedIdsRef.current = selectedIds;
@@ -1093,7 +1105,48 @@ function ReviewProblemSelector({
 
   return (
     <section className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className={cn("flex flex-wrap items-center justify-between gap-3", expanded && "mb-3")}>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="text-sm font-bold text-white">문항 선택</h2>
+          <span className="rounded-[6px] border border-white/10 bg-black/20 px-2 py-1 text-xs font-semibold text-slate-300">
+            {currentProblem ? `${currentIndex + 1}/${problems.length} · #${currentProblem.problem_number}` : `0/${problems.length}`}
+          </span>
+          <span className="rounded-[6px] border border-amber-300/15 bg-amber-300/10 px-2 py-1 text-xs font-semibold text-amber-100">
+            대기 {pendingCount.toLocaleString("ko-KR")}
+          </span>
+          {currentProblem?.review_page_number ? (
+            <span className="rounded-[6px] border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-semibold text-slate-400">
+              {currentProblem.review_page_number}p
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {selectedIds.length ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-[7px] border border-violet-300/25 bg-violet-400/10 px-3 py-2 text-sm text-violet-100">
+              <CheckSquare className="h-4 w-4" />
+              <span className="font-semibold">{selectedIds.length}개 선택됨</span>
+              <Button size="sm" disabled={markingSelected || selectedNeedsReviewCount === 0} onClick={onMarkSelectedReviewed}>
+                {markingSelected ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                선택 검토 완료
+              </Button>
+              <button type="button" className="px-1 text-xs font-semibold text-slate-400 hover:text-white" onClick={() => onSelectionChange([])}>
+                선택 해제
+              </button>
+            </div>
+          ) : null}
+          <Button size="sm" variant="outline" disabled={currentIndex <= 0} onClick={() => moveBy(-1)}>
+            이전
+          </Button>
+          <Button size="sm" variant="outline" disabled={currentIndex < 0 || currentIndex >= problems.length - 1} onClick={() => moveBy(1)}>
+            다음
+          </Button>
+          <Button size="sm" variant={expanded ? "secondary" : "outline"} onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+            <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+            {expanded ? "접기" : "전체 보기"}
+          </Button>
+        </div>
+      </div>
+      <div className="hidden">
         <div>
           <h2 className="text-sm font-bold text-white">문항 선택</h2>
         </div>
@@ -1113,7 +1166,7 @@ function ReviewProblemSelector({
       </div>
       <div
         ref={containerRef}
-        className="relative max-h-[170px] select-none overflow-auto rounded-lg border border-white/10 bg-black/20 p-2"
+        className={cn("relative max-h-[170px] select-none overflow-auto rounded-lg border border-white/10 bg-black/20 p-2", !expanded && "hidden")}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
