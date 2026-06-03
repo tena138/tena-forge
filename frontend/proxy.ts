@@ -20,7 +20,7 @@ const publicRoutes = [
   "/copyright-policy",
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAsset = pathname.startsWith("/_next") || pathname.startsWith("/api/auth") || pathname.includes(".");
