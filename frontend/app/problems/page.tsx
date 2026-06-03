@@ -55,6 +55,7 @@ type BatchFolderDragState = {
   name: string;
   batchCount: number;
   problemCount: number;
+  pointerId: number;
   startX: number;
   startY: number;
   x: number;
@@ -451,6 +452,7 @@ function ProblemsBrowser() {
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const loadRequestRef = useRef(0);
+  const activeBatchFolderDragKey = batchFolderDrag ? `${batchFolderDrag.folderId}:${batchFolderDrag.pointerId}` : "";
 
   function setBatchFolderDragState(nextDrag: BatchFolderDragState | null) {
     batchFolderDragRef.current = nextDrag;
@@ -491,6 +493,49 @@ function ProblemsBrowser() {
       document.body.style.userSelect = previousUserSelect;
     };
   }, [batchFolderDrag?.isDragging]);
+
+  useEffect(() => {
+    if (!activeBatchFolderDragKey) return;
+
+    const handlePointerMove = (event: globalThis.PointerEvent) => {
+      const current = batchFolderDragRef.current;
+      if (!current || event.pointerId !== current.pointerId) return;
+      const moved = Math.hypot(event.clientX - current.startX, event.clientY - current.startY) > 5;
+      const nextDrag = { ...current, x: event.clientX, y: event.clientY, isDragging: current.isDragging || moved };
+      setBatchFolderDragState(nextDrag);
+      if (!nextDrag.isDragging) return;
+      event.preventDefault();
+      setResolvedFolderDropTarget(resolveBatchFolderDropTarget(event.clientX, event.clientY, current.folderId));
+    };
+
+    const finishDrag = (event: globalThis.PointerEvent) => {
+      const current = batchFolderDragRef.current;
+      if (!current || event.pointerId !== current.pointerId) return;
+      if (current.isDragging) {
+        event.preventDefault();
+        const target = resolveBatchFolderDropTarget(event.clientX, event.clientY, current.folderId);
+        if (target) moveBatchFolder(current.folderId, target.parentId, target.beforeFolderId);
+        folderDragSuppressClickRef.current = true;
+        window.setTimeout(() => {
+          folderDragSuppressClickRef.current = false;
+        }, 0);
+      }
+      setBatchFolderDragState(null);
+      setFolderDropTargetId(null);
+      setFolderDropMode(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", finishDrag, { passive: false });
+    window.addEventListener("pointercancel", finishDrag, { passive: false });
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", finishDrag);
+    };
+    // Keep the pointer listeners stable while live drag coordinates update through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBatchFolderDragKey, batchFolders]);
 
   useEffect(() => {
     if (!batchFolderContextMenu) return;
@@ -752,12 +797,12 @@ function ProblemsBrowser() {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("[data-folder-action]")) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
     setBatchFolderDragState({
       folderId: folder.id,
       name: folder.name,
       batchCount,
       problemCount,
+      pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       x: event.clientX,
@@ -765,44 +810,6 @@ function ProblemsBrowser() {
       isDragging: false,
     });
     setResolvedFolderDropTarget(null);
-  }
-
-  function continueBatchFolderPointerDrag(event: PointerEvent<HTMLButtonElement>, folderId: string) {
-    const current = batchFolderDragRef.current;
-    if (!current || current.folderId !== folderId) return;
-    const moved = Math.hypot(event.clientX - current.startX, event.clientY - current.startY) > 5;
-    const nextDrag = { ...current, x: event.clientX, y: event.clientY, isDragging: current.isDragging || moved };
-    setBatchFolderDragState(nextDrag);
-    if (!nextDrag.isDragging) return;
-    setResolvedFolderDropTarget(resolveBatchFolderDropTarget(event.clientX, event.clientY, folderId));
-  }
-
-  function finishBatchFolderPointerDrag(event: PointerEvent<HTMLButtonElement>, folderId: string) {
-    const current = batchFolderDragRef.current;
-    if (!current || current.folderId !== folderId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    if (current.isDragging) {
-      event.preventDefault();
-      event.stopPropagation();
-      const target = resolveBatchFolderDropTarget(event.clientX, event.clientY, folderId);
-      if (target) moveBatchFolder(folderId, target.parentId, target.beforeFolderId);
-      folderDragSuppressClickRef.current = true;
-      window.setTimeout(() => {
-        folderDragSuppressClickRef.current = false;
-      }, 0);
-    }
-    setBatchFolderDragState(null);
-    setFolderDropTargetId(null);
-    setFolderDropMode(null);
-  }
-
-  function cancelBatchFolderPointerDrag(event: PointerEvent<HTMLButtonElement>, folderId: string) {
-    const current = batchFolderDragRef.current;
-    if (!current || current.folderId !== folderId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    setBatchFolderDragState(null);
-    setFolderDropTargetId(null);
-    setFolderDropMode(null);
   }
 
   function toggleBatchInSelectedFolder(batchId: string) {
@@ -1307,9 +1314,6 @@ function ProblemsBrowser() {
                   }}
                   onContextMenu={(event) => handleBatchFolderContextMenu(event, folder.id)}
                   onPointerDown={(event) => beginBatchFolderPointerDrag(event, folder, folderBatches.length, problemCount)}
-                  onPointerMove={(event) => continueBatchFolderPointerDrag(event, folder.id)}
-                  onPointerUp={(event) => finishBatchFolderPointerDrag(event, folder.id)}
-                  onPointerCancel={(event) => cancelBatchFolderPointerDrag(event, folder.id)}
                 >
                   <Folder className="mt-0.5 h-5 w-5 shrink-0 text-[#8be9ff]" />
                   <span className="min-w-0 flex-1">
