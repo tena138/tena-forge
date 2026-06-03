@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronLeft, ChevronRight, Download, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
@@ -483,7 +483,8 @@ function ResultCell({ number, status, onClick }: { number: number; status: Probl
   );
 }
 
-export default function StudentManagementStudentPage({ params }: { params: { id: string } }) {
+export default function StudentManagementStudentPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const [data, setData] = useState<StudentDetail | null>(null);
   const [activeTab, setActiveTab] = useState<StudentTab>("calendar");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -627,13 +628,13 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }
 
   function counselingDraftKey(logId: string | null = editingCounselingLogId) {
-    return `${COUNSELING_DRAFT_KEY_PREFIX}.${params.id}.${logId || "new"}`;
+    return `${COUNSELING_DRAFT_KEY_PREFIX}.${resolvedParams.id}.${logId || "new"}`;
   }
 
   function readCounselingDraft(logId: string | null = editingCounselingLogId) {
     if (typeof window === "undefined") return null;
     const draft = parseCounselingDraft(window.localStorage.getItem(counselingDraftKey(logId)));
-    if (!draft || draft.studentId !== params.id || (draft.editingLogId || null) !== (logId || null)) return null;
+    if (!draft || draft.studentId !== resolvedParams.id || (draft.editingLogId || null) !== (logId || null)) return null;
     return draft;
   }
 
@@ -672,8 +673,8 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
     setFormatAutosaveState("idle");
     setFormatAutosaveSavedAt(null);
     setSelectedWrongAnswerIds([]);
-    getStudentDetail(params.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
-  }, [params.id]);
+    getStudentDetail(resolvedParams.id).then((student) => applyStudentData(student as StudentDetail)).catch(() => setData(null));
+  }, [resolvedParams.id]);
 
   useEffect(() => {
     const validIds = new Set(archivedWrongAnswers.map((wrong) => wrong.id));
@@ -785,7 +786,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
       const savedAt = new Date().toISOString();
       const draft: CounselingDraft = {
         version: 1,
-        studentId: params.id,
+        studentId: resolvedParams.id,
         editingLogId: editingCounselingLogId,
         classId: counselingClassId,
         form: counselingForm,
@@ -809,7 +810,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
         counselingDraftTimerRef.current = null;
       }
     };
-  }, [data, params.id, editingCounselingLogId, counselingClassId, counselingForm, counselingFields, counselingFieldValues, counselingSaving]);
+  }, [data, resolvedParams.id, editingCounselingLogId, counselingClassId, counselingForm, counselingFields, counselingFieldValues, counselingSaving]);
 
   useEffect(() => {
     if (!formatRevision || !counselingClassId) return;
@@ -847,7 +848,7 @@ export default function StudentManagementStudentPage({ params }: { params: { id:
   }, [message]);
 
   async function refreshStudent() {
-    const refreshed = await getStudentDetail(params.id);
+    const refreshed = await getStudentDetail(resolvedParams.id);
     applyStudentData(refreshed as StudentDetail);
   }
 

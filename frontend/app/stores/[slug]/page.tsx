@@ -1,19 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CreatorProfile, MarketplaceListing, contentTypeLabels, getStore, getStoreListings } from "@/lib/marketplace";
 
-export default function StoreDetailPage({ params }: { params: { slug: string } }) {
+export default function StoreDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const resolvedParams = use(params);
   const [store, setStore] = useState<CreatorProfile | null>(null);
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
 
   useEffect(() => {
-    getStore(params.slug).then(setStore).catch(() => setStore(null));
-    getStoreListings(params.slug).then(setListings).catch(() => setListings([]));
-  }, [params.slug]);
+    getStore(resolvedParams.slug).then(setStore).catch(() => setStore(null));
+    getStoreListings(resolvedParams.slug).then(setListings).catch(() => setListings([]));
+  }, [resolvedParams.slug]);
 
   if (!store) return <div className="py-20 text-center text-sm text-slate-400">스토어를 불러오는 중입니다.</div>;
 

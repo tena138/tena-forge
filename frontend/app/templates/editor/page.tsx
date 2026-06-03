@@ -1041,7 +1041,7 @@ function CanvasWorkspace() {
         const state = useEditorStore.getState();
         const tool = state.activeDrawingTool;
         if (tool === "select") return;
-        const pointer = canvas.getPointer(event.e);
+        const pointer = (canvas as FabricCanvas & { getPointer(event: Event): { x: number; y: number } }).getPointer(event.e);
         const shouldSnap = tool !== "pen" && state.snapToGrid;
         const point = {
           x: snap(pointer.x, state.gridSize, shouldSnap),
@@ -1053,7 +1053,7 @@ function CanvasWorkspace() {
         const drawing = drawingRef.current;
         const state = useEditorStore.getState();
         if (!drawing || state.activeDrawingTool !== "pen") return;
-        const pointer = canvas.getPointer(event.e);
+        const pointer = (canvas as FabricCanvas & { getPointer(event: Event): { x: number; y: number } }).getPointer(event.e);
         drawing.points.push({ x: pointer.x, y: pointer.y });
       });
       canvas.on("mouse:up", (event) => {
@@ -1064,7 +1064,7 @@ function CanvasWorkspace() {
         const state = useEditorStore.getState();
         const tool = state.activeDrawingTool;
         if (tool === "select") return;
-        const pointer = canvas.getPointer(event.e);
+        const pointer = (canvas as FabricCanvas & { getPointer(event: Event): { x: number; y: number } }).getPointer(event.e);
         const shouldSnap = tool !== "pen" && state.snapToGrid;
         let end = {
           x: snap(pointer.x, state.gridSize, shouldSnap),

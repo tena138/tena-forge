@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarDays, Check, ClipboardCheck, Clock, Loader2, Plus, RotateCcw, Trash2, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +52,8 @@ function composeScheduleDescription(lessonPlan: string, assignmentNote: string) 
   ].filter(Boolean).join("\n\n") || null;
 }
 
-export default function StudentManagementClassPage({ params }: { params: { id: string } }) {
+export default function StudentManagementClassPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const router = useRouter();
   const [data, setData] = useState<ClassCard | null>(null);
   const [message, setMessage] = useState("");
@@ -78,8 +79,8 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
   });
 
   useEffect(() => {
-    getClassDetail(params.id).then(setData).catch(() => setData(null));
-  }, [params.id]);
+    getClassDetail(resolvedParams.id).then(setData).catch(() => setData(null));
+  }, [resolvedParams.id]);
 
   const events = useMemo(() => data?.schedule_events || [], [data]);
   const selectedEvent = events.find((event) => event.id === selectedEventId) || events[0] || null;
@@ -91,7 +92,7 @@ export default function StudentManagementClassPage({ params }: { params: { id: s
   const studentWrongTotal = classStudents.reduce((total, student) => total + student.unresolved_wrong_count, 0);
 
   async function refresh() {
-    const next = await getClassDetail(params.id);
+    const next = await getClassDetail(resolvedParams.id);
     setData(next);
     return next;
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { Copy, Edit3, Send } from "lucide-react";
 
 import { TemplatePreviewFrame } from "@/components/template-hub/template-preview-frame";
@@ -16,7 +16,8 @@ import {
   visibilityLabels,
 } from "@/lib/templateHub";
 
-export default function TemplateDetailPage({ params }: { params: { id: string } }) {
+export default function TemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const [template, setTemplate] = useState<HubTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
@@ -24,14 +25,14 @@ export default function TemplateDetailPage({ params }: { params: { id: string } 
 
   async function load() {
     setLoading(true);
-    const data = await getHubTemplate(params.id);
+    const data = await getHubTemplate(resolvedParams.id);
     setTemplate(data);
     setLoading(false);
   }
 
   useEffect(() => {
     load().catch(() => setLoading(false));
-  }, [params.id]);
+  }, [resolvedParams.id]);
 
   async function duplicate() {
     if (!template || duplicating) return;
