@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 
@@ -16,15 +16,14 @@ import {
   simulateSubscribeListing,
 } from "@/lib/marketplace";
 
-export default function MarketplaceListingDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
+export default function MarketplaceListingDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [listing, setListing] = useState<MarketplaceListing | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    getMarketplaceListing(resolvedParams.id).then(setListing).catch(() => setListing(null));
-  }, [resolvedParams.id]);
+    getMarketplaceListing(params.id).then(setListing).catch(() => setListing(null));
+  }, [params.id]);
 
   async function claim() {
     if (!listing) return;

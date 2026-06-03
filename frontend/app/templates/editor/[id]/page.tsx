@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -16,8 +16,7 @@ import {
   updateHubTemplate,
 } from "@/lib/templateHub";
 
-export default function HubTemplateEditorPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
+export default function HubTemplateEditorPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [template, setTemplate] = useState<HubTemplate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,19 +25,19 @@ export default function HubTemplateEditorPage({ params }: { params: Promise<{ id
   async function load() {
     setLoading(true);
     await ensureTemplateHubSession();
-    const data = await getHubTemplate(resolvedParams.id);
+    const data = await getHubTemplate(params.id);
     setTemplate(data);
     setLoading(false);
   }
 
   useEffect(() => {
     load().catch(() => setLoading(false));
-  }, [resolvedParams.id]);
+  }, [params.id]);
 
   async function submit(payload: HubTemplatePayload) {
     setSaving(true);
     try {
-      const next = await updateHubTemplate(resolvedParams.id, payload);
+      const next = await updateHubTemplate(params.id, payload);
       setTemplate(next);
     } finally {
       setSaving(false);
