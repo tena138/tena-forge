@@ -53,7 +53,7 @@ For each problem return a JSON object with:
 {
   "problem_number": <integer>,
   "problem_text": "<question stem only in Korean, absolutely no answer choices>",
-  "choices": [{"label": "①", "text": "<visible choice text only>"}],
+  "choices": [],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "is_exercise": <true only for standalone unsolved exercises>,
   "skip_reason": null,
@@ -64,7 +64,7 @@ For each problem return a JSON object with:
 Return a JSON array of all problems found on this page.
 If there are no valid standalone exercises, return [].
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
-Extract visible answer choices into choices, preserving labels such as ①, ②, ③, ④, ⑤. Remove all answer choices from problem_text.
+For the math engine, discard visible answer choices completely. Remove choices from problem_text and always return "choices": [].
 Convert every mathematical expression, function, interval, limit, summation, fraction, root, exponent, coordinate, and equation into LaTeX.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 Use inline LaTeX delimiters like $f(x)=x^2$ inside Korean sentences.
@@ -87,7 +87,7 @@ For each problem return a JSON object with:
 {
   "problem_number": <integer>,
   "problem_text": "<question stem only in Korean, no answer choices>",
-  "choices": [{"label": "①", "text": "<visible choice text only>"}],
+  "choices": [],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "is_exercise": <true only for standalone exercises>,
   "skip_reason": null,
@@ -97,7 +97,7 @@ For each problem return a JSON object with:
 }
 
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
-Extract visible answer choices into choices, preserving labels such as ①, ②, ③, ④, ⑤. Remove all answer choices from problem_text.
+For the math engine, discard visible answer choices completely. Remove choices from problem_text and always return "choices": [].
 Convert mathematical expressions into LaTeX.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
 Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit/exam-round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
@@ -1971,6 +1971,7 @@ def process_batch(batch_id: UUID) -> None:
             for problem in extracted:
                 cleaned, suspicious = strip_answer_choices(problem["problem_text"])
                 problem["problem_text"] = normalize_geometry_notation(cleaned)
+                problem["choices"] = []
                 problem["needs_review"] = problem["needs_review"] or suspicious
 
             set_progress(batch_id, f"문항 저장 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
@@ -3010,6 +3011,8 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
 
 def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> None:
     batch_name = (batch.name or "이름 없는 배치").strip()
+    subject_engine = normalize_subject_engine(batch.subject_engine)
+    preserve_choices = subject_engine == KOREAN_ENGINE
     ensure_batch_active(batch.id)
     for index, item in enumerate(problems):
         if index and index % 20 == 0:
@@ -3022,7 +3025,7 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
         problem = Problem(
             problem_number=item["problem_number"],
             problem_text=item["problem_text"],
-            choices=item.get("choices") or [],
+            choices=_normalize_problem_choices(item.get("choices")) if preserve_choices else [],
             has_visual=item["has_visual"],
             visual_url=item.get("visual_url"),
             review_page_image_url=item.get("review_page_image_url"),
