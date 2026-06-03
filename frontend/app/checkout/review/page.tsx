@@ -1,10 +1,11 @@
 import { CheckoutReviewClient } from "@/components/plan/checkout-review-client";
 
-export default function CheckoutReviewPage({
+export default async function CheckoutReviewPage({
   searchParams,
 }: {
-  searchParams: { plan?: string; billing?: string; packages?: string; engines?: string };
+  searchParams: Promise<{ plan?: string; billing?: string; packages?: string; engines?: string }>;
 }) {
-  const plan = searchParams.plan === "basic" || searchParams.plan === "pro" ? searchParams.plan : "basic";
-  return <CheckoutReviewClient plan={plan} billingCycle="monthly" packages={searchParams.packages || ""} engines={searchParams.engines || ""} />;
+  const params = await searchParams;
+  const plan = params.plan === "basic" || params.plan === "pro" ? params.plan : "basic";
+  return <CheckoutReviewClient plan={plan} billingCycle="monthly" packages={params.packages || ""} engines={params.engines || ""} />;
 }
