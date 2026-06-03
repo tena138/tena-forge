@@ -5,9 +5,7 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {
-    root: rootDir
-  },
+  outputFileTracingRoot: rootDir,
   async redirects() {
     return [
       {
