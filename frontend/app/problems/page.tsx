@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -48,7 +48,7 @@ type DragBox = { left: number; top: number; width: number; height: number };
 type ReviewFilter = "all" | "needs" | "reviewed";
 type ViewMode = "grid" | "list";
 type ProblemSort = "source_order" | "newest" | "oldest" | "number_asc" | "number_desc";
-type BatchFolder = { id: string; name: string; batchIds: string[]; createdAt: string };
+type BatchFolder = { id: string; name: string; batchIds: string[]; createdAt: string; parentId: string | null; order: number };
 type BatchFolderContextMenu = { folderId: string; x: number; y: number } | null;
 
 const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24, pages: 1 };
@@ -92,7 +92,7 @@ function readBatchFolders() {
     const parsed = JSON.parse(window.localStorage.getItem(batchFoldersStorageKey) || "[]");
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .map((folder): BatchFolder | null => {
+      .map((folder, index): BatchFolder | null => {
         if (!folder || typeof folder !== "object") return null;
         const name = String((folder as BatchFolder).name || "").trim();
         const id = String((folder as BatchFolder).id || "");
@@ -100,7 +100,9 @@ function readBatchFolders() {
           ? [...new Set((folder as BatchFolder).batchIds.map((value) => String(value)).filter(Boolean))]
           : [];
         if (!id || !name) return null;
-        return { id, name, batchIds, createdAt: String((folder as BatchFolder).createdAt || new Date().toISOString()) };
+        const parentId = typeof (folder as BatchFolder).parentId === "string" && (folder as BatchFolder).parentId ? String((folder as BatchFolder).parentId) : null;
+        const order = Number.isFinite(Number((folder as BatchFolder).order)) ? Number((folder as BatchFolder).order) : index;
+        return { id, name, batchIds, createdAt: String((folder as BatchFolder).createdAt || new Date().toISOString()), parentId, order };
       })
       .filter((folder): folder is BatchFolder => Boolean(folder));
   } catch {
@@ -111,6 +113,61 @@ function readBatchFolders() {
 function writeBatchFolders(folders: BatchFolder[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(batchFoldersStorageKey, JSON.stringify(folders));
+}
+
+function sortBatchFolders(folders: BatchFolder[]) {
+  return [...folders].sort((left, right) => {
+    const orderDelta = (left.order || 0) - (right.order || 0);
+    if (orderDelta) return orderDelta;
+    return left.createdAt.localeCompare(right.createdAt);
+  });
+}
+
+function folderDepth(folder: BatchFolder, folders: BatchFolder[]) {
+  let depth = 0;
+  let parentId = folder.parentId;
+  const seen = new Set<string>([folder.id]);
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = folders.find((item) => item.id === parentId);
+    if (!parent) break;
+    depth += 1;
+    parentId = parent.parentId;
+  }
+  return Math.min(depth, 4);
+}
+
+function isFolderDescendant(folderId: string, possibleAncestorId: string, folders: BatchFolder[]) {
+  let current = folders.find((folder) => folder.id === folderId);
+  const seen = new Set<string>();
+  while (current?.parentId && !seen.has(current.id)) {
+    if (current.parentId === possibleAncestorId) return true;
+    seen.add(current.id);
+    current = folders.find((folder) => folder.id === current?.parentId);
+  }
+  return false;
+}
+
+function flattenBatchFolderTree(folders: BatchFolder[]) {
+  const byParent = new Map<string, BatchFolder[]>();
+  for (const folder of folders) {
+    const parentKey = folder.parentId || "root";
+    byParent.set(parentKey, [...(byParent.get(parentKey) || []), folder]);
+  }
+  for (const [key, items] of byParent) byParent.set(key, sortBatchFolders(items));
+  const output: BatchFolder[] = [];
+  const visit = (parentId: string | null, seen: Set<string>) => {
+    for (const folder of byParent.get(parentId || "root") || []) {
+      if (seen.has(folder.id)) continue;
+      output.push(folder);
+      visit(folder.id, new Set([...seen, folder.id]));
+    }
+  };
+  visit(null, new Set());
+  for (const folder of sortBatchFolders(folders)) {
+    if (!output.some((item) => item.id === folder.id)) output.push({ ...folder, parentId: null });
+  }
+  return output;
 }
 
 function readSelectedProblemIds() {
@@ -349,6 +406,8 @@ function ProblemsBrowser() {
   const [batchFolders, setBatchFolders] = useState<BatchFolder[]>([]);
   const [folderNameDraft, setFolderNameDraft] = useState("");
   const [batchFolderContextMenu, setBatchFolderContextMenu] = useState<BatchFolderContextMenu>(null);
+  const [draggingBatchFolderId, setDraggingBatchFolderId] = useState("");
+  const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => readReviewFilter(searchParams.get("needs_review")));
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -422,6 +481,7 @@ function ProblemsBrowser() {
   }, [paramsKey]);
 
   const selectedBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === selectedBatchFolderId) || null, [batchFolders, selectedBatchFolderId]);
+  const visibleBatchFolders = useMemo(() => flattenBatchFolderTree(batchFolders), [batchFolders]);
   const selectedFolderBatchIds = useMemo(() => selectedBatchFolder?.batchIds.filter((batchId) => batches.some((batch) => batch.id === batchId)) || [], [batches, selectedBatchFolder]);
   const contextMenuBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === batchFolderContextMenu?.folderId) || null, [batchFolderContextMenu, batchFolders]);
 
@@ -574,6 +634,8 @@ function ProblemsBrowser() {
       name,
       batchIds: selectedBatchId ? [selectedBatchId] : [],
       createdAt: new Date().toISOString(),
+      parentId: selectedBatchFolderId || null,
+      order: batchFolders.filter((item) => (item.parentId || null) === (selectedBatchFolderId || null)).length,
     };
     persistBatchFolders([...batchFolders, folder]);
     setFolderNameDraft("");
@@ -584,7 +646,8 @@ function ProblemsBrowser() {
   }
 
   function deleteBatchFolder(folderId: string) {
-    persistBatchFolders(batchFolders.filter((folder) => folder.id !== folderId));
+    const childIds = new Set(batchFolders.filter((folder) => folder.parentId === folderId).map((folder) => folder.id));
+    persistBatchFolders(batchFolders.filter((folder) => folder.id !== folderId).map((folder) => (childIds.has(folder.id) ? { ...folder, parentId: null } : folder)));
     setBatchFolderContextMenu(null);
     if (selectedBatchFolderId === folderId) {
       resetPageAnd(() => setSelectedBatchFolderId(""));
@@ -602,6 +665,32 @@ function ProblemsBrowser() {
   function handleBatchFolderContextMenu(event: MouseEvent, folderId: string) {
     event.preventDefault();
     setBatchFolderContextMenu({ folderId, x: event.clientX, y: event.clientY });
+  }
+
+  function moveBatchFolder(folderId: string, targetParentId: string | null, beforeFolderId?: string) {
+    if (folderId === targetParentId) return;
+    if (targetParentId && isFolderDescendant(targetParentId, folderId, batchFolders)) return;
+    const moving = batchFolders.find((folder) => folder.id === folderId);
+    if (!moving) return;
+    const normalizedParentId = targetParentId || null;
+    const siblings = sortBatchFolders(batchFolders.filter((folder) => folder.id !== folderId && (folder.parentId || null) === normalizedParentId));
+    const insertIndex = beforeFolderId ? Math.max(0, siblings.findIndex((folder) => folder.id === beforeFolderId)) : siblings.length;
+    const nextSiblings = [...siblings.slice(0, insertIndex), { ...moving, parentId: normalizedParentId }, ...siblings.slice(insertIndex)];
+    const orderById = new Map(nextSiblings.map((folder, index) => [folder.id, index]));
+    persistBatchFolders(batchFolders.map((folder) => {
+      if (folder.id === folderId) return { ...folder, parentId: normalizedParentId, order: orderById.get(folder.id) ?? 0 };
+      if ((folder.parentId || null) === normalizedParentId && orderById.has(folder.id)) return { ...folder, order: orderById.get(folder.id) ?? folder.order };
+      return folder;
+    }));
+  }
+
+  function handleFolderDrop(event: DragEvent<HTMLElement>, targetParentId: string | null, beforeFolderId?: string) {
+    event.preventDefault();
+    const folderId = event.dataTransfer.getData("application/x-tena-batch-folder") || draggingBatchFolderId;
+    setFolderDropTargetId(null);
+    setDraggingBatchFolderId("");
+    if (!folderId) return;
+    moveBatchFolder(folderId, targetParentId, beforeFolderId);
   }
 
   function toggleBatchInSelectedFolder(batchId: string) {
@@ -1066,6 +1155,14 @@ function ProblemsBrowser() {
                 !selectedBatchId && !selectedBatchFolderId ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
               )}
               onClick={selectAllBatches}
+              onDragOver={(event) => {
+                if (!draggingBatchFolderId) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setFolderDropTargetId("root");
+              }}
+              onDragLeave={() => setFolderDropTargetId(null)}
+              onDrop={(event) => handleFolderDrop(event, null)}
             >
               <FolderOpen className="mt-0.5 h-5 w-5 shrink-0 text-[#9b8cff]" />
               <span className="min-w-0">
@@ -1074,20 +1171,47 @@ function ProblemsBrowser() {
               </span>
             </button>
 
-            {batchFolders.map((folder) => {
+            {visibleBatchFolders.map((folder) => {
               const selected = selectedBatchFolderId === folder.id;
               const folderBatches = folder.batchIds.map((batchId) => batches.find((batch) => batch.id === batchId)).filter((batch): batch is Batch => Boolean(batch));
               const problemCount = folderBatches.reduce((sum, batch) => sum + batch.problem_count, 0);
+              const depth = folderDepth(folder, batchFolders);
+              const dropping = folderDropTargetId === folder.id;
               return (
                 <button
                   key={folder.id}
                   type="button"
+                  draggable
                   className={cn(
                     "group flex min-h-[82px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-                    selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                    selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]",
+                    draggingBatchFolderId === folder.id && "opacity-45",
+                    dropping && "border-sky-300/70 bg-sky-400/12"
                   )}
+                  style={{ marginLeft: depth ? `${depth * 18}px` : undefined }}
                   onClick={() => selectBatchFolder(folder.id)}
                   onContextMenu={(event) => handleBatchFolderContextMenu(event, folder.id)}
+                  onDragStart={(event) => {
+                    setDraggingBatchFolderId(folder.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("application/x-tena-batch-folder", folder.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingBatchFolderId("");
+                    setFolderDropTargetId(null);
+                  }}
+                  onDragOver={(event) => {
+                    if (!draggingBatchFolderId || draggingBatchFolderId === folder.id || isFolderDescendant(folder.id, draggingBatchFolderId, batchFolders)) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setFolderDropTargetId(folder.id);
+                  }}
+                  onDragLeave={() => setFolderDropTargetId(null)}
+                  onDrop={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const dropBefore = event.clientY - rect.top < rect.height * 0.3;
+                    handleFolderDrop(event, dropBefore ? folder.parentId : folder.id, dropBefore ? folder.id : undefined);
+                  }}
                 >
                   <Folder className="mt-0.5 h-5 w-5 shrink-0 text-[#8be9ff]" />
                   <span className="min-w-0 flex-1">
