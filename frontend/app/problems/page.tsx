@@ -58,6 +58,7 @@ type BatchFolderDragState = {
   problemCount: number;
   pointerId: number;
   grabX: number;
+  grabY: number;
   previewWidth: number;
   startX: number;
   startY: number;
@@ -897,6 +898,7 @@ function ProblemsBrowser() {
     const rect = event.currentTarget.getBoundingClientRect();
     const previewWidth = Math.min(Math.max(rect.width, 220), 320);
     const grabRatio = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
+    const grabY = Math.max(12, Math.min(rect.height - 12, event.clientY - rect.top));
     setBatchFolderDragState({
       kind: "folder",
       folderId: folder.id,
@@ -905,6 +907,7 @@ function ProblemsBrowser() {
       problemCount,
       pointerId: event.pointerId,
       grabX: Math.max(24, Math.min(previewWidth - 24, grabRatio * previewWidth)),
+      grabY,
       previewWidth,
       startX: event.clientX,
       startY: event.clientY,
@@ -922,6 +925,7 @@ function ProblemsBrowser() {
     const rect = event.currentTarget.getBoundingClientRect();
     const previewWidth = Math.min(Math.max(rect.width, 220), 320);
     const grabRatio = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
+    const grabY = Math.max(12, Math.min(rect.height - 12, event.clientY - rect.top));
     setBatchFolderDragState({
       kind: "batch",
       folderId: batch.id,
@@ -930,6 +934,7 @@ function ProblemsBrowser() {
       problemCount: batch.problem_count,
       pointerId: event.pointerId,
       grabX: Math.max(24, Math.min(previewWidth - 24, grabRatio * previewWidth)),
+      grabY,
       previewWidth,
       startX: event.clientX,
       startY: event.clientY,
@@ -1541,16 +1546,12 @@ function ProblemsBrowser() {
             className="pointer-events-none fixed z-[120]"
             style={{
               left: batchFolderDrag.x - batchFolderDrag.grabX,
-              top: batchFolderDrag.y + 10,
+              top: batchFolderDrag.y - batchFolderDrag.grabY,
               width: batchFolderDrag.previewWidth,
               transform: `rotate(${Math.max(-7, Math.min(7, (batchFolderDrag.x - batchFolderDrag.startX) * 0.04))}deg)`,
-              transformOrigin: `${batchFolderDrag.grabX}px 0`,
+              transformOrigin: `${batchFolderDrag.grabX}px ${batchFolderDrag.grabY}px`,
             }}
           >
-            <div
-              className="absolute -top-1.5 h-1.5 w-10 rounded-t-full border-x border-t border-sky-300/45 bg-[#111022]/95 shadow-[0_0_12px_rgba(125,211,252,0.35)]"
-              style={{ left: batchFolderDrag.grabX - 20 }}
-            />
             <div className="tena-archive-drag-dangle w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
               <div className="flex items-start gap-3">
                 <Folder className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
