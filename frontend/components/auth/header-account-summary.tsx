@@ -11,22 +11,17 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { AcademyProfile, fetchMe, logout, updateMe } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, authHttp, getAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 type PlanTone = "admin" | "trial" | "free" | "basic" | "pro" | "enterprise";
 
 const planStyles: Record<PlanTone, string> = {
-  admin:
-    "rounded-full border border-violet-300/45 bg-violet-50 px-2.5 text-violet-700 ring-1 ring-violet-200/70 shadow-sm dark:border-violet-300/35 dark:bg-violet-500/12 dark:text-violet-100 dark:ring-violet-300/25",
-  trial:
-    "rounded-full border border-cyan-300/45 bg-cyan-50 px-2.5 text-cyan-700 ring-1 ring-cyan-200/70 shadow-sm dark:border-cyan-300/35 dark:bg-cyan-400/12 dark:text-cyan-100 dark:ring-cyan-300/20",
-  free:
-    "rounded-full border border-slate-300/70 bg-slate-100 px-2.5 text-slate-700 ring-1 ring-slate-200/80 shadow-sm dark:border-slate-300/20 dark:bg-slate-400/10 dark:text-slate-200 dark:ring-slate-300/15",
-  basic:
-    "rounded-full border border-sky-300/45 bg-sky-50 px-2.5 text-sky-700 ring-1 ring-sky-200/70 shadow-sm dark:border-sky-300/30 dark:bg-sky-400/12 dark:text-sky-100 dark:ring-sky-300/20",
-  pro:
-    "rounded-full border border-violet-300/45 bg-violet-50 px-2.5 text-violet-700 ring-1 ring-violet-200/70 shadow-sm dark:border-violet-300/35 dark:bg-violet-500/14 dark:text-violet-100 dark:ring-violet-300/25",
-  enterprise:
-    "rounded-full border border-fuchsia-300/45 bg-fuchsia-50 px-2.5 text-fuchsia-700 ring-1 ring-fuchsia-200/70 shadow-sm dark:border-fuchsia-300/35 dark:bg-fuchsia-500/12 dark:text-fuchsia-100 dark:ring-fuchsia-300/20",
+  admin: "plan-aurora-tone-admin",
+  trial: "plan-aurora-tone-trial",
+  free: "plan-aurora-tone-free",
+  basic: "plan-aurora-tone-basic",
+  pro: "plan-aurora-tone-pro",
+  enterprise: "plan-aurora-tone-enterprise",
 };
 
 const planNames: Record<string, { label: string; tone: PlanTone }> = {
@@ -96,6 +91,16 @@ function displayPlan(profile: AcademyProfile) {
   const normalizedPlan = String(profile.plan || "free").toLowerCase();
   const plan = planNames[normalizedPlan] || { label: normalizedPlan || "Free", tone: "free" as PlanTone };
   return { ...plan, status: profile.is_active ? "활성" : "비활성", statusClass: profile.is_active ? "text-emerald-600" : "text-rose-600" };
+}
+
+function PlanBadge({ label, tone }: { label: string; tone: PlanTone }) {
+  return (
+    <Badge className={cn("plan-aurora-surface plan-aurora-badge rounded-full border px-2.5 font-black", planStyles[tone])}>
+      <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
+      <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
+      <span className="relative z-10">{label}</span>
+    </Badge>
+  );
 }
 
 export function HeaderAccountSummary() {
@@ -228,7 +233,7 @@ export function HeaderAccountSummary() {
             <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{currentProfile.academy_name}</span>
             <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{currentProfile.email}</span>
           </span>
-          <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
+          <PlanBadge label={plan.label} tone={plan.tone} />
         </button>
 
       {open && (
@@ -239,7 +244,7 @@ export function HeaderAccountSummary() {
                 <div className="truncate font-semibold">{currentProfile.academy_name}</div>
                 <div className="truncate text-xs text-muted-foreground">{currentProfile.email}</div>
               </div>
-              <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
+              <PlanBadge label={plan.label} tone={plan.tone} />
             </div>
             <div className="mt-3 rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">
               <div className="text-[11px] font-semibold uppercase text-muted-foreground">구독 플랜</div>
@@ -322,7 +327,7 @@ export function HeaderAccountSummary() {
                   <div className="truncate text-sm font-semibold">{currentProfile.email}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{currentProfile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}</div>
                 </div>
-                <Badge className={planStyles[plan.tone]}>{plan.label}</Badge>
+                <PlanBadge label={plan.label} tone={plan.tone} />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-md border bg-card/80 px-3 py-2">

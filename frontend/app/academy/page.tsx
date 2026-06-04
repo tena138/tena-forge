@@ -205,6 +205,14 @@ function planNameFallback(plan?: string | null) {
   return labels[String(plan || "").toLowerCase()] || "Plan";
 }
 
+function planAuroraToneClass(plan?: string | null, name?: string | null) {
+  const key = `${plan || ""} ${name || ""}`.toLowerCase();
+  if (key.includes("enterprise") || key.includes("business")) return "plan-aurora-tone-enterprise";
+  if (key.includes("pro")) return "plan-aurora-tone-pro";
+  if (key.includes("basic") || key.includes("plus")) return "plan-aurora-tone-basic";
+  return "plan-aurora-tone-trial";
+}
+
 function defaultStudentSeatLimit(plan?: string | null) {
   const key = String(plan || "").toLowerCase();
   if (key === "basic") return 5;
@@ -252,6 +260,7 @@ function UsageOverview({
   billing: AcademyBilling | null;
 }) {
   const planName = summary?.plan?.name || planNameFallback(profile?.plan);
+  const planToneClass = planAuroraToneClass(summary?.plan?.code || profile?.plan, planName);
   const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
   const subscription = summary?.subscription;
   const normalizedPlan = String(summary?.plan?.code || profile?.plan || "").toLowerCase();
@@ -280,12 +289,16 @@ function UsageOverview({
         <Link
           href="/billing"
           aria-label="결제 및 플랜 관리로 이동"
-          className="enterprise-plan-card group relative overflow-hidden rounded-[10px] border border-violet-300/35 bg-violet-500/[0.08] p-4 transition hover:border-violet-300/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+          className={`plan-aurora-surface plan-aurora-card ${planToneClass} group rounded-[10px] p-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60`}
         >
-          <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--a" />
-          <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--b" />
+          <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
+          <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
           <div className="relative z-10 text-2xl font-black text-foreground">{planName}</div>
-          <div className="relative z-10 mt-2 inline-flex rounded-full border border-cyan-300/35 bg-cyan-50/85 px-2 py-1 text-[11px] font-black text-cyan-700 shadow-sm backdrop-blur dark:border-cyan-300/25 dark:bg-cyan-400/10 dark:text-cyan-100">{planStatus}</div>
+          <div className={`plan-aurora-surface plan-aurora-badge ${planToneClass} relative z-10 mt-2 inline-flex rounded-full border px-2 py-1 text-[11px] font-black backdrop-blur`}>
+            <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
+            <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
+            <span className="relative z-10">{planStatus}</span>
+          </div>
           <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
               <span key={engine} className="rounded-full border border-border/80 bg-background/70 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur">

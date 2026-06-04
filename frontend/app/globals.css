@@ -561,8 +561,130 @@
   animation: enterpriseAuroraDriftB 5.6s ease-in-out infinite alternate;
 }
 
+.plan-aurora-tone-trial,
+.plan-aurora-tone-free {
+  --plan-aurora-a: 45 212 191;
+  --plan-aurora-b: 124 92 255;
+  --plan-aurora-c: 59 111 245;
+  --plan-aurora-text: 22 78 99;
+}
+
+.plan-aurora-tone-basic,
+.plan-aurora-tone-admin {
+  --plan-aurora-a: 124 92 255;
+  --plan-aurora-b: 139 107 255;
+  --plan-aurora-c: 196 181 253;
+  --plan-aurora-text: 91 33 182;
+}
+
+.plan-aurora-tone-pro {
+  --plan-aurora-a: 45 212 191;
+  --plan-aurora-b: 124 92 255;
+  --plan-aurora-c: 244 114 182;
+  --plan-aurora-text: 15 118 110;
+}
+
+.plan-aurora-tone-enterprise {
+  --plan-aurora-a: 59 111 245;
+  --plan-aurora-b: 124 92 255;
+  --plan-aurora-c: 244 114 182;
+  --plan-aurora-text: 126 34 206;
+}
+
+.plan-aurora-surface {
+  isolation: isolate;
+}
+
+.plan-aurora-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(var(--plan-aurora-b) / 0.34);
+  background:
+    radial-gradient(circle at 76% 30%, rgb(var(--plan-aurora-a) / 0.22), transparent 32%),
+    radial-gradient(circle at 20% 88%, rgb(var(--plan-aurora-b) / 0.28), transparent 42%),
+    linear-gradient(135deg, rgb(250 245 255 / 0.92), rgb(238 242 255 / 0.86) 48%, rgb(var(--plan-aurora-a) / 0.13));
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08) inset,
+    0 18px 54px rgb(var(--plan-aurora-b) / 0.14);
+}
+
+.dark .plan-aurora-card {
+  background:
+    radial-gradient(circle at 76% 30%, rgb(var(--plan-aurora-a) / 0.30), transparent 32%),
+    radial-gradient(circle at 20% 88%, rgb(var(--plan-aurora-b) / 0.40), transparent 42%),
+    radial-gradient(circle at 88% 92%, rgb(var(--plan-aurora-c) / 0.20), transparent 38%),
+    linear-gradient(135deg, rgb(18 13 35 / 0.88), rgb(11 13 27 / 0.94) 56%, rgb(6 18 28 / 0.78));
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.045) inset,
+    0 20px 72px rgb(var(--plan-aurora-b) / 0.18);
+}
+
+.plan-aurora-card:hover {
+  border-color: rgb(var(--plan-aurora-c) / 0.48);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08) inset,
+    0 26px 82px rgb(var(--plan-aurora-b) / 0.22);
+}
+
+.plan-aurora-badge {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: rgb(var(--plan-aurora-b) / 0.38);
+  background:
+    radial-gradient(circle at 20% 50%, rgb(var(--plan-aurora-a) / 0.22), transparent 55%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.88), rgb(var(--plan-aurora-b) / 0.13));
+  color: rgb(var(--plan-aurora-text));
+  box-shadow:
+    0 0 0 1px rgb(var(--plan-aurora-b) / 0.18) inset,
+    0 8px 28px rgb(var(--plan-aurora-b) / 0.14);
+}
+
+.dark .plan-aurora-badge {
+  border-color: rgb(var(--plan-aurora-c) / 0.30);
+  background:
+    radial-gradient(circle at 20% 50%, rgb(var(--plan-aurora-a) / 0.28), transparent 55%),
+    linear-gradient(135deg, rgb(var(--plan-aurora-b) / 0.18), rgb(10 12 24 / 0.72));
+  color: rgb(255 255 255 / 0.94);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.05) inset,
+    0 8px 30px rgb(var(--plan-aurora-b) / 0.20);
+}
+
+.plan-aurora__ribbon {
+  position: absolute;
+  inset: -58%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(13px) saturate(1.65);
+  mix-blend-mode: screen;
+}
+
+.plan-aurora-badge .plan-aurora__ribbon {
+  inset: -130%;
+  filter: blur(8px) saturate(1.7);
+  opacity: 0.86;
+}
+
+.plan-aurora__ribbon--a {
+  background:
+    radial-gradient(ellipse at 24% 46%, rgb(var(--plan-aurora-b) / 0.76), transparent 31%),
+    radial-gradient(ellipse at 66% 52%, rgb(var(--plan-aurora-a) / 0.62), transparent 34%),
+    linear-gradient(108deg, transparent 14%, rgb(255 255 255 / 0.26) 42%, transparent 70%);
+  animation: enterpriseAuroraDriftA 4.8s ease-in-out infinite alternate;
+}
+
+.plan-aurora__ribbon--b {
+  background:
+    radial-gradient(ellipse at 40% 34%, rgb(var(--plan-aurora-c) / 0.56), transparent 29%),
+    radial-gradient(ellipse at 72% 66%, rgb(var(--plan-aurora-b) / 0.76), transparent 36%),
+    linear-gradient(74deg, transparent 18%, rgb(var(--plan-aurora-a) / 0.34) 50%, transparent 76%);
+  animation: enterpriseAuroraDriftB 5.6s ease-in-out infinite alternate;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .enterprise-plan-card__aurora {
+  .enterprise-plan-card__aurora,
+  .plan-aurora__ribbon {
     animation: none;
   }
 }
