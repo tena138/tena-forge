@@ -1526,23 +1526,32 @@ function ProblemsBrowser() {
 
         {batchFolderDrag?.isDragging ? (
           <div
-            className="pointer-events-none fixed z-[120] w-[230px] rounded-lg border border-sky-300/45 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur"
-            style={{ left: batchFolderDrag.x + 14, top: batchFolderDrag.y + 14 }}
+            className="pointer-events-none fixed z-[120] flex w-[260px] flex-col items-center"
+            style={{
+              left: batchFolderDrag.x,
+              top: batchFolderDrag.y,
+              transform: `translate(-50%, 0) rotate(${Math.max(-7, Math.min(7, (batchFolderDrag.x - batchFolderDrag.startX) * 0.04))}deg)`,
+              transformOrigin: "50% 0",
+            }}
           >
-            <div className="flex items-start gap-3">
-              <Folder className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
-              <div className="min-w-0">
-                <div className="truncate text-sm font-bold">{batchFolderDrag.name}</div>
-                <div className="mt-1 text-xs text-slate-400">
-                  {batchFolderDrag.batchCount.toLocaleString("ko-KR")}개 배치 · {batchFolderDrag.problemCount.toLocaleString("ko-KR")}문항
+            <div className="h-5 w-px bg-gradient-to-b from-sky-200/90 to-sky-400/30 shadow-[0_0_12px_rgba(125,211,252,0.65)]" />
+            <div className="-mt-1 h-3 w-3 rounded-full border border-sky-100/80 bg-sky-300 shadow-[0_0_18px_rgba(125,211,252,0.9)]" />
+            <div className="tena-archive-drag-dangle mt-1 w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
+              <div className="flex items-start gap-3">
+                <Folder className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-bold">{batchFolderDrag.name}</div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    {batchFolderDrag.batchCount.toLocaleString("ko-KR")}개 배치 · {batchFolderDrag.problemCount.toLocaleString("ko-KR")}문항
+                  </div>
                 </div>
               </div>
+              {folderDropMode ? (
+                <div className="mt-2 rounded-md border border-sky-300/20 bg-sky-400/10 px-2 py-1 text-[11px] font-semibold text-sky-100">
+                  {folderDropMode === "inside" ? "폴더 안에 넣기" : folderDropMode === "before" ? "이 위치로 이동" : "최상위로 이동"}
+                </div>
+              ) : null}
             </div>
-            {folderDropMode ? (
-              <div className="mt-2 rounded-md border border-sky-300/20 bg-sky-400/10 px-2 py-1 text-[11px] font-semibold text-sky-100">
-                {folderDropMode === "inside" ? "폴더 안에 넣기" : folderDropMode === "before" ? "이 위치로 이동" : "최상위로 이동"}
-              </div>
-            ) : null}
           </div>
         ) : null}
 

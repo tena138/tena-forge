@@ -454,6 +454,27 @@
   }
 }
 
+@keyframes tenaArchiveDragDangle {
+  0%,
+  100% {
+    transform: rotate(-1.25deg) translateY(0);
+  }
+  50% {
+    transform: rotate(1.25deg) translateY(1px);
+  }
+}
+
+.tena-archive-drag-dangle {
+  animation: tenaArchiveDragDangle 880ms ease-in-out infinite;
+  transform-origin: 50% -24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tena-archive-drag-dangle {
+    animation: none;
+  }
+}
+
 @keyframes landingAuroraA {
   from {
     transform: translate3d(-4%, -2%, 0) rotate(-3deg) scale(1.02);
