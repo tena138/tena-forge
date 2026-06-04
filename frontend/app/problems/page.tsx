@@ -81,7 +81,7 @@ const viewModeStorageKey = "tena.problemBrowser.viewMode";
 const customSubjectFiltersStorageKey = "tena.problemBrowser.customSubjects";
 const batchFoldersStorageKey = "tena.problemBrowser.batchFolders";
 const selectedProblemsStorageKey = "tena.problemBrowser.selectedIds";
-const archiveDragHotspotOffset = { x: -8, y: -6 };
+const archiveDragHotspotOffset = { x: -12, y: -18 };
 const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "all", label: "전체" },
   { value: "needs", label: "검토 필요" },
