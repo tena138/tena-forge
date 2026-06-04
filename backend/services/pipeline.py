@@ -1455,11 +1455,12 @@ def _extract_korean_problem_document(
     page_count: int,
     dpi: int,
     total_units: int,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[int, str]]:
     settings = get_settings()
     client = _openai_client()
     model_pool = _ai_model_pool()
     page_payloads: list[dict[str, Any]] = []
+    review_page_urls: dict[int, str] = {}
     processed_pages = 0
     for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
         chunk_len = sum(end - start for start, end in range_group)
@@ -1479,6 +1480,10 @@ def _extract_korean_problem_document(
             rendered_groups.append(rendered)
             rendered_pages += end - start
         pages = interleave_rendered_page_groups(rendered_groups)
+        for page in pages:
+            page_number = page.page_index + 1
+            filename = f"{batch_id}_page_{page_number}_review_source.png"
+            review_page_urls[page_number] = save_visual_bytes(page.png_bytes, filename)
         completed = 0
         set_progress(batch_id, f"국어 지문/문항 추출 중 (0/{len(pages)}페이지)", processed_pages + chunk_len, total_units)
         with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
@@ -1519,7 +1524,7 @@ def _extract_korean_problem_document(
                     total_units,
                 )
         processed_pages += chunk_len
-    return merge_korean_page_payloads(document_id, source_file, page_payloads)
+    return merge_korean_page_payloads(document_id, source_file, page_payloads), review_page_urls
 
 
 def _extract_korean_solution_items(
@@ -1613,7 +1618,7 @@ def _korean_problem_text(question: dict[str, Any], passage: dict[str, Any] | Non
     return "\n\n".join(part for part in parts if part.strip()).strip() or str(question.get("question_stem") or "")
 
 
-def _save_korean_document_results(db: Session, batch: Batch, document: dict[str, Any]) -> None:
+def _save_korean_document_results(db: Session, batch: Batch, document: dict[str, Any], review_page_urls: dict[int, str] | None = None) -> None:
     existing = db.query(KoreanExtractionDocument).filter(KoreanExtractionDocument.batch_id == batch.id).first()
     if existing:
         db.query(KoreanQuestion).filter(KoreanQuestion.document_id == existing.id).delete(synchronize_session=False)
@@ -1687,7 +1692,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
             choices=_normalize_problem_choices(question.get("choices")),
             has_visual=False,
             visual_url=None,
-            review_page_image_url=None,
+            review_page_image_url=(review_page_urls or {}).get(first_page),
             review_page_number=first_page,
             answer=question.get("answer"),
             solution_steps=question.get("solution"),
@@ -1723,7 +1728,7 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     set_progress(batch_id, "국어 추출 준비 완료", 0, total_units)
     document_id = f"korean-{batch.id}"
 
-    document = _extract_korean_problem_document(
+    document, review_page_urls = _extract_korean_problem_document(
         batch.problem_pdf_filename,
         batch_id,
         document_id,
@@ -1749,7 +1754,7 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
 
     set_progress(batch_id, "국어 지문/문항 저장 중", total_units, total_units)
     ensure_batch_active(batch_id)
-    _save_korean_document_results(db, batch, document)
+    _save_korean_document_results(db, batch, document, review_page_urls)
     ensure_batch_active(batch_id)
     batch.status = BatchStatus.done
     batch.processing_task = "full"
