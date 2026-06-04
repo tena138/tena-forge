@@ -1541,19 +1541,15 @@ function ProblemsBrowser() {
             className="pointer-events-none fixed z-[120]"
             style={{
               left: batchFolderDrag.x - batchFolderDrag.grabX,
-              top: batchFolderDrag.y + 22,
+              top: batchFolderDrag.y + 10,
               width: batchFolderDrag.previewWidth,
               transform: `rotate(${Math.max(-7, Math.min(7, (batchFolderDrag.x - batchFolderDrag.startX) * 0.04))}deg)`,
-              transformOrigin: `${batchFolderDrag.grabX}px -22px`,
+              transformOrigin: `${batchFolderDrag.grabX}px 0`,
             }}
           >
             <div
-              className="absolute -top-[22px] h-[22px] w-px bg-gradient-to-b from-sky-200/95 to-sky-400/25 shadow-[0_0_12px_rgba(125,211,252,0.7)]"
-              style={{ left: batchFolderDrag.grabX }}
-            />
-            <div
-              className="absolute -top-7 h-3 w-3 rounded-full border border-sky-100/80 bg-sky-300 shadow-[0_0_18px_rgba(125,211,252,0.9)]"
-              style={{ left: batchFolderDrag.grabX - 6 }}
+              className="absolute -top-1.5 h-1.5 w-10 rounded-t-full border-x border-t border-sky-300/45 bg-[#111022]/95 shadow-[0_0_12px_rgba(125,211,252,0.35)]"
+              style={{ left: batchFolderDrag.grabX - 20 }}
             />
             <div className="tena-archive-drag-dangle w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
               <div className="flex items-start gap-3">

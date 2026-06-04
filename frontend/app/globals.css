@@ -457,16 +457,16 @@
 @keyframes tenaArchiveDragDangle {
   0%,
   100% {
-    transform: rotate(-1.25deg) translateY(0);
+    transform: translateY(0);
   }
   50% {
-    transform: rotate(1.25deg) translateY(1px);
+    transform: translateY(1px);
   }
 }
 
 .tena-archive-drag-dangle {
   animation: tenaArchiveDragDangle 880ms ease-in-out infinite;
-  transform-origin: 50% -24px;
+  transform-origin: 50% 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
