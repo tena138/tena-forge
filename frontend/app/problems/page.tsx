@@ -81,6 +81,7 @@ const viewModeStorageKey = "tena.problemBrowser.viewMode";
 const customSubjectFiltersStorageKey = "tena.problemBrowser.customSubjects";
 const batchFoldersStorageKey = "tena.problemBrowser.batchFolders";
 const selectedProblemsStorageKey = "tena.problemBrowser.selectedIds";
+const archiveDragHotspotOffset = { x: -8, y: -6 };
 const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "all", label: "전체" },
   { value: "needs", label: "검토 필요" },
@@ -510,7 +511,7 @@ function ProblemsBrowser() {
       setBatchFolderDragState(nextDrag);
       if (!nextDrag.isDragging) return;
       event.preventDefault();
-      setResolvedFolderDropTarget(resolveBatchFolderDropTarget(event.clientX, event.clientY, current.folderId, current.kind));
+      setResolvedFolderDropTarget(resolveBatchFolderDropTarget(event.clientX + archiveDragHotspotOffset.x, event.clientY + archiveDragHotspotOffset.y, current.folderId, current.kind));
     };
 
     const finishDrag = (event: globalThis.PointerEvent) => {
@@ -518,7 +519,7 @@ function ProblemsBrowser() {
       if (!current || event.pointerId !== current.pointerId) return;
       if (current.isDragging) {
         event.preventDefault();
-        const target = resolveBatchFolderDropTarget(event.clientX, event.clientY, current.folderId, current.kind);
+        const target = resolveBatchFolderDropTarget(event.clientX + archiveDragHotspotOffset.x, event.clientY + archiveDragHotspotOffset.y, current.folderId, current.kind);
         if (target) applyBatchExplorerDrop(current, target);
         folderDragSuppressClickRef.current = true;
         window.setTimeout(() => {
@@ -1545,8 +1546,8 @@ function ProblemsBrowser() {
           <div
             className="pointer-events-none fixed z-[120]"
             style={{
-              left: batchFolderDrag.x - batchFolderDrag.grabX,
-              top: batchFolderDrag.y - batchFolderDrag.grabY,
+              left: batchFolderDrag.x + archiveDragHotspotOffset.x - batchFolderDrag.grabX,
+              top: batchFolderDrag.y + archiveDragHotspotOffset.y - batchFolderDrag.grabY,
               width: batchFolderDrag.previewWidth,
             }}
           >
