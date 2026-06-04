@@ -342,7 +342,7 @@ export function HeaderNotifications() {
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] border border-transparent bg-transparent text-slate-400 shadow-none transition hover:border-transparent hover:bg-transparent hover:text-white",
+          "relative inline-flex h-9 w-9 items-center justify-center overflow-visible rounded-[8px] border border-transparent bg-transparent text-slate-400 shadow-none transition hover:border-transparent hover:bg-transparent hover:text-white",
           unreadCount && "text-violet-100",
           activeStatusData && "text-cyan-100"
         )}
@@ -359,7 +359,7 @@ export function HeaderNotifications() {
         <Bell className="h-4 w-4" />
         {activeStatusData ? <Loader2 className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 animate-spin rounded-full bg-black/80 p-0.5 text-cyan-200" /> : null}
         {unreadCount ? (
-          <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-violet-400 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(0,0,0,0.65)]">
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-violet-400 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(0,0,0,0.78)]">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}
