@@ -441,21 +441,25 @@ def _choice_lines(choices: Any) -> list[str]:
     return [line for index, choice in enumerate(choices, start=1) if (line := _choice_label_text(choice, index))]
 
 
-def _korean_question_export_data(question: KoreanQuestion, order: int, total: int) -> dict[str, Any]:
+def _korean_question_export_data(question: KoreanQuestion, fallback_problem: dict[str, Any], order: int, total: int) -> dict[str, Any]:
     parts = [str(question.question_stem or "").strip(), str(question.additional_material or "").strip()]
     text = "\n\n".join(part for part in parts if part)
+    reviewed_text = str(fallback_problem.get("problem_text") or fallback_problem.get("text") or "").strip()
+    reviewed_choices = fallback_problem.get("choices") if isinstance(fallback_problem.get("choices"), list) else None
+    reviewed_answer = str(fallback_problem.get("answer") or "").strip()
+    reviewed_solution = str(fallback_problem.get("solution") or fallback_problem.get("solution_text") or "").strip()
     return {
-        "id": str(question.id),
+        "id": str(fallback_problem.get("id") or question.id),
         "layout_type": "korean_question",
         "number": order,
         "problem_number": question.question_number or order,
-        "text": normalize_geometry_notation(text),
-        "problem_text": normalize_geometry_notation(text),
-        "choices": question.choices or [],
-        "answer": question.answer or "",
-        "solution": question.solution or "",
-        "solution_text": question.solution or "",
-        "visual_url": "",
+        "text": normalize_geometry_notation(reviewed_text or text),
+        "problem_text": normalize_geometry_notation(reviewed_text or text),
+        "choices": reviewed_choices if reviewed_choices is not None else question.choices or [],
+        "answer": reviewed_answer or question.answer or "",
+        "solution": reviewed_solution or question.solution or "",
+        "solution_text": reviewed_solution or question.solution or "",
+        "visual_url": fallback_problem.get("visual_url") or "",
         "page_number": order,
         "total_pages": total,
     }
@@ -497,7 +501,7 @@ def _build_korean_passage_flow_items(problems: list[Problem], problem_data: list
         if not selected:
             continue
         order, fallback_problem = selected
-        question_entries.append((order, question, _korean_question_export_data(question, fallback_problem.get("number") or order + 1, len(problem_data))))
+        question_entries.append((order, question, _korean_question_export_data(question, fallback_problem, fallback_problem.get("number") or order + 1, len(problem_data))))
         used_problem_ids.add(str(fallback_problem.get("id") or ""))
 
     if not question_entries:

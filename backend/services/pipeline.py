@@ -1656,6 +1656,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
                 linked_question_ids=passage.get("linked_question_ids") or [],
                 extraction_confidence=float(passage.get("extraction_confidence") or 0),
                 warnings=passage.get("warnings") or [],
+                needs_review=True,
             )
         )
 
@@ -1697,7 +1698,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
             answer=question.get("answer"),
             solution_steps=question.get("solution"),
             key_concept=passage.get("passage_type") if passage else None,
-            needs_review=bool(combined_warnings),
+            needs_review=True,
             source_batch_id=batch.id,
             source_type=batch.source_type,
             source_label=batch.source_label,

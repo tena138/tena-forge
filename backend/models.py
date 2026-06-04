@@ -296,6 +296,7 @@ class KoreanPassageGroup(Base):
     linked_question_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     extraction_confidence: Mapped[float] = mapped_column(Numeric(6, 4), default=0, nullable=False)
     warnings: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 

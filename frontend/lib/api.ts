@@ -63,6 +63,8 @@ export type Batch = {
   created_at: string;
   problem_count: number;
   review_count: number;
+  review_item_count?: number;
+  pending_review_item_count?: number;
   tagged_count: number;
   untagged_count: number;
   progress_message?: string | null;
@@ -78,6 +80,47 @@ export type Batch = {
     unit_name?: string | null;
     page_range?: string | null;
   }> | null;
+};
+
+export type KoreanReviewLinkedQuestion = {
+  question_id: string;
+  problem_id?: string | null;
+  question_number?: string | null;
+  problem_number?: number | null;
+  needs_review: boolean;
+  source_pages?: number[];
+};
+
+export type KoreanReviewPassageItem = {
+  item_type: "passage";
+  id: string;
+  passage_id: string;
+  source_pages: number[];
+  passage_instruction?: string | null;
+  passage_title?: string | null;
+  passage_text: string;
+  passage_type: string;
+  linked_questions: KoreanReviewLinkedQuestion[];
+  review_page_image_url?: string | null;
+  review_page_number?: number | null;
+  needs_review: boolean;
+};
+
+export type KoreanReviewQuestionItem = {
+  item_type: "question";
+  id: string;
+  linked_passage_id?: string | null;
+  question_id?: string | null;
+  problem: Problem;
+};
+
+export type KoreanReviewItem = KoreanReviewPassageItem | KoreanReviewQuestionItem;
+
+export type KoreanReviewItemsResponse = {
+  batch_id: string;
+  review_item_count: number;
+  pending_review_item_count: number;
+  items: KoreanReviewItem[];
 };
 
 export type DashboardAnnouncement = {

@@ -12,12 +12,24 @@ from sqlalchemy.orm import Session
 
 from database import get_db, get_settings
 from limiter import limiter
-from models import Batch, BatchStatus, KoreanExtractionDocument, Problem, Tag
-from schemas import BatchRead, BatchStatusResponse, BatchUploadResponse, KoreanExtractionRead, SOURCE_TYPES
+from models import Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
+from schemas import (
+    BatchRead,
+    BatchStatusResponse,
+    BatchUploadResponse,
+    KoreanExtractionRead,
+    KoreanPassageGroupRead,
+    KoreanPassageReviewUpdate,
+    KoreanPassageUpdate,
+    KoreanReviewItemsRead,
+    ProblemListItem,
+    SOURCE_TYPES,
+)
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids
 from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progress_detail
+from services.private_files import sign_static_url
 from services.saas_security import ensure_subject_engine_access
 from services.storage import save_upload
 from services.subject_engines import infer_subject_engine_from_subjects, normalize_subject_engine
@@ -103,6 +115,44 @@ def _tagged_expression():
     )
 
 
+def _first_source_page(value: list | None) -> int:
+    if not value:
+        return 10**9
+    try:
+        return int(value[0])
+    except (TypeError, ValueError):
+        return 10**9
+
+
+def _serialize_problem_list_item(problem: Problem, batch: Batch):
+    owner_id = str(problem.owner_id or "")
+    item = ProblemListItem.model_validate(problem)
+    return item.model_copy(
+        update={
+            "visual_url": sign_static_url(item.visual_url, owner_id),
+            "review_page_image_url": sign_static_url(item.review_page_image_url, owner_id),
+            "batch_name": batch.name,
+            "batch_accent_color": normalize_batch_color(batch.accent_color) or batch_color_for_seed(batch.id or batch.name),
+        }
+    )
+
+
+def _korean_review_counts(db: Session, batch: Batch, problem_count: int, review_count: int) -> tuple[int, int]:
+    if (batch.subject_engine or "math") != "korean":
+        return problem_count, review_count
+    document = db.scalar(select(KoreanExtractionDocument).where(KoreanExtractionDocument.batch_id == batch.id))
+    if not document:
+        return problem_count, review_count
+    passage_count = db.scalar(select(func.count(KoreanPassageGroup.id)).where(KoreanPassageGroup.document_id == document.id)) or 0
+    passage_review_count = db.scalar(
+        select(func.count(KoreanPassageGroup.id)).where(
+            KoreanPassageGroup.document_id == document.id,
+            KoreanPassageGroup.needs_review.is_(True),
+        )
+    ) or 0
+    return problem_count + int(passage_count or 0), review_count + int(passage_review_count or 0)
+
+
 def _batch_read(
     db: Session,
     batch: Batch,
@@ -130,6 +180,7 @@ def _batch_read(
     problem_count = int(problem_count or 0)
     review_count = int(review_count or 0)
     tagged_count = int(tagged_count or 0)
+    review_item_count, pending_review_item_count = _korean_review_counts(db, batch, problem_count, review_count)
     progress = get_progress_detail(batch)
     return BatchRead.model_validate(
         {
@@ -150,6 +201,8 @@ def _batch_read(
             "created_at": batch.created_at,
             "problem_count": problem_count,
             "review_count": review_count,
+            "review_item_count": review_item_count,
+            "pending_review_item_count": pending_review_item_count,
             "tagged_count": tagged_count,
             "untagged_count": max(problem_count - tagged_count, 0),
             **progress,
@@ -352,6 +405,204 @@ def get_korean_extraction(batch_id: UUID, request: Request, db: Session = Depend
     payload.setdefault("source_file", document.source_file)
     payload.setdefault("global_warnings", document.global_warnings or [])
     return KoreanExtractionRead.model_validate(payload)
+
+
+def _owned_batch_or_404(batch_id: UUID, request: Request, db: Session) -> Batch:
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    return batch
+
+
+def _korean_document_or_404(db: Session, batch: Batch) -> KoreanExtractionDocument:
+    document = db.scalar(select(KoreanExtractionDocument).where(KoreanExtractionDocument.batch_id == batch.id))
+    if not document:
+        raise HTTPException(status_code=404, detail="Korean extraction result not found.")
+    return document
+
+
+def _korean_question_number(value: str | None) -> int | None:
+    if not value:
+        return None
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
+def _passage_payload(passage: KoreanPassageGroup) -> dict:
+    return {
+        "id": passage.id,
+        "passage_id": passage.passage_id,
+        "source_pages": passage.source_pages or [],
+        "passage_instruction": passage.passage_instruction,
+        "passage_title": passage.passage_title,
+        "passage_text": passage.passage_text or "",
+        "passage_type": passage.passage_type or "unknown",
+        "linked_question_ids": passage.linked_question_ids or [],
+        "extraction_confidence": float(passage.extraction_confidence or 0),
+        "warnings": passage.warnings or [],
+        "needs_review": bool(passage.needs_review),
+    }
+
+
+@router.get("/{batch_id}/korean/review-items", response_model=KoreanReviewItemsRead)
+@limiter.exempt
+def get_korean_review_items(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
+    batch = _owned_batch_or_404(batch_id, request, db)
+    document = _korean_document_or_404(db, batch)
+    passages = db.scalars(select(KoreanPassageGroup).where(KoreanPassageGroup.document_id == document.id)).all()
+    questions = db.scalars(select(KoreanQuestion).where(KoreanQuestion.document_id == document.id)).all()
+    problems = db.scalars(
+        select(Problem)
+        .where(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None))
+        .order_by(Problem.review_page_number.asc(), Problem.problem_number.asc(), Problem.created_at.asc(), Problem.id.asc())
+    ).all()
+
+    problem_by_number = {problem.problem_number: problem for problem in problems}
+    problem_by_question_id: dict[str, Problem] = {}
+    for question in questions:
+        number = _korean_question_number(question.question_number)
+        if number is not None and number in problem_by_number:
+            problem_by_question_id[str(question.question_id)] = problem_by_number[number]
+
+    questions_by_passage: dict[str, list[KoreanQuestion]] = {}
+    standalone_questions: list[KoreanQuestion] = []
+    for question in questions:
+        if question.linked_passage_id:
+            questions_by_passage.setdefault(str(question.linked_passage_id), []).append(question)
+        else:
+            standalone_questions.append(question)
+
+    for grouped in questions_by_passage.values():
+        grouped.sort(key=lambda item: (_korean_question_number(item.question_number) or 10**9, item.question_id))
+    standalone_questions.sort(key=lambda item: (_first_source_page(item.source_pages), _korean_question_number(item.question_number) or 10**9, item.question_id))
+
+    emitted_problem_ids: set[UUID] = set()
+    items: list[dict] = []
+    sorted_passages = sorted(passages, key=lambda item: (_first_source_page(item.source_pages), item.passage_id))
+    for passage in sorted_passages:
+        linked_questions = questions_by_passage.get(str(passage.passage_id), [])
+        linked_payloads = []
+        first_problem = None
+        for question in linked_questions:
+            problem = problem_by_question_id.get(str(question.question_id))
+            if first_problem is None and problem is not None:
+                first_problem = problem
+            linked_payloads.append(
+                {
+                    "question_id": str(question.question_id),
+                    "problem_id": problem.id if problem else None,
+                    "question_number": question.question_number,
+                    "problem_number": problem.problem_number if problem else None,
+                    "needs_review": bool(problem.needs_review) if problem else True,
+                    "source_pages": question.source_pages or [],
+                }
+            )
+        first_page = _first_source_page(passage.source_pages)
+        if first_page == 10**9:
+            first_page = first_problem.review_page_number if first_problem else None
+        review_url = sign_static_url(first_problem.review_page_image_url, str(first_problem.owner_id or "")) if first_problem else None
+        items.append(
+            {
+                "item_type": "passage",
+                "id": passage.id,
+                "passage_id": passage.passage_id,
+                "source_pages": passage.source_pages or [],
+                "passage_instruction": passage.passage_instruction,
+                "passage_title": passage.passage_title,
+                "passage_text": passage.passage_text or "",
+                "passage_type": passage.passage_type or "unknown",
+                "linked_questions": linked_payloads,
+                "review_page_image_url": review_url,
+                "review_page_number": first_page,
+                "needs_review": bool(passage.needs_review),
+            }
+        )
+        for question in linked_questions:
+            problem = problem_by_question_id.get(str(question.question_id))
+            if not problem:
+                continue
+            emitted_problem_ids.add(problem.id)
+            items.append(
+                {
+                    "item_type": "question",
+                    "id": problem.id,
+                    "linked_passage_id": question.linked_passage_id,
+                    "question_id": question.question_id,
+                    "problem": _serialize_problem_list_item(problem, batch),
+                }
+            )
+
+    for question in standalone_questions:
+        problem = problem_by_question_id.get(str(question.question_id))
+        if not problem or problem.id in emitted_problem_ids:
+            continue
+        emitted_problem_ids.add(problem.id)
+        items.append(
+            {
+                "item_type": "question",
+                "id": problem.id,
+                "linked_passage_id": question.linked_passage_id,
+                "question_id": question.question_id,
+                "problem": _serialize_problem_list_item(problem, batch),
+            }
+        )
+
+    orphan_problems = [problem for problem in problems if problem.id not in emitted_problem_ids]
+    for problem in orphan_problems:
+        items.append(
+            {
+                "item_type": "question",
+                "id": problem.id,
+                "linked_passage_id": None,
+                "question_id": None,
+                "problem": _serialize_problem_list_item(problem, batch),
+            }
+        )
+
+    pending_review_item_count = sum(1 for item in items if item.get("needs_review") or (item.get("problem") and item["problem"].needs_review))
+    return {
+        "batch_id": batch.id,
+        "review_item_count": len(items),
+        "pending_review_item_count": pending_review_item_count,
+        "items": items,
+    }
+
+
+@router.patch("/{batch_id}/korean/passages/{passage_id}/review", response_model=KoreanPassageGroupRead)
+def update_korean_passage_review(batch_id: UUID, passage_id: UUID, payload: KoreanPassageReviewUpdate, request: Request, db: Session = Depends(get_db)):
+    batch = _owned_batch_or_404(batch_id, request, db)
+    document = _korean_document_or_404(db, batch)
+    passage = db.scalar(select(KoreanPassageGroup).where(KoreanPassageGroup.id == passage_id, KoreanPassageGroup.document_id == document.id))
+    if not passage:
+        raise HTTPException(status_code=404, detail="Korean passage not found.")
+    passage.needs_review = payload.needs_review
+    db.commit()
+    db.refresh(passage)
+    return KoreanPassageGroupRead.model_validate(_passage_payload(passage))
+
+
+@router.patch("/{batch_id}/korean/passages/{passage_id}", response_model=KoreanPassageGroupRead)
+def update_korean_passage(batch_id: UUID, passage_id: UUID, payload: KoreanPassageUpdate, request: Request, db: Session = Depends(get_db)):
+    batch = _owned_batch_or_404(batch_id, request, db)
+    document = _korean_document_or_404(db, batch)
+    passage = db.scalar(select(KoreanPassageGroup).where(KoreanPassageGroup.id == passage_id, KoreanPassageGroup.document_id == document.id))
+    if not passage:
+        raise HTTPException(status_code=404, detail="Korean passage not found.")
+    changes = payload.model_dump(exclude_unset=True)
+    if "passage_text" in changes and not str(changes.get("passage_text") or "").strip():
+        raise HTTPException(status_code=400, detail="Passage text cannot be empty.")
+    for field, value in changes.items():
+        if field in {"passage_instruction", "passage_title", "passage_text", "passage_type"}:
+            setattr(passage, field, value)
+    passage.needs_review = True
+    db.commit()
+    db.refresh(passage)
+    return KoreanPassageGroupRead.model_validate(_passage_payload(passage))
 
 
 @router.get("/{batch_id}/status", response_model=BatchStatusResponse)

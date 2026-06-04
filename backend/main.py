@@ -358,6 +358,9 @@ def _ensure_sqlite_columns():
             "deleted_at": "DATETIME",
             "delete_scheduled_at": "DATETIME",
         },
+        "korean_passage_groups": {
+            "needs_review": "BOOLEAN DEFAULT 1 NOT NULL",
+        },
         "academies": {
             "account_type": "VARCHAR(20) DEFAULT 'academy' NOT NULL",
         },

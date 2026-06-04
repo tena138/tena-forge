@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useReviewHotkeys } from "@/hooks/useReviewHotkeys";
-import { api, assetUrl, Batch, Problem, Tag } from "@/lib/api";
+import { api, assetUrl, Batch, KoreanReviewItem, KoreanReviewItemsResponse, KoreanReviewPassageItem, Problem, Tag } from "@/lib/api";
 import { inferReviewAutofill } from "@/lib/review/autofill";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +36,17 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 type Difficulty = "하" | "중" | "상" | "최상";
 type MetadataField = "subject" | "unit" | "problem_type";
 type SelectionBox = { x: number; y: number; width: number; height: number };
+type OriginalPageTarget = {
+  id: string;
+  review_page_image_url?: string | null;
+  review_page_number?: number | null;
+};
+type PassageDraft = {
+  passage_instruction: string;
+  passage_title: string;
+  passage_text: string;
+  passage_type: string;
+};
 type MetadataDraft = {
   subject: string;
   unit: string;
@@ -126,6 +137,29 @@ function findNextUnreviewed(problems: Problem[], fromIndex: number) {
   return null;
 }
 
+function reviewItemId(item: KoreanReviewItem) {
+  return item.item_type === "passage" ? `passage:${item.id}` : item.problem.id;
+}
+
+function reviewItemNeedsReview(item: KoreanReviewItem) {
+  return item.item_type === "passage" ? item.needs_review : item.problem.needs_review;
+}
+
+function questionProblemFromItem(item: KoreanReviewItem): Problem | null {
+  return item.item_type === "question" ? item.problem : null;
+}
+
+function findNextUnreviewedItem(items: KoreanReviewItem[], fromIndex: number) {
+  if (!items.length) return null;
+  for (let i = fromIndex + 1; i < items.length; i += 1) {
+    if (reviewItemNeedsReview(items[i])) return items[i];
+  }
+  for (let i = 0; i <= fromIndex; i += 1) {
+    if (reviewItemNeedsReview(items[i])) return items[i];
+  }
+  return null;
+}
+
 async function fetchAllProblems(batchId: string) {
   const collected: Problem[] = [];
   let page = 1;
@@ -165,8 +199,11 @@ function ProblemReviewClient() {
   const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], problem_types: [], sources: [] });
   const [selectedBatchId, setSelectedBatchId] = useState(requestedBatchId);
   const [problems, setProblems] = useState<Problem[]>([]);
+  const [koreanReviewItems, setKoreanReviewItems] = useState<KoreanReviewItem[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [current, setCurrent] = useState<Problem | null>(null);
+  const [passageDraft, setPassageDraft] = useState<PassageDraft>({ passage_instruction: "", passage_title: "", passage_text: "", passage_type: "" });
+  const [savingPassage, setSavingPassage] = useState(false);
   const [metadata, setMetadata] = useState<MetadataDraft>(emptyMetadata);
   const [problemTextDraft, setProblemTextDraft] = useState("");
   const [loadingBatches, setLoadingBatches] = useState(true);
@@ -192,21 +229,37 @@ function ProblemReviewClient() {
   const loadedProblemIdRef = useRef<string | null>(null);
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
-  const currentIndex = useMemo(() => problems.findIndex((problem) => problem.id === currentId), [currentId, problems]);
-  const currentListItem = currentIndex >= 0 ? problems[currentIndex] : null;
-  const totalCount = selectedBatch?.problem_count || problems.length;
-  const reviewedCount = problems.length
-    ? problems.filter((problem) => !problem.needs_review).length
+  const isKoreanBatch = selectedBatch?.subject_engine === "korean";
+  const reviewItems = useMemo<KoreanReviewItem[]>(
+    () => isKoreanBatch ? koreanReviewItems : problems.map((problem) => ({ item_type: "question" as const, id: problem.id, problem })),
+    [isKoreanBatch, koreanReviewItems, problems],
+  );
+  const currentIndex = useMemo(() => reviewItems.findIndex((item) => reviewItemId(item) === currentId), [currentId, reviewItems]);
+  const currentReviewItem = currentIndex >= 0 ? reviewItems[currentIndex] : null;
+  const currentPassage = currentReviewItem?.item_type === "passage" ? currentReviewItem : null;
+  const currentListItem = currentReviewItem?.item_type === "question" ? currentReviewItem.problem : null;
+  const passageDraftDirty = Boolean(
+    currentPassage &&
+      (
+        passageDraft.passage_instruction !== (currentPassage.passage_instruction || "") ||
+        passageDraft.passage_title !== (currentPassage.passage_title || "") ||
+        passageDraft.passage_text !== (currentPassage.passage_text || "") ||
+        passageDraft.passage_type !== (currentPassage.passage_type || "")
+      ),
+  );
+  const totalCount = isKoreanBatch ? selectedBatch?.review_item_count || reviewItems.length : selectedBatch?.problem_count || problems.length;
+  const reviewedCount = reviewItems.length
+    ? reviewItems.filter((item) => !reviewItemNeedsReview(item)).length
     : selectedBatch
-      ? Math.max(selectedBatch.problem_count - selectedBatch.review_count, 0)
+      ? Math.max(totalCount - (isKoreanBatch ? selectedBatch.pending_review_item_count ?? selectedBatch.review_count : selectedBatch.review_count), 0)
       : 0;
   const progressPercent = totalCount ? Math.min(100, Math.round((reviewedCount / totalCount) * 100)) : 0;
   const pendingCount = Math.max(totalCount - reviewedCount, 0);
 
   useEffect(() => {
-    const visibleIds = new Set(problems.map((problem) => problem.id));
+    const visibleIds = new Set(reviewItems.map(reviewItemId));
     setSelectedProblemIds((currentIds) => currentIds.filter((id) => visibleIds.has(id)));
-  }, [problems]);
+  }, [reviewItems]);
 
   const saveMetadataNow = useCallback(
     async (problem = current, nextMetadata = metadata) => {
@@ -227,6 +280,9 @@ function ProblemReviewClient() {
         const updatedProblem = { ...problem, tags: updatedTags };
         setCurrent(updatedProblem);
         setProblems((prev) => prev.map((item) => (item.id === problemId ? { ...item, tags: updatedTags } : item)));
+        setKoreanReviewItems((prev) =>
+          prev.map((item) => item.item_type === "question" && item.problem.id === problemId ? { ...item, problem: { ...item.problem, tags: updatedTags } } : item),
+        );
         setSaveState("saved");
       } catch {
         if (seq === saveSeqRef.current) {
@@ -280,6 +336,9 @@ function ProblemReviewClient() {
           }
         }
         setProblems((items) => items.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+        setKoreanReviewItems((items) =>
+          items.map((item) => item.item_type === "question" && item.problem.id === updated.id ? { ...item, problem: { ...item.problem, ...updated } } : item),
+        );
         if (isLatestTextSave && latestProblemTextDraftRef.current === nextText) {
           setSaveState("saved");
         }
@@ -307,9 +366,9 @@ function ProblemReviewClient() {
         if (cancelled) return;
         setBatches(data);
         setSelectedBatchId((currentBatchId) => {
-          if (requestedBatchId && data.some((batch) => batch.id === requestedBatchId && batch.problem_count > 0)) return requestedBatchId;
-          if (currentBatchId && data.some((batch) => batch.id === currentBatchId && batch.problem_count > 0)) return currentBatchId;
-          return data.find((batch) => batch.review_count > 0)?.id || data.find((batch) => batch.problem_count > 0)?.id || "";
+          if (requestedBatchId && data.some((batch) => batch.id === requestedBatchId && (batch.review_item_count ?? batch.problem_count) > 0)) return requestedBatchId;
+          if (currentBatchId && data.some((batch) => batch.id === currentBatchId && (batch.review_item_count ?? batch.problem_count) > 0)) return currentBatchId;
+          return data.find((batch) => (batch.pending_review_item_count ?? batch.review_count) > 0)?.id || data.find((batch) => (batch.review_item_count ?? batch.problem_count) > 0)?.id || "";
         });
       })
       .catch(() => setError("배치 목록을 불러오지 못했습니다."))
@@ -329,6 +388,7 @@ function ProblemReviewClient() {
   useEffect(() => {
     if (!selectedBatchId) {
       setProblems([]);
+      setKoreanReviewItems([]);
       setCurrentId(null);
       return;
     }
@@ -336,18 +396,30 @@ function ProblemReviewClient() {
     let cancelled = false;
     setLoadingProblems(true);
     setError(null);
-    fetchAllProblems(selectedBatchId)
+    const load = isKoreanBatch
+      ? api<KoreanReviewItemsResponse>(`/api/batches/${selectedBatchId}/korean/review-items`).then((data) => {
+          const questionProblems = data.items.map(questionProblemFromItem).filter((problem): problem is Problem => Boolean(problem));
+          return { items: data.items, problems: questionProblems };
+        })
+      : fetchAllProblems(selectedBatchId).then((data) => ({
+          items: data.map((problem) => ({ item_type: "question" as const, id: problem.id, problem })),
+          problems: data,
+        }));
+    load
       .then((data) => {
         if (cancelled) return;
-        setProblems(data);
+        setKoreanReviewItems(isKoreanBatch ? data.items : []);
+        setProblems(data.problems);
         setCurrentId((currentValue) => {
-          if (currentValue && data.some((problem) => problem.id === currentValue)) return currentValue;
-          return data.find((problem) => problem.needs_review)?.id || data[0]?.id || null;
+          if (currentValue && data.items.some((item) => reviewItemId(item) === currentValue)) return currentValue;
+          const next = data.items.find(reviewItemNeedsReview) || data.items[0];
+          return next ? reviewItemId(next) : null;
         });
       })
       .catch(() => {
         if (!cancelled) {
           setProblems([]);
+          setKoreanReviewItems([]);
           setCurrentId(null);
           setError("문항 목록을 불러오지 못했습니다.");
         }
@@ -358,14 +430,34 @@ function ProblemReviewClient() {
     return () => {
       cancelled = true;
     };
-  }, [selectedBatchId]);
+  }, [isKoreanBatch, selectedBatchId]);
 
   useEffect(() => {
+    if (currentPassage) {
+      loadedProblemIdRef.current = null;
+      setCurrent(null);
+      setMetadata(emptyMetadata);
+      setProblemTextDraft("");
+      setPassageDraft({
+        passage_instruction: currentPassage.passage_instruction || "",
+        passage_title: currentPassage.passage_title || "",
+        passage_text: currentPassage.passage_text || "",
+        passage_type: currentPassage.passage_type || "",
+      });
+      setSolutionOpen(true);
+      setRawOpen(false);
+      setSaveState("idle");
+      setSavedVisualUrl(null);
+      setDeletingVisual(false);
+      setLoadingCurrent(false);
+      return;
+    }
     if (!currentListItem?.id) {
       loadedProblemIdRef.current = null;
       setCurrent(null);
       setMetadata(emptyMetadata);
       setProblemTextDraft("");
+      setPassageDraft({ passage_instruction: "", passage_title: "", passage_text: "", passage_type: "" });
       setSaveState("idle");
       setSavedVisualUrl(null);
       setDeletingVisual(false);
@@ -382,6 +474,7 @@ function ProblemReviewClient() {
         setCurrent(problem);
         setMetadata(metadataFromProblem(problem, selectedBatch));
         setProblemTextDraft(problem.problem_text || "");
+        setPassageDraft({ passage_instruction: "", passage_title: "", passage_text: "", passage_type: "" });
         setSolutionOpen(true);
         setRawOpen(false);
         setSaveState("idle");
@@ -397,7 +490,7 @@ function ProblemReviewClient() {
     return () => {
       cancelled = true;
     };
-  }, [currentListItem?.id, selectedBatch]);
+  }, [currentListItem?.id, currentPassage, selectedBatch]);
 
   useEffect(() => {
     if (!current || current.id !== loadedProblemIdRef.current) return;
@@ -454,23 +547,23 @@ function ProblemReviewClient() {
 
   const moveToIndex = useCallback(
     async (nextIndex: number) => {
-      if (!problems.length) return;
+      if (!reviewItems.length) return;
       const textSaved = await saveProblemTextNow();
       if (!textSaved) return;
       await flushPendingSave();
-      const bounded = Math.max(0, Math.min(problems.length - 1, nextIndex));
-      setCurrentId(problems[bounded].id);
+      const bounded = Math.max(0, Math.min(reviewItems.length - 1, nextIndex));
+      setCurrentId(reviewItemId(reviewItems[bounded]));
     },
-    [flushPendingSave, problems, saveProblemTextNow],
+    [flushPendingSave, reviewItems, saveProblemTextNow],
   );
 
   const openProblemById = useCallback(
     async (problemId: string) => {
-      const nextIndex = problems.findIndex((problem) => problem.id === problemId);
+      const nextIndex = reviewItems.findIndex((item) => reviewItemId(item) === problemId);
       if (nextIndex < 0) return;
       await moveToIndex(nextIndex);
     },
-    [moveToIndex, problems],
+    [moveToIndex, reviewItems],
   );
 
   const movePrevious = useCallback(() => {
@@ -497,15 +590,95 @@ function ProblemReviewClient() {
     setMetadata((prev) => ({ ...prev, difficulty: prev.difficulty === difficulty ? "" : difficulty }));
   }, []);
 
+  const saveCurrentPassage = useCallback(async () => {
+    if (!currentPassage || !selectedBatchId || savingPassage) return true;
+    if (!passageDraft.passage_text.trim()) {
+      setSaveState("error");
+      setError("지문 본문을 비워둘 수 없습니다.");
+      return false;
+    }
+    if (!passageDraftDirty) return true;
+
+    setSavingPassage(true);
+    setSaveState("saving");
+    setError(null);
+    try {
+      const updated = await api<Partial<KoreanReviewPassageItem>>(`/api/batches/${selectedBatchId}/korean/passages/${currentPassage.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(passageDraft),
+      });
+      const wasPending = currentPassage.needs_review;
+      const updatedItem = {
+        ...currentPassage,
+        passage_instruction: updated.passage_instruction ?? passageDraft.passage_instruction,
+        passage_title: updated.passage_title ?? passageDraft.passage_title,
+        passage_text: updated.passage_text ?? passageDraft.passage_text,
+        passage_type: updated.passage_type ?? passageDraft.passage_type,
+        needs_review: updated.needs_review ?? true,
+      };
+      setKoreanReviewItems((items) =>
+        items.map((item) => item.item_type === "passage" && item.id === currentPassage.id ? updatedItem : item),
+      );
+      if (!wasPending && updatedItem.needs_review) {
+        setBatches((prev) =>
+          prev.map((batch) =>
+            batch.id === selectedBatchId
+              ? { ...batch, pending_review_item_count: (batch.pending_review_item_count ?? batch.review_count ?? 0) + 1 }
+              : batch,
+          ),
+        );
+      }
+      setSaveState("saved");
+      return true;
+    } catch {
+      setSaveState("error");
+      setError("지문 저장에 실패했습니다.");
+      return false;
+    } finally {
+      setSavingPassage(false);
+    }
+  }, [currentPassage, passageDraft, passageDraftDirty, savingPassage, selectedBatchId]);
+
   const markReviewedAndNext = useCallback(async () => {
-    if (!current || busyAction) return;
-    const textSaved = await saveProblemTextNow();
-    if (!textSaved) return;
-    await flushPendingSave();
+    if (!currentReviewItem || busyAction) return;
+    if (currentReviewItem.item_type === "passage") {
+      const passageSaved = await saveCurrentPassage();
+      if (!passageSaved) return;
+    } else {
+      const textSaved = await saveProblemTextNow();
+      if (!textSaved) return;
+      await flushPendingSave();
+    }
     setBusyAction("review");
     setSaveState("saving");
     setError(null);
     try {
+      if (currentReviewItem.item_type === "passage") {
+        await api(`/api/batches/${selectedBatchId}/korean/passages/${currentReviewItem.id}/review`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ needs_review: false }),
+        });
+        const updatedItems = reviewItems.map((item) =>
+          item.item_type === "passage" && item.id === currentReviewItem.id ? { ...item, needs_review: false } : item,
+        );
+        setKoreanReviewItems((items) =>
+          items.map((item) => item.item_type === "passage" && item.id === currentReviewItem.id ? { ...item, needs_review: false } : item),
+        );
+        setBatches((prev) =>
+          prev.map((batch) =>
+            batch.id === selectedBatchId
+              ? { ...batch, pending_review_item_count: Math.max((batch.pending_review_item_count ?? batch.review_count ?? 0) - (currentReviewItem.needs_review ? 1 : 0), 0) }
+              : batch,
+          ),
+        );
+        const next = findNextUnreviewedItem(updatedItems, currentIndex);
+        setCurrentId(next ? reviewItemId(next) : null);
+        setSaveState("saved");
+        return;
+      }
+      if (!current) return;
       await api<Problem>(`/api/problems/${current.id}/review`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -513,17 +686,29 @@ function ProblemReviewClient() {
       });
 
       const updatedProblems = problems.map((problem) => (problem.id === current.id ? { ...problem, needs_review: false } : problem));
+      const updatedItems = reviewItems.map((item) =>
+        item.item_type === "question" && item.problem.id === current.id ? { ...item, problem: { ...item.problem, needs_review: false } } : item,
+      );
       setProblems(updatedProblems);
+      if (isKoreanBatch) {
+        setKoreanReviewItems((items) =>
+          items.map((item) => item.item_type === "question" && item.problem.id === current.id ? { ...item, problem: { ...item.problem, needs_review: false } } : item),
+        );
+      }
       setCurrent((prev) => (prev ? { ...prev, needs_review: false } : prev));
       setBatches((prev) =>
         prev.map((batch) =>
           batch.id === selectedBatchId
-            ? { ...batch, review_count: Math.max((batch.review_count || 0) - 1, 0) }
+            ? {
+                ...batch,
+                review_count: Math.max((batch.review_count || 0) - 1, 0),
+                pending_review_item_count: Math.max((batch.pending_review_item_count ?? batch.review_count ?? 0) - 1, 0),
+              }
             : batch,
         ),
       );
-      const next = findNextUnreviewed(updatedProblems, currentIndex);
-      setCurrentId(next?.id || null);
+      const next = isKoreanBatch ? findNextUnreviewedItem(updatedItems, currentIndex) : findNextUnreviewed(updatedProblems, currentIndex);
+      setCurrentId(next ? (isKoreanBatch ? reviewItemId(next as KoreanReviewItem) : (next as Problem).id) : null);
       setSaveState("saved");
     } catch {
       setSaveState("error");
@@ -531,26 +716,44 @@ function ProblemReviewClient() {
     } finally {
       setBusyAction(null);
     }
-  }, [busyAction, current, currentIndex, flushPendingSave, problems, saveProblemTextNow, selectedBatchId]);
+  }, [busyAction, current, currentIndex, currentReviewItem, flushPendingSave, isKoreanBatch, koreanReviewItems, problems, reviewItems, saveCurrentPassage, saveProblemTextNow, selectedBatchId]);
 
   const markSelectedReviewed = useCallback(async () => {
     if (!selectedProblemIds.length || busyAction) return;
     const selectedSet = new Set(selectedProblemIds);
-    const targets = problems.filter((problem) => selectedSet.has(problem.id) && problem.needs_review);
+    const targets = reviewItems.filter((item) => selectedSet.has(reviewItemId(item)) && reviewItemNeedsReview(item));
     if (!targets.length) {
       setSelectedProblemIds([]);
       return;
     }
-    const textSaved = await saveProblemTextNow();
-    if (!textSaved) return;
-    await flushPendingSave();
+    const questionTargets = targets
+      .map(questionProblemFromItem)
+      .filter((problem): problem is Problem => Boolean(problem));
+    const passageTargets = targets.filter((item): item is KoreanReviewPassageItem => item.item_type === "passage");
+    if (currentReviewItem?.item_type === "passage" && selectedSet.has(reviewItemId(currentReviewItem))) {
+      const passageSaved = await saveCurrentPassage();
+      if (!passageSaved) return;
+    } else {
+      const textSaved = await saveProblemTextNow();
+      if (!textSaved) return;
+      await flushPendingSave();
+    }
     setBusyAction("review");
     setSaveState("saving");
     setError(null);
     try {
       await Promise.all(
-        targets.map((problem) =>
+        questionTargets.map((problem) =>
           api<Problem>(`/api/problems/${problem.id}/review`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ needs_review: false }),
+          }),
+        ),
+      );
+      await Promise.all(
+        passageTargets.map((passage) =>
+          api(`/api/batches/${selectedBatchId}/korean/passages/${passage.id}/review`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ needs_review: false }),
@@ -561,18 +764,38 @@ function ProblemReviewClient() {
       const updatedProblems = problems.map((problem) =>
         selectedSet.has(problem.id) ? { ...problem, needs_review: false } : problem,
       );
+      const updatedItems = reviewItems.map((item) => {
+        const id = reviewItemId(item);
+        if (!selectedSet.has(id)) return item;
+        if (item.item_type === "passage") return { ...item, needs_review: false };
+        return { ...item, problem: { ...item.problem, needs_review: false } };
+      });
       setProblems(updatedProblems);
+      if (isKoreanBatch) {
+        setKoreanReviewItems((items) =>
+          items.map((item) => {
+            const id = reviewItemId(item);
+            if (!selectedSet.has(id)) return item;
+            if (item.item_type === "passage") return { ...item, needs_review: false };
+            return { ...item, problem: { ...item.problem, needs_review: false } };
+          }),
+        );
+      }
       setCurrent((prev) => (prev && selectedSet.has(prev.id) ? { ...prev, needs_review: false } : prev));
       setBatches((prev) =>
         prev.map((batch) =>
           batch.id === selectedBatchId
-            ? { ...batch, review_count: Math.max((batch.review_count || 0) - targets.length, 0) }
+            ? {
+                ...batch,
+                review_count: Math.max((batch.review_count || 0) - questionTargets.length, 0),
+                pending_review_item_count: Math.max((batch.pending_review_item_count ?? batch.review_count ?? 0) - targets.length, 0),
+              }
             : batch,
         ),
       );
-      if (current && selectedSet.has(current.id)) {
-        const next = findNextUnreviewed(updatedProblems, currentIndex);
-        setCurrentId(next?.id || null);
+      if (currentReviewItem && selectedSet.has(reviewItemId(currentReviewItem))) {
+        const next = isKoreanBatch ? findNextUnreviewedItem(updatedItems, currentIndex) : findNextUnreviewed(updatedProblems, currentIndex);
+        setCurrentId(next ? (isKoreanBatch ? reviewItemId(next as KoreanReviewItem) : (next as Problem).id) : null);
       }
       setSelectedProblemIds([]);
       setSaveState("saved");
@@ -582,7 +805,7 @@ function ProblemReviewClient() {
     } finally {
       setBusyAction(null);
     }
-  }, [busyAction, current, currentIndex, flushPendingSave, problems, saveProblemTextNow, selectedBatchId, selectedProblemIds]);
+  }, [busyAction, currentReviewItem, currentIndex, flushPendingSave, isKoreanBatch, problems, reviewItems, saveCurrentPassage, saveProblemTextNow, selectedBatchId, selectedProblemIds]);
 
   const requestReextract = useCallback(async () => {
     if (!current || busyAction) return;
@@ -656,7 +879,7 @@ function ProblemReviewClient() {
   }, [busyAction, current, deletingVisual, savedVisualUrl]);
 
   useReviewHotkeys({
-    enabled: Boolean(current),
+    enabled: Boolean(currentReviewItem),
     shortcutsPaused: helpOpen,
     onComplete: () => void markReviewedAndNext(),
     onNext: moveNext,
@@ -670,13 +893,14 @@ function ProblemReviewClient() {
   });
 
   const manualRetry = useCallback(() => {
-    void saveMetadataNow();
-  }, [saveMetadataNow]);
+    if (currentPassage) void saveCurrentPassage();
+    else void saveMetadataNow();
+  }, [currentPassage, saveCurrentPassage, saveMetadataNow]);
 
-  const reviewReady = Boolean(selectedBatchId && current && !loadingCurrent);
+  const reviewReady = Boolean(selectedBatchId && currentReviewItem && (!loadingCurrent || currentPassage));
   const problemTextDirty = Boolean(current && problemTextDraft !== (current.problem_text || ""));
   const currentPageProblems = useMemo(() => {
-    const pageNumber = current?.review_page_number || currentListItem?.review_page_number;
+    const pageNumber = current?.review_page_number || currentPassage?.review_page_number || currentListItem?.review_page_number;
     if (!pageNumber) return current ? [current] : [];
     const byId = new Map<string, Problem>();
     problems
@@ -687,12 +911,12 @@ function ProblemReviewClient() {
       if (left.problem_number !== right.problem_number) return left.problem_number - right.problem_number;
       return left.id.localeCompare(right.id);
     });
-  }, [current, currentListItem?.review_page_number, problems]);
+  }, [current, currentListItem?.review_page_number, currentPassage?.review_page_number, problems]);
 
   return (
     <div className="min-w-0 space-y-4">
       <ReviewStatusBar
-        batches={batches.filter((batch) => batch.problem_count > 0)}
+        batches={batches.filter((batch) => (batch.review_item_count ?? batch.problem_count) > 0)}
         selectedBatch={selectedBatch}
         batchMenuOpen={batchMenuOpen}
         setBatchMenuOpen={setBatchMenuOpen}
@@ -708,9 +932,9 @@ function ProblemReviewClient() {
         pendingCount={pendingCount}
       />
 
-      {selectedBatchId && problems.length && !loadingProblems ? (
+      {selectedBatchId && reviewItems.length && !loadingProblems ? (
         <ReviewProblemSelector
-          problems={problems}
+          items={reviewItems}
           currentId={currentId}
           selectedIds={selectedProblemIds}
           onSelectionChange={setSelectedProblemIds}
@@ -741,10 +965,11 @@ function ProblemReviewClient() {
       ) : (
         <div className="grid min-h-[calc(100vh-190px)] gap-4 xl:grid-cols-2">
           <OriginalPagePanel
-            problem={current}
+            problem={current || currentPassage}
             loading={loadingCurrent}
             pageProblems={currentPageProblems}
             currentProblemId={currentId}
+            cropProblemId={current?.id || null}
             onOpenProblem={(problemId) => void openProblemById(problemId)}
             onVisualSaved={(updated) => {
               setCurrent(updated);
@@ -753,31 +978,42 @@ function ProblemReviewClient() {
               setSaveState("saved");
             }}
           />
-          <ExtractionPanel
-            problem={current}
-            loading={loadingCurrent}
-            problemTextDraft={problemTextDraft}
-            problemTextDirty={problemTextDirty}
-            savingProblemText={savingProblemText}
-            metadata={metadata}
-            facets={facets}
-            solutionOpen={solutionOpen}
-            rawOpen={rawOpen}
-            setRawOpen={setRawOpen}
-            setSolutionOpen={setSolutionOpen}
-            onProblemTextChange={setProblemTextDraft}
-            onProblemTextSave={() => void saveProblemTextNow()}
-            onMetadataChange={updateMetadataField}
-            onReleaseAutofill={releaseAutofill}
-            onDifficulty={toggleDifficulty}
-            onReextract={() => void requestReextract()}
-            onTrash={() => void requestTrash()}
-            reextracting={busyAction === "reextract"}
-            trashing={busyAction === "trash"}
-            savedVisualUrl={savedVisualUrl}
-            deletingVisual={deletingVisual}
-            onVisualDelete={() => void deleteSavedVisual()}
-          />
+          {currentPassage ? (
+            <PassageReviewPanel
+              passage={currentPassage}
+              draft={passageDraft}
+              dirty={passageDraftDirty}
+              saving={savingPassage}
+              onDraftChange={setPassageDraft}
+              onSave={() => void saveCurrentPassage()}
+            />
+          ) : (
+            <ExtractionPanel
+              problem={current}
+              loading={loadingCurrent}
+              problemTextDraft={problemTextDraft}
+              problemTextDirty={problemTextDirty}
+              savingProblemText={savingProblemText}
+              metadata={metadata}
+              facets={facets}
+              solutionOpen={solutionOpen}
+              rawOpen={rawOpen}
+              setRawOpen={setRawOpen}
+              setSolutionOpen={setSolutionOpen}
+              onProblemTextChange={setProblemTextDraft}
+              onProblemTextSave={() => void saveProblemTextNow()}
+              onMetadataChange={updateMetadataField}
+              onReleaseAutofill={releaseAutofill}
+              onDifficulty={toggleDifficulty}
+              onReextract={() => void requestReextract()}
+              onTrash={() => void requestTrash()}
+              reextracting={busyAction === "reextract"}
+              trashing={busyAction === "trash"}
+              savedVisualUrl={savedVisualUrl}
+              deletingVisual={deletingVisual}
+              onVisualDelete={() => void deleteSavedVisual()}
+            />
+          )}
         </div>
       )}
 
@@ -857,13 +1093,21 @@ function ReviewStatusBar({
                   )}
                   onClick={() => onSelectBatch(batch.id)}
                 >
+                  {(() => {
+                    const itemCount = batch.review_item_count ?? batch.problem_count;
+                    const pendingItems = batch.pending_review_item_count ?? batch.review_count;
+                    return (
+                      <>
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{batch.name}</span>
                     <span className="text-xs text-slate-500">
-                      전체 {batch.problem_count.toLocaleString("ko-KR")} · 대기 {batch.review_count.toLocaleString("ko-KR")}
+                      전체 {itemCount.toLocaleString("ko-KR")} · 대기 {pendingItems.toLocaleString("ko-KR")}
                     </span>
                   </span>
-                  <Badge variant={batch.review_count > 0 ? "warning" : "success"}>{batch.review_count} 대기</Badge>
+                  <Badge variant={pendingItems > 0 ? "warning" : "success"}>{pendingItems} 대기</Badge>
+                      </>
+                    );
+                  })()}
                 </button>
               ))
             ) : (
@@ -934,7 +1178,7 @@ function sameIdSet(left: string[], right: string[]) {
 }
 
 function ReviewProblemSelector({
-  problems,
+  items,
   currentId,
   selectedIds,
   onSelectionChange,
@@ -942,11 +1186,11 @@ function ReviewProblemSelector({
   onMarkSelectedReviewed,
   markingSelected,
 }: {
-  problems: Problem[];
+  items: KoreanReviewItem[];
   currentId: string | null;
   selectedIds: string[];
   onSelectionChange: Dispatch<SetStateAction<string[]>>;
-  onOpenProblem: (problemId: string) => void;
+  onOpenProblem: (itemId: string) => void;
   onMarkSelectedReviewed: () => void;
   markingSelected: boolean;
 }) {
@@ -964,20 +1208,20 @@ function ReviewProblemSelector({
   const [expanded, setExpanded] = useState(false);
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const currentIndex = useMemo(() => problems.findIndex((problem) => problem.id === currentId), [problems, currentId]);
-  const currentProblem = currentIndex >= 0 ? problems[currentIndex] : null;
+  const currentIndex = useMemo(() => items.findIndex((item) => reviewItemId(item) === currentId), [items, currentId]);
+  const currentItem = currentIndex >= 0 ? items[currentIndex] : null;
   const selectedNeedsReviewCount = useMemo(
-    () => problems.filter((problem) => selectedSet.has(problem.id) && problem.needs_review).length,
-    [problems, selectedSet],
+    () => items.filter((item) => selectedSet.has(reviewItemId(item)) && reviewItemNeedsReview(item)).length,
+    [items, selectedSet],
   );
-  const pendingCount = useMemo(() => problems.filter((problem) => problem.needs_review).length, [problems]);
+  const pendingCount = useMemo(() => items.filter(reviewItemNeedsReview).length, [items]);
 
   function moveBy(delta: number) {
-    if (!problems.length) return;
+    if (!items.length) return;
     const baseIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = Math.min(problems.length - 1, Math.max(0, baseIndex + delta));
-    const next = problems[nextIndex];
-    if (next) onOpenProblem(next.id);
+    const nextIndex = Math.min(items.length - 1, Math.max(0, baseIndex + delta));
+    const next = items[nextIndex];
+    if (next) onOpenProblem(reviewItemId(next));
   }
 
   useEffect(() => {
@@ -992,11 +1236,11 @@ function ReviewProblemSelector({
     };
   }, []);
 
-  function toggleSelection(problemId: string, checked?: boolean) {
+  function toggleSelection(itemId: string, checked?: boolean) {
     onSelectionChange((currentIds) => {
-      const shouldSelect = checked ?? !currentIds.includes(problemId);
-      if (shouldSelect) return currentIds.includes(problemId) ? currentIds : [...currentIds, problemId];
-      return currentIds.filter((id) => id !== problemId);
+      const shouldSelect = checked ?? !currentIds.includes(itemId);
+      if (shouldSelect) return currentIds.includes(itemId) ? currentIds : [...currentIds, itemId];
+      return currentIds.filter((id) => id !== itemId);
     });
   }
 
@@ -1007,14 +1251,14 @@ function ReviewProblemSelector({
       top: box.y,
       bottom: box.y + box.height,
     };
-    const nextIds = problems
-      .filter((problem) => {
-        const element = itemRefs.current[problem.id];
+    const nextIds = items
+      .filter((item) => {
+        const element = itemRefs.current[reviewItemId(item)];
         if (!element) return false;
         const rect = element.getBoundingClientRect();
         return rect.left < selectionRect.right && rect.right > selectionRect.left && rect.top < selectionRect.bottom && rect.bottom > selectionRect.top;
       })
-      .map((problem) => problem.id);
+      .map(reviewItemId);
     if (sameIdSet(nextIds, selectedIdsRef.current)) return;
     selectedIdsRef.current = nextIds;
     onSelectionChange(nextIds);
@@ -1107,16 +1351,16 @@ function ReviewProblemSelector({
     <section className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
       <div className={cn("flex flex-wrap items-center justify-between gap-3", expanded && "mb-3")}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="text-sm font-bold text-white">문항 선택</h2>
+          <h2 className="text-sm font-bold text-white">검토 항목 선택</h2>
           <span className="rounded-[6px] border border-white/10 bg-black/20 px-2 py-1 text-xs font-semibold text-slate-300">
-            {currentProblem ? `${currentIndex + 1}/${problems.length} · #${currentProblem.problem_number}` : `0/${problems.length}`}
+            {currentItem ? `${currentIndex + 1}/${items.length} · ${currentItem.item_type === "passage" ? "지문" : `#${currentItem.problem.problem_number}`}` : `0/${items.length}`}
           </span>
           <span className="rounded-[6px] border border-amber-300/15 bg-amber-300/10 px-2 py-1 text-xs font-semibold text-amber-100">
             대기 {pendingCount.toLocaleString("ko-KR")}
           </span>
-          {currentProblem?.review_page_number ? (
+          {(currentItem?.item_type === "passage" ? currentItem.review_page_number : currentItem?.problem.review_page_number) ? (
             <span className="rounded-[6px] border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-semibold text-slate-400">
-              {currentProblem.review_page_number}p
+              {currentItem?.item_type === "passage" ? currentItem.review_page_number : currentItem?.problem.review_page_number}p
             </span>
           ) : null}
         </div>
@@ -1137,7 +1381,7 @@ function ReviewProblemSelector({
           <Button size="sm" variant="outline" disabled={currentIndex <= 0} onClick={() => moveBy(-1)}>
             이전
           </Button>
-          <Button size="sm" variant="outline" disabled={currentIndex < 0 || currentIndex >= problems.length - 1} onClick={() => moveBy(1)}>
+          <Button size="sm" variant="outline" disabled={currentIndex < 0 || currentIndex >= items.length - 1} onClick={() => moveBy(1)}>
             다음
           </Button>
           <Button size="sm" variant={expanded ? "secondary" : "outline"} onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
@@ -1148,7 +1392,7 @@ function ReviewProblemSelector({
       </div>
       <div className="hidden">
         <div>
-          <h2 className="text-sm font-bold text-white">문항 선택</h2>
+          <h2 className="text-sm font-bold text-white">검토 항목 선택</h2>
         </div>
         {selectedIds.length ? (
           <div className="flex flex-wrap items-center gap-2 rounded-[7px] border border-violet-300/25 bg-violet-400/10 px-3 py-2 text-sm text-violet-100">
@@ -1179,17 +1423,25 @@ function ReviewProblemSelector({
           />
         ) : null}
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
-          {problems.map((problem) => {
-            const selected = selectedSet.has(problem.id);
-            const current = problem.id === currentId;
+          {items.map((item) => {
+            const itemId = reviewItemId(item);
+            const selected = selectedSet.has(itemId);
+            const current = itemId === currentId;
+            const isPassage = item.item_type === "passage";
+            const problem = questionProblemFromItem(item);
+            const itemNeedsReview = reviewItemNeedsReview(item);
+            const title = isPassage ? (item.passage_title || item.passage_instruction || "지문") : `#${problem?.problem_number || "-"}`;
+            const subtitle = isPassage
+              ? `${item.linked_questions.length.toLocaleString("ko-KR")}문항 연결`
+              : `${problem?.review_page_number ? `${problem.review_page_number}p · ` : ""}${problem?.tags?.subject || "과목 미지정"}`;
             return (
               <article
-                key={problem.id}
-                ref={(element) => { itemRefs.current[problem.id] = element; }}
-                data-review-problem-card-id={problem.id}
+                key={itemId}
+                ref={(element) => { itemRefs.current[itemId] = element; }}
+                data-review-problem-card-id={itemId}
                 role="button"
                 tabIndex={0}
-                aria-label={`${problem.problem_number}번 문항 검토로 이동`}
+                aria-label={`${isPassage ? "지문" : `${problem?.problem_number || ""}번 문항`} 검토로 이동`}
                 className={cn(
                   "relative cursor-pointer rounded-[7px] border bg-white/[0.04] p-2 pl-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60",
                   current && "border-violet-300/60 bg-violet-400/12",
@@ -1200,7 +1452,7 @@ function ReviewProblemSelector({
                   if (event.key !== "Enter" && event.key !== " ") return;
                   event.preventDefault();
                   if (suppressClick || suppressClickRef.current) return;
-                  onOpenProblem(problem.id);
+                  onOpenProblem(itemId);
                 }}
               >
                 <label
@@ -1213,19 +1465,19 @@ function ReviewProblemSelector({
                     type="checkbox"
                     className="h-3.5 w-3.5 accent-violet-400"
                     checked={selected}
-                    onChange={(event) => toggleSelection(problem.id, event.target.checked)}
-                    aria-label={`${problem.problem_number}번 선택`}
+                    onChange={(event) => toggleSelection(itemId, event.target.checked)}
+                    aria-label={`${isPassage ? "지문" : `${problem?.problem_number || ""}번 문항`} 선택`}
                   />
                 </label>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-bold text-white">#{problem.problem_number}</span>
-                  <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", problem.needs_review ? "bg-amber-300/12 text-amber-100" : "bg-emerald-300/12 text-emerald-100")}>
-                    {problem.needs_review ? "대기" : "완료"}
+                  <span className="min-w-0 truncate text-sm font-bold text-white">{title}</span>
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", itemNeedsReview ? "bg-amber-300/12 text-amber-100" : "bg-emerald-300/12 text-emerald-100")}>
+                    {itemNeedsReview ? "대기" : "완료"}
                   </span>
                 </div>
                 <p className="mt-1 line-clamp-1 text-xs text-slate-400">
-                  {problem.review_page_number ? `${problem.review_page_number}p · ` : ""}
-                  {problem.tags?.subject || "과목 미지정"}
+                  {isPassage ? "국어 지문 · " : ""}
+                  {subtitle}
                 </p>
               </article>
             );
@@ -1236,18 +1488,96 @@ function ReviewProblemSelector({
   );
 }
 
+function PassageReviewPanel({
+  passage,
+  draft,
+  dirty,
+  saving,
+  onDraftChange,
+  onSave,
+}: {
+  passage: KoreanReviewPassageItem;
+  draft: PassageDraft;
+  dirty: boolean;
+  saving: boolean;
+  onDraftChange: Dispatch<SetStateAction<PassageDraft>>;
+  onSave: () => void;
+}) {
+  function updateField(field: keyof PassageDraft, value: string) {
+    onDraftChange((current) => ({ ...current, [field]: value }));
+  }
+
+  return (
+    <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-sky-300/20 bg-sky-400/[0.045] p-3">
+      <div className="rounded-lg border border-sky-300/20 bg-[#0e1220]">
+        <div className="flex items-center justify-between gap-3 border-b border-sky-300/15 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-white">국어 지문</h2>
+            <Badge variant={passage.needs_review ? "error" : "success"}>{passage.needs_review ? "검토 필요" : "검토 완료"}</Badge>
+            {dirty ? <Badge variant="warning">수정 중</Badge> : null}
+          </div>
+          <Button size="sm" variant="outline" onClick={onSave} disabled={saving || !draft.passage_text.trim() || !dirty}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            저장
+          </Button>
+        </div>
+        <div className="grid gap-3 p-4 md:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-400">지문 유형</span>
+            <Input value={draft.passage_type} onChange={(event) => updateField("passage_type", event.target.value)} placeholder="문학, 독서, 화법과 작문 등" />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-400">제목</span>
+            <Input value={draft.passage_title} onChange={(event) => updateField("passage_title", event.target.value)} placeholder="지문 제목" />
+          </label>
+          <label className="space-y-1.5 md:col-span-2">
+            <span className="text-xs font-semibold text-slate-400">안내문</span>
+            <Input value={draft.passage_instruction} onChange={(event) => updateField("passage_instruction", event.target.value)} placeholder="[1~3] 다음 글을 읽고 물음에 답하시오." />
+          </label>
+          <label className="space-y-1.5 md:col-span-2">
+            <span className="text-xs font-semibold text-slate-400">본문</span>
+            <textarea
+              className="min-h-[420px] w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/15"
+              value={draft.passage_text}
+              onChange={(event) => updateField("passage_text", event.target.value)}
+              placeholder="지문 본문"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+        <div className="mb-3 text-sm font-bold text-white">연결 문항</div>
+        {passage.linked_questions.length ? (
+          <div className="flex flex-wrap gap-2">
+            {passage.linked_questions.map((question) => (
+              <span key={question.question_id} className="rounded-[7px] border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-200">
+                #{question.problem_number || question.question_number}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">연결된 문항이 없습니다.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function OriginalPagePanel({
   problem,
   loading,
   pageProblems,
   currentProblemId,
+  cropProblemId,
   onOpenProblem,
   onVisualSaved,
 }: {
-  problem: Problem | null;
+  problem: OriginalPageTarget | null;
   loading: boolean;
   pageProblems: Problem[];
   currentProblemId: string | null;
+  cropProblemId: string | null;
   onOpenProblem: (problemId: string) => void;
   onVisualSaved: (problem: Problem) => void;
 }) {
@@ -1304,7 +1634,7 @@ function OriginalPagePanel({
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (!imageUrl || event.button !== 0) return;
+    if (!imageUrl || !cropProblemId || event.button !== 0) return;
     const point = pointFromEvent(event);
     if (!point) return;
     setDragStart(point);
@@ -1330,7 +1660,7 @@ function OriginalPagePanel({
 
   async function saveVisualCrop() {
     const image = imageRef.current;
-    if (!problem || !image || !selection || selection.width <= 16 || selection.height <= 16) return;
+    if (!cropProblemId || !image || !selection || selection.width <= 16 || selection.height <= 16) return;
     const rect = image.getBoundingClientRect();
     const scaleX = image.naturalWidth / rect.width;
     const scaleY = image.naturalHeight / rect.height;
@@ -1338,7 +1668,7 @@ function OriginalPagePanel({
     setSavingCrop(true);
     setCropError(null);
     try {
-      const updated = await api<Problem>(`/api/problems/${problem.id}/visual-crop`, {
+      const updated = await api<Problem>(`/api/problems/${cropProblemId}/visual-crop`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1357,7 +1687,7 @@ function OriginalPagePanel({
     }
   }
 
-  const showSelectionAction = selection && selection.width > 16 && selection.height > 16;
+  const showSelectionAction = cropProblemId && selection && selection.width > 16 && selection.height > 16;
   const pageSwitcherOpen = pageSwitcherIntroVisible || pageSwitcherHovered;
 
   return (

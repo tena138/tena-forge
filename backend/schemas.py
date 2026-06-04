@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -232,6 +232,8 @@ class BatchRead(BaseModel):
     created_at: datetime
     problem_count: int = 0
     review_count: int = 0
+    review_item_count: int = 0
+    pending_review_item_count: int = 0
     tagged_count: int = 0
     untagged_count: int = 0
     progress_message: str | None = None
@@ -313,6 +315,7 @@ class KoreanPassageGroupRead(BaseModel):
     linked_question_ids: list[str] = Field(default_factory=list)
     extraction_confidence: float = 0
     warnings: list[str] = Field(default_factory=list)
+    needs_review: bool = True
 
 
 class KoreanQuestionRead(BaseModel):
@@ -336,6 +339,56 @@ class KoreanExtractionRead(BaseModel):
     passage_groups: list[KoreanPassageGroupRead] = Field(default_factory=list)
     questions: list[KoreanQuestionRead] = Field(default_factory=list)
     global_warnings: list[str] = Field(default_factory=list)
+
+
+class KoreanPassageReviewUpdate(BaseModel):
+    needs_review: bool
+
+
+class KoreanPassageUpdate(BaseModel):
+    passage_instruction: str | None = None
+    passage_title: str | None = None
+    passage_text: str | None = None
+    passage_type: str | None = None
+
+
+class KoreanReviewLinkedQuestion(BaseModel):
+    question_id: str
+    problem_id: UUID | None = None
+    question_number: str | None = None
+    problem_number: int | None = None
+    needs_review: bool = True
+    source_pages: list[int] = Field(default_factory=list)
+
+
+class KoreanReviewPassageItem(BaseModel):
+    item_type: Literal["passage"] = "passage"
+    id: UUID
+    passage_id: str
+    source_pages: list[int] = Field(default_factory=list)
+    passage_instruction: str | None = None
+    passage_title: str | None = None
+    passage_text: str
+    passage_type: str = "unknown"
+    linked_questions: list[KoreanReviewLinkedQuestion] = Field(default_factory=list)
+    review_page_image_url: str | None = None
+    review_page_number: int | None = None
+    needs_review: bool = True
+
+
+class KoreanReviewQuestionItem(BaseModel):
+    item_type: Literal["question"] = "question"
+    id: UUID
+    linked_passage_id: str | None = None
+    question_id: str | None = None
+    problem: ProblemListItem
+
+
+class KoreanReviewItemsRead(BaseModel):
+    batch_id: UUID
+    review_item_count: int = 0
+    pending_review_item_count: int = 0
+    items: list[KoreanReviewPassageItem | KoreanReviewQuestionItem] = Field(default_factory=list)
 
 
 class FacetsResponse(BaseModel):

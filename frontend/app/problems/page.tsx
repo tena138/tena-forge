@@ -32,7 +32,7 @@ import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api, Batch, Problem } from "@/lib/api";
+import { api, Batch, KoreanReviewItemsResponse, KoreanReviewPassageItem, Problem } from "@/lib/api";
 import {
   SubjectNode,
   buildSubjectTree,
@@ -420,6 +420,7 @@ function ProblemsBrowser() {
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
   const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], sources: [], visibilities: [], origin_types: [] });
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [koreanPassages, setKoreanPassages] = useState<KoreanReviewPassageItem[]>([]);
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
   const [unit, setUnit] = useState(() => searchParams.get("unit") || "");
   const [subjects, setSubjects] = useState<string[]>(() => searchParams.getAll("subject"));
@@ -657,6 +658,29 @@ function ProblemsBrowser() {
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
   const subjectTree = useMemo(() => buildSubjectTree([...facets.subjects, ...customSubjectFilters, ...subjects]), [customSubjectFilters, facets.subjects, subjects]);
+  const visibleKoreanPassages = useMemo(
+    () => koreanPassages.filter((passage) => reviewFilter === "all" || (reviewFilter === "needs" ? passage.needs_review : !passage.needs_review)),
+    [koreanPassages, reviewFilter],
+  );
+
+  useEffect(() => {
+    if (!selectedBatchId || selectedBatchFolderId || selectedBatch?.subject_engine !== "korean") {
+      setKoreanPassages([]);
+      return;
+    }
+    let cancelled = false;
+    api<KoreanReviewItemsResponse>(`/api/batches/${selectedBatchId}/korean/review-items`)
+      .then((response) => {
+        if (cancelled) return;
+        setKoreanPassages(response.items.filter((item): item is KoreanReviewPassageItem => item.item_type === "passage"));
+      })
+      .catch(() => {
+        if (!cancelled) setKoreanPassages([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedBatch?.subject_engine, selectedBatchFolderId, selectedBatchId]);
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
@@ -1137,6 +1161,32 @@ function ProblemsBrowser() {
     dragStartRef.current = null;
     setIsDragSelecting(false);
     setDragBox(null);
+  }
+
+  function renderKoreanPassageCard(passage: KoreanReviewPassageItem) {
+    return (
+      <article key={passage.id} className="rounded-lg border border-sky-300/20 bg-sky-400/[0.045] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-200/70">Korean Passage</div>
+            <h3 className="mt-1 line-clamp-1 text-sm font-bold text-slate-100">
+              {passage.passage_title || passage.passage_instruction || "국어 지문"}
+            </h3>
+          </div>
+          <span className={cn("shrink-0 rounded border px-2 py-1 text-[11px] font-semibold", passage.needs_review ? "border-amber-300/20 bg-amber-300/10 text-amber-100" : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100")}>
+            {passage.needs_review ? "검토 필요" : "검토 완료"}
+          </span>
+        </div>
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-300">
+          {passage.passage_text || "지문 본문이 비어 있습니다."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-500">
+          {passage.review_page_number ? <span>{passage.review_page_number}p</span> : null}
+          <span>{passage.linked_questions.length.toLocaleString("ko-KR")}문항 연결</span>
+          {passage.passage_type ? <span>{passage.passage_type}</span> : null}
+        </div>
+      </article>
+    );
   }
 
   function renderProblemCard(problem: Problem) {
@@ -1696,12 +1746,17 @@ function ProblemsBrowser() {
               style={{ left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height }}
             />
           )}
+          {visibleKoreanPassages.length ? (
+            <div className="mb-4 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              {visibleKoreanPassages.map(renderKoreanPassageCard)}
+            </div>
+          ) : null}
           <div className={cn(viewMode === "grid" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2")}>
             {data.items.map((problem) => viewMode === "grid" ? renderProblemCard(problem) : renderProblemRow(problem))}
           </div>
         </div>
 
-        {!data.items.length && (
+        {!data.items.length && !visibleKoreanPassages.length && (
           <div className="forge-panel rounded-lg py-16 text-center text-muted-foreground">
             조건에 맞는 문항이 없습니다.
             <div className="mt-4"><Link href="/upload"><Button>PDF 업로드</Button></Link></div>
