@@ -1186,7 +1186,6 @@ function ProblemsBrowser() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="line-clamp-1 text-[11px] font-medium leading-4 text-muted-foreground">{sourceLabel(problem)}</div>
-              <div className="mt-1 text-[13px] font-medium leading-5 text-slate-200">#{problem.problem_number}</div>
             </div>
             {!problem.tags?.difficulty ? <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold", tone.badge)}>미지정</span> : null}
           </div>
@@ -1231,10 +1230,7 @@ function ProblemsBrowser() {
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-        <div className="grid min-h-[66px] grid-cols-[70px_minmax(0,1fr)_auto_auto_36px_36px] items-start gap-3 py-3 pl-6 pr-3">
-          <div className="pt-1 text-[13px] font-medium text-slate-200">
-            #{problem.problem_number}
-          </div>
+        <div className="grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto_auto_36px_36px] items-start gap-3 py-3 pl-6 pr-3">
           <div className="min-w-0">
             <div className="mb-0.5 line-clamp-1 text-[11px] font-medium text-muted-foreground">{sourceLabel(problem)}</div>
             <MathText className="line-clamp-1 text-[14px] font-medium leading-[1.45] text-foreground" value={problem.problem_text} />
@@ -1738,8 +1734,7 @@ function ProblemsBrowser() {
               return (
                 <article key={problem.id} className="relative overflow-hidden rounded-lg border border-white/10 bg-white/[0.035] p-4 pl-5">
                   <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div className="text-[13px] font-medium text-slate-200">#{problem.problem_number}</div>
+                  <div className="mb-2 flex items-center justify-end gap-3">
                     <span className={cn("rounded border px-2 py-1 text-[11px] font-semibold", tone.badge)}>{tone.label}</span>
                   </div>
                   <MathText className="text-[14px] leading-[1.55] text-foreground" value={problem.problem_text} />
