@@ -197,7 +197,7 @@ function formatUsageNumber(value: number, suffix = "") {
 
 function planNameFallback(plan?: string | null) {
   const labels: Record<string, string> = {
-    free: "Free",
+    free: "Trial",
     basic: "Basic",
     pro: "Pro",
     enterprise: "Enterprise",
@@ -255,7 +255,7 @@ function UsageOverview({
   const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
   const subscription = summary?.subscription;
   const normalizedPlan = String(summary?.plan?.code || profile?.plan || "").toLowerCase();
-  const hasAssignedPlan = !["", "free", "plan"].includes(normalizedPlan) || !["", "Free", "Plan"].includes(planName);
+  const hasAssignedPlan = !["", "free", "plan"].includes(normalizedPlan) || !["", "Free", "Trial", "Plan"].includes(planName);
   const remainingDays = daysUntil(profile?.trial_ends_at || profile?.plan_expires_at || null);
   const isTrial = subscription?.status === "trialing" || Boolean(profile?.plan_expires_at && profile?.plan === "basic");
   const planStatus = isTrial && remainingDays !== null ? `무료 체험 ${Math.max(remainingDays, 0)}일 남음` : subscription?.status === "active" || hasAssignedPlan ? "사용 중" : "플랜 미등록";
@@ -285,7 +285,7 @@ function UsageOverview({
           <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--a" />
           <span className="enterprise-plan-card__aurora enterprise-plan-card__aurora--b" />
           <div className="relative z-10 text-2xl font-black text-foreground">{planName}</div>
-          <div className="relative z-10 mt-2 inline-flex rounded-full border border-violet-300/30 bg-white/45 px-2 py-1 text-[11px] font-black text-violet-700 shadow-sm backdrop-blur dark:bg-black/20 dark:text-violet-100">{planStatus}</div>
+          <div className="relative z-10 mt-2 inline-flex rounded-full border border-cyan-300/35 bg-cyan-50/85 px-2 py-1 text-[11px] font-black text-cyan-700 shadow-sm backdrop-blur dark:border-cyan-300/25 dark:bg-cyan-400/10 dark:text-cyan-100">{planStatus}</div>
           <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
               <span key={engine} className="rounded-full border border-border/80 bg-background/70 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur">

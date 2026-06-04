@@ -15,17 +15,23 @@ import { AUTH_CHANGED_EVENT, authHttp, getAccessToken, readStoredAuthProfile, se
 type PlanTone = "admin" | "trial" | "free" | "basic" | "pro" | "enterprise";
 
 const planStyles: Record<PlanTone, string> = {
-  admin: "bg-amber-100 text-amber-900 ring-1 ring-amber-300",
-  trial: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-  free: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
-  basic: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
-  pro: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
-  enterprise: "bg-slate-950 text-white ring-1 ring-slate-700",
+  admin:
+    "rounded-full border border-violet-300/45 bg-violet-50 px-2.5 text-violet-700 ring-1 ring-violet-200/70 shadow-sm dark:border-violet-300/35 dark:bg-violet-500/12 dark:text-violet-100 dark:ring-violet-300/25",
+  trial:
+    "rounded-full border border-cyan-300/45 bg-cyan-50 px-2.5 text-cyan-700 ring-1 ring-cyan-200/70 shadow-sm dark:border-cyan-300/35 dark:bg-cyan-400/12 dark:text-cyan-100 dark:ring-cyan-300/20",
+  free:
+    "rounded-full border border-slate-300/70 bg-slate-100 px-2.5 text-slate-700 ring-1 ring-slate-200/80 shadow-sm dark:border-slate-300/20 dark:bg-slate-400/10 dark:text-slate-200 dark:ring-slate-300/15",
+  basic:
+    "rounded-full border border-sky-300/45 bg-sky-50 px-2.5 text-sky-700 ring-1 ring-sky-200/70 shadow-sm dark:border-sky-300/30 dark:bg-sky-400/12 dark:text-sky-100 dark:ring-sky-300/20",
+  pro:
+    "rounded-full border border-violet-300/45 bg-violet-50 px-2.5 text-violet-700 ring-1 ring-violet-200/70 shadow-sm dark:border-violet-300/35 dark:bg-violet-500/14 dark:text-violet-100 dark:ring-violet-300/25",
+  enterprise:
+    "rounded-full border border-fuchsia-300/45 bg-fuchsia-50 px-2.5 text-fuchsia-700 ring-1 ring-fuchsia-200/70 shadow-sm dark:border-fuchsia-300/35 dark:bg-fuchsia-500/12 dark:text-fuchsia-100 dark:ring-fuchsia-300/20",
 };
 
 const planNames: Record<string, { label: string; tone: PlanTone }> = {
   admin: { label: "Admin", tone: "admin" },
-  free: { label: "Free", tone: "free" },
+  free: { label: "Trial", tone: "trial" },
   basic: { label: "Basic", tone: "basic" },
   plus: { label: "Basic", tone: "basic" },
   pro: { label: "Pro", tone: "pro" },
@@ -76,16 +82,16 @@ function displayPlan(profile: AcademyProfile) {
   const roles = profile.roles || [];
   const isAdmin = String(profile.plan || "").toLowerCase() === "admin" || roles.includes("admin") || roles.includes("super_admin");
   if (isAdmin) {
-    return { label: "Admin", tone: "admin" as PlanTone, status: "무제한", statusClass: "text-amber-500" };
+    return { label: "Admin", tone: "admin" as PlanTone, status: "무제한", statusClass: "text-violet-600 dark:text-violet-200" };
   }
 
   const trialEndsAt = profile.trial_ends_at || profile.plan_expires_at;
   const isTrial = profile.account_type !== "student" && !profile.requires_payment && isFutureDate(trialEndsAt);
   if (isTrial) {
-    return { label: "Trial", tone: "trial" as PlanTone, status: "체험 중", statusClass: "text-emerald-500" };
+    return { label: "Trial", tone: "trial" as PlanTone, status: "체험 중", statusClass: "text-cyan-600 dark:text-cyan-200" };
   }
   if (profile.requires_payment) {
-    return { label: "Trial Expired", tone: "free" as PlanTone, status: "결제 필요", statusClass: "text-amber-500" };
+    return { label: "Trial Expired", tone: "free" as PlanTone, status: "결제 필요", statusClass: "text-rose-600 dark:text-rose-200" };
   }
   const normalizedPlan = String(profile.plan || "free").toLowerCase();
   const plan = planNames[normalizedPlan] || { label: normalizedPlan || "Free", tone: "free" as PlanTone };
