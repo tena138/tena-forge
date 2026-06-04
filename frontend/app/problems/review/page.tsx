@@ -1256,7 +1256,10 @@ function OriginalPagePanel({
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [savingCrop, setSavingCrop] = useState(false);
   const [cropError, setCropError] = useState<string | null>(null);
+  const [pageSwitcherIntroVisible, setPageSwitcherIntroVisible] = useState(false);
+  const [pageSwitcherHovered, setPageSwitcherHovered] = useState(false);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const pageSwitcherTimerRef = useRef<number | null>(null);
 
   const imageUrl = problem?.review_page_image_url || null;
 
@@ -1266,6 +1269,29 @@ function OriginalPagePanel({
     setCropError(null);
     setSavingCrop(false);
   }, [problem?.id]);
+
+  useEffect(() => {
+    if (pageSwitcherTimerRef.current) window.clearTimeout(pageSwitcherTimerRef.current);
+    setPageSwitcherHovered(false);
+
+    if (pageProblems.length <= 1) {
+      setPageSwitcherIntroVisible(false);
+      return undefined;
+    }
+
+    setPageSwitcherIntroVisible(true);
+    pageSwitcherTimerRef.current = window.setTimeout(() => {
+      setPageSwitcherIntroVisible(false);
+      pageSwitcherTimerRef.current = null;
+    }, 2600);
+
+    return () => {
+      if (pageSwitcherTimerRef.current) {
+        window.clearTimeout(pageSwitcherTimerRef.current);
+        pageSwitcherTimerRef.current = null;
+      }
+    };
+  }, [currentProblemId, pageProblems.length]);
 
   function pointFromEvent(event: PointerEvent<HTMLDivElement>) {
     const image = imageRef.current;
@@ -1332,6 +1358,7 @@ function OriginalPagePanel({
   }
 
   const showSelectionAction = selection && selection.width > 16 && selection.height > 16;
+  const pageSwitcherOpen = pageSwitcherIntroVisible || pageSwitcherHovered;
 
   return (
     <section className="flex min-h-[680px] flex-col rounded-lg border border-white/10 bg-white/[0.035]">
@@ -1377,37 +1404,58 @@ function OriginalPagePanel({
             />
             {pageProblems.length > 1 ? (
               <div
-                className="absolute right-3 top-3 z-10 flex max-h-[calc(100%-1.5rem)] w-48 flex-col gap-1 overflow-auto rounded-lg border border-white/15 bg-[#090912]/88 p-2 shadow-2xl backdrop-blur"
+                className="absolute right-3 top-3 z-10 min-h-9 w-48"
                 onPointerDown={(event) => event.stopPropagation()}
                 onPointerMove={(event) => event.stopPropagation()}
                 onPointerUp={(event) => event.stopPropagation()}
+                onMouseEnter={() => setPageSwitcherHovered(true)}
+                onMouseLeave={() => setPageSwitcherHovered(false)}
+                onFocusCapture={() => setPageSwitcherHovered(true)}
+                onBlurCapture={() => setPageSwitcherHovered(false)}
               >
-                <div className="px-1 pb-1 text-[11px] font-semibold text-slate-400">같은 페이지 문항</div>
-                {pageProblems.map((pageProblem) => {
-                  const active = pageProblem.id === currentProblemId;
-                  const label = pageProblem.tags?.unit || pageProblem.tags?.subject || (pageProblem.needs_review ? "검토 필요" : "검토 완료");
-                  return (
-                    <button
-                      key={pageProblem.id}
-                      type="button"
-                      className={cn(
-                        "rounded-[7px] border px-2 py-1.5 text-left transition",
-                        active
-                          ? "border-violet-300/70 bg-violet-400/20 text-white"
-                          : "border-white/10 bg-white/[0.055] text-slate-200 hover:border-violet-300/45 hover:bg-violet-400/12",
-                      )}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onOpenProblem(pageProblem.id);
-                      }}
-                    >
-                      <span className="block text-xs font-bold">#{pageProblem.problem_number}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">
-                        {label}
-                      </span>
-                    </button>
-                  );
-                })}
+                <button
+                  type="button"
+                  aria-label="같은 페이지 문항 목록 열기"
+                  className={cn(
+                    "absolute right-0 top-0 rounded-full border border-white/10 bg-[#090912]/70 px-2.5 py-1 text-[11px] font-semibold text-slate-300 shadow-xl backdrop-blur transition",
+                    pageSwitcherOpen ? "pointer-events-none scale-95 opacity-0" : "opacity-70 hover:border-violet-300/40 hover:bg-violet-400/12 hover:text-white hover:opacity-100",
+                  )}
+                >
+                  같은 페이지 {pageProblems.length}
+                </button>
+                <div
+                  className={cn(
+                    "flex max-h-[calc(100vh-16rem)] flex-col gap-1 overflow-auto rounded-lg border border-white/15 bg-[#090912]/88 p-2 shadow-2xl backdrop-blur transition duration-200",
+                    pageSwitcherOpen ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0",
+                  )}
+                >
+                  <div className="px-1 pb-1 text-[11px] font-semibold text-slate-400">같은 페이지 문항</div>
+                  {pageProblems.map((pageProblem) => {
+                    const active = pageProblem.id === currentProblemId;
+                    const label = pageProblem.tags?.unit || pageProblem.tags?.subject || (pageProblem.needs_review ? "검토 필요" : "검토 완료");
+                    return (
+                      <button
+                        key={pageProblem.id}
+                        type="button"
+                        className={cn(
+                          "rounded-[7px] border px-2 py-1.5 text-left transition",
+                          active
+                            ? "border-violet-300/70 bg-violet-400/20 text-white"
+                            : "border-white/10 bg-white/[0.055] text-slate-200 hover:border-violet-300/45 hover:bg-violet-400/12",
+                        )}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenProblem(pageProblem.id);
+                        }}
+                      >
+                        <span className="block text-xs font-bold">#{pageProblem.problem_number}</span>
+                        <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                          {label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
             {selection && imageRef.current ? (
