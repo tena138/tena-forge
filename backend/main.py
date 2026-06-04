@@ -225,7 +225,14 @@ def health():
 def health_db():
     try:
         from scripts.ensure_admin_account import ADMIN_EMAIL
-        from scripts.repair_alembic_version import ACADEMY_REQUIRED_COLUMNS, SUBJECT_ENGINE_COLUMNS
+        from scripts.repair_alembic_version import (
+            ACADEMY_REQUIRED_COLUMNS,
+            ACADEMY_SEAT_REQUIRED_COLUMNS,
+            BATCH_REQUIRED_COLUMNS,
+            KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS,
+            PROBLEM_REQUIRED_COLUMNS,
+            SUBJECT_ENGINE_COLUMNS,
+        )
 
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
@@ -237,6 +244,9 @@ def health_db():
             "batches",
             "problems",
             "problem_sets",
+            "student_academy_memberships",
+            "academy_classes",
+            "academy_seats",
             "content_versions",
             "archive_access_grants",
             "learning_assignments",
@@ -260,12 +270,16 @@ def health_db():
         academy_columns = {column["name"] for column in inspector.get_columns("academies")} if "academies" in tables else set()
         batch_columns = {column["name"] for column in inspector.get_columns("batches")} if "batches" in tables else set()
         problem_columns = {column["name"] for column in inspector.get_columns("problems")} if "problems" in tables else set()
+        academy_seat_columns = {column["name"] for column in inspector.get_columns("academy_seats")} if "academy_seats" in tables else set()
+        korean_passage_group_columns = {column["name"] for column in inspector.get_columns("korean_passage_groups")} if "korean_passage_groups" in tables else set()
         plan_columns = {column["name"] for column in inspector.get_columns("plans")} if "plans" in tables else set()
         subscription_columns = {column["name"] for column in inspector.get_columns("subscriptions")} if "subscriptions" in tables else set()
         missing_tables = sorted(required_tables - tables)
         missing_academy_columns = sorted(ACADEMY_REQUIRED_COLUMNS - academy_columns)
-        missing_batch_columns = sorted({"subject_candidates", "unit_candidates", "processing_task", "subject_engine"} - batch_columns)
-        missing_problem_columns = sorted({"choices"} - problem_columns)
+        missing_batch_columns = sorted(BATCH_REQUIRED_COLUMNS - batch_columns)
+        missing_problem_columns = sorted(PROBLEM_REQUIRED_COLUMNS - problem_columns)
+        missing_academy_seat_columns = sorted(ACADEMY_SEAT_REQUIRED_COLUMNS - academy_seat_columns)
+        missing_korean_passage_group_columns = sorted(KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS - korean_passage_group_columns)
         missing_plan_columns = sorted(SUBJECT_ENGINE_COLUMNS - plan_columns)
         missing_subscription_columns = sorted(SUBJECT_ENGINE_COLUMNS - subscription_columns)
         alembic_versions = []
@@ -288,6 +302,8 @@ def health_db():
                     missing_academy_columns,
                     missing_batch_columns,
                     missing_problem_columns,
+                    missing_academy_seat_columns,
+                    missing_korean_passage_group_columns,
                     missing_plan_columns,
                     missing_subscription_columns,
                 ]
@@ -301,6 +317,8 @@ def health_db():
             "missing_academy_columns": missing_academy_columns,
             "missing_batch_columns": missing_batch_columns,
             "missing_problem_columns": missing_problem_columns,
+            "missing_academy_seat_columns": missing_academy_seat_columns,
+            "missing_korean_passage_group_columns": missing_korean_passage_group_columns,
             "missing_plan_columns": missing_plan_columns,
             "missing_subscription_columns": missing_subscription_columns,
         }

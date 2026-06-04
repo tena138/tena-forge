@@ -10,13 +10,52 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0024_batch_accent_color"
+HEAD_REVISION = "0026_korean_passage_review"
 BATCH_REQUIRED_COLUMNS = {
+    "source_type",
+    "source_label",
+    "rights_confirmed",
+    "rights_confirmed_at",
+    "rights_note",
     "subject_candidates",
     "unit_candidates",
     "processing_task",
     "subject_engine",
     "accent_color",
+    "owner_id",
+    "academy_id",
+    "progress_message",
+    "progress_current",
+    "progress_total",
+    "progress_started_at",
+    "progress_updated_at",
+    "failure_stage",
+    "failure_reason",
+    "failure_hint",
+    "failed_at",
+}
+PROBLEM_REQUIRED_COLUMNS = {
+    "choices",
+    "source_type",
+    "source_label",
+    "rights_confirmed",
+    "rights_confirmed_at",
+    "rights_note",
+    "visibility",
+    "origin_type",
+    "owner_id",
+    "academy_id",
+    "updated_at",
+    "review_page_image_url",
+    "review_page_number",
+    "deleted_at",
+    "delete_scheduled_at",
+}
+KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS = {
+    "needs_review",
+}
+ACADEMY_SEAT_REQUIRED_COLUMNS = {
+    "class_id",
 }
 SUBJECT_ENGINE_COLUMNS = {
     "enabled_subject_engines",
@@ -58,6 +97,12 @@ def _index_names(inspector, table_name: str) -> set[str]:
     if table_name not in inspector.get_table_names():
         return set()
     return {index["name"] for index in inspector.get_indexes(table_name)}
+
+
+def _foreign_key_names(inspector, table_name: str) -> set[str]:
+    if table_name not in inspector.get_table_names():
+        return set()
+    return {foreign_key.get("name") for foreign_key in inspector.get_foreign_keys(table_name) if foreign_key.get("name")}
 
 
 def _has_columns(inspector, table_name: str, column_names: set[str]) -> bool:
@@ -139,20 +184,53 @@ def _ensure_batch_columns(connection, inspector) -> bool:
         return False
 
     changed = False
+    bool_false = "FALSE" if connection.dialect.name == "postgresql" else "0"
     json_definition = "JSONB NOT NULL DEFAULT '[]'::jsonb" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '[]'"
+    json_default = "'[]'::jsonb" if connection.dialect.name == "postgresql" else "'[]'"
     specs = [
+        ("source_type", "VARCHAR(40) NOT NULL DEFAULT 'self_created'"),
+        ("source_label", "VARCHAR(255) NULL"),
+        ("rights_confirmed", f"BOOLEAN NOT NULL DEFAULT {bool_false}"),
+        ("rights_confirmed_at", "TIMESTAMP NULL"),
+        ("rights_note", "TEXT NULL"),
         ("subject_candidates", json_definition),
         ("unit_candidates", json_definition),
         ("processing_task", "VARCHAR(30) NOT NULL DEFAULT 'full'"),
         ("subject_engine", "VARCHAR(30) NOT NULL DEFAULT 'math'"),
         ("accent_color", "VARCHAR(7) NULL"),
+        ("owner_id", "VARCHAR(64) NOT NULL DEFAULT 'local_user'"),
+        ("academy_id", "VARCHAR(64) NULL"),
+        ("progress_message", "VARCHAR(500) NULL"),
+        ("progress_current", "INTEGER NULL"),
+        ("progress_total", "INTEGER NULL"),
+        ("progress_started_at", "TIMESTAMP NULL"),
+        ("progress_updated_at", "TIMESTAMP NULL"),
+        ("failure_stage", "VARCHAR(500) NULL"),
+        ("failure_reason", "TEXT NULL"),
+        ("failure_hint", "TEXT NULL"),
+        ("failed_at", "TIMESTAMP NULL"),
     ]
     for column_name, definition in specs:
         if _add_column_if_missing(connection, inspector, "batches", column_name, definition):
             changed = True
             inspector = inspect(connection)
+    connection.execute(text("UPDATE batches SET source_type = 'self_created' WHERE source_type IS NULL OR source_type = ''"))
+    connection.execute(text(f"UPDATE batches SET rights_confirmed = {bool_false} WHERE rights_confirmed IS NULL"))
+    connection.execute(text("UPDATE batches SET owner_id = 'local_user' WHERE owner_id IS NULL OR owner_id = ''"))
+    connection.execute(text(f"UPDATE batches SET subject_candidates = {json_default} WHERE subject_candidates IS NULL"))
+    connection.execute(text(f"UPDATE batches SET unit_candidates = {json_default} WHERE unit_candidates IS NULL"))
     connection.execute(text("UPDATE batches SET processing_task = 'full' WHERE processing_task IS NULL OR processing_task = ''"))
     connection.execute(text("UPDATE batches SET subject_engine = 'math' WHERE subject_engine IS NULL OR subject_engine = ''"))
+    inspector = inspect(connection)
+    if "ix_batches_source_type" not in _index_names(inspector, "batches"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_source_type ON batches (source_type)"))
+        changed = True
+    if "ix_batches_owner_id" not in _index_names(inspector, "batches"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_owner_id ON batches (owner_id)"))
+        changed = True
+    if "ix_batches_academy_id" not in _index_names(inspector, "batches"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_academy_id ON batches (academy_id)"))
+        changed = True
     if "ix_batches_processing_task" not in _index_names(inspector, "batches"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_processing_task ON batches (processing_task)"))
         changed = True
@@ -185,8 +263,120 @@ def _ensure_problem_columns(connection, inspector) -> bool:
     if "problems" not in inspector.get_table_names():
         return False
 
+    changed = False
+    bool_false = "FALSE" if connection.dialect.name == "postgresql" else "0"
     json_definition = "JSONB NOT NULL DEFAULT '[]'::jsonb" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '[]'"
-    return _add_column_if_missing(connection, inspector, "problems", "choices", json_definition)
+    json_default = "'[]'::jsonb" if connection.dialect.name == "postgresql" else "'[]'"
+    specs = [
+        ("choices", json_definition),
+        ("source_type", "VARCHAR(40) NOT NULL DEFAULT 'self_created'"),
+        ("source_label", "VARCHAR(255) NULL"),
+        ("rights_confirmed", f"BOOLEAN NOT NULL DEFAULT {bool_false}"),
+        ("rights_confirmed_at", "TIMESTAMP NULL"),
+        ("rights_note", "TEXT NULL"),
+        ("visibility", "VARCHAR(32) NOT NULL DEFAULT 'private'"),
+        ("origin_type", "VARCHAR(32) NOT NULL DEFAULT 'owned'"),
+        ("owner_id", "VARCHAR(64) NOT NULL DEFAULT 'local_user'"),
+        ("academy_id", "VARCHAR(64) NULL"),
+        ("updated_at", "TIMESTAMP NULL"),
+        ("review_page_image_url", "VARCHAR(1000) NULL"),
+        ("review_page_number", "INTEGER NULL"),
+        ("deleted_at", "TIMESTAMP NULL"),
+        ("delete_scheduled_at", "TIMESTAMP NULL"),
+    ]
+    for column_name, definition in specs:
+        if _add_column_if_missing(connection, inspector, "problems", column_name, definition):
+            changed = True
+            inspector = inspect(connection)
+
+    connection.execute(text(f"UPDATE problems SET choices = {json_default} WHERE choices IS NULL"))
+    connection.execute(text("UPDATE problems SET source_type = 'self_created' WHERE source_type IS NULL OR source_type = ''"))
+    connection.execute(text(f"UPDATE problems SET rights_confirmed = {bool_false} WHERE rights_confirmed IS NULL"))
+    connection.execute(text("UPDATE problems SET visibility = 'private' WHERE visibility IS NULL OR visibility = ''"))
+    connection.execute(text("UPDATE problems SET origin_type = 'owned' WHERE origin_type IS NULL OR origin_type = ''"))
+    connection.execute(text("UPDATE problems SET owner_id = 'local_user' WHERE owner_id IS NULL OR owner_id = ''"))
+    if "created_at" in _column_names(inspector, "problems"):
+        connection.execute(text("UPDATE problems SET updated_at = created_at WHERE updated_at IS NULL"))
+
+    inspector = inspect(connection)
+    for index_name, column_name in (
+        ("ix_problems_visibility", "visibility"),
+        ("ix_problems_origin_type", "origin_type"),
+        ("ix_problems_owner_id", "owner_id"),
+        ("ix_problems_academy_id", "academy_id"),
+        ("ix_problems_deleted_at", "deleted_at"),
+        ("ix_problems_delete_scheduled_at", "delete_scheduled_at"),
+    ):
+        if index_name not in _index_names(inspector, "problems"):
+            connection.execute(text(f"CREATE INDEX IF NOT EXISTS {index_name} ON problems ({column_name})"))
+            changed = True
+    return changed
+
+
+def _ensure_academy_seat_columns(connection, inspector) -> bool:
+    if "academy_seats" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    class_id_definition = "UUID NULL" if connection.dialect.name == "postgresql" else "CHAR(36) NULL"
+    if _add_column_if_missing(connection, inspector, "academy_seats", "class_id", class_id_definition):
+        changed = True
+        inspector = inspect(connection)
+    if "ix_academy_seats_class_id" not in _index_names(inspector, "academy_seats"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_academy_seats_class_id ON academy_seats (class_id)"))
+        changed = True
+    if (
+        connection.dialect.name == "postgresql"
+        and "academy_classes" in inspector.get_table_names()
+        and "fk_academy_seats_class_id_academy_classes" not in _foreign_key_names(inspector, "academy_seats")
+    ):
+        connection.execute(
+            text(
+                "ALTER TABLE academy_seats "
+                "ADD CONSTRAINT fk_academy_seats_class_id_academy_classes "
+                "FOREIGN KEY (class_id) REFERENCES academy_classes (id) ON DELETE SET NULL"
+            )
+        )
+        changed = True
+    return changed
+
+
+def _ensure_korean_passage_review_columns(connection, inspector) -> bool:
+    if "korean_passage_groups" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    bool_true = "TRUE" if connection.dialect.name == "postgresql" else "1"
+    if _add_column_if_missing(connection, inspector, "korean_passage_groups", "needs_review", f"BOOLEAN NOT NULL DEFAULT {bool_true}"):
+        changed = True
+        inspector = inspect(connection)
+    connection.execute(text(f"UPDATE korean_passage_groups SET needs_review = {bool_true} WHERE needs_review IS NULL"))
+    if "ix_korean_passage_groups_needs_review" not in _index_names(inspector, "korean_passage_groups"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_korean_passage_groups_needs_review ON korean_passage_groups (needs_review)"))
+        changed = True
+
+    tables = set(inspector.get_table_names())
+    problem_columns = _column_names(inspector, "problems")
+    batch_columns = _column_names(inspector, "batches")
+    if (
+        {"problems", "batches"}.issubset(tables)
+        and {"needs_review", "source_batch_id"}.issubset(problem_columns)
+        and "subject_engine" in batch_columns
+    ):
+        deleted_filter = "AND deleted_at IS NULL" if "deleted_at" in problem_columns else ""
+        connection.execute(
+            text(
+                f"""
+                UPDATE problems
+                SET needs_review = {bool_true}
+                WHERE source_batch_id IN (
+                    SELECT id FROM batches WHERE subject_engine = 'korean'
+                )
+                {deleted_filter}
+                """
+            )
+        )
+    return changed
 
 
 def _ensure_subject_engine_columns(connection, inspector) -> bool:
@@ -240,6 +430,9 @@ def _schema_is_at_head(inspector) -> bool:
         "batches",
         "problems",
         "problem_sets",
+        "student_academy_memberships",
+        "academy_classes",
+        "academy_seats",
         "content_versions",
         "archive_access_grants",
         "learning_assignments",
@@ -268,7 +461,9 @@ def _schema_is_at_head(inspector) -> bool:
         and _has_columns(inspector, "subscriptions", SUBJECT_ENGINE_COLUMNS)
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
         and _has_columns(inspector, "student_academy_memberships", {"display_name_in_academy", "expires_at"})
-        and _has_columns(inspector, "problems", {"choices"})
+        and _has_columns(inspector, "academy_seats", ACADEMY_SEAT_REQUIRED_COLUMNS)
+        and _has_columns(inspector, "korean_passage_groups", KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS)
+        and _has_columns(inspector, "problems", PROBLEM_REQUIRED_COLUMNS)
     )
 
 
@@ -303,6 +498,10 @@ def main() -> None:
             inspector = inspect(connection)
         if _ensure_problem_columns(connection, inspector):
             inspector = inspect(connection)
+        if _ensure_academy_seat_columns(connection, inspector):
+            inspector = inspect(connection)
+        if _ensure_korean_passage_review_columns(connection, inspector):
+            inspector = inspect(connection)
         if _ensure_subject_engine_columns(connection, inspector):
             inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
@@ -320,9 +519,15 @@ def main() -> None:
             inspector = inspect(connection)
             if _ensure_academy_columns(connection, inspector):
                 inspector = inspect(connection)
+            if _ensure_batch_columns(connection, inspector):
+                inspector = inspect(connection)
             if _ensure_student_membership_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_problem_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_academy_seat_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_korean_passage_review_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_subject_engine_columns(connection, inspector):
                 inspector = inspect(connection)
