@@ -489,6 +489,12 @@ function ProblemsBrowser() {
   }, [selectedIds]);
 
   useEffect(() => {
+    if (!selectedIds.length && duplicateNotice.includes("랜덤 추출")) {
+      setDuplicateNotice("");
+    }
+  }, [duplicateNotice, selectedIds.length]);
+
+  useEffect(() => {
     if (!batchFolderDrag?.isDragging) return;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
