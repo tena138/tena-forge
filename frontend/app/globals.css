@@ -469,6 +469,11 @@
   transform-origin: 50% 0;
 }
 
+html.tena-archive-dragging,
+html.tena-archive-dragging * {
+  cursor: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tena-archive-drag-dangle {
     animation: none;
