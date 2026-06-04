@@ -4,6 +4,7 @@ import unicodedata
 
 COMMON_MATH_PATTERN = re.compile(r"공통수학[12]|공통수[12]|공수[12]")
 SUBJECT_RULES: tuple[tuple[str, re.Pattern[str], bool], ...] = (
+    ("영어", re.compile(r"영어|영문|영문법|독해|어휘|듣기|ENGLISH|READING|GRAMMAR|LISTENING|VOCAB"), False),
     ("국어", re.compile(r"국어|언어와매체|화법과작문|문학|비문학|독서|KOREAN|LANGUAGE"), False),
     ("공통수학1", re.compile(r"공통수학1|공통수1|공수1"), False),
     ("공통수학2", re.compile(r"공통수학2|공통수2|공수2"), False),

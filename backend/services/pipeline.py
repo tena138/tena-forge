@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session, joinedload
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
 from services.korean_extraction import (
+    ENGLISH_EXTRACTION_PROMPT,
+    ENGLISH_SOLUTION_PROMPT,
     KOREAN_EXTRACTION_PROMPT,
     KOREAN_SOLUTION_PROMPT,
     map_korean_answers,
@@ -33,7 +35,7 @@ from services.korean_extraction import (
 from services.matcher import match_with_summary
 from services.math_normalization import normalize_geometry_notation
 from services.storage import save_visual_bytes
-from services.subject_engines import KOREAN_ENGINE, normalize_subject_engine
+from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, is_language_passage_engine, language_engine_label, normalize_subject_engine
 
 
 _ai_request_lock = threading.Lock()
@@ -1455,10 +1457,14 @@ def _extract_korean_problem_document(
     page_count: int,
     dpi: int,
     total_units: int,
+    subject_engine: str = KOREAN_ENGINE,
 ) -> tuple[dict[str, Any], dict[int, str]]:
     settings = get_settings()
     client = _openai_client()
     model_pool = _ai_model_pool()
+    engine = normalize_subject_engine(subject_engine)
+    engine_label = language_engine_label(engine)
+    extraction_prompt = ENGLISH_EXTRACTION_PROMPT if engine == ENGLISH_ENGINE else KOREAN_EXTRACTION_PROMPT
     page_payloads: list[dict[str, Any]] = []
     review_page_urls: dict[int, str] = {}
     processed_pages = 0
@@ -1470,7 +1476,7 @@ def _extract_korean_problem_document(
             rendered = render_pdf(
                 path,
                 batch_id=batch_id,
-                label="국어 PDF 렌더링 중",
+                label=f"{engine_label} PDF 렌더링 중",
                 start_page=start,
                 end_page=end,
                 dpi=dpi,
@@ -1485,7 +1491,7 @@ def _extract_korean_problem_document(
             filename = f"{batch_id}_page_{page_number}_review_source.png"
             review_page_urls[page_number] = save_visual_bytes(page.png_bytes, filename)
         completed = 0
-        set_progress(batch_id, f"국어 지문/문항 추출 중 (0/{len(pages)}페이지)", processed_pages + chunk_len, total_units)
+        set_progress(batch_id, f"{engine_label} 지문/문항 추출 중 (0/{len(pages)}페이지)", processed_pages + chunk_len, total_units)
         with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
             futures = {
                 executor.submit(
@@ -1493,7 +1499,7 @@ def _extract_korean_problem_document(
                     client,
                     page.base64_png,
                     (
-                        f"{KOREAN_EXTRACTION_PROMPT}\n\n"
+                        f"{extraction_prompt}\n\n"
                         f"Document id: {document_id}\n"
                         f"Source file: {source_file}\n"
                         f"Current source page: {page.page_index + 1}\n"
@@ -1509,22 +1515,22 @@ def _extract_korean_problem_document(
             for future, page in _completed_futures_with_heartbeat(
                 futures,
                 batch_id=batch_id,
-                message_factory=lambda: f"국어 지문/문항 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+                message_factory=lambda: f"{engine_label} 지문/문항 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
                 current_factory=lambda: processed_pages + chunk_len + completed,
                 total=total_units,
             ):
                 items = future.result()
                 raw = items[0] if items and isinstance(items[0], dict) else {}
-                page_payloads.append(normalize_korean_page_payload(raw, document_id, source_file, page.page_index + 1))
+                page_payloads.append(normalize_korean_page_payload(raw, document_id, source_file, page.page_index + 1, subject=engine))
                 completed += 1
                 set_progress(
                     batch_id,
-                    f"국어 지문/문항 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
+                    f"{engine_label} 지문/문항 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
                     processed_pages + chunk_len + completed,
                     total_units,
                 )
         processed_pages += chunk_len
-    return merge_korean_page_payloads(document_id, source_file, page_payloads), review_page_urls
+    return merge_korean_page_payloads(document_id, source_file, page_payloads, subject=engine), review_page_urls
 
 
 def _extract_korean_solution_items(
@@ -1534,10 +1540,14 @@ def _extract_korean_solution_items(
     dpi: int,
     offset: int,
     total_units: int,
+    subject_engine: str = KOREAN_ENGINE,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     client = _openai_client()
     model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
+    engine = normalize_subject_engine(subject_engine)
+    engine_label = language_engine_label(engine)
+    solution_prompt = ENGLISH_SOLUTION_PROMPT if engine == ENGLISH_ENGINE else KOREAN_SOLUTION_PROMPT
     answer_items: list[dict[str, Any]] = []
     processed_pages = 0
     for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
@@ -1549,7 +1559,7 @@ def _extract_korean_solution_items(
             rendered = render_pdf(
                 path,
                 batch_id=batch_id,
-                label="국어 정답/해설 PDF 렌더링 중",
+                label=f"{engine_label} 정답/해설 PDF 렌더링 중",
                 start_page=start,
                 end_page=end,
                 dpi=dpi,
@@ -1566,7 +1576,7 @@ def _extract_korean_solution_items(
                     vision_json,
                     client,
                     page.base64_png,
-                    f"{KOREAN_SOLUTION_PROMPT}\n\nCurrent source page: {page.page_index + 1}. Use this page number in source_pages.",
+                    f"{solution_prompt}\n\nCurrent source page: {page.page_index + 1}. Use this page number in source_pages.",
                     _page_split_model(model_pool, page.page_index, page_count),
                     page.ai_image_mime,
                     settings.ai_solution_max_output_tokens,
@@ -1577,7 +1587,7 @@ def _extract_korean_solution_items(
             for future, page in _completed_futures_with_heartbeat(
                 futures,
                 batch_id=batch_id,
-                message_factory=lambda: f"국어 정답/해설 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+                message_factory=lambda: f"{engine_label} 정답/해설 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
                 current_factory=lambda: base + chunk_len + completed,
                 total=total_units,
             ):
@@ -1585,7 +1595,7 @@ def _extract_korean_solution_items(
                 completed += 1
                 set_progress(
                     batch_id,
-                    f"국어 정답/해설 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
+                    f"{engine_label} 정답/해설 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
                     base + chunk_len + completed,
                     total_units,
                 )
@@ -1619,6 +1629,8 @@ def _korean_problem_text(question: dict[str, Any], passage: dict[str, Any] | Non
 
 
 def _save_korean_document_results(db: Session, batch: Batch, document: dict[str, Any], review_page_urls: dict[int, str] | None = None) -> None:
+    subject_engine = normalize_subject_engine(batch.subject_engine)
+    subject_label = language_engine_label(subject_engine)
     existing = db.query(KoreanExtractionDocument).filter(KoreanExtractionDocument.batch_id == batch.id).first()
     if existing:
         db.query(KoreanQuestion).filter(KoreanQuestion.document_id == existing.id).delete(synchronize_session=False)
@@ -1629,7 +1641,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
     record = KoreanExtractionDocument(
         batch_id=batch.id,
         document_id=str(document.get("document_id") or batch.id),
-        subject="korean",
+        subject=subject_engine,
         source_file=str(document.get("source_file") or batch.problem_pdf_filename),
         payload=document,
         global_warnings=document.get("global_warnings") or [],
@@ -1660,7 +1672,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
             )
         )
 
-    batch_name = (batch.name or "Korean batch").strip()
+    batch_name = (batch.name or f"{subject_label} batch").strip()
     for index, question in enumerate(questions, start=1):
         if not isinstance(question, dict):
             continue
@@ -1711,7 +1723,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
             academy_id=batch.academy_id,
         )
         problem.tags = Tag(
-            subject="국어",
+            subject=subject_label,
             unit=(passage.get("passage_type") if passage else None) or None,
             problem_type="객관식" if question.get("choices") else None,
             source=f"{batch_name} / p.{first_page} / {question.get('question_number') or index}번",
@@ -1721,13 +1733,15 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
 
 def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     settings = get_settings()
+    subject_engine = normalize_subject_engine(batch.subject_engine)
+    subject_label = language_engine_label(subject_engine)
     problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
     solution_page_count = count_pdf_pages(batch.solution_pdf_filename) if batch.solution_pdf_filename else 0
     total_units = max(problem_page_count * 2 + solution_page_count * 2, 1)
     problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
     solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)) if batch.solution_pdf_filename else problem_dpi
-    set_progress(batch_id, "국어 추출 준비 완료", 0, total_units)
-    document_id = f"korean-{batch.id}"
+    set_progress(batch_id, f"{subject_label} 추출 준비 완료", 0, total_units)
+    document_id = f"{subject_engine}-{batch.id}"
 
     document, review_page_urls = _extract_korean_problem_document(
         batch.problem_pdf_filename,
@@ -1737,6 +1751,7 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
         problem_page_count,
         problem_dpi,
         total_units,
+        subject_engine=subject_engine,
     )
     _write_batch_artifact(batch_id, "korean_extraction.json", document)
 
@@ -1748,12 +1763,13 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
             solution_dpi,
             offset=problem_page_count * 2,
             total_units=total_units,
+            subject_engine=subject_engine,
         )
         _write_batch_artifact(batch_id, "korean_answer_solution_items.json", answer_items)
         document = map_korean_answers(document, answer_items)
         _write_batch_artifact(batch_id, "korean_extraction_with_answers.json", document)
 
-    set_progress(batch_id, "국어 지문/문항 저장 중", total_units, total_units)
+    set_progress(batch_id, f"{subject_label} 지문/문항 저장 중", total_units, total_units)
     ensure_batch_active(batch_id)
     _save_korean_document_results(db, batch, document, review_page_urls)
     ensure_batch_active(batch_id)
@@ -1848,7 +1864,7 @@ def process_batch(batch_id: UUID) -> None:
             raise RuntimeError("OPENAI_API_KEY is required for processing")
 
         settings = get_settings()
-        if normalize_subject_engine(batch.subject_engine) == KOREAN_ENGINE:
+        if is_language_passage_engine(batch.subject_engine):
             process_korean_batch(db, batch, batch_id)
             return
 
@@ -2066,8 +2082,8 @@ def process_solutions_only(batch_id: UUID) -> None:
         set_progress(batch_id, "해설 재처리 시작", 0, 0, reset=True)
         if not get_settings().openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is required for processing")
-        if normalize_subject_engine(batch.subject_engine) == KOREAN_ENGINE:
-            raise RuntimeError("Korean Language solution-only reprocessing is not supported yet. Retry the full Korean batch to remap answers and explanations.")
+        if is_language_passage_engine(batch.subject_engine):
+            raise RuntimeError("Language beta solution-only reprocessing is not supported yet. Retry the full batch to remap answers and explanations.")
 
         settings = get_settings()
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
@@ -3018,7 +3034,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
 def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> None:
     batch_name = (batch.name or "이름 없는 배치").strip()
     subject_engine = normalize_subject_engine(batch.subject_engine)
-    preserve_choices = subject_engine == KOREAN_ENGINE
+    preserve_choices = is_language_passage_engine(subject_engine)
     ensure_batch_active(batch.id)
     for index, item in enumerate(problems):
         if index and index % 20 == 0:

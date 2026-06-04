@@ -6,6 +6,8 @@ from typing import Any
 
 MATH_ENGINE = "math"
 KOREAN_ENGINE = "korean"
+ENGLISH_ENGINE = "english"
+LANGUAGE_PASSAGE_ENGINES = {KOREAN_ENGINE, ENGLISH_ENGINE}
 DEFAULT_SUBJECT_ENGINES = [MATH_ENGINE]
 
 
@@ -30,6 +32,14 @@ SUBJECT_ENGINES: dict[str, SubjectEngineDefinition] = {
             "shared passage-question groups, and exact multiple-choice extraction."
         ),
     ),
+    ENGLISH_ENGINE: SubjectEngineDefinition(
+        code=ENGLISH_ENGINE,
+        label="영어 beta",
+        description=(
+            "English Language extraction uses the same passage-question pipeline as Korean beta, "
+            "preserving both English and Korean text exactly as shown."
+        ),
+    ),
 }
 
 
@@ -37,7 +47,34 @@ def normalize_subject_engine(value: Any) -> str:
     text = str(value or "").strip().lower()
     if text in {"korean", "kor", "language", "korean_language", "korean-language", "국어", "언어"}:
         return KOREAN_ENGINE
+    if text in {
+        "english",
+        "eng",
+        "en",
+        "english_language",
+        "english-language",
+        "영어",
+        "영문",
+        "영문법",
+        "독해",
+        "reading",
+        "grammar",
+    }:
+        return ENGLISH_ENGINE
     return MATH_ENGINE
+
+
+def is_language_passage_engine(value: Any) -> bool:
+    return normalize_subject_engine(value) in LANGUAGE_PASSAGE_ENGINES
+
+
+def language_engine_label(value: Any) -> str:
+    engine = normalize_subject_engine(value)
+    if engine == ENGLISH_ENGINE:
+        return "영어"
+    if engine == KOREAN_ENGINE:
+        return "국어"
+    return "수학"
 
 
 def normalize_subject_engines(value: Any) -> list[str]:
@@ -63,6 +100,8 @@ def infer_subject_engine_from_subjects(subjects: list[str] | None, fallback: str
         compact = str(subject or "").replace(" ", "").lower()
         if any(marker in compact for marker in ("국어", "언어와매체", "화법과작문", "문학", "비문학", "독서", "korean")):
             return KOREAN_ENGINE
+        if any(marker in compact for marker in ("영어", "영문", "영문법", "독해", "어휘", "듣기", "english", "reading", "grammar")):
+            return ENGLISH_ENGINE
     return normalize_subject_engine(fallback)
 
 

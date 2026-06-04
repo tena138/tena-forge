@@ -664,7 +664,8 @@ function ProblemsBrowser() {
   );
 
   useEffect(() => {
-    if (!selectedBatchId || selectedBatchFolderId || selectedBatch?.subject_engine !== "korean") {
+    const isLanguageBatch = selectedBatch?.subject_engine === "korean" || selectedBatch?.subject_engine === "english";
+    if (!selectedBatchId || selectedBatchFolderId || !isLanguageBatch) {
       setKoreanPassages([]);
       return;
     }

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from database import get_settings
 from models import Academy, Batch, BatchStatus, Plan, PlatformSetting, Subscription, UsageLog, UserRole
-from services.subject_engines import KOREAN_ENGINE, normalize_subject_engine
+from services.subject_engines import is_language_passage_engine, normalize_subject_engine
 
 
 POLICY_SETTING_KEY = "usage_cost_policy"
@@ -324,10 +324,10 @@ def estimate_extraction(
     total_pages = max(int(problem_pages or 0), 0) + max(int(solution_pages or 0), 0)
     hard_scan = likely_hard_scan(problem_file_mb + solution_file_mb, max(total_pages, 1))
 
-    if engine == KOREAN_ENGINE:
+    if is_language_passage_engine(engine):
         problem_multiplier = 4.0 if hard_scan else 3.0
         solution_multiplier = 1.5
-        category = "korean_hard_scan" if hard_scan else "korean_long_passage"
+        category = f"{engine}_hard_scan" if hard_scan else f"{engine}_long_passage"
     elif hard_scan:
         problem_multiplier = 2.0
         solution_multiplier = 2.0

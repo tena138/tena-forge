@@ -25,6 +25,14 @@ class SubscriptionPricingTests(unittest.TestCase):
         self.assertEqual(pricing["monthly_price_krw"], 152_000)
         self.assertEqual(pricing["amount_krw"], 152_000)
 
+    def test_english_engine_counts_as_third_subject_engine(self):
+        pricing = calculate_subscription_price("basic", "monthly", {}, ["math", "korean", "english"])
+
+        self.assertEqual(pricing["enabled_subject_engines"], ["math", "korean", "english"])
+        self.assertEqual(pricing["subject_engine_count"], 3)
+        self.assertEqual(pricing["subject_engine_monthly_delta_krw"], 96_000)
+        self.assertEqual(pricing["monthly_price_krw"], 144_000)
+
     def test_annual_subject_engine_delta_uses_existing_discount(self):
         pricing = calculate_subscription_price("pro", "annual", {}, ["math", "korean"])
 

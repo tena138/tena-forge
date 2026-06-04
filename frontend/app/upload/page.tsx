@@ -13,10 +13,12 @@ import { Batch, BatchStatus, SourceType } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
 import { SUBJECT_ENGINES, subjectEngineLabel } from "@/lib/plan-pricing";
+import type { SubjectEngineCode } from "@/lib/plan-pricing";
 import { getRoles, getUsageSummary, UsageSummary } from "@/lib/saas";
 import {
   SubjectNode,
   buildSubjectTree,
+  isEnglishSubjectValue,
   isKoreanSubjectValue,
   makeSubjectPathValue,
   normalizeSubjectValue,
@@ -62,6 +64,7 @@ function compactSubjectText(value: string | null | undefined) {
 function inferSubjectsFromFilename(fileName: string | null | undefined) {
   const compacted = compactSubjectText(fileName);
   if (!compacted) return [];
+  if (/영어|영문|영문법|독해|어휘|듣기|ENGLISH|READING|GRAMMAR|LISTENING|VOCAB/.test(compacted)) return ["영어"];
   if (/국어|언어와매체|화법과작문|문학|비문학|독서|KOREAN|LANGUAGE/.test(compacted)) return ["국어"];
   const withoutCommonMath = compacted.replace(commonMathPattern, "");
   const subjects: string[] = [];
@@ -223,6 +226,21 @@ function likelyHardScan(totalMb: number, totalPages: number) {
   return totalPages > 0 && totalMb / totalPages >= 1;
 }
 
+const languageSubjectByEngine: Partial<Record<SubjectEngineCode, string>> = {
+  korean: "국어",
+  english: "영어",
+};
+
+function isLanguagePassageEngine(engine: SubjectEngineCode) {
+  return engine === "korean" || engine === "english";
+}
+
+function subjectEngineForSubject(subject: string): SubjectEngineCode | null {
+  if (isKoreanSubjectValue(subject)) return "korean";
+  if (isEnglishSubjectValue(subject)) return "english";
+  return null;
+}
+
 function buildCreditEstimate({
   problem,
   solution,
@@ -232,7 +250,7 @@ function buildCreditEstimate({
 }: {
   problem: PdfPageEstimate;
   solution: PdfPageEstimate;
-  subjectEngine: "math" | "korean";
+  subjectEngine: SubjectEngineCode;
   problemFile: File | null;
   solutionFile: File | null;
 }) {
@@ -244,7 +262,7 @@ function buildCreditEstimate({
   const hardScan = likelyHardScan(totalMb, Math.max(totalPages, 1));
   let problemMultiplier = 1;
   let solutionMultiplier = 1.35;
-  if (subjectEngine === "korean") {
+  if (isLanguagePassageEngine(subjectEngine)) {
     problemMultiplier = hardScan ? 4 : 3;
     solutionMultiplier = 1.5;
   } else if (hardScan) {
@@ -935,7 +953,7 @@ export default function UploadPage() {
   const [solutionPdf, setSolutionPdf] = useState<File | null>(null);
   const [problemPdfEstimate, setProblemPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
   const [solutionPdfEstimate, setSolutionPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
-  const [subjectEngine, setSubjectEngine] = useState<"math" | "korean">("math");
+  const [subjectEngine, setSubjectEngine] = useState<SubjectEngineCode>("math");
   const [subjectEngineTouched, setSubjectEngineTouched] = useState(false);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
@@ -1003,11 +1021,11 @@ export default function UploadPage() {
     };
   }, [solutionPdf]);
 
-  function applyInferredSubjectEngine(engine: "math" | "korean") {
+  function applyInferredSubjectEngine(engine: SubjectEngineCode) {
     if (!subjectEngineTouched) setSubjectEngine(engine);
   }
 
-  function selectSubjectEngine(engine: "math" | "korean") {
+  function selectSubjectEngine(engine: SubjectEngineCode) {
     setSubjectEngineTouched(true);
     setSubjectEngine(engine);
   }
@@ -1015,7 +1033,8 @@ export default function UploadPage() {
   function toggleSubject(subject: string) {
     const normalized = normalizeSubjectValue(subject);
     if (!normalized) return;
-    if (isKoreanSubjectValue(normalized)) applyInferredSubjectEngine("korean");
+    const inferredEngine = subjectEngineForSubject(normalized);
+    if (inferredEngine) applyInferredSubjectEngine(inferredEngine);
     setSelectedSubjects((current) => (current.includes(normalized) ? current.filter((item) => item !== normalized) : [...current, normalized]));
   }
 
@@ -1028,7 +1047,8 @@ export default function UploadPage() {
       writeStringList(CUSTOM_SUBJECTS_KEY, next);
       return next;
     });
-    if (isKoreanSubjectValue(subject)) applyInferredSubjectEngine("korean");
+    const inferredEngine = subjectEngineForSubject(subject);
+    if (inferredEngine) applyInferredSubjectEngine(inferredEngine);
     updateSubjectTagColor(subject, color);
   }
 
@@ -1111,7 +1131,8 @@ export default function UploadPage() {
     if (inferredSubjects.length) {
       const nextSubjects = inferredSubjects.map(normalizeSubjectValue).filter(Boolean);
       setSelectedSubjects((current) => [...current, ...nextSubjects.filter((subject) => !current.includes(subject))]);
-      if (nextSubjects.some(isKoreanSubjectValue)) applyInferredSubjectEngine("korean");
+      const inferredEngine = nextSubjects.map(subjectEngineForSubject).find(Boolean);
+      if (inferredEngine) applyInferredSubjectEngine(inferredEngine);
     }
     setAutoBatchName(nextAutoBatchName);
   }
@@ -1167,14 +1188,17 @@ export default function UploadPage() {
   }, []);
 
   const currentStatus = historyBatchSnapshot?.id === batchId ? historyBatchSnapshot.status : null;
-  const enabledSubjectEngines = usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"];
+  const enabledSubjectEngines = useMemo(
+    () => usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"],
+    [usageSummary],
+  );
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const selectedEngineLocked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(subjectEngine);
   const subjectTree = useMemo(() => buildSubjectTree([...customSubjectOptions, ...selectedSubjects]), [customSubjectOptions, selectedSubjects]);
 
   useEffect(() => {
     if (isAdmin || !usageSummary || enabledSubjectEngines.includes(subjectEngine)) return;
-    const nextEngine = enabledSubjectEngines.find((engine): engine is "math" | "korean" => engine === "math" || engine === "korean") || "math";
+    const nextEngine = enabledSubjectEngines.find((engine): engine is SubjectEngineCode => engine === "math" || engine === "korean" || engine === "english") || "math";
     setSubjectEngine(nextEngine);
     setSubjectEngineTouched(false);
   }, [enabledSubjectEngines, isAdmin, subjectEngine, usageSummary]);
@@ -1233,8 +1257,9 @@ export default function UploadPage() {
                         )}
                         onClick={() => {
                           selectSubjectEngine(engine.code);
-                          if (engine.code === "korean" && !selectedSubjects.includes("국어")) {
-                            setSelectedSubjects((current) => [...current, "국어"]);
+                          const languageSubject = languageSubjectByEngine[engine.code];
+                          if (languageSubject && !selectedSubjects.includes(languageSubject)) {
+                            setSelectedSubjects((current) => [...current, languageSubject]);
                           }
                         }}
                       >
@@ -1321,7 +1346,7 @@ export default function UploadPage() {
                 <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
                 <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">해설 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
                 <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
-                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : subjectEngine === "korean" ? "국어 엔진 가중치" : "기본 가중치"}</div>
+                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : isLanguagePassageEngine(subjectEngine) ? `${subjectEngineLabel(subjectEngine)} 가중치` : "기본 가중치"}</div>
               </div>
               {creditEstimate?.approximate || problemPdfEstimate.error || solutionPdfEstimate.error ? (
                 <p className="mt-3 text-xs font-semibold text-amber-200">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>

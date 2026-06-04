@@ -173,7 +173,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                   {selectedSubjectEngines.map((engine) => (
                     <div key={engine} className="flex items-center justify-between rounded-[12px] bg-slate-50 px-4 py-3">
                       <span className="font-bold text-slate-500">{subjectEngineLabel(engine)}</span>
-                      <span className="font-black">{engine === "math" ? "수학 추출" : "국어 추출"}</span>
+                      <span className="font-black">{engine === "math" ? "수학 추출" : `${subjectEngineLabel(engine)} 추출`}</span>
                     </div>
                   ))}
                 </div>

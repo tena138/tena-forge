@@ -2,7 +2,7 @@ export type PlanType = "free" | "basic" | "pro" | "enterprise";
 export type PaidPlanType = "basic" | "pro";
 export type BillingCycle = "monthly" | "annual";
 export type PackageGroup = "ai" | "storage" | "student" | "processing";
-export type SubjectEngineCode = "math" | "korean";
+export type SubjectEngineCode = "math" | "korean" | "english";
 
 export type PlanSpecs = {
   monthlyAiCredits: number | "custom";
@@ -62,6 +62,12 @@ export const SUBJECT_ENGINES: Array<{
     label: "국어",
     version: "beta",
     description: "긴 지문, 공통 지문 묶음, 선택지를 국어형 구조로 추출합니다.",
+  },
+  {
+    code: "english",
+    label: "영어",
+    version: "beta",
+    description: "영어 지문과 한국어 지시문을 함께 보존하며 국어 beta와 같은 지문형 구조로 추출합니다.",
   },
 ];
 
@@ -262,7 +268,14 @@ export function normalizeSubjectEngines(value: unknown): SubjectEngineCode[] {
   const engines: SubjectEngineCode[] = [];
   for (const item of rawItems) {
     const normalized = String(item || "").trim().toLowerCase();
-    const engine = normalized === "korean" || normalized === "kor" || normalized === "국어" ? "korean" : normalized === "math" || normalized === "수학" ? "math" : null;
+    const engine =
+      normalized === "korean" || normalized === "kor" || normalized === "국어"
+        ? "korean"
+        : normalized === "english" || normalized === "eng" || normalized === "en" || normalized === "영어"
+          ? "english"
+          : normalized === "math" || normalized === "수학"
+            ? "math"
+            : null;
     if (engine && !engines.includes(engine)) engines.push(engine);
   }
   return engines.length ? engines : ["math"];

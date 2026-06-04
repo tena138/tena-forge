@@ -229,7 +229,7 @@ function ProblemReviewClient() {
   const loadedProblemIdRef = useRef<string | null>(null);
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
-  const isKoreanBatch = selectedBatch?.subject_engine === "korean";
+  const isKoreanBatch = selectedBatch?.subject_engine === "korean" || selectedBatch?.subject_engine === "english";
   const reviewItems = useMemo<KoreanReviewItem[]>(
     () => isKoreanBatch ? koreanReviewItems : problems.map((problem) => ({ item_type: "question" as const, id: problem.id, problem })),
     [isKoreanBatch, koreanReviewItems, problems],

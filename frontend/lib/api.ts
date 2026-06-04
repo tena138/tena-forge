@@ -58,7 +58,7 @@ export type Batch = {
   rights_note: string | null;
   subject_candidates?: string[];
   unit_candidates?: string[];
-  subject_engine?: "math" | "korean";
+  subject_engine?: "math" | "korean" | "english";
   processing_task?: "full" | "solution_only";
   created_at: string;
   problem_count: number;

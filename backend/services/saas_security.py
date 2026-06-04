@@ -22,7 +22,7 @@ from models import (
     UserRole,
 )
 from services.ownership import current_owner_id
-from services.subject_engines import KOREAN_ENGINE, SUBJECT_ENGINES, normalize_subject_engine, normalize_subject_engines, subject_engine_pricing
+from services.subject_engines import SUBJECT_ENGINES, is_language_passage_engine, language_engine_label, normalize_subject_engine, normalize_subject_engines, subject_engine_pricing
 from services.usage_cost_policy import active_plan_for_user, monthly_usage_totals, plan_cost_policy
 
 ADMIN_ROLES = {"admin", "super_admin"}
@@ -154,15 +154,16 @@ def ensure_subject_engine_access(db: Session, user_id: str, subject_engine: str)
     engine = normalize_subject_engine(subject_engine)
     if engine in enabled_subject_engines_for_user(db, user_id):
         return
-    if engine == KOREAN_ENGINE:
-        detail = "국어 beta 엔진은 현재 플랜에서 사용할 수 없습니다. 결제 화면에서 국어 beta 엔진을 추가해주세요."
+    if is_language_passage_engine(engine):
+        label = language_engine_label(engine)
+        detail = f"{label} beta 엔진은 현재 플랜에서 사용할 수 없습니다. 결제 화면에서 {label} beta 엔진을 추가해주세요."
     else:
         detail = "수학 1.0 엔진은 현재 플랜에서 사용할 수 없습니다."
     raise HTTPException(status_code=402, detail=detail)
 
 
 def _plan_summary_for_policy(plan: Plan, subscription: Subscription | None, policy) -> SimpleNamespace:
-    engines = sorted(SUBJECT_ENGINES) if getattr(policy, "plan_id", "") == "admin" else normalize_subject_engines(
+    engines = list(SUBJECT_ENGINES) if getattr(policy, "plan_id", "") == "admin" else normalize_subject_engines(
         subscription.enabled_subject_engines if subscription else getattr(plan, "enabled_subject_engines", None)
     )
     subject_multiplier = float(getattr(subscription, "subject_multiplier", None) or len(engines) or 1)

@@ -32,7 +32,7 @@ from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progres
 from services.private_files import sign_static_url
 from services.saas_security import ensure_subject_engine_access
 from services.storage import save_upload
-from services.subject_engines import infer_subject_engine_from_subjects, normalize_subject_engine
+from services.subject_engines import infer_subject_engine_from_subjects, is_language_passage_engine, normalize_subject_engine
 from services.subject_inference import infer_subject_candidates_from_text
 from services.usage_cost_policy import enforce_extraction_preflight, estimate_extraction, record_usage_event
 
@@ -138,7 +138,7 @@ def _serialize_problem_list_item(problem: Problem, batch: Batch):
 
 
 def _korean_review_counts(db: Session, batch: Batch, problem_count: int, review_count: int) -> tuple[int, int]:
-    if (batch.subject_engine or "math") != "korean":
+    if not is_language_passage_engine(batch.subject_engine):
         return problem_count, review_count
     document = db.scalar(select(KoreanExtractionDocument).where(KoreanExtractionDocument.batch_id == batch.id))
     if not document:

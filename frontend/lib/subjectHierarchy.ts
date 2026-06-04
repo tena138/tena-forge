@@ -52,6 +52,11 @@ export function isKoreanSubjectValue(value: string) {
   return /국어|문학|독서|화법과 작문|언어와 매체/.test(text);
 }
 
+export function isEnglishSubjectValue(value: string) {
+  const text = normalizeSubjectValue(value);
+  return /영어|영문|영문법|독해|어휘|듣기|ENGLISH|READING|GRAMMAR|VOCAB|LISTENING/i.test(text);
+}
+
 export function buildSubjectTree(extraValues: string[] = []): SubjectNode[] {
   const roots = cloneSubjectNodes(DEFAULT_SUBJECT_TREE);
   for (const rawValue of extraValues) {

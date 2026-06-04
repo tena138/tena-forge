@@ -47,6 +47,12 @@ class UsageCostPolicyTests(unittest.TestCase):
         self.assertEqual(estimate.metadata["category"], "korean_hard_scan")
         self.assertEqual(estimate.credits, 80)
 
+    def test_english_clean_scan_uses_language_multiplier(self):
+        estimate = estimate_extraction(subject_engine="english", problem_pages=20, problem_file_mb=10)
+
+        self.assertEqual(estimate.metadata["category"], "english_long_passage")
+        self.assertEqual(estimate.credits, 60)
+
     def test_single_reextract_consumes_fractional_credit(self):
         estimate = estimate_single_reextract()
 

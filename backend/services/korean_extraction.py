@@ -86,6 +86,86 @@ Rules:
 - If a question number is unclear, include a warning."""
 
 
+ENGLISH_EXTRACTION_PROMPT = r"""You are the English Language beta extraction engine for Tena Forge.
+
+Your task is to extract English exam content with maximum fidelity. Many Korean English exams contain
+English passages and Korean instructions, stems, choices, explanations, or grammar labels. Preserve both
+English and Korean text exactly as visible.
+
+The passage is the primary unit. A passage can be linked to multiple questions.
+
+Return raw JSON array only. The array must contain exactly one object:
+[
+  {
+    "document_id": "<document id supplied by the system>",
+    "subject": "english",
+    "source_file": "<source file name supplied by the system>",
+    "passage_groups": [
+      {
+        "passage_id": "<stable id unique within this document>",
+        "source_pages": [<1-based source page numbers>],
+        "passage_instruction": "<visible instruction in Korean or English, or null>",
+        "passage_title": "<visible title or null>",
+        "passage_text": "<exact passage text as visible>",
+        "passage_type": "reading" | "grammar" | "vocabulary" | "listening" | "literature" | "unknown",
+        "linked_question_ids": ["<question ids>"],
+        "extraction_confidence": <0.0 to 1.0>,
+        "warnings": []
+      }
+    ],
+    "questions": [
+      {
+        "question_id": "<stable id unique within this document>",
+        "source_pages": [<1-based source page numbers>],
+        "question_number": "<visible question number>",
+        "linked_passage_id": "<passage_id or null>",
+        "question_stem": "<exact question stem text>",
+        "additional_material": "<보기/additional material text or null>",
+        "choices": [
+          {"choice_label": "①", "choice_text": "<exact choice text>"}
+        ],
+        "answer": null,
+        "solution": null,
+        "extraction_confidence": <0.0 to 1.0>,
+        "warnings": []
+      }
+    ],
+    "global_warnings": []
+  }
+]
+
+Rules:
+- Do not rewrite, translate, summarize, normalize, modernize, or correct passage text.
+- Preserve English punctuation, capitalization, line breaks, blanks, underlines, bracket labels, and Korean annotations.
+- Put every shared passage body only in passage_groups[].passage_text.
+- Never put passage text, passage instructions, or shared reading text inside question_stem.
+- Extract 보기 blocks, underlined phrases, blank options, and grammar/vocabulary tables into additional_material when they are part of a question.
+- Extract choices ①②③④⑤ exactly. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
+- Link questions to a passage when the page shows a shared passage range such as [1~3], [1-3], 1~3, or an instruction that says to read the following passage.
+- If uncertain, add warnings instead of guessing.
+- Do not extract answers or solutions from the problem file. Only answer/solution files may fill answer and solution later."""
+
+
+ENGLISH_SOLUTION_PROMPT = r"""You are extracting answers and explanations for English exam questions.
+
+Return raw JSON array only:
+[
+  {
+    "question_number": "<visible question number>",
+    "answer": "<final answer label or text, or null>",
+    "solution": "<explanation text exactly as visible, preserving Korean and English, or null>",
+    "source_pages": [<1-based source page numbers>],
+    "warnings": []
+  }
+]
+
+Rules:
+- Preserve Korean and English explanation text exactly as visible.
+- Do not invent answers.
+- If only an answer key is visible, fill answer and leave solution null.
+- If a question number is unclear, include a warning."""
+
+
 PASSAGE_RANGE_RE = re.compile(r"(?:\[|\()?0*(\d{1,3})\s*[~\-∼]\s*0*(\d{1,3})(?:\]|\))?")
 PASSAGE_INSTRUCTION_RE = re.compile(r"(?:※\s*)?다음\s+글을\s+읽고\s+물음에\s+답하시오")
 QUESTION_NUMBER_RE = re.compile(r"(?m)^\s*0*(\d{1,3})\s*[\.\)]")
@@ -274,7 +354,7 @@ def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
-def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_file: str, fallback_page: int) -> dict[str, Any]:
+def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_file: str, fallback_page: int, subject: str = "korean") -> dict[str, Any]:
     payload = raw if isinstance(raw, dict) else {}
     passage_groups: list[dict[str, Any]] = []
     questions: list[dict[str, Any]] = []
@@ -329,7 +409,7 @@ def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_
 
     return {
         "document_id": _text(payload.get("document_id")) or document_id,
-        "subject": "korean",
+        "subject": subject,
         "source_file": _text(payload.get("source_file")) or source_file,
         "passage_groups": passage_groups,
         "questions": questions,
@@ -337,10 +417,10 @@ def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_
     }
 
 
-def merge_korean_page_payloads(document_id: str, source_file: str, page_payloads: list[dict[str, Any]]) -> dict[str, Any]:
+def merge_korean_page_payloads(document_id: str, source_file: str, page_payloads: list[dict[str, Any]], subject: str = "korean") -> dict[str, Any]:
     document = {
         "document_id": document_id,
-        "subject": "korean",
+        "subject": subject,
         "source_file": source_file,
         "passage_groups": [],
         "questions": [],
