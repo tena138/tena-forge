@@ -69,30 +69,39 @@ void main() {
   float n2 = fbm(p * 2.25 + vec2(n1 * 0.48 + t * 0.22, -t * 0.34));
   float n3 = fbm(vec2(counterSpiral * 0.28, radius * 3.1) - vec2(t * 0.28, n2 * 0.32));
 
-  vec3 base = vec3(0.020, 0.019, 0.036);
-  vec3 deep = vec3(0.006, 0.008, 0.020);
-  vec3 blue = vec3(0.105, 0.295, 0.820);
-  vec3 indigo = vec3(0.185, 0.145, 0.500);
-  vec3 violet = vec3(0.455, 0.205, 0.940);
-  vec3 magenta = vec3(0.780, 0.140, 0.680);
+  vec3 base = vec3(0.026, 0.023, 0.052);
+  vec3 deep = vec3(0.004, 0.006, 0.018);
+  vec3 blue = vec3(0.070, 0.260, 0.960);
+  vec3 cyan = vec3(0.020, 0.740, 0.980);
+  vec3 indigo = vec3(0.200, 0.150, 0.540);
+  vec3 violet = vec3(0.500, 0.245, 1.000);
+  vec3 magenta = vec3(0.900, 0.165, 0.720);
 
   float ringA = exp(-pow((radius - (0.34 + 0.035 * sin(t * 0.92 + n1 * 2.2))) / 0.245, 2.0));
   float ringB = exp(-pow((radius - (0.58 + 0.045 * cos(t * 0.70 + n2 * 2.6))) / 0.320, 2.0));
   float ringC = exp(-pow((radius - (0.82 + 0.035 * sin(t * 0.46 + n3 * 2.0))) / 0.380, 2.0));
   float armA = smoothstep(0.10, 0.95, sin(spiral * 1.74 + n2 * 2.2) * 0.5 + 0.5);
   float armB = smoothstep(0.12, 0.92, sin(counterSpiral * 1.38 + n3 * 2.0) * 0.5 + 0.5);
-  float aurora = ringA * (0.52 + armA * 0.24) + ringB * (0.36 + armB * 0.28) + ringC * 0.18;
-  aurora *= 0.66 + n1 * 0.24 + n2 * 0.18;
+  float ribbonA = exp(-pow((p.y + sin(p.x * 2.45 + t * 1.40) * 0.16 - 0.10) / 0.24, 2.0));
+  float ribbonB = exp(-pow((p.y + cos(p.x * 1.85 - t * 1.05) * 0.20 + 0.28) / 0.32, 2.0));
+  ribbonA *= smoothstep(1.24, 0.10, length(p * vec2(0.72, 1.12)));
+  ribbonB *= smoothstep(1.34, 0.22, length(p * vec2(0.86, 0.96)));
+
+  float aurora = ringA * (0.55 + armA * 0.26) + ringB * (0.40 + armB * 0.30) + ringC * 0.20;
+  aurora += ribbonA * (0.34 + n2 * 0.18) + ribbonB * (0.22 + n3 * 0.16);
+  aurora *= 0.74 + n1 * 0.26 + n2 * 0.20;
 
   vec3 bandColor = mix(blue, violet, smoothstep(-0.58, 0.62, sin(spiral + n1)));
   bandColor = mix(bandColor, magenta, smoothstep(0.56, 1.0, sin(counterSpiral * 0.84 + n3) * 0.5 + 0.5) * 0.52);
-  bandColor = mix(bandColor, indigo, smoothstep(0.52, 1.0, radius) * 0.34);
+  bandColor = mix(bandColor, cyan, smoothstep(-0.74, 0.42, cos(spiral * 0.62 - n2)) * 0.26);
+  bandColor = mix(bandColor, indigo, smoothstep(0.56, 1.06, radius) * 0.26);
 
   float centerShadow = smoothstep(0.36, 0.02, radius);
   float outerFalloff = smoothstep(1.18, 0.28, radius);
   vec3 color = mix(deep, base, outerFalloff * 0.62);
-  color += bandColor * aurora * (0.74 + outerFalloff * 0.42);
-  color = mix(color, deep, centerShadow * 0.34);
+  color += bandColor * aurora * (0.80 + outerFalloff * 0.40);
+  color += mix(cyan, magenta, smoothstep(-0.22, 0.84, p.x + n3 * 0.34)) * (ribbonA * 0.10 + ribbonB * 0.08);
+  color = mix(color, deep, centerShadow * 0.26);
 
   float sideFade = smoothstep(1.46, 0.22, length(p * vec2(0.74, 1.04)));
   color *= 0.52 + sideFade * 0.66;
@@ -269,7 +278,7 @@ export function AuroraWebGLBackground() {
       <div className="landing-webgl-fallback absolute inset-0" />
       <canvas ref={canvasRef} className={fallback ? "absolute inset-0 h-full w-full opacity-0" : "absolute inset-0 h-full w-full opacity-100"} />
       <div className="landing-film-grain absolute inset-0" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(10,10,15,0.08)_0%,rgba(10,10,15,0.38)_54%,rgba(10,10,15,0.96)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,7,18,0.18)_0%,rgba(8,8,18,0.30)_56%,rgba(5,5,10,0.96)_100%)]" />
       <div className="absolute inset-x-0 bottom-0 h-[42vh] bg-[linear-gradient(180deg,transparent,rgba(5,5,10,0.34)_100%)]" />
     </div>
   );

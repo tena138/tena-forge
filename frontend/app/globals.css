@@ -242,11 +242,12 @@
 
   .landing-webgl-fallback {
     background:
-      radial-gradient(circle at 54% 50%, rgba(5, 6, 18, 0.96) 0 17%, rgba(18, 12, 48, 0.84) 24%, transparent 34%),
-      radial-gradient(circle at 54% 50%, transparent 0 27%, rgba(103, 46, 224, 0.54) 38%, rgba(37, 82, 210, 0.40) 52%, transparent 68%),
-      conic-gradient(from 220deg at 54% 50%, rgba(8, 8, 24, 0.96), rgba(100, 45, 218, 0.72), rgba(194, 36, 153, 0.50), rgba(27, 82, 202, 0.72), rgba(92, 41, 190, 0.62), rgba(8, 8, 24, 0.96)),
-      radial-gradient(ellipse at 18% 26%, rgba(74, 43, 173, 0.40), transparent 42%),
-      linear-gradient(180deg, #050611, var(--landing-bg-base) 58%, #05050a);
+      radial-gradient(circle at 52% 48%, rgba(5, 7, 18, 0.94) 0 14%, rgba(23, 13, 58, 0.82) 23%, transparent 34%),
+      radial-gradient(circle at 48% 54%, transparent 0 24%, rgba(124, 92, 255, 0.64) 36%, rgba(14, 165, 233, 0.46) 53%, transparent 70%),
+      radial-gradient(ellipse at 16% 30%, rgba(45, 212, 191, 0.34), transparent 38%),
+      radial-gradient(ellipse at 86% 42%, rgba(244, 114, 182, 0.34), transparent 42%),
+      conic-gradient(from 218deg at 53% 50%, rgba(5, 6, 20, 0.98), rgba(37, 99, 235, 0.74), rgba(124, 92, 255, 0.86), rgba(244, 114, 182, 0.58), rgba(20, 184, 166, 0.52), rgba(89, 62, 220, 0.72), rgba(5, 6, 20, 0.98)),
+      linear-gradient(180deg, #050611, #090818 52%, #05050a);
   }
 
   .landing-film-grain {
@@ -258,9 +259,42 @@
 
   .landing-plan-section {
     background:
-      radial-gradient(ellipse at 20% 0%, rgba(59, 111, 245, 0.16), transparent 34rem),
-      radial-gradient(ellipse at 80% 12%, rgba(124, 92, 255, 0.20), transparent 38rem),
-      linear-gradient(180deg, rgba(8, 8, 15, 0.30) 0%, rgba(8, 8, 15, 0.96) 24%, #08080f 100%);
+      radial-gradient(ellipse at 15% -8%, rgba(45, 212, 191, 0.22), transparent 34rem),
+      radial-gradient(ellipse at 78% 4%, rgba(124, 92, 255, 0.34), transparent 42rem),
+      radial-gradient(ellipse at 48% 28%, rgba(244, 114, 182, 0.13), transparent 36rem),
+      linear-gradient(180deg, rgba(8, 8, 15, 0.24) 0%, rgba(7, 8, 18, 0.92) 24%, #050611 100%);
+  }
+
+  .landing-plan-section::before,
+  .landing-plan-section::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .landing-plan-section::before {
+    inset: -28% -12% -14%;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse at 20% 36%, rgba(45, 212, 191, 0.36), transparent 28%),
+      radial-gradient(ellipse at 65% 30%, rgba(124, 92, 255, 0.42), transparent 30%),
+      radial-gradient(ellipse at 82% 62%, rgba(244, 114, 182, 0.28), transparent 32%),
+      linear-gradient(108deg, transparent 18%, rgba(125, 211, 252, 0.18) 38%, rgba(167, 139, 250, 0.22) 54%, transparent 78%);
+    filter: blur(34px) saturate(1.55);
+    mix-blend-mode: screen;
+    opacity: 0.76;
+    animation: landingAuroraA 16s ease-in-out infinite alternate;
+  }
+
+  .landing-plan-section::after {
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.10), transparent 0.26rem),
+      radial-gradient(circle at 78% 18%, rgba(255, 255, 255, 0.08), transparent 0.22rem),
+      radial-gradient(circle at 58% 68%, rgba(125, 211, 252, 0.08), transparent 0.24rem),
+      linear-gradient(180deg, rgba(5, 6, 17, 0.18), rgba(5, 6, 17, 0.76));
+    opacity: 0.58;
   }
 
   .landing-plan-rail {
