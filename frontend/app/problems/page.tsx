@@ -17,7 +17,6 @@ import {
   Grid3X3,
   List,
   Minus,
-  MousePointer2,
   Plus,
   Search,
   Send,
@@ -491,15 +490,10 @@ function ProblemsBrowser() {
   useEffect(() => {
     if (!batchFolderDrag?.isDragging) return;
     const previousCursor = document.body.style.cursor;
-    const previousRootCursor = document.documentElement.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
-    document.documentElement.classList.add("tena-archive-dragging");
-    document.documentElement.style.cursor = "none";
-    document.body.style.cursor = "none";
+    document.body.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
     return () => {
-      document.documentElement.classList.remove("tena-archive-dragging");
-      document.documentElement.style.cursor = previousRootCursor;
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
     };
@@ -1554,24 +1548,9 @@ function ProblemsBrowser() {
               left: batchFolderDrag.x - batchFolderDrag.grabX,
               top: batchFolderDrag.y - batchFolderDrag.grabY,
               width: batchFolderDrag.previewWidth,
-              transform: `rotate(${Math.max(-3, Math.min(3, (batchFolderDrag.x - batchFolderDrag.startX) * 0.018))}deg)`,
-              transformOrigin: `${batchFolderDrag.grabX}px ${batchFolderDrag.grabY}px`,
             }}
           >
-            <div className="tena-archive-drag-dangle w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
-              <div
-                className="absolute z-10 rounded-full bg-sky-300/35 shadow-[0_0_18px_rgba(125,211,252,0.85)]"
-                style={{
-                  left: batchFolderDrag.grabX - 9,
-                  top: batchFolderDrag.grabY - 9,
-                  width: 18,
-                  height: 18,
-                }}
-              />
-              <MousePointer2
-                className="absolute z-20 h-5 w-5 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.75)]"
-                style={{ left: batchFolderDrag.grabX - 1, top: batchFolderDrag.grabY - 1 }}
-              />
+            <div className="w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
               <div className="flex items-start gap-3">
                 <Folder className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
                 <div className="min-w-0">
