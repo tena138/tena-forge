@@ -57,6 +57,8 @@ type BatchFolderDragState = {
   batchCount: number;
   problemCount: number;
   pointerId: number;
+  grabX: number;
+  previewWidth: number;
   startX: number;
   startY: number;
   x: number;
@@ -892,6 +894,9 @@ function ProblemsBrowser() {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("[data-folder-action]")) return;
     event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const previewWidth = Math.min(Math.max(rect.width, 220), 320);
+    const grabRatio = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
     setBatchFolderDragState({
       kind: "folder",
       folderId: folder.id,
@@ -899,6 +904,8 @@ function ProblemsBrowser() {
       batchCount,
       problemCount,
       pointerId: event.pointerId,
+      grabX: Math.max(24, Math.min(previewWidth - 24, grabRatio * previewWidth)),
+      previewWidth,
       startX: event.clientX,
       startY: event.clientY,
       x: event.clientX,
@@ -912,6 +919,9 @@ function ProblemsBrowser() {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("[data-folder-action]")) return;
     event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const previewWidth = Math.min(Math.max(rect.width, 220), 320);
+    const grabRatio = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
     setBatchFolderDragState({
       kind: "batch",
       folderId: batch.id,
@@ -919,6 +929,8 @@ function ProblemsBrowser() {
       batchCount: 1,
       problemCount: batch.problem_count,
       pointerId: event.pointerId,
+      grabX: Math.max(24, Math.min(previewWidth - 24, grabRatio * previewWidth)),
+      previewWidth,
       startX: event.clientX,
       startY: event.clientY,
       x: event.clientX,
@@ -1526,17 +1538,24 @@ function ProblemsBrowser() {
 
         {batchFolderDrag?.isDragging ? (
           <div
-            className="pointer-events-none fixed z-[120] flex w-[260px] flex-col items-center"
+            className="pointer-events-none fixed z-[120]"
             style={{
-              left: batchFolderDrag.x,
-              top: batchFolderDrag.y,
-              transform: `translate(-50%, 0) rotate(${Math.max(-7, Math.min(7, (batchFolderDrag.x - batchFolderDrag.startX) * 0.04))}deg)`,
-              transformOrigin: "50% 0",
+              left: batchFolderDrag.x - batchFolderDrag.grabX,
+              top: batchFolderDrag.y + 22,
+              width: batchFolderDrag.previewWidth,
+              transform: `rotate(${Math.max(-7, Math.min(7, (batchFolderDrag.x - batchFolderDrag.startX) * 0.04))}deg)`,
+              transformOrigin: `${batchFolderDrag.grabX}px -22px`,
             }}
           >
-            <div className="h-5 w-px bg-gradient-to-b from-sky-200/90 to-sky-400/30 shadow-[0_0_12px_rgba(125,211,252,0.65)]" />
-            <div className="-mt-1 h-3 w-3 rounded-full border border-sky-100/80 bg-sky-300 shadow-[0_0_18px_rgba(125,211,252,0.9)]" />
-            <div className="tena-archive-drag-dangle mt-1 w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
+            <div
+              className="absolute -top-[22px] h-[22px] w-px bg-gradient-to-b from-sky-200/95 to-sky-400/25 shadow-[0_0_12px_rgba(125,211,252,0.7)]"
+              style={{ left: batchFolderDrag.grabX }}
+            />
+            <div
+              className="absolute -top-7 h-3 w-3 rounded-full border border-sky-100/80 bg-sky-300 shadow-[0_0_18px_rgba(125,211,252,0.9)]"
+              style={{ left: batchFolderDrag.grabX - 6 }}
+            />
+            <div className="tena-archive-drag-dangle w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
               <div className="flex items-start gap-3">
                 <Folder className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
                 <div className="min-w-0">
