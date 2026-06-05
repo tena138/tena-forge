@@ -1219,6 +1219,39 @@ export default function UploadPage() {
   const creditsAfterUpload = creditEstimate && creditsRemaining !== null ? Math.max(creditsRemaining - creditEstimate.credits, 0) : null;
   const creditEstimateExceedsRemaining = Boolean(creditEstimate && creditsRemaining !== null && creditEstimate.credits > creditsRemaining);
   const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting && !selectedEngineLocked);
+  const creditEstimatePanel = problemPdf ? (
+    <div className="rounded-lg border border-violet-300/20 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),rgba(255,255,255,0.035)_52%,rgba(0,0,0,0.18))] p-4 shadow-[0_18px_52px_rgba(76,29,149,0.16)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-violet-200">
+            <Sparkles className="h-4 w-4" />
+            예상 credits
+          </div>
+          <div className="mt-2 text-3xl font-black text-white">
+            {creditEstimate ? `${formatCompactNumber(creditEstimate.credits)} credits` : "계산 중"}
+          </div>
+        </div>
+        <div className="rounded-[8px] border border-white/10 bg-black/25 px-3 py-2 text-right">
+          <div className="text-xs font-semibold text-slate-500">남은 credits</div>
+          <div className="mt-1 text-sm font-black text-white">
+            {creditsRemaining === null ? "불러오는 중" : `${formatCompactNumber(creditsRemaining)} → ${formatCompactNumber(creditsAfterUpload ?? creditsRemaining)}`}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-300 sm:grid-cols-2">
+        <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
+        <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">해설 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
+        <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
+        <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : isLanguagePassageEngine(subjectEngine) ? `${subjectEngineLabel(subjectEngine)} 가중치` : "기본 가중치"}</div>
+      </div>
+      {creditEstimate?.approximate || problemPdfEstimate.error || solutionPdfEstimate.error ? (
+        <p className="mt-3 text-xs font-semibold text-amber-200">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>
+      ) : null}
+      {creditEstimateExceedsRemaining ? (
+        <p className="mt-3 text-xs font-semibold text-red-200">현재 남은 credits보다 예상 소모량이 큽니다. 플랜 사용량을 확인해주세요.</p>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-6">
@@ -1313,6 +1346,8 @@ export default function UploadPage() {
                       onChange={(event) => setRightsNote(event.target.value)}
                     />
                   </label>
+
+                  {creditEstimatePanel}
                 </div>
               </div>
             </div>
@@ -1322,40 +1357,6 @@ export default function UploadPage() {
                 <DropZone label="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
                 <DropZone label="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
               </div>
-
-          {problemPdf ? (
-            <div className="rounded-lg border border-violet-300/20 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),rgba(255,255,255,0.035)_52%,rgba(0,0,0,0.18))] p-4 shadow-[0_18px_52px_rgba(76,29,149,0.16)]">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-violet-200">
-                    <Sparkles className="h-4 w-4" />
-                    예상 credits
-                  </div>
-                  <div className="mt-2 text-3xl font-black text-white">
-                    {creditEstimate ? `${formatCompactNumber(creditEstimate.credits)} credits` : "계산 중"}
-                  </div>
-                </div>
-                <div className="rounded-[8px] border border-white/10 bg-black/25 px-3 py-2 text-right">
-                  <div className="text-xs font-semibold text-slate-500">남은 credits</div>
-                  <div className="mt-1 text-sm font-black text-white">
-                    {creditsRemaining === null ? "불러오는 중" : `${formatCompactNumber(creditsRemaining)} → ${formatCompactNumber(creditsAfterUpload ?? creditsRemaining)}`}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-300 sm:grid-cols-2">
-                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
-                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">해설 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
-                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
-                <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : isLanguagePassageEngine(subjectEngine) ? `${subjectEngineLabel(subjectEngine)} 가중치` : "기본 가중치"}</div>
-              </div>
-              {creditEstimate?.approximate || problemPdfEstimate.error || solutionPdfEstimate.error ? (
-                <p className="mt-3 text-xs font-semibold text-amber-200">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>
-              ) : null}
-              {creditEstimateExceedsRemaining ? (
-                <p className="mt-3 text-xs font-semibold text-red-200">현재 남은 credits보다 예상 소모량이 큽니다. 플랜 사용량을 확인해주세요.</p>
-              ) : null}
-            </div>
-          ) : null}
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="flex items-center gap-2 text-sm font-bold text-white">
