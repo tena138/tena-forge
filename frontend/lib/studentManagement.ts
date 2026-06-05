@@ -351,9 +351,11 @@ export function createScheduleEvent(payload: {
   });
 }
 
-export function listScheduleEvents(params?: { class_id?: string }) {
+export function listScheduleEvents(params?: { class_id?: string; start_date?: string; end_date?: string }) {
   const search = new URLSearchParams();
   if (params?.class_id) search.set("class_id", params.class_id);
+  if (params?.start_date) search.set("start_date", params.start_date);
+  if (params?.end_date) search.set("end_date", params.end_date);
   const suffix = search.toString() ? `?${search.toString()}` : "";
   return api<ScheduleEvent[]>(`/api/student-management/schedule-events${suffix}`);
 }

@@ -2473,7 +2473,13 @@ def create_review_set(payload: ReviewSetPayload, request: Request, db: Session =
 
 
 @router.get("/schedule-events")
-def list_schedule_events(request: Request, class_id: UUID | None = None, db: Session = Depends(get_db)):
+def list_schedule_events(
+    request: Request,
+    class_id: UUID | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    db: Session = Depends(get_db),
+):
     academy_id = _student_management_academy_id(request, db)
     academy_ids = _student_management_academy_ids(request, db, academy_id)
     stmt = select(ClassScheduleEvent).where(ClassScheduleEvent.academy_id.in_(list(academy_ids)))
@@ -2482,6 +2488,12 @@ def list_schedule_events(request: Request, class_id: UUID | None = None, db: Ses
         if not class_row or class_row.academy_id not in academy_ids:
             raise HTTPException(status_code=404, detail="Class not found.")
         stmt = stmt.where(ClassScheduleEvent.class_id == class_id)
+    start_bound = _date_boundary(start_date)
+    end_bound = _date_boundary(end_date, end=True)
+    if start_bound:
+        stmt = stmt.where(func.coalesce(ClassScheduleEvent.ends_at, ClassScheduleEvent.starts_at) >= start_bound)
+    if end_bound:
+        stmt = stmt.where(ClassScheduleEvent.starts_at <= end_bound)
     rows = db.scalars(stmt.order_by(ClassScheduleEvent.starts_at.asc()).limit(500)).all()
     return [_schedule_event_payload(row) for row in rows]
 

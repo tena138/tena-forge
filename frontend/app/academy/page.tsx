@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowUpRight,
@@ -1009,6 +1009,14 @@ function academyMonthDays(value: Date) {
   return Array.from({ length: 42 }, (_, index) => academyAddDays(start, index));
 }
 
+function academyScheduleRange(value: Date) {
+  const days = academyMonthDays(value);
+  return {
+    start_date: academyDateKey(days[0] || academyStartOfMonthGrid(value)),
+    end_date: academyDateKey(days[days.length - 1] || value),
+  };
+}
+
 function academyMonthTitle(value: Date) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long" }).format(value);
 }
@@ -1057,25 +1065,35 @@ function AcademySchedulePanel() {
     description: "",
   });
 
-  async function load() {
+  const load = useCallback(async function load() {
     setLoading(true);
     try {
-      const [dashboard, schedule] = await Promise.all([getStudentManagementDashboard(), listScheduleEvents()]);
+      const dashboard = await getStudentManagementDashboard();
       setClasses(dashboard.classes);
-      setEvents(schedule);
       setForm((current) => ({ ...current, class_id: current.class_id || dashboard.classes[0]?.id || "" }));
-      setError("");
+      try {
+        const schedule = await listScheduleEvents(academyScheduleRange(monthCursor));
+        setEvents(schedule);
+        setError("");
+      } catch {
+        const fallbackSchedule = dashboard.classes.flatMap((classRow) => classRow.schedule_events || []);
+        setEvents(fallbackSchedule);
+        setError("시간표를 불러오지 못했습니다. 클래스 정보에 포함된 일정만 표시합니다.");
+      }
     } catch {
       setError("시간표를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [monthCursor]);
 
   useEffect(() => {
     setProfile(readStoredAuthProfile<AcademyProfile>());
-    void load();
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const classById = useMemo(() => new Map(classes.map((classRow) => [classRow.id, classRow])), [classes]);
   const monthDays = useMemo(() => academyMonthDays(monthCursor), [monthCursor]);
