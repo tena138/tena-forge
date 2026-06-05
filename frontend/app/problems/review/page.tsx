@@ -1355,7 +1355,7 @@ function ReviewProblemSelector({
           <span className="rounded-[6px] border border-white/10 bg-black/20 px-2 py-1 text-xs font-semibold text-slate-300">
             {currentItem ? `${currentIndex + 1}/${items.length} · ${currentItem.item_type === "passage" ? "지문" : `#${currentItem.problem.problem_number}`}` : `0/${items.length}`}
           </span>
-          <span className="rounded-[6px] border border-amber-300/15 bg-amber-300/10 px-2 py-1 text-xs font-semibold text-amber-100">
+          <span className="rounded-[6px] border border-violet-300/20 bg-violet-400/10 px-2 py-1 text-xs font-semibold text-violet-100">
             대기 {pendingCount.toLocaleString("ko-KR")}
           </span>
           {(currentItem?.item_type === "passage" ? currentItem.review_page_number : currentItem?.problem.review_page_number) ? (
@@ -1471,7 +1471,7 @@ function ReviewProblemSelector({
                 </label>
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate text-sm font-bold text-white">{title}</span>
-                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", itemNeedsReview ? "bg-amber-300/12 text-amber-100" : "bg-emerald-300/12 text-emerald-100")}>
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", itemNeedsReview ? "bg-violet-400/12 text-violet-100 ring-1 ring-violet-300/20" : "bg-emerald-300/12 text-emerald-100")}>
                     {itemNeedsReview ? "대기" : "완료"}
                   </span>
                 </div>
