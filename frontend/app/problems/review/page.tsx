@@ -1529,7 +1529,7 @@ function PassageReviewPanel({
       <div className="rounded-lg border border-sky-300/20 bg-[#0e1220]">
         <div className="flex items-center justify-between gap-3 border-b border-sky-300/15 px-4 py-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-white">국어 지문</h2>
+            <h2 className="text-sm font-bold text-white">지문</h2>
             <Badge variant={passage.needs_review ? "error" : "success"}>{passage.needs_review ? "검토 필요" : "검토 완료"}</Badge>
             {dirty ? <Badge variant="warning">수정 중</Badge> : null}
           </div>

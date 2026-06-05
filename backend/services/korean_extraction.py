@@ -62,6 +62,7 @@ Rules:
 - Extract 보기 blocks such as <보기>, 〈보기〉, [보기], or 보기 into additional_material.
 - Extract choices ① ② ③ ④ ⑤ exactly. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
 - Link questions to a passage when the page shows a shared passage range such as [1~3], [1-3], 1~3, or an instruction such as 다음 글을 읽고 물음에 답하시오.
+- Before returning, audit every visible passage range. If the source says [1~3], questions 1, 2, and 3 must all be present and linked to that passage. Never skip a middle question in a range.
 - If uncertain, add warnings instead of guessing.
 - Do not extract answers or solutions from the problem file. Only answer/solution files may fill answer and solution later."""
 
@@ -84,93 +85,6 @@ Rules:
 - Do not invent answers.
 - If only an answer key is visible, fill answer and leave solution null.
 - If a question number is unclear, include a warning."""
-
-
-ENGLISH_EXTRACTION_PROMPT = r"""You are the English Language beta extraction engine for Tena Forge.
-
-Your task is to extract English exam content with maximum fidelity. Many Korean English exams contain
-English passages and Korean instructions, stems, choices, explanations, or grammar labels. Preserve both
-English and Korean text exactly as visible.
-
-The passage is the primary unit. A passage can be linked to multiple questions.
-
-Return raw JSON array only. The array must contain exactly one object:
-[
-  {
-    "document_id": "<document id supplied by the system>",
-    "subject": "english",
-    "source_file": "<source file name supplied by the system>",
-    "passage_groups": [
-      {
-        "passage_id": "<stable id unique within this document>",
-        "source_pages": [<1-based source page numbers>],
-        "passage_instruction": "<visible instruction in Korean or English, or null>",
-        "passage_title": "<visible title or null>",
-        "passage_text": "<exact passage text as visible>",
-        "passage_type": "reading" | "grammar" | "vocabulary" | "listening" | "literature" | "unknown",
-        "linked_question_ids": ["<question ids>"],
-        "extraction_confidence": <0.0 to 1.0>,
-        "warnings": []
-      }
-    ],
-    "questions": [
-      {
-        "question_id": "<stable id unique within this document>",
-        "source_pages": [<1-based source page numbers>],
-        "question_number": "<visible question number>",
-        "linked_passage_id": "<passage_id or null>",
-        "question_stem": "<exact question stem text>",
-        "additional_material": "<보기/additional material text or null>",
-        "choices": [
-          {"choice_label": "①", "choice_text": "<exact choice text>"}
-        ],
-        "answer": null,
-        "solution": null,
-        "extraction_confidence": <0.0 to 1.0>,
-        "warnings": []
-      }
-    ],
-    "global_warnings": []
-  }
-]
-
-Rules:
-- Do not rewrite, translate, summarize, normalize, modernize, or correct passage text.
-- Preserve English punctuation, capitalization, line breaks, blanks, underlines, bracket labels, and Korean annotations.
-- Put every shared passage body only in passage_groups[].passage_text.
-- Never put passage text, passage instructions, or shared reading text inside question_stem.
-- For standalone numbered reading questions, a boxed/indented English notice, letter, email, article,
-  dialogue, or passage between the stem and choices is still a passage_group even when it links to
-  only one question and has no [n~m] range. Create a passage_group and link that question.
-- For questions like "다음 글의 목적으로 가장 적절한 것은?", put only that prompt in question_stem,
-  put the visible English block such as "To All Members..." in passage_text, and put the Korean
-  ①②③④⑤ lines after the block in choices.
-- Extract 보기 blocks, underlined phrases, blank options, and grammar/vocabulary tables into additional_material when they are part of a question.
-- Extract choices ①②③④⑤ exactly, including choices printed below a long passage box. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
-- Link questions to a passage when the page shows a shared passage range such as [1~3], [1-3], 1~3, or an instruction that says to read the following passage.
-- If uncertain, add warnings instead of guessing.
-- Do not extract answers or solutions from the problem file. Only answer/solution files may fill answer and solution later."""
-
-
-ENGLISH_SOLUTION_PROMPT = r"""You are extracting answers and explanations for English exam questions.
-
-Return raw JSON array only:
-[
-  {
-    "question_number": "<visible question number>",
-    "answer": "<final answer label or text, or null>",
-    "solution": "<explanation text exactly as visible, preserving Korean and English, or null>",
-    "source_pages": [<1-based source page numbers>],
-    "warnings": []
-  }
-]
-
-Rules:
-- Preserve Korean and English explanation text exactly as visible.
-- Do not invent answers.
-- If only an answer key is visible, fill answer and leave solution null.
-- If a question number is unclear, include a warning."""
-
 
 PASSAGE_RANGE_RE = re.compile(r"(?:\[|\()?0*(\d{1,3})\s*[~\-∼]\s*0*(\d{1,3})(?:\]|\))?")
 PASSAGE_INSTRUCTION_RE = re.compile(r"(?:※\s*)?다음\s+글을\s+읽고\s+물음에\s+답하시오")
@@ -391,8 +305,13 @@ def _split_embedded_english_passage_from_question_stem(stem: str) -> tuple[str, 
     return question_text, None, passage_text
 
 
-def _split_any_embedded_passage_from_question_stem(stem: str) -> tuple[str, str | None, str] | None:
-    return _split_embedded_passage_from_question_stem(stem) or _split_embedded_english_passage_from_question_stem(stem)
+def _split_any_embedded_passage_from_question_stem(stem: str, subject: str = "korean") -> tuple[str, str | None, str] | None:
+    korean_split = _split_embedded_passage_from_question_stem(stem)
+    if korean_split:
+        return korean_split
+    if subject == "english":
+        return None
+    return _split_embedded_english_passage_from_question_stem(stem)
 
 
 def _new_embedded_passage_id(question: dict[str, Any]) -> str:
@@ -407,6 +326,7 @@ def _new_embedded_passage_id(question: dict[str, Any]) -> str:
 
 def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
     doc = deepcopy(document)
+    subject = _text(doc.get("subject")).lower() or "korean"
     passages = _as_list(doc.get("passage_groups"))
     questions = _as_list(doc.get("questions"))
     passages_by_id = {
@@ -428,7 +348,7 @@ def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
                 question["warnings"] = list(dict.fromkeys(question_warnings))
         linked_passage_id = _text(question.get("linked_passage_id"))
         question_warnings = _as_str_list(question.get("warnings"))
-        split = _split_any_embedded_passage_from_question_stem(str(question.get("question_stem") or ""))
+        split = _split_any_embedded_passage_from_question_stem(str(question.get("question_stem") or ""), subject)
         if split and not linked_passage_id:
             question_text, instruction, extracted_passage_text = split
             passage_id = _new_embedded_passage_id(question)
@@ -470,7 +390,7 @@ def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
             question["question_stem"] = _collapse_blank_lines(stem)
             question_warnings.append("removed_passage_text_from_question_stem")
 
-        split = _split_any_embedded_passage_from_question_stem(str(question.get("question_stem") or ""))
+        split = _split_any_embedded_passage_from_question_stem(str(question.get("question_stem") or ""), subject)
         if split:
             question_text, instruction, extracted_passage_text = split
             question["question_stem"] = question_text
@@ -491,6 +411,61 @@ def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
         passage["warnings"] = list(dict.fromkeys(passage_warnings))
 
     doc["passage_groups"] = passages
+    doc["questions"] = questions
+    return doc
+
+
+def inline_standalone_english_passages(document: dict[str, Any]) -> dict[str, Any]:
+    doc = deepcopy(document)
+    if _text(doc.get("subject")).lower() != "english":
+        return doc
+
+    passages = _as_list(doc.get("passage_groups"))
+    questions = _as_list(doc.get("questions"))
+    questions_by_id = {
+        _text(question.get("question_id")): question
+        for question in questions
+        if isinstance(question, dict) and _text(question.get("question_id"))
+    }
+    remaining_passages: list[dict[str, Any]] = []
+
+    for passage in passages:
+        if not isinstance(passage, dict):
+            continue
+        passage_id = _text(passage.get("passage_id"))
+        expected_numbers = parse_passage_question_range(
+            _text(passage.get("passage_instruction")),
+            _text(passage.get("passage_title")),
+            str(passage.get("passage_text") or "")[:300],
+        )
+        linked_questions = [
+            question
+            for question in questions
+            if isinstance(question, dict) and _text(question.get("linked_passage_id")) == passage_id
+        ]
+        for linked_id in _as_str_list(passage.get("linked_question_ids")):
+            question = questions_by_id.get(linked_id)
+            if question and question not in linked_questions:
+                linked_questions.append(question)
+
+        if expected_numbers or len(linked_questions) != 1:
+            remaining_passages.append(passage)
+            continue
+
+        question = linked_questions[0]
+        parts = [
+            str(question.get("question_stem") or "").strip(),
+            _text(passage.get("passage_instruction")),
+            _text(passage.get("passage_title")),
+            str(passage.get("passage_text") or "").strip(),
+        ]
+        question["question_stem"] = _collapse_blank_lines("\n\n".join(part for part in parts if part))
+        question["linked_passage_id"] = None
+        warnings = _as_str_list(question.get("warnings"))
+        warnings.append("inlined_standalone_english_passage")
+        question["warnings"] = list(dict.fromkeys(warnings))
+
+    doc["passage_groups"] = remaining_passages
     doc["questions"] = questions
     return doc
 
@@ -612,6 +587,7 @@ def merge_korean_page_payloads(document_id: str, source_file: str, page_payloads
 
 def validate_korean_document(document: dict[str, Any]) -> dict[str, Any]:
     doc = separate_embedded_passages(document)
+    doc = inline_standalone_english_passages(doc)
     global_warnings = _as_str_list(doc.get("global_warnings"))
     questions = _as_list(doc.get("questions"))
     passages = _as_list(doc.get("passage_groups"))
@@ -725,6 +701,48 @@ def validate_korean_document(document: dict[str, Any]) -> dict[str, Any]:
 
     doc["global_warnings"] = list(dict.fromkeys(global_warnings))
     return doc
+
+
+def missing_passage_range_questions(document: dict[str, Any]) -> list[dict[str, Any]]:
+    questions = _as_list(document.get("questions"))
+    passages = _as_list(document.get("passage_groups"))
+    questions_by_number = {
+        _question_number_key(question.get("question_number")): question
+        for question in questions
+        if isinstance(question, dict) and _question_number_key(question.get("question_number"))
+    }
+    missing_groups: list[dict[str, Any]] = []
+
+    for passage in passages:
+        if not isinstance(passage, dict):
+            continue
+        passage_id = _text(passage.get("passage_id"))
+        expected_numbers = parse_passage_question_range(
+            _text(passage.get("passage_instruction")),
+            _text(passage.get("passage_title")),
+            str(passage.get("passage_text") or "")[:300],
+        )
+        if not passage_id or not expected_numbers:
+            continue
+        linked_ids = set(_as_str_list(passage.get("linked_question_ids")))
+        missing_numbers: list[str] = []
+        for number in expected_numbers:
+            question = questions_by_number.get(number)
+            if not question or (_text(question.get("linked_passage_id")) != passage_id and _text(question.get("question_id")) not in linked_ids):
+                missing_numbers.append(number)
+        if missing_numbers:
+            missing_groups.append(
+                {
+                    "passage_id": passage_id,
+                    "source_pages": _as_page_list(passage.get("source_pages")),
+                    "expected_numbers": expected_numbers,
+                    "missing_numbers": missing_numbers,
+                    "passage_instruction": passage.get("passage_instruction"),
+                    "passage_title": passage.get("passage_title"),
+                    "passage_text": passage.get("passage_text"),
+                }
+            )
+    return missing_groups
 
 
 def map_korean_answers(document: dict[str, Any], answer_items: list[dict[str, Any]]) -> dict[str, Any]:

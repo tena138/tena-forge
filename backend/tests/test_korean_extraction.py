@@ -6,7 +6,8 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from services.korean_extraction import map_korean_answers, merge_korean_page_payloads, validate_korean_document  # noqa: E402
+from services.english_extraction import merge_english_page_payloads  # noqa: E402
+from services.korean_extraction import map_korean_answers, merge_korean_page_payloads, missing_passage_range_questions, validate_korean_document  # noqa: E402
 from services.pipeline import _korean_problem_text  # noqa: E402
 from services.subject_engines import subject_engine_pricing  # noqa: E402
 
@@ -46,6 +47,36 @@ class KoreanExtractionTests(unittest.TestCase):
 
         self.assertEqual(document["passage_groups"][0]["warnings"], [])
         self.assertEqual(document["questions"][1]["linked_passage_id"], "p1")
+
+    def test_passage_range_middle_question_missing_is_reported(self):
+        document = validate_korean_document(
+            {
+                "document_id": "doc",
+                "subject": "korean",
+                "source_file": "range.pdf",
+                "passage_groups": [
+                    {
+                        "passage_id": "p1",
+                        "source_pages": [1],
+                        "passage_instruction": "[1~3] 다음 글을 읽고 물음에 답하시오.",
+                        "passage_text": "읽기 기능은 글의 내용을 해독한다.",
+                        "passage_type": "비문학",
+                        "linked_question_ids": ["q1", "q3"],
+                        "extraction_confidence": 0.9,
+                        "warnings": [],
+                    }
+                ],
+                "questions": [
+                    {"question_id": "q1", "source_pages": [1], "question_number": "1", "linked_passage_id": "p1", "question_stem": "윗글의 내용과 일치하는 것은?", "choices": [choice("①", "A"), choice("②", "B"), choice("③", "C"), choice("④", "D"), choice("⑤", "E")], "warnings": []},
+                    {"question_id": "q3", "source_pages": [1], "question_number": "3", "linked_passage_id": "p1", "question_stem": "[A]를 이해한 내용으로 적절한 것은?", "choices": [choice("①", "A"), choice("②", "B"), choice("③", "C"), choice("④", "D"), choice("⑤", "E")], "warnings": []},
+                ],
+                "global_warnings": [],
+            }
+        )
+
+        self.assertIn("passage_range_unlinked_questions:2", document["passage_groups"][0]["warnings"])
+        missing = missing_passage_range_questions(document)
+        self.assertEqual(missing[0]["missing_numbers"], ["2"])
 
     def test_first_question_embedded_passage_is_split(self):
         document = validate_korean_document(
@@ -191,7 +222,7 @@ class KoreanExtractionTests(unittest.TestCase):
 
         self.assertIn("fewer_than_5_choices", document["questions"][0]["warnings"])
 
-    def test_english_standalone_boxed_passage_is_split_from_question(self):
+    def test_english_standalone_boxed_passage_stays_inside_question(self):
         document = validate_korean_document(
             {
                 "document_id": "doc",
@@ -226,14 +257,55 @@ class KoreanExtractionTests(unittest.TestCase):
         )
 
         question = document["questions"][0]
-        self.assertEqual(question["question_stem"], "다음 글의 목적으로 가장 적절한 것은?")
-        self.assertEqual(len(document["passage_groups"]), 1)
-        self.assertEqual(question["linked_passage_id"], document["passage_groups"][0]["passage_id"])
-        self.assertIn("To All Members", document["passage_groups"][0]["passage_text"])
+        self.assertIn("다음 글의 목적으로 가장 적절한 것은?", question["question_stem"])
+        self.assertIn("To All Members", question["question_stem"])
+        self.assertEqual(question["linked_passage_id"], None)
+        self.assertEqual(document["passage_groups"], [])
         self.assertEqual(len(question["choices"]), 5)
         self.assertIn("담당 강사 변경", question["choices"][1]["choice_text"])
 
-    def test_passage_linked_question_ids_backfill_question_link(self):
+    def test_english_single_question_passage_group_is_inlined(self):
+        document = merge_english_page_payloads(
+            "doc",
+            "english.pdf",
+            [
+                {
+                    "document_id": "doc",
+                    "subject": "english",
+                    "source_file": "english.pdf",
+                    "passage_groups": [
+                        {
+                            "passage_id": "p18",
+                            "source_pages": [8],
+                            "passage_text": "To All Members of the Hillside Fitness Club\nWe would like to let you know about a change.",
+                            "passage_type": "reading",
+                            "linked_question_ids": ["q18"],
+                            "extraction_confidence": 0.9,
+                            "warnings": [],
+                        }
+                    ],
+                    "questions": [
+                        {
+                            "question_id": "q18",
+                            "source_pages": [8],
+                            "question_number": "18",
+                            "linked_passage_id": "p18",
+                            "question_stem": "다음 글의 목적으로 가장 적절한 것은?",
+                            "choices": [choice("①", "A"), choice("②", "B"), choice("③", "C"), choice("④", "D"), choice("⑤", "E")],
+                            "warnings": [],
+                        }
+                    ],
+                    "global_warnings": [],
+                }
+            ],
+        )
+
+        self.assertEqual(document["passage_groups"], [])
+        self.assertIsNone(document["questions"][0]["linked_passage_id"])
+        self.assertIn("To All Members", document["questions"][0]["question_stem"])
+        self.assertIn("inlined_standalone_english_passage", document["questions"][0]["warnings"])
+
+    def test_english_range_passage_group_stays_linked(self):
         document = validate_korean_document(
             {
                 "document_id": "doc",
@@ -241,22 +313,32 @@ class KoreanExtractionTests(unittest.TestCase):
                 "source_file": "english.pdf",
                 "passage_groups": [
                     {
-                        "passage_id": "p18",
-                        "source_pages": [8],
-                        "passage_text": "To All Members of the Hillside Fitness Club\nWe would like to let you know about a change.",
+                        "passage_id": "p41",
+                        "source_pages": [12],
+                        "passage_instruction": "[41~42] 다음 글을 읽고 물음에 답하시오.",
+                        "passage_text": "Shared English passage.",
                         "passage_type": "reading",
-                        "linked_question_ids": ["q18"],
+                        "linked_question_ids": ["q41", "q42"],
                         "extraction_confidence": 0.9,
                         "warnings": [],
                     }
                 ],
                 "questions": [
                     {
-                        "question_id": "q18",
-                        "source_pages": [8],
-                        "question_number": "18",
-                        "linked_passage_id": None,
-                        "question_stem": "다음 글의 목적으로 가장 적절한 것은?",
+                        "question_id": "q41",
+                        "source_pages": [12],
+                        "question_number": "41",
+                        "linked_passage_id": "p41",
+                        "question_stem": "빈칸에 들어갈 말로 가장 적절한 것은?",
+                        "choices": [choice("①", "A"), choice("②", "B"), choice("③", "C"), choice("④", "D"), choice("⑤", "E")],
+                        "warnings": [],
+                    },
+                    {
+                        "question_id": "q42",
+                        "source_pages": [12],
+                        "question_number": "42",
+                        "linked_passage_id": "p41",
+                        "question_stem": "글의 제목으로 가장 적절한 것은?",
                         "choices": [choice("①", "A"), choice("②", "B"), choice("③", "C"), choice("④", "D"), choice("⑤", "E")],
                         "warnings": [],
                     }
@@ -265,8 +347,9 @@ class KoreanExtractionTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(document["questions"][0]["linked_passage_id"], "p18")
-        self.assertIn("linked_from_passage_group", document["questions"][0]["warnings"])
+        self.assertEqual(len(document["passage_groups"]), 1)
+        self.assertEqual(document["questions"][0]["linked_passage_id"], "p41")
+        self.assertEqual(document["questions"][1]["linked_passage_id"], "p41")
 
     def test_ocr_corrupted_passage_warning_case(self):
         document = validate_korean_document(

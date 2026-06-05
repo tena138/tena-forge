@@ -23,13 +23,18 @@ from sqlalchemy.orm import Session, joinedload
 
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
-from services.korean_extraction import (
+from services.english_extraction import (
     ENGLISH_EXTRACTION_PROMPT,
     ENGLISH_SOLUTION_PROMPT,
+    merge_english_page_payloads,
+    normalize_english_page_payload,
+)
+from services.korean_extraction import (
     KOREAN_EXTRACTION_PROMPT,
     KOREAN_SOLUTION_PROMPT,
     map_korean_answers,
     merge_korean_page_payloads,
+    missing_passage_range_questions,
     normalize_korean_page_payload,
 )
 from services.matcher import match_with_summary
@@ -1449,6 +1454,117 @@ def collect_page_metadata_for_pdf(
     return sorted(metadata, key=lambda item: int(item.get("page_index") or 0))
 
 
+KOREAN_RANGE_RECOVERY_PROMPT = r"""You are repairing a Korean Language extraction where a visible passage range was incomplete.
+
+Return raw JSON array only. The array must contain exactly one object:
+[
+  {
+    "document_id": "<document id supplied by the system>",
+    "subject": "korean",
+    "source_file": "<source file name supplied by the system>",
+    "passage_groups": [],
+    "questions": [
+      {
+        "question_id": "<stable id unique within this document>",
+        "source_pages": [<1-based source page numbers>],
+        "question_number": "<one of the requested missing question numbers>",
+        "linked_passage_id": "<the supplied passage_id>",
+        "question_stem": "<exact visible question stem for this number only>",
+        "additional_material": "<보기/additional material text or null>",
+        "choices": [
+          {"choice_label": "①", "choice_text": "<exact choice text>"}
+        ],
+        "answer": null,
+        "solution": null,
+        "extraction_confidence": <0.0 to 1.0>,
+        "warnings": []
+      }
+    ],
+    "global_warnings": []
+  }
+]
+
+Rules:
+- Extract only the requested missing question numbers. Do not repeat already extracted numbers.
+- Link every recovered question to the supplied passage_id.
+- Preserve exact Korean text, 보기 blocks, circled choices ①②③④⑤, and source page number.
+- Do not extract answers or solutions from the problem file."""
+
+
+def _question_number_key(value: Any) -> str:
+    match = re.search(r"\d+", str(value or ""))
+    return str(int(match.group(0))) if match else str(value or "").strip()
+
+
+def _korean_range_recovery_prompt(
+    document_id: str,
+    source_file: str,
+    page_number: int,
+    group: dict[str, Any],
+) -> str:
+    passage_excerpt = str(group.get("passage_text") or "")[:1400]
+    return (
+        f"{KOREAN_RANGE_RECOVERY_PROMPT}\n\n"
+        f"Document id: {document_id}\n"
+        f"Source file: {source_file}\n"
+        f"Current source page: {page_number}\n"
+        "Use the current source page number in every source_pages array.\n"
+        f"Visible passage_id to link: {group.get('passage_id')}\n"
+        f"Visible passage instruction/title: {group.get('passage_instruction') or ''} {group.get('passage_title') or ''}\n"
+        f"Expected range numbers: {', '.join(str(number) for number in group.get('expected_numbers') or [])}\n"
+        f"Missing question numbers to recover: {', '.join(str(number) for number in group.get('missing_numbers') or [])}\n"
+        f"Existing passage excerpt for context:\n{passage_excerpt}"
+    )
+
+
+def _recover_missing_korean_range_questions(
+    client: OpenAI,
+    model_pool: list[str],
+    rendered_pages_by_number: dict[int, RenderedPage],
+    document: dict[str, Any],
+    document_id: str,
+    source_file: str,
+    page_count: int,
+    batch_id: UUID,
+    total_units: int,
+) -> dict[str, Any]:
+    missing_groups = missing_passage_range_questions(document)
+    if not missing_groups:
+        return document
+
+    settings = get_settings()
+    recovered_payloads: list[dict[str, Any]] = []
+    for index, group in enumerate(missing_groups, start=1):
+        page_numbers = [int(page) for page in group.get("source_pages") or [] if int(page or 0) > 0]
+        page_number = page_numbers[0] if page_numbers else 1
+        page = rendered_pages_by_number.get(page_number)
+        if not page:
+            continue
+        set_progress(batch_id, f"국어 범위 누락 문항 보정 중 ({index}/{len(missing_groups)})", total_units, total_units)
+        items = vision_json(
+            client,
+            page.base64_png,
+            _korean_range_recovery_prompt(document_id, source_file, page_number, group),
+            _page_split_model(model_pool, page.page_index, page_count),
+            page.ai_image_mime,
+            max(settings.ai_max_output_tokens, settings.ai_solution_max_output_tokens),
+            settings.ai_image_detail,
+        )
+        raw = items[0] if items and isinstance(items[0], dict) else {}
+        payload = normalize_korean_page_payload(raw, document_id, source_file, page_number, subject="korean")
+        missing_numbers = {str(number) for number in group.get("missing_numbers") or []}
+        for question in payload.get("questions") or []:
+            if not isinstance(question, dict):
+                continue
+            if _question_number_key(question.get("question_number")) in missing_numbers and not question.get("linked_passage_id"):
+                question["linked_passage_id"] = group.get("passage_id")
+        recovered_payloads.append(payload)
+
+    if not recovered_payloads:
+        return document
+    return merge_korean_page_payloads(document_id, source_file, [document, *recovered_payloads], subject="korean")
+
+
 def _extract_korean_problem_document(
     path: str,
     batch_id: UUID,
@@ -1467,6 +1583,7 @@ def _extract_korean_problem_document(
     extraction_prompt = ENGLISH_EXTRACTION_PROMPT if engine == ENGLISH_ENGINE else KOREAN_EXTRACTION_PROMPT
     page_payloads: list[dict[str, Any]] = []
     review_page_urls: dict[int, str] = {}
+    rendered_pages_by_number: dict[int, RenderedPage] = {}
     processed_pages = 0
     for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
         chunk_len = sum(end - start for start, end in range_group)
@@ -1490,6 +1607,7 @@ def _extract_korean_problem_document(
             page_number = page.page_index + 1
             filename = f"{batch_id}_page_{page_number}_review_source.png"
             review_page_urls[page_number] = save_visual_bytes(page.png_bytes, filename)
+            rendered_pages_by_number[page_number] = page
         completed = 0
         set_progress(batch_id, f"{engine_label} 지문/문항 추출 중 (0/{len(pages)}페이지)", processed_pages + chunk_len, total_units)
         with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
@@ -1521,7 +1639,10 @@ def _extract_korean_problem_document(
             ):
                 items = future.result()
                 raw = items[0] if items and isinstance(items[0], dict) else {}
-                page_payloads.append(normalize_korean_page_payload(raw, document_id, source_file, page.page_index + 1, subject=engine))
+                if engine == ENGLISH_ENGINE:
+                    page_payloads.append(normalize_english_page_payload(raw, document_id, source_file, page.page_index + 1))
+                else:
+                    page_payloads.append(normalize_korean_page_payload(raw, document_id, source_file, page.page_index + 1, subject=engine))
                 completed += 1
                 set_progress(
                     batch_id,
@@ -1530,7 +1651,22 @@ def _extract_korean_problem_document(
                     total_units,
                 )
         processed_pages += chunk_len
-    return merge_korean_page_payloads(document_id, source_file, page_payloads, subject=engine), review_page_urls
+    if engine == ENGLISH_ENGINE:
+        return merge_english_page_payloads(document_id, source_file, page_payloads), review_page_urls
+    document = merge_korean_page_payloads(document_id, source_file, page_payloads, subject=engine)
+    if engine == KOREAN_ENGINE:
+        document = _recover_missing_korean_range_questions(
+            client,
+            model_pool,
+            rendered_pages_by_number,
+            document,
+            document_id,
+            source_file,
+            page_count,
+            batch_id,
+            total_units,
+        )
+    return document, review_page_urls
 
 
 def _extract_korean_solution_items(
