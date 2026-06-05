@@ -659,7 +659,7 @@ def _render_problem_card(problem: dict[str, Any], region: dict[str, Any], base_d
     choices = ""
     choice_lines = _choice_lines(problem.get("choices"))
     if choice_lines:
-        choices = '<div class="problem-choices">' + "".join(f"<span>{escape(line)}</span>" for line in choice_lines) + "</div>"
+        choices = '<div class="problem-choices">' + "".join(f'<span class="math-text">{escape(line)}</span>' for line in choice_lines) + "</div>"
     solution = ""
     if region.get("type") == "solutionRegion" or base_data.get("include_solution"):
         solution = f'<div class="problem-solution math-text">{escape(str(problem.get("solution") or ""))}</div>'
@@ -695,7 +695,7 @@ def _render_korean_passage_group_card(item: dict[str, Any], region: dict[str, An
         if not isinstance(question, dict):
             continue
         number_label = escape(_problem_number_label(question, region))
-        choices = "".join(f"<span>{escape(line)}</span>" for line in _choice_lines(question.get("choices")))
+        choices = "".join(f'<span class="math-text">{escape(line)}</span>' for line in _choice_lines(question.get("choices")))
         choices_html = f'<div class="problem-choices korean-question-choices">{choices}</div>' if choices else ""
         solution = f'<div class="problem-solution math-text">{escape(str(question.get("solution") or ""))}</div>' if region.get("type") == "solutionRegion" or base_data.get("include_solution") else ""
         answer = f'<div class="problem-answer"><span>{number_label} </span><span class="math-text">{escape(str(question.get("answer") or ""))}</span></div>' if region.get("type") == "answerRegion" else ""
@@ -1277,6 +1277,26 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+  const underlineTagPattern = /<\/?u>/gi;
+  const splitUnderlineSegments = (value) => {
+    const segments = [];
+    let cursor = 0;
+    let underlineDepth = 0;
+    for (const match of String(value).matchAll(underlineTagPattern)) {
+      const token = match[0];
+      const index = match.index || 0;
+      if (index > cursor) {
+        segments.push({ content: String(value).slice(cursor, index), underline: underlineDepth > 0 });
+      }
+      underlineDepth = token.startsWith("</") ? Math.max(0, underlineDepth - 1) : underlineDepth + 1;
+      cursor = index + token.length;
+    }
+    if (cursor < String(value).length) {
+      segments.push({ content: String(value).slice(cursor), underline: underlineDepth > 0 });
+    }
+    return segments;
+  };
+  const withUnderline = (html, underline) => underline ? `<u>${html}</u>` : html;
   const needsBlockMath = (value) => /\\begin\{|\\\\/.test(value);
   const needsDisplayStyle = (value) => {
     const trimmed = String(value).trim();
@@ -1310,14 +1330,13 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
       ));
     return needsDisplayStyle(normalized) ? `\\displaystyle ${normalized}` : normalized;
   };
-  const renderMathText = (node) => {
-    const raw = node.textContent || "";
+  const renderMathSegment = (raw, underline) => {
     let cursor = 0;
     let html = "";
     for (const match of raw.matchAll(pattern)) {
       const token = match[0];
       const index = match.index || 0;
-      html += escapeHtml(raw.slice(cursor, index));
+      html += withUnderline(escapeHtml(raw.slice(cursor, index)), underline);
       let latex = token;
       let display = false;
       if (token.startsWith("$$")) {
@@ -1340,11 +1359,18 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
         trust: false
       });
       const inlineClass = hasProminentInlineMath(latex) ? "math-inline math-inline-prominent" : "math-inline";
-      html += `<span class="${display ? "math-display" : inlineClass}">${rendered}</span>`;
+      const underlineClass = underline ? " text-underline" : "";
+      html += `<span class="${display ? `math-display${underlineClass}` : `${inlineClass}${underlineClass}`}">${rendered}</span>`;
       cursor = index + token.length;
     }
-    html += escapeHtml(raw.slice(cursor));
-    node.innerHTML = html;
+    html += withUnderline(escapeHtml(raw.slice(cursor)), underline);
+    return html;
+  };
+  const renderMathText = (node) => {
+    const raw = node.textContent || "";
+    node.innerHTML = splitUnderlineSegments(raw)
+      .map((segment) => renderMathSegment(segment.content, segment.underline))
+      .join("");
   };
   document.querySelectorAll(".math-text").forEach(renderMathText);
 })();
@@ -1425,6 +1451,8 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
     .korean-flow-column > .problem-card {{ break-inside: avoid; page-break-inside: avoid; }}
     .column-divider {{ position: absolute; width: 0; pointer-events: none; z-index: 2; }}
     .math-text {{ white-space: pre-wrap; overflow-wrap: break-word; }}
+    .math-text u {{ text-decoration-thickness: 1px; text-underline-offset: 0.16em; }}
+    .math-text .text-underline {{ text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.16em; }}
     .math-text .katex {{ color: currentColor; }}
     .math-inline {{ display: inline-block; max-width: 100%; vertical-align: baseline; }}
     .math-inline-prominent {{ vertical-align: -0.12em; }}

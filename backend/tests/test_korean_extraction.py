@@ -269,6 +269,40 @@ class KoreanExtractionTests(unittest.TestCase):
         self.assertEqual(len(question["choices"]), 5)
         self.assertIn("담당 강사 변경", question["choices"][1]["choice_text"])
 
+    def test_english_underline_markup_survives_merge(self):
+        document = merge_english_page_payloads(
+            "doc",
+            "english.pdf",
+            [
+                {
+                    "document_id": "doc",
+                    "subject": "english",
+                    "source_file": "english.pdf",
+                    "passage_groups": [],
+                    "questions": [
+                        {
+                            "question_id": "q21",
+                            "source_pages": [9],
+                            "question_number": "21",
+                            "linked_passage_id": None,
+                            "question_stem": (
+                                "21. <u>every door has become a mirror</u> means what?\n\n"
+                                "The focus shifted. <u>every door has become a mirror</u> in a world once offered connection."
+                            ),
+                            "choices": [choice("1)", "<u>online branding</u> creates a false sense of achievement")],
+                            "warnings": [],
+                        }
+                    ],
+                    "global_warnings": [],
+                }
+            ],
+        )
+
+        question = document["questions"][0]
+        self.assertFalse(question["question_stem"].startswith("21."))
+        self.assertIn("<u>every door has become a mirror</u>", question["question_stem"])
+        self.assertIn("<u>online branding</u>", question["choices"][0]["choice_text"])
+
     def test_english_single_question_passage_group_is_inlined(self):
         document = merge_english_page_payloads(
             "doc",

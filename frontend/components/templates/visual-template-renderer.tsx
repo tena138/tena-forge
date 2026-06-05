@@ -378,7 +378,7 @@ function ProblemCard({ problem, region }: { problem: SampleProblem; region: Cont
       >
         <MathText value={problem.text} />
       </div>
-      {problem.choices?.length ? <div className="mt-2 grid grid-cols-5 gap-1 text-[11px] text-slate-700">{problem.choices.map((choice, index) => <span key={choice}>{index + 1}) {choice}</span>)}</div> : null}
+      {problem.choices?.length ? <div className="mt-2 grid grid-cols-5 gap-1 text-[11px] text-slate-700">{problem.choices.map((choice, index) => <MathText key={`${index}-${choice}`} value={`${index + 1}) ${choice}`} />)}</div> : null}
       {visualUrl ? <img src={assetUrl(visualUrl)} alt="" className="mx-auto mt-3 block h-auto max-w-full object-contain" style={{ width: "min(100%, 420px)", maxHeight: 320 }} /> : null}
       {region.type === "solutionRegion" ? <div className="mt-3 rounded bg-slate-50 p-2 text-[11px] leading-relaxed text-slate-700"><MathText value={problem.solution} /></div> : null}
       {region.type === "answerRegion" ? <div className="mt-2 text-[12px] font-bold text-slate-900">{formatProblemNumber(problem, region)} <MathText value={problem.answer || ""} /></div> : null}

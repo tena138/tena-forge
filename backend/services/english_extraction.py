@@ -55,6 +55,7 @@ Return raw JSON array only. The array must contain exactly one object:
 Rules:
 - Do not rewrite, translate, summarize, normalize, modernize, or correct passage text.
 - Preserve English punctuation, capitalization, line breaks, blanks, underlines, bracket labels, and Korean annotations.
+- When any visible text is underlined, wrap only the exact underlined characters in <u>...</u> in the appropriate field: passage_text, question_stem, additional_material, or choice_text.
 - For a standalone numbered reading question with no explicit shared range, do not create a passage_group. Keep the visible order inside question_stem: Korean stem, then the English passage/notice/letter/email/article/dialogue block. Extract the ①②③④⑤ lines into choices.
 - Do not include the visible problem number in question_stem. Store it only in question_number. For example, question_stem starts with "다음 글의 목적으로..." rather than "18. 다음 글의 목적으로...".
 - Example standalone layout: "18. 다음 글의 목적으로..." followed by a boxed "To All Members..." passage followed by ①②③④⑤ choices. Return one question with linked_passage_id null; question_stem must contain the Korean prompt and the English box text in order; choices must contain the five Korean options.
@@ -81,6 +82,7 @@ Return raw JSON array only:
 
 Rules:
 - Preserve Korean and English explanation text exactly as visible.
+- When any visible text is underlined, wrap only the exact underlined characters in <u>...</u>.
 - Do not invent answers.
 - If only an answer key is visible, fill answer and leave solution null.
 - If a question number is unclear, include a warning."""

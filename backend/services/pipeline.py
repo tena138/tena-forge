@@ -1488,6 +1488,7 @@ Rules:
 - Extract only the requested missing question numbers. Do not repeat already extracted numbers.
 - Link every recovered question to the supplied passage_id.
 - Preserve exact Korean text, 보기 blocks, circled choices ①②③④⑤, and source page number.
+- When any visible text is underlined, wrap only the exact underlined characters in <u>...</u> in the appropriate field: question_stem, additional_material, or choice_text.
 - Do not extract answers or solutions from the problem file."""
 
 

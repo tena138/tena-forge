@@ -55,6 +55,7 @@ Return raw JSON array only. The array must contain exactly one object:
 Rules:
 - Do not rewrite, summarize, normalize, modernize, or correct passage text.
 - Preserve line breaks in poems and line-sensitive passages.
+- When any visible text is underlined, wrap only the exact underlined characters in <u>...</u> in the appropriate field: passage_text, question_stem, additional_material, or choice_text.
 - Preserve reference markers such as ㉠, ㉡, ⓐ, ㄱ, ㄴ, (가), (나), (다), [A], [B].
 - Put every shared passage body only in passage_groups[].passage_text.
 - Never put passage text, passage instructions, or shared reading text inside question_stem.
@@ -82,6 +83,7 @@ Return raw JSON array only:
 
 Rules:
 - Preserve Korean explanation text as visible.
+- When any visible text is underlined, wrap only the exact underlined characters in <u>...</u>.
 - Do not invent answers.
 - If only an answer key is visible, fill answer and leave solution null.
 - If a question number is unclear, include a warning."""

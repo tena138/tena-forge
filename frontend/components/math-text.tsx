@@ -8,32 +8,62 @@ type Token = {
   content: string;
   math: boolean;
   display?: boolean;
+  underline?: boolean;
 };
 
 const MATH_PATTERN = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$[^$\n]+?\$)/g;
+const UNDERLINE_TAG_PATTERN = /<\/?u>/gi;
 
-function tokenize(value: string): Token[] {
-  const tokens: Token[] = [];
+type TextSegment = {
+  content: string;
+  underline: boolean;
+};
+
+function splitUnderlineSegments(value: string): TextSegment[] {
+  const segments: TextSegment[] = [];
   let cursor = 0;
-  for (const match of value.matchAll(MATH_PATTERN)) {
+  let underlineDepth = 0;
+
+  for (const match of value.matchAll(UNDERLINE_TAG_PATTERN)) {
     const raw = match[0];
     const index = match.index ?? 0;
     if (index > cursor) {
-      tokens.push({ content: value.slice(cursor, index), math: false });
+      segments.push({ content: value.slice(cursor, index), underline: underlineDepth > 0 });
     }
-    const display = raw.startsWith("$$") || raw.startsWith("\\[");
-    const content = raw.startsWith("$$")
-      ? raw.slice(2, -2)
-      : raw.startsWith("\\[")
-        ? raw.slice(2, -2)
-        : raw.startsWith("\\(")
-          ? raw.slice(2, -2)
-          : raw.slice(1, -1);
-    tokens.push({ content, math: true, display });
+    underlineDepth = raw.startsWith("</") ? Math.max(0, underlineDepth - 1) : underlineDepth + 1;
     cursor = index + raw.length;
   }
+
   if (cursor < value.length) {
-    tokens.push({ content: value.slice(cursor), math: false });
+    segments.push({ content: value.slice(cursor), underline: underlineDepth > 0 });
+  }
+  return segments;
+}
+
+function tokenize(value: string): Token[] {
+  const tokens: Token[] = [];
+  for (const segment of splitUnderlineSegments(value)) {
+    let cursor = 0;
+    for (const match of segment.content.matchAll(MATH_PATTERN)) {
+      const raw = match[0];
+      const index = match.index ?? 0;
+      if (index > cursor) {
+        tokens.push({ content: segment.content.slice(cursor, index), math: false, underline: segment.underline });
+      }
+      const display = raw.startsWith("$$") || raw.startsWith("\\[");
+      const content = raw.startsWith("$$")
+        ? raw.slice(2, -2)
+        : raw.startsWith("\\[")
+          ? raw.slice(2, -2)
+          : raw.startsWith("\\(")
+            ? raw.slice(2, -2)
+            : raw.slice(1, -1);
+      tokens.push({ content, math: true, display, underline: segment.underline });
+      cursor = index + raw.length;
+    }
+    if (cursor < segment.content.length) {
+      tokens.push({ content: segment.content.slice(cursor), math: false, underline: segment.underline });
+    }
   }
   return tokens;
 }
@@ -95,7 +125,12 @@ export function MathText({ value, className, clamp }: { value: string | null | u
   return (
     <span className={cn("tena-math-text whitespace-pre-wrap break-words", clamp && "line-clamp-3", className)}>
       {tokenize(text).map((token, index) => {
-        if (!token.math) return <span key={index}>{token.content}</span>;
+        if (!token.math) {
+          if (token.underline) {
+            return <u key={index} className="underline underline-offset-2">{token.content}</u>;
+          }
+          return <span key={index}>{token.content}</span>;
+        }
         const display = Boolean(token.display || needsBlockMath(token.content));
         const prominentInline = !display && hasProminentInlineMath(token.content);
         return (
@@ -103,8 +138,8 @@ export function MathText({ value, className, clamp }: { value: string | null | u
             key={index}
             className={
               display
-                ? "tena-math-display my-3 block overflow-x-auto"
-                : cn("tena-math-inline inline-block max-w-full", prominentInline && "tena-math-inline-prominent")
+                ? cn("tena-math-display my-3 block overflow-x-auto", token.underline && "underline underline-offset-2")
+                : cn("tena-math-inline inline-block max-w-full", prominentInline && "tena-math-inline-prominent", token.underline && "underline underline-offset-2")
             }
             dangerouslySetInnerHTML={{ __html: renderLatex(token.content, display) }}
           />
