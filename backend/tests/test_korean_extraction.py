@@ -111,6 +111,46 @@ class KoreanExtractionTests(unittest.TestCase):
         self.assertEqual(document["passage_groups"][0]["linked_question_ids"], ["q1", "q2", "q3"])
         self.assertNotIn("passage_range_unlinked_questions:2", document["passage_groups"][0]["warnings"])
 
+    def test_korean_underline_markup_survives_validation(self):
+        document = validate_korean_document(
+            {
+                "document_id": "doc",
+                "subject": "korean",
+                "source_file": "underline.pdf",
+                "passage_groups": [
+                    {
+                        "passage_id": "p1",
+                        "source_pages": [1],
+                        "passage_instruction": "[1~1] 다음 글을 읽고 물음에 답하시오.",
+                        "passage_text": "글쓴이는 <u>㉠새로운 인식</u>을 강조한다.",
+                        "passage_type": "비문학",
+                        "linked_question_ids": ["q1"],
+                        "extraction_confidence": 0.95,
+                        "warnings": [],
+                    }
+                ],
+                "questions": [
+                    {
+                        "question_id": "q1",
+                        "source_pages": [1],
+                        "question_number": "1",
+                        "linked_passage_id": "p1",
+                        "question_stem": "<u>㉠</u>의 의미로 가장 적절한 것은?",
+                        "choices": [choice("①", "<u>새로운 관점</u>"), choice("②", "기존 태도")],
+                        "warnings": [],
+                    }
+                ],
+                "global_warnings": [],
+            }
+        )
+
+        passage = document["passage_groups"][0]
+        question = document["questions"][0]
+        self.assertIn("<u>㉠새로운 인식</u>", passage["passage_text"])
+        self.assertIn("<u>㉠</u>", question["question_stem"])
+        self.assertIn("<u>새로운 관점</u>", question["choices"][0]["choice_text"])
+        self.assertIn("<u>㉠</u>", _korean_problem_text(question, passage))
+
     def test_first_question_embedded_passage_is_split(self):
         document = validate_korean_document(
             {

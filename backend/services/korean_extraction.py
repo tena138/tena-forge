@@ -56,6 +56,7 @@ Rules:
 - Do not rewrite, summarize, normalize, modernize, or correct passage text.
 - Preserve line breaks in poems and line-sensitive passages.
 - When any visible text is underlined, wrap only the exact underlined characters in <u>...</u> in the appropriate field: passage_text, question_stem, additional_material, or choice_text.
+- Preserve Korean underlined words, phrases, symbols, and sentence parts exactly. For example, if ㉠, 특정 단어, or a sentence segment is visibly underlined, return <u>㉠</u>, <u>해당 단어</u>, or <u>the exact underlined segment</u>; do not replace underlines with quotation marks or plain text.
 - Preserve reference markers such as ㉠, ㉡, ⓐ, ㄱ, ㄴ, (가), (나), (다), [A], [B].
 - Put every shared passage body only in passage_groups[].passage_text.
 - Never put passage text, passage instructions, or shared reading text inside question_stem.
