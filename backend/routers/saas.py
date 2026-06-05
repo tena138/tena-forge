@@ -342,6 +342,8 @@ def create_checkout(payload: BillingCheckoutRequest, request: Request, db: Sessi
         "portone": {
             "store_id": config["store_id"],
             "channel_key": config["channel_key"],
+            "pg_provider": config["pg_provider"],
+            "pg_provider_label": config["pg_provider_label"],
             "billing_key_method": config["billing_key_method"],
             "is_test_channel": config["is_test_channel"],
         },
@@ -415,6 +417,8 @@ def create_one_time_checkout(payload: BillingCheckoutRequest, request: Request, 
         "portone": {
             "store_id": config["store_id"],
             "channel_key": config["channel_key"],
+            "pg_provider": config["pg_provider"],
+            "pg_provider_label": config["pg_provider_label"],
             "is_test_channel": config["is_test_channel"],
         },
     }

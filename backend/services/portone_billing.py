@@ -12,6 +12,11 @@ from fastapi import HTTPException, Request
 from database import get_settings
 
 PORTONE_API_BASE = "https://api.portone.io"
+PG_PROVIDER_LABELS = {
+    "inicis": "KG Inicis",
+    "toss": "Toss Payments",
+    "portone": "PortOne",
+}
 
 
 def _env_first(*names: str) -> str:
@@ -22,27 +27,96 @@ def _env_first(*names: str) -> str:
     return ""
 
 
+def _first_configured(*values: str | None) -> str:
+    for value in values:
+        if value:
+            text = str(value).strip()
+            if text:
+                return text
+    return ""
+
+
 def _store_id() -> str:
     settings = get_settings()
     return settings.portone_store_id or _env_first("PORTONE_STORE_ID", "NEXT_PUBLIC_PORTONE_STORE_ID")
 
 
-def _channel_key(purpose: str = "billing") -> str:
+def _primary_pg_provider() -> str:
     settings = get_settings()
-    purpose = (purpose or "billing").strip().lower()
+    provider = _first_configured(settings.portone_primary_pg_provider, _env_first("PORTONE_PRIMARY_PG_PROVIDER"))
+    provider = provider.lower()
+    return provider if provider in {"inicis", "toss"} else "inicis"
+
+
+def _provider_channel_key(provider: str, purpose: str) -> str:
+    settings = get_settings()
     if purpose == "general":
-        return settings.portone_general_channel_key_toss or _env_first(
-            "PORTONE_GENERAL_CHANNEL_KEY_TOSS",
-            "PORTONE_TOSS_GENERAL_CHANNEL_KEY",
-            "NEXT_PUBLIC_PORTONE_GENERAL_CHANNEL_KEY_TOSS",
-            "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS",
+        if provider == "inicis":
+            return _first_configured(
+                settings.portone_general_channel_key_inicis,
+                _env_first(
+                    "PORTONE_GENERAL_CHANNEL_KEY_INICIS",
+                    "PORTONE_INICIS_GENERAL_CHANNEL_KEY",
+                    "NEXT_PUBLIC_PORTONE_GENERAL_CHANNEL_KEY_INICIS",
+                ),
+                settings.portone_channel_key_inicis,
+                _env_first("PORTONE_CHANNEL_KEY_INICIS", "PORTONE_INICIS_CHANNEL_KEY", "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_INICIS"),
+            )
+        return _first_configured(
+            settings.portone_general_channel_key_toss,
+            _env_first(
+                "PORTONE_GENERAL_CHANNEL_KEY_TOSS",
+                "PORTONE_TOSS_GENERAL_CHANNEL_KEY",
+                "NEXT_PUBLIC_PORTONE_GENERAL_CHANNEL_KEY_TOSS",
+                "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS",
+            ),
         )
-    return settings.portone_billing_channel_key_toss or _env_first(
-        "PORTONE_BILLING_CHANNEL_KEY_TOSS",
-        "PORTONE_TOSS_BILLING_CHANNEL_KEY",
-        "NEXT_PUBLIC_PORTONE_BILLING_CHANNEL_KEY_TOSS",
-        "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS",
+    if provider == "inicis":
+        return _first_configured(
+            settings.portone_billing_channel_key_inicis,
+            _env_first(
+                "PORTONE_BILLING_CHANNEL_KEY_INICIS",
+                "PORTONE_INICIS_BILLING_CHANNEL_KEY",
+                "NEXT_PUBLIC_PORTONE_BILLING_CHANNEL_KEY_INICIS",
+            ),
+            settings.portone_channel_key_inicis,
+            _env_first("PORTONE_CHANNEL_KEY_INICIS", "PORTONE_INICIS_CHANNEL_KEY", "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_INICIS"),
+        )
+    return _first_configured(
+        settings.portone_billing_channel_key_toss,
+        _env_first(
+            "PORTONE_BILLING_CHANNEL_KEY_TOSS",
+            "PORTONE_TOSS_BILLING_CHANNEL_KEY",
+            "NEXT_PUBLIC_PORTONE_BILLING_CHANNEL_KEY_TOSS",
+            "NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS",
+        ),
     )
+
+
+def _generic_channel_key() -> str:
+    settings = get_settings()
+    return _first_configured(
+        settings.portone_channel_key,
+        _env_first("PORTONE_CHANNEL_KEY", "NEXT_PUBLIC_PORTONE_CHANNEL_KEY"),
+    )
+
+
+def _channel_selection(purpose: str = "billing") -> dict[str, str]:
+    purpose = (purpose or "billing").strip().lower()
+    primary = _primary_pg_provider()
+    fallback = "toss" if primary == "inicis" else "inicis"
+    for provider in (primary, fallback):
+        channel_key = _provider_channel_key(provider, purpose)
+        if channel_key:
+            return {"channel_key": channel_key, "pg_provider": provider}
+    channel_key = _generic_channel_key()
+    if channel_key:
+        return {"channel_key": channel_key, "pg_provider": "portone"}
+    return {"channel_key": "", "pg_provider": primary}
+
+
+def _channel_key(purpose: str = "billing") -> str:
+    return _channel_selection(purpose)["channel_key"]
 
 
 def _billing_key_method() -> str:
@@ -74,13 +148,16 @@ def _normalize_payment_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def portone_public_config(purpose: str = "billing") -> dict[str, Any]:
     store_id = _store_id()
-    channel_key = _channel_key(purpose)
+    channel = _channel_selection(purpose)
+    channel_key = channel["channel_key"]
     if not store_id or not channel_key:
         raise HTTPException(status_code=503, detail="PortOne Store ID or channel key is not configured.")
     config = {
         "store_id": store_id,
         "channel_key": channel_key,
         "purpose": purpose,
+        "pg_provider": channel["pg_provider"],
+        "pg_provider_label": PG_PROVIDER_LABELS.get(channel["pg_provider"], "PortOne"),
         "billing_key_method": _billing_key_method(),
         "is_test_channel": _is_test_channel(),
     }

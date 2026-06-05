@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     portone_general_channel_key_toss: str = ""
     portone_api_secret: str = ""
     portone_webhook_secret: str = ""
+    portone_primary_pg_provider: str = "inicis"
     portone_billing_key_method: str = "CARD"
     portone_easy_pay_provider: str = ""
     portone_easy_pay_available_methods: str = ""

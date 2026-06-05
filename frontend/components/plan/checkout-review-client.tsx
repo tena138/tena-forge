@@ -219,6 +219,11 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
           <aside className="h-fit rounded-[28px] border border-slate-950/10 bg-slate-950 p-6 text-white shadow-[0_24px_90px_rgba(15,23,42,0.22)]">
             <CreditCard className="h-6 w-6" />
             <h2 className="mt-5 text-2xl font-black">결제 금액</h2>
+            <div className="mt-4 rounded-[14px] border border-cyan-100/20 bg-white/[0.06] px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Primary PG</p>
+              <p className="mt-1 text-sm font-black">KG Inicis via PortOne</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">Toss Payments remains available as fallback.</p>
+            </div>
             <div className="mt-6 space-y-3 border-b border-white/10 pb-5 text-sm">
               <PriceLine label="기본 플랜" value={`${formatKRW(PLANS[plan].baseMonthlyPrice)} / 월`} />
               {subjectEngineDelta > 0 ? <PriceLine label="엔진 추가" value={`+${formatKRW(subjectEngineDelta)} / 월`} /> : null}
