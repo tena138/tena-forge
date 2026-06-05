@@ -19,23 +19,30 @@ type TextSegment = {
   underline: boolean;
 };
 
+function normalizeUnderlineTags(value: string) {
+  return value
+    .replace(/&lt;\s*u\s*&gt;/gi, "<u>")
+    .replace(/&lt;\s*\/\s*u\s*&gt;/gi, "</u>");
+}
+
 function splitUnderlineSegments(value: string): TextSegment[] {
+  const normalizedValue = normalizeUnderlineTags(value);
   const segments: TextSegment[] = [];
   let cursor = 0;
   let underlineDepth = 0;
 
-  for (const match of value.matchAll(UNDERLINE_TAG_PATTERN)) {
+  for (const match of normalizedValue.matchAll(UNDERLINE_TAG_PATTERN)) {
     const raw = match[0];
     const index = match.index ?? 0;
     if (index > cursor) {
-      segments.push({ content: value.slice(cursor, index), underline: underlineDepth > 0 });
+      segments.push({ content: normalizedValue.slice(cursor, index), underline: underlineDepth > 0 });
     }
     underlineDepth = raw.startsWith("</") ? Math.max(0, underlineDepth - 1) : underlineDepth + 1;
     cursor = index + raw.length;
   }
 
-  if (cursor < value.length) {
-    segments.push({ content: value.slice(cursor), underline: underlineDepth > 0 });
+  if (cursor < normalizedValue.length) {
+    segments.push({ content: normalizedValue.slice(cursor), underline: underlineDepth > 0 });
   }
   return segments;
 }
@@ -127,7 +134,7 @@ export function MathText({ value, className, clamp }: { value: string | null | u
       {tokenize(text).map((token, index) => {
         if (!token.math) {
           if (token.underline) {
-            return <u key={index} className="underline underline-offset-2">{token.content}</u>;
+            return <span key={index} className="tena-underline-mark">{token.content}</span>;
           }
           return <span key={index}>{token.content}</span>;
         }
@@ -138,8 +145,8 @@ export function MathText({ value, className, clamp }: { value: string | null | u
             key={index}
             className={
               display
-                ? cn("tena-math-display my-3 block overflow-x-auto", token.underline && "underline underline-offset-2")
-                : cn("tena-math-inline inline-block max-w-full", prominentInline && "tena-math-inline-prominent", token.underline && "underline underline-offset-2")
+                ? cn("tena-math-display my-3 block overflow-x-auto", token.underline && "tena-underline-mark")
+                : cn("tena-math-inline inline-block max-w-full", prominentInline && "tena-math-inline-prominent", token.underline && "tena-underline-mark")
             }
             dangerouslySetInnerHTML={{ __html: renderLatex(token.content, display) }}
           />

@@ -143,6 +143,13 @@
     line-height: inherit;
   }
 
+  .tena-underline-mark {
+    text-decoration-line: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.16em;
+    text-decoration-skip-ink: auto;
+  }
+
   .tena-math-inline {
     vertical-align: -0.045em;
     line-height: 1;
