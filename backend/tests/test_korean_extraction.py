@@ -223,40 +223,45 @@ class KoreanExtractionTests(unittest.TestCase):
         self.assertIn("fewer_than_5_choices", document["questions"][0]["warnings"])
 
     def test_english_standalone_boxed_passage_stays_inside_question(self):
-        document = validate_korean_document(
-            {
-                "document_id": "doc",
-                "subject": "english",
-                "source_file": "english.pdf",
-                "passage_groups": [],
-                "questions": [
-                    {
-                        "question_id": "q18",
-                        "source_pages": [8],
-                        "question_number": "18",
-                        "linked_passage_id": None,
-                        "question_stem": (
-                            "다음 글의 목적으로 가장 적절한 것은?\n\n"
-                            "To All Members of the Hillside Fitness Club\n"
-                            "We would like to let you know about an important change regarding our weekend yoga class. "
-                            "The instructor originally assigned to lead the session had a personal emergency and will be unavailable. "
-                            "To avoid canceling the class altogether, we have arranged for another certified instructor to take her place.\n"
-                            "Hillside Fitness Club Management\n"
-                            "① 요가 수업을 위한 준비물을 공지하려고\n"
-                            "② 요가 수업의 담당 강사 변경을 알리려고\n"
-                            "③ 새로운 요가 수업에 가입할 것을 권유하려고\n"
-                            "④ 요가 동아리에 가입할 동기를 조사하려고\n"
-                            "⑤ 시설 이용 요금 인상을 발표하려고"
-                        ),
-                        "choices": [],
-                        "warnings": [],
-                    }
-                ],
-                "global_warnings": [],
-            }
+        document = merge_english_page_payloads(
+            "doc",
+            "english.pdf",
+            [
+                {
+                    "document_id": "doc",
+                    "subject": "english",
+                    "source_file": "english.pdf",
+                    "passage_groups": [],
+                    "questions": [
+                        {
+                            "question_id": "q18",
+                            "source_pages": [8],
+                            "question_number": "18",
+                            "linked_passage_id": None,
+                            "question_stem": (
+                                "18. 다음 글의 목적으로 가장 적절한 것은?\n\n"
+                                "To All Members of the Hillside Fitness Club\n"
+                                "We would like to let you know about an important change regarding our weekend yoga class. "
+                                "The instructor originally assigned to lead the session had a personal emergency and will be unavailable. "
+                                "To avoid canceling the class altogether, we have arranged for another certified instructor to take her place.\n"
+                                "Hillside Fitness Club Management\n"
+                                "① 요가 수업을 위한 준비물을 공지하려고\n"
+                                "② 요가 수업의 담당 강사 변경을 알리려고\n"
+                                "③ 새로운 요가 수업에 가입할 것을 권유하려고\n"
+                                "④ 요가 동아리에 가입할 동기를 조사하려고\n"
+                                "⑤ 시설 이용 요금 인상을 발표하려고"
+                            ),
+                            "choices": [],
+                            "warnings": [],
+                        }
+                    ],
+                    "global_warnings": [],
+                }
+            ],
         )
 
         question = document["questions"][0]
+        self.assertFalse(question["question_stem"].startswith("18."))
         self.assertIn("다음 글의 목적으로 가장 적절한 것은?", question["question_stem"])
         self.assertIn("To All Members", question["question_stem"])
         self.assertEqual(question["linked_passage_id"], None)

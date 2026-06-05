@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from services.korean_extraction import merge_korean_page_payloads, normalize_korean_page_payload
@@ -55,6 +56,7 @@ Rules:
 - Do not rewrite, translate, summarize, normalize, modernize, or correct passage text.
 - Preserve English punctuation, capitalization, line breaks, blanks, underlines, bracket labels, and Korean annotations.
 - For a standalone numbered reading question with no explicit shared range, do not create a passage_group. Keep the visible order inside question_stem: Korean stem, then the English passage/notice/letter/email/article/dialogue block. Extract the ①②③④⑤ lines into choices.
+- Do not include the visible problem number in question_stem. Store it only in question_number. For example, question_stem starts with "다음 글의 목적으로..." rather than "18. 다음 글의 목적으로...".
 - Example standalone layout: "18. 다음 글의 목적으로..." followed by a boxed "To All Members..." passage followed by ①②③④⑤ choices. Return one question with linked_passage_id null; question_stem must contain the Korean prompt and the English box text in order; choices must contain the five Korean options.
 - For shared range layouts such as [41~42], [43-45], 41~42, or instructions that visibly apply to multiple questions, create one passage_group and link every question in that range.
 - Before returning, audit every visible shared range. If the source says [41~42], questions 41 and 42 must both be present and linked to that passage.
@@ -84,9 +86,29 @@ Rules:
 - If a question number is unclear, include a warning."""
 
 
+def strip_english_question_number_prefix(text: Any, question_number: Any) -> str:
+    value = str(text or "").lstrip()
+    number_match = re.search(r"\d+", str(question_number or ""))
+    if not value or not number_match:
+        return value
+    number = re.escape(str(int(number_match.group(0))))
+    return re.sub(rf"^(?:문항\s*)?#?\s*0*{number}\s*(?:번|[\.\):：])\s*", "", value, count=1).lstrip()
+
+
+def _strip_question_number_prefixes(document: dict[str, Any]) -> dict[str, Any]:
+    for question in document.get("questions") or []:
+        if not isinstance(question, dict):
+            continue
+        question["question_stem"] = strip_english_question_number_prefix(
+            question.get("question_stem"),
+            question.get("question_number"),
+        )
+    return document
+
+
 def normalize_english_page_payload(raw: dict[str, Any], document_id: str, source_file: str, fallback_page: int) -> dict[str, Any]:
-    return normalize_korean_page_payload(raw, document_id, source_file, fallback_page, subject="english")
+    return _strip_question_number_prefixes(normalize_korean_page_payload(raw, document_id, source_file, fallback_page, subject="english"))
 
 
 def merge_english_page_payloads(document_id: str, source_file: str, page_payloads: list[dict[str, Any]]) -> dict[str, Any]:
-    return merge_korean_page_payloads(document_id, source_file, page_payloads, subject="english")
+    return _strip_question_number_prefixes(merge_korean_page_payloads(document_id, source_file, page_payloads, subject="english"))
