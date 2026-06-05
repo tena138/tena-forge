@@ -1551,15 +1551,21 @@ function PassageReviewPanel({
             <span className="text-xs font-semibold text-slate-400">안내문</span>
             <Input value={draft.passage_instruction} onChange={(event) => updateField("passage_instruction", event.target.value)} placeholder="[1~3] 다음 글을 읽고 물음에 답하시오." />
           </label>
-          <label className="space-y-1.5 md:col-span-2">
+          <div className="space-y-1.5 md:col-span-2">
             <span className="text-xs font-semibold text-slate-400">본문</span>
-            <textarea
-              className="min-h-[420px] w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/15"
-              value={draft.passage_text}
-              onChange={(event) => updateField("passage_text", event.target.value)}
-              placeholder="지문 본문"
-            />
-          </label>
+            <div className="max-h-[420px] min-h-[280px] overflow-auto rounded-[7px] border border-white/10 bg-black/35 p-3">
+              <MathText className="text-sm leading-7 text-slate-100" value={draft.passage_text || "지문 본문이 비어 있습니다."} />
+            </div>
+            <details className="rounded-[7px] border border-white/10 bg-black/20">
+              <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-400">원문 편집</summary>
+              <textarea
+                className="min-h-[260px] w-full resize-y border-t border-white/10 bg-black/35 p-3 text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/15"
+                value={draft.passage_text}
+                onChange={(event) => updateField("passage_text", event.target.value)}
+                placeholder="지문 본문"
+              />
+            </details>
+          </div>
         </div>
       </div>
 
@@ -1921,8 +1927,8 @@ function ExtractionPanel({
             </div>
             <span className="text-xs font-semibold text-violet-100">#{problem?.problem_number || "-"}</span>
           </div>
-          <div className="max-h-56 overflow-auto whitespace-pre-wrap px-4 py-3 text-sm leading-7 text-slate-100">
-            {linkedPassageText || "지문 내용이 비어 있습니다."}
+          <div className="max-h-56 overflow-auto px-4 py-3">
+            <MathText className="text-sm leading-7 text-slate-100" value={linkedPassageText || "지문 내용이 비어 있습니다."} />
           </div>
         </div>
       ) : null}
