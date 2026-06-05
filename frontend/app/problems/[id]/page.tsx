@@ -3,7 +3,7 @@
 import type { PointerEvent } from "react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Crop, RefreshCcw, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, RefreshCcw, Save, Trash2 } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -74,12 +74,16 @@ function ProblemDetailContent() {
   const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], problem_types: [], sources: [] });
   const [tags, setTags] = useState<Tag>(emptyTags);
   const [draftText, setDraftText] = useState("");
+  const [draftAnswer, setDraftAnswer] = useState("");
+  const [draftSolution, setDraftSolution] = useState("");
   const [savingText, setSavingText] = useState(false);
+  const [savingAnswer, setSavingAnswer] = useState(false);
+  const [savingSolution, setSavingSolution] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
-  const [cropMode, setCropMode] = useState(false);
   const [dragStart, setDragStart] = useState<Point | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [savingCrop, setSavingCrop] = useState(false);
+  const [deletingVisual, setDeletingVisual] = useState(false);
   const [reextracting, setReextracting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
@@ -101,6 +105,8 @@ function ProblemDetailContent() {
       .then((data) => {
         setProblem(data);
         setDraftText(data.problem_text);
+        setDraftAnswer(data.answer || "");
+        setDraftSolution(data.solution_steps || "");
         setTags(normalizedTags(data.tags));
       })
       .catch((error) => {
@@ -134,6 +140,10 @@ function ProblemDetailContent() {
     if (!problemId) return;
     const textSaved = await saveProblemText();
     if (!textSaved) return;
+    const answerSaved = await saveProblemAnswer();
+    if (!answerSaved) return;
+    const solutionSaved = await saveProblemSolution();
+    if (!solutionSaved) return;
     const tagsSaved = await saveTags();
     if (!tagsSaved) return;
     router.push(`/problems/${problemId}${detailQuerySuffix}`);
@@ -150,15 +160,16 @@ function ProblemDetailContent() {
   }
 
   function startCrop(event: PointerEvent<HTMLDivElement>) {
-    if (!cropMode) return;
+    if (!cropSourceUrl || event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = imagePoint(event);
+    setActionError("");
     setDragStart(point);
     setSelection({ x: point.x, y: point.y, width: 0, height: 0 });
   }
 
   function moveCrop(event: PointerEvent<HTMLDivElement>) {
-    if (!cropMode || !dragStart) return;
+    if (!dragStart) return;
     const point = imagePoint(event);
     setSelection({
       x: Math.min(dragStart.x, point.x),
@@ -243,11 +254,73 @@ function ProblemDetailContent() {
       });
       setProblem(updated);
       setSelection(null);
-      setCropMode(false);
     } catch {
       setActionError("시각 자료 영역 저장에 실패했습니다.");
     } finally {
       setSavingCrop(false);
+    }
+  }
+
+  const saveProblemAnswer = useCallback(async (nextAnswer = draftAnswer) => {
+    if (!problem) return true;
+    if (nextAnswer === (problem.answer || "")) {
+      return true;
+    }
+    setSavingAnswer(true);
+    setActionError("");
+    try {
+      const updated = await api<Problem>(`/api/problems/${problem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: nextAnswer.trim() ? nextAnswer : null }),
+      });
+      setProblem(updated);
+      setDraftAnswer(updated.answer || "");
+      return true;
+    } catch {
+      setActionError("정답 저장에 실패했습니다.");
+      return false;
+    } finally {
+      setSavingAnswer(false);
+    }
+  }, [draftAnswer, problem]);
+
+  const saveProblemSolution = useCallback(async (nextSolution = draftSolution) => {
+    if (!problem) return true;
+    if (nextSolution === (problem.solution_steps || "")) {
+      return true;
+    }
+    setSavingSolution(true);
+    setActionError("");
+    try {
+      const updated = await api<Problem>(`/api/problems/${problem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ solution_steps: nextSolution.trim() ? nextSolution : null }),
+      });
+      setProblem(updated);
+      setDraftSolution(updated.solution_steps || "");
+      return true;
+    } catch {
+      setActionError("해설 저장에 실패했습니다.");
+      return false;
+    } finally {
+      setSavingSolution(false);
+    }
+  }, [draftSolution, problem]);
+
+  async function deleteVisual() {
+    if (!problem || !problem.visual_url) return;
+    setDeletingVisual(true);
+    setActionError("");
+    try {
+      const updated = await api<Problem>(`/api/problems/${problem.id}/visual`, { method: "DELETE" });
+      setProblem(updated);
+      setSelection(null);
+    } catch {
+      setActionError("저장된 사진 삭제에 실패했습니다.");
+    } finally {
+      setDeletingVisual(false);
     }
   }
 
@@ -336,6 +409,10 @@ function ProblemDetailContent() {
     if (!problem) return;
     const textSaved = await saveProblemText();
     if (!textSaved) return;
+    const answerSaved = await saveProblemAnswer();
+    if (!answerSaved) return;
+    const solutionSaved = await saveProblemSolution();
+    if (!solutionSaved) return;
     const tagsSaved = await saveTags();
     if (!tagsSaved) return;
     const updated = await api<Problem>(`/api/problems/${problem.id}/review`, {
@@ -426,41 +503,16 @@ function ProblemDetailContent() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {cropSourceUrl ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant={cropMode ? "secondary" : "outline"}
-                    onClick={() => {
-                      setCropMode(!cropMode);
-                      setSelection(null);
-                    }}
-                  >
-                    <Crop className="h-4 w-4" />
-                    영역 자르기
-                  </Button>
-                  <Button size="sm" onClick={saveCrop} disabled={!selection || selection.width < 10 || selection.height < 10 || savingCrop}>
-                    <Save className="h-4 w-4" />
-                    저장
-                  </Button>
-                  {cropMode ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setCropMode(false);
-                        setSelection(null);
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  ) : null}
-                </>
+                <Button size="sm" onClick={saveCrop} disabled={!selection || selection.width < 10 || selection.height < 10 || savingCrop}>
+                  <Save className="h-4 w-4" />
+                  저장
+                </Button>
               ) : null}
             </div>
           </div>
 
           <div
-            className={`relative flex flex-1 items-start justify-center overflow-auto bg-[#07070c] p-4 ${cropMode ? "cursor-crosshair" : ""}`}
+            className={`relative flex flex-1 items-start justify-center overflow-auto bg-[#07070c] p-4 ${cropSourceUrl ? "cursor-crosshair" : ""}`}
             onPointerDown={startCrop}
             onPointerMove={moveCrop}
             onPointerUp={() => setDragStart(null)}
@@ -475,7 +527,6 @@ function ProblemDetailContent() {
                   className="select-none rounded bg-white shadow-[0_18px_55px_rgba(0,0,0,0.42)]"
                   draggable={false}
                 />
-                {cropMode ? <div className="absolute inset-0 bg-black/20" /> : null}
                 {selection ? (
                   <div
                     className="absolute border-2 border-dashed border-violet-400 bg-violet-400/15"
@@ -533,18 +584,53 @@ function ProblemDetailContent() {
 
           <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
-              <h3 className="mb-3 text-sm font-bold text-white">정답</h3>
-              <div className="text-lg font-bold text-white">
-                <MathText value={problem.answer || "정답 데이터 없음"} />
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-white">정답</h3>
+                <Button size="sm" variant="outline" onClick={() => void saveProblemAnswer()} disabled={savingAnswer || draftAnswer === (problem.answer || "")}>
+                  <Save className="h-3.5 w-3.5" />
+                  저장
+                </Button>
               </div>
+              <textarea
+                aria-label="정답 수정"
+                className="min-h-24 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15"
+                value={draftAnswer}
+                onChange={(event) => setDraftAnswer(event.target.value)}
+                placeholder="정답 데이터 없음"
+              />
             </div>
             <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
-              <h3 className="mb-3 text-sm font-bold text-white">해설</h3>
-              <div className="max-h-32 overflow-auto text-sm leading-7 text-slate-200">
-                <MathText value={problem.solution_steps || "해설 데이터 없음"} />
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-white">해설</h3>
+                <Button size="sm" variant="outline" onClick={() => void saveProblemSolution()} disabled={savingSolution || draftSolution === (problem.solution_steps || "")}>
+                  <Save className="h-3.5 w-3.5" />
+                  저장
+                </Button>
               </div>
+              <textarea
+                aria-label="해설 수정"
+                className="min-h-24 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15"
+                value={draftSolution}
+                onChange={(event) => setDraftSolution(event.target.value)}
+                placeholder="해설 데이터 없음"
+              />
             </div>
           </div>
+
+          {problem.visual_url ? (
+            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-white">저장된 사진</h3>
+                <Button size="sm" variant="outline" onClick={deleteVisual} disabled={deletingVisual}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  삭제
+                </Button>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/35 p-2">
+                <img src={assetUrl(problem.visual_url)} alt="저장된 사진" className="max-h-52 w-full rounded object-contain" />
+              </div>
+            </div>
+          ) : null}
 
           <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
             <div className="flex items-start justify-between gap-3">

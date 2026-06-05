@@ -107,7 +107,9 @@ class ReviewUpdate(BaseModel):
 
 
 class ProblemUpdate(BaseModel):
-    problem_text: str
+    problem_text: str | None = None
+    answer: str | None = None
+    solution_steps: str | None = None
 
 
 class VisualCropUpdate(BaseModel):

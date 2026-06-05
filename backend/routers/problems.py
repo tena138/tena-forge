@@ -505,10 +505,23 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
-    if not payload.problem_text.strip():
-        raise HTTPException(status_code=400, detail="Problem text cannot be empty.")
-    problem.problem_text = normalize_geometry_notation(payload.problem_text)
-    problem.needs_review = True
+    changed = False
+    fields_set = payload.model_fields_set
+    if "problem_text" in fields_set:
+        if not (payload.problem_text or "").strip():
+            raise HTTPException(status_code=400, detail="Problem text cannot be empty.")
+        problem.problem_text = normalize_geometry_notation(payload.problem_text or "")
+        changed = True
+    if "answer" in fields_set:
+        answer = (payload.answer or "").strip()
+        problem.answer = answer or None
+        changed = True
+    if "solution_steps" in fields_set:
+        solution_steps = (payload.solution_steps or "").strip()
+        problem.solution_steps = normalize_geometry_notation(solution_steps) if solution_steps else None
+        changed = True
+    if changed:
+        problem.needs_review = True
     db.commit()
     db.refresh(problem)
     return _serialize_problem(problem)
