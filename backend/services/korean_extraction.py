@@ -139,8 +139,14 @@ Rules:
 - Preserve English punctuation, capitalization, line breaks, blanks, underlines, bracket labels, and Korean annotations.
 - Put every shared passage body only in passage_groups[].passage_text.
 - Never put passage text, passage instructions, or shared reading text inside question_stem.
+- For standalone numbered reading questions, a boxed/indented English notice, letter, email, article,
+  dialogue, or passage between the stem and choices is still a passage_group even when it links to
+  only one question and has no [n~m] range. Create a passage_group and link that question.
+- For questions like "다음 글의 목적으로 가장 적절한 것은?", put only that prompt in question_stem,
+  put the visible English block such as "To All Members..." in passage_text, and put the Korean
+  ①②③④⑤ lines after the block in choices.
 - Extract 보기 blocks, underlined phrases, blank options, and grammar/vocabulary tables into additional_material when they are part of a question.
-- Extract choices ①②③④⑤ exactly. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
+- Extract choices ①②③④⑤ exactly, including choices printed below a long passage box. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
 - Link questions to a passage when the page shows a shared passage range such as [1~3], [1-3], 1~3, or an instruction that says to read the following passage.
 - If uncertain, add warnings instead of guessing.
 - Do not extract answers or solutions from the problem file. Only answer/solution files may fill answer and solution later."""
@@ -171,6 +177,7 @@ PASSAGE_INSTRUCTION_RE = re.compile(r"(?:※\s*)?다음\s+글을\s+읽고\s+물�
 QUESTION_NUMBER_RE = re.compile(r"(?m)^\s*0*(\d{1,3})\s*[\.\)]")
 STANDARD_CHOICE_RE = re.compile(r"[①②③④⑤]")
 FALLBACK_CHOICE_RE = re.compile(r"(?m)^\s*[1-5]\)")
+TRAILING_CHOICE_LINE_RE = re.compile(r"(?m)^\s*([①②③④⑤]|[1-5][\).])\s*(.+?)\s*$")
 BOGI_RE = re.compile(r"(?:<보기>|〈보기〉|\[보기\]|^\s*보기\s*$)", re.MULTILINE)
 PASSAGE_LABEL_RE = re.compile(r"(?:\([가-힣]\)|\[[A-Z]\])")
 UPPER_PASSAGE_REF_RE = re.compile(r"윗글|위\s+글|앞\s*글")
@@ -184,6 +191,7 @@ PASSAGE_START_LINE_RE = re.compile(
 QUESTION_LIKE_RE = re.compile(
     r"(?:\?|？|고르시오|찾으시오|적절|알맞|옳은|옳지|않은|설명|내용|이해|반응|의미|이유|관계)"
 )
+LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'’-]*")
 
 
 def _text(value: Any) -> str:
@@ -257,6 +265,51 @@ def normalize_korean_choice(raw: dict[str, Any]) -> dict[str, str]:
     return {"choice_label": label, "choice_text": text}
 
 
+def _choice_label_index(label: str) -> int | None:
+    normalized = label.strip()
+    if normalized in "①②③④⑤":
+        return "①②③④⑤".index(normalized) + 1
+    match = re.search(r"[1-5]", normalized)
+    return int(match.group(0)) if match else None
+
+
+def _extract_trailing_choices_from_text(text: str) -> tuple[str, list[dict[str, str]]]:
+    matches = list(TRAILING_CHOICE_LINE_RE.finditer(text or ""))
+    if len(matches) < 2:
+        return text, []
+
+    first_choice_index = next(
+        (
+            index
+            for index, match in enumerate(matches)
+            if _choice_label_index(match.group(1)) == 1
+        ),
+        None,
+    )
+    if first_choice_index is None:
+        return text, []
+
+    choice_matches = matches[first_choice_index:]
+    expected = 1
+    choices: list[dict[str, str]] = []
+    for match in choice_matches:
+        label = match.group(1).strip()
+        label_index = _choice_label_index(label)
+        if label_index != expected:
+            break
+        choices.append({"choice_label": label, "choice_text": match.group(2).strip()})
+        expected += 1
+        if expected > 5:
+            break
+
+    if len(choices) < 2:
+        return text, []
+
+    first_match = choice_matches[0]
+    cleaned = _collapse_blank_lines(text[: first_match.start()])
+    return cleaned, choices
+
+
 def _collapse_blank_lines(value: str) -> str:
     text = value.replace("\r\n", "\n").replace("\r", "\n")
     return re.sub(r"\n{3,}", "\n\n", text).strip()
@@ -297,6 +350,61 @@ def _split_embedded_passage_from_question_stem(stem: str) -> tuple[str, str | No
     return question_text, instruction, body
 
 
+def _latin_ratio(value: str) -> float:
+    letters = re.findall(r"[A-Za-z가-힣]", value)
+    if not letters:
+        return 0.0
+    latin = [letter for letter in letters if re.match(r"[A-Za-z]", letter)]
+    return len(latin) / len(letters)
+
+
+def _looks_like_english_passage(value: str) -> bool:
+    text = _text(value)
+    if len(text) < 40:
+        return False
+    latin_words = LATIN_WORD_RE.findall(text)
+    return len(latin_words) >= 8 and _latin_ratio(text) >= 0.55
+
+
+def _split_embedded_english_passage_from_question_stem(stem: str) -> tuple[str, str | None, str] | None:
+    text, _choices = _extract_trailing_choices_from_text(_collapse_blank_lines(stem))
+    if not text:
+        return None
+    lines = [line.rstrip() for line in text.splitlines()]
+    content_indexes = [index for index, line in enumerate(lines) if line.strip()]
+    if len(content_indexes) < 2:
+        return None
+
+    passage_start_index = None
+    for index in content_indexes[1:]:
+        line = lines[index].strip()
+        if len(LATIN_WORD_RE.findall(line)) >= 2 or _looks_like_english_passage("\n".join(lines[index:])):
+            passage_start_index = index
+            break
+    if passage_start_index is None:
+        return None
+
+    question_text = _collapse_blank_lines("\n".join(lines[:passage_start_index]))
+    passage_text = _collapse_blank_lines("\n".join(lines[passage_start_index:]))
+    if not _looks_like_question_stem(question_text) or not _looks_like_english_passage(passage_text):
+        return None
+    return question_text, None, passage_text
+
+
+def _split_any_embedded_passage_from_question_stem(stem: str) -> tuple[str, str | None, str] | None:
+    return _split_embedded_passage_from_question_stem(stem) or _split_embedded_english_passage_from_question_stem(stem)
+
+
+def _new_embedded_passage_id(question: dict[str, Any]) -> str:
+    number = _question_number_key(question.get("question_number"))
+    question_id = re.sub(r"[^A-Za-z0-9_]+", "_", _text(question.get("question_id"))).strip("_")
+    if number:
+        return f"p_q{number}"
+    if question_id:
+        return f"p_{question_id}"
+    return f"p_{uuid.uuid4().hex[:8]}"
+
+
 def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
     doc = deepcopy(document)
     passages = _as_list(doc.get("passage_groups"))
@@ -310,7 +418,41 @@ def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
     for question in questions:
         if not isinstance(question, dict):
             continue
+        question_warnings = _as_str_list(question.get("warnings"))
+        if not _as_list(question.get("choices")):
+            question_stem, recovered_choices = _extract_trailing_choices_from_text(str(question.get("question_stem") or ""))
+            if recovered_choices:
+                question["question_stem"] = question_stem
+                question["choices"] = recovered_choices
+                question_warnings.append("recovered_choices_from_question_stem")
+                question["warnings"] = list(dict.fromkeys(question_warnings))
         linked_passage_id = _text(question.get("linked_passage_id"))
+        question_warnings = _as_str_list(question.get("warnings"))
+        split = _split_any_embedded_passage_from_question_stem(str(question.get("question_stem") or ""))
+        if split and not linked_passage_id:
+            question_text, instruction, extracted_passage_text = split
+            passage_id = _new_embedded_passage_id(question)
+            while passage_id in passages_by_id:
+                passage_id = f"p_{uuid.uuid4().hex[:8]}"
+            question["question_stem"] = question_text
+            question["linked_passage_id"] = passage_id
+            linked_passage_id = passage_id
+            question_id = _text(question.get("question_id"))
+            passage = {
+                "passage_id": passage_id,
+                "source_pages": _as_page_list(question.get("source_pages")),
+                "passage_instruction": instruction,
+                "passage_title": None,
+                "passage_text": extracted_passage_text,
+                "passage_type": "reading" if _looks_like_english_passage(extracted_passage_text) else "unknown",
+                "linked_question_ids": [question_id] if question_id else [],
+                "extraction_confidence": _confidence(question.get("extraction_confidence")),
+                "warnings": ["split_embedded_passage_from_question_stem"],
+            }
+            passages.append(passage)
+            passages_by_id[passage_id] = passage
+            question_warnings.append("split_embedded_passage_from_question_stem")
+            question["warnings"] = list(dict.fromkeys(question_warnings))
         if not linked_passage_id:
             continue
         passage = passages_by_id.get(linked_passage_id)
@@ -318,7 +460,6 @@ def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
             continue
 
         stem = str(question.get("question_stem") or "")
-        question_warnings = _as_str_list(question.get("warnings"))
         passage_warnings = _as_str_list(passage.get("warnings"))
         passage_text = str(passage.get("passage_text") or "")
 
@@ -329,7 +470,7 @@ def separate_embedded_passages(document: dict[str, Any]) -> dict[str, Any]:
             question["question_stem"] = _collapse_blank_lines(stem)
             question_warnings.append("removed_passage_text_from_question_stem")
 
-        split = _split_embedded_passage_from_question_stem(str(question.get("question_stem") or ""))
+        split = _split_any_embedded_passage_from_question_stem(str(question.get("question_stem") or ""))
         if split:
             question_text, instruction, extracted_passage_text = split
             question["question_stem"] = question_text
@@ -389,6 +530,12 @@ def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_
         question_id = _text(question.get("question_id")) or f"q{question_number or fallback_page}_{index + 1}"
         choices = [normalize_korean_choice(choice) for choice in _as_list(question.get("choices")) if isinstance(choice, dict)]
         warnings = _as_str_list(question.get("warnings"))
+        question_stem = str(question.get("question_stem") or "")
+        if not choices:
+            question_stem, recovered_choices = _extract_trailing_choices_from_text(question_stem)
+            if recovered_choices:
+                choices = recovered_choices
+                warnings.append("recovered_choices_from_question_stem")
         if choices and any(not STANDARD_CHOICE_RE.fullmatch(choice["choice_label"]) for choice in choices):
             warnings.append("nonstandard_choice_labels")
         questions.append(
@@ -397,13 +544,13 @@ def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_
                 "source_pages": _as_page_list(question.get("source_pages"), fallback_page),
                 "question_number": question_number,
                 "linked_passage_id": _text(question.get("linked_passage_id")) or None,
-                "question_stem": str(question.get("question_stem") or ""),
+                "question_stem": question_stem,
                 "additional_material": str(question.get("additional_material") or "").strip() or None,
                 "choices": choices,
                 "answer": _text(question.get("answer")) or None,
                 "solution": str(question.get("solution") or "").strip() or None,
                 "extraction_confidence": confidence,
-                "warnings": list(dict.fromkeys(warnings + detect_korean_warnings(str(question.get("question_stem") or ""), confidence))),
+                "warnings": list(dict.fromkeys(warnings + detect_korean_warnings(question_stem, confidence))),
             }
         )
 
@@ -468,6 +615,57 @@ def validate_korean_document(document: dict[str, Any]) -> dict[str, Any]:
     global_warnings = _as_str_list(doc.get("global_warnings"))
     questions = _as_list(doc.get("questions"))
     passages = _as_list(doc.get("passage_groups"))
+
+    questions_by_id = {
+        _text(question.get("question_id")): question
+        for question in questions
+        if isinstance(question, dict) and _text(question.get("question_id"))
+    }
+    passages_by_id = {
+        _text(passage.get("passage_id")): passage
+        for passage in passages
+        if isinstance(passage, dict) and _text(passage.get("passage_id"))
+    }
+
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        choices = _as_list(question.get("choices"))
+        if not choices:
+            question_stem, recovered_choices = _extract_trailing_choices_from_text(str(question.get("question_stem") or ""))
+            if recovered_choices:
+                question["question_stem"] = question_stem
+                question["choices"] = recovered_choices
+                warnings = _as_str_list(question.get("warnings"))
+                warnings.append("recovered_choices_from_question_stem")
+                question["warnings"] = list(dict.fromkeys(warnings))
+
+    for passage in passages:
+        if not isinstance(passage, dict):
+            continue
+        passage_id = _text(passage.get("passage_id"))
+        if not passage_id:
+            continue
+        linked_ids = _as_str_list(passage.get("linked_question_ids"))
+        for linked_question_id in linked_ids:
+            question = questions_by_id.get(linked_question_id)
+            if question and not _text(question.get("linked_passage_id")):
+                question["linked_passage_id"] = passage_id
+                warnings = _as_str_list(question.get("warnings"))
+                warnings.append("linked_from_passage_group")
+                question["warnings"] = list(dict.fromkeys(warnings))
+
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        linked_passage_id = _text(question.get("linked_passage_id"))
+        question_id = _text(question.get("question_id"))
+        passage = passages_by_id.get(linked_passage_id)
+        if passage and question_id:
+            linked_ids = _as_str_list(passage.get("linked_question_ids"))
+            if question_id not in linked_ids:
+                linked_ids.append(question_id)
+                passage["linked_question_ids"] = linked_ids
 
     number_counts = Counter(_question_number_key(question.get("question_number")) for question in questions if _question_number_key(question.get("question_number")))
     duplicate_numbers = {number for number, count in number_counts.items() if count > 1}

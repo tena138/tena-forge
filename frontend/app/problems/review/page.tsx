@@ -149,6 +149,21 @@ function questionProblemFromItem(item: KoreanReviewItem): Problem | null {
   return item.item_type === "question" ? item.problem : null;
 }
 
+function linkedPassageForQuestion(item: KoreanReviewItem | null, items: KoreanReviewItem[]): KoreanReviewPassageItem | null {
+  if (!item || item.item_type !== "question") return null;
+  const linkedPassageId = item.linked_passage_id || "";
+  const questionId = item.question_id || "";
+  return (
+    items.find((candidate): candidate is KoreanReviewPassageItem =>
+      candidate.item_type === "passage" &&
+      (
+        Boolean(linkedPassageId && candidate.passage_id === linkedPassageId) ||
+        candidate.linked_questions.some((question) => question.question_id === questionId || question.problem_id === item.problem.id)
+      ),
+    ) || null
+  );
+}
+
 function findNextUnreviewedItem(items: KoreanReviewItem[], fromIndex: number) {
   if (!items.length) return null;
   for (let i = fromIndex + 1; i < items.length; i += 1) {
@@ -238,6 +253,7 @@ function ProblemReviewClient() {
   const currentReviewItem = currentIndex >= 0 ? reviewItems[currentIndex] : null;
   const currentPassage = currentReviewItem?.item_type === "passage" ? currentReviewItem : null;
   const currentListItem = currentReviewItem?.item_type === "question" ? currentReviewItem.problem : null;
+  const currentLinkedPassage = useMemo(() => linkedPassageForQuestion(currentReviewItem, reviewItems), [currentReviewItem, reviewItems]);
   const passageDraftDirty = Boolean(
     currentPassage &&
       (
@@ -990,6 +1006,7 @@ function ProblemReviewClient() {
           ) : (
             <ExtractionPanel
               problem={current}
+              linkedPassage={currentLinkedPassage}
               loading={loadingCurrent}
               problemTextDraft={problemTextDraft}
               problemTextDirty={problemTextDirty}
@@ -1836,6 +1853,7 @@ function OriginalPagePanel({
 
 function ExtractionPanel({
   problem,
+  linkedPassage,
   loading,
   problemTextDraft,
   problemTextDirty,
@@ -1860,6 +1878,7 @@ function ExtractionPanel({
   onVisualDelete,
 }: {
   problem: Problem | null;
+  linkedPassage: KoreanReviewPassageItem | null;
   loading: boolean;
   problemTextDraft: string;
   problemTextDirty: boolean;
@@ -1885,9 +1904,28 @@ function ExtractionPanel({
 }) {
   const solution = problem?.solution_steps || "";
   const solutionPreview = solution ? solution.split(/\r?\n/).slice(0, 2).join("\n") : "해설 데이터 없음";
+  const linkedPassageText = [
+    linkedPassage?.passage_instruction,
+    linkedPassage?.passage_title,
+    linkedPassage?.passage_text,
+  ].filter(Boolean).join("\n\n");
 
   return (
     <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+      {linkedPassage ? (
+        <div className="rounded-lg border border-violet-300/20 bg-violet-400/[0.055]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-300/15 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white">연결 지문</h2>
+              <Badge variant="warning">{linkedPassage.passage_type || "지문"}</Badge>
+            </div>
+            <span className="text-xs font-semibold text-violet-100">#{problem?.problem_number || "-"}</span>
+          </div>
+          <div className="max-h-56 overflow-auto whitespace-pre-wrap px-4 py-3 text-sm leading-7 text-slate-100">
+            {linkedPassageText || "지문 내용이 비어 있습니다."}
+          </div>
+        </div>
+      ) : null}
       <div className="rounded-lg border border-white/10 bg-[#11101a]">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="flex items-center gap-2">

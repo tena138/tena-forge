@@ -191,6 +191,83 @@ class KoreanExtractionTests(unittest.TestCase):
 
         self.assertIn("fewer_than_5_choices", document["questions"][0]["warnings"])
 
+    def test_english_standalone_boxed_passage_is_split_from_question(self):
+        document = validate_korean_document(
+            {
+                "document_id": "doc",
+                "subject": "english",
+                "source_file": "english.pdf",
+                "passage_groups": [],
+                "questions": [
+                    {
+                        "question_id": "q18",
+                        "source_pages": [8],
+                        "question_number": "18",
+                        "linked_passage_id": None,
+                        "question_stem": (
+                            "다음 글의 목적으로 가장 적절한 것은?\n\n"
+                            "To All Members of the Hillside Fitness Club\n"
+                            "We would like to let you know about an important change regarding our weekend yoga class. "
+                            "The instructor originally assigned to lead the session had a personal emergency and will be unavailable. "
+                            "To avoid canceling the class altogether, we have arranged for another certified instructor to take her place.\n"
+                            "Hillside Fitness Club Management\n"
+                            "① 요가 수업을 위한 준비물을 공지하려고\n"
+                            "② 요가 수업의 담당 강사 변경을 알리려고\n"
+                            "③ 새로운 요가 수업에 가입할 것을 권유하려고\n"
+                            "④ 요가 동아리에 가입할 동기를 조사하려고\n"
+                            "⑤ 시설 이용 요금 인상을 발표하려고"
+                        ),
+                        "choices": [],
+                        "warnings": [],
+                    }
+                ],
+                "global_warnings": [],
+            }
+        )
+
+        question = document["questions"][0]
+        self.assertEqual(question["question_stem"], "다음 글의 목적으로 가장 적절한 것은?")
+        self.assertEqual(len(document["passage_groups"]), 1)
+        self.assertEqual(question["linked_passage_id"], document["passage_groups"][0]["passage_id"])
+        self.assertIn("To All Members", document["passage_groups"][0]["passage_text"])
+        self.assertEqual(len(question["choices"]), 5)
+        self.assertIn("담당 강사 변경", question["choices"][1]["choice_text"])
+
+    def test_passage_linked_question_ids_backfill_question_link(self):
+        document = validate_korean_document(
+            {
+                "document_id": "doc",
+                "subject": "english",
+                "source_file": "english.pdf",
+                "passage_groups": [
+                    {
+                        "passage_id": "p18",
+                        "source_pages": [8],
+                        "passage_text": "To All Members of the Hillside Fitness Club\nWe would like to let you know about a change.",
+                        "passage_type": "reading",
+                        "linked_question_ids": ["q18"],
+                        "extraction_confidence": 0.9,
+                        "warnings": [],
+                    }
+                ],
+                "questions": [
+                    {
+                        "question_id": "q18",
+                        "source_pages": [8],
+                        "question_number": "18",
+                        "linked_passage_id": None,
+                        "question_stem": "다음 글의 목적으로 가장 적절한 것은?",
+                        "choices": [choice("①", "A"), choice("②", "B"), choice("③", "C"), choice("④", "D"), choice("⑤", "E")],
+                        "warnings": [],
+                    }
+                ],
+                "global_warnings": [],
+            }
+        )
+
+        self.assertEqual(document["questions"][0]["linked_passage_id"], "p18")
+        self.assertIn("linked_from_passage_group", document["questions"][0]["warnings"])
+
     def test_ocr_corrupted_passage_warning_case(self):
         document = validate_korean_document(
             {"document_id": "doc", "subject": "korean", "source_file": "ocr.pdf", "passage_groups": [{"passage_id": "p1", "source_pages": [1], "passage_text": "□□□ ???", "passage_type": "unknown", "linked_question_ids": [], "extraction_confidence": 0.4, "warnings": ["low_ocr_confidence", "ocr_corruption_suspected"]}], "questions": [], "global_warnings": []}
