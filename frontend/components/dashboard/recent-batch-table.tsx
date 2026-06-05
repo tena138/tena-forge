@@ -7,9 +7,10 @@ import { AlertTriangle, ChevronDown, ClipboardCheck, ExternalLink, FileUp, Info 
 import { StatusBadge } from "@/components/status-badge";
 import type { Batch } from "@/lib/api";
 import { sourceTypeLabel } from "@/lib/api";
+import { formatKstDateTime } from "@/lib/datetime";
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("ko-KR", {
+  return formatKstDateTime(value, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

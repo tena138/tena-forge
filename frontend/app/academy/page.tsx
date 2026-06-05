@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { AcademyProfile, fetchMe } from "@/lib/auth-api";
 import { readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
+import { formatKstDateTime } from "@/lib/datetime";
 import {
   ScheduleRecurrenceUnit,
   buildRecurringDateTimes,
@@ -92,7 +93,7 @@ function count(value: number) {
 }
 
 function compactDate(value: string) {
-  return new Date(value).toLocaleString("ko-KR", {
+  return formatKstDateTime(value, {
     month: "short",
     day: "numeric",
     hour: "2-digit",

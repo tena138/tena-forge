@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, Batch } from "@/lib/api";
 import { rememberActiveBatch } from "@/lib/batch-progress";
+import { formatKstDateTime } from "@/lib/datetime";
 import { ClassCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +19,7 @@ function fileName(path: string | null) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("ko-KR", {
+  return formatKstDateTime(value, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
