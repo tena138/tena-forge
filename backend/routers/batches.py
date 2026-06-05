@@ -27,6 +27,7 @@ from schemas import (
 )
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
+from services.korean_extraction import parse_passage_question_range
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids
 from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progress_detail
 from services.private_files import sign_static_url
@@ -476,6 +477,34 @@ def get_korean_review_items(batch_id: UUID, request: Request, db: Session = Depe
             questions_by_passage.setdefault(str(question.linked_passage_id), []).append(question)
         else:
             standalone_questions.append(question)
+
+    questions_by_number = {
+        number: question
+        for question in questions
+        if (number := _korean_question_number(question.question_number)) is not None
+    }
+    standalone_question_ids = {str(question.question_id) for question in standalone_questions}
+    for passage in passages:
+        expected_numbers = parse_passage_question_range(
+            passage.passage_instruction,
+            passage.passage_title,
+            (passage.passage_text or "")[:300],
+        )
+        if not expected_numbers:
+            continue
+        grouped = questions_by_passage.setdefault(str(passage.passage_id), [])
+        grouped_ids = {str(question.question_id) for question in grouped}
+        for number_text in expected_numbers:
+            number = _korean_question_number(number_text)
+            question = questions_by_number.get(number) if number is not None else None
+            if not question or str(question.question_id) in grouped_ids:
+                continue
+            if question.linked_passage_id and str(question.linked_passage_id) != str(passage.passage_id):
+                continue
+            grouped.append(question)
+            grouped_ids.add(str(question.question_id))
+            standalone_question_ids.discard(str(question.question_id))
+    standalone_questions = [question for question in standalone_questions if str(question.question_id) in standalone_question_ids]
 
     for grouped in questions_by_passage.values():
         grouped.sort(key=lambda item: (_korean_question_number(item.question_number) or 10**9, item.question_id))

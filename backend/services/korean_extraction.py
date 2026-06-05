@@ -155,6 +155,47 @@ def _question_number_key(value: Any) -> str:
     return str(int(match.group(0))) if match else _text(value)
 
 
+def _question_number_int(value: Any) -> int | None:
+    match = re.search(r"\d+", _text(value))
+    return int(match.group(0)) if match else None
+
+
+def _first_source_page_key(value: Any) -> int:
+    pages = _as_page_list(value)
+    return pages[0] if pages else 10**9
+
+
+def _question_sort_key(question: dict[str, Any]) -> tuple[int, int, str, str]:
+    number = _question_number_int(question.get("question_number"))
+    return (
+        _first_source_page_key(question.get("source_pages")),
+        number if number is not None else 10**9,
+        _text(question.get("question_number")),
+        _text(question.get("question_id")),
+    )
+
+
+def _sort_document_questions_and_links(doc: dict[str, Any]) -> dict[str, Any]:
+    questions = [question for question in _as_list(doc.get("questions")) if isinstance(question, dict)]
+    questions.sort(key=_question_sort_key)
+    doc["questions"] = questions
+
+    question_by_id = {
+        _text(question.get("question_id")): question
+        for question in questions
+        if _text(question.get("question_id"))
+    }
+
+    passages = [passage for passage in _as_list(doc.get("passage_groups")) if isinstance(passage, dict)]
+    passages.sort(key=lambda passage: (_first_source_page_key(passage.get("source_pages")), _text(passage.get("passage_id"))))
+    for passage in passages:
+        linked_ids = list(dict.fromkeys(_as_str_list(passage.get("linked_question_ids"))))
+        linked_ids.sort(key=lambda question_id: _question_sort_key(question_by_id.get(question_id, {"question_id": question_id})))
+        passage["linked_question_ids"] = linked_ids
+    doc["passage_groups"] = passages
+    return doc
+
+
 def parse_passage_question_range(*texts: str | None) -> list[str]:
     for text in texts:
         match = PASSAGE_RANGE_RE.search(_text(text))
@@ -691,8 +732,19 @@ def validate_korean_document(document: dict[str, Any]) -> dict[str, Any]:
             linked_ids = set(_as_str_list(passage.get("linked_question_ids")))
             for number in expected_numbers:
                 question = questions_by_number.get(number)
+                if question and not _text(question.get("linked_passage_id")):
+                    question["linked_passage_id"] = passage_id
+                    question_id = _text(question.get("question_id"))
+                    if question_id:
+                        linked_ids.add(question_id)
+                    linked_passage_ids.add(passage_id)
+                    question_warnings = _as_str_list(question.get("warnings"))
+                    question_warnings.append("linked_from_passage_range")
+                    question["warnings"] = list(dict.fromkeys(question_warnings))
                 if not question or (_text(question.get("linked_passage_id")) != passage_id and _text(question.get("question_id")) not in linked_ids):
                     missing.append(number)
+            if linked_ids:
+                passage["linked_question_ids"] = list(dict.fromkeys([*linked_ids]))
             if missing:
                 warnings.append(f"passage_range_unlinked_questions:{','.join(missing)}")
         if passage_id in linked_passage_ids and not passage_text.strip():
@@ -702,7 +754,7 @@ def validate_korean_document(document: dict[str, Any]) -> dict[str, Any]:
         passage["warnings"] = list(dict.fromkeys(warnings))
 
     doc["global_warnings"] = list(dict.fromkeys(global_warnings))
-    return doc
+    return _sort_document_questions_and_links(doc)
 
 
 def missing_passage_range_questions(document: dict[str, Any]) -> list[dict[str, Any]]:

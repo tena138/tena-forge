@@ -78,6 +78,39 @@ class KoreanExtractionTests(unittest.TestCase):
         missing = missing_passage_range_questions(document)
         self.assertEqual(missing[0]["missing_numbers"], ["2"])
 
+    def test_passage_range_questions_are_sorted_and_auto_linked(self):
+        document = validate_korean_document(
+            {
+                "document_id": "doc",
+                "subject": "korean",
+                "source_file": "range.pdf",
+                "passage_groups": [
+                    {
+                        "passage_id": "p1",
+                        "source_pages": [1],
+                        "passage_instruction": "[1~3] read the passage.",
+                        "passage_text": "shared passage",
+                        "passage_type": "reading",
+                        "linked_question_ids": ["q1", "q3"],
+                        "extraction_confidence": 0.9,
+                        "warnings": [],
+                    }
+                ],
+                "questions": [
+                    {"question_id": "q1", "source_pages": [1], "question_number": "1", "linked_passage_id": "p1", "question_stem": "question one", "choices": [], "warnings": []},
+                    {"question_id": "q3", "source_pages": [1], "question_number": "3", "linked_passage_id": "p1", "question_stem": "question three", "choices": [], "warnings": []},
+                    {"question_id": "q2", "source_pages": [1], "question_number": "2", "linked_passage_id": None, "question_stem": "question two", "choices": [], "warnings": []},
+                ],
+                "global_warnings": [],
+            }
+        )
+
+        self.assertEqual([question["question_number"] for question in document["questions"]], ["1", "2", "3"])
+        self.assertEqual(document["questions"][1]["linked_passage_id"], "p1")
+        self.assertIn("linked_from_passage_range", document["questions"][1]["warnings"])
+        self.assertEqual(document["passage_groups"][0]["linked_question_ids"], ["q1", "q2", "q3"])
+        self.assertNotIn("passage_range_unlinked_questions:2", document["passage_groups"][0]["warnings"])
+
     def test_first_question_embedded_passage_is_split(self):
         document = validate_korean_document(
             {
