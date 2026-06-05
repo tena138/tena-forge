@@ -336,6 +336,41 @@ class KoreanExtractionTests(unittest.TestCase):
         self.assertIn("<u>every door has become a mirror</u>", question["question_stem"])
         self.assertIn("<u>online branding</u>", question["choices"][0]["choice_text"])
 
+    def test_english_glossary_reference_words_survive_merge(self):
+        document = merge_english_page_payloads(
+            "doc",
+            "english.pdf",
+            [
+                {
+                    "document_id": "doc",
+                    "subject": "english",
+                    "source_file": "english.pdf",
+                    "passage_groups": [],
+                    "questions": [
+                        {
+                            "question_id": "q23",
+                            "source_pages": [12],
+                            "question_number": "23",
+                            "linked_passage_id": None,
+                            "question_stem": (
+                                "23. 다음 글의 주제로 가장 적절한 것은?\n\n"
+                                "One key actor in the climate change debate is the media."
+                            ),
+                            "additional_material": "* tenet: 원칙\n** consensus: 합의",
+                            "choices": [choice("①", "media impartiality as a key to addressing climate change")],
+                            "warnings": [],
+                        }
+                    ],
+                    "global_warnings": [],
+                }
+            ],
+        )
+
+        question = document["questions"][0]
+        self.assertFalse(question["question_stem"].startswith("23."))
+        self.assertIn("* tenet: 원칙", question["additional_material"])
+        self.assertIn("** consensus: 합의", _korean_problem_text(question, None))
+
     def test_english_single_question_passage_group_is_inlined(self):
         document = merge_english_page_payloads(
             "doc",
