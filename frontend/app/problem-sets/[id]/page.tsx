@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { closestCenter, DndContext, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronLeft, ChevronRight, Clock, FileDown, GripVertical, Plus, Save, Search, Trash2 } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, Clock, FileDown, GripVertical, Plus, Save, Search, Trash2 } from "lucide-react";
 
 import { ExportModal } from "@/components/export-modal";
 import { MathText } from "@/components/math-text";
@@ -30,9 +31,10 @@ function exportHistoryTime(value: string) {
 
 function SortableRow({ item, onRemove }: { item: ProblemSetItem; onRemove: (problemId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.problem_id });
+  const problemNumber = item.problem.problem_number;
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="flex items-center gap-3 rounded-lg border bg-card/90 p-3 shadow-sm">
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="relative flex items-start gap-3 rounded-lg border bg-card/90 p-3 pr-24 shadow-sm">
       <button className="text-muted-foreground" {...attributes} {...listeners} aria-label="순서 이동">
         <GripVertical className="h-5 w-5" />
       </button>
@@ -44,9 +46,18 @@ function SortableRow({ item, onRemove }: { item: ProblemSetItem; onRemove: (prob
         </div>
         <MathText className="mt-1 text-sm text-muted-foreground" clamp value={item.problem.problem_text.slice(0, 180)} />
       </div>
-      <Button size="icon" variant="ghost" onClick={() => onRemove(item.problem_id)} aria-label="세트에서 문항 제거">
+      <Button className="absolute right-12 top-3" size="icon" variant="ghost" onClick={() => onRemove(item.problem_id)} aria-label="세트에서 문항 제거">
         <Trash2 className="h-4 w-4" />
       </Button>
+      <Link
+        href={`/problems/${item.problem_id}`}
+        className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70"
+        draggable={false}
+        aria-label={`${problemNumber}번 상세 보기`}
+        title="문항 상세보기"
+      >
+        <ArrowUpRight className="h-4 w-4" />
+      </Link>
     </div>
   );
 }
