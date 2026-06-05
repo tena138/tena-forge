@@ -29,7 +29,7 @@ function exportHistoryTime(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
 }
 
-function SortableRow({ item, onRemove }: { item: ProblemSetItem; onRemove: (problemId: string) => void }) {
+function SortableRow({ item, returnHref, onRemove }: { item: ProblemSetItem; returnHref: string; onRemove: (problemId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.problem_id });
   const problemNumber = item.problem.problem_number;
 
@@ -50,7 +50,7 @@ function SortableRow({ item, onRemove }: { item: ProblemSetItem; onRemove: (prob
         <Trash2 className="h-4 w-4" />
       </Button>
       <Link
-        href={`/problems/${item.problem_id}`}
+        href={`/problems/${item.problem_id}?returnTo=${encodeURIComponent(returnHref)}`}
         className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70"
         draggable={false}
         aria-label={`${problemNumber}번 상세 보기`}
@@ -355,6 +355,7 @@ export default function ProblemSetDetailPage() {
 
   const ids = useMemo(() => problemSet?.items.map((item) => item.problem_id) || [], [problemSet]);
   const itemCount = problemSet?.items.length || 0;
+  const problemSetReturnHref = `/problem-sets/${params.id}`;
 
   async function saveName() {
     if (!problemSet || !name.trim()) return;
@@ -413,7 +414,7 @@ export default function ProblemSetDetailPage() {
           <DndContext collisionDetection={closestCenter} onDragEnd={reorder}>
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
-                {problemSet.items.map((item) => <SortableRow key={item.id} item={item} onRemove={remove} />)}
+                {problemSet.items.map((item) => <SortableRow key={item.id} item={item} returnHref={problemSetReturnHref} onRemove={remove} />)}
               </div>
             </SortableContext>
           </DndContext>
