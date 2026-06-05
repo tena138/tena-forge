@@ -50,6 +50,11 @@ function sameTags(a: Tag | null | undefined, b: Tag | null | undefined) {
   );
 }
 
+function safeReturnHref(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
 export default function ProblemDetailPage() {
   return (
     <Suspense fallback={<div className="py-20 text-center text-muted-foreground">문항을 불러오는 중입니다.</div>}>
@@ -87,14 +92,25 @@ function ProblemDetailContent() {
   const [reextracting, setReextracting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
-  const contextQuery = useMemo(() => searchParams.toString(), [searchParams]);
+  const returnHref = useMemo(() => safeReturnHref(searchParams.get("returnTo")), [searchParams]);
+  const contextQuery = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("returnTo");
+    return params.toString();
+  }, [searchParams]);
   const hasFilterContext = useMemo(() => {
     const params = new URLSearchParams(contextQuery);
     params.delete("page");
     return Boolean(params.toString());
   }, [contextQuery]);
-  const detailQuerySuffix = contextQuery ? `?${contextQuery}` : "";
-  const archiveHref = `/problems${detailQuerySuffix}`;
+  const navigationQuerySuffix = contextQuery ? `?${contextQuery}` : "";
+  const detailQuerySuffix = useMemo(() => {
+    const params = new URLSearchParams(contextQuery);
+    if (returnHref) params.set("returnTo", returnHref);
+    const query = params.toString();
+    return query ? `?${query}` : "";
+  }, [contextQuery, returnHref]);
+  const archiveHref = returnHref || `/problems${navigationQuerySuffix}`;
 
   useEffect(() => {
     setProblem(null);
@@ -124,7 +140,7 @@ function ProblemDetailContent() {
   useEffect(() => {
     let cancelled = false;
     setNavigation(null);
-    api<ProblemNavigation>(`/api/problems/${params.id}/navigation${detailQuerySuffix}`)
+    api<ProblemNavigation>(`/api/problems/${params.id}/navigation${navigationQuerySuffix}`)
       .then((data) => {
         if (!cancelled) setNavigation(data);
       })
@@ -134,7 +150,7 @@ function ProblemDetailContent() {
     return () => {
       cancelled = true;
     };
-  }, [params.id, detailQuerySuffix]);
+  }, [params.id, navigationQuerySuffix]);
 
   async function openProblem(problemId: string | null) {
     if (!problemId) return;

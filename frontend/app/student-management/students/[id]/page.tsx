@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronLeft, ChevronRight, Download, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
 
@@ -61,6 +62,10 @@ type TimelineCalendarItem = {
   lane: number;
   laneCount: number;
 };
+
+function isStudentTab(value: string | null): value is StudentTab {
+  return value === "calendar" || value === "results" || value === "wrong" || value === "counseling";
+}
 
 const TIMELINE_HOUR_HEIGHT = 34;
 const TIMELINE_DAY_HEIGHT = TIMELINE_HOUR_HEIGHT * 24;
@@ -485,8 +490,10 @@ function ResultCell({ number, status, onClick }: { number: number; status: Probl
 
 export default function StudentManagementStudentPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const [data, setData] = useState<StudentDetail | null>(null);
-  const [activeTab, setActiveTab] = useState<StudentTab>("calendar");
+  const [activeTab, setActiveTab] = useState<StudentTab>(() => (isStudentTab(tabParam) ? tabParam : "calendar"));
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => dateKey(new Date()));
   const [selectedCalendarItemId, setSelectedCalendarItemId] = useState("");
@@ -529,6 +536,11 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   const formatSaveRequestRef = useRef(0);
   const skipNextCounselingDraftSaveRef = useRef(false);
   const skipNextCounselingFormatSyncRef = useRef(false);
+  const wrongArchiveReturnHref = `/student-management/students/${resolvedParams.id}?tab=wrong`;
+
+  useEffect(() => {
+    if (isStudentTab(tabParam)) setActiveTab(tabParam);
+  }, [tabParam]);
 
   const calendarItems = useMemo(() => (data ? studentCalendarItems(data) : []), [data]);
   const archivedWrongAnswers = useMemo(() => data?.wrong_answers || [], [data?.wrong_answers]);
@@ -1800,7 +1812,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                         <div className="flex shrink-0 items-center gap-1">
                           {wrong.problem_id ? (
                             <Link
-                              href={`/problems/${wrong.problem_id}`}
+                              href={`/problems/${wrong.problem_id}?returnTo=${encodeURIComponent(wrongArchiveReturnHref)}`}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-violet-300/50 hover:bg-violet-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
                               onClick={(event) => event.stopPropagation()}
                               aria-label={`${wrong.problem_number}번 상세 보기`}
