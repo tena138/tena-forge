@@ -454,13 +454,13 @@ function SubjectTreeSelector({
         </button>
       </div>
 
-      <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-        <div className="flex min-w-max items-start gap-6">
+      <div className="max-w-full overflow-hidden">
+        <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] items-start gap-3">
         {nodes.map((node) => {
           const nodeKey = nodeValue(node);
           const groupColor = tagColor(nodeKey, subjectTagColors, "subject");
           return (
-            <div key={nodeKey} className="w-64 shrink-0 rounded-[8px] bg-white/[0.018] p-3">
+            <div key={nodeKey} className="min-w-0 rounded-[8px] bg-white/[0.018] p-3">
               {editing && editTarget === nodeKey ? (
                 <SubjectEditRow
                   value={editLabel}
@@ -574,7 +574,7 @@ function SubjectTreeSelector({
         })}
         {editing ? (
           addTarget === "root" ? (
-            <div className="w-80 shrink-0 rounded-[8px] border border-dashed border-violet-300/40 bg-violet-400/[0.06] p-3">
+            <div className="min-w-0 rounded-[8px] border border-dashed border-violet-300/40 bg-violet-400/[0.06] p-3">
               <SubjectDraftRow
                 value={draftLabel}
                 color={draftColor}
@@ -586,7 +586,7 @@ function SubjectTreeSelector({
               />
             </div>
           ) : (
-            <div className="w-64 shrink-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
+            <div className="min-w-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
               <button
                 type="button"
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:border-violet-300/40 hover:bg-violet-400/10"
@@ -1194,7 +1194,7 @@ export default function UploadPage() {
   );
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const selectedEngineLocked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(subjectEngine);
-  const subjectTree = useMemo(() => buildSubjectTree([...customSubjectOptions, ...selectedSubjects]), [customSubjectOptions, selectedSubjects]);
+  const subjectTree = useMemo(() => buildSubjectTree(customSubjectOptions), [customSubjectOptions]);
 
   useEffect(() => {
     if (isAdmin || !usageSummary || enabledSubjectEngines.includes(subjectEngine)) return;
