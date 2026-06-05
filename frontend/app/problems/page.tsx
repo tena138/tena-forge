@@ -1178,9 +1178,7 @@ function ProblemsBrowser() {
             {passage.needs_review ? "검토 필요" : "검토 완료"}
           </span>
         </div>
-        <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-300">
-          {passage.passage_text || "지문 본문이 비어 있습니다."}
-        </p>
+        <MathText className="mt-3 line-clamp-3 text-sm leading-6 text-slate-300" value={passage.passage_text || "지문 본문이 비어 있습니다."} />
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-500">
           {passage.review_page_number ? <span>{passage.review_page_number}p</span> : null}
           <span>{passage.linked_questions.length.toLocaleString("ko-KR")}문항 연결</span>

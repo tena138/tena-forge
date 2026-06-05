@@ -30,6 +30,7 @@ from services.template_renderer import build_visual_template_export_pages, rende
 
 FONT_NAME = "Helvetica"
 MIKTEX_BIN = Path.home() / "AppData" / "Local" / "Programs" / "MiKTeX" / "miktex" / "bin" / "x64"
+UNDERLINE_TAG_PATTERN = re.compile(r"</?u>", re.IGNORECASE)
 
 
 def register_korean_font() -> str:
@@ -110,10 +111,43 @@ def _tex_escape(value: str | None) -> str:
         "_": r"\_",
         "{": r"\{",
         "}": r"\}",
+        "<": r"\textless{}",
+        ">": r"\textgreater{}",
         "~": r"\textasciitilde{}",
         "^": r"\textasciicircum{}",
     }
     return "".join(replacements.get(char, char) for char in text)
+
+
+def _tex_escape_with_underline(value: str | None) -> str:
+    text = value or ""
+    rendered: list[str] = []
+    cursor = 0
+    underline_depth = 0
+    for match in UNDERLINE_TAG_PATTERN.finditer(text):
+        if match.start() > cursor:
+            chunk = _tex_escape(text[cursor:match.start()])
+            rendered.append(r"\underline{" + chunk + "}" if underline_depth > 0 and chunk else chunk)
+        underline_depth = max(0, underline_depth - 1) if match.group(0).startswith("</") else underline_depth + 1
+        cursor = match.end()
+    if cursor < len(text):
+        chunk = _tex_escape(text[cursor:])
+        rendered.append(r"\underline{" + chunk + "}" if underline_depth > 0 and chunk else chunk)
+    return "".join(rendered)
+
+
+def _reportlab_text_markup(value: str | None) -> str:
+    text = value or ""
+    rendered: list[str] = []
+    cursor = 0
+    for match in UNDERLINE_TAG_PATTERN.finditer(text):
+        if match.start() > cursor:
+            rendered.append(html.escape(text[cursor:match.start()]))
+        rendered.append("</u>" if match.group(0).startswith("</") else "<u>")
+        cursor = match.end()
+    if cursor < len(text):
+        rendered.append(html.escape(text[cursor:]))
+    return "".join(rendered)
 
 
 def _normalize_latex_math(math: str) -> str:
@@ -139,7 +173,7 @@ def _tex_content(value: str | None) -> str:
             math = _normalize_latex_math(part[1:-1])
             output.append(f"${math}$")
         else:
-            escaped = _tex_escape(part)
+            escaped = _tex_escape_with_underline(part)
             escaped = escaped.replace("\r\n", "\n").replace("\n", r"\\ " + "\n")
             output.append(escaped)
     return "".join(output)
@@ -686,7 +720,7 @@ def _latex_paragraph_markup(text: str | None, style: ParagraphStyle) -> str:
     cursor = 0
     for match in MATH_TOKEN_PATTERN.finditer(raw):
         if match.start() > cursor:
-            rendered.append(html.escape(raw[cursor:match.start()]))
+            rendered.append(_reportlab_text_markup(raw[cursor:match.start()]))
         math, explicit_display = _strip_math_delimiters(match.group(0))
         line_prefix = raw[:match.start()].rsplit("\n", 1)[-1].strip()
         line_suffix = raw[match.end():].split("\n", 1)[0].strip()
@@ -695,7 +729,7 @@ def _latex_paragraph_markup(text: str | None, style: ParagraphStyle) -> str:
         rendered.append(f"<br/>{tag}<br/>" if display_mode else tag)
         cursor = match.end()
     if cursor < len(raw):
-        rendered.append(html.escape(raw[cursor:]))
+        rendered.append(_reportlab_text_markup(raw[cursor:]))
     return "".join(rendered)
 
 
@@ -950,7 +984,7 @@ def _visual_text_blocks(text: str | None, style: ParagraphStyle) -> list[tuple[s
 
     for match in MATH_TOKEN_PATTERN.finditer(raw):
         if match.start() > cursor:
-            inline_parts.append(html.escape(raw[cursor:match.start()]))
+            inline_parts.append(_reportlab_text_markup(raw[cursor:match.start()]))
         math, explicit_display = _strip_math_delimiters(match.group(0))
         line_prefix = raw[:match.start()].rsplit("\n", 1)[-1].strip()
         line_suffix = raw[match.end():].split("\n", 1)[0].strip()
@@ -962,7 +996,7 @@ def _visual_text_blocks(text: str | None, style: ParagraphStyle) -> list[tuple[s
             inline_parts.append(_math_img_tag(math, style, False))
         cursor = match.end()
     if cursor < len(raw):
-        inline_parts.append(html.escape(raw[cursor:]))
+        inline_parts.append(_reportlab_text_markup(raw[cursor:]))
     flush_inline()
     return blocks or [("paragraph", "&nbsp;")]
 

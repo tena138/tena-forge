@@ -274,7 +274,7 @@ export default function StudentAppPage() {
                     <span className="text-sm font-semibold text-white">{index + 1}. {problem.problem_number}번</span>
                     <Badge variant="secondary">{problem.tags?.unit || "단원 미지정"}</Badge>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{problem.problem_text}</p>
+                  <MathText className="text-sm leading-6 text-slate-200" value={problem.problem_text} />
                   {problem.review_page_image_url && <img src={problem.review_page_image_url} alt="" className="mt-3 max-h-56 rounded-[8px] border border-white/10 object-contain" />}
                   <Input className="mt-3" value={answers[problem.id] || ""} onChange={(event) => setAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
                   {problem.answer && <p className="mt-2 text-xs text-emerald-200">정답: {problem.answer}</p>}
@@ -312,7 +312,7 @@ export default function StudentAppPage() {
               {selectedArchive?.problems.map((problem) => (
                 <div key={problem.id} className="rounded-[10px] border border-white/10 bg-black/20 p-3">
                   <div className="text-sm font-semibold text-white">{problem.problem_number}번</div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-200">{problem.problem_text}</p>
+                  <MathText className="mt-2 text-sm leading-6 text-slate-200" value={problem.problem_text} />
                   <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                     <Input value={archiveAnswers[problem.id] || ""} onChange={(event) => setArchiveAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
                     <Button variant="outline" onClick={() => void solveArchiveProblem(problem.id, selectedArchive.grant.id)}>풀이 저장</Button>

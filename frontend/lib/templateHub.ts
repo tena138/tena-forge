@@ -182,8 +182,24 @@ function escapeHtml(value: string | number) {
     .replaceAll("'", "&#039;");
 }
 
+function escapeHtmlWithUnderline(value: string | number) {
+  const text = String(value);
+  const pattern = /<\/?u>/gi;
+  let cursor = 0;
+  let rendered = "";
+  for (const match of text.matchAll(pattern)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+    if (index > cursor) rendered += escapeHtml(text.slice(cursor, index));
+    rendered += token.startsWith("</") ? "</u>" : "<u>";
+    cursor = index + token.length;
+  }
+  if (cursor < text.length) rendered += escapeHtml(text.slice(cursor));
+  return rendered;
+}
+
 export function renderTemplatePreview(html: string, css?: string | null, data = sampleTemplateData) {
-  const rendered = html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => escapeHtml(data[key] ?? ""));
+  const rendered = html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => escapeHtmlWithUnderline(data[key] ?? ""));
   return `<!doctype html>
 <html lang="ko">
 <head>

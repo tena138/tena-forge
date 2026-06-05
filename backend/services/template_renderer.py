@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, StrictUndefined, TemplateError
+from markupsafe import Markup
 from PIL import Image, ImageChops
 from sqlalchemy.orm import object_session
 
@@ -18,6 +19,21 @@ from services.math_normalization import normalize_geometry_notation
 
 
 BLOCKED_CONTAINER_TAGS = ("script", "iframe", "object", "embed")
+UNDERLINE_TAG_PATTERN = re.compile(r"</?u>", re.IGNORECASE)
+
+
+def underline_html_markup(value: Any) -> Markup:
+    text = str(value or "")
+    rendered: list[str] = []
+    cursor = 0
+    for match in UNDERLINE_TAG_PATTERN.finditer(text):
+        if match.start() > cursor:
+            rendered.append(escape(text[cursor:match.start()]))
+        rendered.append("</u>" if match.group(0).startswith("</") else "<u>")
+        cursor = match.end()
+    if cursor < len(text):
+        rendered.append(escape(text[cursor:]))
+    return Markup("".join(rendered))
 
 
 def _trim_visual_whitespace(image: Image.Image, padding: int = 16, threshold: int = 18) -> Image.Image:
@@ -133,9 +149,9 @@ def problem_to_template_data(problem: Problem, base_data: dict[str, Any], page_n
         **base_data,
         "test_title": base_data.get("test_title") or base_data.get("exam_title") or "Tena Forge",
         "student_name": base_data.get("student_name") or "",
-        "problem_text": normalize_geometry_notation(problem.problem_text),
-        "solution": problem.solution_steps or "",
-        "answer": problem.answer or "",
+        "problem_text": underline_html_markup(normalize_geometry_notation(problem.problem_text)),
+        "solution": underline_html_markup(problem.solution_steps),
+        "answer": underline_html_markup(problem.answer),
         "page_number": page_number,
         "total_pages": total_pages,
         "subject": tags.subject if tags else base_data.get("subject", ""),
