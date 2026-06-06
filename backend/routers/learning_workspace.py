@@ -156,6 +156,9 @@ class AssignmentSubmitPayload(BaseModel):
     time_spent_seconds: int | None = None
 
 
+COMPLETED_SUBMISSION_STATUSES = {"submitted", "late", "completed"}
+
+
 class FreeSolvePayload(BaseModel):
     answer: str | None = None
     source_access_grant_id: UUID | None = None
@@ -755,6 +758,34 @@ def submit_learning_assignment(assignment_id: UUID, payload: AssignmentSubmitPay
     return _serialize(submission)
 
 
+@router.post("/student/assignments/{assignment_id}/complete")
+def complete_learning_assignment(assignment_id: UUID, request: Request, db: Session = Depends(get_db)):
+    student_id = current_owner_id(request)
+    assignment = _require_student_assignment(db, student_id, assignment_id)
+    now = datetime.utcnow()
+    submission = db.scalar(
+        select(LearningSubmission)
+        .where(LearningSubmission.assignment_id == assignment.id, LearningSubmission.student_id == student_id)
+        .order_by(LearningSubmission.created_at.desc())
+    )
+    if not submission:
+        submission = LearningSubmission(
+            academy_id=assignment.academy_id,
+            student_id=student_id,
+            assignment_id=assignment.id,
+            source_context="assignment",
+            source_id=str(assignment.id),
+        )
+        db.add(submission)
+        db.flush()
+    submission.submitted_at = now
+    submission.status = "late" if assignment.due_at and now > assignment.due_at else "completed"
+    submission.total_count = len((assignment.content_version.snapshot or {}).get("problems", [])) if assignment.content_version else 0
+    submission.updated_at = now
+    db.commit()
+    return _serialize(submission)
+
+
 @router.get("/student/archives")
 def student_archives(request: Request, academy_id: str | None = None, db: Session = Depends(get_db)):
     student_id = current_owner_id(request)
@@ -916,7 +947,7 @@ def _student_stats_payload(db: Session, student_id: str, academy_id: str | None 
     wrong_records = db.scalars(wrong_query).all()
     graded = [attempt for attempt in attempts if attempt.is_correct is not None]
     correct = sum(1 for attempt in graded if attempt.is_correct)
-    completed = sum(1 for submission in submissions if submission.status in {"submitted", "late"})
+    completed = sum(1 for submission in submissions if submission.status in COMPLETED_SUBMISSION_STATUSES)
     units: dict[str, dict[str, int]] = {}
     for attempt in attempts:
         problem = db.scalars(select(Problem).where(Problem.id == attempt.problem_id).options(joinedload(Problem.tags))).first()

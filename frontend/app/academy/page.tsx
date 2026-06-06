@@ -87,6 +87,15 @@ function percentLabel(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function learningSubmissionStatusLabel(status: string) {
+  if (status === "completed" || status === "submitted") return "완료";
+  if (status === "late") return "지각 완료";
+  if (status === "in_progress") return "진행 중";
+  if (status === "missing") return "미제출";
+  if (status === "not_started") return "대기";
+  return status;
+}
+
 function compactDate(value: string) {
   return formatKstDateTime(value, {
     month: "short",
@@ -1001,7 +1010,7 @@ function AcademyOperationsPanel() {
                     {learningReport.students.map((student) => (
                       <div key={student.student_id} className="flex items-center justify-between rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
                         <span>{student.student_name}</span>
-                        <span className="text-slate-400">{student.status}</span>
+                        <span className="text-slate-400">{learningSubmissionStatusLabel(student.status)}</span>
                       </div>
                     ))}
                   </div>

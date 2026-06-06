@@ -124,6 +124,13 @@ class Assignment {
     this.closeAt,
     this.resultReleasePolicy,
     this.timeLimitMinutes,
+    this.academyName,
+    this.sourceType,
+    this.status,
+    this.submittedAt,
+    this.problemCount = 0,
+    this.materialTitle,
+    this.materialScope,
   });
 
   final String id;
@@ -137,22 +144,62 @@ class Assignment {
   final DateTime? closeAt;
   final String? resultReleasePolicy;
   final int? timeLimitMinutes;
+  final String? academyName;
+  final String? sourceType;
+  final String? status;
+  final DateTime? submittedAt;
+  final int problemCount;
+  final String? materialTitle;
+  final String? materialScope;
 
   bool get isTest => assignmentType == 'test';
+  bool get isCompleted =>
+      submittedAt != null ||
+      status == 'completed' ||
+      status == 'submitted' ||
+      status == 'late';
+  String get statusLabel {
+    if (status == 'late') return '지각 완료';
+    if (isCompleted) return '완료';
+    if (status == 'in_progress') return '진행 중';
+    return '대기';
+  }
 
   factory Assignment.fromJson(Map<String, dynamic> json) {
+    final content = json['content'] is Map
+        ? Map<String, dynamic>.from(json['content'] as Map)
+        : const <String, dynamic>{};
+    final snapshot = content['snapshot'] is Map
+        ? Map<String, dynamic>.from(content['snapshot'] as Map)
+        : const <String, dynamic>{};
+    final submission = json['submission'] is Map
+        ? Map<String, dynamic>.from(json['submission'] as Map)
+        : const <String, dynamic>{};
+    final timeLimitSeconds = (json['time_limit_seconds'] as num?)?.toInt();
+    final timeLimitMinutes = (json['time_limit_minutes'] as num?)?.toInt() ??
+        (timeLimitSeconds == null ? null : (timeLimitSeconds / 60).ceil());
+    final problemCount = (snapshot['problem_count'] as num?)?.toInt() ??
+        (snapshot['problems'] as List?)?.length ??
+        0;
     return Assignment(
       id: '${json['id']}',
       academyId: '${json['academy_id']}',
       title: '${json['title'] ?? 'Untitled'}',
       description: json['description']?.toString(),
-      assignmentType: '${json['assignment_type'] ?? 'homework'}',
-      submissionMode: '${json['submission_mode'] ?? 'completion'}',
-      openAt: DateTime.tryParse('${json['open_at']}'),
+      assignmentType: '${json['assignment_type'] ?? (timeLimitSeconds == null ? 'homework' : 'test')}',
+      submissionMode: '${json['submission_mode'] ?? (problemCount > 0 ? 'problem_set' : 'completion')}',
+      openAt: DateTime.tryParse('${json['open_at'] ?? json['start_at']}'),
       dueAt: DateTime.tryParse('${json['due_at']}'),
       closeAt: DateTime.tryParse('${json['close_at']}'),
       resultReleasePolicy: json['result_release_policy']?.toString(),
-      timeLimitMinutes: (json['time_limit_minutes'] as num?)?.toInt(),
+      timeLimitMinutes: timeLimitMinutes,
+      academyName: json['academy_name']?.toString(),
+      sourceType: json['source_type']?.toString(),
+      status: submission['status']?.toString(),
+      submittedAt: DateTime.tryParse('${submission['submitted_at']}'),
+      problemCount: problemCount,
+      materialTitle: snapshot['material_title']?.toString(),
+      materialScope: snapshot['material_scope']?.toString(),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../app/theme.dart';
 import '../state/student_app_state.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/empty_state.dart';
@@ -20,8 +21,14 @@ class AssignmentsScreen extends StatelessWidget {
         for (final assignment in assignments)
           ListItemCard(
             title: assignment.title,
-            subtitle: assignment.dueAt == null ? assignment.description : '마감 ${assignment.dueAt!.toLocal()}',
-            badge: assignment.assignmentType,
+            subtitle: assignment.dueAt == null
+                ? [assignment.description, assignment.materialScope].whereType<String>().join(' · ')
+                : '마감 ${assignment.dueAt!.toLocal()}',
+            badge: assignment.isCompleted ? '완료' : assignment.assignmentType,
+            trailing: Icon(
+              assignment.isCompleted ? Icons.check_circle : Icons.chevron_right,
+              color: assignment.isCompleted ? AppColors.success : AppColors.muted,
+            ),
             onTap: () => context.push('/assignment/${assignment.id}'),
           ),
         if (assignments.isEmpty) const EmptyState(title: '과제가 없습니다', body: '학원 키를 등록하면 학원별 과제가 여기에 표시됩니다.'),

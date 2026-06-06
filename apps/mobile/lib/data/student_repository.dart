@@ -66,7 +66,7 @@ class StudentRepository {
   Future<List<Assignment>> listAssignments({String? academyId, bool allowMock = true}) async {
     try {
       return apiClient.get<List<Assignment>>(
-        '/api/student/assignments${academyId == null ? '' : '?academy_id=$academyId'}',
+        '/api/learning/student/assignments${academyId == null ? '' : '?academy_id=$academyId'}',
         (json) => (json as List).map((item) => Assignment.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
       );
     } catch (_) {
@@ -77,18 +77,14 @@ class StudentRepository {
 
   Future<void> submitAssignment(String assignmentId, String answerText) {
     return apiClient.post<void>(
-      '/api/student/assignments/$assignmentId/submit',
-      {
-        'answers': [
-          {'item_index': 0, 'answer_text': answerText},
-        ],
-      },
+      '/api/learning/student/assignments/$assignmentId/complete',
+      {'completion_note': answerText},
       (_) {},
     );
   }
 
   Future<void> startTest(String assignmentId) {
-    return apiClient.post<void>('/api/student/tests/$assignmentId/start', null, (_) {});
+    return apiClient.post<void>('/api/learning/student/assignments/$assignmentId/start', null, (_) {});
   }
 
   Future<List<StudentMaterial>> listMaterials({bool allowMock = true}) async {
