@@ -846,7 +846,7 @@ export default function StudentManagementPage() {
   const [sessionDetail, setSessionDetail] = useState<PaperSessionDetail | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [gridStatuses, setGridStatuses] = useState<Record<string, ProblemStatus>>({});
-  const [collapsedProblemPages, setCollapsedProblemPages] = useState<Record<string, boolean>>({});
+  const [collapsedTextbookGrids, setCollapsedTextbookGrids] = useState<Record<string, boolean>>({});
   const [wrongInput, setWrongInput] = useState("");
   const [classSaving, setClassSaving] = useState(false);
   const [showClassCreator, setShowClassCreator] = useState(false);
@@ -958,19 +958,6 @@ export default function StudentManagementPage() {
         .join(", ")
     );
   }, [sessionDetail, selectedStudentId]);
-
-  useEffect(() => {
-    if (!sessionDetail) {
-      setCollapsedProblemPages({});
-      return;
-    }
-    const groups = groupProblemsByPage(sessionDetail.problems);
-    const next: Record<string, boolean> = {};
-    groups.forEach((group, index) => {
-      next[group.key] = sessionDetail.problems.length > 60 && index > 0;
-    });
-    setCollapsedProblemPages(next);
-  }, [sessionDetail]);
 
   async function submitClass() {
     if (!classForm.name.trim()) return;
@@ -1654,38 +1641,51 @@ export default function StudentManagementPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
-                      {groupProblemsByPage(sessionDetail.problems).map((group) => {
-                      const collapsed = collapsedProblemPages[group.key] || false;
-                      return (
-                        <div key={group.key} className="overflow-hidden rounded-lg border border-white/10 bg-black/15">
-                          <button
-                            type="button"
-                            className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
-                            onClick={() => setCollapsedProblemPages((current) => ({ ...current, [group.key]: !collapsed }))}
-                          >
+                    <div className="overflow-hidden rounded-lg border border-white/10 bg-black/15">
+                      {(() => {
+                        const collapsed = collapsedTextbookGrids[sessionDetail.id] || false;
+                        const groups = groupProblemsByPage(sessionDetail.problems);
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
+                              onClick={() => setCollapsedTextbookGrids((current) => ({ ...current, [sessionDetail.id]: !collapsed }))}
+                            >
                             <span className="flex min-w-0 items-center gap-2">
                               {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
-                              <span className="text-sm font-bold text-white">{group.label}</span>
+                              <span className="text-sm font-bold text-white">교재 문항</span>
                             </span>
-                            <span className="text-xs font-semibold text-slate-500">{group.problems.length}문항</span>
-                          </button>
-                          {!collapsed ? (
-                            <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5 p-2">
-                              {group.problems.map((problem) => (
-                                <ProblemCell
-                                  key={problem.problem_id}
-                                  label={String(displayProblemNumber(problem))}
-                                  subtitle={group.label}
-                                  status={gridStatuses[problemStatusKey(problem)] || "correct"}
-                                  onClick={() => toggleProblem(problem)}
-                                />
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                      })}
+                              <span className="text-xs font-semibold text-slate-500">{groups.length}p · {sessionDetail.problems.length}문항</span>
+                            </button>
+                            {!collapsed ? (
+                              <div className="max-h-[420px] overflow-y-auto p-2">
+                                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                  {groups.map((group) => (
+                                    <div key={group.key} className="rounded-lg border border-white/10 bg-white/[0.025] p-2">
+                                      <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold">
+                                        <span className="text-white">{group.label}</span>
+                                        <span className="text-slate-500">{group.problems.length}문항</span>
+                                      </div>
+                                      <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5">
+                                        {group.problems.map((problem) => (
+                                          <ProblemCell
+                                            key={problem.problem_id}
+                                            label={String(displayProblemNumber(problem))}
+                                            subtitle={group.label}
+                                            status={gridStatuses[problemStatusKey(problem)] || "correct"}
+                                            onClick={() => toggleProblem(problem)}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                     </div>
                   )
                 ) : (

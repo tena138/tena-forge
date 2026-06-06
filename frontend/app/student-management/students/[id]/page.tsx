@@ -553,7 +553,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => dateKey(new Date()));
   const [selectedCalendarItemId, setSelectedCalendarItemId] = useState("");
   const [resultStatuses, setResultStatuses] = useState<Record<string, Record<string, ProblemStatus>>>({});
-  const [collapsedResultPages, setCollapsedResultPages] = useState<Record<string, boolean>>({});
+  const [collapsedTextbookResults, setCollapsedTextbookResults] = useState<Record<string, boolean>>({});
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
   const [deletingResultId, setDeletingResultId] = useState("");
@@ -1752,39 +1752,50 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                             ))}
                           </div>
                         ) : (
-                          <div className="mt-3 grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
-                            {groups.map((group, index) => {
-                            const collapseKey = `${result.id}:${group.key}`;
-                            const collapsed = collapsedResultPages[collapseKey] ?? (problems.length > 60 && index > 0);
-                            return (
-                              <div key={group.key} className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.025]">
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
-                                  onClick={() => setCollapsedResultPages((current) => ({ ...current, [collapseKey]: !collapsed }))}
-                                >
+                          <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025]">
+                            {(() => {
+                              const collapsed = collapsedTextbookResults[result.id] || false;
+                              return (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
+                                    onClick={() => setCollapsedTextbookResults((current) => ({ ...current, [result.id]: !collapsed }))}
+                                  >
                                   <span className="flex min-w-0 items-center gap-2">
                                     {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
-                                    <span className="text-sm font-bold text-white">{group.label}</span>
+                                    <span className="text-sm font-bold text-white">교재 문항</span>
                                   </span>
-                                  <span className="text-xs font-semibold text-slate-500">{group.problems.length}문항</span>
-                                </button>
-                                {!collapsed ? (
-                                  <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5 p-2">
-                                    {group.problems.map((problem) => (
-                                      <ResultCell
-                                        key={problemStatusKey(problem)}
-                                        label={String(displayProblemNumber(problem))}
-                                        subtitle={group.label}
-                                        status={statuses[problemStatusKey(problem)] || "correct"}
-                                        onClick={() => toggleResultProblem(result, problem)}
-                                      />
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
-                            );
-                            })}
+                                    <span className="text-xs font-semibold text-slate-500">{groups.length}p · {problems.length}문항</span>
+                                  </button>
+                                  {!collapsed ? (
+                                    <div className="max-h-[420px] overflow-y-auto p-2">
+                                      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                        {groups.map((group) => (
+                                          <div key={group.key} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                                            <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold">
+                                              <span className="text-white">{group.label}</span>
+                                              <span className="text-slate-500">{group.problems.length}문항</span>
+                                            </div>
+                                            <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5">
+                                              {group.problems.map((problem) => (
+                                                <ResultCell
+                                                  key={problemStatusKey(problem)}
+                                                  label={String(displayProblemNumber(problem))}
+                                                  subtitle={group.label}
+                                                  status={statuses[problemStatusKey(problem)] || "correct"}
+                                                  onClick={() => toggleResultProblem(result, problem)}
+                                                />
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </>
+                              );
+                            })()}
                           </div>
                         )}
                         <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(result)} disabled={savingResultId === result.id || deletingResultId === result.id}>
