@@ -683,6 +683,7 @@ def _problem_set_snapshot(db: Session, owner_id: str, academy_id: str, problem_s
                 "problem_id": str(problem.id),
                 "problem_number": index,
                 "original_problem_number": problem.problem_number,
+                "review_page_number": problem.review_page_number,
                 "problem_text": problem.problem_text,
                 "answer": problem.answer,
                 "solution_steps": problem.solution_steps,
@@ -725,6 +726,7 @@ def _snapshot_problem_rows(problems: list[Problem]) -> list[dict]:
                 "problem_id": str(problem.id),
                 "problem_number": index,
                 "original_problem_number": problem.problem_number,
+                "review_page_number": problem.review_page_number,
                 "problem_text": problem.problem_text,
                 "answer": problem.answer,
                 "solution_steps": problem.solution_steps,
@@ -823,6 +825,46 @@ def _batch_snapshot(db: Session, owner_id: str, academy_id: str, batch_id: UUID,
 def _session_problems(session: PaperSession) -> list[dict]:
     snapshot = session.content_version.snapshot if session.content_version else {}
     return list((snapshot or {}).get("problems") or [])
+
+
+def _session_problems_for_response(db: Session, session: PaperSession) -> list[dict]:
+    problems = [dict(problem) for problem in _session_problems(session)]
+    problem_ids: list[UUID] = []
+    for problem in problems:
+        try:
+            problem_ids.append(UUID(str(problem.get("problem_id"))))
+        except (TypeError, ValueError):
+            continue
+    if not problem_ids:
+        return problems
+    rows = {
+        row.id: row
+        for row in db.scalars(
+            select(Problem)
+            .where(Problem.id.in_(problem_ids))
+            .options(joinedload(Problem.tags))
+        ).all()
+    }
+    for problem in problems:
+        try:
+            row = rows.get(UUID(str(problem.get("problem_id"))))
+        except (TypeError, ValueError):
+            row = None
+        if not row:
+            continue
+        if not problem.get("original_problem_number"):
+            problem["original_problem_number"] = row.problem_number
+        if not problem.get("review_page_number"):
+            problem["review_page_number"] = row.review_page_number
+        if not problem.get("source_label"):
+            problem["source_label"] = row.source_label
+        if not problem.get("subject"):
+            problem["subject"] = row.tags.subject if row.tags else None
+        if not problem.get("unit"):
+            problem["unit"] = row.tags.unit if row.tags else None
+        if not problem.get("difficulty"):
+            problem["difficulty"] = row.tags.difficulty if row.tags else None
+    return problems
 
 
 def _session_summary(db: Session, academy_id: str, session: PaperSession | None) -> dict | None:
@@ -1660,10 +1702,13 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
     history = []
     for result in results:
         session = sessions.get(result.paper_session_id)
+        session_payload = _safe_session_summary(db, session.academy_id, session) if session else None
+        if session_payload and session:
+            session_payload["problems"] = _session_problems_for_response(db, session)
         history.append(
             {
                 **_result_payload(result),
-                "session": _safe_session_summary(db, session.academy_id, session) if session else None,
+                "session": session_payload,
                 "problem_results": [],
             }
         )
@@ -2146,7 +2191,7 @@ def _paper_session_detail(db: Session, academy_id: str, session: PaperSession) -
         )
     return {
         **(_session_summary(db, academy_id, session) or {}),
-        "problems": _session_problems(session),
+        "problems": _session_problems_for_response(db, session),
         "students": students,
     }
 
@@ -2235,6 +2280,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
     problems = _session_problems(session)
     if not problems:
         raise HTTPException(status_code=400, detail="Paper session has no versioned problems.")
+    status_by_problem_id: dict[UUID, str] = {}
     status_by_number: dict[int, str] = {}
     wrong_numbers = _parse_wrong_numbers(payload.wrong_numbers)
     if payload.wrong_numbers is not None:
@@ -2247,7 +2293,10 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
         status = item.result_status
         if status not in {"correct", "wrong", "unanswered", "unmarked"}:
             raise HTTPException(status_code=400, detail="Result status must be correct, wrong, unanswered, or unmarked.")
-        status_by_number[item.problem_number] = status
+        if item.problem_id:
+            status_by_problem_id[item.problem_id] = status
+        else:
+            status_by_number[item.problem_number] = status
     existing = {
         row.problem_id: row
         for row in db.scalars(
@@ -2261,7 +2310,7 @@ def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Se
     for problem in problems:
         problem_id = UUID(problem["problem_id"])
         number = int(problem["problem_number"])
-        status = status_by_number.get(number)
+        status = status_by_problem_id.get(problem_id) or status_by_number.get(number)
         if status is None:
             status = "correct" if payload.mark_unlisted_correct else "unmarked"
         row = existing.get(problem_id)

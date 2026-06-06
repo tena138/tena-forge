@@ -212,6 +212,7 @@ def _problem_snapshot(problem: Problem) -> dict[str, Any]:
     return {
         "id": str(problem.id),
         "problem_number": problem.problem_number,
+        "review_page_number": problem.review_page_number,
         "problem_text": problem.problem_text,
         "has_visual": problem.has_visual,
         "visual_url": problem.visual_url,

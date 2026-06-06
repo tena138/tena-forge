@@ -71,8 +71,11 @@ export type SessionProblem = {
   problem_id: string;
   problem_number: number;
   original_problem_number?: number;
+  review_page_number?: number | null;
   problem_text?: string;
   answer?: string | null;
+  solution_steps?: string | null;
+  source_label?: string | null;
   subject?: string | null;
   unit?: string | null;
   difficulty?: string | null;

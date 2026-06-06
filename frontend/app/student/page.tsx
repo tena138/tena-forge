@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Archive, BarChart3, BookOpenCheck, CheckCircle2, KeyRound, Lock, NotebookTabs, Plus, RotateCcw, UserRound } from "lucide-react";
+import { Archive, BarChart3, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, KeyRound, Lock, NotebookTabs, Plus, RotateCcw, UserRound } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   LearningArchiveDetail,
   LearningArchiveGrant,
   LearningAssignment,
+  LearningProblem,
   LearningStats,
   LearningWrongAnswer,
   StudentMembership,
@@ -60,6 +61,27 @@ function assignmentWorkloadLabel(assignment: LearningAssignment) {
   return snapshot.material_scope || "직접 입력 숙제";
 }
 
+type AssignmentProblemPageGroup = {
+  key: string;
+  label: string;
+  problems: LearningProblem[];
+};
+
+function learningProblemPageLabel(problem: Pick<LearningProblem, "review_page_number">) {
+  return problem.review_page_number ? `p.${problem.review_page_number}` : "페이지 미상";
+}
+
+function groupLearningProblemsByPage(problems: LearningProblem[]): AssignmentProblemPageGroup[] {
+  const groups = new Map<string, AssignmentProblemPageGroup>();
+  for (const problem of problems) {
+    const key = problem.review_page_number ? String(problem.review_page_number) : "unknown";
+    const group = groups.get(key) || { key, label: learningProblemPageLabel(problem), problems: [] };
+    group.problems.push(problem);
+    groups.set(key, group);
+  }
+  return Array.from(groups.values());
+}
+
 function StatusChip({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "good" | "warn" | "locked" }) {
   const toneClass = {
     default: "border-violet-300/25 bg-violet-300/10 text-violet-100",
@@ -84,6 +106,7 @@ export default function StudentAppPage() {
   const [selectedArchive, setSelectedArchive] = useState<LearningArchiveDetail | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [archiveAnswers, setArchiveAnswers] = useState<Record<string, string>>({});
+  const [collapsedAssignmentPages, setCollapsedAssignmentPages] = useState<Record<string, boolean>>({});
   const [keyCode, setKeyCode] = useState("");
   const [newSetTitle, setNewSetTitle] = useState("");
   const [notice, setNotice] = useState("");
@@ -123,6 +146,19 @@ export default function StudentAppPage() {
     setProfile(readStoredAuthProfile<AcademyProfile>());
     load().catch(() => setError("학생 학습 공간을 불러오지 못했습니다."));
   }, []);
+
+  useEffect(() => {
+    if (!selectedAssignment) {
+      setCollapsedAssignmentPages({});
+      return;
+    }
+    const problems = selectedAssignment.content.snapshot.problems;
+    const next: Record<string, boolean> = {};
+    groupLearningProblemsByPage(problems).forEach((group, index) => {
+      next[group.key] = problems.length > 40 && index > 0;
+    });
+    setCollapsedAssignmentPages(next);
+  }, [selectedAssignment]);
 
   async function applyAcademyFilter(value: string) {
     setAcademyFilter(value);
@@ -280,19 +316,45 @@ export default function StudentAppPage() {
                   <div className="mt-2 text-sm leading-6 text-slate-300">{selectedAssignment.content.snapshot.material_scope || selectedAssignment.description || "등록된 분량을 확인하세요."}</div>
                 </div>
               ) : null}
-              {selectedAssignment?.content.snapshot.problems.map((problem, index) => (
-                <div key={problem.id} className="rounded-[10px] border border-white/10 bg-black/20 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-white">{index + 1}. {problem.problem_number}번</span>
-                    <Badge variant="secondary">{problem.tags?.unit || "단원 미지정"}</Badge>
-                  </div>
-                  <MathText className="text-sm leading-6 text-slate-200" value={problem.problem_text} />
-                  {problem.review_page_image_url && <img src={problem.review_page_image_url} alt="" className="mt-3 max-h-56 rounded-[8px] border border-white/10 object-contain" />}
-                  <Input className="mt-3" value={answers[problem.id] || ""} onChange={(event) => setAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
-                  {problem.answer && <p className="mt-2 text-xs text-emerald-200">정답: {problem.answer}</p>}
-                  {problem.solution_steps && <p className="mt-1 text-xs leading-5 text-slate-400">{problem.solution_steps}</p>}
+              {selectedAssignment && selectedAssignment.content.snapshot.problem_count > 0 ? (
+                <div className="space-y-2">
+                  {groupLearningProblemsByPage(selectedAssignment.content.snapshot.problems).map((group) => {
+                    const collapsed = collapsedAssignmentPages[group.key] || false;
+                    return (
+                      <div key={group.key} className="overflow-hidden rounded-[10px] border border-white/10 bg-black/20">
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
+                          onClick={() => setCollapsedAssignmentPages((current) => ({ ...current, [group.key]: !collapsed }))}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
+                            <span className="text-sm font-bold text-white">{group.label}</span>
+                          </span>
+                          <span className="text-xs font-semibold text-slate-500">{group.problems.length}문항</span>
+                        </button>
+                        {!collapsed ? (
+                          <div className="space-y-3 p-3">
+                            {group.problems.map((problem) => (
+                              <div key={problem.id} className="rounded-[8px] border border-white/10 bg-white/[0.035] p-3">
+                                <div className="mb-2 flex items-center justify-between gap-3">
+                                  <span className="text-sm font-semibold text-white">{problem.problem_number}번</span>
+                                  <Badge variant="secondary">{problem.tags?.unit || "단원 미지정"}</Badge>
+                                </div>
+                                <MathText className="text-sm leading-6 text-slate-200" value={problem.problem_text} />
+                                {problem.review_page_image_url && <img src={problem.review_page_image_url} alt="" className="mt-3 max-h-56 rounded-[8px] border border-white/10 object-contain" />}
+                                <Input className="mt-3" value={answers[problem.id] || ""} onChange={(event) => setAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
+                                {problem.answer && <p className="mt-2 text-xs text-emerald-200">정답: {problem.answer}</p>}
+                                {problem.solution_steps && <p className="mt-1 text-xs leading-5 text-slate-400">{problem.solution_steps}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              ) : null}
               {selectedAssignment && <Button className="w-full" onClick={submitSelectedAssignment}><CheckCircle2 className="h-4 w-4" /> 제출</Button>}
             </CardContent>
           </Card>

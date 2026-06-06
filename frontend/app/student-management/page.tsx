@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Check,
+  ChevronDown,
+  ChevronRight,
   Copy,
   GripVertical,
   KeyRound,
@@ -37,6 +39,7 @@ import {
   ClassCard,
   PaperSessionDetail,
   PaperSessionSummary,
+  SessionProblem,
   StudentCard,
   WrongAnswer,
   createClass,
@@ -71,6 +74,11 @@ type ClassSessionMetricPoint = {
   q2: number | null;
   q3: number | null;
   stddev: number | null;
+};
+type ProblemPageGroup = {
+  key: string;
+  label: string;
+  problems: SessionProblem[];
 };
 
 const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
@@ -748,12 +756,56 @@ function ClassStatsPanel({
   );
 }
 
+function problemStatusKey(problem: Pick<SessionProblem, "problem_id" | "problem_number">) {
+  return problem.problem_id || String(problem.problem_number);
+}
+
+function displayProblemNumber(problem: Pick<SessionProblem, "problem_number" | "original_problem_number">) {
+  return problem.original_problem_number || problem.problem_number;
+}
+
+function problemPageLabel(problem: Pick<SessionProblem, "review_page_number">) {
+  return problem.review_page_number ? `p.${problem.review_page_number}` : "페이지 미상";
+}
+
+function groupProblemsByPage(problems: SessionProblem[]): ProblemPageGroup[] {
+  const groups = new Map<string, ProblemPageGroup>();
+  for (const problem of problems) {
+    const key = problem.review_page_number ? String(problem.review_page_number) : "unknown";
+    const group = groups.get(key) || { key, label: problemPageLabel(problem), problems: [] };
+    group.problems.push(problem);
+    groups.set(key, group);
+  }
+  return Array.from(groups.values());
+}
+
+function problemMatchesInput(problem: SessionProblem, rawToken: string) {
+  const token = rawToken.trim().toLowerCase().replace(/\s+/g, "");
+  if (!token) return false;
+  const display = String(displayProblemNumber(problem));
+  const internal = String(problem.problem_number);
+  const page = problem.review_page_number ? String(problem.review_page_number) : "";
+  if (token === display || token === internal) return true;
+  if (!page) return false;
+  const pageTokens = [
+    `${page}-${display}`,
+    `${page}:${display}`,
+    `${page}.${display}`,
+    `p${page}-${display}`,
+    `p${page}:${display}`,
+    `${page}p-${display}`,
+  ];
+  return pageTokens.includes(token);
+}
+
 function ProblemCell({
-  number,
+  label,
+  subtitle,
   status,
   onClick,
 }: {
-  number: number;
+  label: string;
+  subtitle?: string;
   status: ProblemStatus;
   onClick: () => void;
 }) {
@@ -762,15 +814,15 @@ function ProblemCell({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex aspect-square min-h-10 items-center justify-center rounded-md border text-sm font-bold transition",
+        "flex h-8 min-w-8 items-center justify-center rounded-md border px-1 text-xs font-black leading-none transition",
         status === "correct" && "border-emerald-300/50 bg-emerald-500/20 text-emerald-100",
         status === "wrong" && "border-orange-300/60 bg-orange-500/25 text-orange-100",
         status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-100",
         status === "unmarked" && "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40"
       )}
-      title={`${number}번 ${status}`}
+      title={`${subtitle ? `${subtitle} · ` : ""}${label}번 ${status}`}
     >
-      {number}
+      {label}
     </button>
   );
 }
@@ -789,7 +841,8 @@ export default function StudentManagementPage() {
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [sessionDetail, setSessionDetail] = useState<PaperSessionDetail | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState("");
-  const [gridStatuses, setGridStatuses] = useState<Record<number, ProblemStatus>>({});
+  const [gridStatuses, setGridStatuses] = useState<Record<string, ProblemStatus>>({});
+  const [collapsedProblemPages, setCollapsedProblemPages] = useState<Record<string, boolean>>({});
   const [wrongInput, setWrongInput] = useState("");
   const [classSaving, setClassSaving] = useState(false);
   const [showClassCreator, setShowClassCreator] = useState(false);
@@ -884,12 +937,36 @@ export default function StudentManagementPage() {
       return;
     }
     const student = sessionDetail.students.find((item) => item.id === selectedStudentId);
-    const next: Record<number, ProblemStatus> = {};
-    for (const problem of sessionDetail.problems) next[problem.problem_number] = "correct";
-    for (const result of student?.problem_results || []) next[result.problem_number] = result.result_status;
+    const next: Record<string, ProblemStatus> = {};
+    for (const problem of sessionDetail.problems) next[problemStatusKey(problem)] = "correct";
+    for (const result of student?.problem_results || []) {
+      const problem = sessionDetail.problems.find((item) => item.problem_id === result.problem_id) || sessionDetail.problems.find((item) => item.problem_number === result.problem_number);
+      next[problem ? problemStatusKey(problem) : String(result.problem_number)] = result.result_status;
+    }
     setGridStatuses(next);
-    setWrongInput((student?.problem_results || []).filter((item) => item.result_status === "wrong").map((item) => item.problem_number).join(", "));
+    setWrongInput(
+      (student?.problem_results || [])
+        .filter((item) => item.result_status === "wrong")
+        .map((item) => {
+          const problem = sessionDetail.problems.find((candidate) => candidate.problem_id === item.problem_id) || sessionDetail.problems.find((candidate) => candidate.problem_number === item.problem_number);
+          return problem ? String(displayProblemNumber(problem)) : String(item.problem_number);
+        })
+        .join(", ")
+    );
   }, [sessionDetail, selectedStudentId]);
+
+  useEffect(() => {
+    if (!sessionDetail) {
+      setCollapsedProblemPages({});
+      return;
+    }
+    const groups = groupProblemsByPage(sessionDetail.problems);
+    const next: Record<string, boolean> = {};
+    groups.forEach((group, index) => {
+      next[group.key] = sessionDetail.problems.length > 60 && index > 0;
+    });
+    setCollapsedProblemPages(next);
+  }, [sessionDetail]);
 
   async function submitClass() {
     if (!classForm.name.trim()) return;
@@ -1076,31 +1153,29 @@ export default function StudentManagementPage() {
     await refresh();
   }
 
-  function toggleProblem(number: number) {
+  function toggleProblem(problem: SessionProblem) {
+    const key = problemStatusKey(problem);
     setGridStatuses((current) => {
-      const currentStatus = current[number] || "correct";
+      const currentStatus = current[key] || "correct";
       const nextStatus = currentStatus === "correct" ? "wrong" : currentStatus === "wrong" ? "unanswered" : "correct";
-      return { ...current, [number]: nextStatus };
+      return { ...current, [key]: nextStatus };
     });
   }
 
   function applyWrongInput() {
     if (!sessionDetail) return;
-    const wrongs = new Set(
-      wrongInput
-        .split(/[\s,;/]+/)
-        .map((value) => Number(value.trim()))
-        .filter((value) => Number.isFinite(value))
-    );
-    const next: Record<number, ProblemStatus> = {};
-    for (const problem of sessionDetail.problems) next[problem.problem_number] = wrongs.has(problem.problem_number) ? "wrong" : "correct";
+    const tokens = wrongInput.split(/[\s,;/]+/).filter(Boolean);
+    const next: Record<string, ProblemStatus> = {};
+    for (const problem of sessionDetail.problems) {
+      next[problemStatusKey(problem)] = tokens.some((token) => problemMatchesInput(problem, token)) ? "wrong" : "correct";
+    }
     setGridStatuses(next);
   }
 
   function markAll(status: ProblemStatus) {
     if (!sessionDetail) return;
-    const next: Record<number, ProblemStatus> = {};
-    for (const problem of sessionDetail.problems) next[problem.problem_number] = status;
+    const next: Record<string, ProblemStatus> = {};
+    for (const problem of sessionDetail.problems) next[problemStatusKey(problem)] = status;
     setGridStatuses(next);
     if (status === "correct") setWrongInput("");
   }
@@ -1112,7 +1187,7 @@ export default function StudentManagementPage() {
       const statuses = sessionDetail.problems.map((problem) => ({
         problem_id: problem.problem_id,
         problem_number: problem.problem_number,
-        result_status: gridStatuses[problem.problem_number] || "unmarked",
+        result_status: gridStatuses[problemStatusKey(problem)] || "unmarked",
       }));
       const detail = await savePaperSessionGrade(sessionDetail.id, {
         student_membership_id: selectedStudentId,
@@ -1559,19 +1634,42 @@ export default function StudentManagementPage() {
               </CardHeader>
               <CardContent className="space-y-4 pt-5">
                 <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
-                  <Input placeholder="틀린 번호만 입력: 3, 7, 12" value={wrongInput} onChange={(event) => setWrongInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyWrongInput(); }} />
+                  <Input placeholder="틀린 교재 번호: 3, 7 또는 p8-12" value={wrongInput} onChange={(event) => setWrongInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyWrongInput(); }} />
                   <Button variant="outline" onClick={applyWrongInput}>틀린 번호 적용</Button>
                 </div>
                 {sessionDetail && selectedStudent ? (
-                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 xl:grid-cols-[repeat(15,minmax(0,1fr))]">
-                    {sessionDetail.problems.map((problem) => (
-                      <ProblemCell
-                        key={problem.problem_id}
-                        number={problem.problem_number}
-                        status={gridStatuses[problem.problem_number] || "correct"}
-                        onClick={() => toggleProblem(problem.problem_number)}
-                      />
-                    ))}
+                  <div className="space-y-2">
+                    {groupProblemsByPage(sessionDetail.problems).map((group) => {
+                      const collapsed = collapsedProblemPages[group.key] || false;
+                      return (
+                        <div key={group.key} className="overflow-hidden rounded-lg border border-white/10 bg-black/15">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
+                            onClick={() => setCollapsedProblemPages((current) => ({ ...current, [group.key]: !collapsed }))}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
+                              <span className="text-sm font-bold text-white">{group.label}</span>
+                            </span>
+                            <span className="text-xs font-semibold text-slate-500">{group.problems.length}문항</span>
+                          </button>
+                          {!collapsed ? (
+                            <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5 p-2">
+                              {group.problems.map((problem) => (
+                                <ProblemCell
+                                  key={problem.problem_id}
+                                  label={String(displayProblemNumber(problem))}
+                                  subtitle={group.label}
+                                  status={gridStatuses[problemStatusKey(problem)] || "correct"}
+                                  onClick={() => toggleProblem(problem)}
+                                />
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-white/10 p-10 text-center text-sm text-slate-500">세션과 학생을 선택하세요.</div>

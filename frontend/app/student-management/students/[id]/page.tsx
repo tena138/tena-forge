@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronLeft, ChevronRight, Download, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Download, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
 import { CounselingExportModal } from "@/components/counseling-export-modal";
@@ -19,6 +19,7 @@ import {
   CounselingFormatField,
   CounselingPreset,
   ScheduleEvent,
+  SessionProblem,
   StudentCard,
   WrongAnswer,
   createCounselingLog,
@@ -62,6 +63,11 @@ type TimelineCalendarItem = {
   lane: number;
   laneCount: number;
 };
+type ResultPageGroup = {
+  key: string;
+  label: string;
+  problems: SessionProblem[];
+};
 
 function isStudentTab(value: string | null): value is StudentTab {
   return value === "calendar" || value === "results" || value === "wrong" || value === "counseling";
@@ -79,7 +85,7 @@ type StudentDetail = StudentCard & {
     correct_count: number;
     wrong_count: number;
     total_count: number;
-    session?: { title?: string; session_type?: string; scheduled_at?: string | null; due_at?: string | null; problem_count?: number } | null;
+    session?: { title?: string; session_type?: string; scheduled_at?: string | null; due_at?: string | null; problem_count?: number; problems?: SessionProblem[] } | null;
     problem_results: Array<{
       id: string;
       problem_id: string;
@@ -308,12 +314,54 @@ function buildMonthDays(value: Date) {
   return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
 }
 
-function problemCount(result: StudentDetail["paper_session_history"][number]) {
+function fallbackProblemCount(result: StudentDetail["paper_session_history"][number]) {
   return (
     result.total_count ||
     result.session?.problem_count ||
     Math.max(0, ...result.problem_results.map((item) => item.problem_number))
   );
+}
+
+function fallbackResultProblems(result: StudentDetail["paper_session_history"][number]): SessionProblem[] {
+  return Array.from({ length: fallbackProblemCount(result) }, (_, index) => {
+    const number = index + 1;
+    return {
+      problem_id: `fallback-${result.id}-${number}`,
+      problem_number: number,
+      original_problem_number: number,
+    };
+  });
+}
+
+function resultProblems(result: StudentDetail["paper_session_history"][number]) {
+  return result.session?.problems?.length ? result.session.problems : fallbackResultProblems(result);
+}
+
+function problemCount(result: StudentDetail["paper_session_history"][number]) {
+  return resultProblems(result).length;
+}
+
+function problemStatusKey(problem: Pick<SessionProblem, "problem_id" | "problem_number">) {
+  return problem.problem_id || String(problem.problem_number);
+}
+
+function displayProblemNumber(problem: Pick<SessionProblem, "problem_number" | "original_problem_number">) {
+  return problem.original_problem_number || problem.problem_number;
+}
+
+function problemPageLabel(problem: Pick<SessionProblem, "review_page_number">) {
+  return problem.review_page_number ? `p.${problem.review_page_number}` : "페이지 미상";
+}
+
+function groupProblemsByPage(problems: SessionProblem[]): ResultPageGroup[] {
+  const groups = new Map<string, ResultPageGroup>();
+  for (const problem of problems) {
+    const key = problem.review_page_number ? String(problem.review_page_number) : "unknown";
+    const group = groups.get(key) || { key, label: problemPageLabel(problem), problems: [] };
+    group.problems.push(problem);
+    groups.set(key, group);
+  }
+  return Array.from(groups.values());
 }
 
 function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
@@ -443,10 +491,13 @@ function timelineRangeLabel(item: StudentCalendarItem) {
 }
 
 function buildStatuses(result: StudentDetail["paper_session_history"][number]) {
-  const count = problemCount(result);
-  const next: Record<number, ProblemStatus> = {};
-  for (let number = 1; number <= count; number += 1) next[number] = "correct";
-  for (const item of result.problem_results) next[item.problem_number] = item.result_status;
+  const problems = resultProblems(result);
+  const next: Record<string, ProblemStatus> = {};
+  for (const problem of problems) next[problemStatusKey(problem)] = "correct";
+  for (const item of result.problem_results) {
+    const problem = problems.find((candidate) => candidate.problem_id === item.problem_id) || problems.find((candidate) => candidate.problem_number === item.problem_number);
+    next[problem ? problemStatusKey(problem) : String(item.problem_number)] = item.result_status;
+  }
   return next;
 }
 
@@ -456,12 +507,12 @@ function nextProblemStatus(status?: ProblemStatus): ProblemStatus {
   return "correct";
 }
 
-function statusCounts(statuses: Record<number, ProblemStatus>, totalCount: number) {
+function statusCounts(statuses: Record<string, ProblemStatus>, problems: SessionProblem[]) {
   let correct = 0;
   let wrong = 0;
   let unmarked = 0;
-  for (let number = 1; number <= totalCount; number += 1) {
-    const status = statuses[number] || "correct";
+  for (const problem of problems) {
+    const status = statuses[problemStatusKey(problem)] || "correct";
     if (status === "correct") correct += 1;
     else if (status === "wrong" || status === "unanswered") wrong += 1;
     else unmarked += 1;
@@ -469,21 +520,21 @@ function statusCounts(statuses: Record<number, ProblemStatus>, totalCount: numbe
   return { correct, wrong, unmarked };
 }
 
-function ResultCell({ number, status, onClick }: { number: number; status: ProblemStatus; onClick: () => void }) {
+function ResultCell({ label, subtitle, status, onClick }: { label: string; subtitle?: string; status: ProblemStatus; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex aspect-square min-h-9 items-center justify-center rounded-md border text-xs font-black transition sm:text-sm",
+        "flex h-8 min-w-8 items-center justify-center rounded-md border px-1 text-xs font-black leading-none transition",
         status === "correct" && "border-emerald-300/50 bg-emerald-500/25 text-emerald-50 hover:bg-emerald-500/35",
         status === "wrong" && "border-orange-300/60 bg-orange-500/25 text-orange-50 hover:bg-orange-500/35",
         status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-50 hover:bg-rose-500/35",
         status === "unmarked" && "border-white/10 bg-white/[0.04] text-slate-300 hover:border-violet-300/40"
       )}
-      title={`${number}번 ${status}`}
+      title={`${subtitle ? `${subtitle} · ` : ""}${label}번 ${status}`}
     >
-      {number}
+      {label}
     </button>
   );
 }
@@ -497,7 +548,8 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => dateKey(new Date()));
   const [selectedCalendarItemId, setSelectedCalendarItemId] = useState("");
-  const [resultStatuses, setResultStatuses] = useState<Record<string, Record<number, ProblemStatus>>>({});
+  const [resultStatuses, setResultStatuses] = useState<Record<string, Record<string, ProblemStatus>>>({});
+  const [collapsedResultPages, setCollapsedResultPages] = useState<Record<string, boolean>>({});
   const [savingResultId, setSavingResultId] = useState("");
   const [autosaveStates, setAutosaveStates] = useState<Record<string, AutosaveState>>({});
   const [deletingResultId, setDeletingResultId] = useState("");
@@ -624,7 +676,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
 
   function applyStudentData(student: StudentDetail) {
     setData(student);
-    const next: Record<string, Record<number, ProblemStatus>> = {};
+    const next: Record<string, Record<string, ProblemStatus>> = {};
     for (const result of student.paper_session_history) next[result.id] = buildStatuses(result);
     setResultStatuses(next);
     if (!calendarInitializedRef.current) {
@@ -894,9 +946,10 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
     delete autosaveTimers.current[resultId];
   }
 
-  function updateSavedSummary(result: StudentDetail["paper_session_history"][number], statuses: Record<number, ProblemStatus>) {
-    const count = problemCount(result);
-    const counts = statusCounts(statuses, count);
+  function updateSavedSummary(result: StudentDetail["paper_session_history"][number], statuses: Record<string, ProblemStatus>) {
+    const problems = resultProblems(result);
+    const count = problems.length;
+    const counts = statusCounts(statuses, problems);
     setData((current) => {
       if (!current) return current;
       return {
@@ -917,17 +970,15 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
     });
   }
 
-  async function persistResult(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>, manual = false) {
+  async function persistResult(result: StudentDetail["paper_session_history"][number], statusesByKey: Record<string, ProblemStatus>, manual = false) {
     if (!data) return;
-    const count = problemCount(result);
-    if (!count) return;
-    const statuses = Array.from({ length: count }, (_, index) => {
-      const problemNumber = index + 1;
-      return {
-        problem_number: problemNumber,
-        result_status: statusesByNumber[problemNumber] || "correct",
-      };
-    });
+    const problems = resultProblems(result);
+    if (!problems.length) return;
+    const statuses = problems.map((problem) => ({
+      problem_id: problem.problem_id.startsWith("fallback-") ? undefined : problem.problem_id,
+      problem_number: problem.problem_number,
+      result_status: statusesByKey[problemStatusKey(problem)] || "correct",
+    }));
     if (manual) setSavingResultId(result.id);
     else setAutosaveStates((current) => ({ ...current, [result.id]: "saving" }));
     try {
@@ -936,7 +987,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
         statuses,
         mark_unlisted_correct: false,
       });
-      updateSavedSummary(result, statusesByNumber);
+      updateSavedSummary(result, statusesByKey);
       if (manual) {
         await refreshStudent();
         setMessage(`${result.session?.title || "시험"} 채점 결과를 저장했습니다.`);
@@ -951,20 +1002,21 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
     }
   }
 
-  function scheduleAutosave(result: StudentDetail["paper_session_history"][number], statusesByNumber: Record<number, ProblemStatus>) {
+  function scheduleAutosave(result: StudentDetail["paper_session_history"][number], statusesByKey: Record<string, ProblemStatus>) {
     clearAutosaveTimer(result.id);
     setAutosaveStates((current) => ({ ...current, [result.id]: "pending" }));
     autosaveTimers.current[result.id] = setTimeout(() => {
       delete autosaveTimers.current[result.id];
-      persistResult(result, statusesByNumber, false).catch(() => undefined);
+      persistResult(result, statusesByKey, false).catch(() => undefined);
     }, 500);
   }
 
-  function toggleResultProblem(result: StudentDetail["paper_session_history"][number], number: number) {
+  function toggleResultProblem(result: StudentDetail["paper_session_history"][number], problem: SessionProblem) {
     const currentResult = resultStatuses[result.id] || buildStatuses(result);
+    const key = problemStatusKey(problem);
     const nextForResult = {
       ...currentResult,
-      [number]: nextProblemStatus(currentResult[number] || "correct"),
+      [key]: nextProblemStatus(currentResult[key] || "correct"),
     };
     setResultStatuses((current) => ({ ...current, [result.id]: nextForResult }));
     scheduleAutosave(result, nextForResult);
@@ -1648,8 +1700,10 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
               <CardContent className="space-y-3">
                 {data.paper_session_history.length ? (
                   data.paper_session_history.map((result) => {
+                    const problems = resultProblems(result);
                     const statuses = resultStatuses[result.id] || buildStatuses(result);
-                    const counts = statusCounts(statuses, problemCount(result));
+                    const counts = statusCounts(statuses, problems);
+                    const groups = groupProblemsByPage(problems);
                     return (
                       <div key={result.id} className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1682,16 +1736,37 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                           <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">주황: 오답</span>
                           <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
                         </div>
-                        <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-10 lg:grid-cols-12">
-                          {Array.from({ length: problemCount(result) }, (_, index) => {
-                            const number = index + 1;
+                        <div className="mt-3 space-y-2">
+                          {groups.map((group, index) => {
+                            const collapseKey = `${result.id}:${group.key}`;
+                            const collapsed = collapsedResultPages[collapseKey] ?? (problems.length > 60 && index > 0);
                             return (
-                              <ResultCell
-                                key={number}
-                                number={number}
-                                status={statuses[number] || "correct"}
-                                onClick={() => toggleResultProblem(result, number)}
-                              />
+                              <div key={group.key} className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.025]">
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
+                                  onClick={() => setCollapsedResultPages((current) => ({ ...current, [collapseKey]: !collapsed }))}
+                                >
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
+                                    <span className="text-sm font-bold text-white">{group.label}</span>
+                                  </span>
+                                  <span className="text-xs font-semibold text-slate-500">{group.problems.length}문항</span>
+                                </button>
+                                {!collapsed ? (
+                                  <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5 p-2">
+                                    {group.problems.map((problem) => (
+                                      <ResultCell
+                                        key={problemStatusKey(problem)}
+                                        label={String(displayProblemNumber(problem))}
+                                        subtitle={group.label}
+                                        status={statuses[problemStatusKey(problem)] || "correct"}
+                                        onClick={() => toggleResultProblem(result, problem)}
+                                      />
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
                             );
                           })}
                         </div>

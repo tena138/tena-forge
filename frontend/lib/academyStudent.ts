@@ -226,6 +226,7 @@ export function exportWrongAnswers(itemIds: string[], academyId?: string | null)
 export type LearningProblem = {
   id: string;
   problem_number: number;
+  review_page_number?: number | null;
   problem_text: string;
   has_visual: boolean;
   visual_url: string | null;
