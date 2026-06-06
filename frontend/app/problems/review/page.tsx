@@ -961,7 +961,7 @@ function ProblemReviewClient() {
       ) : null}
 
       {error ? (
-        <div className="flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-100">
           <AlertTriangle className="h-4 w-4" />
           {error}
         </div>
@@ -1034,8 +1034,8 @@ function ProblemReviewClient() {
         </div>
       )}
 
-      <div className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-500">
-        <span className="font-semibold text-slate-300">⌨</span> Enter 완료·다음, ←→ 이동, 1·2·3·4 난이도, Space 해설, R 재추출, Delete 휴지통, ? 도움말
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 dark:border-white/10 dark:bg-white/[0.03]">
+        <span className="font-semibold text-slate-500 dark:text-slate-300">⌨</span> Enter 완료·다음, ←→ 이동, 1·2·3·4 난이도, Space 해설, R 재추출, Delete 휴지통, ? 도움말
       </div>
 
       <HotkeyHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
@@ -1083,11 +1083,11 @@ function ReviewStatusBar({
   pendingCount: number;
 }) {
   return (
-    <div className="sticky top-[65px] z-30 flex min-h-14 flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-[#0b0a12]/95 px-3 py-2 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+    <div className="sticky top-[65px] z-30 flex min-h-14 flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#0b0a12]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
       <div className="relative">
         <button
           type="button"
-          className="flex h-10 min-w-[250px] max-w-[360px] items-center justify-between gap-3 rounded-[7px] border border-white/10 bg-white/[0.05] px-3 text-left text-sm text-slate-100 hover:border-violet-300/35"
+          className="flex h-10 min-w-[250px] max-w-[360px] items-center justify-between gap-3 rounded-[7px] border border-slate-200 bg-slate-50 px-3 text-left text-sm text-slate-800 hover:border-violet-300/50 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:hover:border-violet-300/35"
           onClick={() => setBatchMenuOpen((value) => !value)}
           aria-expanded={batchMenuOpen}
         >
@@ -1098,15 +1098,15 @@ function ReviewStatusBar({
           <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
         </button>
         {batchMenuOpen ? (
-          <div className="absolute left-0 top-12 z-40 max-h-[360px] w-[420px] max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border border-white/10 bg-[#0a0911] p-2 shadow-2xl">
+          <div className="absolute left-0 top-12 z-40 max-h-[360px] w-[420px] max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border border-slate-200 bg-white p-2 shadow-2xl dark:border-white/10 dark:bg-[#0a0911]">
             {batches.length ? (
               batches.map((batch) => (
                 <button
                   key={batch.id}
                   type="button"
                   className={cn(
-                    "flex w-full items-center justify-between gap-3 rounded-[7px] px-3 py-2 text-left text-sm transition hover:bg-white/[0.07]",
-                    selectedBatch?.id === batch.id && "bg-violet-400/14 text-violet-100",
+                    "flex w-full items-center justify-between gap-3 rounded-[7px] px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.07]",
+                    selectedBatch?.id === batch.id && "bg-violet-100 text-violet-800 dark:bg-violet-400/14 dark:text-violet-100",
                   )}
                   onClick={() => onSelectBatch(batch.id)}
                 >
@@ -1134,9 +1134,9 @@ function ReviewStatusBar({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-3 rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2">
-        <span className="text-sm font-semibold text-slate-100">{progressLabel}</span>
-        <div className="h-2 w-[180px] overflow-hidden rounded-full bg-white/10" aria-label="검토 진행률">
+      <div className="flex items-center gap-3 rounded-[7px] border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.035]">
+        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{progressLabel}</span>
+        <div className="h-2 w-[180px] overflow-hidden rounded-full bg-slate-200 dark:bg-white/10" aria-label="검토 진행률">
           <div className="h-full rounded-full bg-violet-400 transition-all" style={{ width: `${progressPercent}%` }} />
         </div>
         <span className="text-xs text-slate-500">{pendingCount.toLocaleString("ko-KR")} 남음</span>
@@ -1144,7 +1144,7 @@ function ReviewStatusBar({
 
       <SaveStateIndicator state={saveState} onRetry={onRetrySave} />
 
-      <div className="flex items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.03] px-2.5 py-2 text-xs text-slate-400">
+      <div className="flex items-center gap-2 rounded-[7px] border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
         <Users className="h-3.5 w-3.5" />
         <span>협업자 없음</span>
         {/* TODO: Wire presence avatars when a batch presence endpoint exists. */}
@@ -1154,7 +1154,7 @@ function ReviewStatusBar({
         <span>← 이전</span>
         <span>R 재추출</span>
         <span>⌫ 휴지통</span>
-        <button type="button" className="inline-flex items-center gap-1 hover:text-slate-300" onClick={onOpenHelp}>
+        <button type="button" className="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-300" onClick={onOpenHelp}>
           <HelpCircle className="h-3.5 w-3.5" /> ?
         </button>
       </div>
@@ -1176,11 +1176,11 @@ function SaveStateIndicator({ state, onRetry }: { state: SaveState; onRetry: () 
     error: { color: "bg-red-400", label: "저장 실패" },
   }[state];
   return (
-    <div className="flex items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2 text-sm">
+    <div className="flex items-center gap-2 rounded-[7px] border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.035]">
       {state === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-300" /> : <span className={cn("h-2 w-2 rounded-full", config.color)} />}
-      <span className={state === "error" ? "text-red-200" : "text-slate-200"}>{config.label}</span>
+      <span className={state === "error" ? "text-red-600 dark:text-red-200" : "text-slate-700 dark:text-slate-200"}>{config.label}</span>
       {state === "error" ? (
-        <button type="button" className="text-xs font-semibold text-violet-200 hover:text-violet-100" onClick={onRetry}>
+        <button type="button" className="text-xs font-semibold text-violet-700 hover:text-violet-600 dark:text-violet-200 dark:hover:text-violet-100" onClick={onRetry}>
           재시도
         </button>
       ) : null}
@@ -1365,32 +1365,32 @@ function ReviewProblemSelector({
   }
 
   return (
-    <section className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+    <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
       <div className={cn("flex flex-wrap items-center justify-between gap-3", expanded && "mb-3")}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="text-sm font-bold text-white">검토 항목 선택</h2>
-          <span className="rounded-[6px] border border-white/10 bg-black/20 px-2 py-1 text-xs font-semibold text-slate-300">
+          <h2 className="text-sm font-bold text-slate-950 dark:text-white">검토 항목 선택</h2>
+          <span className="rounded-[6px] border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 dark:border-white/10 dark:bg-black/20 dark:text-slate-300">
             {currentItem ? `${currentIndex + 1}/${items.length} · ${currentItem.item_type === "passage" ? "지문" : `#${currentItem.problem.problem_number}`}` : `0/${items.length}`}
           </span>
-          <span className="rounded-[6px] border border-violet-300/20 bg-violet-400/10 px-2 py-1 text-xs font-semibold text-violet-100">
+          <span className="rounded-[6px] border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 dark:border-violet-300/20 dark:bg-violet-400/10 dark:text-violet-100">
             대기 {pendingCount.toLocaleString("ko-KR")}
           </span>
           {(currentItem?.item_type === "passage" ? currentItem.review_page_number : currentItem?.problem.review_page_number) ? (
-            <span className="rounded-[6px] border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-semibold text-slate-400">
+            <span className="rounded-[6px] border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
               {currentItem?.item_type === "passage" ? currentItem.review_page_number : currentItem?.problem.review_page_number}p
             </span>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {selectedIds.length ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-[7px] border border-violet-300/25 bg-violet-400/10 px-3 py-2 text-sm text-violet-100">
+            <div className="flex flex-wrap items-center gap-2 rounded-[7px] border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:border-violet-300/25 dark:bg-violet-400/10 dark:text-violet-100">
               <CheckSquare className="h-4 w-4" />
               <span className="font-semibold">{selectedIds.length}개 선택됨</span>
               <Button size="sm" disabled={markingSelected || selectedNeedsReviewCount === 0} onClick={onMarkSelectedReviewed}>
                 {markingSelected ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                 선택 검토 완료
               </Button>
-              <button type="button" className="px-1 text-xs font-semibold text-slate-400 hover:text-white" onClick={() => onSelectionChange([])}>
+              <button type="button" className="px-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white" onClick={() => onSelectionChange([])}>
                 선택 해제
               </button>
             </div>
@@ -1409,17 +1409,17 @@ function ReviewProblemSelector({
       </div>
       <div className="hidden">
         <div>
-          <h2 className="text-sm font-bold text-white">검토 항목 선택</h2>
+          <h2 className="text-sm font-bold text-slate-950 dark:text-white">검토 항목 선택</h2>
         </div>
         {selectedIds.length ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-[7px] border border-violet-300/25 bg-violet-400/10 px-3 py-2 text-sm text-violet-100">
+          <div className="flex flex-wrap items-center gap-2 rounded-[7px] border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:border-violet-300/25 dark:bg-violet-400/10 dark:text-violet-100">
             <CheckSquare className="h-4 w-4" />
             <span className="font-semibold">{selectedIds.length}개 선택됨</span>
             <Button size="sm" disabled={markingSelected || selectedNeedsReviewCount === 0} onClick={onMarkSelectedReviewed}>
               {markingSelected ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
               선택 검토 완료
             </Button>
-            <button type="button" className="px-1 text-xs font-semibold text-slate-400 hover:text-white" onClick={() => onSelectionChange([])}>
+            <button type="button" className="px-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white" onClick={() => onSelectionChange([])}>
               선택 해제
             </button>
           </div>
@@ -1427,7 +1427,7 @@ function ReviewProblemSelector({
       </div>
       <div
         ref={containerRef}
-        className={cn("relative max-h-[170px] select-none overflow-auto rounded-lg border border-white/10 bg-black/20 p-2", !expanded && "hidden")}
+        className={cn("relative max-h-[170px] select-none overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-black/20", !expanded && "hidden")}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -1460,10 +1460,10 @@ function ReviewProblemSelector({
                 tabIndex={0}
                 aria-label={`${isPassage ? "지문" : `${problem?.problem_number || ""}번 문항`} 검토로 이동`}
                 className={cn(
-                  "relative cursor-pointer rounded-[7px] border bg-white/[0.04] p-2 pl-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60",
-                  current && "border-violet-300/60 bg-violet-400/12",
-                  selected && "border-sky-300/60 bg-sky-400/12",
-                  !current && !selected && "border-white/10 hover:border-white/20 hover:bg-white/[0.07]",
+                  "relative cursor-pointer rounded-[7px] border bg-white p-2 pl-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 dark:bg-white/[0.04]",
+                  current && "border-violet-300/70 bg-violet-50 dark:border-violet-300/60 dark:bg-violet-400/12",
+                  selected && "border-sky-300/70 bg-sky-50 dark:border-sky-300/60 dark:bg-sky-400/12",
+                  !current && !selected && "border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.07]",
                 )}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" && event.key !== " ") return;
@@ -1474,7 +1474,7 @@ function ReviewProblemSelector({
               >
                 <label
                   data-review-selector-control="true"
-                  className="absolute left-2 top-2 grid h-5 w-5 place-items-center rounded border border-white/15 bg-black/25"
+                  className="absolute left-2 top-2 grid h-5 w-5 place-items-center rounded border border-slate-300 bg-white dark:border-white/15 dark:bg-black/25"
                   onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
@@ -1487,8 +1487,8 @@ function ReviewProblemSelector({
                   />
                 </label>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm font-bold text-white">{title}</span>
-                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", itemNeedsReview ? "bg-violet-400/12 text-violet-100 ring-1 ring-violet-300/20" : "bg-emerald-300/12 text-emerald-100")}>
+                  <span className="min-w-0 truncate text-sm font-bold text-slate-900 dark:text-white">{title}</span>
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", itemNeedsReview ? "bg-violet-50 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-400/12 dark:text-violet-100 dark:ring-violet-300/20" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-300/12 dark:text-emerald-100")}>
                     {itemNeedsReview ? "대기" : "완료"}
                   </span>
                 </div>
@@ -1525,11 +1525,11 @@ function PassageReviewPanel({
   }
 
   return (
-    <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-sky-300/20 bg-sky-400/[0.045] p-3">
-      <div className="rounded-lg border border-sky-300/20 bg-[#0e1220]">
-        <div className="flex items-center justify-between gap-3 border-b border-sky-300/15 px-4 py-3">
+    <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-300/20 dark:bg-sky-400/[0.045]">
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-sky-300/20 dark:bg-[#0e1220] dark:shadow-none">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-sky-300/15">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-white">지문</h2>
+            <h2 className="text-sm font-bold text-slate-950 dark:text-white">지문</h2>
             <Badge variant={passage.needs_review ? "error" : "success"}>{passage.needs_review ? "검토 필요" : "검토 완료"}</Badge>
             {dirty ? <Badge variant="warning">수정 중</Badge> : null}
           </div>
@@ -1540,26 +1540,26 @@ function PassageReviewPanel({
         </div>
         <div className="grid gap-3 p-4 md:grid-cols-2">
           <label className="space-y-1.5">
-            <span className="text-xs font-semibold text-slate-400">지문 유형</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">지문 유형</span>
             <Input value={draft.passage_type} onChange={(event) => updateField("passage_type", event.target.value)} placeholder="문학, 독서, 화법과 작문 등" />
           </label>
           <label className="space-y-1.5">
-            <span className="text-xs font-semibold text-slate-400">제목</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">제목</span>
             <Input value={draft.passage_title} onChange={(event) => updateField("passage_title", event.target.value)} placeholder="지문 제목" />
           </label>
           <label className="space-y-1.5 md:col-span-2">
-            <span className="text-xs font-semibold text-slate-400">안내문</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">안내문</span>
             <Input value={draft.passage_instruction} onChange={(event) => updateField("passage_instruction", event.target.value)} placeholder="[1~3] 다음 글을 읽고 물음에 답하시오." />
           </label>
           <div className="space-y-1.5 md:col-span-2">
-            <span className="text-xs font-semibold text-slate-400">본문</span>
-            <div className="max-h-[420px] min-h-[280px] overflow-auto rounded-[7px] border border-white/10 bg-black/35 p-3">
-              <MathText className="text-sm leading-7 text-slate-100" value={draft.passage_text || "지문 본문이 비어 있습니다."} />
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">본문</span>
+            <div className="max-h-[420px] min-h-[280px] overflow-auto rounded-[7px] border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-black/35">
+              <MathText className="text-sm leading-7 text-slate-900 dark:text-slate-100" value={draft.passage_text || "지문 본문이 비어 있습니다."} />
             </div>
-            <details className="rounded-[7px] border border-white/10 bg-black/20">
-              <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-400">원문 편집</summary>
+            <details className="rounded-[7px] border border-slate-200 bg-white dark:border-white/10 dark:bg-black/20">
+              <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400">원문 편집</summary>
               <textarea
-                className="min-h-[260px] w-full resize-y border-t border-white/10 bg-black/35 p-3 text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/15"
+                className="min-h-[260px] w-full resize-y border-t border-slate-200 bg-white p-3 text-sm leading-7 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/15 dark:border-white/10 dark:bg-black/35 dark:text-slate-100 dark:placeholder:text-slate-600"
                 value={draft.passage_text}
                 onChange={(event) => updateField("passage_text", event.target.value)}
                 placeholder="지문 본문"
@@ -1569,12 +1569,12 @@ function PassageReviewPanel({
         </div>
       </div>
 
-      <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
-        <div className="mb-3 text-sm font-bold text-white">연결 문항</div>
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#11101a] dark:shadow-none">
+        <div className="mb-3 text-sm font-bold text-slate-950 dark:text-white">연결 문항</div>
         {passage.linked_questions.length ? (
           <div className="flex flex-wrap gap-2">
             {passage.linked_questions.map((question) => (
-              <span key={question.question_id} className="rounded-[7px] border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-200">
+              <span key={question.question_id} className="rounded-[7px] border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">
                 #{question.problem_number || question.question_number}
               </span>
             ))}
@@ -1714,10 +1714,10 @@ function OriginalPagePanel({
   const pageSwitcherOpen = pageSwitcherIntroVisible || pageSwitcherHovered;
 
   return (
-    <section className="flex min-h-[680px] flex-col rounded-lg border border-white/10 bg-white/[0.035]">
-      <div className="flex h-14 items-center justify-between gap-3 border-b border-white/10 px-4">
+    <section className="flex min-h-[680px] flex-col rounded-lg border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
+      <div className="flex h-14 items-center justify-between gap-3 border-b border-slate-200 px-4 dark:border-white/10">
         <div>
-          <h2 className="text-sm font-bold text-white">원본 페이지 p.{problem?.review_page_number || "-"}</h2>
+          <h2 className="text-sm font-bold text-slate-950 dark:text-white">원본 페이지 p.{problem?.review_page_number || "-"}</h2>
         </div>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="outline" aria-label="축소" onClick={() => setZoom((value) => Math.max(50, value - 10))}>
@@ -1733,7 +1733,7 @@ function OriginalPagePanel({
       </div>
 
       <div
-        className="relative flex flex-1 items-start justify-center overflow-auto bg-[#07070c] p-4"
+        className="relative flex flex-1 items-start justify-center overflow-auto bg-slate-100 p-4 dark:bg-[#07070c]"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -1750,7 +1750,7 @@ function OriginalPagePanel({
               ref={imageRef}
               src={assetUrl(imageUrl)}
               alt={`원본 페이지 ${problem?.review_page_number || ""}`}
-              className="select-none rounded bg-white shadow-[0_18px_55px_rgba(0,0,0,0.42)]"
+              className="select-none rounded bg-white shadow-[0_18px_55px_rgba(15,23,42,0.18)] dark:shadow-[0_18px_55px_rgba(0,0,0,0.42)]"
               style={{ width: `${zoom}%`, maxWidth: "none" }}
               draggable={false}
               onDragStart={(event) => event.preventDefault()}
@@ -1770,15 +1770,15 @@ function OriginalPagePanel({
                   type="button"
                   aria-label="같은 페이지 문항 목록 열기"
                   className={cn(
-                    "absolute right-0 top-0 rounded-full border border-white/10 bg-[#090912]/70 px-2.5 py-1 text-[11px] font-semibold text-slate-300 shadow-xl backdrop-blur transition",
-                    pageSwitcherOpen ? "pointer-events-none scale-95 opacity-0" : "opacity-70 hover:border-violet-300/40 hover:bg-violet-400/12 hover:text-white hover:opacity-100",
+                    "absolute right-0 top-0 rounded-full border border-slate-200 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-xl backdrop-blur transition dark:border-white/10 dark:bg-[#090912]/70 dark:text-slate-300",
+                    pageSwitcherOpen ? "pointer-events-none scale-95 opacity-0" : "opacity-80 hover:border-violet-300/50 hover:bg-violet-50 hover:text-violet-700 hover:opacity-100 dark:opacity-70 dark:hover:border-violet-300/40 dark:hover:bg-violet-400/12 dark:hover:text-white",
                   )}
                 >
                   같은 페이지 {pageProblems.length}
                 </button>
                 <div
                   className={cn(
-                    "flex max-h-[calc(100vh-16rem)] flex-col gap-1 overflow-auto rounded-lg border border-white/15 bg-[#090912]/88 p-2 shadow-2xl backdrop-blur transition duration-200",
+                    "flex max-h-[calc(100vh-16rem)] flex-col gap-1 overflow-auto rounded-lg border border-slate-200 bg-white/95 p-2 shadow-2xl backdrop-blur transition duration-200 dark:border-white/15 dark:bg-[#090912]/88",
                     pageSwitcherOpen ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0",
                   )}
                 >
@@ -1793,8 +1793,8 @@ function OriginalPagePanel({
                         className={cn(
                           "rounded-[7px] border px-2 py-1.5 text-left transition",
                           active
-                            ? "border-violet-300/70 bg-violet-400/20 text-white"
-                            : "border-white/10 bg-white/[0.055] text-slate-200 hover:border-violet-300/45 hover:bg-violet-400/12",
+                            ? "border-violet-300/70 bg-violet-50 text-violet-800 dark:bg-violet-400/20 dark:text-white"
+                            : "border-slate-200 bg-slate-50 text-slate-700 hover:border-violet-300/45 hover:bg-violet-50 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200 dark:hover:bg-violet-400/12",
                         )}
                         onClick={(event) => {
                           event.stopPropagation();
@@ -1824,7 +1824,7 @@ function OriginalPagePanel({
             ) : null}
             {showSelectionAction && imageRef.current ? (
               <div
-                className="absolute z-10 rounded-lg border border-violet-300/40 bg-[#100b1f] p-2 shadow-2xl"
+                className="absolute z-10 rounded-lg border border-violet-200 bg-white p-2 shadow-2xl dark:border-violet-300/40 dark:bg-[#100b1f]"
                 onPointerDown={(event) => event.stopPropagation()}
                 style={{
                   left: imageRef.current.offsetLeft + selection.x,
@@ -1842,13 +1842,13 @@ function OriginalPagePanel({
               </div>
             ) : null}
             {cropError ? (
-              <div className="absolute left-3 top-3 z-10 rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-100 shadow-xl">
+              <div className="absolute left-3 top-3 z-10 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 shadow-xl dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">
                 {cropError}
               </div>
             ) : null}
           </div>
         ) : (
-          <div className="flex min-h-[560px] w-full items-center justify-center rounded-lg border border-dashed border-white/10 text-center text-sm text-slate-500">
+          <div className="flex min-h-[560px] w-full items-center justify-center rounded-lg border border-dashed border-slate-300 text-center text-sm text-slate-500 dark:border-white/10">
             검토용 원본 페이지 이미지가 없습니다.
           </div>
         )}
@@ -1917,30 +1917,30 @@ function ExtractionPanel({
   ].filter(Boolean).join("\n\n");
 
   return (
-    <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+    <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
       {linkedPassage ? (
-        <div className="rounded-lg border border-violet-300/20 bg-violet-400/[0.055]">
+        <div className="rounded-lg border border-violet-200 bg-violet-50/70 dark:border-violet-300/20 dark:bg-violet-400/[0.055]">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-300/15 px-4 py-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-white">연결 지문</h2>
+              <h2 className="text-sm font-bold text-slate-950 dark:text-white">연결 지문</h2>
               <Badge variant="warning">{linkedPassage.passage_type || "지문"}</Badge>
             </div>
-            <span className="text-xs font-semibold text-violet-100">#{problem?.problem_number || "-"}</span>
+            <span className="text-xs font-semibold text-violet-700 dark:text-violet-100">#{problem?.problem_number || "-"}</span>
           </div>
           <div className="max-h-56 overflow-auto px-4 py-3">
-            <MathText className="text-sm leading-7 text-slate-100" value={linkedPassageText || "지문 내용이 비어 있습니다."} />
+            <MathText className="text-sm leading-7 text-slate-800 dark:text-slate-100" value={linkedPassageText || "지문 내용이 비어 있습니다."} />
           </div>
         </div>
       ) : null}
-      <div className="rounded-lg border border-white/10 bg-[#11101a]">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#11101a] dark:shadow-none">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-white/10">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-white">본문</h2>
+            <h2 className="text-sm font-bold text-slate-950 dark:text-white">본문</h2>
             <Badge variant={problem?.needs_review ? "error" : "success"}>{problem?.needs_review ? "검토 필요" : "검토 완료"}</Badge>
           </div>
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-[6px] border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/[0.06]"
+            className="inline-flex items-center gap-1 rounded-[6px] border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
             onClick={() => setRawOpen((value) => !value)}
           >
             <Code2 className="h-3.5 w-3.5" />
@@ -1961,10 +1961,10 @@ function ExtractionPanel({
             </>
           )}
         </div>
-        <div className="border-t border-white/10 bg-[#0c0b13] p-4">
+        <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0c0b13]">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-white">문항 텍스트</span>
+              <span className="text-sm font-semibold text-slate-950 dark:text-white">문항 텍스트</span>
               {problemTextDirty ? <Badge variant="warning">수정 중</Badge> : null}
             </div>
             <Button
@@ -1979,7 +1979,7 @@ function ExtractionPanel({
           </div>
           <textarea
             aria-label="문항 텍스트 수정"
-            className="min-h-36 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15"
+            className="min-h-36 w-full resize-y rounded-[7px] border border-slate-200 bg-white p-3 font-mono text-sm leading-7 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15 dark:border-white/10 dark:bg-black/35 dark:text-slate-100 dark:placeholder:text-slate-600"
             value={problemTextDraft}
             onChange={(event) => onProblemTextChange(event.target.value)}
             disabled={loading || !problem}
@@ -1987,7 +1987,7 @@ function ExtractionPanel({
           />
         </div>
         {rawOpen ? (
-          <pre className="max-h-48 overflow-auto border-t border-white/10 bg-black/40 p-4 text-xs leading-5 text-slate-300">
+          <pre className="max-h-48 overflow-auto border-t border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-700 dark:border-white/10 dark:bg-black/40 dark:text-slate-300">
             {problemTextDraft || ""}
           </pre>
         ) : null}
@@ -1995,28 +1995,28 @@ function ExtractionPanel({
 
       <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
         <InfoCard title="정답">
-          <div className="text-lg font-bold text-white">{problem?.answer || "정답 데이터 없음"}</div>
+          <div className="text-lg font-bold text-slate-950 dark:text-white">{problem?.answer || "정답 데이터 없음"}</div>
           <div className="mt-1 text-xs text-slate-500">{problem?.answer ? "해설 PDF에서 추출됨" : "정답 데이터가 아직 없습니다."}</div>
         </InfoCard>
 
         <InfoCard
           title="해설"
           action={
-            <button type="button" className="text-xs font-semibold text-violet-200 hover:text-violet-100" onClick={() => setSolutionOpen((value) => !value)}>
+            <button type="button" className="text-xs font-semibold text-violet-700 hover:text-violet-600 dark:text-violet-200 dark:hover:text-violet-100" onClick={() => setSolutionOpen((value) => !value)}>
               {solutionOpen ? "접기" : "펴서 보기"} (Space)
             </button>
           }
         >
-          <div className={cn("text-sm leading-7 text-slate-200", !solutionOpen && "max-h-14 overflow-hidden text-slate-400")}>
+          <div className={cn("text-sm leading-7 text-slate-700 dark:text-slate-200", !solutionOpen && "max-h-14 overflow-hidden text-slate-500 dark:text-slate-400")}>
             <MathText value={solutionOpen ? solution || "해설 데이터 없음" : solutionPreview} />
           </div>
         </InfoCard>
       </div>
 
-      <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#11101a] dark:shadow-none">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-bold text-white">메타데이터</h3>
+            <h3 className="text-sm font-bold text-slate-950 dark:text-white">메타데이터</h3>
             <p className="mt-1 text-xs text-slate-500">자동 채움됨. 회색은 자동, 밝은 글자는 직접 입력입니다.</p>
           </div>
           <div className="flex gap-2">
@@ -2024,7 +2024,7 @@ function ExtractionPanel({
               {reextracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
               재추출
             </Button>
-            <Button size="sm" variant="outline" className="border-red-400/25 text-red-100" onClick={onTrash} disabled={trashing || !problem}>
+            <Button size="sm" variant="outline" className="border-red-200 text-red-700 hover:border-red-300 dark:border-red-400/25 dark:text-red-100" onClick={onTrash} disabled={trashing || !problem}>
               {trashing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               휴지통
             </Button>
@@ -2068,8 +2068,8 @@ function ExtractionPanel({
                 className={cn(
                   "h-12 rounded-[7px] border text-sm font-bold transition",
                   metadata.difficulty === difficulty
-                    ? "border-violet-300/60 bg-violet-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.26)]"
-                    : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]",
+                    ? "border-violet-400 bg-violet-600 text-white shadow-[0_12px_30px_rgba(124,58,237,0.22)]"
+                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/[0.07]",
                 )}
                 onClick={() => onDifficulty(difficulty)}
               >
@@ -2082,14 +2082,14 @@ function ExtractionPanel({
         {savedVisualUrl ? (
           <div className="mt-4 w-full max-w-sm rounded-lg border border-emerald-300/25 bg-emerald-400/[0.06] p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-100">
                 <CheckCircle2 className="h-4 w-4 text-emerald-300" />
                 시각자료 추가됨
               </div>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 border-red-400/25 px-2 text-xs text-red-100 hover:border-red-300/40"
+                className="h-8 border-red-200 px-2 text-xs text-red-700 hover:border-red-300 dark:border-red-400/25 dark:text-red-100 dark:hover:border-red-300/40"
                 onClick={onVisualDelete}
                 disabled={deletingVisual}
               >
@@ -2097,7 +2097,7 @@ function ExtractionPanel({
                 삭제
               </Button>
             </div>
-            <div className="overflow-hidden rounded border border-white/10 bg-white">
+            <div className="overflow-hidden rounded border border-slate-200 bg-white dark:border-white/10">
               <img src={assetUrl(savedVisualUrl)} alt="추가된 시각자료" className="max-h-40 w-full object-contain" />
             </div>
           </div>
@@ -2109,9 +2109,9 @@ function ExtractionPanel({
 
 function InfoCard({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#11101a] dark:shadow-none">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-white">{title}</h3>
+        <h3 className="text-sm font-bold text-slate-950 dark:text-white">{title}</h3>
         {action}
       </div>
       {children}
@@ -2136,12 +2136,12 @@ function MetadataInput({
 }) {
   const id = `review-${label}`;
   return (
-    <label className="block text-sm font-medium text-slate-300">
+    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
       <span className="mb-1.5 flex items-center justify-between gap-2">
         <span>{label}</span>
         <button
           type="button"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-slate-500 hover:bg-white/[0.07] hover:text-slate-200"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/[0.07] dark:hover:text-slate-200"
           onClick={onRelease}
           aria-label={`${label} 자동 채움 해제`}
           title="자동 채움 해제"
@@ -2154,8 +2154,8 @@ function MetadataInput({
         list={`${id}-options`}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "border-white/10 bg-black/30",
-          autoFilled ? "text-slate-400 placeholder:text-slate-600" : "text-slate-50",
+          "border-slate-200 bg-white dark:border-white/10 dark:bg-black/30",
+          autoFilled ? "text-slate-500 placeholder:text-slate-400 dark:text-slate-400 dark:placeholder:text-slate-600" : "text-slate-900 dark:text-slate-50",
         )}
         placeholder="비어 있음"
       />
@@ -2181,10 +2181,10 @@ function EmptyState({
   actionLabel?: string;
 }) {
   return (
-    <div className="flex min-h-[460px] items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] p-8 text-center">
+    <div className="flex min-h-[460px] items-center justify-center rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
       <div className="max-w-md">
         {loading ? <Loader2 className="mx-auto mb-4 h-6 w-6 animate-spin text-violet-200" /> : <CheckCircle2 className="mx-auto mb-4 h-7 w-7 text-violet-200" />}
-        <h2 className="text-xl font-bold text-white">{title}</h2>
+        <h2 className="text-xl font-bold text-slate-950 dark:text-white">{title}</h2>
         {actionHref && actionLabel ? (
           <Link href={actionHref} className="mt-5 inline-flex">
             <Button>{actionLabel}</Button>
@@ -2211,13 +2211,13 @@ function HotkeyHelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <div className="pr-8">
-          <h2 className="text-lg font-bold text-white">검토 단축키</h2>
+          <h2 className="text-lg font-bold text-slate-950 dark:text-white">검토 단축키</h2>
         </div>
-        <div className="mt-5 overflow-hidden rounded-lg border border-white/10">
+        <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 dark:border-white/10">
           {rows.map(([key, description]) => (
-            <div key={key} className="grid grid-cols-[150px_1fr] border-b border-white/10 last:border-b-0">
-              <div className="bg-white/[0.04] px-4 py-3 font-mono text-sm font-bold text-violet-100">{key}</div>
-              <div className="px-4 py-3 text-sm text-slate-300">{description}</div>
+            <div key={key} className="grid grid-cols-[150px_1fr] border-b border-slate-200 last:border-b-0 dark:border-white/10">
+              <div className="bg-violet-50 px-4 py-3 font-mono text-sm font-bold text-violet-700 dark:bg-white/[0.04] dark:text-violet-100">{key}</div>
+              <div className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{description}</div>
             </div>
           ))}
         </div>
