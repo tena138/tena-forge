@@ -779,6 +779,10 @@ function groupProblemsByPage(problems: SessionProblem[]): ProblemPageGroup[] {
   return Array.from(groups.values());
 }
 
+function usesFlatProblemGrid(sessionType?: string | null) {
+  return sessionType === "test" || sessionType === "mock_exam";
+}
+
 function problemMatchesInput(problem: SessionProblem, rawToken: string) {
   const token = rawToken.trim().toLowerCase().replace(/\s+/g, "");
   if (!token) return false;
@@ -1634,12 +1638,24 @@ export default function StudentManagementPage() {
               </CardHeader>
               <CardContent className="space-y-4 pt-5">
                 <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
-                  <Input placeholder="틀린 교재 번호: 3, 7 또는 p8-12" value={wrongInput} onChange={(event) => setWrongInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyWrongInput(); }} />
+                  <Input placeholder={usesFlatProblemGrid(sessionDetail?.session_type) ? "틀린 번호만 입력: 3, 7, 12" : "틀린 교재 번호: 3, 7 또는 p8-12"} value={wrongInput} onChange={(event) => setWrongInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyWrongInput(); }} />
                   <Button variant="outline" onClick={applyWrongInput}>틀린 번호 적용</Button>
                 </div>
                 {sessionDetail && selectedStudent ? (
-                  <div className="space-y-2">
-                    {groupProblemsByPage(sessionDetail.problems).map((group) => {
+                  usesFlatProblemGrid(sessionDetail.session_type) ? (
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5">
+                      {sessionDetail.problems.map((problem) => (
+                        <ProblemCell
+                          key={problem.problem_id}
+                          label={String(displayProblemNumber(problem))}
+                          status={gridStatuses[problemStatusKey(problem)] || "correct"}
+                          onClick={() => toggleProblem(problem)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
+                      {groupProblemsByPage(sessionDetail.problems).map((group) => {
                       const collapsed = collapsedProblemPages[group.key] || false;
                       return (
                         <div key={group.key} className="overflow-hidden rounded-lg border border-white/10 bg-black/15">
@@ -1669,8 +1685,9 @@ export default function StudentManagementPage() {
                           ) : null}
                         </div>
                       );
-                    })}
-                  </div>
+                      })}
+                    </div>
+                  )
                 ) : (
                   <div className="rounded-lg border border-dashed border-white/10 p-10 text-center text-sm text-slate-500">세션과 학생을 선택하세요.</div>
                 )}

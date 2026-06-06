@@ -364,6 +364,10 @@ function groupProblemsByPage(problems: SessionProblem[]): ResultPageGroup[] {
   return Array.from(groups.values());
 }
 
+function usesFlatProblemGrid(sessionType?: string | null) {
+  return sessionType === "test" || sessionType === "mock_exam";
+}
+
 function studentCalendarItems(student: StudentDetail): StudentCalendarItem[] {
   const resultBySessionId = new Map(student.paper_session_history.map((result) => [result.paper_session_id, result]));
   const eventItems = (student.schedule_events || []).map((event) => ({
@@ -1736,8 +1740,20 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                           <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">주황: 오답</span>
                           <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
                         </div>
-                        <div className="mt-3 space-y-2">
-                          {groups.map((group, index) => {
+                        {usesFlatProblemGrid(result.session?.session_type) ? (
+                          <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5">
+                            {problems.map((problem) => (
+                              <ResultCell
+                                key={problemStatusKey(problem)}
+                                label={String(displayProblemNumber(problem))}
+                                status={statuses[problemStatusKey(problem)] || "correct"}
+                                onClick={() => toggleResultProblem(result, problem)}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-3 grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
+                            {groups.map((group, index) => {
                             const collapseKey = `${result.id}:${group.key}`;
                             const collapsed = collapsedResultPages[collapseKey] ?? (problems.length > 60 && index > 0);
                             return (
@@ -1768,8 +1784,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                                 ) : null}
                               </div>
                             );
-                          })}
-                        </div>
+                            })}
+                          </div>
+                        )}
                         <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => saveResult(result)} disabled={savingResultId === result.id || deletingResultId === result.id}>
                           {savingResultId === result.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                           저장
