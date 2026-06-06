@@ -12,7 +12,6 @@ import {
   ChevronRight,
   ClipboardCheck,
   KeyRound,
-  Landmark,
   LineChart,
   PackageCheck,
   Plus,
@@ -51,17 +50,13 @@ import {
   AcademyBilling,
   AcademyClass,
   AcademySeat,
-  Assignment,
   AcademyLearningStudent,
   LearningAssignment,
   LearningAssignmentReport,
-  createAcademyAssignment,
-  createAcademyClass,
   createLearningAccessGrant,
   createLearningAssignment,
   getAcademyBilling,
   issueLearningStudentKeys,
-  listAcademyAssignments,
   listAcademyClasses,
   listAcademyLearningAssignments,
   listAcademyLearningStudents,
@@ -591,7 +586,6 @@ function AcademyOperationsPanel() {
   const [billing, setBilling] = useState<AcademyBilling | null>(null);
   const [seats, setSeats] = useState<AcademySeat[]>([]);
   const [classes, setClasses] = useState<AcademyClass[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [problemSets, setProblemSets] = useState<ProblemSetListItem[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [learningStudents, setLearningStudents] = useState<AcademyLearningStudent[]>([]);
@@ -602,8 +596,6 @@ function AcademyOperationsPanel() {
   const [seatClassId, setSeatClassId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [className, setClassName] = useState("");
-  const [assignmentTitle, setAssignmentTitle] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
   const [learningAssignmentDueAt, setLearningAssignmentDueAt] = useState("");
   const [learningAssignmentSourceMode, setLearningAssignmentSourceMode] = useState<LearningAssignmentSourceMode>(
@@ -625,11 +617,10 @@ function AcademyOperationsPanel() {
 
   async function load(id = academyId) {
     if (!id) return;
-    const [billingResult, seatResult, classResult, assignmentResult, setResult, batchResult, studentResult, learningAssignmentResult] = await Promise.allSettled([
+    const [billingResult, seatResult, classResult, setResult, batchResult, studentResult, learningAssignmentResult] = await Promise.allSettled([
       getAcademyBilling(id),
       listAcademySeats(id),
       listAcademyClasses(id),
-      listAcademyAssignments(id),
       api<ProblemSetListItem[]>("/api/problem-sets"),
       api<Batch[]>("/api/batches"),
       listAcademyLearningStudents(id),
@@ -638,7 +629,6 @@ function AcademyOperationsPanel() {
     const billingData = billingResult.status === "fulfilled" ? billingResult.value : null;
     const seatData = seatResult.status === "fulfilled" ? seatResult.value : [];
     const classData = classResult.status === "fulfilled" ? classResult.value : [];
-    const assignmentData = assignmentResult.status === "fulfilled" ? assignmentResult.value : [];
     const setData = setResult.status === "fulfilled" ? setResult.value : [];
     const batchData = batchResult.status === "fulfilled" ? batchResult.value : [];
     const studentData = studentResult.status === "fulfilled" ? studentResult.value : [];
@@ -646,7 +636,6 @@ function AcademyOperationsPanel() {
     setBilling(billingData);
     setSeats(seatData);
     setClasses(classData);
-    setAssignments(assignmentData);
     setProblemSets(setData);
     setBatches(batchData);
     setLearningStudents(studentData);
@@ -703,7 +692,6 @@ function AcademyOperationsPanel() {
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
   const selectedArchiveSourceValue = selectedLearningSourceType === "archive" ? `archive:${selectedBatchId}` : `problemSet:${selectedProblemSetId}`;
   const selectedLearningSourceId = learningAssignmentSourceMode === "manual" ? "" : selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId;
-  const selectedLearningSourceTitle = learningAssignmentSourceMode === "manual" ? manualMaterialTitle : selectedLearningSourceType === "archive" ? selectedBatch?.name : selectedProblemSet?.name;
   const learningTargetCount = selectedGroupIds.length + selectedStudentIds.length;
   const manualLearningSourceReady = Boolean(manualMaterialTitle.trim() && manualMaterialScope.trim());
   const canPublishLearningAssignment = Boolean(
@@ -767,30 +755,6 @@ function AcademyOperationsPanel() {
     await load();
   }
 
-  async function submitClass(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!academyId || !className.trim()) return;
-    await createAcademyClass(academyId, { name: className.trim() });
-    setClassName("");
-    await load();
-  }
-
-  async function submitAssignment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!academyId || !assignmentTitle.trim()) return;
-    const target = classes[0] ? [{ target_type: "class", target_id: classes[0].id }] : [{ target_type: "academy", target_id: academyId }];
-    await createAcademyAssignment(academyId, {
-      title: assignmentTitle.trim(),
-      description: "Tena Forge 학원 운영 화면에서 생성한 과제입니다.",
-      assignment_type: "homework",
-      submission_mode: "completion",
-      targets: target,
-      contents: [{ content_type: "text", text_content: "학원 자료를 확인하고 풀이를 제출하세요." }],
-    });
-    setAssignmentTitle("");
-    await load();
-  }
-
   function selectArchiveLearningSource(value: string) {
     const [sourceType, sourceId] = value.split(":");
     if (sourceType === "archive") {
@@ -816,13 +780,6 @@ function AcademyOperationsPanel() {
   function assignmentDueAtIso() {
     if (!learningAssignmentDueAt) return null;
     return new Date(`${learningAssignmentDueAt}T23:59:00+09:00`).toISOString();
-  }
-
-  function startStudentAssignment(student: AcademyLearningStudent) {
-    setOperationsTab("assignments");
-    setSelectedGroupIds([]);
-    setSelectedStudentIds([student.student_user_id]);
-    if (!learningAssignmentTitle.trim() && selectedLearningSourceTitle) setLearningAssignmentTitle(selectedLearningSourceTitle);
   }
 
   async function submitLearningAssignment(event: FormEvent<HTMLFormElement>) {
@@ -996,83 +953,29 @@ function AcademyOperationsPanel() {
       </div>
 
       {operationsTab === "students" ? (
-        <>
-          <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> 좌석 / 키 관리</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {seats.map((seat) => (
-                  <div key={seat.id} className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[1fr_auto] md:items-center">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{seat.display_name || seat.seat_number}</span>
-                        <Badge variant={seat.assigned ? "default" : "secondary"}>{seat.assigned ? "배정됨" : "미배정"}</Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        코드 미리보기: ****{seat.invite_code_preview} · 학생: {seat.assigned_student_user_id || "-"}
-                      </p>
-                    </div>
-                    <p className="text-xs text-violet-200">클래스: {seat.class_name || "-"}</p>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => rotateCode(seat)}><RefreshCcw className="h-4 w-4" /> 코드 회전</Button>
-                      <Button variant="outline" size="sm" disabled={!seat.assigned} onClick={() => releaseSeat(seat)}><UserMinus className="h-4 w-4" /> 해제</Button>
-                    </div>
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> 좌석 / 키 관리</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {seats.map((seat) => (
+              <div key={seat.id} className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[1fr_auto] md:items-center">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{seat.display_name || seat.seat_number}</span>
+                    <Badge variant={seat.assigned ? "default" : "secondary"}>{seat.assigned ? "배정됨" : "미배정"}</Badge>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Landmark className="h-5 w-5" /> 클래스 / 기본 과제 빠른 생성</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <form className="flex gap-2" onSubmit={submitClass}>
-                  <Input value={className} onChange={(event) => setClassName(event.target.value)} placeholder="예: 고1 내신반" />
-                  <Button type="submit">생성</Button>
-                </form>
-                <div className="space-y-2">
-                  {classes.map((row) => <div key={row.id} className="rounded-[8px] border border-white/10 px-3 py-2 text-sm">{row.name}</div>)}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    코드 미리보기: ****{seat.invite_code_preview} · 학생: {seat.assigned_student_user_id || "-"}
+                  </p>
                 </div>
-                <form className="flex gap-2" onSubmit={submitAssignment}>
-                  <Input value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder="기본 과제 제목" />
-                  <Button type="submit">과제</Button>
-                </form>
-                <div className="space-y-2">
-                  {assignments.slice(0, 5).map((row) => <div key={row.id} className="rounded-[8px] border border-white/10 px-3 py-2 text-sm">{row.title}</div>)}
+                <p className="text-xs text-violet-200">클래스: {seat.class_name || "-"}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => rotateCode(seat)}><RefreshCcw className="h-4 w-4" /> 코드 회전</Button>
+                  <Button variant="outline" size="sm" disabled={!seat.assigned} onClick={() => releaseSeat(seat)}><UserMinus className="h-4 w-4" /> 해제</Button>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> 학생 관리</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              {learningStudents.length === 0 && <p className="text-sm text-muted-foreground">아직 연결된 학생이 없습니다. 학생 키를 발급하고 학생 계정에서 등록하게 하세요.</p>}
-              {learningStudents.map((student) => (
-                <div key={student.id} className="rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-white">{student.student_name}</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {student.groups.map((group) => group.name).join(", ") || "그룹 없음"} · 오답 {student.unresolved_wrong_answer_count}
-                      </div>
-                    </div>
-                    <Badge variant={student.key_status === "active" ? "default" : "secondary"}>{student.status}</Badge>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
-                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">제출 {student.recent_assignment_completion}</div>
-                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">정답률 {student.recent_correct_rate === null ? "-" : `${Math.round(student.recent_correct_rate * 100)}%`}</div>
-                  </div>
-                  <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => startStudentAssignment(student)}>
-                    <BookOpenCheck className="h-4 w-4" />
-                    과제 배포
-                  </Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="space-y-5">

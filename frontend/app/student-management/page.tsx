@@ -7,10 +7,12 @@ import {
   Check,
   Copy,
   GripVertical,
+  KeyRound,
   LineChart,
   Loader2,
   Plus,
   RotateCcw,
+  UserMinus,
   UserPlus,
   X,
 } from "lucide-react";
@@ -21,6 +23,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import type { AcademyProfile } from "@/lib/auth-api";
+import { readStoredAuthProfile } from "@/lib/auth-client";
+import {
+  issueLearningStudentKeys,
+  listAcademySeats,
+  releaseAcademySeat,
+  rotateAcademySeatCode,
+} from "@/lib/academyStudent";
+import type { AcademySeat } from "@/lib/academyStudent";
 import { ProblemSetListItem, api } from "@/lib/api";
 import {
   ClassCard,
@@ -782,9 +793,16 @@ export default function StudentManagementPage() {
   const [wrongInput, setWrongInput] = useState("");
   const [classSaving, setClassSaving] = useState(false);
   const [showClassCreator, setShowClassCreator] = useState(false);
+  const [showKeyManager, setShowKeyManager] = useState(false);
   const [addingStudentClassId, setAddingStudentClassId] = useState("");
   const [classStudentSavingId, setClassStudentSavingId] = useState("");
   const [copyingStudentKeyId, setCopyingStudentKeyId] = useState("");
+  const [academyId, setAcademyId] = useState("");
+  const [keySeats, setKeySeats] = useState<AcademySeat[]>([]);
+  const [keyClassId, setKeyClassId] = useState("");
+  const [keyManagerLoading, setKeyManagerLoading] = useState(false);
+  const [keyBusySeatId, setKeyBusySeatId] = useState("");
+  const [newKeyCodes, setNewKeyCodes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -812,6 +830,15 @@ export default function StudentManagementPage() {
 
   useEffect(() => {
     classOrderRef.current = classes;
+  }, [classes]);
+
+  useEffect(() => {
+    const stored = readStoredAuthProfile<AcademyProfile>();
+    setAcademyId(stored?.id || "");
+  }, []);
+
+  useEffect(() => {
+    setKeyClassId((current) => current || classes[0]?.id || "");
   }, [classes]);
 
   async function refresh() {
@@ -915,6 +942,83 @@ export default function StudentManagementPage() {
       setMessage(errorMessage(error, "학생 키를 복사하지 못했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
       setCopyingStudentKeyId("");
+    }
+  }
+
+  async function loadKeyManager(id = academyId) {
+    if (!id) return;
+    setKeyManagerLoading(true);
+    try {
+      setKeySeats(await listAcademySeats(id));
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 키 정보를 불러오지 못했습니다."));
+    } finally {
+      setKeyManagerLoading(false);
+    }
+  }
+
+  function toggleKeyManager() {
+    setShowKeyManager((current) => {
+      const next = !current;
+      if (next) {
+        setShowClassCreator(false);
+        void loadKeyManager();
+      }
+      return next;
+    });
+  }
+
+  async function issueClassKey() {
+    if (!academyId || !keyClassId) return;
+    setKeyManagerLoading(true);
+    try {
+      const created = await issueLearningStudentKeys(academyId, { count: 1, class_id: keyClassId });
+      const codes = created.keys.map((seat) => seat.key_code || "").filter(Boolean);
+      setNewKeyCodes(codes);
+      setMessage(codes[0] ? `학생 키를 발급했습니다: ${codes[0]}` : "학생 키를 발급했습니다.");
+      await loadKeyManager();
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 키를 발급하지 못했습니다."));
+    } finally {
+      setKeyManagerLoading(false);
+    }
+  }
+
+  async function copySeatKey(code: string) {
+    if (!code) return;
+    await navigator.clipboard.writeText(code);
+    setMessage("학생 키를 복사했습니다.");
+  }
+
+  async function rotateSeatKey(seat: AcademySeat) {
+    if (!academyId) return;
+    setKeyBusySeatId(seat.id);
+    try {
+      const updated = await rotateAcademySeatCode(academyId, seat.id);
+      const code = updated.invite_code || "";
+      setNewKeyCodes(code ? [code] : []);
+      setMessage(code ? `학생 키를 새로 만들었습니다: ${code}` : "학생 키를 새로 만들었습니다.");
+      await loadKeyManager();
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 키를 새로 만들지 못했습니다."));
+    } finally {
+      setKeyBusySeatId("");
+    }
+  }
+
+  async function releaseKeySeat(seat: AcademySeat) {
+    if (!academyId || !seat.assigned || !window.confirm("이 학생의 학원 접근 권한을 종료하고 좌석을 비울까요?")) return;
+    setKeyBusySeatId(seat.id);
+    try {
+      const updated = await releaseAcademySeat(academyId, seat.id, "released_from_student_management");
+      const code = updated.invite_code || "";
+      setNewKeyCodes(code ? [code] : []);
+      setMessage("좌석을 비웠습니다. 필요하면 새 키를 복사해서 전달하세요.");
+      await loadKeyManager();
+    } catch (error) {
+      setMessage(errorMessage(error, "좌석을 비우지 못했습니다."));
+    } finally {
+      setKeyBusySeatId("");
     }
   }
 
@@ -1581,6 +1685,88 @@ export default function StudentManagementPage() {
         ) : null}
         {activeTab === "classes" ? (
           <>
+            {showKeyManager ? (
+              <div className="fixed bottom-36 right-6 z-40 w-[min(440px,calc(100vw-48px))] rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/50">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="flex items-center gap-2 font-semibold text-white">
+                      <KeyRound className="h-4 w-4 text-violet-200" />
+                      학생 키 관리
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">반별 학생 접속 키를 발급하고 좌석을 관리합니다.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowKeyManager(false)} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="학생 키 관리 닫기">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <select
+                      className="h-10 min-w-0 rounded-md border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none focus:border-violet-300/50"
+                      value={keyClassId}
+                      onChange={(event) => setKeyClassId(event.target.value)}
+                    >
+                      {classes.map((classRow) => (
+                        <option key={classRow.id} value={classRow.id}>
+                          {classRow.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button type="button" onClick={issueClassKey} disabled={!academyId || !keyClassId || keyManagerLoading}>
+                      {keyManagerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                      키 발급
+                    </Button>
+                  </div>
+                  {newKeyCodes.length ? (
+                    <div className="space-y-2 rounded-md border border-violet-300/20 bg-violet-500/10 p-2">
+                      {newKeyCodes.map((code) => (
+                        <div key={code} className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/25 px-2 py-1.5">
+                          <span className="min-w-0 truncate font-mono text-sm font-bold text-violet-100">{code}</span>
+                          <Button type="button" size="sm" variant="ghost" onClick={() => copySeatKey(code)}>
+                            <Copy className="h-4 w-4" />
+                            복사
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {keyManagerLoading && !keySeats.length ? (
+                      <div className="flex items-center justify-center rounded-md border border-dashed border-white/10 p-4 text-sm text-slate-500">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        불러오는 중
+                      </div>
+                    ) : null}
+                    {!keyManagerLoading && !keySeats.length ? (
+                      <div className="rounded-md border border-dashed border-white/10 p-4 text-sm text-slate-500">발급된 학생 키가 없습니다.</div>
+                    ) : null}
+                    {keySeats.map((seat) => (
+                      <div key={seat.id} className="rounded-md border border-white/10 bg-white/[0.035] p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <span className="truncate text-sm font-semibold text-white">{seat.display_name || seat.seat_number}</span>
+                              <Badge variant={seat.assigned ? "success" : "secondary"}>{seat.assigned ? "연결됨" : "대기"}</Badge>
+                            </div>
+                            <p className="mt-1 truncate text-xs text-slate-500">
+                              {seat.class_name || "반 없음"} · Key ****{seat.invite_code_preview || "-"}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 gap-1.5">
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => rotateSeatKey(seat)} disabled={keyBusySeatId === seat.id} aria-label="학생 키 회전">
+                              {keyBusySeatId === seat.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                            </Button>
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-rose-100" onClick={() => releaseKeySeat(seat)} disabled={!seat.assigned || keyBusySeatId === seat.id} aria-label="좌석 해제">
+                              <UserMinus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {showClassCreator ? (
               <div className="fixed bottom-24 right-6 z-40 w-[min(360px,calc(100vw-48px))] rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/50">
                 <div className="mb-3 flex items-center justify-between">
@@ -1605,7 +1791,20 @@ export default function StudentManagementPage() {
             ) : null}
             <Button
               type="button"
-              onClick={() => setShowClassCreator((current) => !current)}
+              onClick={toggleKeyManager}
+              variant={showKeyManager ? "default" : "outline"}
+              className="fixed bottom-20 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-violet-950/30"
+              aria-label="학생 키 관리"
+              title="학생 키 관리"
+            >
+              <KeyRound className="h-5 w-5" />
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowKeyManager(false);
+                setShowClassCreator((current) => !current);
+              }}
               className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-violet-950/40"
               aria-label="클래스 만들기"
             >
