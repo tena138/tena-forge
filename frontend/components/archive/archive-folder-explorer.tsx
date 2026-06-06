@@ -196,7 +196,7 @@ export function ArchiveFolderExplorer({
         </div>
       ) : null}
 
-      <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(170px,1fr))]" onDragOver={allowDrop}>
+      <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]" onDragOver={allowDrop}>
         <button
           type="button"
           className={cn(
@@ -209,10 +209,14 @@ export function ArchiveFolderExplorer({
             dropTo(null);
           }}
         >
-          <FolderOpen className="mt-0.5 h-5 w-5 shrink-0 text-[#9b8cff]" />
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-bold">전체 문항</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{formatCount(totalProblemCount)}개 표시</span>
+          <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
+            <FolderOpen className="h-5 w-5 text-[#9b8cff]" />
+            <span className="max-w-full text-center text-[11px] font-semibold leading-none text-muted-foreground" title={`${formatCount(totalProblemCount)}문항`}>
+              {formatCount(totalProblemCount)}
+            </span>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block whitespace-normal break-words text-sm font-bold leading-5">전체 문항</span>
           </span>
         </button>
 
@@ -233,7 +237,7 @@ export function ArchiveFolderExplorer({
                 dropTo(folder.id);
               }}
               className={cn(
-                "group flex min-h-[82px] cursor-grab items-start gap-3 rounded-lg border p-3 text-left transition-colors active:cursor-grabbing",
+                "group relative flex min-h-[82px] cursor-grab items-start gap-3 rounded-lg border p-3 text-left transition-colors active:cursor-grabbing",
                 selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
               )}
               role="button"
@@ -241,9 +245,14 @@ export function ArchiveFolderExplorer({
               onClick={() => onSelectFolder?.(folder.id)}
               onDoubleClick={() => onOpenFolder(folder.id)}
             >
-              <span className="relative mt-0.5 shrink-0">
-                <Folder className="h-5 w-5" style={{ color }} />
-                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#111022]" style={{ backgroundColor: color }} />
+              <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
+                <span className="relative">
+                  <Folder className="h-5 w-5" style={{ color }} />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#111022]" style={{ backgroundColor: color }} />
+                </span>
+                <span className="max-w-full text-center text-[11px] font-semibold leading-none text-muted-foreground" title={`${formatCount(problemCount)}문항`}>
+                  {formatCount(problemCount)}
+                </span>
               </span>
               <span className="min-w-0 flex-1">
                 {editingId === folder.id ? (
@@ -271,12 +280,11 @@ export function ArchiveFolderExplorer({
                   </span>
                 ) : (
                   <>
-                    <span className="block truncate text-sm font-bold">{folder.name}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">{formatCount(folderBatchIds.length)}개 배치 · {formatCount(problemCount)}문항</span>
+                    <span className="block whitespace-normal break-words pr-1 text-sm font-bold leading-5" title={folder.name}>{folder.name}</span>
                   </>
                 )}
               </span>
-              <span className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+              <span className={cn("absolute right-2 top-2 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100", editingId === folder.id && "hidden")}>
                 <button type="button" className="grid h-7 w-7 place-items-center rounded-md border border-white/10 bg-black/20 text-slate-300 hover:text-white" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -304,13 +312,17 @@ export function ArchiveFolderExplorer({
               onDragStart={() => onDragStart("batch", batch.id)}
               onDragEnd={() => setDragItem(null)}
             >
-              <span className="relative mt-0.5 shrink-0">
-                <Folder className="h-5 w-5" style={{ color }} />
-                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#111022]" style={{ backgroundColor: color }} />
+              <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
+                <span className="relative">
+                  <Folder className="h-5 w-5" style={{ color }} />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#111022]" style={{ backgroundColor: color }} />
+                </span>
+                <span className="max-w-full text-center text-[11px] font-semibold leading-none text-muted-foreground" title={`${formatCount(batch.problem_count || 0)}문항`}>
+                  {formatCount(batch.problem_count || 0)}
+                </span>
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-bold">{batch.name}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">{formatCount(batch.problem_count || 0)}문항</span>
+                <span className="block whitespace-normal break-words text-sm font-bold leading-5" title={batch.name}>{batch.name}</span>
               </span>
               {onMoveBatch && batch.archive_folder_id ? (
                 <span
