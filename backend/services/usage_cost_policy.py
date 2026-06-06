@@ -18,6 +18,8 @@ POLICY_SETTING_KEY = "usage_cost_policy"
 KRW_PER_BASE_CREDIT = 26.0
 SAFETY_BUDGET_RATE = 0.80
 DEFAULT_KRW_PER_USD = 1520
+TRIAL_USAGE_REFERENCE_DAYS = 28
+DEFAULT_TRIAL_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -209,6 +211,23 @@ def scaled_plan_cost_policy(policy: PlanCostPolicy, multiplier: float | int | No
     )
 
 
+def trial_plan_cost_policy(
+    policy: PlanCostPolicy,
+    period_start: datetime | None = None,
+    period_end: datetime | None = None,
+) -> PlanCostPolicy:
+    duration_days = float(DEFAULT_TRIAL_DAYS)
+    if period_start and period_end:
+        try:
+            duration_seconds = (period_end - period_start).total_seconds()
+        except TypeError:
+            duration_seconds = 0
+        if duration_seconds > 0:
+            duration_days = duration_seconds / 86_400
+    factor = min(max(duration_days / TRIAL_USAGE_REFERENCE_DAYS, 1 / TRIAL_USAGE_REFERENCE_DAYS), 1.0)
+    return replace(policy, monthly_cost_cap_krw=max(1, int(round(policy.monthly_cost_cap_krw * factor))))
+
+
 def is_admin_user(db: Session, user_id: str) -> bool:
     roles = set(db.scalars(select(UserRole.role).where(UserRole.user_id == user_id)).all())
     if roles & ADMIN_ROLES:
@@ -243,6 +262,8 @@ def active_plan_for_user(db: Session, user_id: str) -> tuple[Plan | None, Subscr
     )
     policy = plan_cost_policy(db, plan_code)
     if subscription:
+        if subscription.status == "trialing":
+            policy = trial_plan_cost_policy(policy, subscription.current_period_start, subscription.current_period_end)
         policy = scaled_plan_cost_policy(policy, getattr(subscription, "subject_multiplier", 1))
     return plan, subscription, policy
 
