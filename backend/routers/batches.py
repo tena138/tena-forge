@@ -225,12 +225,14 @@ def _batch_status_payload(batch: Batch) -> dict:
     }
 
 
-def _validate_archive_folder(db: Session, owner_id: str, folder_id: UUID | None) -> UUID | None:
+def _validate_archive_folder(db: Session, owner_id: str, folder_id: UUID | None, subject_engine: str) -> UUID | None:
     if not folder_id:
         return None
     folder = db.scalar(select(ArchiveFolder).where(ArchiveFolder.id == folder_id, ArchiveFolder.owner_id == owner_id))
     if not folder:
         raise HTTPException(status_code=404, detail="아카이브 폴더를 찾을 수 없습니다.")
+    if normalize_subject_engine(folder.subject_engine) != normalize_subject_engine(subject_engine):
+        raise HTTPException(status_code=400, detail="선택한 폴더와 과목 엔진이 일치하지 않습니다.")
     return folder.id
 
 
@@ -261,11 +263,11 @@ def upload_batch(
         raise HTTPException(status_code=400, detail="자료 업로드 및 아카이빙 권리 확인이 필요합니다.")
 
     owner_id = current_owner_id(request)
-    validated_archive_folder_id = _validate_archive_folder(db, owner_id, archive_folder_id)
     parsed_subject_candidates = _parse_candidate_list(subject_candidates)
     if not parsed_subject_candidates:
         parsed_subject_candidates = infer_subject_candidates_from_text(problem_pdf.filename, batch_name)
     engine = normalize_subject_engine(subject_engine or infer_subject_engine_from_subjects(parsed_subject_candidates))
+    validated_archive_folder_id = _validate_archive_folder(db, owner_id, archive_folder_id, engine)
     ensure_subject_engine_access(db, owner_id, engine)
     problem_path = save_upload(problem_pdf)
     solution_path = save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None
@@ -411,7 +413,7 @@ def update_batch_archive_folder(batch_id: UUID, payload: BatchArchiveFolderUpdat
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
-    batch.archive_folder_id = _validate_archive_folder(db, owner_id, payload.archive_folder_id)
+    batch.archive_folder_id = _validate_archive_folder(db, owner_id, payload.archive_folder_id, batch.subject_engine or "math")
     db.commit()
     db.refresh(batch)
     return _batch_read(db, batch)

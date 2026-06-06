@@ -10,6 +10,7 @@ export const legacyCustomSubjectsStorageKey = "tena-forge-upload-custom-subjects
 const customSubjectMigrationKey = "tena.archiveFolders.migrated.customSubjects.v1";
 const batchFolderMigrationKey = "tena.archiveFolders.migrated.batchFolders.v1";
 const palette = ["#8b5cf6", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ec4899", "#6366f1", "#06b6d4", "#84cc16"];
+type SubjectEngineCode = "math" | "korean" | "english";
 
 type LegacyBatchFolder = {
   id: string;
@@ -92,6 +93,13 @@ export function archiveFolderBatchIds(folderId: string | null, folders: ArchiveF
   return batches.filter((batch) => batch.archive_folder_id && folderIds.has(batch.archive_folder_id)).map((batch) => batch.id);
 }
 
+function inferFolderEngine(parts: string[]): SubjectEngineCode {
+  const compact = parts.join(" ").replace(/\s+/g, "").toLowerCase();
+  if (compact.includes("english") || compact.includes("eng") || compact.includes("영어")) return "english";
+  if (compact.includes("korean") || compact.includes("kor") || compact.includes("국어")) return "korean";
+  return "math";
+}
+
 function readJsonArray(key: string) {
   if (typeof window === "undefined") return [];
   try {
@@ -102,18 +110,19 @@ function readJsonArray(key: string) {
   }
 }
 
-async function ensureFolderPath(parts: string[], folders: ArchiveFolder[]) {
+async function ensureFolderPath(parts: string[], folders: ArchiveFolder[], subjectEngine: SubjectEngineCode) {
   let parentId: string | null = null;
   let currentFolders = folders;
   let created = false;
   for (const part of parts) {
     const name = normalizeFolderName(part);
     if (!name) continue;
-    let folder = currentFolders.find((item) => (item.parent_id || null) === parentId && item.name === name);
+    let folder = currentFolders.find((item) => (item.parent_id || null) === parentId && item.name === name && (item.subject_engine || "math") === subjectEngine);
     if (!folder) {
       folder = await createArchiveFolder({
         name,
         parent_id: parentId,
+        subject_engine: subjectEngine,
         color: defaultArchiveFolderColor(parts.join(" > ")),
       });
       currentFolders = [...currentFolders, folder];
@@ -124,8 +133,9 @@ async function ensureFolderPath(parts: string[], folders: ArchiveFolder[]) {
   return { folderId: parentId, folders: currentFolders, changed: created };
 }
 
-export async function migrateCustomSubjectFolders(folders: ArchiveFolder[]) {
-  if (typeof window === "undefined" || window.localStorage.getItem(customSubjectMigrationKey) === "done") {
+export async function migrateCustomSubjectFolders(folders: ArchiveFolder[], subjectEngine: SubjectEngineCode) {
+  const migrationKey = `${customSubjectMigrationKey}.${subjectEngine}`;
+  if (typeof window === "undefined" || window.localStorage.getItem(migrationKey) === "done") {
     return { folders, changed: false };
   }
   const values = readJsonArray(legacyCustomSubjectsStorageKey).map((value) => String(value || ""));
@@ -134,11 +144,12 @@ export async function migrateCustomSubjectFolders(folders: ArchiveFolder[]) {
   for (const value of values) {
     const parts = splitFolderPath(value);
     if (!parts.length) continue;
-    const result = await ensureFolderPath(parts, currentFolders);
+    if (inferFolderEngine(parts) !== subjectEngine) continue;
+    const result = await ensureFolderPath(parts, currentFolders, subjectEngine);
     currentFolders = result.folders;
     changed = changed || result.changed;
   }
-  window.localStorage.setItem(customSubjectMigrationKey, "done");
+  window.localStorage.setItem(migrationKey, "done");
   return { folders: currentFolders, changed };
 }
 
@@ -174,8 +185,9 @@ function legacyFolderPath(folder: LegacyBatchFolder, folders: LegacyBatchFolder[
   return path;
 }
 
-export async function migrateLegacyBatchFolders(folders: ArchiveFolder[], batches: Batch[]) {
-  if (typeof window === "undefined" || window.localStorage.getItem(batchFolderMigrationKey) === "done") {
+export async function migrateLegacyBatchFolders(folders: ArchiveFolder[], batches: Batch[], subjectEngine: SubjectEngineCode) {
+  const migrationKey = `${batchFolderMigrationKey}.${subjectEngine}`;
+  if (typeof window === "undefined" || window.localStorage.getItem(migrationKey) === "done") {
     return { folders, changed: false };
   }
   const legacyFolders = readLegacyBatchFolders();
@@ -185,7 +197,13 @@ export async function migrateLegacyBatchFolders(folders: ArchiveFolder[], batche
   const folderIdByLegacyId = new Map<string, string>();
 
   for (const folder of legacyFolders) {
-    const result = await ensureFolderPath(legacyFolderPath(folder, legacyFolders), currentFolders);
+    const path = legacyFolderPath(folder, legacyFolders);
+    const folderBatchEngines = folder.batchIds
+      .map((batchId) => batches.find((batch) => batch.id === batchId)?.subject_engine || null)
+      .filter(Boolean);
+    const inferredEngine = folderBatchEngines[0] || inferFolderEngine(path);
+    if (inferredEngine !== subjectEngine) continue;
+    const result = await ensureFolderPath(path, currentFolders, subjectEngine);
     currentFolders = result.folders;
     changed = changed || result.changed;
     if (result.folderId) folderIdByLegacyId.set(folder.id, result.folderId);
@@ -195,10 +213,12 @@ export async function migrateLegacyBatchFolders(folders: ArchiveFolder[], batche
     if (!targetId) continue;
     for (const batchId of folder.batchIds) {
       if (!batchIds.has(batchId)) continue;
+      const batch = batches.find((item) => item.id === batchId);
+      if ((batch?.subject_engine || "math") !== subjectEngine) continue;
       await updateBatchArchiveFolder(batchId, targetId);
       changed = true;
     }
   }
-  window.localStorage.setItem(batchFolderMigrationKey, "done");
+  window.localStorage.setItem(migrationKey, "done");
   return { folders: currentFolders, changed };
 }

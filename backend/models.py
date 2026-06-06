@@ -275,6 +275,7 @@ class ArchiveFolder(Base):
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
     academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    subject_engine: Mapped[str] = mapped_column(String(30), default="math", nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     parent_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("archive_folders.id", ondelete="SET NULL"), nullable=True, index=True)
     color: Mapped[str | None] = mapped_column(String(7), nullable=True)

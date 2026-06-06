@@ -993,20 +993,23 @@ export default function UploadPage() {
   }, []);
 
   async function refreshArchiveFolders() {
-    const folders = await listArchiveFolders();
+    const folders = await listArchiveFolders(subjectEngine);
     setArchiveFolders(folders);
     return folders;
   }
 
   useEffect(() => {
     let cancelled = false;
-    listArchiveFolders()
+    setCurrentArchiveFolderId(null);
+    setSelectedArchiveFolderId(null);
+    setSelectedSubjects([]);
+    listArchiveFolders(subjectEngine)
       .then(async (folders) => {
         if (cancelled) return;
-        const migrated = await migrateCustomSubjectFolders(folders);
+        const migrated = await migrateCustomSubjectFolders(folders, subjectEngine);
         if (cancelled) return;
         if (migrated.changed) {
-          const nextFolders = await listArchiveFolders();
+          const nextFolders = await listArchiveFolders(subjectEngine);
           if (!cancelled) setArchiveFolders(nextFolders);
         } else {
           setArchiveFolders(migrated.folders);
@@ -1018,7 +1021,7 @@ export default function UploadPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [subjectEngine]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1061,6 +1064,8 @@ export default function UploadPage() {
   function selectSubjectEngine(engine: SubjectEngineCode) {
     setSubjectEngineTouched(true);
     setSubjectEngine(engine);
+    setCurrentArchiveFolderId(null);
+    setSelectedArchiveFolderId(null);
   }
 
   function toggleSubject(subject: string) {
@@ -1145,12 +1150,10 @@ export default function UploadPage() {
     const label = archiveFolderPathLabel(folderId, archiveFolders);
     const folderCandidates = folderId ? [label] : [];
     setSelectedSubjects(folderCandidates);
-    const inferredEngine = subjectEngineForSubject(label);
-    if (inferredEngine) applyInferredSubjectEngine(inferredEngine);
   }
 
   async function createArchiveFolderInCurrent(payload: { name: string; parent_id: string | null; color: string }) {
-    const folder = await createArchiveFolder(payload);
+    const folder = await createArchiveFolder({ ...payload, subject_engine: subjectEngine });
     await refreshArchiveFolders();
     setCurrentArchiveFolderId(folder.id);
   }

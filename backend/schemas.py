@@ -293,6 +293,7 @@ class BatchUploadResponse(BaseModel):
 class ArchiveFolderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     parent_id: UUID | None = None
+    subject_engine: str = "math"
     color: str | None = None
     order: int | None = None
 
@@ -310,6 +311,7 @@ class ArchiveFolderRead(BaseModel):
     id: UUID
     owner_id: str
     academy_id: str | None = None
+    subject_engine: str = "math"
     name: str
     parent_id: UUID | None = None
     color: str | None = None

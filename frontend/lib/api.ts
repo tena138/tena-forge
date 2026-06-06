@@ -87,6 +87,7 @@ export type ArchiveFolder = {
   id: string;
   owner_id: string;
   academy_id?: string | null;
+  subject_engine?: "math" | "korean" | "english";
   name: string;
   parent_id?: string | null;
   color?: string | null;
@@ -98,6 +99,7 @@ export type ArchiveFolder = {
 export type ArchiveFolderPayload = {
   name?: string;
   parent_id?: string | null;
+  subject_engine?: "math" | "korean" | "english";
   color?: string | null;
   order?: number | null;
 };
@@ -411,8 +413,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return response.data;
 }
 
-export async function listArchiveFolders() {
-  return api<ArchiveFolder[]>("/api/archive-folders");
+export async function listArchiveFolders(subjectEngine?: "math" | "korean" | "english") {
+  const query = subjectEngine ? `?subject_engine=${encodeURIComponent(subjectEngine)}` : "";
+  return api<ArchiveFolder[]>(`/api/archive-folders${query}`);
 }
 
 export async function createArchiveFolder(payload: Required<Pick<ArchiveFolderPayload, "name">> & ArchiveFolderPayload) {

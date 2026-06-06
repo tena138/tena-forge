@@ -362,6 +362,9 @@ def _ensure_sqlite_columns():
             "failure_hint": "TEXT",
             "failed_at": "DATETIME",
         },
+        "archive_folders": {
+            "subject_engine": "VARCHAR(30) DEFAULT 'math' NOT NULL",
+        },
         "problems": {
             "source_type": "VARCHAR(40) DEFAULT 'self_created' NOT NULL",
             "source_label": "VARCHAR(255)",

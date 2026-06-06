@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -35,6 +35,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, ArchiveFolder, Batch, createArchiveFolder, deleteArchiveFolder, KoreanReviewItemsResponse, KoreanReviewPassageItem, listArchiveFolders, Problem, updateArchiveFolder, updateBatchArchiveFolder } from "@/lib/api";
 import { archiveFolderBatchIds, archiveFolderPathLabel, migrateLegacyBatchFolders } from "@/lib/archiveFolders";
+import { SUBJECT_ENGINES, subjectEngineLabel, type SubjectEngineCode } from "@/lib/plan-pricing";
 import {
   SubjectNode,
   buildSubjectTree,
@@ -96,6 +97,11 @@ const sortOptions: Array<{ value: ProblemSort; label: string }> = [
   { value: "number_asc", label: "번호 오름차순" },
   { value: "number_desc", label: "번호 내림차순" },
 ];
+const archiveEngineCodes = new Set<SubjectEngineCode>(["math", "korean", "english"]);
+
+function readArchiveEngine(value: string | null): SubjectEngineCode {
+  return archiveEngineCodes.has(value as SubjectEngineCode) ? (value as SubjectEngineCode) : "math";
+}
 
 function readSubjectList(key: string) {
   if (typeof window === "undefined") return [];
@@ -422,6 +428,7 @@ function ProblemsBrowser() {
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
   const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], sources: [], visibilities: [], origin_types: [] });
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [archiveEngine, setArchiveEngine] = useState<SubjectEngineCode>(() => readArchiveEngine(searchParams.get("archive_engine")));
   const [archiveFolders, setArchiveFolders] = useState<ArchiveFolder[]>([]);
   const [archiveFoldersLoaded, setArchiveFoldersLoaded] = useState(false);
   const [batchesLoaded, setBatchesLoaded] = useState(false);
@@ -465,6 +472,7 @@ function ProblemsBrowser() {
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const loadRequestRef = useRef(0);
+  const archiveEngineInitializedRef = useRef(false);
   const activeBatchFolderDragKey = batchFolderDrag ? `${batchFolderDrag.folderId}:${batchFolderDrag.pointerId}` : "";
 
   function setBatchFolderDragState(nextDrag: BatchFolderDragState | null) {
@@ -476,12 +484,12 @@ function ProblemsBrowser() {
     api<Facets>("/api/problems/facets").then(setFacets).catch(() => undefined);
   }, []);
 
-  async function refreshArchiveFolders() {
-    const folders = await listArchiveFolders();
+  const refreshArchiveFolders = useCallback(async (engine: SubjectEngineCode = archiveEngine) => {
+    const folders = await listArchiveFolders(engine);
     setArchiveFolders(folders);
     setArchiveFoldersLoaded(true);
     return folders;
-  }
+  }, [archiveEngine]);
 
   async function refreshBatches() {
     const nextBatches = await api<Batch[]>("/api/batches");
@@ -491,11 +499,17 @@ function ProblemsBrowser() {
   }
 
   useEffect(() => {
-    refreshArchiveFolders().catch(() => {
+    if (archiveEngineInitializedRef.current) {
+      setSelectedBatchFolderId("");
+      setSelectedBatchId("");
+    }
+    archiveEngineInitializedRef.current = true;
+    setLegacyFolderMigrationDone(false);
+    refreshArchiveFolders(archiveEngine).catch(() => {
       setArchiveFolders([]);
       setArchiveFoldersLoaded(true);
     });
-  }, []);
+  }, [archiveEngine, refreshArchiveFolders]);
 
   useEffect(() => {
     refreshBatches().catch(() => {
@@ -507,18 +521,18 @@ function ProblemsBrowser() {
   useEffect(() => {
     if (!archiveFoldersLoaded || !batchesLoaded || legacyFolderMigrationDone) return;
     let cancelled = false;
-    migrateLegacyBatchFolders(archiveFolders, batches)
+    migrateLegacyBatchFolders(archiveFolders, batches, archiveEngine)
       .then(async (result) => {
         if (cancelled) return;
         setLegacyFolderMigrationDone(true);
         if (!result.changed) return;
-        await Promise.all([refreshArchiveFolders(), refreshBatches()]);
+        await Promise.all([refreshArchiveFolders(archiveEngine), refreshBatches()]);
       })
       .catch(() => setLegacyFolderMigrationDone(true));
     return () => {
       cancelled = true;
     };
-  }, [archiveFolders, archiveFoldersLoaded, batches, batchesLoaded, legacyFolderMigrationDone]);
+  }, [archiveEngine, archiveFolders, archiveFoldersLoaded, batches, batchesLoaded, legacyFolderMigrationDone, refreshArchiveFolders]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(viewModeStorageKey);
@@ -616,6 +630,7 @@ function ProblemsBrowser() {
     setSelectedDiffs(searchParams.getAll("difficulty"));
     setSelectedBatchId(searchParams.get("batch_id") || "");
     setSelectedBatchFolderId(searchParams.get("batch_folder_id") || "");
+    setArchiveEngine(readArchiveEngine(searchParams.get("archive_engine")));
     setReviewFilter(readReviewFilter(searchParams.get("needs_review")));
     setSort(readSort(searchParams.get("sort")));
     setPage(readPageParam(searchParams.get("page")));
@@ -628,11 +643,15 @@ function ProblemsBrowser() {
     if (selectedBatchFolder) return batches.filter((batch) => selectedBatchFolder.batchIds.includes(batch.id));
     return batches.filter((batch) => !assignedBatchIds.has(batch.id));
   }, [assignedBatchIds, batches, selectedBatchFolder]);
-  const selectedFolderBatchIds = useMemo(() => selectedBatchFolderId ? archiveFolderBatchIds(selectedBatchFolderId, archiveFolders, batches) : [], [archiveFolders, batches, selectedBatchFolderId]);
+  const archiveEngineBatches = useMemo(() => batches.filter((batch) => (batch.subject_engine || "math") === archiveEngine), [archiveEngine, batches]);
+  const archiveEngineBatchIds = useMemo(() => archiveEngineBatches.map((batch) => batch.id), [archiveEngineBatches]);
+  const archiveEngineProblemCount = useMemo(() => archiveEngineBatches.reduce((sum, batch) => sum + (batch.problem_count || 0), 0), [archiveEngineBatches]);
+  const selectedFolderBatchIds = useMemo(() => selectedBatchFolderId ? archiveFolderBatchIds(selectedBatchFolderId, archiveFolders, archiveEngineBatches) : [], [archiveEngineBatches, archiveFolders, selectedBatchFolderId]);
   const contextMenuBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === batchFolderContextMenu?.folderId) || null, [batchFolderContextMenu, batchFolders]);
 
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
+    params.set("archive_engine", archiveEngine);
     const searchTerm = search.trim();
     if (searchTerm) params.set("search", searchTerm);
     if (unit.trim()) params.set("unit", unit.trim());
@@ -646,11 +665,27 @@ function ProblemsBrowser() {
       params.append("batch_ids", "00000000-0000-0000-0000-000000000000");
     } else if (selectedBatchId) {
       params.set("batch_id", selectedBatchId);
+    } else if (archiveEngineBatchIds.length) {
+      archiveEngineBatchIds.forEach((batchId) => params.append("batch_ids", batchId));
+    } else {
+      params.append("batch_ids", "00000000-0000-0000-0000-000000000000");
     }
     subjects.forEach((value) => params.append("subject", value));
     selectedDiffs.forEach((value) => params.append("difficulty", value));
     return params.toString();
-  }, [reviewFilter, search, selectedBatchFolderId, selectedBatchId, selectedDiffs, selectedFolderBatchIds, sort, subjects, unit]);
+  }, [archiveEngine, archiveEngineBatchIds, reviewFilter, search, selectedBatchFolderId, selectedBatchId, selectedDiffs, selectedFolderBatchIds, sort, subjects, unit]);
+
+  useEffect(() => {
+    if (selectedBatchFolderId && archiveFoldersLoaded && !archiveFolders.some((folder) => folder.id === selectedBatchFolderId)) {
+      setSelectedBatchFolderId("");
+    }
+  }, [archiveFolders, archiveFoldersLoaded, selectedBatchFolderId]);
+
+  useEffect(() => {
+    if (selectedBatchId && batchesLoaded && !archiveEngineBatchIds.includes(selectedBatchId)) {
+      setSelectedBatchId("");
+    }
+  }, [archiveEngineBatchIds, batchesLoaded, selectedBatchId]);
 
   const query = useMemo(() => {
     const params = new URLSearchParams(filterQuery);
@@ -1044,19 +1079,19 @@ function ProblemsBrowser() {
   }
 
   async function createServerArchiveFolder(payload: { name: string; parent_id: string | null; color: string }) {
-    const folder = await createArchiveFolder(payload);
-    await refreshArchiveFolders();
+    const folder = await createArchiveFolder({ ...payload, subject_engine: archiveEngine });
+    await refreshArchiveFolders(archiveEngine);
     openArchiveFolder(folder.id);
   }
 
   async function updateServerArchiveFolder(folderId: string, payload: { name?: string; parent_id?: string | null; color?: string | null; order?: number }) {
     await updateArchiveFolder(folderId, payload);
-    await refreshArchiveFolders();
+    await refreshArchiveFolders(archiveEngine);
   }
 
   async function deleteServerArchiveFolder(folderId: string) {
     await deleteArchiveFolder(folderId);
-    await Promise.all([refreshArchiveFolders(), refreshBatches()]);
+    await Promise.all([refreshArchiveFolders(archiveEngine), refreshBatches()]);
     if (selectedBatchFolderId === folderId || !archiveFolders.some((folder) => folder.id === selectedBatchFolderId)) {
       openArchiveFolder(null);
     }
@@ -1504,14 +1539,35 @@ function ProblemsBrowser() {
         </div>
 
         <div className="mt-3">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {SUBJECT_ENGINES.map((engine) => {
+              const selected = archiveEngine === engine.code;
+              const engineBatchCount = batches.filter((batch) => (batch.subject_engine || "math") === engine.code).length;
+              return (
+                <button
+                  key={engine.code}
+                  type="button"
+                  className={cn(
+                    "rounded-[7px] border px-3 py-2 text-xs font-bold transition",
+                    selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-400 hover:border-white/20 hover:bg-white/[0.06] hover:text-slate-200"
+                  )}
+                  onClick={() => setArchiveEngine(engine.code)}
+                >
+                  {subjectEngineLabel(engine.code)}
+                  <span className="ml-2 text-[11px] font-semibold text-muted-foreground">{engineBatchCount.toLocaleString("ko-KR")}</span>
+                </button>
+              );
+            })}
+          </div>
           <ArchiveFolderExplorer
             folders={archiveFolders}
-            batches={batches}
+            batches={archiveEngineBatches}
             currentFolderId={selectedBatchFolderId || null}
             selectedFolderId={selectedBatchFolderId || null}
             selectedBatchId={selectedBatchId || null}
             mode="browse"
-            totalProblemCount={data.total}
+            title={`${subjectEngineLabel(archiveEngine)} 보관 폴더`}
+            totalProblemCount={archiveEngineProblemCount}
             onOpenFolder={openArchiveFolder}
             onSelectFolder={() => undefined}
             onSelectBatch={selectBatch}

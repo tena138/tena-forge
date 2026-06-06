@@ -10,7 +10,7 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0027_archive_folders"
+HEAD_REVISION = "0028_archive_folder_subject_engine"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -245,6 +245,21 @@ def _ensure_batch_columns(connection, inspector) -> bool:
     return changed
 
 
+def _ensure_archive_folder_columns(connection, inspector) -> bool:
+    if "archive_folders" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    if _add_column_if_missing(connection, inspector, "archive_folders", "subject_engine", "VARCHAR(30) NOT NULL DEFAULT 'math'"):
+        changed = True
+        inspector = inspect(connection)
+    connection.execute(text("UPDATE archive_folders SET subject_engine = 'math' WHERE subject_engine IS NULL OR subject_engine = ''"))
+    if "ix_archive_folders_subject_engine" not in _index_names(inspector, "archive_folders"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_archive_folders_subject_engine ON archive_folders (subject_engine)"))
+        changed = True
+    return changed
+
+
 def _ensure_student_membership_columns(connection, inspector) -> bool:
     if "student_academy_memberships" not in inspector.get_table_names():
         return False
@@ -463,6 +478,7 @@ def _schema_is_at_head(inspector) -> bool:
     return (
         required_tables.issubset(tables)
         and _has_columns(inspector, "batches", BATCH_REQUIRED_COLUMNS)
+        and _has_columns(inspector, "archive_folders", {"subject_engine"})
         and _has_columns(inspector, "plans", SUBJECT_ENGINE_COLUMNS)
         and _has_columns(inspector, "subscriptions", SUBJECT_ENGINE_COLUMNS)
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
@@ -500,6 +516,8 @@ def main() -> None:
             inspector = inspect(connection)
         if _ensure_batch_columns(connection, inspector):
             inspector = inspect(connection)
+        if _ensure_archive_folder_columns(connection, inspector):
+            inspector = inspect(connection)
         if _ensure_student_membership_columns(connection, inspector):
             inspector = inspect(connection)
         if _ensure_problem_columns(connection, inspector):
@@ -526,6 +544,8 @@ def main() -> None:
             if _ensure_academy_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_batch_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_archive_folder_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_student_membership_columns(connection, inspector):
                 inspector = inspect(connection)
