@@ -682,6 +682,15 @@ function AcademyOperationsPanel() {
     () => learningStudents.filter((student) => selectedStudentIds.includes(student.student_user_id)).map((student) => student.student_name),
     [learningStudents, selectedStudentIds]
   );
+  const visibleLearningStudents = useMemo(() => {
+    if (!selectedGroupIds.length) return learningStudents;
+    const selectedGroupStudents = learningStudents.filter((student) => student.groups.some((group) => selectedGroupIds.includes(group.id)));
+    const visibleIds = new Set(selectedGroupStudents.map((student) => student.student_user_id));
+    const selectedOtherStudents = learningStudents.filter(
+      (student) => selectedStudentIds.includes(student.student_user_id) && !visibleIds.has(student.student_user_id)
+    );
+    return [...selectedGroupStudents, ...selectedOtherStudents];
+  }, [learningStudents, selectedGroupIds, selectedStudentIds]);
   const showSeatOperationsSummary = operationsTab === "students";
 
   if (profile?.account_type === "student") {
@@ -1067,23 +1076,33 @@ function AcademyOperationsPanel() {
                     </div>
                   </div>
                   <div>
-                    <div className="mb-2 text-sm font-bold text-white">학생 선택</div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <span className="text-sm font-bold text-white">{selectedGroupIds.length ? "선택한 반 학생" : "학생 선택"}</span>
+                      {selectedGroupIds.length ? <span className="text-xs font-semibold text-slate-500">{visibleLearningStudents.length}명</span> : null}
+                    </div>
                     <div className="flex max-h-44 flex-wrap gap-2 overflow-auto rounded-[8px] border border-white/10 bg-black/20 p-2">
-                      {learningStudents.length ? learningStudents.map((student) => {
+                      {visibleLearningStudents.length ? visibleLearningStudents.map((student) => {
                         const selected = selectedStudentIds.includes(student.student_user_id);
                         return (
                           <button
                             key={student.student_user_id}
                             type="button"
                             onClick={() => setSelectedStudentIds((current) => toggleId(current, student.student_user_id))}
-                            className={`rounded-[7px] border px-3 py-2 text-sm font-semibold transition ${
+                            className={`min-w-[8rem] rounded-[7px] border px-3 py-2 text-left text-sm font-semibold transition ${
                               selected ? "border-cyan-300/60 bg-cyan-500/75 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
                             }`}
                           >
-                            {student.student_name}
+                            <span className="block truncate">{student.student_name}</span>
+                            <span className="mt-1 block truncate text-[11px] font-medium text-slate-500">
+                              {student.groups.map((group) => group.name).join(", ") || "반 없음"}
+                            </span>
                           </button>
                         );
-                      }) : <span className="p-2 text-sm text-muted-foreground">등록된 학생이 없습니다.</span>}
+                      }) : (
+                        <span className="p-2 text-sm text-muted-foreground">
+                          {selectedGroupIds.length ? "선택한 반에 연결된 학생이 없습니다." : "등록된 학생이 없습니다."}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
