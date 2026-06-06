@@ -157,6 +157,7 @@ class AssignmentSubmitPayload(BaseModel):
 
 
 COMPLETED_SUBMISSION_STATUSES = {"submitted", "late", "completed"}
+PENDING_CONFIRMATION_STATUS = "pending_confirmation"
 
 
 class FreeSolvePayload(BaseModel):
@@ -597,7 +598,7 @@ def _assignment_payload(db: Session, assignment: LearningAssignment, student_id:
             .where(LearningSubmission.assignment_id == assignment.id, LearningSubmission.student_id == student_id)
             .order_by(LearningSubmission.created_at.desc())
         )
-    submitted = bool(submission and submission.submitted_at)
+    submitted = bool(submission and submission.status in COMPLETED_SUBMISSION_STATUSES)
     show_answer = assignment.show_answer_policy == "immediately" or (submitted and assignment.show_answer_policy in {"afterSubmit", "immediately"})
     show_solution = assignment.show_solution_policy == "immediately" or (submitted and assignment.show_solution_policy in {"afterSubmit", "immediately"})
     return {
@@ -779,8 +780,10 @@ def complete_learning_assignment(assignment_id: UUID, request: Request, db: Sess
         )
         db.add(submission)
         db.flush()
-    submission.submitted_at = now
-    submission.status = "late" if assignment.due_at and now > assignment.due_at else "completed"
+    if submission.status in COMPLETED_SUBMISSION_STATUSES:
+        return _serialize(submission)
+    submission.submitted_at = None
+    submission.status = PENDING_CONFIRMATION_STATUS
     submission.total_count = len((assignment.content_version.snapshot or {}).get("problems", [])) if assignment.content_version else 0
     submission.updated_at = now
     db.commit()
@@ -1341,19 +1344,49 @@ def learning_assignment_report(academy_id: str, assignment_id: UUID, request: Re
                 "submission": _serialize(submission) if submission else None,
             }
         )
-    submitted = [row for row in rows if row["submission"] and row["submission"]["submitted_at"]]
-    scores = [row["submission"]["score"] for row in submitted if row["submission"].get("score") is not None]
+    completed = [row for row in rows if row["submission"] and row["submission"]["status"] in COMPLETED_SUBMISSION_STATUSES]
+    pending = [row for row in rows if row["status"] == PENDING_CONFIRMATION_STATUS]
+    scores = [row["submission"]["score"] for row in completed if row["submission"].get("score") is not None]
     return {
         "assignment": _assignment_payload(db, assignment),
         "students": rows,
         "summary": {
             "target_count": len(rows),
-            "submitted_count": len(submitted),
+            "submitted_count": len(completed),
+            "pending_confirmation_count": len(pending),
             "missing_count": sum(1 for row in rows if row["status"] == "missing"),
-            "completion_rate": len(submitted) / len(rows) if rows else 0,
+            "completion_rate": len(completed) / len(rows) if rows else 0,
             "average_score": sum(scores) / len(scores) if scores else None,
         },
     }
+
+
+@router.post("/academy/{academy_id}/assignments/{assignment_id}/students/{student_id}/confirm")
+def confirm_learning_assignment_completion(academy_id: str, assignment_id: UUID, student_id: str, request: Request, db: Session = Depends(get_db)):
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    assignment = db.scalar(select(LearningAssignment).where(LearningAssignment.id == assignment_id, LearningAssignment.academy_id == academy_id).options(joinedload(LearningAssignment.content_version)))
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+    if student_id not in _assignment_student_ids(db, assignment):
+        raise HTTPException(status_code=404, detail="Student is not a target of this assignment.")
+    submission = db.scalar(
+        select(LearningSubmission)
+        .where(LearningSubmission.assignment_id == assignment.id, LearningSubmission.student_id == student_id)
+        .order_by(LearningSubmission.created_at.desc())
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="No completion request found for this student.")
+    if submission.status in COMPLETED_SUBMISSION_STATUSES:
+        return _serialize(submission)
+    if submission.status != PENDING_CONFIRMATION_STATUS:
+        raise HTTPException(status_code=400, detail="This assignment is not waiting for teacher confirmation.")
+    now = datetime.utcnow()
+    submission.submitted_at = now
+    submission.status = "late" if assignment.due_at and now > assignment.due_at else "completed"
+    submission.total_count = len((assignment.content_version.snapshot or {}).get("problems", [])) if assignment.content_version else submission.total_count
+    submission.updated_at = now
+    db.commit()
+    return _serialize(submission)
 
 
 def _assignment_student_ids(db: Session, assignment: LearningAssignment) -> set[str]:

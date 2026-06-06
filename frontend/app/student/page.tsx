@@ -61,6 +61,23 @@ function assignmentWorkloadLabel(assignment: LearningAssignment) {
   return snapshot.material_scope || "직접 입력 숙제";
 }
 
+function assignmentStatusTone(assignment: LearningAssignment): "default" | "good" | "warn" {
+  const status = assignment.submission?.status;
+  if (status === "completed" || status === "submitted" || status === "late") return "good";
+  if (status === "pending_confirmation") return "warn";
+  if (assignment.due_at && new Date(assignment.due_at) < new Date()) return "warn";
+  return "default";
+}
+
+function assignmentStatusLabel(assignment: LearningAssignment) {
+  const status = assignment.submission?.status;
+  if (status === "completed" || status === "submitted") return "Completed";
+  if (status === "late") return "Completed late";
+  if (status === "pending_confirmation") return "Waiting teacher";
+  if (status === "in_progress") return "In progress";
+  return "Assigned";
+}
+
 type AssignmentProblemPageGroup = {
   key: string;
   label: string;
@@ -296,8 +313,8 @@ export default function StudentAppPage() {
                       <div className="font-semibold text-white">{item.title}</div>
                       <div className="mt-1 text-xs text-slate-500">{item.academy_name} · {assignmentWorkloadLabel(item)} · {formatDate(item.due_at)}</div>
                     </div>
-                    <StatusChip tone={item.submission?.submitted_at ? "good" : item.due_at && new Date(item.due_at) < new Date() ? "warn" : "default"}>
-                      {item.submission?.submitted_at ? "Submitted" : item.submission?.status === "in_progress" ? "In progress" : "Assigned"}
+                    <StatusChip tone={assignmentStatusTone(item)}>
+                      {assignmentStatusLabel(item)}
                     </StatusChip>
                   </div>
                   {item.submission?.score !== null && item.submission?.score !== undefined && <div className="mt-2 text-sm text-violet-100">Score {item.submission.score}</div>}

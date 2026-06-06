@@ -30,7 +30,7 @@ class _AssignmentDetailScreenState extends State<AssignmentDetailScreen> {
         if (mounted) context.push('/test/${assignment.id}');
       } else {
         await state.submitAssignment(assignment.id, 'completed');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('완료 체크했습니다.')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('완료 체크를 선생님에게 보냈습니다.')));
       }
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('완료 체크 가능 시간이나 학원 멤버십을 확인하세요.')));
@@ -59,7 +59,17 @@ class _AssignmentDetailScreenState extends State<AssignmentDetailScreen> {
               const SizedBox(height: 8),
               Text('마감: ${assignment.dueAt?.toLocal().toString() ?? '없음'}', style: const TextStyle(color: AppColors.muted)),
               const SizedBox(height: 8),
-              Text('상태: ${assignment.statusLabel}', style: TextStyle(color: assignment.isCompleted ? AppColors.success : AppColors.muted, fontWeight: FontWeight.w800)),
+              Text(
+                '상태: ${assignment.statusLabel}',
+                style: TextStyle(
+                  color: assignment.isCompleted
+                      ? AppColors.success
+                      : assignment.isAwaitingTeacherConfirmation
+                          ? AppColors.warning
+                          : AppColors.muted,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               if (assignment.problemCount > 0) ...[
                 const SizedBox(height: 8),
                 Text('문항: ${assignment.problemCount}개', style: const TextStyle(color: AppColors.muted)),
@@ -77,17 +87,33 @@ class _AssignmentDetailScreenState extends State<AssignmentDetailScreen> {
         ),
         if (!assignment.isTest)
           PremiumCard(
-            title: assignment.isCompleted ? '완료됨' : '완료 체크',
+            title: assignment.isCompleted
+                ? '완료됨'
+                : assignment.isAwaitingTeacherConfirmation
+                    ? '선생 확인 대기'
+                    : '완료 체크',
             child: Row(
               children: [
                 Icon(
-                  assignment.isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: assignment.isCompleted ? AppColors.success : AppColors.muted,
+                  assignment.isCompleted
+                      ? Icons.check_circle
+                      : assignment.isAwaitingTeacherConfirmation
+                          ? Icons.pending_actions
+                          : Icons.radio_button_unchecked,
+                  color: assignment.isCompleted
+                      ? AppColors.success
+                      : assignment.isAwaitingTeacherConfirmation
+                          ? AppColors.warning
+                          : AppColors.muted,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    assignment.isCompleted ? '선생님 화면에 완료 상태로 표시됩니다.' : '과제를 다 했으면 완료 체크를 눌러 선생님에게 알려주세요.',
+                    assignment.isCompleted
+                        ? '선생님이 최종 확인한 완료 상태입니다.'
+                        : assignment.isAwaitingTeacherConfirmation
+                            ? '선생님이 최종 확인하면 과제 완료로 반영됩니다.'
+                            : '과제를 다 했으면 완료 체크를 눌러 선생님에게 알려주세요.',
                     style: const TextStyle(color: AppColors.muted, height: 1.35),
                   ),
                 ),
@@ -95,9 +121,17 @@ class _AssignmentDetailScreenState extends State<AssignmentDetailScreen> {
             ),
           ),
         FilledButton.icon(
-          onPressed: loading || assignment.isCompleted ? null : submit,
+          onPressed: loading || assignment.isCompleted || assignment.isAwaitingTeacherConfirmation ? null : submit,
           icon: Icon(assignment.isTest ? Icons.play_arrow : Icons.check),
-          label: Text(assignment.isTest ? '테스트 시작' : assignment.isCompleted ? '완료됨' : '완료 체크'),
+          label: Text(
+            assignment.isTest
+                ? '테스트 시작'
+                : assignment.isCompleted
+                    ? '완료됨'
+                    : assignment.isAwaitingTeacherConfirmation
+                        ? '선생 확인 대기'
+                        : '완료 체크',
+          ),
         ),
       ],
     );

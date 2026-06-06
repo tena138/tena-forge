@@ -153,16 +153,24 @@ class Assignment {
   final String? materialScope;
 
   bool get isTest => assignmentType == 'test';
+  bool get isAwaitingTeacherConfirmation => status == 'pending_confirmation';
   bool get isCompleted =>
       submittedAt != null ||
       status == 'completed' ||
       status == 'submitted' ||
       status == 'late';
   String get statusLabel {
+    if (isAwaitingTeacherConfirmation) return '선생 확인 대기';
     if (status == 'late') return '지각 완료';
     if (isCompleted) return '완료';
     if (status == 'in_progress') return '진행 중';
     return '대기';
+  }
+
+  String get badgeLabel {
+    if (isCompleted) return '완료';
+    if (isAwaitingTeacherConfirmation) return '확인 대기';
+    return assignmentType;
   }
 
   factory Assignment.fromJson(Map<String, dynamic> json) {

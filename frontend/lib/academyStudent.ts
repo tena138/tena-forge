@@ -408,6 +408,7 @@ export type LearningAssignmentReport = {
   summary: {
     target_count: number;
     submitted_count: number;
+    pending_confirmation_count?: number;
     missing_count: number;
     completion_rate: number;
     average_score: number | null;
@@ -582,6 +583,10 @@ export function archiveLearningAssignment(academyId: string, assignmentId: strin
 
 export function readLearningAssignmentReport(academyId: string, assignmentId: string) {
   return api<LearningAssignmentReport>(`/api/learning/academy/${academyId}/assignments/${assignmentId}/report`);
+}
+
+export function confirmLearningAssignmentCompletion(academyId: string, assignmentId: string, studentId: string) {
+  return api<LearningSubmission>(`/api/learning/academy/${academyId}/assignments/${assignmentId}/students/${studentId}/confirm`, { method: "POST" });
 }
 
 export function createLearningAccessGrant(

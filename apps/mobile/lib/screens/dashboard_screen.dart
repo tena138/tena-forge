@@ -51,10 +51,18 @@ class DashboardScreen extends StatelessWidget {
                 ListItemCard(
                   title: assignment.title,
                   subtitle: assignment.dueAt == null ? assignment.description : '마감 ${MaterialLocalizations.of(context).formatFullDate(assignment.dueAt!)}',
-                  badge: assignment.isCompleted ? '완료' : assignment.assignmentType,
+                  badge: assignment.badgeLabel,
                   trailing: Icon(
-                    assignment.isCompleted ? Icons.check_circle : Icons.chevron_right,
-                    color: assignment.isCompleted ? AppColors.success : AppColors.muted,
+                    assignment.isCompleted
+                        ? Icons.check_circle
+                        : assignment.isAwaitingTeacherConfirmation
+                            ? Icons.pending_actions
+                            : Icons.chevron_right,
+                    color: assignment.isCompleted
+                        ? AppColors.success
+                        : assignment.isAwaitingTeacherConfirmation
+                            ? AppColors.warning
+                            : AppColors.muted,
                   ),
                   onTap: () => context.push('/assignment/${assignment.id}'),
                 ),

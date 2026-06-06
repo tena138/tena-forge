@@ -48,6 +48,7 @@ import {
   AcademyLearningStudent,
   LearningAssignment,
   LearningAssignmentReport,
+  confirmLearningAssignmentCompletion,
   createLearningAccessGrant,
   createLearningAssignment,
   getAcademyBilling,
@@ -90,6 +91,7 @@ function percentLabel(value: number) {
 function learningSubmissionStatusLabel(status: string) {
   if (status === "completed" || status === "submitted") return "완료";
   if (status === "late") return "지각 완료";
+  if (status === "pending_confirmation") return "확인 대기";
   if (status === "in_progress") return "진행 중";
   if (status === "missing") return "미제출";
   if (status === "not_started") return "대기";
@@ -583,6 +585,7 @@ function AcademyOperationsPanel() {
   const [learningStudents, setLearningStudents] = useState<AcademyLearningStudent[]>([]);
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignment[]>([]);
   const [learningReport, setLearningReport] = useState<LearningAssignmentReport | null>(null);
+  const [confirmingLearningStudentId, setConfirmingLearningStudentId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
@@ -812,6 +815,21 @@ function AcademyOperationsPanel() {
     setLearningReport(await readLearningAssignmentReport(academyId, assignment.id));
   }
 
+  async function confirmLearningCompletion(studentId: string) {
+    if (!academyId || !learningReport) return;
+    const key = `${learningReport.assignment.id}:${studentId}`;
+    setConfirmingLearningStudentId(key);
+    try {
+      await confirmLearningAssignmentCompletion(academyId, learningReport.assignment.id, studentId);
+      setLearningReport(await readLearningAssignmentReport(academyId, learningReport.assignment.id));
+      setNotice("학생 완료 체크를 최종 완료로 확정했습니다.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "과제 완료 확정에 실패했습니다.");
+    } finally {
+      setConfirmingLearningStudentId("");
+    }
+  }
+
   if (!profile) {
     return <div className="rounded-[12px] border border-white/10 bg-white/[0.04] p-6">로그인이 필요합니다.</div>;
   }
@@ -994,11 +1012,13 @@ function AcademyOperationsPanel() {
                 <CardContent className="space-y-4">
                   <div>
                     <div className="font-semibold text-white">{learningReport.assignment.title}</div>
-                    <div className="mt-1 text-xs text-slate-400">대상 {learningReport.summary.target_count} · 제출 {learningReport.summary.submitted_count} · 미제출 {learningReport.summary.missing_count}</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      대상 {learningReport.summary.target_count} · 완료 {learningReport.summary.submitted_count} · 확인 대기 {learningReport.summary.pending_confirmation_count || 0} · 미제출 {learningReport.summary.missing_count}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-                      <p className="text-xs text-slate-500">제출률</p>
+                      <p className="text-xs text-slate-500">완료율</p>
                       <p className="mt-1 text-xl font-black text-white">{percentLabel(learningReport.summary.completion_rate)}</p>
                     </div>
                     <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
@@ -1008,9 +1028,21 @@ function AcademyOperationsPanel() {
                   </div>
                   <div className="max-h-72 space-y-2 overflow-y-auto">
                     {learningReport.students.map((student) => (
-                      <div key={student.student_id} className="flex items-center justify-between rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                        <span>{student.student_name}</span>
-                        <span className="text-slate-400">{learningSubmissionStatusLabel(student.status)}</span>
+                      <div key={student.student_id} className="flex items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
+                        <span className="min-w-0 truncate">{student.student_name}</span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={student.status === "pending_confirmation" ? "text-amber-200" : "text-slate-400"}>{learningSubmissionStatusLabel(student.status)}</span>
+                          {student.status === "pending_confirmation" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => confirmLearningCompletion(student.student_id)}
+                              disabled={confirmingLearningStudentId === `${learningReport.assignment.id}:${student.student_id}`}
+                            >
+                              확정
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                     ))}
                   </div>
