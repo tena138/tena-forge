@@ -86,6 +86,8 @@ class LearningAssignmentCreate(BaseModel):
     description: str | None = None
     source_type: str = "problemSet"
     source_id: str
+    manual_material_title: str | None = None
+    manual_material_scope: str | None = None
     student_ids: list[str] = Field(default_factory=list)
     group_ids: list[UUID] = Field(default_factory=list)
     start_at: datetime | None = None
@@ -263,7 +265,39 @@ def _source_title_and_problems(db: Session, academy_id: str, source_type: str, s
     raise HTTPException(status_code=400, detail="Unsupported source type.")
 
 
-def _create_content_version(db: Session, academy_id: str, actor_id: str, source_type: str, source_id: str) -> ContentVersion:
+def _create_content_version(
+    db: Session,
+    academy_id: str,
+    actor_id: str,
+    source_type: str,
+    source_id: str,
+    manual_material_title: str | None = None,
+    manual_material_scope: str | None = None,
+) -> ContentVersion:
+    source_type = source_type.strip()
+    if source_type == "manual":
+        title = (manual_material_title or "").strip() or "직접 입력 숙제"
+        scope = (manual_material_scope or "").strip()
+        version = ContentVersion(
+            academy_id=academy_id,
+            source_type=source_type,
+            source_id=source_id,
+            title=title,
+            version_label=datetime.utcnow().strftime("%Y%m%d%H%M%S"),
+            snapshot={
+                "title": title,
+                "source_type": source_type,
+                "source_id": source_id,
+                "problem_count": 0,
+                "problems": [],
+                "material_title": title,
+                "material_scope": scope,
+            },
+            created_by=actor_id,
+        )
+        db.add(version)
+        db.flush()
+        return version
     title, problems = _source_title_and_problems(db, academy_id, source_type, source_id)
     if not problems:
         raise HTTPException(status_code=400, detail="This source has no problems to assign.")
@@ -1140,7 +1174,15 @@ def remove_group_student(academy_id: str, group_id: UUID, student_id: str, reque
 @router.post("/academy/{academy_id}/assignments")
 def create_learning_assignment(academy_id: str, payload: LearningAssignmentCreate, request: Request, db: Session = Depends(get_db)):
     actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
-    version = _create_content_version(db, academy_id, actor, payload.source_type, payload.source_id)
+    version = _create_content_version(
+        db,
+        academy_id,
+        actor,
+        payload.source_type,
+        payload.source_id,
+        payload.manual_material_title,
+        payload.manual_material_scope,
+    )
     target_type = "mixed"
     if payload.student_ids and not payload.group_ids:
         target_type = "students"

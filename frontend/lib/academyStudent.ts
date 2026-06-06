@@ -295,6 +295,8 @@ export type LearningAssignment = {
       source_id: string;
       problem_count: number;
       problems: LearningProblem[];
+      material_title?: string | null;
+      material_scope?: string | null;
     };
   };
   submission: LearningSubmission | null;
@@ -530,6 +532,8 @@ export function createLearningAssignment(
     description?: string;
     source_type: string;
     source_id: string;
+    manual_material_title?: string | null;
+    manual_material_scope?: string | null;
     student_ids?: string[];
     group_ids?: string[];
     due_at?: string | null;

@@ -54,6 +54,12 @@ function percent(value: number | null | undefined) {
   return `${Math.round(value * 100)}%`;
 }
 
+function assignmentWorkloadLabel(assignment: LearningAssignment) {
+  const snapshot = assignment.content.snapshot;
+  if (snapshot.problem_count > 0) return `${snapshot.problem_count}문항`;
+  return snapshot.material_scope || "직접 입력 숙제";
+}
+
 function StatusChip({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "good" | "warn" | "locked" }) {
   const toneClass = {
     default: "border-violet-300/25 bg-violet-300/10 text-violet-100",
@@ -252,7 +258,7 @@ export default function StudentAppPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-semibold text-white">{item.title}</div>
-                      <div className="mt-1 text-xs text-slate-500">{item.academy_name} · {item.content.snapshot.problem_count}문항 · {formatDate(item.due_at)}</div>
+                      <div className="mt-1 text-xs text-slate-500">{item.academy_name} · {assignmentWorkloadLabel(item)} · {formatDate(item.due_at)}</div>
                     </div>
                     <StatusChip tone={item.submission?.submitted_at ? "good" : item.due_at && new Date(item.due_at) < new Date() ? "warn" : "default"}>
                       {item.submission?.submitted_at ? "Submitted" : item.submission?.status === "in_progress" ? "In progress" : "Assigned"}
@@ -268,6 +274,12 @@ export default function StudentAppPage() {
             <CardHeader><CardTitle>{selectedAssignment ? selectedAssignment.title : "Assignment Solver"}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {!selectedAssignment && <p className="text-sm text-muted-foreground">과제를 선택하면 한 화면에서 문제를 풀 수 있습니다.</p>}
+              {selectedAssignment && selectedAssignment.content.snapshot.problem_count === 0 ? (
+                <div className="rounded-[10px] border border-white/10 bg-black/20 p-4">
+                  <div className="text-sm font-semibold text-white">{selectedAssignment.content.snapshot.material_title || selectedAssignment.title}</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-300">{selectedAssignment.content.snapshot.material_scope || selectedAssignment.description || "등록된 분량을 확인하세요."}</div>
+                </div>
+              ) : null}
               {selectedAssignment?.content.snapshot.problems.map((problem, index) => (
                 <div key={problem.id} className="rounded-[10px] border border-white/10 bg-black/20 p-3">
                   <div className="mb-2 flex items-center justify-between gap-3">

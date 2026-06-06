@@ -84,6 +84,7 @@ type ProblemStats = { total: number; needs_review: number; tagged: number; untag
 type ProblemFacets = { subjects: string[] };
 type SubjectCount = { subject: string; count: number };
 type AcademyOperationsTab = "students" | "assignments";
+type LearningAssignmentSourceMode = "archive" | "manual";
 
 function academyOperationsTabFromQuery(panel: string | null, tab: string | null): AcademyOperationsTab {
   return panel === "assignments" || tab === "assignments" ? "assignments" : "students";
@@ -112,6 +113,12 @@ function compactDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function learningAssignmentWorkloadLabel(assignment: LearningAssignment) {
+  const snapshot = assignment.content.snapshot;
+  if (snapshot.problem_count > 0) return `${snapshot.problem_count}문항`;
+  return snapshot.material_scope || "직접 입력 숙제";
 }
 
 function fileName(value: string | null) {
@@ -599,6 +606,11 @@ function AcademyOperationsPanel() {
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
   const [learningAssignmentDueAt, setLearningAssignmentDueAt] = useState("");
+  const [learningAssignmentSourceMode, setLearningAssignmentSourceMode] = useState<LearningAssignmentSourceMode>(
+    searchParams.get("source_type") === "manual" ? "manual" : "archive"
+  );
+  const [manualMaterialTitle, setManualMaterialTitle] = useState("");
+  const [manualMaterialScope, setManualMaterialScope] = useState("");
   const [selectedLearningSourceType, setSelectedLearningSourceType] = useState<"problemSet" | "archive">(
     searchParams.get("source_type") === "archive" || searchParams.get("source_type") === "batch" ? "archive" : "problemSet"
   );
@@ -641,7 +653,7 @@ function AcademyOperationsPanel() {
     setLearningAssignments(learningAssignmentData);
     if (!selectedProblemSetId && setData[0]) {
       setSelectedProblemSetId(setData[0].id);
-      if (selectedLearningSourceType === "problemSet" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(setData[0].name);
+      if (learningAssignmentSourceMode === "archive" && selectedLearningSourceType === "problemSet" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(setData[0].name);
     }
     if (!selectedBatchId) {
       const requestedSourceId = searchParams.get("source_id");
@@ -649,7 +661,7 @@ function AcademyOperationsPanel() {
       const fallbackBatch = batchData.find((batch) => batch.status === "done" && batch.problem_count > 0);
       const nextBatch = requestedBatch || fallbackBatch;
       if (nextBatch) setSelectedBatchId(nextBatch.id);
-      if (nextBatch && selectedLearningSourceType === "archive" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(nextBatch.name);
+      if (learningAssignmentSourceMode === "archive" && nextBatch && selectedLearningSourceType === "archive" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(nextBatch.name);
     }
     if (!seatClassId && classData[0]) setSeatClassId(classData[0].id);
     setError((current) => current === "학원 운영 정보를 불러오지 못했습니다." ? "" : current);
@@ -668,12 +680,38 @@ function AcademyOperationsPanel() {
 
   const assigned = useMemo(() => seats.filter((seat) => seat.assigned).length, [seats]);
   const assignableBatches = useMemo(() => batches.filter((batch) => batch.status === "done" && batch.problem_count > 0), [batches]);
+  const archiveAssignmentSources = useMemo(
+    () => [
+      ...problemSets.map((set) => ({
+        value: `problemSet:${set.id}`,
+        sourceType: "problemSet" as const,
+        sourceId: set.id,
+        title: set.name,
+        detail: `${set.item_count}문항`,
+      })),
+      ...assignableBatches.map((batch) => ({
+        value: `archive:${batch.id}`,
+        sourceType: "archive" as const,
+        sourceId: batch.id,
+        title: batch.name,
+        detail: `${batch.problem_count}문항`,
+      })),
+    ],
+    [assignableBatches, problemSets]
+  );
   const selectedProblemSet = useMemo(() => problemSets.find((set) => set.id === selectedProblemSetId) || null, [problemSets, selectedProblemSetId]);
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
-  const selectedLearningSourceId = selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId;
-  const selectedLearningSourceTitle = selectedLearningSourceType === "archive" ? selectedBatch?.name : selectedProblemSet?.name;
+  const selectedArchiveSourceValue = selectedLearningSourceType === "archive" ? `archive:${selectedBatchId}` : `problemSet:${selectedProblemSetId}`;
+  const selectedLearningSourceId = learningAssignmentSourceMode === "manual" ? "" : selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId;
+  const selectedLearningSourceTitle = learningAssignmentSourceMode === "manual" ? manualMaterialTitle : selectedLearningSourceType === "archive" ? selectedBatch?.name : selectedProblemSet?.name;
   const learningTargetCount = selectedGroupIds.length + selectedStudentIds.length;
-  const canPublishLearningAssignment = Boolean(academyId && learningAssignmentTitle.trim() && selectedLearningSourceId && learningTargetCount > 0);
+  const manualLearningSourceReady = Boolean(manualMaterialTitle.trim() && manualMaterialScope.trim());
+  const canPublishLearningAssignment = Boolean(
+    academyId &&
+    learningAssignmentTitle.trim() &&
+    learningTargetCount > 0 &&
+    (learningAssignmentSourceMode === "manual" ? manualLearningSourceReady : selectedLearningSourceId)
+  );
   const selectedGroupNames = useMemo(
     () => classes.filter((group) => selectedGroupIds.includes(group.id)).map((group) => group.name),
     [classes, selectedGroupIds]
@@ -753,22 +791,26 @@ function AcademyOperationsPanel() {
     await load();
   }
 
-  function selectLearningSourceType(nextType: "problemSet" | "archive") {
-    setSelectedLearningSourceType(nextType);
-    const nextTitle = nextType === "archive" ? selectedBatch?.name || assignableBatches[0]?.name : selectedProblemSet?.name || problemSets[0]?.name;
-    if (!learningAssignmentTitle.trim() && nextTitle) setLearningAssignmentTitle(nextTitle);
+  function selectArchiveLearningSource(value: string) {
+    const [sourceType, sourceId] = value.split(":");
+    if (sourceType === "archive") {
+      setSelectedLearningSourceType("archive");
+      setSelectedBatchId(sourceId || "");
+    } else {
+      setSelectedLearningSourceType("problemSet");
+      setSelectedProblemSetId(sourceId || "");
+    }
+    const source = archiveAssignmentSources.find((item) => item.value === value);
+    if (!learningAssignmentTitle.trim() && source) setLearningAssignmentTitle(source.title);
   }
 
-  function selectLearningSource(sourceId: string) {
-    if (selectedLearningSourceType === "archive") {
-      setSelectedBatchId(sourceId);
-      const batch = batches.find((item) => item.id === sourceId);
-      if (!learningAssignmentTitle.trim() && batch) setLearningAssignmentTitle(batch.name);
-    } else {
-      setSelectedProblemSetId(sourceId);
-      const set = problemSets.find((item) => item.id === sourceId);
-      if (!learningAssignmentTitle.trim() && set) setLearningAssignmentTitle(set.name);
-    }
+  function updateManualMaterialTitle(value: string) {
+    setManualMaterialTitle(value);
+    if (!learningAssignmentTitle.trim()) setLearningAssignmentTitle(value);
+  }
+
+  function updateManualMaterialScope(value: string) {
+    setManualMaterialScope(value);
   }
 
   function assignmentDueAtIso() {
@@ -787,9 +829,14 @@ function AcademyOperationsPanel() {
     event.preventDefault();
     setError("");
     if (!academyId || !learningAssignmentTitle.trim()) return;
-    const sourceId = selectedLearningSourceId || (selectedLearningSourceType === "archive" ? assignableBatches[0]?.id : problemSets[0]?.id);
+    const isManualSource = learningAssignmentSourceMode === "manual";
+    const sourceId = isManualSource ? `manual-${Date.now()}` : selectedLearningSourceId || (selectedLearningSourceType === "archive" ? assignableBatches[0]?.id : problemSets[0]?.id);
     if (!sourceId) {
-      setError("먼저 배포할 문항 세트 또는 배치를 선택해주세요.");
+      setError("먼저 배포할 아카이브 자료를 선택해주세요.");
+      return;
+    }
+    if (isManualSource && (!manualMaterialTitle.trim() || !manualMaterialScope.trim())) {
+      setError("교재·인강 이름과 분량을 모두 입력해주세요.");
       return;
     }
     if (!learningTargetCount) {
@@ -798,9 +845,13 @@ function AcademyOperationsPanel() {
     }
     const created = await createLearningAssignment(academyId, {
       title: learningAssignmentTitle.trim(),
-      description: selectedLearningSourceType === "archive" ? "배치 교재를 기반으로 생성한 학생 풀이 과제입니다." : "아카이브 문제 세트를 기반으로 생성한 학생 풀이 과제입니다.",
-      source_type: selectedLearningSourceType,
+      description: isManualSource
+        ? `교재·인강: ${manualMaterialTitle.trim()}\n분량: ${manualMaterialScope.trim()}`
+        : "아카이브 자료를 기반으로 생성한 학생 풀이 과제입니다.",
+      source_type: isManualSource ? "manual" : selectedLearningSourceType,
       source_id: sourceId,
+      manual_material_title: isManualSource ? manualMaterialTitle.trim() : null,
+      manual_material_scope: isManualSource ? manualMaterialScope.trim() : null,
       group_ids: selectedGroupIds,
       student_ids: selectedStudentIds,
       due_at: assignmentDueAtIso(),
@@ -808,6 +859,10 @@ function AcademyOperationsPanel() {
     });
     setLearningAssignmentTitle("");
     setLearningAssignmentDueAt("");
+    if (isManualSource) {
+      setManualMaterialTitle("");
+      setManualMaterialScope("");
+    }
     setNotice("학생 풀이 과제를 배포했습니다. 학생 Today 화면에 표시됩니다.");
     setLearningReport(await readLearningAssignmentReport(academyId, created.id));
     await load();
@@ -816,6 +871,10 @@ function AcademyOperationsPanel() {
   async function grantSelectedArchiveAccess() {
     if (!academyId) return;
     setError("");
+    if (learningAssignmentSourceMode === "manual") {
+      setError("직접 입력 숙제에는 접근 권한을 부여할 아카이브 자료가 없습니다.");
+      return;
+    }
     const sourceId = selectedLearningSourceId || (selectedLearningSourceType === "archive" ? assignableBatches[0]?.id : problemSets[0]?.id);
     if (!sourceId) {
       setError("권한을 부여할 문항 세트 또는 배치를 선택해주세요.");
@@ -1022,18 +1081,18 @@ function AcademyOperationsPanel() {
                 <CardTitle className="flex items-center gap-2"><BookOpenCheck className="h-5 w-5" /> 새 과제 배포</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)]">
-                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2 sm:max-w-md">
                     {[
-                      { value: "problemSet", label: "문항 세트" },
-                      { value: "archive", label: "배치·교재" },
+                      { value: "archive", label: "아카이브 자료" },
+                      { value: "manual", label: "교재·인강 직접 입력" },
                     ].map((option) => (
                       <button
                         key={option.value}
                         type="button"
-                        onClick={() => selectLearningSourceType(option.value as "problemSet" | "archive")}
+                        onClick={() => setLearningAssignmentSourceMode(option.value as LearningAssignmentSourceMode)}
                         className={`h-11 rounded-[8px] border px-3 text-sm font-bold transition ${
-                          selectedLearningSourceType === option.value
+                          learningAssignmentSourceMode === option.value
                             ? "border-violet-300/60 bg-violet-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.22)]"
                             : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
                         }`}
@@ -1042,16 +1101,31 @@ function AcademyOperationsPanel() {
                       </button>
                     ))}
                   </div>
-                  <select
-                    className="h-11 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
-                    value={selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId}
-                    onChange={(event) => selectLearningSource(event.target.value)}
-                  >
-                    <option value="">{selectedLearningSourceType === "archive" ? "배치 선택" : "문제 세트 선택"}</option>
-                    {selectedLearningSourceType === "archive"
-                      ? assignableBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name} · {batch.problem_count}문항</option>)
-                      : problemSets.map((set) => <option key={set.id} value={set.id}>{set.name}</option>)}
-                  </select>
+                  {learningAssignmentSourceMode === "archive" ? (
+                    <select
+                      className="h-11 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                      value={selectedArchiveSourceValue}
+                      onChange={(event) => selectArchiveLearningSource(event.target.value)}
+                    >
+                      <option value="">아카이브 자료 선택</option>
+                      {archiveAssignmentSources.map((source) => (
+                        <option key={source.value} value={source.value}>{source.title} · {source.detail}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <Input
+                        value={manualMaterialTitle}
+                        onChange={(event) => updateManualMaterialTitle(event.target.value)}
+                        placeholder="교재 또는 인강 이름"
+                      />
+                      <Input
+                        value={manualMaterialScope}
+                        onChange={(event) => updateManualMaterialScope(event.target.value)}
+                        placeholder="분량 예: p.32-39, 3강, 1~20번"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -1130,8 +1204,8 @@ function AcademyOperationsPanel() {
                 <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> 접근 권한</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm leading-6 text-muted-foreground">과제 없이 자료만 열람·자유풀이할 수 있게 할 때 사용합니다. 위에서 선택한 자료와 대상을 그대로 사용합니다.</p>
-                <Button type="button" variant="outline" onClick={grantSelectedArchiveAccess} disabled={!selectedLearningSourceId || !learningTargetCount}>
+                <p className="text-sm leading-6 text-muted-foreground">과제 없이 아카이브 자료만 열람·자유풀이할 수 있게 할 때 사용합니다. 직접 입력 숙제에는 적용되지 않습니다.</p>
+                <Button type="button" variant="outline" onClick={grantSelectedArchiveAccess} disabled={learningAssignmentSourceMode === "manual" || !selectedLearningSourceId || !learningTargetCount}>
                   <ShieldCheck className="h-4 w-4" />
                   접근 권한 부여
                 </Button>
@@ -1151,7 +1225,7 @@ function AcademyOperationsPanel() {
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-white">{assignment.title}</div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {assignment.content.snapshot.problem_count}문항 · {assignment.status}{assignment.due_at ? ` · 마감 ${compactDate(assignment.due_at)}` : ""}
+                          {learningAssignmentWorkloadLabel(assignment)} · {assignment.status}{assignment.due_at ? ` · 마감 ${compactDate(assignment.due_at)}` : ""}
                         </div>
                       </div>
                       <LineChart className="h-4 w-4 shrink-0 text-violet-200" />
