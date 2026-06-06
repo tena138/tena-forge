@@ -673,6 +673,7 @@ function AcademyOperationsPanel() {
     () => learningStudents.filter((student) => selectedStudentIds.includes(student.student_user_id)).map((student) => student.student_name),
     [learningStudents, selectedStudentIds]
   );
+  const showSeatOperationsSummary = operationsTab === "students";
 
   if (profile?.account_type === "student") {
     return (
@@ -833,27 +834,29 @@ function AcademyOperationsPanel() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[16px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.22),rgba(8,10,16,0.92)_42%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-violet-200">Academy Operations</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight">학생 좌석, 과제, 클래스 운영</h1>
+      {showSeatOperationsSummary ? (
+        <section className="rounded-[16px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.22),rgba(8,10,16,0.92)_42%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-violet-200">Academy Operations</p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight">학생 좌석, 과제, 클래스 운영</h1>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                className="h-10 min-w-[180px] rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white"
+                value={seatClassId}
+                onChange={(event) => setSeatClassId(event.target.value)}
+              >
+                <option value="">클래스 선택</option>
+                {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
+              </select>
+              <Button onClick={addSeats} disabled={!seatClassId}>
+                <Plus className="h-4 w-4" /> 클래스 키 추가
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              className="h-10 min-w-[180px] rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white"
-              value={seatClassId}
-              onChange={(event) => setSeatClassId(event.target.value)}
-            >
-              <option value="">클래스 선택</option>
-              {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
-            </select>
-            <Button onClick={addSeats} disabled={!seatClassId}>
-              <Plus className="h-4 w-4" /> 클래스 키 추가
-            </Button>
-          </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {(notice || error || newCodes.length > 0) && (
         <div className="rounded-[12px] border border-violet-300/20 bg-violet-400/[0.08] p-4 text-sm">
@@ -868,27 +871,29 @@ function AcademyOperationsPanel() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        <Card>
-          <CardHeader><CardTitle>현재 플랜</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{billing?.plan?.name || "Tutor"}</div>
-            <p className="mt-1 text-sm text-muted-foreground">예상 월 {money(billing?.estimated_monthly_bill)}원</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>포함 좌석</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{billing?.included_seats ?? 5}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>활성 좌석</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{seats.length}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>배정 좌석</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{assigned}</div></CardContent>
-        </Card>
-      </div>
+      {showSeatOperationsSummary ? (
+        <div className="grid gap-4 lg:grid-cols-4">
+          <Card>
+            <CardHeader><CardTitle>현재 플랜</CardTitle></CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{billing?.plan?.name || "Tutor"}</div>
+              <p className="mt-1 text-sm text-muted-foreground">예상 월 {money(billing?.estimated_monthly_bill)}원</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>포함 좌석</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{billing?.included_seats ?? 5}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>활성 좌석</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{seats.length}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>배정 좌석</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{assigned}</div></CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
         {[
