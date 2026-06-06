@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ArchiveBatchHistory } from "@/components/archive/archive-batch-history";
+import { ArchiveFolderExplorer } from "@/components/archive/archive-folder-explorer";
 import { ColorPicker } from "@/components/editor/color-picker";
-import { Batch, BatchStatus, SourceType } from "@/lib/api";
+import { ArchiveFolder, Batch, BatchStatus, createArchiveFolder, deleteArchiveFolder, listArchiveFolders, SourceType, updateArchiveFolder } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
 import { SUBJECT_ENGINES, subjectEngineLabel } from "@/lib/plan-pricing";
 import type { SubjectEngineCode } from "@/lib/plan-pricing";
 import { getRoles, getUsageSummary, UsageSummary } from "@/lib/saas";
+import { archiveFolderPathLabel, migrateCustomSubjectFolders } from "@/lib/archiveFolders";
 import {
   SubjectNode,
   buildSubjectTree,
@@ -958,6 +960,9 @@ export default function UploadPage() {
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [archiveFolders, setArchiveFolders] = useState<ArchiveFolder[]>([]);
+  const [currentArchiveFolderId, setCurrentArchiveFolderId] = useState<string | null>(null);
+  const [selectedArchiveFolderId, setSelectedArchiveFolderId] = useState<string | null>(null);
   const [batchAccentColor, setBatchAccentColor] = useState(() => defaultTagColor("new-batch", "batch"));
   const [batchColorTouched, setBatchColorTouched] = useState(false);
   const [customSubjectOptions, setCustomSubjectOptions] = useState<string[]>([]);
@@ -985,6 +990,34 @@ export default function UploadPage() {
   useEffect(() => {
     setSubjectTagColors(readTagColors(SUBJECT_TAG_COLORS_KEY));
     setCustomSubjectOptions(readStringList(CUSTOM_SUBJECTS_KEY));
+  }, []);
+
+  async function refreshArchiveFolders() {
+    const folders = await listArchiveFolders();
+    setArchiveFolders(folders);
+    return folders;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    listArchiveFolders()
+      .then(async (folders) => {
+        if (cancelled) return;
+        const migrated = await migrateCustomSubjectFolders(folders);
+        if (cancelled) return;
+        if (migrated.changed) {
+          const nextFolders = await listArchiveFolders();
+          if (!cancelled) setArchiveFolders(nextFolders);
+        } else {
+          setArchiveFolders(migrated.folders);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setArchiveFolders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1107,6 +1140,37 @@ export default function UploadPage() {
     });
   }
 
+  function selectArchiveFolder(folderId: string | null) {
+    setSelectedArchiveFolderId(folderId);
+    const label = archiveFolderPathLabel(folderId, archiveFolders);
+    const folderCandidates = folderId ? [label] : [];
+    setSelectedSubjects(folderCandidates);
+    const inferredEngine = subjectEngineForSubject(label);
+    if (inferredEngine) applyInferredSubjectEngine(inferredEngine);
+  }
+
+  async function createArchiveFolderInCurrent(payload: { name: string; parent_id: string | null; color: string }) {
+    const folder = await createArchiveFolder(payload);
+    await refreshArchiveFolders();
+    setCurrentArchiveFolderId(folder.id);
+  }
+
+  async function updateArchiveFolderInList(folderId: string, payload: { name?: string; parent_id?: string | null; color?: string | null; order?: number }) {
+    await updateArchiveFolder(folderId, payload);
+    await refreshArchiveFolders();
+  }
+
+  async function deleteArchiveFolderFromList(folderId: string) {
+    await deleteArchiveFolder(folderId);
+    const folders = await refreshArchiveFolders();
+    if (currentArchiveFolderId === folderId || !folders.some((folder) => folder.id === currentArchiveFolderId)) {
+      setCurrentArchiveFolderId(null);
+    }
+    if (selectedArchiveFolderId === folderId || !folders.some((folder) => folder.id === selectedArchiveFolderId)) {
+      selectArchiveFolder(null);
+    }
+  }
+
   function updateBatchName(value: string) {
     setBatchName(value);
     if (!batchColorTouched && value.trim()) setBatchAccentColor(defaultTagColor(value.trim(), "batch"));
@@ -1142,7 +1206,7 @@ export default function UploadPage() {
       setMessage("선택한 과목 엔진은 현재 플랜에서 잠겨 있습니다. 결제 화면에서 엔진을 추가해주세요.");
       return;
     }
-    if (!batchName || !problemPdf || !rightsConfirmed || !selectedSubjects.length) return;
+    if (!batchName || !problemPdf || !rightsConfirmed || !selectedArchiveFolderId) return;
     setSubmitting(true);
     setUploadPercent(0);
     setMessage("업로드 중입니다.");
@@ -1154,8 +1218,10 @@ export default function UploadPage() {
     form.append("rights_confirmed", String(rightsConfirmed));
     form.append("rights_note", rightsNote);
     form.append("accent_color", batchAccentColor);
-    form.append("subject_candidates", JSON.stringify(selectedSubjects));
+    const selectedFolderPath = archiveFolderPathLabel(selectedArchiveFolderId, archiveFolders);
+    form.append("subject_candidates", JSON.stringify(selectedFolderPath ? [selectedFolderPath] : selectedSubjects));
     form.append("unit_candidates", JSON.stringify([]));
+    form.append("archive_folder_id", selectedArchiveFolderId);
     form.append("subject_engine", subjectEngine);
     if (solutionPdf) form.append("solution_pdf", solutionPdf);
     let data: UploadResponse;
@@ -1194,7 +1260,6 @@ export default function UploadPage() {
   );
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const selectedEngineLocked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(subjectEngine);
-  const subjectTree = useMemo(() => buildSubjectTree(customSubjectOptions), [customSubjectOptions]);
 
   useEffect(() => {
     if (isAdmin || !usageSummary || enabledSubjectEngines.includes(subjectEngine)) return;
@@ -1218,7 +1283,7 @@ export default function UploadPage() {
   );
   const creditsAfterUpload = creditEstimate && creditsRemaining !== null ? Math.max(creditsRemaining - creditEstimate.credits, 0) : null;
   const creditEstimateExceedsRemaining = Boolean(creditEstimate && creditsRemaining !== null && creditEstimate.credits > creditsRemaining);
-  const canSubmit = Boolean(batchName && problemPdf && selectedSubjects.length && rightsConfirmed && !submitting && !selectedEngineLocked);
+  const canSubmit = Boolean(batchName && problemPdf && selectedArchiveFolderId && rightsConfirmed && !submitting && !selectedEngineLocked);
   const creditEstimatePanel = problemPdf ? (
     <div className="rounded-lg border border-violet-300/20 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),rgba(255,255,255,0.035)_52%,rgba(0,0,0,0.18))] p-4 shadow-[0_18px_52px_rgba(76,29,149,0.16)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1309,32 +1374,22 @@ export default function UploadPage() {
 
               <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
                 <div className="space-y-4">
-                  <div>
-                    <SubjectTreeSelector
-                      nodes={subjectTree}
-                      selectedSubjects={selectedSubjects}
-                      subjectTagColors={subjectTagColors}
-                      onToggleSubject={toggleSubject}
-                      onAddSubject={addCustomSubject}
-                      onRenameSubject={renameCustomSubject}
-                      onDeleteSubject={deleteCustomSubject}
+                  <div className="min-w-0">
+                    <ArchiveFolderExplorer
+                      folders={archiveFolders}
+                      batches={[]}
+                      currentFolderId={currentArchiveFolderId}
+                      selectedFolderId={selectedArchiveFolderId}
+                      mode="select"
+                      title="저장 폴더"
+                      kicker="Archive folders"
+                      showBatches={false}
+                      onOpenFolder={setCurrentArchiveFolderId}
+                      onSelectFolder={selectArchiveFolder}
+                      onCreateFolder={createArchiveFolderInCurrent}
+                      onUpdateFolder={updateArchiveFolderInList}
+                      onDeleteFolder={deleteArchiveFolderFromList}
                     />
-                    {selectedSubjects.length ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {selectedSubjects.map((subject) => {
-                          const color = tagColor(subject, subjectTagColors, "subject");
-                          return (
-                            <EditableTagChip
-                              key={subject}
-                              label={subjectDisplayLabel(subject)}
-                              color={color}
-                              onColorChange={(nextColor) => updateSubjectTagColor(subject, nextColor)}
-                              onRemove={() => toggleSubject(subject)}
-                            />
-                          );
-                        })}
-                      </div>
-                    ) : null}
                   </div>
 
                   <label className="block">

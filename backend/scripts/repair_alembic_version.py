@@ -10,7 +10,7 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0026_korean_passage_review"
+HEAD_REVISION = "0027_archive_folders"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -19,6 +19,7 @@ BATCH_REQUIRED_COLUMNS = {
     "rights_note",
     "subject_candidates",
     "unit_candidates",
+    "archive_folder_id",
     "processing_task",
     "subject_engine",
     "accent_color",
@@ -195,6 +196,7 @@ def _ensure_batch_columns(connection, inspector) -> bool:
         ("rights_note", "TEXT NULL"),
         ("subject_candidates", json_definition),
         ("unit_candidates", json_definition),
+        ("archive_folder_id", "UUID NULL" if connection.dialect.name == "postgresql" else "CHAR(36) NULL"),
         ("processing_task", "VARCHAR(30) NOT NULL DEFAULT 'full'"),
         ("subject_engine", "VARCHAR(30) NOT NULL DEFAULT 'math'"),
         ("accent_color", "VARCHAR(7) NULL"),
@@ -230,6 +232,9 @@ def _ensure_batch_columns(connection, inspector) -> bool:
         changed = True
     if "ix_batches_academy_id" not in _index_names(inspector, "batches"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_academy_id ON batches (academy_id)"))
+        changed = True
+    if "ix_batches_archive_folder_id" not in _index_names(inspector, "batches"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_archive_folder_id ON batches (archive_folder_id)"))
         changed = True
     if "ix_batches_processing_task" not in _index_names(inspector, "batches"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_batches_processing_task ON batches (processing_task)"))
@@ -427,6 +432,7 @@ def _schema_is_at_head(inspector) -> bool:
     required_tables = {
         "academies",
         "user_roles",
+        "archive_folders",
         "batches",
         "problems",
         "problem_sets",

@@ -58,6 +58,7 @@ export type Batch = {
   rights_note: string | null;
   subject_candidates?: string[];
   unit_candidates?: string[];
+  archive_folder_id?: string | null;
   subject_engine?: "math" | "korean" | "english";
   processing_task?: "full" | "solution_only";
   created_at: string;
@@ -80,6 +81,25 @@ export type Batch = {
     unit_name?: string | null;
     page_range?: string | null;
   }> | null;
+};
+
+export type ArchiveFolder = {
+  id: string;
+  owner_id: string;
+  academy_id?: string | null;
+  name: string;
+  parent_id?: string | null;
+  color?: string | null;
+  order: number;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type ArchiveFolderPayload = {
+  name?: string;
+  parent_id?: string | null;
+  color?: string | null;
+  order?: number | null;
 };
 
 export type KoreanReviewLinkedQuestion = {
@@ -389,6 +409,38 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (response.status === 204) return undefined as T;
   return response.data;
+}
+
+export async function listArchiveFolders() {
+  return api<ArchiveFolder[]>("/api/archive-folders");
+}
+
+export async function createArchiveFolder(payload: Required<Pick<ArchiveFolderPayload, "name">> & ArchiveFolderPayload) {
+  return api<ArchiveFolder>("/api/archive-folders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateArchiveFolder(id: string, payload: ArchiveFolderPayload) {
+  return api<ArchiveFolder>(`/api/archive-folders/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteArchiveFolder(id: string) {
+  return api<void>(`/api/archive-folders/${id}`, { method: "DELETE" });
+}
+
+export async function updateBatchArchiveFolder(batchId: string, archiveFolderId: string | null) {
+  return api<Batch>(`/api/batches/${batchId}/archive-folder`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ archive_folder_id: archiveFolderId }),
+  });
 }
 
 export async function getActiveDashboardAnnouncement() {

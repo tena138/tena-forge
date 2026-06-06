@@ -16,7 +16,7 @@ from sqlalchemy import inspect, select, text
 from database import Base, SessionLocal, engine, get_settings
 from limiter import limiter
 from models import Problem, ProblemSetItem
-from routers import academy_student_app, admin_saas, assets, auth, batches, creator_products, creators, dashboard_announcements, export, learning_workspace, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, student_management, template_hub, templates
+from routers import academy_student_app, admin_saas, archive_folders, assets, auth, batches, creator_products, creators, dashboard_announcements, export, learning_workspace, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, student_management, template_hub, templates
 from services.auth_security import decode_access_token, is_jti_blacklisted
 from services.batch_jobs import mark_stale_processing_batches
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
@@ -162,6 +162,7 @@ app.include_router(marketplace_products.router)
 app.include_router(admin_saas.router)
 app.include_router(legal_marketplace.router)
 app.include_router(dashboard_announcements.router)
+app.include_router(archive_folders.router)
 app.include_router(batches.router)
 app.include_router(problems.router)
 app.include_router(problem_sets.router)
@@ -241,6 +242,7 @@ def health_db():
             "plans",
             "subscriptions",
             "user_roles",
+            "archive_folders",
             "batches",
             "problems",
             "problem_sets",
@@ -345,6 +347,7 @@ def _ensure_sqlite_columns():
             "accent_color": "VARCHAR(7)",
             "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
             "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
+            "archive_folder_id": "CHAR(36)",
             "subject_engine": "VARCHAR(30) DEFAULT 'math' NOT NULL",
             "processing_task": "VARCHAR(30) DEFAULT 'full' NOT NULL",
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",

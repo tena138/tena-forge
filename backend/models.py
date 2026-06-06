@@ -249,6 +249,7 @@ class Batch(Base):
     accent_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     subject_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     unit_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    archive_folder_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("archive_folders.id", ondelete="SET NULL"), nullable=True, index=True)
     subject_engine: Mapped[str] = mapped_column(String(30), default="math", nullable=False, index=True)
     processing_task: Mapped[str] = mapped_column(String(30), default="full", nullable=False, index=True)
     owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
@@ -265,6 +266,25 @@ class Batch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     problems: Mapped[list["Problem"]] = relationship("Problem", back_populates="batch", cascade="all, delete-orphan")
+    archive_folder: Mapped["ArchiveFolder | None"] = relationship("ArchiveFolder", back_populates="batches")
+
+
+class ArchiveFolder(Base):
+    __tablename__ = "archive_folders"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[str] = mapped_column(String(64), default="local_user", nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("archive_folders.id", ondelete="SET NULL"), nullable=True, index=True)
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    parent: Mapped["ArchiveFolder | None"] = relationship("ArchiveFolder", remote_side=[id], back_populates="children")
+    children: Mapped[list["ArchiveFolder"]] = relationship("ArchiveFolder", back_populates="parent")
+    batches: Mapped[list[Batch]] = relationship("Batch", back_populates="archive_folder")
 
 
 class KoreanExtractionDocument(Base):

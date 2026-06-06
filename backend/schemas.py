@@ -229,6 +229,7 @@ class BatchRead(BaseModel):
     accent_color: str
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
+    archive_folder_id: UUID | None = None
     subject_engine: str = "math"
     processing_task: str = "full"
     created_at: datetime
@@ -287,6 +288,38 @@ class BatchRead(BaseModel):
 class BatchUploadResponse(BaseModel):
     batch_id: UUID
     status: BatchStatus
+
+
+class ArchiveFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    parent_id: UUID | None = None
+    color: str | None = None
+    order: int | None = None
+
+
+class ArchiveFolderUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    parent_id: UUID | None = None
+    color: str | None = None
+    order: int | None = None
+
+
+class ArchiveFolderRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    owner_id: str
+    academy_id: str | None = None
+    name: str
+    parent_id: UUID | None = None
+    color: str | None = None
+    order: int = 0
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class BatchArchiveFolderUpdate(BaseModel):
+    archive_folder_id: UUID | None = None
 
 
 class BatchStatusResponse(BaseModel):

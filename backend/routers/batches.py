@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db, get_settings
 from limiter import limiter
-from models import Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
+from models import ArchiveFolder, Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
 from schemas import (
+    BatchArchiveFolderUpdate,
     BatchRead,
     BatchStatusResponse,
     BatchUploadResponse,
@@ -197,6 +198,7 @@ def _batch_read(
             "accent_color": normalize_batch_color(batch.accent_color) or batch_color_for_seed(batch.id or batch.name),
             "subject_candidates": batch.subject_candidates,
             "unit_candidates": batch.unit_candidates,
+            "archive_folder_id": batch.archive_folder_id,
             "subject_engine": batch.subject_engine or "math",
             "processing_task": batch.processing_task or "full",
             "created_at": batch.created_at,
@@ -223,6 +225,15 @@ def _batch_status_payload(batch: Batch) -> dict:
     }
 
 
+def _validate_archive_folder(db: Session, owner_id: str, folder_id: UUID | None) -> UUID | None:
+    if not folder_id:
+        return None
+    folder = db.scalar(select(ArchiveFolder).where(ArchiveFolder.id == folder_id, ArchiveFolder.owner_id == owner_id))
+    if not folder:
+        raise HTTPException(status_code=404, detail="아카이브 폴더를 찾을 수 없습니다.")
+    return folder.id
+
+
 @router.post("/upload", response_model=BatchUploadResponse)
 def upload_batch(
     request: Request,
@@ -236,6 +247,7 @@ def upload_batch(
     accent_color: str | None = Form(default=None),
     subject_candidates: str | None = Form(default=None),
     unit_candidates: str | None = Form(default=None),
+    archive_folder_id: UUID | None = Form(default=None),
     subject_engine: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
@@ -249,6 +261,7 @@ def upload_batch(
         raise HTTPException(status_code=400, detail="자료 업로드 및 아카이빙 권리 확인이 필요합니다.")
 
     owner_id = current_owner_id(request)
+    validated_archive_folder_id = _validate_archive_folder(db, owner_id, archive_folder_id)
     parsed_subject_candidates = _parse_candidate_list(subject_candidates)
     if not parsed_subject_candidates:
         parsed_subject_candidates = infer_subject_candidates_from_text(problem_pdf.filename, batch_name)
@@ -294,6 +307,7 @@ def upload_batch(
         accent_color=normalize_batch_color(accent_color) or batch_color_for_seed(batch_name),
         subject_candidates=parsed_subject_candidates,
         unit_candidates=_parse_candidate_list(unit_candidates, max_items=80),
+        archive_folder_id=validated_archive_folder_id,
         subject_engine=engine,
         processing_task="full",
         owner_id=owner_id,
@@ -388,6 +402,18 @@ def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    return _batch_read(db, batch)
+
+
+@router.patch("/{batch_id}/archive-folder", response_model=BatchRead)
+def update_batch_archive_folder(batch_id: UUID, payload: BatchArchiveFolderUpdate, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    batch.archive_folder_id = _validate_archive_folder(db, owner_id, payload.archive_folder_id)
+    db.commit()
+    db.refresh(batch)
     return _batch_read(db, batch)
 
 
