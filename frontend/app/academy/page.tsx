@@ -85,6 +85,10 @@ type ProblemFacets = { subjects: string[] };
 type SubjectCount = { subject: string; count: number };
 type AcademyOperationsTab = "students" | "assignments";
 
+function academyOperationsTabFromQuery(panel: string | null, tab: string | null): AcademyOperationsTab {
+  return panel === "assignments" || tab === "assignments" ? "assignments" : "students";
+}
+
 function money(value?: number) {
   return new Intl.NumberFormat("ko-KR").format(value || 0);
 }
@@ -575,6 +579,7 @@ function AcademyConsoleHome() {
 
 function AcademyOperationsPanel() {
   const searchParams = useSearchParams();
+  const queryOperationsTab = academyOperationsTabFromQuery(searchParams.get("panel"), searchParams.get("tab"));
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
   const [billing, setBilling] = useState<AcademyBilling | null>(null);
   const [seats, setSeats] = useState<AcademySeat[]>([]);
@@ -586,7 +591,7 @@ function AcademyOperationsPanel() {
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignment[]>([]);
   const [learningReport, setLearningReport] = useState<LearningAssignmentReport | null>(null);
   const [newCodes, setNewCodes] = useState<string[]>([]);
-  const [operationsTab, setOperationsTab] = useState<AcademyOperationsTab>("students");
+  const [operationsTab, setOperationsTab] = useState<AcademyOperationsTab>(queryOperationsTab);
   const [seatClassId, setSeatClassId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -645,7 +650,12 @@ function AcademyOperationsPanel() {
     const stored = readStoredAuthProfile<AcademyProfile>();
     setProfile(stored);
     if (stored?.id) load(stored.id).catch(() => setError("학원 운영 정보를 불러오지 못했습니다."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Initial academy load runs once; mutations call load explicitly.
   }, []);
+
+  useEffect(() => {
+    setOperationsTab(queryOperationsTab);
+  }, [queryOperationsTab]);
 
   const assigned = useMemo(() => seats.filter((seat) => seat.assigned).length, [seats]);
   const assignableBatches = useMemo(() => batches.filter((batch) => batch.status === "done" && batch.problem_count > 0), [batches]);
@@ -1597,7 +1607,7 @@ function AcademySchedulePanel() {
 function AcademyPageContent() {
   const searchParams = useSearchParams();
   const panel = searchParams.get("panel");
-  if (panel === "seats" || panel === "classes") return <AcademyOperationsPanel />;
+  if (panel === "seats" || panel === "classes" || panel === "assignments" || searchParams.get("tab") === "assignments") return <AcademyOperationsPanel />;
   if (panel === "operations") return <AcademySchedulePanel />;
   return <AcademyConsoleHome />;
 }

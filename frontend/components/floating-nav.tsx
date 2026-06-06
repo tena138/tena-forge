@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
+  BookOpenCheck,
   BookOpen,
   CalendarDays,
   ClipboardCheck,
@@ -63,6 +64,7 @@ const sections = [
     activeIcon: "text-sky-200 group-hover:text-sky-200",
     items: [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
+      { href: "/academy?panel=assignments", label: "과제", icon: BookOpenCheck },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
       { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
     ],
@@ -129,7 +131,7 @@ function isActive(pathname: string, href: string, searchParams?: URLSearchParams
     return pathname === hrefPath && Array.from(expected.entries()).every(([key, value]) => searchParams?.get(key) === value);
   }
   if (pathname !== hrefPath) return false;
-  if (hrefPath === "/academy") return !searchParams?.get("panel");
+  if (hrefPath === "/academy") return !searchParams?.get("panel") && !searchParams?.get("tab");
   return pathname === hrefPath;
 }
 
