@@ -11,16 +11,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
-  KeyRound,
   LineChart,
   PackageCheck,
   Plus,
-  RefreshCcw,
   ScanText,
   ShieldCheck,
   Trash2,
-  UserMinus,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,21 +45,16 @@ import { subjectEngineLabel } from "@/lib/plan-pricing";
 import {
   AcademyBilling,
   AcademyClass,
-  AcademySeat,
   AcademyLearningStudent,
   LearningAssignment,
   LearningAssignmentReport,
   createLearningAccessGrant,
   createLearningAssignment,
   getAcademyBilling,
-  issueLearningStudentKeys,
   listAcademyClasses,
   listAcademyLearningAssignments,
   listAcademyLearningStudents,
-  listAcademySeats,
   readLearningAssignmentReport,
-  releaseAcademySeat,
-  rotateAcademySeatCode,
 } from "@/lib/academyStudent";
 import {
   ClassCard,
@@ -78,12 +69,7 @@ type ProblemPage = { items: unknown[]; total: number; page: number; limit: numbe
 type ProblemStats = { total: number; needs_review: number; tagged: number; untagged: number };
 type ProblemFacets = { subjects: string[] };
 type SubjectCount = { subject: string; count: number };
-type AcademyOperationsTab = "students" | "assignments";
 type LearningAssignmentSourceMode = "archive" | "manual";
-
-function academyOperationsTabFromQuery(panel: string | null, tab: string | null): AcademyOperationsTab {
-  return panel === "assignments" || tab === "assignments" ? "assignments" : "students";
-}
 
 function money(value?: number) {
   return new Intl.NumberFormat("ko-KR").format(value || 0);
@@ -581,19 +567,13 @@ function AcademyConsoleHome() {
 
 function AcademyOperationsPanel() {
   const searchParams = useSearchParams();
-  const queryOperationsTab = academyOperationsTabFromQuery(searchParams.get("panel"), searchParams.get("tab"));
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
-  const [billing, setBilling] = useState<AcademyBilling | null>(null);
-  const [seats, setSeats] = useState<AcademySeat[]>([]);
   const [classes, setClasses] = useState<AcademyClass[]>([]);
   const [problemSets, setProblemSets] = useState<ProblemSetListItem[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [learningStudents, setLearningStudents] = useState<AcademyLearningStudent[]>([]);
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignment[]>([]);
   const [learningReport, setLearningReport] = useState<LearningAssignmentReport | null>(null);
-  const [newCodes, setNewCodes] = useState<string[]>([]);
-  const [operationsTab, setOperationsTab] = useState<AcademyOperationsTab>(queryOperationsTab);
-  const [seatClassId, setSeatClassId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
@@ -617,24 +597,18 @@ function AcademyOperationsPanel() {
 
   async function load(id = academyId) {
     if (!id) return;
-    const [billingResult, seatResult, classResult, setResult, batchResult, studentResult, learningAssignmentResult] = await Promise.allSettled([
-      getAcademyBilling(id),
-      listAcademySeats(id),
+    const [classResult, setResult, batchResult, studentResult, learningAssignmentResult] = await Promise.allSettled([
       listAcademyClasses(id),
       api<ProblemSetListItem[]>("/api/problem-sets"),
       api<Batch[]>("/api/batches"),
       listAcademyLearningStudents(id),
       listAcademyLearningAssignments(id),
     ]);
-    const billingData = billingResult.status === "fulfilled" ? billingResult.value : null;
-    const seatData = seatResult.status === "fulfilled" ? seatResult.value : [];
     const classData = classResult.status === "fulfilled" ? classResult.value : [];
     const setData = setResult.status === "fulfilled" ? setResult.value : [];
     const batchData = batchResult.status === "fulfilled" ? batchResult.value : [];
     const studentData = studentResult.status === "fulfilled" ? studentResult.value : [];
     const learningAssignmentData = learningAssignmentResult.status === "fulfilled" ? learningAssignmentResult.value : [];
-    setBilling(billingData);
-    setSeats(seatData);
     setClasses(classData);
     setProblemSets(setData);
     setBatches(batchData);
@@ -652,7 +626,6 @@ function AcademyOperationsPanel() {
       if (nextBatch) setSelectedBatchId(nextBatch.id);
       if (learningAssignmentSourceMode === "archive" && nextBatch && selectedLearningSourceType === "archive" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(nextBatch.name);
     }
-    if (!seatClassId && classData[0]) setSeatClassId(classData[0].id);
     setError((current) => current === "학원 운영 정보를 불러오지 못했습니다." ? "" : current);
   }
 
@@ -663,11 +636,6 @@ function AcademyOperationsPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Initial academy load runs once; mutations call load explicitly.
   }, []);
 
-  useEffect(() => {
-    setOperationsTab(queryOperationsTab);
-  }, [queryOperationsTab]);
-
-  const assigned = useMemo(() => seats.filter((seat) => seat.assigned).length, [seats]);
   const assignableBatches = useMemo(() => batches.filter((batch) => batch.status === "done" && batch.problem_count > 0), [batches]);
   const archiveAssignmentSources = useMemo(
     () => [
@@ -717,8 +685,6 @@ function AcademyOperationsPanel() {
     );
     return [...selectedGroupStudents, ...selectedOtherStudents];
   }, [learningStudents, selectedGroupIds, selectedStudentIds]);
-  const showSeatOperationsSummary = operationsTab === "students";
-
   if (profile?.account_type === "student") {
     return (
       <div className="mx-auto max-w-xl rounded-[14px] border border-sky-300/20 bg-sky-300/[0.045] p-6 text-center">
@@ -728,31 +694,6 @@ function AcademyOperationsPanel() {
         </a>
       </div>
     );
-  }
-
-  async function addSeats() {
-    if (!academyId) return;
-    setError("");
-    const created = await issueLearningStudentKeys(academyId, { count: 1, class_id: seatClassId || null });
-    setNewCodes(created.keys.map((seat) => seat.key_code || "").filter(Boolean));
-    setNotice("좌석을 만들었습니다. 초대 코드는 지금 한 번만 전체 표시됩니다.");
-    await load();
-  }
-
-  async function rotateCode(seat: AcademySeat) {
-    if (!academyId) return;
-    const updated = await rotateAcademySeatCode(academyId, seat.id);
-    setNewCodes([updated.invite_code || ""].filter(Boolean));
-    setNotice("초대 코드를 재발급했습니다. 새 코드는 지금 한 번만 복사할 수 있습니다.");
-    await load();
-  }
-
-  async function releaseSeat(seat: AcademySeat) {
-    if (!academyId || !window.confirm("이 학생의 학원 접근 권한을 종료하고 좌석을 재사용 가능하게 만들까요?")) return;
-    const updated = await releaseAcademySeat(academyId, seat.id, "released_by_academy");
-    setNewCodes([updated.invite_code || ""].filter(Boolean));
-    setNotice("좌석을 해제했고 기본 보안 정책에 따라 초대 코드를 회전했습니다.");
-    await load();
   }
 
   function selectArchiveLearningSource(value: string) {
@@ -868,116 +809,14 @@ function AcademyOperationsPanel() {
 
   return (
     <div className="space-y-6">
-      {showSeatOperationsSummary ? (
-        <section className="rounded-[16px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.22),rgba(8,10,16,0.92)_42%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-violet-200">Academy Operations</p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight">학생 좌석, 과제, 클래스 운영</h1>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <select
-                className="h-10 min-w-[180px] rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white"
-                value={seatClassId}
-                onChange={(event) => setSeatClassId(event.target.value)}
-              >
-                <option value="">클래스 선택</option>
-                {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
-              </select>
-              <Button onClick={addSeats} disabled={!seatClassId}>
-                <Plus className="h-4 w-4" /> 클래스 키 추가
-              </Button>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {(notice || error || newCodes.length > 0) && (
+      {(notice || error) && (
         <div className="rounded-[12px] border border-violet-300/20 bg-violet-400/[0.08] p-4 text-sm">
           {notice && <div className="text-violet-100">{notice}</div>}
           {error && <div className="text-red-300">{error}</div>}
-          {newCodes.map((code) => (
-            <div key={code} className="mt-2 flex items-center justify-between rounded-[8px] border border-white/10 bg-black/35 px-3 py-2 font-mono">
-              {code}
-              <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(code)}>복사</Button>
-            </div>
-          ))}
         </div>
       )}
 
-      {showSeatOperationsSummary ? (
-        <div className="grid gap-4 lg:grid-cols-4">
-          <Card>
-            <CardHeader><CardTitle>현재 플랜</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{billing?.plan?.name || "Tutor"}</div>
-              <p className="mt-1 text-sm text-muted-foreground">예상 월 {money(billing?.estimated_monthly_bill)}원</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>포함 좌석</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{billing?.included_seats ?? 5}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>활성 좌석</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{seats.length}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>배정 좌석</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{assigned}</div></CardContent>
-          </Card>
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
-        {[
-          { id: "students", label: "학생", icon: Users },
-          { id: "assignments", label: "과제", icon: BookOpenCheck },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const active = operationsTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setOperationsTab(tab.id as AcademyOperationsTab)}
-              className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-bold transition ${
-                active ? "bg-violet-500/85 text-white shadow-lg shadow-violet-950/25" : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {operationsTab === "students" ? (
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> 좌석 / 키 관리</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {seats.map((seat) => (
-              <div key={seat.id} className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[1fr_auto] md:items-center">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{seat.display_name || seat.seat_number}</span>
-                    <Badge variant={seat.assigned ? "default" : "secondary"}>{seat.assigned ? "배정됨" : "미배정"}</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    코드 미리보기: ****{seat.invite_code_preview} · 학생: {seat.assigned_student_user_id || "-"}
-                  </p>
-                </div>
-                <p className="text-xs text-violet-200">클래스: {seat.class_name || "-"}</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => rotateCode(seat)}><RefreshCcw className="h-4 w-4" /> 코드 회전</Button>
-                  <Button variant="outline" size="sm" disabled={!seat.assigned} onClick={() => releaseSeat(seat)}><UserMinus className="h-4 w-4" /> 해제</Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="space-y-5">
             <Card>
               <CardHeader>
@@ -1175,7 +1014,6 @@ function AcademyOperationsPanel() {
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }
