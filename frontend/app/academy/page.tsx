@@ -613,7 +613,7 @@ function AcademyOperationsPanel() {
 
   async function load(id = academyId) {
     if (!id) return;
-    const [billingData, seatData, classData, assignmentData, setData, batchData, studentData, learningAssignmentData] = await Promise.all([
+    const [billingResult, seatResult, classResult, assignmentResult, setResult, batchResult, studentResult, learningAssignmentResult] = await Promise.allSettled([
       getAcademyBilling(id),
       listAcademySeats(id),
       listAcademyClasses(id),
@@ -623,6 +623,14 @@ function AcademyOperationsPanel() {
       listAcademyLearningStudents(id),
       listAcademyLearningAssignments(id),
     ]);
+    const billingData = billingResult.status === "fulfilled" ? billingResult.value : null;
+    const seatData = seatResult.status === "fulfilled" ? seatResult.value : [];
+    const classData = classResult.status === "fulfilled" ? classResult.value : [];
+    const assignmentData = assignmentResult.status === "fulfilled" ? assignmentResult.value : [];
+    const setData = setResult.status === "fulfilled" ? setResult.value : [];
+    const batchData = batchResult.status === "fulfilled" ? batchResult.value : [];
+    const studentData = studentResult.status === "fulfilled" ? studentResult.value : [];
+    const learningAssignmentData = learningAssignmentResult.status === "fulfilled" ? learningAssignmentResult.value : [];
     setBilling(billingData);
     setSeats(seatData);
     setClasses(classData);
@@ -644,12 +652,13 @@ function AcademyOperationsPanel() {
       if (nextBatch && selectedLearningSourceType === "archive" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(nextBatch.name);
     }
     if (!seatClassId && classData[0]) setSeatClassId(classData[0].id);
+    setError((current) => current === "학원 운영 정보를 불러오지 못했습니다." ? "" : current);
   }
 
   useEffect(() => {
     const stored = readStoredAuthProfile<AcademyProfile>();
     setProfile(stored);
-    if (stored?.id) load(stored.id).catch(() => setError("학원 운영 정보를 불러오지 못했습니다."));
+    if (stored?.id) void load(stored.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Initial academy load runs once; mutations call load explicitly.
   }, []);
 
