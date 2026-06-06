@@ -83,6 +83,7 @@ type ProblemPage = { items: unknown[]; total: number; page: number; limit: numbe
 type ProblemStats = { total: number; needs_review: number; tagged: number; untagged: number };
 type ProblemFacets = { subjects: string[] };
 type SubjectCount = { subject: string; count: number };
+type AcademyOperationsTab = "students" | "assignments";
 
 function money(value?: number) {
   return new Intl.NumberFormat("ko-KR").format(value || 0);
@@ -90,6 +91,14 @@ function money(value?: number) {
 
 function count(value: number) {
   return new Intl.NumberFormat("ko-KR").format(value);
+}
+
+function toggleId(list: string[], id: string) {
+  return list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
+}
+
+function percentLabel(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
 
 function compactDate(value: string) {
@@ -577,12 +586,14 @@ function AcademyOperationsPanel() {
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignment[]>([]);
   const [learningReport, setLearningReport] = useState<LearningAssignmentReport | null>(null);
   const [newCodes, setNewCodes] = useState<string[]>([]);
+  const [operationsTab, setOperationsTab] = useState<AcademyOperationsTab>("students");
   const [seatClassId, setSeatClassId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [className, setClassName] = useState("");
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
+  const [learningAssignmentDueAt, setLearningAssignmentDueAt] = useState("");
   const [selectedLearningSourceType, setSelectedLearningSourceType] = useState<"problemSet" | "archive">(
     searchParams.get("source_type") === "archive" || searchParams.get("source_type") === "batch" ? "archive" : "problemSet"
   );
@@ -590,8 +601,8 @@ function AcademyOperationsPanel() {
   const [selectedBatchId, setSelectedBatchId] = useState(
     searchParams.get("source_type") === "archive" || searchParams.get("source_type") === "batch" ? searchParams.get("source_id") || "" : ""
   );
-  const [selectedGroupId, setSelectedGroupId] = useState("");
-  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
   const academyId = profile?.id || "";
 
@@ -615,18 +626,19 @@ function AcademyOperationsPanel() {
     setBatches(batchData);
     setLearningStudents(studentData);
     setLearningAssignments(learningAssignmentData);
-    if (!selectedProblemSetId && setData[0]) setSelectedProblemSetId(setData[0].id);
+    if (!selectedProblemSetId && setData[0]) {
+      setSelectedProblemSetId(setData[0].id);
+      if (selectedLearningSourceType === "problemSet" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(setData[0].name);
+    }
     if (!selectedBatchId) {
       const requestedSourceId = searchParams.get("source_id");
       const requestedBatch = requestedSourceId ? batchData.find((batch) => batch.id === requestedSourceId) : null;
       const fallbackBatch = batchData.find((batch) => batch.status === "done" && batch.problem_count > 0);
       const nextBatch = requestedBatch || fallbackBatch;
       if (nextBatch) setSelectedBatchId(nextBatch.id);
-      if (requestedBatch && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(requestedBatch.name);
+      if (nextBatch && selectedLearningSourceType === "archive" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(nextBatch.name);
     }
-    if (!selectedGroupId && classData[0]) setSelectedGroupId(classData[0].id);
     if (!seatClassId && classData[0]) setSeatClassId(classData[0].id);
-    if (!selectedStudentId && studentData[0]) setSelectedStudentId(studentData[0].student_user_id);
   }
 
   useEffect(() => {
@@ -640,6 +652,17 @@ function AcademyOperationsPanel() {
   const selectedProblemSet = useMemo(() => problemSets.find((set) => set.id === selectedProblemSetId) || null, [problemSets, selectedProblemSetId]);
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
   const selectedLearningSourceId = selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId;
+  const selectedLearningSourceTitle = selectedLearningSourceType === "archive" ? selectedBatch?.name : selectedProblemSet?.name;
+  const learningTargetCount = selectedGroupIds.length + selectedStudentIds.length;
+  const canPublishLearningAssignment = Boolean(academyId && learningAssignmentTitle.trim() && selectedLearningSourceId && learningTargetCount > 0);
+  const selectedGroupNames = useMemo(
+    () => classes.filter((group) => selectedGroupIds.includes(group.id)).map((group) => group.name),
+    [classes, selectedGroupIds]
+  );
+  const selectedStudentNames = useMemo(
+    () => learningStudents.filter((student) => selectedStudentIds.includes(student.student_user_id)).map((student) => student.student_name),
+    [learningStudents, selectedStudentIds]
+  );
 
   if (profile?.account_type === "student") {
     return (
@@ -701,12 +724,47 @@ function AcademyOperationsPanel() {
     await load();
   }
 
+  function selectLearningSourceType(nextType: "problemSet" | "archive") {
+    setSelectedLearningSourceType(nextType);
+    const nextTitle = nextType === "archive" ? selectedBatch?.name || assignableBatches[0]?.name : selectedProblemSet?.name || problemSets[0]?.name;
+    if (!learningAssignmentTitle.trim() && nextTitle) setLearningAssignmentTitle(nextTitle);
+  }
+
+  function selectLearningSource(sourceId: string) {
+    if (selectedLearningSourceType === "archive") {
+      setSelectedBatchId(sourceId);
+      const batch = batches.find((item) => item.id === sourceId);
+      if (!learningAssignmentTitle.trim() && batch) setLearningAssignmentTitle(batch.name);
+    } else {
+      setSelectedProblemSetId(sourceId);
+      const set = problemSets.find((item) => item.id === sourceId);
+      if (!learningAssignmentTitle.trim() && set) setLearningAssignmentTitle(set.name);
+    }
+  }
+
+  function assignmentDueAtIso() {
+    if (!learningAssignmentDueAt) return null;
+    return new Date(`${learningAssignmentDueAt}T23:59:00+09:00`).toISOString();
+  }
+
+  function startStudentAssignment(student: AcademyLearningStudent) {
+    setOperationsTab("assignments");
+    setSelectedGroupIds([]);
+    setSelectedStudentIds([student.student_user_id]);
+    if (!learningAssignmentTitle.trim() && selectedLearningSourceTitle) setLearningAssignmentTitle(selectedLearningSourceTitle);
+  }
+
   async function submitLearningAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError("");
     if (!academyId || !learningAssignmentTitle.trim()) return;
     const sourceId = selectedLearningSourceId || (selectedLearningSourceType === "archive" ? assignableBatches[0]?.id : problemSets[0]?.id);
     if (!sourceId) {
       setError("먼저 배포할 문항 세트 또는 배치를 선택해주세요.");
+      return;
+    }
+    if (!learningTargetCount) {
+      setError("과제를 받을 반 또는 학생을 선택해주세요.");
       return;
     }
     const created = await createLearningAssignment(academyId, {
@@ -714,11 +772,13 @@ function AcademyOperationsPanel() {
       description: selectedLearningSourceType === "archive" ? "배치 교재를 기반으로 생성한 학생 풀이 과제입니다." : "아카이브 문제 세트를 기반으로 생성한 학생 풀이 과제입니다.",
       source_type: selectedLearningSourceType,
       source_id: sourceId,
-      group_ids: selectedGroupId ? [selectedGroupId] : [],
-      student_ids: selectedGroupId ? [] : selectedStudentId ? [selectedStudentId] : [],
+      group_ids: selectedGroupIds,
+      student_ids: selectedStudentIds,
+      due_at: assignmentDueAtIso(),
       status: "published",
     });
     setLearningAssignmentTitle("");
+    setLearningAssignmentDueAt("");
     setNotice("학생 풀이 과제를 배포했습니다. 학생 Today 화면에 표시됩니다.");
     setLearningReport(await readLearningAssignmentReport(academyId, created.id));
     await load();
@@ -726,21 +786,28 @@ function AcademyOperationsPanel() {
 
   async function grantSelectedArchiveAccess() {
     if (!academyId) return;
+    setError("");
     const sourceId = selectedLearningSourceId || (selectedLearningSourceType === "archive" ? assignableBatches[0]?.id : problemSets[0]?.id);
     if (!sourceId) {
-      setError("권한을 부여할 문항 세트 또는 배치가 없습니다.");
+      setError("권한을 부여할 문항 세트 또는 배치를 선택해주세요.");
       return;
     }
-    await createLearningAccessGrant(academyId, {
+    if (!learningTargetCount) {
+      setError("접근 권한을 받을 반 또는 학생을 선택해주세요.");
+      return;
+    }
+    const commonPayload = {
       source_type: selectedLearningSourceType,
       source_id: sourceId,
-      group_id: selectedGroupId || null,
-      student_id: selectedGroupId ? null : selectedStudentId || null,
       can_solve_freely: true,
       can_save_to_my_archive: true,
       can_see_answer_immediately: false,
       can_see_solution: false,
-    });
+    };
+    await Promise.all([
+      ...selectedGroupIds.map((groupId) => createLearningAccessGrant(academyId, { ...commonPayload, group_id: groupId, student_id: null })),
+      ...selectedStudentIds.map((studentId) => createLearningAccessGrant(academyId, { ...commonPayload, group_id: null, student_id: studentId })),
+    ]);
     setNotice("아카이브 접근 권한을 부여했습니다. 학생 Archive 화면에서 확인할 수 있습니다.");
     await load();
   }
@@ -813,170 +880,282 @@ function AcademyOperationsPanel() {
         </Card>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> 좌석 / 키 관리</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {seats.map((seat) => (
-              <div key={seat.id} className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[1fr_auto] md:items-center">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{seat.display_name || seat.seat_number}</span>
-                    <Badge variant={seat.assigned ? "default" : "secondary"}>{seat.assigned ? "배정됨" : "미배정"}</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    코드 미리보기: ****{seat.invite_code_preview} · 학생: {seat.assigned_student_user_id || "-"}
-                  </p>
-                </div>
-                <p className="text-xs text-violet-200">클래스: {seat.class_name || "-"}</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => rotateCode(seat)}><RefreshCcw className="h-4 w-4" /> 코드 회전</Button>
-                  <Button variant="outline" size="sm" disabled={!seat.assigned} onClick={() => releaseSeat(seat)}><UserMinus className="h-4 w-4" /> 해제</Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Landmark className="h-5 w-5" /> 클래스 / 과제 빠른 생성</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <form className="flex gap-2" onSubmit={submitClass}>
-              <Input value={className} onChange={(event) => setClassName(event.target.value)} placeholder="예: 고1 내신반" />
-              <Button type="submit">생성</Button>
-            </form>
-            <div className="space-y-2">
-              {classes.map((row) => <div key={row.id} className="rounded-[8px] border border-white/10 px-3 py-2 text-sm">{row.name}</div>)}
-            </div>
-            <form className="flex gap-2" onSubmit={submitAssignment}>
-              <Input value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder="과제 제목" />
-              <Button type="submit">과제</Button>
-            </form>
-            <div className="space-y-2">
-              {assignments.slice(0, 5).map((row) => <div key={row.id} className="rounded-[8px] border border-white/10 px-3 py-2 text-sm">{row.title}</div>)}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
+        {[
+          { id: "students", label: "학생", icon: Users },
+          { id: "assignments", label: "과제", icon: BookOpenCheck },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const active = operationsTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setOperationsTab(tab.id as AcademyOperationsTab)}
+              className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-bold transition ${
+                active ? "bg-violet-500/85 text-white shadow-lg shadow-violet-950/25" : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> 학생 관리</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {learningStudents.length === 0 && <p className="text-sm text-muted-foreground">아직 연결된 학생이 없습니다. 학생 키를 발급하고 학생 계정에서 등록하게 하세요.</p>}
-            {learningStudents.map((student) => (
-              <div key={student.id} className="rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-white">{student.student_name}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {student.groups.map((group) => group.name).join(", ") || "그룹 없음"} · 오답 {student.unresolved_wrong_answer_count}
+      {operationsTab === "students" ? (
+        <>
+          <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> 좌석 / 키 관리</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {seats.map((seat) => (
+                  <div key={seat.id} className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[1fr_auto] md:items-center">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">{seat.display_name || seat.seat_number}</span>
+                        <Badge variant={seat.assigned ? "default" : "secondary"}>{seat.assigned ? "배정됨" : "미배정"}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        코드 미리보기: ****{seat.invite_code_preview} · 학생: {seat.assigned_student_user_id || "-"}
+                      </p>
+                    </div>
+                    <p className="text-xs text-violet-200">클래스: {seat.class_name || "-"}</p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => rotateCode(seat)}><RefreshCcw className="h-4 w-4" /> 코드 회전</Button>
+                      <Button variant="outline" size="sm" disabled={!seat.assigned} onClick={() => releaseSeat(seat)}><UserMinus className="h-4 w-4" /> 해제</Button>
                     </div>
                   </div>
-                  <Badge variant={student.key_status === "active" ? "default" : "secondary"}>{student.status}</Badge>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Landmark className="h-5 w-5" /> 클래스 / 기본 과제 빠른 생성</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <form className="flex gap-2" onSubmit={submitClass}>
+                  <Input value={className} onChange={(event) => setClassName(event.target.value)} placeholder="예: 고1 내신반" />
+                  <Button type="submit">생성</Button>
+                </form>
+                <div className="space-y-2">
+                  {classes.map((row) => <div key={row.id} className="rounded-[8px] border border-white/10 px-3 py-2 text-sm">{row.name}</div>)}
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
-                  <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">제출 {student.recent_assignment_completion}</div>
-                  <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">정답률 {student.recent_correct_rate === null ? "-" : `${Math.round(student.recent_correct_rate * 100)}%`}</div>
+                <form className="flex gap-2" onSubmit={submitAssignment}>
+                  <Input value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder="기본 과제 제목" />
+                  <Button type="submit">과제</Button>
+                </form>
+                <div className="space-y-2">
+                  {assignments.slice(0, 5).map((row) => <div key={row.id} className="rounded-[8px] border border-white/10 px-3 py-2 text-sm">{row.title}</div>)}
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><BookOpenCheck className="h-5 w-5" /> 학습 과제 / 접근 권한</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2 md:grid-cols-4">
-              <select
-                className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
-                value={selectedLearningSourceType}
-                onChange={(event) => {
-                  const nextType = event.target.value === "archive" ? "archive" : "problemSet";
-                  setSelectedLearningSourceType(nextType);
-                  const nextTitle = nextType === "archive" ? selectedBatch?.name || assignableBatches[0]?.name : selectedProblemSet?.name || problemSets[0]?.name;
-                  if (!learningAssignmentTitle.trim() && nextTitle) setLearningAssignmentTitle(nextTitle);
-                }}
-              >
-                <option value="problemSet">문항 세트</option>
-                <option value="archive">배치 / 교재</option>
-              </select>
-              <select
-                className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
-                value={selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId}
-                onChange={(event) => {
-                  if (selectedLearningSourceType === "archive") {
-                    setSelectedBatchId(event.target.value);
-                    const batch = batches.find((item) => item.id === event.target.value);
-                    if (!learningAssignmentTitle.trim() && batch) setLearningAssignmentTitle(batch.name);
-                  } else {
-                    setSelectedProblemSetId(event.target.value);
-                    const set = problemSets.find((item) => item.id === event.target.value);
-                    if (!learningAssignmentTitle.trim() && set) setLearningAssignmentTitle(set.name);
-                  }
-                }}
-              >
-                <option value="">{selectedLearningSourceType === "archive" ? "배치 선택" : "문제 세트 선택"}</option>
-                {selectedLearningSourceType === "archive"
-                  ? assignableBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name} · {batch.problem_count}문항</option>)
-                  : problemSets.map((set) => <option key={set.id} value={set.id}>{set.name}</option>)}
-              </select>
-              <select className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)}>
-                <option value="">개별 학생</option>
-                {classes.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-              </select>
-              <select className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)} disabled={Boolean(selectedGroupId)}>
-                <option value="">학생 선택</option>
-                {learningStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}
-              </select>
-            </div>
-
-            <form className="grid gap-2 md:grid-cols-[1fr_auto_auto]" onSubmit={submitLearningAssignment}>
-              <Input value={learningAssignmentTitle} onChange={(event) => setLearningAssignmentTitle(event.target.value)} placeholder="학생 풀이 과제 제목" />
-              <Button type="submit"><BookOpenCheck className="h-4 w-4" /> 배포</Button>
-              <Button type="button" variant="outline" onClick={grantSelectedArchiveAccess}><ShieldCheck className="h-4 w-4" /> 접근 권한</Button>
-            </form>
-
-            <div className="space-y-2">
-              {learningAssignments.slice(0, 6).map((assignment) => (
-                <button key={assignment.id} onClick={() => openLearningReport(assignment)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-violet-300/30">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> 학생 관리</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              {learningStudents.length === 0 && <p className="text-sm text-muted-foreground">아직 연결된 학생이 없습니다. 학생 키를 발급하고 학생 계정에서 등록하게 하세요.</p>}
+              {learningStudents.map((student) => (
+                <div key={student.id} className="rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-semibold text-white">{assignment.title}</div>
-                      <div className="mt-1 text-xs text-slate-500">{assignment.content.snapshot.problem_count}문항 · {assignment.status}</div>
+                      <div className="font-semibold text-white">{student.student_name}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {student.groups.map((group) => group.name).join(", ") || "그룹 없음"} · 오답 {student.unresolved_wrong_answer_count}
+                      </div>
                     </div>
-                    <LineChart className="h-4 w-4 text-violet-200" />
+                    <Badge variant={student.key_status === "active" ? "default" : "secondary"}>{student.status}</Badge>
                   </div>
-                </button>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">제출 {student.recent_assignment_completion}</div>
+                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-2">정답률 {student.recent_correct_rate === null ? "-" : `${Math.round(student.recent_correct_rate * 100)}%`}</div>
+                  </div>
+                  <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => startStudentAssignment(student)}>
+                    <BookOpenCheck className="h-4 w-4" />
+                    과제 배포
+                  </Button>
+                </div>
               ))}
-            </div>
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="space-y-5">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><BookOpenCheck className="h-5 w-5" /> 새 과제 배포</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+                    {[
+                      { value: "problemSet", label: "문항 세트" },
+                      { value: "archive", label: "배치·교재" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => selectLearningSourceType(option.value as "problemSet" | "archive")}
+                        className={`h-11 rounded-[8px] border px-3 text-sm font-bold transition ${
+                          selectedLearningSourceType === option.value
+                            ? "border-violet-300/60 bg-violet-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.22)]"
+                            : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    className="h-11 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                    value={selectedLearningSourceType === "archive" ? selectedBatchId : selectedProblemSetId}
+                    onChange={(event) => selectLearningSource(event.target.value)}
+                  >
+                    <option value="">{selectedLearningSourceType === "archive" ? "배치 선택" : "문제 세트 선택"}</option>
+                    {selectedLearningSourceType === "archive"
+                      ? assignableBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name} · {batch.problem_count}문항</option>)
+                      : problemSets.map((set) => <option key={set.id} value={set.id}>{set.name}</option>)}
+                  </select>
+                </div>
 
-            {learningReport && (
-              <div className="rounded-[10px] border border-violet-300/20 bg-violet-300/[0.06] p-3">
-                <div className="flex items-center justify-between gap-3">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div>
+                    <div className="mb-2 text-sm font-bold text-white">반 선택</div>
+                    <div className="flex max-h-44 flex-wrap gap-2 overflow-auto rounded-[8px] border border-white/10 bg-black/20 p-2">
+                      {classes.length ? classes.map((group) => {
+                        const selected = selectedGroupIds.includes(group.id);
+                        return (
+                          <button
+                            key={group.id}
+                            type="button"
+                            onClick={() => setSelectedGroupIds((current) => toggleId(current, group.id))}
+                            className={`rounded-[7px] border px-3 py-2 text-sm font-semibold transition ${
+                              selected ? "border-violet-300/60 bg-violet-500/80 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
+                            }`}
+                          >
+                            {group.name}
+                          </button>
+                        );
+                      }) : <span className="p-2 text-sm text-muted-foreground">등록된 반이 없습니다.</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-sm font-bold text-white">학생 선택</div>
+                    <div className="flex max-h-44 flex-wrap gap-2 overflow-auto rounded-[8px] border border-white/10 bg-black/20 p-2">
+                      {learningStudents.length ? learningStudents.map((student) => {
+                        const selected = selectedStudentIds.includes(student.student_user_id);
+                        return (
+                          <button
+                            key={student.student_user_id}
+                            type="button"
+                            onClick={() => setSelectedStudentIds((current) => toggleId(current, student.student_user_id))}
+                            className={`rounded-[7px] border px-3 py-2 text-sm font-semibold transition ${
+                              selected ? "border-cyan-300/60 bg-cyan-500/75 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
+                            }`}
+                          >
+                            {student.student_name}
+                          </button>
+                        );
+                      }) : <span className="p-2 text-sm text-muted-foreground">등록된 학생이 없습니다.</span>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[8px] border border-white/10 bg-white/[0.035] p-3 text-sm text-slate-300">
+                  <span className="font-bold text-white">선택 대상 {learningTargetCount}개</span>
+                  <span className="ml-2 text-slate-500">
+                    {[...selectedGroupNames, ...selectedStudentNames].join(", ") || "반 또는 학생을 선택해주세요."}
+                  </span>
+                </div>
+
+                <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto]" onSubmit={submitLearningAssignment}>
+                  <Input value={learningAssignmentTitle} onChange={(event) => setLearningAssignmentTitle(event.target.value)} placeholder="학생 풀이 과제 제목" />
+                  <Input type="date" value={learningAssignmentDueAt} onChange={(event) => setLearningAssignmentDueAt(event.target.value)} />
+                  <Button type="submit" disabled={!canPublishLearningAssignment}>
+                    <BookOpenCheck className="h-4 w-4" />
+                    즉시 배포
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> 접근 권한</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-6 text-muted-foreground">과제 없이 자료만 열람·자유풀이할 수 있게 할 때 사용합니다. 위에서 선택한 자료와 대상을 그대로 사용합니다.</p>
+                <Button type="button" variant="outline" onClick={grantSelectedArchiveAccess} disabled={!selectedLearningSourceId || !learningTargetCount}>
+                  <ShieldCheck className="h-4 w-4" />
+                  접근 권한 부여
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-5">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" /> 과제 현황</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {learningAssignments.length ? learningAssignments.map((assignment) => (
+                  <button key={assignment.id} onClick={() => openLearningReport(assignment)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-violet-300/30">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-white">{assignment.title}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {assignment.content.snapshot.problem_count}문항 · {assignment.status}{assignment.due_at ? ` · 마감 ${compactDate(assignment.due_at)}` : ""}
+                        </div>
+                      </div>
+                      <LineChart className="h-4 w-4 shrink-0 text-violet-200" />
+                    </div>
+                  </button>
+                )) : <p className="text-sm text-muted-foreground">아직 배포한 학습 과제가 없습니다.</p>}
+              </CardContent>
+            </Card>
+
+            {learningReport ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5" /> 제출 리포트</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div>
                     <div className="font-semibold text-white">{learningReport.assignment.title}</div>
-                    <div className="mt-1 text-xs text-slate-400">대상 {learningReport.summary.target_count} · 제출 {learningReport.summary.submitted_count} · 평균 {learningReport.summary.average_score ?? "-"}</div>
+                    <div className="mt-1 text-xs text-slate-400">대상 {learningReport.summary.target_count} · 제출 {learningReport.summary.submitted_count} · 미제출 {learningReport.summary.missing_count}</div>
                   </div>
-                  <Badge variant="secondary">{Math.round(learningReport.summary.completion_rate * 100)}%</Badge>
-                </div>
-                <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
-                  {learningReport.students.map((student) => (
-                    <div key={student.student_id} className="flex items-center justify-between rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                      <span>{student.student_name}</span>
-                      <span className="text-slate-400">{student.status}</span>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
+                      <p className="text-xs text-slate-500">제출률</p>
+                      <p className="mt-1 text-xl font-black text-white">{percentLabel(learningReport.summary.completion_rate)}</p>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
+                      <p className="text-xs text-slate-500">평균</p>
+                      <p className="mt-1 text-xl font-black text-white">{learningReport.summary.average_score ?? "-"}</p>
+                    </div>
+                  </div>
+                  <div className="max-h-72 space-y-2 overflow-y-auto">
+                    {learningReport.students.map((student) => (
+                      <div key={student.student_id} className="flex items-center justify-between rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
+                        <span>{student.student_name}</span>
+                        <span className="text-slate-400">{student.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-5 text-sm text-muted-foreground">과제를 선택하면 제출 현황이 여기에 표시됩니다.</CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
