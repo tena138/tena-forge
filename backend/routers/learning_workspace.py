@@ -328,8 +328,8 @@ def _content_problem(version: ContentVersion, problem_id: UUID) -> dict[str, Any
     raise HTTPException(status_code=404, detail="Problem is not part of this content version.")
 
 
-def _student_group_ids(db: Session, membership: StudentAcademyMembership) -> list[UUID]:
-    return list(
+def _membership_group_ids(db: Session, membership: StudentAcademyMembership) -> list[UUID]:
+    group_ids = list(
         db.scalars(
             select(ClassStudent.class_id).where(
                 ClassStudent.student_membership_id == membership.id,
@@ -337,6 +337,14 @@ def _student_group_ids(db: Session, membership: StudentAcademyMembership) -> lis
             )
         ).all()
     )
+    seat = db.get(AcademySeat, membership.academy_seat_id)
+    if seat and seat.class_id and seat.class_id not in group_ids:
+        group_ids.append(seat.class_id)
+    return group_ids
+
+
+def _student_group_ids(db: Session, membership: StudentAcademyMembership) -> list[UUID]:
+    return _membership_group_ids(db, membership)
 
 
 def _active_grant_filter(now: datetime):
@@ -1021,11 +1029,8 @@ def academy_students(academy_id: str, request: Request, db: Session = Depends(ge
     memberships = db.scalars(select(StudentAcademyMembership).where(StudentAcademyMembership.academy_id == academy_id).order_by(StudentAcademyMembership.joined_at.desc())).all()
     rows = []
     for membership in memberships:
-        group_rows = db.scalars(
-            select(AcademyClass)
-            .join(ClassStudent, ClassStudent.class_id == AcademyClass.id)
-            .where(ClassStudent.student_membership_id == membership.id, ClassStudent.left_at.is_(None), AcademyClass.academy_id == academy_id)
-        ).all()
+        group_ids = _membership_group_ids(db, membership)
+        group_rows = db.scalars(select(AcademyClass).where(AcademyClass.id.in_(group_ids), AcademyClass.academy_id == academy_id)).all() if group_ids else []
         attempts = db.scalars(select(ProblemAttempt).where(ProblemAttempt.academy_id == academy_id, ProblemAttempt.student_id == membership.student_user_id, ProblemAttempt.is_correct.is_not(None))).all()
         correct = sum(1 for attempt in attempts if attempt.is_correct)
         unresolved = db.scalar(
@@ -1337,6 +1342,18 @@ def _assignment_student_ids(db: Session, assignment: LearningAssignment) -> set[
                 )
             ).all()
             ids.update(membership.student_user_id for membership in memberships)
+            seat_memberships = db.scalars(
+                select(StudentAcademyMembership)
+                .join(AcademySeat, AcademySeat.id == StudentAcademyMembership.academy_seat_id)
+                .where(
+                    AcademySeat.class_id == target.group_id,
+                    AcademySeat.current_student_membership_id == StudentAcademyMembership.id,
+                    AcademySeat.is_active.is_(True),
+                    StudentAcademyMembership.academy_id == assignment.academy_id,
+                    StudentAcademyMembership.status == "active",
+                )
+            ).all()
+            ids.update(membership.student_user_id for membership in seat_memberships)
     return ids
 
 
