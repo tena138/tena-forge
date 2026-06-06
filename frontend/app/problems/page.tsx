@@ -645,7 +645,6 @@ function ProblemsBrowser() {
   }, [assignedBatchIds, batches, selectedBatchFolder]);
   const archiveEngineBatches = useMemo(() => batches.filter((batch) => (batch.subject_engine || "math") === archiveEngine), [archiveEngine, batches]);
   const archiveEngineBatchIds = useMemo(() => archiveEngineBatches.map((batch) => batch.id), [archiveEngineBatches]);
-  const archiveEngineProblemCount = useMemo(() => archiveEngineBatches.reduce((sum, batch) => sum + (batch.problem_count || 0), 0), [archiveEngineBatches]);
   const selectedFolderBatchIds = useMemo(() => selectedBatchFolderId ? archiveFolderBatchIds(selectedBatchFolderId, archiveFolders, archiveEngineBatches) : [], [archiveEngineBatches, archiveFolders, selectedBatchFolderId]);
   const contextMenuBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === batchFolderContextMenu?.folderId) || null, [batchFolderContextMenu, batchFolders]);
 
@@ -1567,7 +1566,6 @@ function ProblemsBrowser() {
             selectedBatchId={selectedBatchId || null}
             mode="browse"
             title={`${subjectEngineLabel(archiveEngine)} 보관 폴더`}
-            totalProblemCount={archiveEngineProblemCount}
             onOpenFolder={openArchiveFolder}
             onSelectFolder={() => undefined}
             onSelectBatch={selectBatch}

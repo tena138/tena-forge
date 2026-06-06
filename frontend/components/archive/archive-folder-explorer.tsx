@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type DragEvent } from "react";
-import { Check, ChevronLeft, Folder, FolderOpen, FolderPlus, Pencil, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, Folder, FolderPlus, Pencil, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,6 @@ type ArchiveFolderExplorerProps = {
   mode?: "browse" | "select";
   title?: string;
   kicker?: string;
-  totalProblemCount?: number;
   showBatches?: boolean;
   loading?: boolean;
   onOpenFolder: (folderId: string | null) => void;
@@ -56,7 +55,6 @@ export function ArchiveFolderExplorer({
   mode = "browse",
   title = "문항 아카이브 폴더",
   kicker = "Batch folders",
-  totalProblemCount = 0,
   showBatches = true,
   loading = false,
   onOpenFolder,
@@ -197,29 +195,6 @@ export function ArchiveFolderExplorer({
       ) : null}
 
       <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]" onDragOver={allowDrop}>
-        <button
-          type="button"
-          className={cn(
-            "flex min-h-[82px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-            !currentFolderId && !selectedBatchId ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
-          )}
-          onClick={() => onOpenFolder(null)}
-          onDrop={(event) => {
-            event.preventDefault();
-            dropTo(null);
-          }}
-        >
-          <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
-            <FolderOpen className="h-5 w-5 text-[#9b8cff]" />
-            <span className="max-w-full text-center text-[11px] font-semibold leading-none text-muted-foreground" title={`${formatCount(totalProblemCount)}문항`}>
-              {formatCount(totalProblemCount)}
-            </span>
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block whitespace-normal break-words text-sm font-bold leading-5">전체 문항</span>
-          </span>
-        </button>
-
         {childFolders.map((folder) => {
           const selected = selectedFolderId === folder.id || currentFolderId === folder.id;
           const folderBatchIds = archiveFolderBatchIds(folder.id, folders, batches);
