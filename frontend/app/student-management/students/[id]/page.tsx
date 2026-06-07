@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Download, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Download, Folder, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
 import { CounselingExportModal } from "@/components/counseling-export-modal";
@@ -68,6 +68,15 @@ type ResultPageGroup = {
   label: string;
   problems: SessionProblem[];
 };
+type WrongArchiveFolder = {
+  id: string;
+  label: string;
+  detail: string;
+  wrongIds: string[];
+  wrongCount: number;
+  unresolvedCount: number;
+  latestWrongAt?: string | null;
+};
 
 function isStudentTab(value: string | null): value is StudentTab {
   return value === "calendar" || value === "results" || value === "wrong" || value === "counseling";
@@ -86,6 +95,8 @@ type StudentDetail = StudentCard & {
     wrong_count: number;
     total_count: number;
     session?: { title?: string; session_type?: string; scheduled_at?: string | null; due_at?: string | null; problem_count?: number; problems?: SessionProblem[] } | null;
+    graded_at?: string | null;
+    updated_at?: string | null;
     problem_results: Array<{
       id: string;
       problem_id: string;
@@ -270,6 +281,17 @@ function archiveAccentColor(wrong: WrongAnswer) {
   if (["unanswered", "missing"].includes(status)) return "#fb7185";
   if (wrong.wrong_count > 1) return "#fb923c";
   return "#8b5cf6";
+}
+
+function sessionTypeLabel(value?: string | null) {
+  if (value === "homework") return "교재";
+  if (value === "mock_exam") return "모의고사";
+  if (value === "test") return "테스트";
+  return value || "할당";
+}
+
+function paperSessionSourceMarker(sessionId: string) {
+  return `paper_session:${sessionId}`;
 }
 
 function dateLabel(value?: string | null) {
@@ -559,6 +581,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   const [deletingResultId, setDeletingResultId] = useState("");
   const [deletingWrongAnswerId, setDeletingWrongAnswerId] = useState("");
   const [selectedWrongAnswerIds, setSelectedWrongAnswerIds] = useState<string[]>([]);
+  const [selectedWrongArchiveFolderId, setSelectedWrongArchiveFolderId] = useState("all");
   const [wrongArchiveAddModalOpen, setWrongArchiveAddModalOpen] = useState(false);
   const [wrongArchiveExportOpen, setWrongArchiveExportOpen] = useState(false);
   const [counselingExportOpen, setCounselingExportOpen] = useState(false);
@@ -600,19 +623,91 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
 
   const calendarItems = useMemo(() => (data ? studentCalendarItems(data) : []), [data]);
   const archivedWrongAnswers = useMemo(() => data?.wrong_answers || [], [data?.wrong_answers]);
+  const wrongArchiveFolders = useMemo<WrongArchiveFolder[]>(() => {
+    const allWrongIds = archivedWrongAnswers.map((wrong) => wrong.id);
+    const allFolder: WrongArchiveFolder = {
+      id: "all",
+      label: "전체 오답",
+      detail: "모든 교재/테스트",
+      wrongIds: allWrongIds,
+      wrongCount: archivedWrongAnswers.length,
+      unresolvedCount: archivedWrongAnswers.filter((wrong) => !isArchiveResolved(wrong.resolved_status)).length,
+      latestWrongAt: archivedWrongAnswers[0]?.latest_wrong_at || null,
+    };
+    const folders: WrongArchiveFolder[] = [allFolder];
+    if (!data) return folders;
+
+    const matchedWrongIds = new Set<string>();
+    for (const result of data.paper_session_history) {
+      const sessionId = result.paper_session_id;
+      const marker = paperSessionSourceMarker(sessionId);
+      const resultWrongProblemIds = new Set(
+        result.problem_results
+          .filter((item) => item.result_status === "wrong" || item.result_status === "unanswered")
+          .map((item) => item.problem_id)
+      );
+      const wrongs = archivedWrongAnswers.filter(
+        (wrong) => (wrong.source_assignment_ids || []).includes(marker) || resultWrongProblemIds.has(wrong.problem_id)
+      );
+      if (!wrongs.length) continue;
+      wrongs.forEach((wrong) => matchedWrongIds.add(wrong.id));
+      const title = result.session?.title || "이름 없는 할당";
+      const detail = [
+        sessionTypeLabel(result.session?.session_type),
+        result.session?.scheduled_at ? shortDate(result.session.scheduled_at) : null,
+        `${problemCount(result)}문항`,
+      ].filter(Boolean).join(" · ");
+      folders.push({
+        id: `session:${sessionId}`,
+        label: title,
+        detail,
+        wrongIds: wrongs.map((wrong) => wrong.id),
+        wrongCount: wrongs.length,
+        unresolvedCount: wrongs.filter((wrong) => !isArchiveResolved(wrong.resolved_status)).length,
+        latestWrongAt: wrongs[0]?.latest_wrong_at || result.graded_at || result.updated_at || null,
+      });
+    }
+
+    const uncategorized = archivedWrongAnswers.filter((wrong) => !matchedWrongIds.has(wrong.id));
+    if (uncategorized.length) {
+      folders.push({
+        id: "uncategorized",
+        label: "출처 미분류",
+        detail: "할당 정보 없는 오답",
+        wrongIds: uncategorized.map((wrong) => wrong.id),
+        wrongCount: uncategorized.length,
+        unresolvedCount: uncategorized.filter((wrong) => !isArchiveResolved(wrong.resolved_status)).length,
+        latestWrongAt: uncategorized[0]?.latest_wrong_at || null,
+      });
+    }
+    return folders;
+  }, [archivedWrongAnswers, data]);
+  const selectedWrongArchiveFolder = useMemo(
+    () => wrongArchiveFolders.find((folder) => folder.id === selectedWrongArchiveFolderId) || wrongArchiveFolders[0],
+    [selectedWrongArchiveFolderId, wrongArchiveFolders]
+  );
+  const visibleWrongAnswers = useMemo(() => {
+    if (!selectedWrongArchiveFolder || selectedWrongArchiveFolder.id === "all") return archivedWrongAnswers;
+    const visibleIds = new Set(selectedWrongArchiveFolder.wrongIds);
+    return archivedWrongAnswers.filter((wrong) => visibleIds.has(wrong.id));
+  }, [archivedWrongAnswers, selectedWrongArchiveFolder]);
   const archiveReviewNeededCount = useMemo(
     () => archivedWrongAnswers.filter((wrong) => !isArchiveResolved(wrong.resolved_status)).length,
     [archivedWrongAnswers]
   );
+  const visibleArchiveReviewNeededCount = useMemo(
+    () => visibleWrongAnswers.filter((wrong) => !isArchiveResolved(wrong.resolved_status)).length,
+    [visibleWrongAnswers]
+  );
   const selectedWrongAnswers = useMemo(
-    () => archivedWrongAnswers.filter((wrong) => selectedWrongAnswerIds.includes(wrong.id)),
-    [archivedWrongAnswers, selectedWrongAnswerIds]
+    () => visibleWrongAnswers.filter((wrong) => selectedWrongAnswerIds.includes(wrong.id)),
+    [selectedWrongAnswerIds, visibleWrongAnswers]
   );
   const selectedWrongProblemIds = useMemo(
     () => Array.from(new Set(selectedWrongAnswers.map((wrong) => wrong.problem_id).filter(Boolean))),
     [selectedWrongAnswers]
   );
-  const selectableWrongAnswerCount = useMemo(() => archivedWrongAnswers.filter((wrong) => wrong.problem_id).length, [archivedWrongAnswers]);
+  const selectableWrongAnswerCount = useMemo(() => visibleWrongAnswers.filter((wrong) => wrong.problem_id).length, [visibleWrongAnswers]);
   const activeReportField = useMemo(() => reportField(counselingFields), [counselingFields]);
   const selectedClassName = useMemo(() => {
     if (!data || !counselingClassId) return "";
@@ -745,9 +840,15 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   }, [resolvedParams.id]);
 
   useEffect(() => {
-    const validIds = new Set(archivedWrongAnswers.map((wrong) => wrong.id));
+    if (!wrongArchiveFolders.some((folder) => folder.id === selectedWrongArchiveFolderId)) {
+      setSelectedWrongArchiveFolderId("all");
+    }
+  }, [selectedWrongArchiveFolderId, wrongArchiveFolders]);
+
+  useEffect(() => {
+    const validIds = new Set(visibleWrongAnswers.map((wrong) => wrong.id));
     setSelectedWrongAnswerIds((current) => current.filter((id) => validIds.has(id)));
-  }, [archivedWrongAnswers]);
+  }, [visibleWrongAnswers]);
 
   useEffect(() => {
     if (!data) return;
@@ -922,7 +1023,18 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
 
   async function makeReviewSet() {
     if (!data) return;
-    const review = await createReviewSet({ title: `${data.name} 오답 복습 세트`, student_membership_id: data.id, unresolved_only: true });
+    const scopedWrongIds = visibleWrongAnswers
+      .filter((wrong) => wrong.problem_id && !isArchiveResolved(wrong.resolved_status))
+      .map((wrong) => wrong.id);
+    if (!scopedWrongIds.length) return;
+
+    const scoped = selectedWrongArchiveFolder?.id !== "all";
+    const review = await createReviewSet({
+      title: `${data.name} ${scoped ? `${selectedWrongArchiveFolder?.label || "선택 폴더"} ` : ""}오답 복습 세트`,
+      student_membership_id: data.id,
+      unresolved_only: true,
+      wrong_answer_ids: scoped ? scopedWrongIds : [],
+    });
     setMessage(`복습 세트를 만들었습니다: ${review.name}`);
   }
 
@@ -936,12 +1048,12 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   }
 
   function toggleAllWrongAnswers() {
-    const allIds = archivedWrongAnswers.filter((wrong) => wrong.problem_id).map((wrong) => wrong.id);
+    const allIds = visibleWrongAnswers.filter((wrong) => wrong.problem_id).map((wrong) => wrong.id);
     setSelectedWrongAnswerIds((current) => (current.length >= allIds.length ? [] : allIds));
   }
 
   function selectReviewNeededWrongAnswers() {
-    setSelectedWrongAnswerIds(archivedWrongAnswers.filter((wrong) => wrong.problem_id && !isArchiveResolved(wrong.resolved_status)).map((wrong) => wrong.id));
+    setSelectedWrongAnswerIds(visibleWrongAnswers.filter((wrong) => wrong.problem_id && !isArchiveResolved(wrong.resolved_status)).map((wrong) => wrong.id));
   }
 
   function clearAutosaveTimer(resultId: string) {
@@ -1827,6 +1939,8 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                       <span>{archivedWrongAnswers.length}문항</span>
                       <span className="text-slate-700">·</span>
                       <span>복습 필요 {archiveReviewNeededCount}문항</span>
+                      <span className="text-slate-700">·</span>
+                      <span>현재 폴더 {visibleWrongAnswers.length}문항</span>
                     </div>
                   </div>
                 </div>
@@ -1835,17 +1949,62 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                     <CheckSquare className="h-4 w-4" />
                     {selectedWrongAnswerIds.length >= selectableWrongAnswerCount && selectableWrongAnswerCount ? "전체 해제" : "전체 선택"}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={selectReviewNeededWrongAnswers} disabled={!archiveReviewNeededCount}>
+                  <Button size="sm" variant="outline" onClick={selectReviewNeededWrongAnswers} disabled={!visibleArchiveReviewNeededCount}>
                     <RotateCcw className="h-4 w-4" />
                     미해결 선택
                   </Button>
                 </div>
-                <Button onClick={makeReviewSet} disabled={!archiveReviewNeededCount}>
+                <Button onClick={makeReviewSet} disabled={!visibleArchiveReviewNeededCount}>
                   <RotateCcw className="h-4 w-4" />
                   복습 세트 만들기
                 </Button>
               </CardContent>
             </Card>
+
+            {wrongArchiveFolders.length ? (
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Wrong folders</p>
+                    <h3 className="mt-1 text-sm font-black text-white">할당별 오답 폴더</h3>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-500">{wrongArchiveFolders.length.toLocaleString("ko-KR")}개 분류</p>
+                </div>
+                <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(210px,1fr))]">
+                  {wrongArchiveFolders.map((folder) => {
+                    const selected = selectedWrongArchiveFolder?.id === folder.id;
+                    return (
+                      <button
+                        key={folder.id}
+                        type="button"
+                        className={cn(
+                          "group flex min-h-[88px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                          selected
+                            ? "border-violet-300/70 bg-violet-500/15 text-white"
+                            : "border-white/[0.08] bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.055]"
+                        )}
+                        onClick={() => {
+                          setSelectedWrongArchiveFolderId(folder.id);
+                          setSelectedWrongAnswerIds([]);
+                        }}
+                      >
+                        <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
+                          <Folder className={cn("h-5 w-5", selected ? "text-violet-200" : "text-slate-400 group-hover:text-violet-200")} />
+                          <span className="text-[11px] font-bold leading-none text-slate-500">{folder.wrongCount.toLocaleString("ko-KR")}</span>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block line-clamp-2 text-sm font-bold leading-5">{folder.label}</span>
+                          <span className="mt-1 block truncate text-xs font-semibold text-slate-500">{folder.detail}</span>
+                          <span className="mt-2 inline-flex rounded border border-rose-300/20 bg-rose-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-rose-100">
+                            복습 필요 {folder.unresolvedCount.toLocaleString("ko-KR")}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             {selectedWrongProblemIds.length ? (
               <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
@@ -1869,9 +2028,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
               </div>
             ) : null}
 
-            {archivedWrongAnswers.length ? (
+            {visibleWrongAnswers.length ? (
               <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {archivedWrongAnswers.map((wrong) => {
+                {visibleWrongAnswers.map((wrong) => {
                   const selected = selectedWrongAnswerIds.includes(wrong.id);
                   return (
                   <article
@@ -1960,7 +2119,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
             ) : (
               <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.025] p-10 text-center">
                 <Archive className="mx-auto h-8 w-8 text-violet-200" />
-                <p className="mt-3 text-sm font-semibold text-slate-400">아카이브에 담긴 문항이 없습니다.</p>
+                <p className="mt-3 text-sm font-semibold text-slate-400">
+                  {archivedWrongAnswers.length ? "선택한 폴더에 표시할 오답이 없습니다." : "아카이브에 담긴 문항이 없습니다."}
+                </p>
               </div>
             )}
           </section>
