@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime
-from typing import Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -625,7 +625,9 @@ class ExportRequest(BaseModel):
     exam_time: str | None = None
     exam_datetime: str | None = None
     custom_variables: dict[str, str] | None = None
+    visual_page_plan: dict[str, Any] | None = None
     include_solution: bool = False
+    include_missing_solution_metadata: bool = False
 
 
 class TemplateVisualSave(BaseModel):

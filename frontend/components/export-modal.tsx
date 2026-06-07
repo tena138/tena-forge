@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ExamTemplate, api, downloadExport } from "@/lib/api";
+import { ExamTemplate, VisualPagePlan, api, downloadExport } from "@/lib/api";
 import { ClassCard, StudentCard, createPaperSession, getStudentExamStatsSeries, getStudentManagementDashboard } from "@/lib/studentManagement";
 import { collectVisualTemplateManualVariables, createDynamicPreviewPages } from "@/lib/visualTemplateEngine";
 import { PAGE_SIZES, TemplateSet } from "@/lib/visualTemplateTypes";
@@ -27,6 +27,7 @@ export type ExportedProblemSetInfo = {
   templateKind?: ExportTemplateKind;
   output?: string;
   includeSolution: boolean;
+  includeMissingSolutionMetadata: boolean;
 };
 
 type ExportTemplateOption = {
@@ -110,6 +111,10 @@ function outputLabel(kind?: ExportTemplateKind) {
   return kind === "html" ? "HTML" : "PDF";
 }
 
+function findPageId(templateSet: TemplateSet | null | undefined, roles: string[]) {
+  return templateSet?.pages.find((page) => roles.includes(page.role))?.id || templateSet?.pages[0]?.id || "";
+}
+
 function VisualTemplatePreview({ templateSet }: { templateSet: TemplateSet }) {
   const page = useMemo(() => createDynamicPreviewPages(templateSet)[0] || templateSet.pages[0], [templateSet]);
   const size = page?.pageSize || templateSet.defaultPageSize || PAGE_SIZES.A4_PORTRAIT;
@@ -126,6 +131,36 @@ function VisualTemplatePreview({ templateSet }: { templateSet: TemplateSet }) {
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#111318] to-transparent" />
     </div>
+  );
+}
+
+function PageSelect({
+  label,
+  value,
+  onChange,
+  templateSet,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  templateSet: TemplateSet;
+}) {
+  return (
+    <label className="grid gap-1.5 text-xs font-semibold text-slate-400">
+      {label}
+      <select
+        className="h-9 rounded-md border border-white/10 bg-[#10131b] px-2 text-sm text-slate-100 outline-none"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">페이지 선택</option>
+        {templateSet.pages.map((page, index) => (
+          <option key={page.id} value={page.id}>
+            {index + 1}. {page.name} / {page.role}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -184,6 +219,17 @@ export function ExportModal({
   const [examEndTime, setExamEndTime] = useState("");
   const [customVariables, setCustomVariables] = useState<Record<string, string>>({});
   const [includeSolution, setIncludeSolution] = useState(false);
+  const [includeMissingSolutionMetadata, setIncludeMissingSolutionMetadata] = useState(false);
+  const [documentKind, setDocumentKind] = useState<"exam" | "textbook">("exam");
+  const [includeCoverPage, setIncludeCoverPage] = useState(false);
+  const [includeAnswerPage, setIncludeAnswerPage] = useState(false);
+  const [coverPageId, setCoverPageId] = useState("");
+  const [firstProblemPageId, setFirstProblemPageId] = useState("");
+  const [bodyProblemPageId, setBodyProblemPageId] = useState("");
+  const [leftInnerPageId, setLeftInnerPageId] = useState("");
+  const [rightInnerPageId, setRightInnerPageId] = useState("");
+  const [solutionPageId, setSolutionPageId] = useState("");
+  const [answerPageId, setAnswerPageId] = useState("");
   const [assignEnabled, setAssignEnabled] = useState(false);
   const [classes, setClasses] = useState<ClassCard[]>([]);
   const [assignClassId, setAssignClassId] = useState("");
@@ -295,6 +341,21 @@ export function ExportModal({
   const assignTargetCount = assignStudentIds.length || (assignClassId ? 1 : 0);
 
   useEffect(() => {
+    const templateSet = selected?.kind === "visual" ? selected.templateSet : null;
+    if (!templateSet) return;
+    const nextKind = templateSet.category === "textbook" ? "textbook" : "exam";
+    setDocumentKind(nextKind);
+    setCoverPageId(findPageId(templateSet, ["cover"]));
+    setFirstProblemPageId(findPageId(templateSet, ["exam", "problem", "textbookInner", "textbookLeft"]));
+    setBodyProblemPageId(findPageId(templateSet, ["problem", "exam", "textbookInner", "textbookLeft"]));
+    setLeftInnerPageId(findPageId(templateSet, ["textbookLeft", "textbookInner", "problem"]));
+    setRightInnerPageId(findPageId(templateSet, ["textbookRight", "textbookInner", "problem"]));
+    setSolutionPageId(findPageId(templateSet, ["solution"]));
+    setAnswerPageId(findPageId(templateSet, ["answer"]));
+    setIncludeCoverPage(nextKind === "textbook" && !!templateSet.pages.find((page) => page.role === "cover"));
+  }, [selected?.id, selected?.kind, selected?.templateSet]);
+
+  useEffect(() => {
     setCustomVariables((current) => {
       const next: Record<string, string> = {};
       for (const key of manualVariables) next[key] = current[key] || "";
@@ -322,8 +383,31 @@ export function ExportModal({
     if (!exists && next.length === 1 && !studentName.trim()) setStudentName(student.name);
   }
 
+  const visualPagePlan = useMemo<VisualPagePlan | null>(() => {
+    if (selected?.kind !== "visual" || !selected.templateSet) return null;
+    return {
+      document_kind: documentKind,
+      include_cover: includeCoverPage,
+      cover_page_id: includeCoverPage ? coverPageId || null : null,
+      first_problem_page_id: documentKind === "exam" ? firstProblemPageId || null : null,
+      body_problem_page_id: bodyProblemPageId || leftInnerPageId || null,
+      left_inner_page_id: documentKind === "textbook" ? leftInnerPageId || null : null,
+      right_inner_page_id: documentKind === "textbook" ? rightInnerPageId || null : null,
+      solution_page_id: includeSolution || includeMissingSolutionMetadata ? solutionPageId || null : null,
+      answer_page_id: includeAnswerPage ? answerPageId || null : null,
+    };
+  }, [answerPageId, bodyProblemPageId, coverPageId, documentKind, firstProblemPageId, includeAnswerPage, includeCoverPage, includeMissingSolutionMetadata, includeSolution, leftInnerPageId, rightInnerPageId, selected?.kind, selected?.templateSet, solutionPageId]);
+
+  const visualPagePlanMissing = selected?.kind === "visual" && (
+    (documentKind === "exam" && (!firstProblemPageId || !bodyProblemPageId)) ||
+    (documentKind === "textbook" && !bodyProblemPageId && !leftInnerPageId && !rightInnerPageId) ||
+    (includeCoverPage && !coverPageId) ||
+    ((includeSolution || includeMissingSolutionMetadata) && !solutionPageId) ||
+    (includeAnswerPage && !answerPageId)
+  );
+
   async function submit() {
-    if (!selected || !examTitle.trim() || loading) return;
+    if (!selected || !examTitle.trim() || loading || visualPagePlanMissing) return;
     setLoading(true);
     try {
       let resolvedCustomVariables = customVariables;
@@ -354,7 +438,9 @@ export function ExportModal({
         exam_time: examTime,
         exam_datetime: examDateTime,
         custom_variables: resolvedCustomVariables,
+        visual_page_plan: visualPagePlan,
         include_solution: includeSolution,
+        include_missing_solution_metadata: includeMissingSolutionMetadata,
       });
       if (assignEnabled && assignTargetCount > 0) {
         await createPaperSession({
@@ -379,6 +465,7 @@ export function ExportModal({
         templateKind: selected.kind,
         output: outputLabel(selected.kind),
         includeSolution,
+        includeMissingSolutionMetadata,
       });
       onOpenChange(false);
     } finally {
@@ -435,6 +522,61 @@ export function ExportModal({
               해설 포함
               <input type="checkbox" checked={includeSolution} onChange={(event) => setIncludeSolution(event.target.checked)} />
             </label>
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+              <span>
+                해설 없는 문항 원본 위치 표시
+                <span className="mt-1 block text-xs text-slate-500">저장된 해설이 없으면 원본 배치, PDF, 페이지, 문항 번호를 해설 영역에 내보냅니다.</span>
+              </span>
+              <input type="checkbox" checked={includeMissingSolutionMetadata} onChange={(event) => setIncludeMissingSolutionMetadata(event.target.checked)} />
+            </label>
+            {selected?.kind === "visual" && selected.templateSet ? (
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-100">페이지 구성</div>
+                    <div className="mt-1 text-xs text-slate-500">내보내기에 사용할 페이지를 직접 선택합니다.</div>
+                  </div>
+                  <select
+                    className="h-9 rounded-md border border-white/10 bg-[#10131b] px-2 text-xs font-semibold text-slate-100 outline-none"
+                    value={documentKind}
+                    onChange={(event) => setDocumentKind(event.target.value as "exam" | "textbook")}
+                  >
+                    <option value="exam">시험지</option>
+                    <option value="textbook">교재</option>
+                  </select>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  <label className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.035] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                    표지 사용
+                    <input type="checkbox" checked={includeCoverPage} onChange={(event) => setIncludeCoverPage(event.target.checked)} />
+                  </label>
+                  {includeCoverPage ? <PageSelect label="표지" value={coverPageId} onChange={setCoverPageId} templateSet={selected.templateSet} /> : null}
+                  {documentKind === "exam" ? (
+                    <>
+                      <PageSelect label="시험지 1페이지" value={firstProblemPageId} onChange={setFirstProblemPageId} templateSet={selected.templateSet} />
+                      <PageSelect label="본문 반복 페이지" value={bodyProblemPageId} onChange={setBodyProblemPageId} templateSet={selected.templateSet} />
+                    </>
+                  ) : (
+                    <>
+                      <PageSelect label="내지 기본" value={bodyProblemPageId} onChange={setBodyProblemPageId} templateSet={selected.templateSet} />
+                      <PageSelect label="왼쪽 내지" value={leftInnerPageId} onChange={setLeftInnerPageId} templateSet={selected.templateSet} />
+                      <PageSelect label="오른쪽 내지" value={rightInnerPageId} onChange={setRightInnerPageId} templateSet={selected.templateSet} />
+                    </>
+                  )}
+                  {includeSolution || includeMissingSolutionMetadata ? <PageSelect label="해설/원본 위치 페이지" value={solutionPageId} onChange={setSolutionPageId} templateSet={selected.templateSet} /> : null}
+                  <label className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.035] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                    답안 페이지 사용
+                    <input type="checkbox" checked={includeAnswerPage} onChange={(event) => setIncludeAnswerPage(event.target.checked)} />
+                  </label>
+                  {includeAnswerPage ? <PageSelect label="답안 페이지" value={answerPageId} onChange={setAnswerPageId} templateSet={selected.templateSet} /> : null}
+                  {visualPagePlanMissing ? (
+                    <div className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-100">
+                      필요한 페이지 구성을 모두 선택해야 PDF를 생성할 수 있습니다.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             {(source === "selection" || problemSetId) ? (
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
                 <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
@@ -492,7 +634,7 @@ export function ExportModal({
                 {count}문항 · {selected?.title || "템플릿 미선택"} · {outputLabel(selected?.kind)}
               </p>
             </div>
-            <Button className="w-full" disabled={!selected || loading || !count || (assignEnabled && assignTargetCount === 0)} onClick={submit}>
+            <Button className="w-full" disabled={!selected || loading || !count || visualPagePlanMissing || (assignEnabled && assignTargetCount === 0)} onClick={submit}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
               {selected?.kind === "html" ? "템플릿 HTML 생성" : "PDF 생성"}
             </Button>

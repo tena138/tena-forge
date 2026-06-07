@@ -286,6 +286,18 @@ export type ExamTemplate = {
   updated_at: string;
 };
 
+export type VisualPagePlan = {
+  document_kind?: "exam" | "textbook";
+  include_cover?: boolean;
+  cover_page_id?: string | null;
+  first_problem_page_id?: string | null;
+  body_problem_page_id?: string | null;
+  left_inner_page_id?: string | null;
+  right_inner_page_id?: string | null;
+  solution_page_id?: string | null;
+  answer_page_id?: string | null;
+};
+
 export type TemplateVersion = {
   id: string;
   template_id: string;
@@ -354,7 +366,9 @@ export async function downloadExport(payload: {
   exam_time?: string;
   exam_datetime?: string;
   custom_variables?: Record<string, string>;
+  visual_page_plan?: VisualPagePlan | null;
   include_solution: boolean;
+  include_missing_solution_metadata?: boolean;
 }) {
   const response = await authHttp.post("/api/export", payload, { responseType: "blob" });
   const blob = response.data as Blob;

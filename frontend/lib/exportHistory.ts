@@ -11,6 +11,7 @@ export type ProblemSetExportHistoryItem = {
   output?: string | null;
   count: number;
   includeSolution: boolean;
+  includeMissingSolutionMetadata?: boolean;
   exportedAt: string;
 };
 

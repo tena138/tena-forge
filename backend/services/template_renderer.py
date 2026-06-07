@@ -142,15 +142,57 @@ def render_template_document(template: HubTemplate, data: dict[str, Any]) -> str
     return wrap_rendered_html(render_template_html(template.html, data), template.css)
 
 
+def _has_solution(problem: Problem) -> bool:
+    return bool(str(problem.solution_steps or "").strip())
+
+
+def _source_lookup_metadata(problem: Problem) -> str:
+    tags = problem.tags
+    batch = getattr(problem, "batch", None)
+    lines = ["해설이 저장되어 있지 않습니다. 원본 자료에서 답지/해설을 확인하세요."]
+    if tags and tags.source:
+        lines.append(f"저장된 출처: {tags.source}")
+    if batch and getattr(batch, "name", None):
+        lines.append(f"원본 배치: {batch.name}")
+    if batch and getattr(batch, "problem_pdf_filename", None):
+        lines.append(f"문항 PDF: {Path(str(batch.problem_pdf_filename)).name}")
+    if problem.review_page_number:
+        lines.append(f"원본 페이지: p.{problem.review_page_number}")
+    lines.append(f"문항 번호: {problem.problem_number}번")
+    if problem.answer:
+        lines.append(f"저장된 정답: {problem.answer}")
+    return "\n".join(lines)
+
+
+def _solution_text_for_export(problem: Problem, base_data: dict[str, Any]) -> str:
+    if _has_solution(problem):
+        return problem.solution_steps or ""
+    if base_data.get("include_missing_solution_metadata"):
+        return _source_lookup_metadata(problem)
+    return ""
+
+
+def _solution_items_for_export(problem_data: list[dict[str, Any]], base_data: dict[str, Any]) -> list[dict[str, Any]]:
+    if base_data.get("include_solution"):
+        return list(problem_data)
+    if base_data.get("include_missing_solution_metadata"):
+        return [item for item in problem_data if not item.get("has_solution")]
+    return []
+
+
 def problem_to_template_data(problem: Problem, base_data: dict[str, Any], page_number: int, total_pages: int) -> dict[str, Any]:
     tags = problem.tags
     tag_values = [value for value in ([tags.subject, tags.unit, tags.difficulty, tags.problem_type, tags.source] if tags else []) if value]
+    solution_text = _solution_text_for_export(problem, base_data)
     return {
         **base_data,
         "test_title": base_data.get("test_title") or base_data.get("exam_title") or "Tena Forge",
         "student_name": base_data.get("student_name") or "",
         "problem_text": underline_html_markup(normalize_geometry_notation(problem.problem_text)),
-        "solution": underline_html_markup(problem.solution_steps),
+        "solution": underline_html_markup(solution_text),
+        "solution_text": underline_html_markup(solution_text),
+        "source_lookup_metadata": _source_lookup_metadata(problem),
+        "has_solution": _has_solution(problem),
         "answer": underline_html_markup(problem.answer),
         "page_number": page_number,
         "total_pages": total_pages,
@@ -410,6 +452,8 @@ def _resolve_visual_variable(element: dict[str, Any], data: dict[str, Any]) -> s
 def _problem_export_data(problem: Problem, index: int, total: int, base_data: dict[str, Any]) -> dict[str, Any]:
     tags = problem.tags
     tag_values = [value for value in ([tags.subject, tags.unit, tags.difficulty, tags.problem_type, tags.source] if tags else []) if value]
+    solution_text = _solution_text_for_export(problem, base_data)
+    source_lookup_metadata = _source_lookup_metadata(problem)
     return {
         "id": str(problem.id),
         "source_batch_id": str(problem.source_batch_id),
@@ -419,8 +463,10 @@ def _problem_export_data(problem: Problem, index: int, total: int, base_data: di
         "problem_text": normalize_geometry_notation(problem.problem_text),
         "choices": problem.choices or [],
         "answer": problem.answer or "",
-        "solution": problem.solution_steps or "",
-        "solution_text": problem.solution_steps or "",
+        "solution": solution_text,
+        "solution_text": solution_text,
+        "source_lookup_metadata": source_lookup_metadata,
+        "has_solution": _has_solution(problem),
         "key_concept": problem.key_concept or "",
         "difficulty": tags.difficulty if tags else "",
         "subject": tags.subject if tags else base_data.get("subject", ""),
@@ -1122,7 +1168,123 @@ def _consume_region(region: dict[str, Any], remaining: dict[str, list[dict[str, 
     return True
 
 
+def _template_page_by_id(template_set: dict[str, Any], page_id: Any) -> dict[str, Any] | None:
+    if not page_id:
+        return None
+    page_id_text = str(page_id)
+    pages = [page for page in template_set.get("pages", []) if isinstance(page, dict)]
+    return next((page for page in pages if str(page.get("id") or "") == page_id_text), None)
+
+
+def _consume_page_for_key(page: dict[str, Any], key: str, remaining: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]] | None:
+    placements: dict[str, list[dict[str, Any]]] = {}
+    consumed = False
+    for region in [
+        element
+        for element in page.get("elements", [])
+        if isinstance(element, dict) and element.get("type") in REGION_TYPES and _binding_key(element) == key
+    ]:
+        consumed = _consume_region(region, remaining, placements) or consumed
+    return placements if consumed else None
+
+
+def _append_planned_dynamic_pages(
+    rendered_pages: list[tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]],
+    page_sequence: list[dict[str, Any]],
+    key: str,
+    remaining: dict[str, list[dict[str, Any]]],
+    *,
+    first_page: dict[str, Any] | None = None,
+) -> None:
+    if first_page and remaining.get(key):
+        placements = _consume_page_for_key(first_page, key, remaining)
+        if placements is not None:
+            rendered_pages.append((first_page, placements))
+
+    if not page_sequence:
+        return
+
+    safety = 0
+    while remaining.get(key) and safety < 80:
+        page = page_sequence[safety % len(page_sequence)]
+        placements = _consume_page_for_key(page, key, remaining)
+        if placements is None:
+            break
+        rendered_pages.append((page, placements))
+        safety += 1
+
+
+def _build_visual_template_export_pages_with_plan(
+    template_set: dict[str, Any],
+    problems: list[Problem],
+    base_data: dict[str, Any],
+    plan: dict[str, Any],
+) -> list[dict[str, Any]]:
+    total = max(1, len(problems))
+    problem_data = [_problem_export_data(problem, index, total, base_data) for index, problem in enumerate(problems, start=1)]
+    pages = [page for page in template_set.get("pages", []) if isinstance(page, dict)]
+    uses_korean_flow = any(
+        isinstance(element, dict)
+        and element.get("type") in REGION_TYPES
+        and _binding_key(element) == "problems"
+        and element.get("layoutMode") == "korean-passage-flow"
+        for page in pages
+        for element in page.get("elements", [])
+    )
+    korean_problem_data = _build_korean_passage_flow_items(problems, problem_data) if uses_korean_flow else []
+    remaining = {
+        "problems": list(korean_problem_data or problem_data),
+        "solutions": _solution_items_for_export(problem_data, base_data),
+        "answers": list(problem_data),
+        "counseling": [],
+    }
+    rendered_pages: list[tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]] = []
+
+    cover_page = _template_page_by_id(template_set, plan.get("cover_page_id")) if plan.get("include_cover") else None
+    if cover_page:
+        rendered_pages.append((cover_page, {}))
+
+    document_kind = str(plan.get("document_kind") or "exam")
+    first_page = _template_page_by_id(template_set, plan.get("first_problem_page_id"))
+    body_page = _template_page_by_id(template_set, plan.get("body_problem_page_id"))
+    left_page = _template_page_by_id(template_set, plan.get("left_inner_page_id"))
+    right_page = _template_page_by_id(template_set, plan.get("right_inner_page_id"))
+
+    if document_kind == "textbook":
+        sequence = [page for page in (left_page, right_page) if page] or [page for page in (body_page,) if page]
+        _append_planned_dynamic_pages(rendered_pages, sequence, "problems", remaining)
+    else:
+        sequence = [page for page in (body_page or first_page,) if page]
+        _append_planned_dynamic_pages(rendered_pages, sequence, "problems", remaining, first_page=first_page)
+
+    solution_page = _template_page_by_id(template_set, plan.get("solution_page_id"))
+    if solution_page:
+        _append_planned_dynamic_pages(rendered_pages, [solution_page], "solutions", remaining)
+
+    answer_page = _template_page_by_id(template_set, plan.get("answer_page_id"))
+    if answer_page:
+        _append_planned_dynamic_pages(rendered_pages, [answer_page], "answers", remaining)
+
+    if not rendered_pages:
+        fallback = first_page or body_page or left_page or right_page or cover_page or (pages[0] if pages else {})
+        rendered_pages.append((fallback, {}))
+
+    page_count = max(1, len(rendered_pages))
+    return [
+        {
+            "page": page,
+            "placements": placements,
+            "data": {**base_data, "page_number": index, "total_pages": page_count},
+        }
+        for index, (page, placements) in enumerate(rendered_pages, start=1)
+    ]
+
+
 def build_visual_template_export_pages(template_set: dict[str, Any], problems: list[Problem], base_data: dict[str, Any]) -> list[dict[str, Any]]:
+    visual_page_plan = base_data.get("visual_page_plan")
+    if isinstance(visual_page_plan, dict):
+        return _build_visual_template_export_pages_with_plan(template_set, problems, base_data, visual_page_plan)
+
     total = max(1, len(problems))
     problem_data = [_problem_export_data(problem, index, total, base_data) for index, problem in enumerate(problems, start=1)]
     pages = [page for page in template_set.get("pages", []) if isinstance(page, dict)]
@@ -1142,7 +1304,7 @@ def build_visual_template_export_pages(template_set: dict[str, Any], problems: l
     ]
     remaining = {
         "problems": list(korean_problem_data or problem_data),
-        "solutions": list(problem_data) if base_data.get("include_solution") else [],
+        "solutions": _solution_items_for_export(problem_data, base_data),
         "answers": list(problem_data),
         "counseling": list(counseling_data),
     }

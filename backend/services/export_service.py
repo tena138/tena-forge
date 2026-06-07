@@ -240,7 +240,50 @@ def _tex_problem(problem: Problem, image_height: str = "0.28\\textheight") -> st
     return "\n".join(body)
 
 
-def _tex_solution(problem: Problem) -> str:
+def _has_solution(problem: Problem) -> bool:
+    return bool(str(problem.solution_steps or "").strip())
+
+
+def _source_lookup_metadata(problem: Problem) -> str:
+    tags = problem.tags
+    batch = getattr(problem, "batch", None)
+    lines = ["해설이 저장되어 있지 않습니다. 원본 자료에서 답지/해설을 확인하세요."]
+    if tags and tags.source:
+        lines.append(f"저장된 출처: {tags.source}")
+    if batch and getattr(batch, "name", None):
+        lines.append(f"원본 배치: {batch.name}")
+    if batch and getattr(batch, "problem_pdf_filename", None):
+        lines.append(f"문항 PDF: {Path(str(batch.problem_pdf_filename)).name}")
+    if problem.review_page_number:
+        lines.append(f"원본 페이지: p.{problem.review_page_number}")
+    lines.append(f"문항 번호: {problem.problem_number}번")
+    if problem.answer:
+        lines.append(f"저장된 정답: {problem.answer}")
+    return "\n".join(lines)
+
+
+def _solution_body(problem: Problem, include_missing_solution_metadata: bool) -> str:
+    if _has_solution(problem):
+        return problem.solution_steps or ""
+    if include_missing_solution_metadata:
+        return _source_lookup_metadata(problem)
+    return "해설이 없습니다."
+
+
+def _solution_export_problems(problems: Iterable[Problem], include_solution: bool, include_missing_solution_metadata: bool) -> list[Problem]:
+    items = list(problems)
+    if include_solution:
+        return items
+    if include_missing_solution_metadata:
+        return [problem for problem in items if not _has_solution(problem)]
+    return []
+
+
+def _solution_section_title(include_solution: bool) -> str:
+    return "정답 및 해설" if include_solution else "해설 미등록 문항 원본 위치"
+
+
+def _tex_solution(problem: Problem, include_missing_solution_metadata: bool = False) -> str:
     source_label = problem.tags.source if problem.tags and problem.tags.source else f"문 {problem.problem_number}"
     parts = [
         r"\noindent\textbf{" + _tex_escape(source_label) + r". 정답: " + _tex_content(problem.answer or "미확인") + r"}\par",
@@ -248,12 +291,18 @@ def _tex_solution(problem: Problem) -> str:
     if problem.key_concept:
         parts.append(r"\smallskip\noindent\textbf{핵심 개념:} " + _tex_content(problem.key_concept))
     parts.append(r"\smallskip")
-    parts.append(_tex_content(problem.solution_steps or "해설이 없습니다."))
+    parts.append(_tex_content(_solution_body(problem, include_missing_solution_metadata)))
     parts.append(r"\par\medskip\hrule\medskip")
     return "\n".join(parts)
 
 
-def _build_xelatex_document(problems: list[Problem], template: ExamTemplate, export_values: dict, include_solution: bool) -> str:
+def _build_xelatex_document(
+    problems: list[Problem],
+    template: ExamTemplate,
+    export_values: dict,
+    include_solution: bool,
+    include_missing_solution_metadata: bool = False,
+) -> str:
     font_size = max(8, min(int(template.font_size or 10), 14))
     lines = [
         r"\documentclass[" + str(font_size) + r"pt,a4paper]{article}",
@@ -304,16 +353,24 @@ def _build_xelatex_document(problems: list[Problem], template: ExamTemplate, exp
                 ]
             )
 
-    if include_solution:
-        lines.extend([r"\newpage", _tex_header(template, export_values), r"\begin{center}\Large\textbf{정답 및 해설}\end{center}", r"\vspace{4mm}"])
-        for problem in problems:
-            lines.append(_tex_solution(problem))
+    solution_problems = _solution_export_problems(problems, include_solution, include_missing_solution_metadata)
+    if solution_problems:
+        title = _solution_section_title(include_solution)
+        lines.extend([r"\newpage", _tex_header(template, export_values), r"\begin{center}\Large\textbf{" + _tex_escape(title) + r"}\end{center}", r"\vspace{4mm}"])
+        for problem in solution_problems:
+            lines.append(_tex_solution(problem, include_missing_solution_metadata))
 
     lines.append(r"\end{document}")
     return "\n".join(lines)
 
 
-def _generate_xelatex_pdf(problems: list[Problem], template: ExamTemplate, export_values: dict, include_solution: bool) -> BytesIO:
+def _generate_xelatex_pdf(
+    problems: list[Problem],
+    template: ExamTemplate,
+    export_values: dict,
+    include_solution: bool,
+    include_missing_solution_metadata: bool = False,
+) -> BytesIO:
     xelatex = _find_xelatex()
     if not xelatex:
         raise RuntimeError("xelatex is not installed")
@@ -321,7 +378,10 @@ def _generate_xelatex_pdf(problems: list[Problem], template: ExamTemplate, expor
     workdir.mkdir(parents=True, exist_ok=True)
     tex_path = workdir / "exam.tex"
     pdf_path = workdir / "exam.pdf"
-    tex_path.write_text(_build_xelatex_document(problems, template, export_values, include_solution), encoding="utf-8")
+    tex_path.write_text(
+        _build_xelatex_document(problems, template, export_values, include_solution, include_missing_solution_metadata),
+        encoding="utf-8",
+    )
     env = os.environ.copy()
     env["PATH"] = f"{MIKTEX_BIN};{env.get('PATH', '')}"
     result = subprocess.run(
@@ -833,21 +893,35 @@ def _build_exam_story(problems: list[Problem], template: ExamTemplate, export_va
     return story
 
 
-def _build_solution_story(problems: Iterable[Problem], template: ExamTemplate, export_values: dict, doc_width: float, styles: dict):
+def _build_solution_story(
+    problems: Iterable[Problem],
+    template: ExamTemplate,
+    export_values: dict,
+    doc_width: float,
+    styles: dict,
+    include_solution: bool,
+    include_missing_solution_metadata: bool = False,
+):
     story = [PageBreak(), _header_table(template, export_values, doc_width), Spacer(1, 8 * mm)]
     centered = ParagraphStyle("SolutionHeading", parent=styles["problem_title"], alignment=TA_CENTER, fontSize=18, leading=24)
-    story.extend([Paragraph("정답 및 해설", centered), Spacer(1, 8 * mm)])
+    story.extend([Paragraph(_solution_section_title(include_solution), centered), Spacer(1, 8 * mm)])
     for problem in problems:
         answer = _latex_paragraph_markup(problem.answer or "미확인", styles["problem_title"])
         source_label = html.escape(problem.tags.source if problem.tags and problem.tags.source else f"문 {problem.problem_number}")
         story.append(Paragraph(f"<b>{source_label}. 정답: {answer}</b>", styles["problem_title"]))
         if problem.key_concept:
             story.extend([Spacer(1, 2 * mm), _paragraph(f"핵심 개념: {problem.key_concept}", styles["chip"])])
-        story.extend([Spacer(1, 3 * mm), _paragraph(problem.solution_steps or "해설이 없습니다.", styles["problem"]), Spacer(1, 4 * mm), HRFlowable(width="100%", color=colors.HexColor("#ddd6ef"), thickness=0.6), Spacer(1, 4 * mm)])
+        story.extend([Spacer(1, 3 * mm), _paragraph(_solution_body(problem, include_missing_solution_metadata), styles["problem"]), Spacer(1, 4 * mm), HRFlowable(width="100%", color=colors.HexColor("#ddd6ef"), thickness=0.6), Spacer(1, 4 * mm)])
     return story
 
 
-def _generate_reportlab_pdf(problems: list[Problem], template: ExamTemplate, export_values: dict, include_solution: bool) -> BytesIO:
+def _generate_reportlab_pdf(
+    problems: list[Problem],
+    template: ExamTemplate,
+    export_values: dict,
+    include_solution: bool,
+    include_missing_solution_metadata: bool = False,
+) -> BytesIO:
     register_korean_font()
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=20 * mm, bottomMargin=20 * mm)
@@ -859,18 +933,25 @@ def _generate_reportlab_pdf(problems: list[Problem], template: ExamTemplate, exp
         "chip": ParagraphStyle("Chip", parent=base["Normal"], fontName=FONT_NAME, fontSize=9, leading=13, textColor=colors.HexColor("#4c1d95")),
     }
     story = _build_exam_story(problems, template, export_values, doc.width, styles)
-    if include_solution:
-        story.extend(_build_solution_story(problems, template, export_values, doc.width, styles))
+    solution_problems = _solution_export_problems(problems, include_solution, include_missing_solution_metadata)
+    if solution_problems:
+        story.extend(_build_solution_story(solution_problems, template, export_values, doc.width, styles, include_solution, include_missing_solution_metadata))
     doc.build(story, canvasmaker=lambda *args, **kwargs: NumberedCanvas(*args, footer_text=template.footer_text, **kwargs))
     buffer.seek(0)
     return buffer
 
 
-def generate_exam_pdf(problems: list[Problem], template: ExamTemplate, export_values: dict, include_solution: bool) -> BytesIO:
+def generate_exam_pdf(
+    problems: list[Problem],
+    template: ExamTemplate,
+    export_values: dict,
+    include_solution: bool,
+    include_missing_solution_metadata: bool = False,
+) -> BytesIO:
     try:
-        return _generate_xelatex_pdf(problems, template, export_values, include_solution)
+        return _generate_xelatex_pdf(problems, template, export_values, include_solution, include_missing_solution_metadata)
     except Exception:
-        return _generate_reportlab_pdf(problems, template, export_values, include_solution)
+        return _generate_reportlab_pdf(problems, template, export_values, include_solution, include_missing_solution_metadata)
 
 
 def _canvas_color(value: str | None, fallback=colors.black):

@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from typing import Any
 from urllib.parse import quote
 from uuid import UUID
 
@@ -47,7 +48,7 @@ def _date_parts(value: str) -> tuple[str, str, str]:
     return f"{today.year:04d}", f"{today.month:02d}", f"{today.day:02d}"
 
 
-def _export_values(payload: ExportRequest) -> dict[str, str | bool]:
+def _export_values(payload: ExportRequest) -> dict[str, Any]:
     exam_date = _date_label(payload.date)
     exam_time = _time_label(payload.exam_start_time, payload.exam_end_time, payload.exam_time)
     exam_datetime = (payload.exam_datetime or " ".join(part for part in [exam_date, exam_time] if part)).strip()
@@ -68,11 +69,14 @@ def _export_values(payload: ExportRequest) -> dict[str, str | bool]:
         "exam_datetime": exam_datetime,
         "printed_at": datetime.now().strftime("%Y.%m.%d %H:%M"),
         "include_solution": payload.include_solution,
+        "include_missing_solution_metadata": payload.include_missing_solution_metadata,
     }
     for key, value in (payload.custom_variables or {}).items():
         clean_key = str(key).strip()
         if clean_key:
             values[clean_key] = str(value or "")
+    if payload.visual_page_plan:
+        values["visual_page_plan"] = payload.visual_page_plan
     return values
 
 
@@ -82,7 +86,7 @@ def _load_problems_from_ids(db: Session, problem_ids: list[UUID], owner_id: str)
     rows = db.scalars(
         select(Problem)
         .where(Problem.id.in_(problem_ids), Problem.owner_id == owner_id)
-        .options(joinedload(Problem.tags))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
     ).unique().all()
     by_id = {problem.id: problem for problem in rows}
     missing = [str(problem_id) for problem_id in problem_ids if problem_id not in by_id]
@@ -99,6 +103,7 @@ def _load_requested_problems(payload: ExportRequest, db: Session, owner_id: str)
             select(ProblemSet)
             .where(ProblemSet.id == payload.problem_set_id, ProblemSet.owner_id == owner_id)
             .options(joinedload(ProblemSet.items).joinedload(ProblemSetItem.problem).joinedload(Problem.tags))
+            .options(joinedload(ProblemSet.items).joinedload(ProblemSetItem.problem).joinedload(Problem.batch))
         ).unique().first()
         if not problem_set:
             raise HTTPException(status_code=404, detail="문제 세트를 찾을 수 없습니다.")
@@ -152,6 +157,7 @@ def export_pdf(payload: ExportRequest, request: Request, db: Session = Depends(g
         template,
         export_values,
         include_solution=include_solution,
+        include_missing_solution_metadata=payload.include_missing_solution_metadata,
     )
     filename = f"{_safe_filename(payload.exam_title)}_{_safe_filename(payload.date)}.pdf"
     encoded_filename = quote(filename, safe="")
