@@ -1084,9 +1084,8 @@ function ProblemsBrowser() {
   function openArchiveFolder(folderId: string | null) {
     resetPageAnd(() => {
       setCurrentArchiveFolderId(folderId);
-      if (folderId) return;
       setSelectedBatchId("");
-      setSelectedBatchFolderId(folderId || "");
+      setSelectedBatchFolderId("");
     });
   }
 

@@ -72,6 +72,13 @@ export function ArchiveFolderExplorer({
 
   const currentPath = useMemo(() => archiveFolderPath(currentFolderId, folders), [currentFolderId, folders]);
   const childFolders = useMemo(() => archiveFolderChildren(folders, currentFolderId), [currentFolderId, folders]);
+  const parentIdsWithChildren = useMemo(() => {
+    const parentIds = new Set<string>();
+    for (const folder of folders) {
+      if (folder.parent_id) parentIds.add(folder.parent_id);
+    }
+    return parentIds;
+  }, [folders]);
   const visibleBatches = useMemo(
     () => showBatches ? batches.filter((batch) => (batch.archive_folder_id || null) === (currentFolderId || null)) : [],
     [batches, currentFolderId, showBatches],
@@ -197,6 +204,7 @@ export function ArchiveFolderExplorer({
       <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]" onDragOver={allowDrop}>
         {childFolders.map((folder) => {
           const selected = selectedFolderId === folder.id || currentFolderId === folder.id;
+          const hasChildFolders = parentIdsWithChildren.has(folder.id);
           const folderBatchIds = archiveFolderBatchIds(folder.id, folders, batches);
           const problemCount = batches.filter((batch) => folderBatchIds.includes(batch.id)).reduce((sum, batch) => sum + (batch.problem_count || 0), 0);
           const color = normalizeHexColor(folder.color) || defaultArchiveFolderColor(folder.name);
@@ -222,9 +230,15 @@ export function ArchiveFolderExplorer({
                   onOpenFolder(folder.id);
                   return;
                 }
+                if (hasChildFolders) {
+                  onOpenFolder(folder.id);
+                  return;
+                }
                 onSelectFolder?.(folder.id);
               }}
-              onDoubleClick={() => onOpenFolder(folder.id)}
+              onDoubleClick={() => {
+                if (mode === "select" || hasChildFolders) onOpenFolder(folder.id);
+              }}
             >
               <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
                 <span className="relative">
