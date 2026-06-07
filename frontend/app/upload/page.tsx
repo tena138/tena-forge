@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ArchiveBatchHistory } from "@/components/archive/archive-batch-history";
 import { ArchiveFolderExplorer } from "@/components/archive/archive-folder-explorer";
 import { ColorPicker } from "@/components/editor/color-picker";
-import { ArchiveFolder, Batch, BatchStatus, createArchiveFolder, deleteArchiveFolder, listArchiveFolders, SourceType, updateArchiveFolder } from "@/lib/api";
+import { api, ArchiveFolder, Batch, BatchStatus, createArchiveFolder, deleteArchiveFolder, listArchiveFolders, SourceType, updateArchiveFolder } from "@/lib/api";
 import { authHttp } from "@/lib/auth-client";
 import { readActiveBatch, rememberActiveBatch } from "@/lib/batch-progress";
 import { SUBJECT_ENGINES, subjectEngineLabel } from "@/lib/plan-pricing";
@@ -961,6 +961,7 @@ export default function UploadPage() {
   const [roles, setRoles] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [archiveFolders, setArchiveFolders] = useState<ArchiveFolder[]>([]);
+  const [archiveBatches, setArchiveBatches] = useState<Batch[]>([]);
   const [currentArchiveFolderId, setCurrentArchiveFolderId] = useState<string | null>(null);
   const [selectedArchiveFolderId, setSelectedArchiveFolderId] = useState<string | null>(null);
   const [batchAccentColor, setBatchAccentColor] = useState(() => defaultTagColor("new-batch", "batch"));
@@ -998,6 +999,12 @@ export default function UploadPage() {
     return folders;
   }
 
+  async function refreshArchiveBatches() {
+    const batches = await api<Batch[]>("/api/batches");
+    setArchiveBatches(batches);
+    return batches;
+  }
+
   useEffect(() => {
     let cancelled = false;
     setCurrentArchiveFolderId(null);
@@ -1022,6 +1029,20 @@ export default function UploadPage() {
       cancelled = true;
     };
   }, [subjectEngine]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<Batch[]>("/api/batches")
+      .then((batches) => {
+        if (!cancelled) setArchiveBatches(batches);
+      })
+      .catch(() => {
+        if (!cancelled) setArchiveBatches([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1249,14 +1270,26 @@ export default function UploadPage() {
     setUploadPercent(null);
     setBatchId(data.batch_id);
     rememberActiveBatch(data.batch_id);
+    await refreshArchiveBatches();
     setMessage("업로드 완료. 아래 아카이빙 기록에서 진행률을 확인할 수 있습니다.");
   }
 
   const handleActiveBatchSnapshot = useCallback((batch: Batch | null) => {
     setHistoryBatchSnapshot(batch);
+    if (!batch) return;
+    setArchiveBatches((current) => {
+      if (current.some((item) => item.id === batch.id)) {
+        return current.map((item) => (item.id === batch.id ? batch : item));
+      }
+      return [batch, ...current];
+    });
   }, []);
 
   const currentStatus = historyBatchSnapshot?.id === batchId ? historyBatchSnapshot.status : null;
+  const archiveEngineBatches = useMemo(
+    () => archiveBatches.filter((batch) => (batch.subject_engine || "math") === subjectEngine),
+    [archiveBatches, subjectEngine],
+  );
   const enabledSubjectEngines = useMemo(
     () => usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"],
     [usageSummary],
@@ -1380,7 +1413,7 @@ export default function UploadPage() {
                   <div className="min-w-0">
                     <ArchiveFolderExplorer
                       folders={archiveFolders}
-                      batches={[]}
+                      batches={archiveEngineBatches}
                       currentFolderId={currentArchiveFolderId}
                       selectedFolderId={selectedArchiveFolderId}
                       mode="select"

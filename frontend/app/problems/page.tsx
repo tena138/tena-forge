@@ -778,6 +778,7 @@ function ProblemsBrowser() {
   function resetPageAnd(run: () => void) {
     loadRequestRef.current += 1;
     setPage(1);
+    setSelectedIds([]);
     run();
   }
 
@@ -1550,7 +1551,7 @@ function ProblemsBrowser() {
                     "rounded-[7px] border px-3 py-2 text-xs font-bold transition",
                     selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-400 hover:border-white/20 hover:bg-white/[0.06] hover:text-slate-200"
                   )}
-                  onClick={() => setArchiveEngine(engine.code)}
+                  onClick={() => resetPageAnd(() => setArchiveEngine(engine.code))}
                 >
                   {subjectEngineLabel(engine.code)}
                   <span className="ml-2 text-[11px] font-semibold text-muted-foreground">{engineBatchCount.toLocaleString("ko-KR")}</span>

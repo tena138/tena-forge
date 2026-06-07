@@ -217,7 +217,13 @@ export function ArchiveFolderExplorer({
               )}
               role="button"
               tabIndex={0}
-              onClick={() => onSelectFolder?.(folder.id)}
+              onClick={() => {
+                if (mode === "select") {
+                  onOpenFolder(folder.id);
+                  return;
+                }
+                onSelectFolder?.(folder.id);
+              }}
               onDoubleClick={() => onOpenFolder(folder.id)}
             >
               <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
