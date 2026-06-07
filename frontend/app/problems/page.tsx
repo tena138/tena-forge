@@ -441,6 +441,7 @@ function ProblemsBrowser() {
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
   const [selectedBatchId, setSelectedBatchId] = useState(() => searchParams.get("batch_id") || "");
   const [selectedBatchFolderId, setSelectedBatchFolderId] = useState(() => searchParams.get("batch_folder_id") || "");
+  const [currentArchiveFolderId, setCurrentArchiveFolderId] = useState<string | null>(null);
   const [batchFolders, setBatchFolders] = useState<BatchFolder[]>([]);
   const [folderNameDraft, setFolderNameDraft] = useState("");
   const [batchFolderContextMenu, setBatchFolderContextMenu] = useState<BatchFolderContextMenu>(null);
@@ -502,6 +503,7 @@ function ProblemsBrowser() {
     if (archiveEngineInitializedRef.current) {
       setSelectedBatchFolderId("");
       setSelectedBatchId("");
+      setCurrentArchiveFolderId(null);
     }
     archiveEngineInitializedRef.current = true;
     setLegacyFolderMigrationDone(false);
@@ -630,6 +632,7 @@ function ProblemsBrowser() {
     setSelectedDiffs(searchParams.getAll("difficulty"));
     setSelectedBatchId(searchParams.get("batch_id") || "");
     setSelectedBatchFolderId(searchParams.get("batch_folder_id") || "");
+    setCurrentArchiveFolderId(null);
     setArchiveEngine(readArchiveEngine(searchParams.get("archive_engine")));
     setReviewFilter(readReviewFilter(searchParams.get("needs_review")));
     setSort(readSort(searchParams.get("sort")));
@@ -679,6 +682,12 @@ function ProblemsBrowser() {
       setSelectedBatchFolderId("");
     }
   }, [archiveFolders, archiveFoldersLoaded, selectedBatchFolderId]);
+
+  useEffect(() => {
+    if (currentArchiveFolderId && archiveFoldersLoaded && !archiveFolders.some((folder) => folder.id === currentArchiveFolderId)) {
+      setCurrentArchiveFolderId(null);
+    }
+  }, [archiveFolders, archiveFoldersLoaded, currentArchiveFolderId]);
 
   useEffect(() => {
     if (selectedBatchId && batchesLoaded && !archiveEngineBatchIds.includes(selectedBatchId)) {
@@ -814,6 +823,7 @@ function ProblemsBrowser() {
     resetPageAnd(() => {
       setSelectedBatchId("");
       setSelectedBatchFolderId("");
+      setCurrentArchiveFolderId(null);
     });
   }
 
@@ -1073,8 +1083,19 @@ function ProblemsBrowser() {
 
   function openArchiveFolder(folderId: string | null) {
     resetPageAnd(() => {
+      setCurrentArchiveFolderId(folderId);
+      if (folderId) return;
       setSelectedBatchId("");
       setSelectedBatchFolderId(folderId || "");
+    });
+  }
+
+  function selectArchiveFolderForProblems(folderId: string | null) {
+    resetPageAnd(() => {
+      const folder = folderId ? archiveFolders.find((item) => item.id === folderId) : null;
+      setSelectedBatchId("");
+      setSelectedBatchFolderId(folderId || "");
+      setCurrentArchiveFolderId(folder ? folder.parent_id || null : null);
     });
   }
 
@@ -1562,13 +1583,13 @@ function ProblemsBrowser() {
           <ArchiveFolderExplorer
             folders={archiveFolders}
             batches={archiveEngineBatches}
-            currentFolderId={selectedBatchFolderId || null}
+            currentFolderId={currentArchiveFolderId}
             selectedFolderId={selectedBatchFolderId || null}
             selectedBatchId={selectedBatchId || null}
             mode="browse"
             title={`${subjectEngineLabel(archiveEngine)} 보관 폴더`}
             onOpenFolder={openArchiveFolder}
-            onSelectFolder={() => undefined}
+            onSelectFolder={selectArchiveFolderForProblems}
             onSelectBatch={selectBatch}
             onCreateFolder={createServerArchiveFolder}
             onUpdateFolder={updateServerArchiveFolder}
