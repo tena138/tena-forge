@@ -283,6 +283,8 @@ def _problem_filter_conditions(
     search: str | None = None,
     batch_id: UUID | None = None,
     batch_ids: list[UUID] | None = None,
+    page_from: int | None = None,
+    page_to: int | None = None,
 ):
     filters = [Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None)]
     if subject:
@@ -303,6 +305,15 @@ def _problem_filter_conditions(
         filters.append(Problem.origin_type.in_(origin_type))
     for term in _search_terms(search):
         filters.append(_problem_search_condition(term))
+    if page_from is not None or page_to is not None:
+        start_page = page_from if page_from is not None else page_to
+        end_page = page_to if page_to is not None else page_from
+        if start_page is not None and end_page is not None and start_page > end_page:
+            start_page, end_page = end_page, start_page
+        if start_page is not None:
+            filters.append(Problem.review_page_number >= start_page)
+        if end_page is not None:
+            filters.append(Problem.review_page_number <= end_page)
     if batch_ids:
         filters.append(Problem.source_batch_id.in_(batch_ids))
     elif batch_id:
@@ -324,6 +335,8 @@ def list_problems(
     search: str | None = None,
     batch_id: UUID | None = None,
     batch_ids: list[UUID] | None = Query(default=None),
+    page_from: int | None = Query(default=None, ge=1),
+    page_to: int | None = Query(default=None, ge=1),
     sort: str = "source_order",
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
@@ -343,6 +356,8 @@ def list_problems(
         search=search,
         batch_id=batch_id,
         batch_ids=batch_ids,
+        page_from=page_from,
+        page_to=page_to,
     )
 
     base = select(Problem).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id).options(joinedload(Problem.tags), joinedload(Problem.batch))
@@ -375,6 +390,8 @@ def random_problems(
     search: str | None = None,
     batch_id: UUID | None = None,
     batch_ids: list[UUID] | None = Query(default=None),
+    page_from: int | None = Query(default=None, ge=1),
+    page_to: int | None = Query(default=None, ge=1),
     count: int = Query(default=10, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
@@ -392,6 +409,8 @@ def random_problems(
         search=search,
         batch_id=batch_id,
         batch_ids=batch_ids,
+        page_from=page_from,
+        page_to=page_to,
     )
 
     base = select(Problem).outerjoin(Tag).outerjoin(Batch, Problem.source_batch_id == Batch.id).options(joinedload(Problem.tags), joinedload(Problem.batch))
@@ -421,6 +440,8 @@ def problem_navigation(
     search: str | None = None,
     batch_id: UUID | None = None,
     batch_ids: list[UUID] | None = Query(default=None),
+    page_from: int | None = Query(default=None, ge=1),
+    page_to: int | None = Query(default=None, ge=1),
     sort: str = "source_order",
     db: Session = Depends(get_db),
 ):
@@ -444,6 +465,8 @@ def problem_navigation(
         search=search,
         batch_id=batch_id,
         batch_ids=batch_ids,
+        page_from=page_from,
+        page_to=page_to,
     )
     ids = db.scalars(
         select(Problem.id)

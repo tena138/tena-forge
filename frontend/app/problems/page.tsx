@@ -86,6 +86,31 @@ function readArchiveEngine(value: string | null): SubjectEngineCode {
   return archiveEngineCodes.has(value as SubjectEngineCode) ? (value as SubjectEngineCode) : "math";
 }
 
+type PageRangeFilter = { from: number; to: number };
+
+function pageRangeFromQuery(pageRange: string | null, pageFrom: string | null, pageTo: string | null) {
+  const savedRange = (pageRange || "").trim();
+  if (savedRange) return savedRange;
+  if (pageFrom && pageTo) return pageFrom === pageTo ? `${pageFrom}p` : `${pageFrom}~${pageTo}p`;
+  if (pageFrom) return `${pageFrom}p`;
+  if (pageTo) return `${pageTo}p`;
+  return "";
+}
+
+function parsePageRange(value: string): PageRangeFilter | null {
+  const numbers = (value.match(/\d+/g) || [])
+    .map((item) => Number.parseInt(item, 10))
+    .filter((item) => Number.isFinite(item) && item > 0);
+  if (!numbers.length) return null;
+  const from = numbers[0];
+  const to = numbers[1] ?? from;
+  return { from: Math.min(from, to), to: Math.max(from, to) };
+}
+
+function pageRangeLabel(range: PageRangeFilter) {
+  return range.from === range.to ? `${range.from}p` : `${range.from}~${range.to}p`;
+}
+
 function readBatchFolders() {
   if (typeof window === "undefined") return [];
   try {
@@ -249,6 +274,7 @@ function ProblemsBrowser() {
   const [legacyFolderMigrationDone, setLegacyFolderMigrationDone] = useState(false);
   const [koreanPassages, setKoreanPassages] = useState<KoreanReviewPassageItem[]>([]);
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const [pageRange, setPageRange] = useState(() => pageRangeFromQuery(searchParams.get("page_range"), searchParams.get("page_from"), searchParams.get("page_to")));
   const [unit, setUnit] = useState(() => searchParams.get("unit") || "");
   const [subjects, setSubjects] = useState<string[]>(() => searchParams.getAll("subject"));
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
@@ -434,6 +460,7 @@ function ProblemsBrowser() {
 
   useEffect(() => {
     setSearch(searchParams.get("search") || "");
+    setPageRange(pageRangeFromQuery(searchParams.get("page_range"), searchParams.get("page_from"), searchParams.get("page_to")));
     setUnit(searchParams.get("unit") || "");
     setSubjects(searchParams.getAll("subject"));
     setSelectedDiffs(searchParams.getAll("difficulty"));
@@ -457,12 +484,18 @@ function ProblemsBrowser() {
   const archiveEngineBatchIds = useMemo(() => archiveEngineBatches.map((batch) => batch.id), [archiveEngineBatches]);
   const selectedFolderBatchIds = useMemo(() => selectedBatchFolderId ? archiveFolderBatchIds(selectedBatchFolderId, archiveFolders, archiveEngineBatches) : [], [archiveEngineBatches, archiveFolders, selectedBatchFolderId]);
   const contextMenuBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === batchFolderContextMenu?.folderId) || null, [batchFolderContextMenu, batchFolders]);
+  const parsedPageRange = useMemo(() => parsePageRange(pageRange), [pageRange]);
 
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
     params.set("archive_engine", archiveEngine);
     const searchTerm = search.trim();
     if (searchTerm) params.set("search", searchTerm);
+    if (parsedPageRange) {
+      params.set("page_from", String(parsedPageRange.from));
+      params.set("page_to", String(parsedPageRange.to));
+      params.set("page_range", pageRange.trim());
+    }
     if (unit.trim()) params.set("unit", unit.trim());
     if (reviewFilter === "needs") params.set("needs_review", "true");
     if (reviewFilter === "reviewed") params.set("needs_review", "false");
@@ -482,7 +515,7 @@ function ProblemsBrowser() {
     subjects.forEach((value) => params.append("subject", value));
     selectedDiffs.forEach((value) => params.append("difficulty", value));
     return params.toString();
-  }, [archiveEngine, archiveEngineBatchIds, reviewFilter, search, selectedBatchFolderId, selectedBatchId, selectedDiffs, selectedFolderBatchIds, sort, subjects, unit]);
+  }, [archiveEngine, archiveEngineBatchIds, pageRange, parsedPageRange, reviewFilter, search, selectedBatchFolderId, selectedBatchId, selectedDiffs, selectedFolderBatchIds, sort, subjects, unit]);
 
   useEffect(() => {
     if (selectedBatchFolderId && archiveFoldersLoaded && !archiveFolders.some((folder) => folder.id === selectedBatchFolderId)) {
@@ -583,12 +616,13 @@ function ProblemsBrowser() {
     if (selectedBatchFolderId) chips.push({ key: "batch-folder", label: `폴더: ${archiveFolderPathLabel(selectedBatchFolderId, archiveFolders)}`, onRemove: () => setSelectedBatchFolderId("") });
     if (!selectedBatchFolderId && selectedBatchId) chips.push({ key: "batch", label: `배치: ${selectedBatch?.name || selectedBatchId.slice(0, 8)}`, onRemove: () => setSelectedBatchId("") });
     if (search.trim()) chips.push({ key: "search", label: `검색: ${search.trim()}`, onRemove: () => setSearch("") });
+    if (parsedPageRange) chips.push({ key: "page-range", label: `페이지: ${pageRangeLabel(parsedPageRange)}`, onRemove: () => setPageRange("") });
     if (unit.trim()) chips.push({ key: "unit", label: `단원: ${unit.trim()}`, onRemove: () => setUnit("") });
     subjects.forEach((value) => chips.push({ key: `subject-${value}`, label: `과목: ${subjectDisplayLabel(value)}`, onRemove: () => setSubjects(subjects.filter((item) => item !== value)) }));
     selectedDiffs.forEach((value) => chips.push({ key: `difficulty-${value}`, label: `난이도: ${value}`, onRemove: () => setSelectedDiffs(selectedDiffs.filter((item) => item !== value)) }));
     if (reviewFilter !== "all") chips.push({ key: "review", label: reviewFilter === "needs" ? "검토 필요" : "검토 완료", onRemove: () => setReviewFilter("all") });
     return chips;
-  }, [archiveFolders, reviewFilter, search, selectedBatch, selectedBatchFolderId, selectedBatchId, selectedDiffs, subjects, unit]);
+  }, [archiveFolders, parsedPageRange, reviewFilter, search, selectedBatch, selectedBatchFolderId, selectedBatchId, selectedDiffs, subjects, unit]);
 
   function resetPageAnd(run: () => void) {
     loadRequestRef.current += 1;
@@ -1245,14 +1279,25 @@ function ProblemsBrowser() {
     <div className="space-y-4">
       <section className="forge-panel rounded-lg p-4">
         <div className="grid gap-3 xl:grid-cols-[minmax(18rem,1fr)_auto] xl:items-center">
-          <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3 xl:max-w-4xl">
-            <Search className="h-4 w-4 shrink-0 text-[#7F77DD]" />
-            <Input
-              className="min-w-0 border-0 bg-transparent px-0 text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
-              placeholder="본문, 번호, 정답, 태그, 출처 검색"
-              value={search}
-              onChange={(event) => resetPageAnd(() => setSearch(event.target.value))}
-            />
+          <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_14rem] xl:max-w-5xl">
+            <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3">
+              <Search className="h-4 w-4 shrink-0 text-[#7F77DD]" />
+              <Input
+                className="min-w-0 border-0 bg-transparent px-0 text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
+                placeholder="본문, 번호, 정답, 태그, 출처 검색"
+                value={search}
+                onChange={(event) => resetPageAnd(() => setSearch(event.target.value))}
+              />
+            </div>
+            <label className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3 text-sm text-slate-300">
+              <span className="shrink-0 text-xs font-bold text-muted-foreground">페이지</span>
+              <Input
+                className="min-w-0 border-0 bg-transparent px-0 text-sm font-semibold text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
+                placeholder="124~130p"
+                value={pageRange}
+                onChange={(event) => resetPageAnd(() => setPageRange(event.target.value))}
+              />
+            </label>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
