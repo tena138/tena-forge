@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   CheckSquare,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -17,11 +16,9 @@ import {
   Grid3X3,
   List,
   Minus,
-  Plus,
   Search,
   Send,
   Shuffle,
-  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -36,17 +33,10 @@ import { Input } from "@/components/ui/input";
 import { api, ArchiveFolder, Batch, createArchiveFolder, deleteArchiveFolder, KoreanReviewItemsResponse, KoreanReviewPassageItem, listArchiveFolders, Problem, updateArchiveFolder, updateBatchArchiveFolder } from "@/lib/api";
 import { archiveFolderBatchIds, archiveFolderPathLabel, migrateLegacyBatchFolders } from "@/lib/archiveFolders";
 import { SUBJECT_ENGINES, subjectEngineLabel, type SubjectEngineCode } from "@/lib/plan-pricing";
-import {
-  SubjectNode,
-  buildSubjectTree,
-  makeSubjectPathValue,
-  normalizeSubjectValue,
-  subjectDisplayLabel,
-} from "@/lib/subjectHierarchy";
+import { subjectDisplayLabel } from "@/lib/subjectHierarchy";
 import { cn } from "@/lib/utils";
 
 type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
-type Facets = { subjects: string[]; units: string[]; sources: string[]; visibilities?: string[]; origin_types?: string[] };
 type DragBox = { left: number; top: number; width: number; height: number };
 type ReviewFilter = "all" | "needs" | "reviewed";
 type ViewMode = "grid" | "list";
@@ -78,18 +68,11 @@ type BatchFolderDropTarget = {
 };
 
 const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24, pages: 1 };
-const difficulties = ["하", "중", "상", "최상"];
 const defaultReviewFilter: ReviewFilter = "all";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
-const customSubjectFiltersStorageKey = "tena.problemBrowser.customSubjects";
 const batchFoldersStorageKey = "tena.problemBrowser.batchFolders";
 const selectedProblemsStorageKey = "tena.problemBrowser.selectedIds";
 const archiveDragHotspotOffset = { x: -32, y: -38 };
-const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
-  { value: "all", label: "전체" },
-  { value: "needs", label: "검토 필요" },
-  { value: "reviewed", label: "검토 완료" },
-];
 const sortOptions: Array<{ value: ProblemSort; label: string }> = [
   { value: "source_order", label: "원문 순" },
   { value: "newest", label: "최근 등록" },
@@ -101,21 +84,6 @@ const archiveEngineCodes = new Set<SubjectEngineCode>(["math", "korean", "englis
 
 function readArchiveEngine(value: string | null): SubjectEngineCode {
   return archiveEngineCodes.has(value as SubjectEngineCode) ? (value as SubjectEngineCode) : "math";
-}
-
-function readSubjectList(key: string) {
-  if (typeof window === "undefined") return [];
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed.map((value) => normalizeSubjectValue(String(value))).filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeSubjectList(key: string, values: string[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify([...new Set(values.map(normalizeSubjectValue).filter(Boolean))]));
 }
 
 function readBatchFolders() {
@@ -269,164 +237,10 @@ function stopInteractiveEvent(event: SyntheticEvent) {
   event.stopPropagation();
 }
 
-function ProblemSubjectFolderBoard({
-  nodes,
-  selectedSubjects,
-  onToggleSubject,
-  onAddSubject,
-}: {
-  nodes: SubjectNode[];
-  selectedSubjects: string[];
-  onToggleSubject: (subject: string) => void;
-  onAddSubject: (subject: string) => void;
-}) {
-  const [openParent, setOpenParent] = useState("");
-  const [newRoot, setNewRoot] = useState("");
-  const [newChild, setNewChild] = useState("");
-
-  useEffect(() => {
-    if (!nodes.length) {
-      setOpenParent("");
-      return;
-    }
-    if (!openParent || !nodes.some((node) => (node.value || node.label) === openParent)) {
-      setOpenParent(nodes[0].value || nodes[0].label);
-    }
-  }, [nodes, openParent]);
-
-  function addRoot() {
-    const subject = normalizeSubjectValue(newRoot);
-    if (!subject) return;
-    onAddSubject(subject);
-    setOpenParent(subject);
-    setNewRoot("");
-  }
-
-  function addChild(parent: SubjectNode) {
-    const subject = normalizeSubjectValue(makeSubjectPathValue(parent.value || parent.label, newChild));
-    if (!subject) return;
-    onAddSubject(subject);
-    setOpenParent(parent.value || parent.label);
-    setNewChild("");
-  }
-
-  return (
-    <div className="overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
-      <div className="flex min-w-max gap-3">
-        {nodes.map((node) => {
-          const nodeKey = node.value || node.label;
-          const isOpen = openParent === nodeKey;
-          const parentSelected = Boolean(node.value && selectedSubjects.includes(node.value));
-          const parentRowVisible = parentSelected || !node.children?.length;
-          return (
-            <div key={nodeKey} className="w-52 shrink-0 rounded-md border border-white/10 bg-black/15 p-2">
-              <button
-                type="button"
-                className={cn(
-                  "flex h-8 w-full items-center gap-2 rounded-md border px-2 text-left text-xs font-bold transition-colors",
-                  isOpen ? "border-[#7F77DD] bg-[#7F77DD]/18 text-white" : "border-white/10 bg-card/70 text-slate-300 hover:bg-accent"
-                )}
-                onClick={() => setOpenParent(isOpen ? "" : nodeKey)}
-              >
-                <span className="truncate">{node.label}</span>
-              </button>
-              {isOpen ? (
-                <div className="mt-2 space-y-1.5">
-                  {parentRowVisible && node.value ? (
-                    <ProblemSubjectRow
-                      label={node.label}
-                      value={node.value}
-                      selected={selectedSubjects.includes(node.value)}
-                      onToggle={onToggleSubject}
-                    />
-                  ) : null}
-                  {node.children?.map((child) => {
-                    const value = normalizeSubjectValue(child.value || child.label);
-                    return (
-                      <ProblemSubjectRow
-                        key={value}
-                        label={child.label}
-                        value={value}
-                        selected={selectedSubjects.includes(value)}
-                        onToggle={onToggleSubject}
-                      />
-                    );
-                  })}
-                  <div className="flex items-center gap-1 rounded-md border border-dashed border-white/12 bg-white/[0.025] p-1.5">
-                    <span className="px-1 text-sm font-bold text-slate-400">+</span>
-                    <Input
-                      className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
-                      value={newChild}
-                      onChange={(event) => setNewChild(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          addChild(node);
-                        }
-                      }}
-                      placeholder="하위항목"
-                    />
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => addChild(node)}>+</Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-        <div className="w-52 shrink-0 rounded-md border border-dashed border-white/15 bg-black/15 p-2">
-          <div className="flex h-8 items-center gap-2 rounded-md border border-white/10 bg-card/70 px-2 text-xs font-bold text-slate-300">
-            <span className="text-sm">+</span>
-            <span>상위항목</span>
-          </div>
-          <div className="mt-2 flex gap-1">
-            <Input
-              className="h-8 min-w-0 border-white/10 bg-black/25 text-xs"
-              value={newRoot}
-              onChange={(event) => setNewRoot(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addRoot();
-                }
-              }}
-              placeholder="상위항목"
-            />
-            <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={addRoot}>+</Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProblemSubjectRow({
-  label,
-  value,
-  selected,
-  onToggle,
-}: {
-  label: string;
-  value: string;
-  selected: boolean;
-  onToggle: (subject: string) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={cn("flex h-8 w-full items-center gap-2 rounded-md border px-2 text-left text-xs transition-colors", selected ? "border-[#7F77DD] bg-[#7F77DD] text-white" : "border-white/10 bg-card/70 hover:bg-accent")}
-      onClick={() => onToggle(value)}
-    >
-      <span className="text-slate-500">-</span>
-      <span className="truncate">{label}</span>
-    </button>
-  );
-}
-
 function ProblemsBrowser() {
   const searchParams = useSearchParams();
   const paramsKey = searchParams.toString();
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
-  const [facets, setFacets] = useState<Facets>({ subjects: [], units: [], sources: [], visibilities: [], origin_types: [] });
   const [batches, setBatches] = useState<Batch[]>([]);
   const [archiveEngine, setArchiveEngine] = useState<SubjectEngineCode>(() => readArchiveEngine(searchParams.get("archive_engine")));
   const [archiveFolders, setArchiveFolders] = useState<ArchiveFolder[]>([]);
@@ -437,7 +251,6 @@ function ProblemsBrowser() {
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
   const [unit, setUnit] = useState(() => searchParams.get("unit") || "");
   const [subjects, setSubjects] = useState<string[]>(() => searchParams.getAll("subject"));
-  const [customSubjectFilters, setCustomSubjectFilters] = useState<string[]>([]);
   const [selectedDiffs, setSelectedDiffs] = useState<string[]>(() => searchParams.getAll("difficulty"));
   const [selectedBatchId, setSelectedBatchId] = useState(() => searchParams.get("batch_id") || "");
   const [selectedBatchFolderId, setSelectedBatchFolderId] = useState(() => searchParams.get("batch_folder_id") || "");
@@ -452,7 +265,6 @@ function ProblemsBrowser() {
   const [folderDropMode, setFolderDropMode] = useState<BatchFolderDropTarget["mode"] | null>(null);
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => readReviewFilter(searchParams.get("needs_review")));
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
   const [selectedIds, setSelectedIds] = useState<string[]>(() => readSelectedProblemIds());
@@ -480,10 +292,6 @@ function ProblemsBrowser() {
     batchFolderDragRef.current = nextDrag;
     setBatchFolderDrag(nextDrag);
   }
-
-  useEffect(() => {
-    api<Facets>("/api/problems/facets").then(setFacets).catch(() => undefined);
-  }, []);
 
   const refreshArchiveFolders = useCallback(async (engine: SubjectEngineCode = archiveEngine) => {
     const folders = await listArchiveFolders(engine);
@@ -539,7 +347,6 @@ function ProblemsBrowser() {
   useEffect(() => {
     const saved = window.localStorage.getItem(viewModeStorageKey);
     if (saved === "grid" || saved === "list") setViewMode(saved);
-    setCustomSubjectFilters(readSubjectList(customSubjectFiltersStorageKey));
     setBatchFolders(readBatchFolders());
   }, []);
 
@@ -746,7 +553,6 @@ function ProblemsBrowser() {
   );
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) || null, [batches, selectedBatchId]);
-  const subjectTree = useMemo(() => buildSubjectTree([...facets.subjects, ...customSubjectFilters, ...subjects]), [customSubjectFilters, facets.subjects, subjects]);
   const visibleKoreanPassages = useMemo(
     () => koreanPassages.filter((passage) => reviewFilter === "all" || (reviewFilter === "needs" ? passage.needs_review : !passage.needs_review)),
     [koreanPassages, reviewFilter],
@@ -789,29 +595,6 @@ function ProblemsBrowser() {
     setPage(1);
     setSelectedIds([]);
     run();
-  }
-
-  function toggle(value: string, list: string[], setList: (next: string[]) => void) {
-    resetPageAnd(() => setList(list.includes(value) ? list.filter((item) => item !== value) : [...list, value]));
-  }
-
-  function toggleSubjectValue(value: string) {
-    const subject = normalizeSubjectValue(value);
-    if (!subject) return;
-    resetPageAnd(() => setSubjects(subjects.includes(subject) ? subjects.filter((item) => item !== subject) : [...subjects, subject]));
-  }
-
-  function addCustomSubjectFilter(subjectValue: string) {
-    const subject = normalizeSubjectValue(subjectValue);
-    if (!subject) return;
-    resetPageAnd(() => {
-      setSubjects(subjects.includes(subject) ? subjects : [...subjects, subject]);
-      setCustomSubjectFilters((current) => {
-        const next = current.includes(subject) ? current : [...current, subject];
-        writeSubjectList(customSubjectFiltersStorageKey, next);
-        return next;
-      });
-    });
   }
 
   function persistBatchFolders(nextFolders: BatchFolder[]) {
@@ -1547,15 +1330,6 @@ function ProblemsBrowser() {
               추출
             </button>
           </div>
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
-            onClick={() => setFiltersOpen((value) => !value)}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            필터 {filtersOpen ? "접기" : "펼치기"}
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", filtersOpen && "rotate-180")} />
-          </button>
         </div>
 
         <div className="mt-3">
@@ -1661,61 +1435,6 @@ function ProblemsBrowser() {
           </div>
         ) : null}
 
-        {filtersOpen ? (
-          <div className="mt-4 space-y-4 rounded-lg border border-white/10 bg-black/15 p-3">
-            <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">과목</label>
-                <ProblemSubjectFolderBoard
-                  nodes={subjectTree}
-                  selectedSubjects={subjects}
-                  onToggleSubject={toggleSubjectValue}
-                  onAddSubject={addCustomSubjectFilter}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">난이도</label>
-                <div className="flex flex-wrap gap-2 rounded-md border border-white/10 bg-card/50 p-2">
-                  {difficulties.map((difficulty) => {
-                    const tone = difficultyTone(difficulty);
-                    return (
-                      <label key={difficulty} className={cn("flex items-center gap-2 rounded-md border px-2 py-1 text-sm", selectedDiffs.includes(difficulty) ? tone.badge : "border-white/10 bg-card/70")}>
-                        <input type="checkbox" checked={selectedDiffs.includes(difficulty)} onChange={() => toggle(difficulty, selectedDiffs, setSelectedDiffs)} />
-                        {difficulty}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">단원</label>
-                <Input
-                  value={unit}
-                  onChange={(event) => resetPageAnd(() => setUnit(event.target.value))}
-                  placeholder="단원 검색"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">검토 상태</label>
-              <div className="flex w-fit rounded-md border border-white/10 bg-card/70 p-1">
-                {reviewFilters.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn("rounded px-3 py-1.5 text-sm font-medium transition-colors", reviewFilter === option.value ? "bg-[#7F77DD] text-white shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground")}
-                    onClick={() => resetPageAnd(() => setReviewFilter(option.value))}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : null}
       </section>
 
       {selectedIds.length > 0 ? (
