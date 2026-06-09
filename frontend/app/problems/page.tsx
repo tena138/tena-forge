@@ -1085,7 +1085,7 @@ function ProblemsBrowser() {
     resetPageAnd(() => {
       setCurrentArchiveFolderId(folderId);
       setSelectedBatchId("");
-      setSelectedBatchFolderId("");
+      setSelectedBatchFolderId(folderId || "");
     });
   }
 
