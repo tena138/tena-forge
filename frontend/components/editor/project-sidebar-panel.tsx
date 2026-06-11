@@ -112,6 +112,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
   const isDirty = useEditorStore((state) => state.isDirty);
   const setTemplateName = useEditorStore((state) => state.setTemplateName);
   const setDocument = useEditorStore((state) => state.setDocument);
+  const setSidebarTab = useEditorStore((state) => state.setSidebarTab);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(templateName);
   const [templates, setTemplates] = useState<ExamTemplate[]>([]);
@@ -293,6 +294,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
     const blank = cloneDocument(EMPTY_DOCUMENT);
     blank.updatedAt = new Date().toISOString();
     setDocument(blank, { id: null, name: "새 시각 템플릿", dirty: false });
+    setSidebarTab("elements");
     router.replace("/templates/editor?blank=1");
   }
 

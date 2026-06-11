@@ -239,7 +239,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   zoom: 1,
   panX: 0,
   panY: 0,
-  activeSidebarTab: "templates",
+  activeSidebarTab: "elements",
   activeInspectorTab: "properties",
   showGrid: false,
   snapToGrid: false,

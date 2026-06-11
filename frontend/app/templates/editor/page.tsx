@@ -30,7 +30,6 @@ import {
   Folder,
   ImageIcon,
   Italic,
-  LayoutTemplate,
   LineChart,
   Link2,
   List,
@@ -76,7 +75,6 @@ import { Input } from "@/components/ui/input";
 import { ColorPicker } from "@/components/editor/color-picker";
 import { ElementsSidebarPanel } from "@/components/editor/elements-sidebar-panel";
 import { ProjectSidebarPanel } from "@/components/editor/project-sidebar-panel";
-import { TemplateSidebarPanel } from "@/components/editor/template-sidebar-panel";
 import { TextSidebarPanel } from "@/components/editor/text-sidebar-panel";
 import { ToolsSidebarPanel } from "@/components/editor/tools-sidebar-panel";
 import { UploadsSidebarPanel } from "@/components/editor/uploads-sidebar-panel";
@@ -87,7 +85,6 @@ import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget
 import { rememberElementUse } from "@/lib/elementPresets";
 import { A4_CANVAS, CanvasDocument, CanvasDocumentPage, CanvasElement, CanvasElementType, DrawingTool, DynamicFieldKey, EMPTY_DOCUMENT, Guide, SidebarTab, getCanvasDocumentPages } from "@/lib/editorTypes";
 import { createClipboardEditableElements } from "@/lib/powerpointClipboard";
-import { getStarterTemplate } from "@/lib/starterTemplates";
 import { legacyTemplateDocument } from "@/lib/templateFallback";
 import { TemplateElement } from "@/lib/visualTemplateTypes";
 import { Alignment, LayerDirection, useEditorStore } from "@/store/editorStore";
@@ -440,18 +437,17 @@ function CanvaLeftPanel({
   const toggleSnap = useEditorStore((state) => state.toggleSnap);
   const toggleRulers = useEditorStore((state) => state.toggleRulers);
   const toggleGuides = useEditorStore((state) => state.toggleGuides);
-  const normalizedTab = activeTab === "assets" ? "uploads" : activeTab;
+  const normalizedTab = activeTab === "assets" ? "uploads" : activeTab === "templates" ? "elements" : activeTab;
   const filteredBasics = presets.basics.filter((preset) => preset.label.toLowerCase().includes(query.toLowerCase()));
 
   const tabs: Array<{ key: SidebarTab; label: string; hint: string; icon: React.ReactNode }> = [
-    { key: "templates", label: "추천 템플릿", hint: "기본 레이아웃", icon: <LayoutTemplate className="h-6 w-6" /> },
     { key: "elements", label: "요소", hint: "도형과 영역", icon: <Shapes className="h-6 w-6" /> },
     { key: "text", label: "텍스트", hint: "글상자와 변수", icon: <Type className="h-6 w-6" /> },
     { key: "uploads", label: "업로드 항목", hint: "이미지와 로고", icon: <UploadCloud className="h-6 w-6" /> },
     { key: "tools", label: "도구", hint: "배치 도구", icon: <Pencil className="h-6 w-6" /> },
     { key: "projects", label: "프로젝트", hint: "저장과 버전", icon: <Folder className="h-6 w-6" /> },
   ];
-  const activeMeta = tabs.find((tab) => tab.key === normalizedTab) || tabs[1];
+  const activeMeta = tabs.find((tab) => tab.key === normalizedTab) || tabs[0];
 
   function addTextStyle(label: string, size: number, weight: "normal" | "bold", color = "#111827") {
     addElement(baseElement("text", label, 120, 120, { text: label, width: 260, height: Math.max(40, size * 1.7), fontSize: size, fontWeight: weight, color }));
@@ -510,10 +506,6 @@ function CanvaLeftPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-3">
-          {normalizedTab === "templates" && (
-            <TemplateSidebarPanel onNotice={onNotice} />
-          )}
-
           {normalizedTab === "elements" && (
             <ElementsSidebarPanel />
           )}
@@ -1929,6 +1921,7 @@ function VisualTemplateEditorPageInner() {
   const isDirty = useEditorStore((state) => state.isDirty);
   const setSaving = useEditorStore((state) => state.setSaving);
   const markSaved = useEditorStore((state) => state.markSaved);
+  const setSidebarTab = useEditorStore((state) => state.setSidebarTab);
   const addElement = useEditorStore((state) => state.addElement);
   const selectedIds = useEditorStore((state) => state.selectedIds);
   const updateElements = useEditorStore((state) => state.updateElements);
@@ -2040,15 +2033,13 @@ function VisualTemplateEditorPageInner() {
     if (typeof window === "undefined") return;
     const state = useEditorStore.getState();
     if (!state.isDirty) return;
-    const key = `${draftPrefix}${state.templateId || searchParams.get("starter") || "new"}`;
+    const key = `${draftPrefix}${state.templateId || "new"}`;
     localStorage.setItem(key, JSON.stringify({ id: state.templateId, name: state.templateName, canvasJson: state.canvasJson }));
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     const id = searchParams.get("id");
-    const starter = searchParams.get("starter");
-    const blank = searchParams.get("blank");
-    const draftKey = `${draftPrefix}${id || starter || "new"}`;
+    const draftKey = `${draftPrefix}${id || "new"}`;
     const draft = typeof window !== "undefined" ? localStorage.getItem(draftKey) : null;
     async function load() {
       if (draft) {
@@ -2060,25 +2051,21 @@ function VisualTemplateEditorPageInner() {
           localStorage.removeItem(draftKey);
         }
       }
-      if (blank) {
-        const blankDocument = JSON.parse(JSON.stringify(EMPTY_DOCUMENT)) as CanvasDocument;
-        blankDocument.updatedAt = new Date().toISOString();
-        setDocument(blankDocument, { id: null, name: "새 시각 템플릿", dirty: false });
-        return;
-      }
       if (id) {
         const template = await api<ExamTemplate>(`/api/templates/${id}`);
         setDocument(template.canvas_json || legacyTemplateDocument(template), { id: template.id, name: template.name, dirty: false });
         return;
       }
-      const selected = getStarterTemplate(starter);
-      setDocument(selected.canvasJson, { id: null, name: selected.name, dirty: false });
+      const blankDocument = JSON.parse(JSON.stringify(EMPTY_DOCUMENT)) as CanvasDocument;
+      blankDocument.updatedAt = new Date().toISOString();
+      setDocument(blankDocument, { id: null, name: "새 시각 템플릿", dirty: false });
+      setSidebarTab("elements");
     }
     load().catch((error) => {
       console.error(error);
       setNotice("템플릿을 불러오지 못했습니다.");
     });
-  }, [searchParams, setDocument]);
+  }, [searchParams, setDocument, setSidebarTab]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -2117,7 +2104,7 @@ function VisualTemplateEditorPageInner() {
         problems_per_page: questionAreaCapacity,
         include_solution: allElements.some((element) => element.type === "solution_area"),
       });
-      localStorage.removeItem(`${draftPrefix}${templateId || searchParams.get("starter") || "new"}`);
+      localStorage.removeItem(`${draftPrefix}${templateId || "new"}`);
       markSaved(result.id);
       setNotice("템플릿이 저장되었습니다");
       if (!templateId) router.replace(`/templates/editor?id=${result.id}`);
@@ -2129,7 +2116,7 @@ function VisualTemplateEditorPageInner() {
     } finally {
       saveInFlight.current = false;
     }
-  }, [document, markSaved, router, searchParams, setSaving, templateId, templateName]);
+  }, [document, markSaved, router, setSaving, templateId, templateName]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -2158,7 +2145,7 @@ function VisualTemplateEditorPageInner() {
         problems_per_page: questionAreaCapacity,
         include_solution: allElements.some((element) => element.type === "solution_area"),
       });
-      localStorage.removeItem(`${draftPrefix}${templateId || searchParams.get("starter") || "new"}`);
+      localStorage.removeItem(`${draftPrefix}${templateId || "new"}`);
       markSaved(result.id);
       setNotice("사본이 저장되었습니다");
       router.replace(`/templates/editor?id=${result.id}`);
@@ -2168,7 +2155,7 @@ function VisualTemplateEditorPageInner() {
       setNotice(error instanceof Error ? error.message : "사본 저장에 실패했습니다.");
       return null;
     }
-  }, [document, markSaved, router, searchParams, setSaving, templateId, templateName]);
+  }, [document, markSaved, router, setSaving, templateId, templateName]);
 
   const openExport = useCallback(async () => {
     let id = useEditorStore.getState().templateId;
