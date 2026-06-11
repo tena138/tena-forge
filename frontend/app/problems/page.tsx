@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
-import { ArchiveFolderExplorer } from "@/components/archive/archive-folder-explorer";
 import { ExportModal } from "@/components/export-modal";
 import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
@@ -488,7 +487,6 @@ function ProblemsBrowser() {
 
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
-    params.set("archive_engine", archiveEngine);
     const searchTerm = search.trim();
     if (searchTerm) params.set("search", searchTerm);
     if (parsedPageRange) {
@@ -500,22 +498,13 @@ function ProblemsBrowser() {
     if (reviewFilter === "needs") params.set("needs_review", "true");
     if (reviewFilter === "reviewed") params.set("needs_review", "false");
     if (sort !== "source_order") params.set("sort", sort);
-    if (selectedBatchFolderId) params.set("batch_folder_id", selectedBatchFolderId);
-    if (selectedFolderBatchIds.length) {
-      selectedFolderBatchIds.forEach((batchId) => params.append("batch_ids", batchId));
-    } else if (selectedBatchFolderId) {
-      params.append("batch_ids", "00000000-0000-0000-0000-000000000000");
-    } else if (selectedBatchId) {
+    if (selectedBatchId) {
       params.set("batch_id", selectedBatchId);
-    } else if (archiveEngineBatchIds.length) {
-      archiveEngineBatchIds.forEach((batchId) => params.append("batch_ids", batchId));
-    } else {
-      params.append("batch_ids", "00000000-0000-0000-0000-000000000000");
     }
     subjects.forEach((value) => params.append("subject", value));
     selectedDiffs.forEach((value) => params.append("difficulty", value));
     return params.toString();
-  }, [archiveEngine, archiveEngineBatchIds, pageRange, parsedPageRange, reviewFilter, search, selectedBatchFolderId, selectedBatchId, selectedDiffs, selectedFolderBatchIds, sort, subjects, unit]);
+  }, [pageRange, parsedPageRange, reviewFilter, search, selectedBatchId, selectedDiffs, sort, subjects, unit]);
 
   useEffect(() => {
     if (selectedBatchFolderId && archiveFoldersLoaded && !archiveFolders.some((folder) => folder.id === selectedBatchFolderId)) {
@@ -1290,10 +1279,10 @@ function ProblemsBrowser() {
               />
             </div>
             <label className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3 text-sm text-slate-300">
-              <span className="shrink-0 text-xs font-bold text-muted-foreground">페이지</span>
+              <span className="shrink-0 text-xs font-bold text-muted-foreground">원본 페이지</span>
               <Input
                 className="min-w-0 border-0 bg-transparent px-0 text-sm font-semibold text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
-                placeholder="124~130p"
+                placeholder="예: 124~130p"
                 value={pageRange}
                 onChange={(event) => resetPageAnd(() => setPageRange(event.target.value))}
               />
@@ -1376,46 +1365,6 @@ function ProblemsBrowser() {
             </button>
           </div>
         </div>
-
-        <div className="mt-3">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            {SUBJECT_ENGINES.map((engine) => {
-              const selected = archiveEngine === engine.code;
-              const engineBatchCount = batches.filter((batch) => (batch.subject_engine || "math") === engine.code).length;
-              return (
-                <button
-                  key={engine.code}
-                  type="button"
-                  className={cn(
-                    "rounded-[7px] border px-3 py-2 text-xs font-bold transition",
-                    selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-400 hover:border-white/20 hover:bg-white/[0.06] hover:text-slate-200"
-                  )}
-                  onClick={() => resetPageAnd(() => setArchiveEngine(engine.code))}
-                >
-                  {subjectEngineLabel(engine.code)}
-                  <span className="ml-2 text-[11px] font-semibold text-muted-foreground">{engineBatchCount.toLocaleString("ko-KR")}</span>
-                </button>
-              );
-            })}
-          </div>
-          <ArchiveFolderExplorer
-            folders={archiveFolders}
-            batches={archiveEngineBatches}
-            currentFolderId={currentArchiveFolderId}
-            selectedFolderId={selectedBatchFolderId || null}
-            selectedBatchId={selectedBatchId || null}
-            mode="browse"
-            title={`${subjectEngineLabel(archiveEngine)} 보관 폴더`}
-            onOpenFolder={openArchiveFolder}
-            onSelectFolder={selectArchiveFolderForProblems}
-            onSelectBatch={selectBatch}
-            onCreateFolder={createServerArchiveFolder}
-            onUpdateFolder={updateServerArchiveFolder}
-            onDeleteFolder={deleteServerArchiveFolder}
-            onMoveBatch={moveBatchToServerFolder}
-          />
-        </div>
-
         {batchFolderDrag?.isDragging ? (
           <div
             className="pointer-events-none fixed z-[120]"
