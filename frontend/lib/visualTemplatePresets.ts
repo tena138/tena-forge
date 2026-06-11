@@ -310,6 +310,25 @@ function createPage(name: string, role: PageRole, elements: TemplateElement[] = 
   };
 }
 
+export function createBlankTemplateSet(): TemplateSet {
+  const createdAt = now();
+  const theme = { primary: "#6d28d9", graphite: "#111827", muted: "#6b7280", fontFamily: "Pretendard, Noto Sans KR, sans-serif" };
+  return {
+    id: nanoid(),
+    schemaVersion: 1,
+    title: "A4 Template Set",
+    description: "Blank A4 template created in Visual Template Studio.",
+    category: "custom",
+    visibility: "private",
+    defaultPageSize: PAGE_SIZES.A4_PORTRAIT,
+    theme,
+    pages: [createPage("A4", "custom")],
+    assets: [],
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
 export function createTemplateSet(category: TemplateCategory): TemplateSet {
   const theme = { primary: "#6d28d9", graphite: "#111827", muted: "#6b7280", fontFamily: "Pretendard, Noto Sans KR, sans-serif" };
   const title = visualTemplateCategories.find((item) => item.value === category)?.label || "템플릿";

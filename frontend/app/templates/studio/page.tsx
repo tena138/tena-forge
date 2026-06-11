@@ -10,7 +10,6 @@ import {
   AlignStartHorizontal,
   ArrowLeft,
   BarChart3,
-  BookOpen,
   BoxSelect,
   Braces,
   BringToFront,
@@ -52,19 +51,18 @@ import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget
 import { ClipboardDesignImage, createClipboardEditableElements, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
 import { importPowerPointFile } from "@/lib/powerpointPptxImport";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
-import { createElement, createProblemRegion, createTemplateSet, pageRoleLabels, visualTemplateCategories } from "@/lib/visualTemplatePresets";
+import { createBlankTemplateSet, createElement, createProblemRegion, pageRoleLabels } from "@/lib/visualTemplatePresets";
 import { ElementStyle, ExamStatsDataSource, ExamStatsMetricKey, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubTemplate, ensureTemplateHubSession, getHubTemplate, updateHubTemplate } from "@/lib/templateHub";
 
 const LOCAL_STORAGE_KEY = "tena-forge-visual-template-studio";
 
-type StudioPanel = "presets" | "elements" | "pages" | "variables" | "search" | "layers";
+type StudioPanel = "elements" | "pages" | "variables" | "search" | "layers";
 type PaletteGroup = "기본 요소" | "문서 블록" | "동적 영역" | "시스템";
 type SaveMode = "manual" | "auto";
 type AutoSaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
 
 const panelTabs: Array<{ key: StudioPanel; label: string; icon: typeof Type }> = [
-  { key: "presets", label: "프리셋", icon: BookOpen },
   { key: "elements", label: "요소", icon: BoxSelect },
   { key: "pages", label: "페이지", icon: FileStack },
   { key: "variables", label: "변수", icon: Braces },
@@ -137,10 +135,6 @@ function sanitizeTemplateSetForSave(templateSet: TemplateSet): TemplateSet {
     elements: page.elements.map(normalizeExamStatsElement),
   }));
   return JSON.parse(JSON.stringify(next)) as TemplateSet;
-}
-
-function isTemplateCategory(value: string | null): value is TemplateCategory {
-  return !!value && visualTemplateCategories.some((category) => category.value === value);
 }
 
 function mapToHubCategory(category: TemplateCategory): HubTemplateCategory {
@@ -878,11 +872,10 @@ type MarqueeSelectionState = {
 function VisualTemplateStudioPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const requestedType = searchParams.get("type");
-  const initialCategory: TemplateCategory = isTemplateCategory(requestedType) ? requestedType : "exam";
   const requestedId = searchParams.get("id");
+  const forceNewTemplate = searchParams.get("new") === "1" || searchParams.has("type");
 
-  const [templateSet, setTemplateSet] = useState<TemplateSet>(() => createTemplateSet(initialCategory));
+  const [templateSet, setTemplateSet] = useState<TemplateSet>(() => createBlankTemplateSet());
   const [persistedTemplateId, setPersistedTemplateId] = useState<string | null>(requestedId);
   const [selectedPageId, setSelectedPageId] = useState<string>(() => templateSet.pages[0]?.id || "");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -1142,8 +1135,13 @@ function VisualTemplateStudioPageContent() {
         }
       }
 
+      if (forceNewTemplate && !requestedId) {
+        window.localStorage.removeItem(LOCAL_STORAGE_KEY);
+        return;
+      }
+
       const local = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (local && !searchParams.get("type") && !requestedId) {
+      if (local && !requestedId) {
         try {
           const parsed = JSON.parse(local) as TemplateSet;
           if (parsed?.schemaVersion && Array.isArray(parsed.pages)) {
@@ -1159,7 +1157,7 @@ function VisualTemplateStudioPageContent() {
       }
     }
     void loadTemplate();
-  }, [requestedId, searchParams]);
+  }, [forceNewTemplate, requestedId]);
 
   useEffect(() => {
     function onPointerMove(event: PointerEvent) {
@@ -1783,32 +1781,6 @@ function VisualTemplateStudioPageContent() {
   }
 
   function renderLeftPanel() {
-    if (leftPanel === "presets") {
-      return (
-        <div className="space-y-3">
-          <h2 className="text-sm font-bold text-white">시작 프리셋</h2>
-          {visualTemplateCategories.map((category) => (
-            <button
-              key={category.value}
-              className="group w-full overflow-hidden rounded-[12px] border border-white/10 bg-white/[0.045] text-left shadow-[0_12px_32px_rgba(0,0,0,0.14)] transition hover:-translate-y-0.5 hover:border-violet-300/40 hover:bg-violet-500/10"
-              onClick={() => {
-                const next = createTemplateSet(category.value);
-                pushHistory();
-                setTemplateSet(next);
-                setSelectedPageId(next.pages[0]?.id || "");
-                setSelectedIds([]);
-              }}
-            >
-              <div className="h-16 border-b border-white/10 bg-[radial-gradient(circle_at_18%_20%,rgba(167,139,250,0.28),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
-              <div className="p-3">
-                <div className="text-sm font-bold text-white">{category.label}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      );
-    }
-
     if (leftPanel === "elements") {
       const groups: PaletteGroup[] = ["기본 요소", "문서 블록", "동적 영역", "시스템"];
       return (

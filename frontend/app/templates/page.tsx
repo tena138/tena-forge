@@ -21,7 +21,7 @@ import {
   templateCategories,
   visibilityLabels,
 } from "@/lib/templateHub";
-import { createTemplateSet } from "@/lib/visualTemplatePresets";
+import { createBlankTemplateSet } from "@/lib/visualTemplatePresets";
 import { TemplateSet } from "@/lib/visualTemplateTypes";
 
 function getVisualTemplateSet(template: HubTemplate): TemplateSet | null {
@@ -36,7 +36,7 @@ function hasVisualSchema(template: HubTemplate) {
 }
 
 function openHref(template: HubTemplate) {
-  if (template.id === "starter") return "/templates/studio?type=exam";
+  if (template.id === "starter") return "/templates/studio?new=1";
   return hasVisualSchema(template) ? `/templates/studio?id=${template.id}` : `/templates/${template.id}`;
 }
 
@@ -102,12 +102,12 @@ export default function TemplateHubPage() {
   }, [category, keyword, sort]);
 
   const starter = useMemo<HubTemplate>(() => {
-    const visualSet = createTemplateSet("exam");
+    const visualSet = createBlankTemplateSet();
     return {
       id: "starter",
       owner_id: "system",
-      title: "기본 시험지 Visual Set",
-      description: "A4 시험지와 문항 자동 배치 영역을 포함한 Visual Template Studio 시작 프리셋입니다.",
+      title: "Blank A4 Visual Set",
+      description: "A blank A4 canvas for Visual Template Studio.",
       category: "exam",
       visibility: "public",
       html: defaultTemplateHtml,
@@ -167,13 +167,13 @@ export default function TemplateHubPage() {
             <Link href="/templates/mine">
               <Button variant="outline">내 템플릿</Button>
             </Link>
-            <Link href="/templates/new">
+            <Link href="/templates/studio?new=1">
               <Button>
                 <Plus className="h-4 w-4" />
                 템플릿 만들기
               </Button>
             </Link>
-            <Link href="/templates/studio?type=exam">
+            <Link href="/templates/studio?new=1">
               <Button variant="secondary">
                 <LayoutTemplate className="h-4 w-4" />
                 Visual Studio

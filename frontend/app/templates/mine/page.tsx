@@ -116,7 +116,7 @@ export default function MyTemplatesPage() {
   return (
     <div className="space-y-6 pb-24">
       <Link
-        href="/templates/new"
+        href="/templates/studio?new=1"
         className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-violet-300/40 bg-violet-600 text-white shadow-[0_18px_44px_rgba(124,58,237,0.42)] transition hover:bg-violet-500"
         aria-label="템플릿 만들기"
         title="템플릿 만들기"
@@ -199,7 +199,7 @@ export default function MyTemplatesPage() {
       ) : (
         <section className="rounded-[10px] border border-dashed border-white/15 bg-white/[0.035] p-10 text-center">
           <h2 className="text-lg font-bold text-white">저장된 템플릿이 없습니다</h2>
-          <Link href="/templates/new" className="mt-5 inline-flex">
+          <Link href="/templates/studio?new=1" className="mt-5 inline-flex">
             <Button>
               <Plus className="h-4 w-4" />
               템플릿 만들기

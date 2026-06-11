@@ -646,7 +646,7 @@ export function ExportModal({
                 <h2 className="text-lg font-semibold text-white">템플릿 선택</h2>
               </div>
               {!hideTemplateSelection ? (
-                <Link className="rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/[0.06]" href="/templates/new">
+                <Link className="rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/[0.06]" href="/templates/studio?new=1">
                   새 템플릿 만들기
                 </Link>
               ) : null}

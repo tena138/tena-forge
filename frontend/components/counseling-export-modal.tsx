@@ -124,7 +124,7 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
               <h2 className="text-xl font-bold">상담일지 템플릿 내보내기</h2>
               <p className="mt-1 text-sm text-slate-400">상담일지 카테고리 템플릿에 상담 항목을 자동 삽입합니다.</p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => window.open("/templates/studio?type=counseling", "_blank", "noopener,noreferrer")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => window.open("/templates/studio?new=1", "_blank", "noopener,noreferrer")}>
               템플릿 만들기
             </Button>
           </div>
