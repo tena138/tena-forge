@@ -761,7 +761,24 @@ function problemStatusKey(problem: Pick<SessionProblem, "problem_id" | "problem_
 }
 
 function displayProblemNumber(problem: Pick<SessionProblem, "problem_number" | "original_problem_number">) {
-  return problem.original_problem_number || problem.problem_number;
+  return problem.original_problem_number ?? problem.problem_number;
+}
+
+function sessionProblemDisplayNumber(problem: Pick<SessionProblem, "problem_number" | "original_problem_number">, index: number, sessionType?: string | null) {
+  return usesFlatProblemGrid(sessionType) ? index + 1 : displayProblemNumber(problem);
+}
+
+function problemMetadataLabel(problem: SessionProblem) {
+  return [
+    problem.source_label,
+    problem.review_page_number ? `원본 페이지 ${problem.review_page_number}p` : null,
+    `원본 문항 ${displayProblemNumber(problem)}번`,
+    problem.problem_number !== displayProblemNumber(problem) ? `저장 번호 ${problem.problem_number}번` : null,
+    problem.subject,
+    problem.unit,
+    problem.difficulty,
+    problem.answer ? `정답 ${problem.answer}` : null,
+  ].filter(Boolean).join(" · ");
 }
 
 function problemPageLabel(problem: Pick<SessionProblem, "review_page_number">) {
@@ -783,21 +800,24 @@ function usesFlatProblemGrid(sessionType?: string | null) {
   return sessionType === "test" || sessionType === "mock_exam";
 }
 
-function problemMatchesInput(problem: SessionProblem, rawToken: string) {
+function problemMatchesInput(problem: SessionProblem, rawToken: string, displayNumber = displayProblemNumber(problem), includeMetadataAliases = true) {
   const token = rawToken.trim().toLowerCase().replace(/\s+/g, "");
   if (!token) return false;
-  const display = String(displayProblemNumber(problem));
+  const display = String(displayNumber);
   const internal = String(problem.problem_number);
+  const original = String(displayProblemNumber(problem));
   const page = problem.review_page_number ? String(problem.review_page_number) : "";
-  if (token === display || token === internal) return true;
+  if (token === display) return true;
+  if (!includeMetadataAliases) return false;
+  if (token === internal || token === original) return true;
   if (!page) return false;
   const pageTokens = [
-    `${page}-${display}`,
-    `${page}:${display}`,
-    `${page}.${display}`,
-    `p${page}-${display}`,
-    `p${page}:${display}`,
-    `${page}p-${display}`,
+    `${page}-${original}`,
+    `${page}:${original}`,
+    `${page}.${original}`,
+    `p${page}-${original}`,
+    `p${page}:${original}`,
+    `${page}p-${original}`,
   ];
   return pageTokens.includes(token);
 }
@@ -805,11 +825,13 @@ function problemMatchesInput(problem: SessionProblem, rawToken: string) {
 function ProblemCell({
   label,
   subtitle,
+  metadata,
   status,
   onClick,
 }: {
   label: string;
   subtitle?: string;
+  metadata?: string;
   status: ProblemStatus;
   onClick: () => void;
 }) {
@@ -824,7 +846,7 @@ function ProblemCell({
         status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-100",
         status === "unmarked" && "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40"
       )}
-      title={`${subtitle ? `${subtitle} · ` : ""}${label}번 ${status}`}
+      title={[`${label}번`, metadata || subtitle, status].filter(Boolean).join(" · ")}
     >
       {label}
     </button>
@@ -952,8 +974,9 @@ export default function StudentManagementPage() {
       (student?.problem_results || [])
         .filter((item) => item.result_status === "wrong")
         .map((item) => {
-          const problem = sessionDetail.problems.find((candidate) => candidate.problem_id === item.problem_id) || sessionDetail.problems.find((candidate) => candidate.problem_number === item.problem_number);
-          return problem ? String(displayProblemNumber(problem)) : String(item.problem_number);
+          const problemIndex = sessionDetail.problems.findIndex((candidate) => candidate.problem_id === item.problem_id || candidate.problem_number === item.problem_number);
+          const problem = problemIndex >= 0 ? sessionDetail.problems[problemIndex] : null;
+          return problem ? String(sessionProblemDisplayNumber(problem, problemIndex, sessionDetail.session_type)) : String(item.problem_number);
         })
         .join(", ")
     );
@@ -1156,9 +1179,11 @@ export default function StudentManagementPage() {
   function applyWrongInput() {
     if (!sessionDetail) return;
     const tokens = wrongInput.split(/[\s,;/]+/).filter(Boolean);
+    const flatProblemGrid = usesFlatProblemGrid(sessionDetail.session_type);
     const next: Record<string, ProblemStatus> = {};
-    for (const problem of sessionDetail.problems) {
-      next[problemStatusKey(problem)] = tokens.some((token) => problemMatchesInput(problem, token)) ? "wrong" : "correct";
+    for (const [index, problem] of sessionDetail.problems.entries()) {
+      const displayNumber = sessionProblemDisplayNumber(problem, index, sessionDetail.session_type);
+      next[problemStatusKey(problem)] = tokens.some((token) => problemMatchesInput(problem, token, displayNumber, !flatProblemGrid)) ? "wrong" : "correct";
     }
     setGridStatuses(next);
   }
@@ -1631,10 +1656,11 @@ export default function StudentManagementPage() {
                 {sessionDetail && selectedStudent ? (
                   usesFlatProblemGrid(sessionDetail.session_type) ? (
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5">
-                      {sessionDetail.problems.map((problem) => (
+                      {sessionDetail.problems.map((problem, index) => (
                         <ProblemCell
                           key={problem.problem_id}
-                          label={String(displayProblemNumber(problem))}
+                          label={String(sessionProblemDisplayNumber(problem, index, sessionDetail.session_type))}
+                          metadata={problemMetadataLabel(problem)}
                           status={gridStatuses[problemStatusKey(problem)] || "correct"}
                           onClick={() => toggleProblem(problem)}
                         />
@@ -1673,6 +1699,7 @@ export default function StudentManagementPage() {
                                             key={problem.problem_id}
                                             label={String(displayProblemNumber(problem))}
                                             subtitle={group.label}
+                                            metadata={problemMetadataLabel(problem)}
                                             status={gridStatuses[problemStatusKey(problem)] || "correct"}
                                             onClick={() => toggleProblem(problem)}
                                           />

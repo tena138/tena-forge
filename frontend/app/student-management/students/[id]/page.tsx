@@ -368,7 +368,24 @@ function problemStatusKey(problem: Pick<SessionProblem, "problem_id" | "problem_
 }
 
 function displayProblemNumber(problem: Pick<SessionProblem, "problem_number" | "original_problem_number">) {
-  return problem.original_problem_number || problem.problem_number;
+  return problem.original_problem_number ?? problem.problem_number;
+}
+
+function sessionProblemDisplayNumber(problem: Pick<SessionProblem, "problem_number" | "original_problem_number">, index: number, sessionType?: string | null) {
+  return usesFlatProblemGrid(sessionType) ? index + 1 : displayProblemNumber(problem);
+}
+
+function problemMetadataLabel(problem: SessionProblem) {
+  return [
+    problem.source_label,
+    problem.review_page_number ? `원본 페이지 ${problem.review_page_number}p` : null,
+    `원본 문항 ${displayProblemNumber(problem)}번`,
+    problem.problem_number !== displayProblemNumber(problem) ? `저장 번호 ${problem.problem_number}번` : null,
+    problem.subject,
+    problem.unit,
+    problem.difficulty,
+    problem.answer ? `정답 ${problem.answer}` : null,
+  ].filter(Boolean).join(" · ");
 }
 
 function problemPageLabel(problem: Pick<SessionProblem, "review_page_number">) {
@@ -546,7 +563,7 @@ function statusCounts(statuses: Record<string, ProblemStatus>, problems: Session
   return { correct, wrong, unmarked };
 }
 
-function ResultCell({ label, subtitle, status, onClick }: { label: string; subtitle?: string; status: ProblemStatus; onClick: () => void }) {
+function ResultCell({ label, subtitle, metadata, status, onClick }: { label: string; subtitle?: string; metadata?: string; status: ProblemStatus; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -558,7 +575,7 @@ function ResultCell({ label, subtitle, status, onClick }: { label: string; subti
         status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-50 hover:bg-rose-500/35",
         status === "unmarked" && "border-white/10 bg-white/[0.04] text-slate-300 hover:border-violet-300/40"
       )}
-      title={`${subtitle ? `${subtitle} · ` : ""}${label}번 ${status}`}
+      title={[`${label}번`, metadata || subtitle, status].filter(Boolean).join(" · ")}
     >
       {label}
     </button>
@@ -1854,10 +1871,11 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                         </div>
                         {usesFlatProblemGrid(result.session?.session_type) ? (
                           <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5">
-                            {problems.map((problem) => (
+                            {problems.map((problem, index) => (
                               <ResultCell
                                 key={problemStatusKey(problem)}
-                                label={String(displayProblemNumber(problem))}
+                                label={String(sessionProblemDisplayNumber(problem, index, result.session?.session_type))}
+                                metadata={problemMetadataLabel(problem)}
                                 status={statuses[problemStatusKey(problem)] || "correct"}
                                 onClick={() => toggleResultProblem(result, problem)}
                               />
@@ -1895,6 +1913,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                                                   key={problemStatusKey(problem)}
                                                   label={String(displayProblemNumber(problem))}
                                                   subtitle={group.label}
+                                                  metadata={problemMetadataLabel(problem)}
                                                   status={statuses[problemStatusKey(problem)] || "correct"}
                                                   onClick={() => toggleResultProblem(result, problem)}
                                                 />
