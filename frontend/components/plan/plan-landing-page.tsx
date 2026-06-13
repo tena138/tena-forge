@@ -392,11 +392,11 @@ export function PlanLandingPage() {
           <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
             <div className="flex w-full flex-col items-center">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
-              <h1 className="landing-hero-title landing-keep-words mt-4 bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
-                자료 업로드부터 과제까지 한 흐름으로
+              <h1 className="landing-hero-title landing-keep-words mt-4 whitespace-nowrap bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
+                혼자서도 빠르고, 강력하게
               </h1>
               <p className="landing-keep-words mt-4 max-w-4xl text-base leading-7 text-[var(--landing-text-secondary)] sm:mt-5 sm:text-lg sm:leading-8">
-                권리 있는 PDF를 올리고, 검토한 문항으로 수업 자료와 학생 과제를 만듭니다.
+                자체 제작한 교재 PDF, 시험지 PDF 자료를 업로드하면 문항을 추출하고, 문제 DB로 정리한 뒤 시험지 제작과 학생 오답 기록까지 이어지는 제작 콘솔.
               </p>
               <div className="mt-6 flex w-full flex-wrap items-center justify-center gap-3 sm:mt-8 sm:w-auto sm:gap-4">
                 <Link
@@ -426,6 +426,7 @@ export function PlanLandingPage() {
         </div>
       </section>
 
+      <ScrollStorySection />
       <PlanSection />
       <LandingFooter />
     </main>
@@ -503,7 +504,7 @@ function ProductPreview() {
               <button type="button" className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-slate-400 lg:inline-flex" aria-label="사이드바 닫기">
                 <PanelLeftClose className="h-4 w-4" />
               </button>
-              <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">제작</span>
+              <span className="hidden min-w-0 border-l border-white/10 pl-3 text-xs font-semibold tracking-normal text-slate-400 sm:inline">제작 콘솔</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[11px] font-bold text-slate-300 sm:inline-flex">/problems</span>
@@ -519,19 +520,19 @@ function ProductPreview() {
           <div className="grid h-[calc(32rem-3.5rem)] min-h-0 grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)]">
             <aside className="border-r border-white/10 bg-black/45 px-1.5 py-3 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-2">
               <SidebarGroup
-                title="제작"
+                title="Private Studio"
                 accent="bg-violet-400"
                 panel="border-violet-400/20 bg-violet-400/[0.055]"
                 items={[
-                  ["홈", LayoutDashboard, true],
-                  ["자료 업로드", FileUp, false],
-                  ["문항 확인", ClipboardCheck, false],
-                  ["문항 보관함", Archive, true],
+                  ["제작 콘솔", LayoutDashboard, true],
+                  ["추출", FileUp, false],
+                  ["확인", ClipboardCheck, false],
+                  ["보관", Archive, true],
                   ["문항 세트", FolderKanban, false],
                 ]}
               />
               <SidebarGroup
-                title="운영"
+                title="Academy OS"
                 accent="bg-violet-300"
                 panel="border-violet-300/20 bg-violet-300/[0.045]"
                 items={[
@@ -544,12 +545,12 @@ function ProductPreview() {
             <section className="min-h-0 min-w-0 overflow-hidden bg-[#090b10]/[0.92]">
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
                 <div>
-                  <p className="text-[11px] font-black tracking-normal text-violet-200">제작</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Private Studio</p>
                   <p className="mt-0.5 text-sm font-black text-slate-100">문항 보관함</p>
                 </div>
                 <div className="hidden items-center gap-2 sm:flex">
                   <span className="h-2 w-2 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.7)]" />
-                  <span className="text-xs font-bold text-slate-400">제품 화면</span>
+                  <span className="text-xs font-bold text-slate-400">Live preview</span>
                 </div>
               </div>
 
@@ -567,8 +568,8 @@ function ProductPreview() {
 function MobileProductPreview() {
   const previewSteps: Array<[string, string, IconComponent, string]> = [
     ["PDF 업로드", "모의고사_수학.pdf", FileUp, "bg-violet-400/15 text-violet-100 border-violet-300/20"],
-    ["문항 확인", "58문항 · 태그 대기", ClipboardCheck, "bg-cyan-400/12 text-cyan-100 border-cyan-300/20"],
-    ["과제 제작", "선택 12문항", Send, "bg-emerald-400/12 text-emerald-100 border-emerald-300/20"],
+    ["문항 검수", "58문항 · 태그 대기", ClipboardCheck, "bg-cyan-400/12 text-cyan-100 border-cyan-300/20"],
+    ["시험지 제작", "선택 12문항", Send, "bg-emerald-400/12 text-emerald-100 border-emerald-300/20"],
   ];
 
   return (
@@ -577,7 +578,7 @@ function MobileProductPreview() {
       <div className="relative z-10 border-b border-white/10 px-3.5 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-black tracking-normal text-violet-200">제작</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Private Studio</p>
             <h2 className="mt-1 truncate text-sm font-black text-white">오늘 만들 자료</h2>
           </div>
           <span className="rounded-[7px] border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-bold text-emerald-100">3단계</span>
@@ -728,7 +729,7 @@ function MobileWorkflowSection() {
   return (
     <div className="relative z-10 bg-[#07080d]/70 px-4 py-12 sm:px-6 lg:hidden">
       <div className="mx-auto max-w-md">
-        <p className="text-xs font-black tracking-normal text-cyan-200">흐름</p>
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Workflow</p>
         <h2 className="landing-keep-words mt-3 text-[2rem] font-black leading-tight tracking-normal text-white">
           수업 준비는 세 단계면 충분합니다.
         </h2>
@@ -870,7 +871,7 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
             items={[
               ["제작 콘솔", LayoutDashboard, scene.eyebrow === "Private Studio" && scene.route === "/problems"],
               ["추출", FileUp, false],
-              ["검토", ClipboardCheck, false],
+              ["확인", ClipboardCheck, false],
               ["보관", Archive, scene.route === "/problems"],
               ["세트", FolderKanban, scene.route.includes("problem-sets")],
             ]}
@@ -894,7 +895,7 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
             </div>
             <div className="hidden items-center gap-2 sm:flex">
               <span className="h-2 w-2 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.7)]" />
-              <span className="text-xs font-bold text-slate-400">제품 화면</span>
+              <span className="text-xs font-bold text-slate-400">Live preview</span>
             </div>
           </div>
           <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
@@ -1539,7 +1540,7 @@ function DemoProblemBrowserSurface({
           <span className="text-sm text-muted-foreground">본문, 번호, 정답, 태그, 출처 검색</span>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex h-7 items-center rounded-md border border-[#7F77DD]/25 bg-[#7F77DD]/10 px-2 text-xs font-semibold text-violet-100">검토 완료</span>
+          <span className="inline-flex h-7 items-center rounded-md border border-[#7F77DD]/25 bg-[#7F77DD]/10 px-2 text-xs font-semibold text-violet-100">확인 완료</span>
           <span className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200">
             <SlidersHorizontal className="h-3.5 w-3.5" />
             필터 펼치기
@@ -1619,7 +1620,7 @@ function ProblemCard({ number, selected, style }: { number: number; selected: bo
           <span className="text-slate-600">·</span>
           <span>{problem.choices?.length ? "객관식" : "주관식·단답형"}</span>
           <span className="text-slate-600">·</span>
-          <span>검토 완료</span>
+          <span>확인 완료</span>
         </div>
       </div>
     </article>

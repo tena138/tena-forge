@@ -156,10 +156,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <Suspense fallback={null}>
-        <FloatingNav />
+        <FloatingNav collapsed hoverExpand />
       </Suspense>
 
-      <main className="w-full px-4 py-6 transition-[padding] duration-200 lg:pl-60 lg:pr-8">
+      <main className="w-full px-4 py-6 transition-[padding] duration-200 lg:pl-24 lg:pr-8">
         <div className="mx-auto w-full max-w-[1440px]">{children}</div>
       </main>
     </div>

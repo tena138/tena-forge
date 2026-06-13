@@ -4,21 +4,22 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
-  BookOpen,
   BookOpenCheck,
+  BookOpen,
   CalendarDays,
   FileUp,
   FolderKanban,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   LayoutTemplate,
   Library,
   Megaphone,
   NotebookPen,
+  Settings,
   ShieldCheck,
   Store,
   UserCircle,
-  type LucideIcon,
 } from "lucide-react";
 
 import { SidebarNavItem } from "@/components/sidebar-nav-item";
@@ -28,28 +29,12 @@ import { cn } from "@/lib/utils";
 
 type AccountType = "academy" | "student";
 type StoredProfile = { account_type?: AccountType; plan?: string | null; roles?: string[] | null };
-type NavItem = { href: string; label: string; icon: LucideIcon; adminOnly?: boolean };
-type NavSection = {
-  title: string;
-  shortTitle: string;
-  description: string;
-  accountTypes?: AccountType[];
-  adminOnly?: boolean;
-  accent: string;
-  panel: string;
-  header: string;
-  activeItem: string;
-  activeIndicator: string;
-  activeIcon: string;
-  items: NavItem[];
-};
 
-const sections: NavSection[] = [
+const sections = [
   {
-    title: "제작",
-    shortTitle: "제작",
-    description: "자료 제작",
-    accountTypes: ["academy"],
+    title: "Private Studio",
+    shortTitle: "PS",
+    description: "내 자료 제작",
     accent: "bg-violet-400",
     panel: "border-violet-400/20 bg-violet-400/[0.055]",
     header: "text-violet-100",
@@ -57,17 +42,17 @@ const sections: NavSection[] = [
     activeIndicator: "bg-violet-400",
     activeIcon: "text-violet-300 group-hover:text-violet-300",
     items: [
-      { href: "/academy", label: "홈", icon: LayoutDashboard },
-      { href: "/archive/new", label: "자료 업로드", icon: FileUp },
-      { href: "/problems", label: "문항 보관함", icon: Archive },
-      { href: "/problem-sets", label: "문항 세트", icon: FolderKanban },
+      { href: "/academy", label: "제작 콘솔", icon: LayoutDashboard },
+      { href: "/archive/new", label: "추출", icon: FileUp },
+      { href: "/problems", label: "보관", icon: Archive },
       { href: "/templates/mine", label: "템플릿", icon: LayoutTemplate },
+      { href: "/problem-sets", label: "문항 세트", icon: FolderKanban },
     ],
   },
   {
-    title: "운영",
-    shortTitle: "운영",
-    description: "수업 운영",
+    title: "Academy OS",
+    shortTitle: "AO",
+    description: "Seats, classes, assignments",
     accountTypes: ["academy"],
     accent: "bg-sky-300",
     panel: "border-sky-300/20 bg-sky-300/[0.045]",
@@ -76,16 +61,16 @@ const sections: NavSection[] = [
     activeIndicator: "bg-sky-300",
     activeIcon: "text-sky-200 group-hover:text-sky-200",
     items: [
-      { href: "/academy?panel=operations", label: "일정", icon: CalendarDays },
+      { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
       { href: "/academy?panel=assignments", label: "과제", icon: BookOpenCheck },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
-      { href: "/licensed-library", label: "라이선스 보관", icon: Library },
+      { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
     ],
   },
   {
-    title: "관리자",
-    shortTitle: "관리",
-    description: "내부 관리",
+    title: "Marketplace",
+    shortTitle: "MP",
+    description: "공개 허브",
     adminOnly: true,
     accent: "bg-emerald-300",
     panel: "border-emerald-300/20 bg-emerald-300/[0.045]",
@@ -100,9 +85,9 @@ const sections: NavSection[] = [
     ],
   },
   {
-    title: "학생",
-    shortTitle: "학생",
-    description: "학생 앱",
+    title: "Student App",
+    shortTitle: "ST",
+    description: "Student learning access",
     accountTypes: ["student"],
     accent: "bg-sky-300",
     panel: "border-sky-300/20 bg-sky-300/[0.045]",
@@ -110,12 +95,17 @@ const sections: NavSection[] = [
     activeItem: "border-sky-300/25 bg-sky-300/10 text-sky-50 hover:bg-sky-300/10 hover:text-sky-50 shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
     activeIndicator: "bg-sky-300",
     activeIcon: "text-sky-200 group-hover:text-sky-200",
-    items: [{ href: "/student", label: "학생 홈", icon: GraduationCap }],
+    items: [
+      { href: "/student", label: "학생 홈", icon: GraduationCap },
+      { href: "/student", label: "학원 키 등록", icon: KeyRound },
+      { href: "/student", label: "오답노트", icon: NotebookPen },
+      { href: "/student", label: "학생 캘린더", icon: CalendarDays },
+    ],
   },
   {
-    title: "계정",
-    shortTitle: "계정",
-    description: "계정 관리",
+    title: "Admin",
+    shortTitle: "AD",
+    description: "계정 및 정책",
     accent: "bg-slate-300",
     panel: "border-white/12 bg-white/[0.035]",
     header: "text-slate-200",
@@ -124,8 +114,9 @@ const sections: NavSection[] = [
     activeIcon: "text-slate-200 group-hover:text-slate-200",
     items: [
       { href: "/account/profile", label: "프로필", icon: UserCircle },
-      { href: "/account/rights-policy", label: "권리 정책", icon: ShieldCheck },
-      { href: "/admin/announcements", label: "공지 관리", icon: Megaphone, adminOnly: true },
+      { href: "/admin/announcements", label: "소식 관리", icon: Megaphone, adminOnly: true },
+      { href: "/account/rights-policy", label: "권리 및 업로드 정책", icon: ShieldCheck },
+      { href: "/settings", label: "설정", icon: Settings },
     ],
   },
 ];
@@ -163,10 +154,10 @@ export function FloatingNav({
     () =>
       sections
         .filter((section) => !section.accountTypes || section.accountTypes.includes(accountType))
-        .filter((section) => !section.adminOnly || canManageAnnouncements)
+        .filter((section) => !("adminOnly" in section) || !section.adminOnly || canManageAnnouncements)
         .map((section) => ({
           ...section,
-          items: section.items.filter((item) => !item.adminOnly || canManageAnnouncements),
+          items: section.items.filter((item) => !("adminOnly" in item) || !item.adminOnly || canManageAnnouncements),
         }))
         .filter((section) => section.items.length > 0),
     [accountType, canManageAnnouncements]
@@ -216,7 +207,7 @@ export function FloatingNav({
       ref={navRef}
       className={cn(
         "scrollbar-thin-dark fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto border-r border-white/10 bg-black/45 py-4 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-[width,padding] duration-200 lg:flex",
-        isCollapsed ? "w-16 px-1.5" : "w-56 px-3"
+        isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
       )}
       onMouseEnter={() => hoverExpand && setAutoExpanded(true)}
       onMouseLeave={() => hoverExpand && setAutoExpanded(false)}

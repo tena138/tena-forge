@@ -70,7 +70,7 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
             <div className="flex flex-wrap gap-2">
               {template.is_owner ? (
                 <>
-                  <Link href={`/templates/studio?id=${template.id}`}><Button><Edit3 className="h-4 w-4" />편집하기</Button></Link>
+                  <Link href={`/templates/editor/${template.id}`}><Button><Edit3 className="h-4 w-4" />편집하기</Button></Link>
                   <Button variant="outline" onClick={togglePublish}>{template.visibility === "public" ? "게시 취소" : "게시하기"}</Button>
                 </>
               ) : (

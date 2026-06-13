@@ -4,7 +4,7 @@ Tena Forge is a Korean academy content operations platform. It supports private 
 
 ## Architecture
 
-- Frontend: `frontend/` Next.js App Router + TypeScript. This is the active product web surface.
+- Frontend: `frontend/` Next.js App Router + TypeScript
 - Backend: `backend/` FastAPI + SQLAlchemy
 - Local DB: `backend/tenaforge.db` SQLite for development
 - Production target: PostgreSQL/Supabase-compatible schema
@@ -35,13 +35,7 @@ Start frontend:
 
 ```powershell
 cd frontend
-npm run dev -- -H 0.0.0.0 -p 3001
-```
-
-From the repository root, the equivalent command is:
-
-```powershell
-npm run dev:web
+npm run dev -- -p 3001
 ```
 
 Open:
@@ -193,15 +187,17 @@ Sensitive actions are audited, including creator approval, product review, purch
 
 ## New Frontend Pages
 
-- `/academy` - academy production console
-- `/archive/new` - canonical upload and archiving flow
-- `/problems/review` - extraction review queue
-- `/problems` - private problem archive
-- `/problem-sets` - set creation and export
-- `/templates/studio` - canonical visual template editor
-- `/student-management` - academy student management
-- `/student` - student app
-- `/billing`, `/terms`, `/privacy`, `/refund-policy`, `/copyright-policy`
+- `/pricing`
+- `/billing`
+- `/creator/apply`
+- `/creator/products`
+- `/purchases`
+- `/admin/saas`
+- `/academy`
+- `/student`
+- `/terms`
+- `/privacy`
+- `/copyright-policy`
 
 ## Academy Student Access System
 

@@ -29,8 +29,12 @@ function getVisualTemplateSet(template: HubTemplate): TemplateSet | null {
   return candidate.schemaVersion && Array.isArray(candidate.pages) ? candidate : null;
 }
 
+function hasVisualSchema(template: HubTemplate) {
+  return Boolean(getVisualTemplateSet(template));
+}
+
 function editorHref(template: HubTemplate) {
-  return `/templates/studio?id=${template.id}`;
+  return hasVisualSchema(template) ? `/templates/studio?id=${template.id}` : `/templates/editor/${template.id}`;
 }
 
 function formatDate(value: string) {

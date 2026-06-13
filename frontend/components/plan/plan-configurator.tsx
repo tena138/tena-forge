@@ -35,6 +35,7 @@ import {
   RefreshCcw,
   School,
   Search,
+  Settings,
   ShieldCheck,
   Sparkles,
   Store,
@@ -768,6 +769,7 @@ const consoleSidebarSections: Array<{
       { href: "/account/profile", label: "프로필", icon: UserCircle, scenes: [] },
       { href: "/admin/announcements", label: "소식 관리", icon: Megaphone, scenes: [] },
       { href: "/account/rights-policy", label: "권리 및 업로드 정책", icon: ShieldCheck, scenes: [] },
+      { href: "/settings", label: "설정", icon: Settings, scenes: [] },
     ],
   },
 ];
