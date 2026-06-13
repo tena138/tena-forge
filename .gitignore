@@ -33,3 +33,5 @@ build/
 /*.png
 *-dev.out.log
 *-dev.err.log
+
+.vercel
