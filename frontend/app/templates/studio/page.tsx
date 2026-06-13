@@ -71,7 +71,7 @@ const panelTabs: Array<{ key: StudioPanel; label: string; icon: typeof Type }> =
 ];
 
 const elementPalette: Array<{ type: TemplateElementType; label: string; description: string; group: PaletteGroup; icon: typeof Type }> = [
-  { type: "counselingRegion", label: "상담 항목 영역", description: "상담 항목 자동 배치", group: "?숈쟻 ?곸뿭" as PaletteGroup, icon: MessageSquareText },
+  { type: "counselingRegion", label: "상담 항목 영역", description: "상담 항목 자동 배치", group: "동적 영역" as PaletteGroup, icon: MessageSquareText },
   { type: "text", label: "텍스트", description: "자유 텍스트 박스", group: "기본 요소", icon: Type },
   { type: "richText", label: "리치 텍스트", description: "강조와 줄바꿈 텍스트", group: "기본 요소", icon: FileText },
   { type: "image", label: "이미지", description: "로고, 표지, 사진", group: "기본 요소", icon: ImageIcon },
@@ -1782,7 +1782,10 @@ function VisualTemplateStudioPageContent() {
 
   function renderLeftPanel() {
     if (leftPanel === "elements") {
-      const groups: PaletteGroup[] = ["기본 요소", "문서 블록", "동적 영역", "시스템"];
+      const paletteSections: Array<{ title: string; groups: PaletteGroup[] }> = [
+        { title: "기본", groups: ["기본 요소", "문서 블록"] },
+        { title: "고급", groups: ["동적 영역", "시스템"] },
+      ];
       return (
         <div className="space-y-3">
           <h2 className="text-sm font-bold text-white">요소</h2>
@@ -1836,32 +1839,39 @@ function VisualTemplateStudioPageContent() {
             ) : null}
           </div>
 
-          {groups.map((group) => {
-            const items = filteredPalette.filter((item) => item.group === group);
-            if (!items.length) return null;
+          {paletteSections.map((section) => {
+            const sectionGroups = section.groups
+              .map((group) => ({ group, items: filteredPalette.filter((item) => item.group === group) }))
+              .filter(({ items }) => items.length);
+            if (!sectionGroups.length) return null;
             return (
-              <div key={group} className="space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{group}</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {items.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.type}
-                        draggable
-                        onDragStart={(event) => event.dataTransfer.setData("application/x-template-element", item.type)}
-                        onClick={() => addElement(item.type)}
-                        className="group min-h-[74px] rounded-[11px] border border-white/10 bg-white/[0.045] p-2.5 text-left shadow-[0_10px_26px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/10"
-                        title={item.description}
-                      >
-                        <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-[9px] border border-white/10 bg-black/30 text-violet-200 transition group-hover:border-violet-300/40 group-hover:bg-violet-400/15">
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <span className="block text-sm font-bold text-white">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+              <div key={section.title} className="space-y-3">
+                <div className="text-xs font-black text-slate-300">{section.title}</div>
+                {sectionGroups.map(({ group, items }) => (
+                  <div key={group} className="space-y-2">
+                    <div className="text-[11px] font-bold tracking-normal text-slate-500">{group}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {items.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.type}
+                            draggable
+                            onDragStart={(event) => event.dataTransfer.setData("application/x-template-element", item.type)}
+                            onClick={() => addElement(item.type)}
+                            className="group min-h-[74px] rounded-[11px] border border-white/10 bg-white/[0.045] p-2.5 text-left shadow-[0_10px_26px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/10"
+                            title={item.description}
+                          >
+                            <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-[9px] border border-white/10 bg-black/30 text-violet-200 transition group-hover:border-violet-300/40 group-hover:bg-violet-400/15">
+                              <Icon className="h-4 w-4" />
+                            </span>
+                            <span className="block text-sm font-bold text-white">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             );
           })}

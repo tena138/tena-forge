@@ -3,16 +3,15 @@
   "private": true,
   "packageManager": "npm@10.9.0",
   "workspaces": [
-    "apps/web",
     "packages/*"
   ],
   "scripts": {
-    "dev:web": "npm --workspace apps/web run dev",
-    "build:web": "npm --workspace apps/web run build",
-    "lint:web": "npm --workspace apps/web run lint",
+    "dev:web": "npm --prefix frontend run dev -- -H 0.0.0.0 -p 3001",
+    "build:web": "npm --prefix frontend run build",
+    "lint:web": "npm --prefix frontend run lint",
     "dev:mobile": "cd apps/mobile && flutter run",
     "analyze:mobile": "cd apps/mobile && flutter analyze",
     "worker:dev": "cd apps/worker && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8100",
-    "typecheck": "npm --workspace apps/web run typecheck"
+    "typecheck": "npm --prefix frontend exec tsc --noEmit"
   }
 }

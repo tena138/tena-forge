@@ -1368,13 +1368,17 @@ export default function UploadPage() {
         <CardContent className="pt-5">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.85fr)]">
             <div className="min-w-0 space-y-5">
+              <div className="flex items-center gap-2 text-xs font-black text-violet-200">
+                <span className="grid h-6 w-6 place-items-center rounded-full border border-violet-300/30 bg-violet-400/10">2</span>
+                <span>분류/저장</span>
+              </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Input className="min-w-0 flex-1" placeholder="배치 이름" value={batchName} onChange={(event) => updateBatchName(event.target.value)} />
-                <TagColorPicker value={batchAccentColor} onChange={updateBatchAccentColor} label="배치 색상" />
+                <Input className="min-w-0 flex-1" placeholder="자료 묶음 이름" value={batchName} onChange={(event) => updateBatchName(event.target.value)} />
+                <TagColorPicker value={batchAccentColor} onChange={updateBatchAccentColor} label="색상" />
               </div>
 
               <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-                <h2 className="text-sm font-bold text-white">Subject Engine</h2>
+                <h2 className="text-sm font-bold text-white">과목 엔진</h2>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {SUBJECT_ENGINES.map((engine) => {
                     const locked = !isAdmin && Boolean(usageSummary) && !enabledSubjectEngines.includes(engine.code);
@@ -1399,7 +1403,7 @@ export default function UploadPage() {
                       >
                         <span className="inline-flex items-center gap-1.5">
                           {locked ? <LockKeyhole className="h-3.5 w-3.5" /> : null}
-                          {subjectEngineLabel(engine.code)}{locked ? " · Locked" : ""}
+                          {subjectEngineLabel(engine.code)}{locked ? " · 잠김" : ""}
                         </span>
                       </button>
                     );
@@ -1418,7 +1422,7 @@ export default function UploadPage() {
                       selectedFolderId={selectedArchiveFolderId}
                       mode="select"
                       title="저장 폴더"
-                      kicker="Archive folders"
+                      kicker="저장 위치"
                       showBatches={false}
                       onOpenFolder={setCurrentArchiveFolderId}
                       onSelectFolder={selectArchiveFolder}
@@ -1429,10 +1433,10 @@ export default function UploadPage() {
                   </div>
 
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold text-slate-400">배치 메모</span>
+                    <span className="mb-2 block text-xs font-semibold text-slate-400">메모</span>
                     <textarea
                       className="min-h-20 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400"
-                      placeholder="선택 사항: 배치에 남겨둘 메모를 입력하세요."
+                      placeholder="선택 사항"
                       value={rightsNote}
                       onChange={(event) => setRightsNote(event.target.value)}
                     />
@@ -1444,40 +1448,53 @@ export default function UploadPage() {
             </div>
 
             <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
+              <div className="flex items-center gap-2 text-xs font-black text-violet-200">
+                <span className="grid h-6 w-6 place-items-center rounded-full border border-violet-300/30 bg-violet-400/10">1</span>
+                <span>자료 선택</span>
+              </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
                 <DropZone label="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
                 <DropZone label="해설 PDF" file={solutionPdf} onChange={setSolutionPdf} />
               </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-white">
-              <ShieldCheck className="h-4 w-4 text-violet-200" />
-              업로드 권리 확인
-            </h2>
-            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
-              <p>업로드하는 자료는 본인이 직접 제작했거나, 저장·변환·재구성·출력에 사용할 권리를 보유한 자료여야 합니다.</p>
-              <p>시중 교재, 인강 교재, 타 학원 자료, 유료 문제집, 해설, 이미지, 도표 등을 권한 없이 업로드하거나 문항화하여 사용하는 것은 제한됩니다.</p>
-              <p className="text-xs text-slate-500">권리 없는 자료를 업로드하여 발생하는 법적 책임은 업로드한 사용자에게 있으며, Tena Forge는 신고 또는 확인 절차에 따라 해당 자료의 이용을 제한할 수 있습니다.</p>
-            </div>
-            <label className="mt-4 flex items-start gap-3 rounded-md border border-white/10 bg-black/30 p-3 text-sm text-slate-200">
-              <input className="mt-1" type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} />
-              <span>본인은 이 자료를 직접 제작했거나, Tena Forge에서 업로드·추출·저장·재구성·출력할 권리를 보유하고 있음을 확인합니다.</span>
-            </label>
-          </div>
-
-          <Button className="w-full" onClick={submit} disabled={!canSubmit}>
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-            아카이빙 시작
-          </Button>
-          {uploadPercent !== null ? (
-            <div className="space-y-1">
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-violet-400 transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+                  <ShieldCheck className="h-4 w-4 text-violet-200" />
+                  업로드 권리 확인
+                </h2>
+                <label className="mt-4 flex items-start gap-3 rounded-md border border-white/10 bg-black/30 p-3 text-sm text-slate-200">
+                  <input className="mt-1" type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} />
+                  <span>본인은 이 자료를 직접 제작했거나, Tena Forge에서 업로드·추출·저장·재구성·출력할 권리를 보유하고 있음을 확인합니다.</span>
+                </label>
+                <details className="mt-3 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
+                  <summary className="cursor-pointer text-xs font-bold text-slate-400 marker:text-slate-500">권리 기준 보기</summary>
+                  <div className="mt-3 space-y-2 leading-6">
+                    <p>업로드하는 자료는 본인이 직접 제작했거나, 저장·변환·재구성·출력에 사용할 권리를 보유한 자료여야 합니다.</p>
+                    <p>시중 교재, 인강 교재, 타 학원 자료, 유료 문제집, 해설, 이미지, 도표 등을 권한 없이 업로드하거나 문항화하여 사용하는 것은 제한됩니다.</p>
+                    <p className="text-xs text-slate-500">권리 없는 자료를 업로드하여 발생하는 법적 책임은 업로드한 사용자에게 있으며, Tena Forge는 신고 또는 확인 절차에 따라 해당 자료의 이용을 제한할 수 있습니다.</p>
+                  </div>
+                </details>
               </div>
-              <p className="text-xs text-slate-500">{uploadPercent >= 100 ? "서버에서 배치 생성 중" : `업로드 ${uploadPercent}%`}</p>
-            </div>
-          ) : null}
-          {message ? <p className="text-sm text-slate-400">{message}</p> : null}
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs font-black text-violet-200">
+                  <span className="grid h-6 w-6 place-items-center rounded-full border border-violet-300/30 bg-violet-400/10">3</span>
+                  <span>시작</span>
+                </div>
+                <Button className="w-full" onClick={submit} disabled={!canSubmit}>
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  아카이빙 시작
+                </Button>
+                {uploadPercent !== null ? (
+                  <div className="space-y-1">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-violet-400 transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+                    </div>
+                    <p className="text-xs text-slate-500">{uploadPercent >= 100 ? "서버에서 배치 생성 중" : `업로드 ${uploadPercent}%`}</p>
+                  </div>
+                ) : null}
+                {message ? <p className="text-sm text-slate-400">{message}</p> : null}
+              </div>
             </div>
           </div>
         </CardContent>

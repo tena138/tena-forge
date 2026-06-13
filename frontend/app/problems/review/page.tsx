@@ -15,7 +15,6 @@ import {
   RotateCcw,
   Save,
   Trash2,
-  Users,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -1034,10 +1033,6 @@ function ProblemReviewClient() {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 dark:border-white/10 dark:bg-white/[0.03]">
-        <span className="font-semibold text-slate-500 dark:text-slate-300">⌨</span> Enter 완료·다음, ←→ 이동, 1·2·3·4 난이도, Space 해설, R 재추출, Delete 휴지통, ? 도움말
-      </div>
-
       <HotkeyHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
@@ -1144,17 +1139,8 @@ function ReviewStatusBar({
 
       <SaveStateIndicator state={saveState} onRetry={onRetrySave} />
 
-      <div className="flex items-center gap-2 rounded-[7px] border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
-        <Users className="h-3.5 w-3.5" />
-        <span>협업자 없음</span>
-        {/* TODO: Wire presence avatars when a batch presence endpoint exists. */}
-      </div>
-
-      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-3 text-xs text-slate-500">
-        <span>← 이전</span>
-        <span>R 재추출</span>
-        <span>⌫ 휴지통</span>
-        <button type="button" className="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-300" onClick={onOpenHelp}>
+      <div className="flex min-w-0 flex-1 items-center justify-end">
+        <button type="button" className="inline-flex h-9 items-center gap-1 rounded-[7px] border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-500 hover:text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:text-slate-300" onClick={onOpenHelp} aria-label="검토 도움말">
           <HelpCircle className="h-3.5 w-3.5" /> ?
         </button>
       </div>
@@ -1162,7 +1148,6 @@ function ReviewStatusBar({
       <Button className="ml-auto h-10 shrink-0" onClick={onComplete} disabled={completeDisabled}>
         <CheckCircle2 className="h-4 w-4" />
         검토 완료 후 다음
-        <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[11px]">↵</kbd>
       </Button>
     </div>
   );
@@ -2170,6 +2155,7 @@ function MetadataInput({
 
 function EmptyState({
   title,
+  description,
   loading,
   actionHref,
   actionLabel,
@@ -2185,6 +2171,7 @@ function EmptyState({
       <div className="max-w-md">
         {loading ? <Loader2 className="mx-auto mb-4 h-6 w-6 animate-spin text-violet-200" /> : <CheckCircle2 className="mx-auto mb-4 h-7 w-7 text-violet-200" />}
         <h2 className="text-xl font-bold text-slate-950 dark:text-white">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
         {actionHref && actionLabel ? (
           <Link href={actionHref} className="mt-5 inline-flex">
             <Button>{actionLabel}</Button>

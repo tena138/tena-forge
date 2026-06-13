@@ -1781,41 +1781,6 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                     </div>
                   </div>
                 </div>
-                {false && selectedCalendarItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      "rounded-lg border bg-white/[0.03] p-3 transition hover:border-violet-300/40 hover:bg-white/[0.045]",
-                      selectedCalendarItem?.id === item.id ? "border-violet-300/50 ring-1 ring-violet-300/25" : "border-white/[0.08]"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <button type="button" onClick={() => setSelectedCalendarItemId(item.id)} className="min-w-0 flex-1 text-left">
-                        <p className="text-xs font-semibold text-violet-200">{dateLabel(item.date)}</p>
-                        <p className="mt-1 font-black text-white">{item.title}</p>
-                      </button>
-                      <div className="flex shrink-0 items-start gap-1">
-                        <Badge className="border border-white/10 bg-white/[0.06] text-slate-200">{item.kind}</Badge>
-                        <Badge className={cn("border", tone(item.meta))}>{item.meta}</Badge>
-                        {item.event_id ? (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
-                            onClick={() => removeCalendarEvent(item)}
-                            disabled={deletingScheduleEventId === item.event_id}
-                            aria-label={`${item.title} 일정 삭제`}
-                          >
-                            {deletingScheduleEventId === item.event_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                    {item.description ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{item.description}</p> : null}
-                  </div>
-                ))}
-                {false && !selectedCalendarItems.length ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">선택한 날짜에 등록된 일정이 없습니다.</p> : null}
               </CardContent>
             </Card>
           </section>

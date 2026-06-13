@@ -8,6 +8,9 @@ const config = [
       "node_modules/**",
       "out/**",
       "dist/**",
+      "artifacts/**",
+      "test-results/**",
+      "tmp/**",
       "scripts/**",
       "**/*.test.mjs"
     ]

@@ -16,6 +16,7 @@ import {
   Grid3X3,
   List,
   Minus,
+  MoreHorizontal,
   Search,
   Send,
   Shuffle,
@@ -1163,7 +1164,7 @@ function ProblemsBrowser() {
         </Link>
         <button
           type="button"
-          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 opacity-0 backdrop-blur transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:opacity-100 disabled:cursor-wait disabled:opacity-60 group-hover:opacity-100"
           onPointerDown={stopInteractiveEvent}
           onClick={(event) => {
             stopInteractiveEvent(event);
@@ -1218,7 +1219,7 @@ function ProblemsBrowser() {
         onClick={() => handleProblemBlockClick(problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "relative cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-colors hover:border-[#7F77DD]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70",
+          "group relative cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-colors hover:border-[#7F77DD]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70",
           selected ? "border-[#7F77DD] bg-[#7F77DD]/10" : "border-white/10"
         )}
       >
@@ -1247,7 +1248,7 @@ function ProblemsBrowser() {
           </Link>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 opacity-0 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:opacity-100 disabled:cursor-wait disabled:opacity-60 group-hover:opacity-100"
             onPointerDown={stopInteractiveEvent}
             onClick={(event) => {
               stopInteractiveEvent(event);
@@ -1340,30 +1341,38 @@ function ProblemsBrowser() {
               <X className="h-3 w-3" />
             </button>
           )) : <span className="text-xs text-muted-foreground">적용된 필터 없음</span>}
-          <div className="ml-auto flex h-8 items-center overflow-hidden rounded-md border border-white/10 bg-white/[0.04]">
-            <label className="flex h-full items-center gap-1.5 border-r border-white/10 px-2 text-xs font-semibold text-slate-300">
-              랜덤
-              <Input
-                type="number"
-                min={1}
-                max={500}
-                value={randomCount}
-                onChange={(event) => setRandomCount(event.target.value)}
-                className="h-6 w-14 border-white/10 bg-black/20 px-1.5 text-center text-xs font-bold"
-                aria-label="랜덤 추출 문항 개수"
-              />
-              개
-            </label>
-            <button
-              type="button"
-              className="inline-flex h-full items-center gap-1.5 px-2.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={selectRandomProblems}
-              disabled={randomSelecting || !data.total}
-            >
-              <Shuffle className="h-3.5 w-3.5" />
-              추출
-            </button>
-          </div>
+          <details className="relative ml-auto">
+            <summary className="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">추가 작업</span>
+            </summary>
+            <div className="absolute right-0 top-10 z-40 w-64 rounded-lg border border-white/10 bg-[#111022]/95 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur">
+              <div className="text-xs font-bold text-slate-400">랜덤 추출</div>
+              <div className="mt-2 flex h-9 items-center overflow-hidden rounded-md border border-white/10 bg-white/[0.04]">
+                <label className="flex h-full flex-1 items-center gap-1.5 border-r border-white/10 px-2 text-xs font-semibold text-slate-300">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={randomCount}
+                    onChange={(event) => setRandomCount(event.target.value)}
+                    className="h-6 w-16 border-white/10 bg-black/20 px-1.5 text-center text-xs font-bold"
+                    aria-label="랜덤 추출 문항 개수"
+                  />
+                  개
+                </label>
+                <button
+                  type="button"
+                  className="inline-flex h-full items-center gap-1.5 px-2.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={selectRandomProblems}
+                  disabled={randomSelecting || !data.total}
+                >
+                  <Shuffle className="h-3.5 w-3.5" />
+                  추출
+                </button>
+              </div>
+            </div>
+          </details>
         </div>
         {batchFolderDrag?.isDragging ? (
           <div
@@ -1441,8 +1450,21 @@ function ProblemsBrowser() {
             <Button size="sm" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</Button>
             <Button size="sm" variant="outline" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</Button>
             <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</Button>
-            <Button size="sm" variant="destructive" disabled={deleting} onClick={deleteSelectedProblems}><Trash2 className="h-4 w-4" />삭제</Button>
-            <button type="button" className="px-2 text-sm font-semibold text-slate-400 hover:text-white" onClick={() => setSelectedIds([])}>선택 해제</button>
+            <details className="relative">
+              <summary className="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">선택 문항 추가 작업</span>
+              </summary>
+              <div className="absolute right-0 top-10 z-40 w-40 rounded-lg border border-white/10 bg-[#111022]/95 p-1 shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur">
+                <button type="button" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white" onClick={() => setSelectedIds([])}>
+                  선택 해제
+                </button>
+                <button type="button" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-100 transition hover:bg-rose-500/10 disabled:cursor-wait disabled:opacity-60" disabled={deleting} onClick={deleteSelectedProblems}>
+                  <Trash2 className="h-4 w-4" />
+                  삭제
+                </button>
+              </div>
+            </details>
           </div>
         </div>
       ) : null}
@@ -1475,7 +1497,7 @@ function ProblemsBrowser() {
         {!data.items.length && !visibleKoreanPassages.length && (
           <div className="forge-panel rounded-lg py-16 text-center text-muted-foreground">
             조건에 맞는 문항이 없습니다.
-            <div className="mt-4"><Link href="/upload"><Button>PDF 업로드</Button></Link></div>
+            <div className="mt-4"><Link href="/archive/new"><Button>PDF 업로드</Button></Link></div>
           </div>
         )}
 

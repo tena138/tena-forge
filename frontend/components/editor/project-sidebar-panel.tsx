@@ -243,7 +243,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
   async function openTemplate(template: ExamTemplate) {
     if (isDirty) await onSave();
     bumpUsage(template.id);
-    router.push(`/templates/editor?id=${template.id}`);
+    router.push(`/templates/studio?id=${template.id}`);
   }
 
   async function duplicateSaved(template: ExamTemplate) {
@@ -267,7 +267,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
         const blank = cloneDocument(EMPTY_DOCUMENT);
         blank.updatedAt = new Date().toISOString();
         setDocument(blank, { id: null, name: "새 시각 템플릿", dirty: false });
-        router.replace("/templates/editor?blank=1");
+        router.replace("/templates/studio?blank=1");
       }
     } catch (error) {
       onNotice?.(error instanceof Error ? error.message : "삭제에 실패했습니다.");
@@ -295,7 +295,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
     blank.updatedAt = new Date().toISOString();
     setDocument(blank, { id: null, name: "새 시각 템플릿", dirty: false });
     setSidebarTab("elements");
-    router.replace("/templates/editor?blank=1");
+    router.replace("/templates/studio?blank=1");
   }
 
   return (

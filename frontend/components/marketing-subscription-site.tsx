@@ -311,7 +311,7 @@ export function MarketingSubscriptionSite() {
       <section id="workflow" className="border-y border-white/10 bg-[#0b1117]">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-200">Workflow</p>
+            <p className="text-xs font-bold tracking-normal text-emerald-200">흐름</p>
             <h2 className="mt-3 text-3xl font-black tracking-normal text-white sm:text-4xl">
               PDF 추출 이후의 운영까지 한 흐름으로 묶습니다.
             </h2>
