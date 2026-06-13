@@ -1,5 +1,4 @@
 .git
-.next
 node_modules
 .venv
 .local-worker-venv
@@ -24,7 +23,6 @@ latex-smoke*
 *.png
 *.sln
 *.uproject
-frontend/.next
 frontend/node_modules
 frontend/tmp
 frontend/test-results
