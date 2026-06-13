@@ -104,7 +104,7 @@ export function TemplateForm({ templateId }: { templateId?: string }) {
             </label>
           </div>
           <label className="flex items-center justify-between rounded-md border p-3 text-sm">
-            해설지 포함 기본값
+            답안지 포함 기본값
             <input type="checkbox" checked={includeSolution} onChange={(event) => setIncludeSolution(event.target.checked)} />
           </label>
           <Button disabled={!name.trim() || saving} onClick={submit}><Save className="h-4 w-4" />저장</Button>

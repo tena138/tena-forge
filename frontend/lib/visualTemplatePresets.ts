@@ -19,7 +19,7 @@ export const visualTemplateCategories: Array<{ value: TemplateCategory; label: s
   { value: "counseling", label: "상담일지", description: "상담 항목과 학습 계획 자동 삽입" },
   { value: "exam", label: "시험지", description: "문항 영역과 답안 공간 중심" },
   { value: "textbook", label: "교재", description: "표지와 좌우 내지 페이지" },
-  { value: "solution", label: "해설지", description: "문항별 해설과 정답 중심" },
+  { value: "solution", label: "답안지", description: "문항별 정답 중심" },
   { value: "worksheet", label: "워크북", description: "연습 문항과 풀이 공간" },
   { value: "answerSheet", label: "답안지", description: "정답 입력 및 채점용 레이아웃" },
   { value: "report", label: "리포트", description: "학생 분석과 학습 결과 보고" },
@@ -68,7 +68,7 @@ export const pageRoleLabels: Record<PageRole, string> = {
   textbookLeft: "왼쪽 내지",
   textbookRight: "오른쪽 내지",
   problem: "문항 페이지",
-  solution: "해설 페이지",
+  solution: "답안 페이지",
   answer: "답안 페이지",
   report: "리포트",
   custom: "사용자 정의",
@@ -171,9 +171,9 @@ export function createSolutionRegion(x = 64, y = 170, width = 666, height = 820)
     ...createProblemRegion(x, y, width, height, 1, 4),
     id: nanoid(),
     type: "solutionRegion",
-    name: "해설 자동 배치 영역",
-    binding: "solutions",
-    nextPageRolePreference: "solution",
+    name: "답안 자동 배치 영역",
+    binding: "answers",
+    nextPageRolePreference: "answer",
   };
 }
 
@@ -359,8 +359,8 @@ export function createTemplateSet(category: TemplateCategory): TemplateSet {
     ];
   } else if (category === "solution") {
     baseSet.pages = [
-      createPage("해설 표지", "cover", [createText("{{test_title}} 해설지", 76, 190, 600, 72, 34), createVariable("academy_name", "학원명", 76, 880)]),
-      createPage("해설 페이지", "solution", [createText("해설", 64, 64, 220, 42, 24), createSolutionRegion(), createElement("pageNumber", 337, 1054)]),
+      createPage("답안 표지", "cover", [createText("{{test_title}} 답안지", 76, 190, 600, 72, 34), createVariable("academy_name", "학원명", 76, 880)]),
+      createPage("답안 페이지", "solution", [createText("답안", 64, 64, 220, 42, 24), createSolutionRegion(), createElement("pageNumber", 337, 1054)]),
     ];
   } else if (category === "answerSheet") {
     baseSet.pages = [createPage("답안지", "answer", [createText("답안지", 64, 64, 220, 48, 28), createVariable("student_name", "이름", 560, 70), createAnswerRegion(), createElement("pageNumber", 337, 1054)])];

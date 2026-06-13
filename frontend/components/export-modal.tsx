@@ -100,7 +100,7 @@ function templateCategoryLabel(value: string) {
     workbook: "교재",
     worksheet: "워크북",
     wrong_answer_note: "오답노트",
-    solution_book: "해설지",
+    solution_book: "답안지",
     concept_note: "개념노트",
     unit_test: "단원평가지",
     cover: "표지",
@@ -218,8 +218,6 @@ export function ExportModal({
   const [examStartTime, setExamStartTime] = useState("");
   const [examEndTime, setExamEndTime] = useState("");
   const [customVariables, setCustomVariables] = useState<Record<string, string>>({});
-  const [includeSolution, setIncludeSolution] = useState(false);
-  const [includeMissingSolutionMetadata, setIncludeMissingSolutionMetadata] = useState(false);
   const [documentKind, setDocumentKind] = useState<"exam" | "textbook">("exam");
   const [includeCoverPage, setIncludeCoverPage] = useState(false);
   const [includeAnswerPage, setIncludeAnswerPage] = useState(false);
@@ -228,7 +226,6 @@ export function ExportModal({
   const [bodyProblemPageId, setBodyProblemPageId] = useState("");
   const [leftInnerPageId, setLeftInnerPageId] = useState("");
   const [rightInnerPageId, setRightInnerPageId] = useState("");
-  const [solutionPageId, setSolutionPageId] = useState("");
   const [answerPageId, setAnswerPageId] = useState("");
   const [assignEnabled, setAssignEnabled] = useState(false);
   const [classes, setClasses] = useState<ClassCard[]>([]);
@@ -255,7 +252,6 @@ export function ExportModal({
           if (preferred) {
             setSelectedKind("legacy");
             setSelectedId(preferred.id);
-            setIncludeSolution(preferred.include_solution);
           }
         }
       })
@@ -318,7 +314,6 @@ export function ExportModal({
     if (first) {
       setSelectedKind(first.kind);
       setSelectedId(first.id);
-      if (first.legacy) setIncludeSolution(first.legacy.include_solution);
     }
   }, [open, hideTemplateSelection, options, selectedId, selectedKind]);
 
@@ -350,7 +345,6 @@ export function ExportModal({
     setBodyProblemPageId(findPageId(templateSet, ["problem", "exam", "textbookInner", "textbookLeft"]));
     setLeftInnerPageId(findPageId(templateSet, ["textbookLeft", "textbookInner", "problem"]));
     setRightInnerPageId(findPageId(templateSet, ["textbookRight", "textbookInner", "problem"]));
-    setSolutionPageId(findPageId(templateSet, ["solution"]));
     setAnswerPageId(findPageId(templateSet, ["answer"]));
     setIncludeCoverPage(nextKind === "textbook" && !!templateSet.pages.find((page) => page.role === "cover"));
   }, [selected?.id, selected?.kind, selected?.templateSet]);
@@ -366,7 +360,6 @@ export function ExportModal({
   function selectOption(option: ExportTemplateOption) {
     setSelectedKind(option.kind);
     setSelectedId(option.id);
-    if (option.legacy) setIncludeSolution(option.legacy.include_solution);
   }
 
   function changeAssignClass(classId: string) {
@@ -393,16 +386,15 @@ export function ExportModal({
       body_problem_page_id: bodyProblemPageId || leftInnerPageId || null,
       left_inner_page_id: documentKind === "textbook" ? leftInnerPageId || null : null,
       right_inner_page_id: documentKind === "textbook" ? rightInnerPageId || null : null,
-      solution_page_id: includeSolution || includeMissingSolutionMetadata ? solutionPageId || null : null,
+      solution_page_id: null,
       answer_page_id: includeAnswerPage ? answerPageId || null : null,
     };
-  }, [answerPageId, bodyProblemPageId, coverPageId, documentKind, firstProblemPageId, includeAnswerPage, includeCoverPage, includeMissingSolutionMetadata, includeSolution, leftInnerPageId, rightInnerPageId, selected?.kind, selected?.templateSet, solutionPageId]);
+  }, [answerPageId, bodyProblemPageId, coverPageId, documentKind, firstProblemPageId, includeAnswerPage, includeCoverPage, leftInnerPageId, rightInnerPageId, selected?.kind, selected?.templateSet]);
 
   const visualPagePlanMissing = selected?.kind === "visual" && (
     (documentKind === "exam" && (!firstProblemPageId || !bodyProblemPageId)) ||
     (documentKind === "textbook" && !bodyProblemPageId && !leftInnerPageId && !rightInnerPageId) ||
     (includeCoverPage && !coverPageId) ||
-    ((includeSolution || includeMissingSolutionMetadata) && !solutionPageId) ||
     (includeAnswerPage && !answerPageId)
   );
 
@@ -439,8 +431,8 @@ export function ExportModal({
         exam_datetime: examDateTime,
         custom_variables: resolvedCustomVariables,
         visual_page_plan: visualPagePlan,
-        include_solution: includeSolution,
-        include_missing_solution_metadata: includeMissingSolutionMetadata,
+        include_solution: false,
+        include_missing_solution_metadata: false,
       });
       if (assignEnabled && assignTargetCount > 0) {
         await createPaperSession({
@@ -464,8 +456,8 @@ export function ExportModal({
         templateTitle: selected.title,
         templateKind: selected.kind,
         output: outputLabel(selected.kind),
-        includeSolution,
-        includeMissingSolutionMetadata,
+        includeSolution: false,
+        includeMissingSolutionMetadata: false,
       });
       onOpenChange(false);
     } finally {
@@ -518,17 +510,6 @@ export function ExportModal({
                 </div>
               </div>
             ) : null}
-            <label className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
-              해설 포함
-              <input type="checkbox" checked={includeSolution} onChange={(event) => setIncludeSolution(event.target.checked)} />
-            </label>
-            <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
-              <span>
-                해설 없는 문항 원본 위치 표시
-                <span className="mt-1 block text-xs text-slate-500">저장된 해설이 없으면 원본 배치, PDF, 페이지, 문항 번호를 해설 영역에 내보냅니다.</span>
-              </span>
-              <input type="checkbox" checked={includeMissingSolutionMetadata} onChange={(event) => setIncludeMissingSolutionMetadata(event.target.checked)} />
-            </label>
             {selected?.kind === "visual" && selected.templateSet ? (
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
                 <div className="flex items-center justify-between gap-3">
@@ -563,7 +544,6 @@ export function ExportModal({
                       <PageSelect label="오른쪽 내지" value={rightInnerPageId} onChange={setRightInnerPageId} templateSet={selected.templateSet} />
                     </>
                   )}
-                  {includeSolution || includeMissingSolutionMetadata ? <PageSelect label="해설/원본 위치 페이지" value={solutionPageId} onChange={setSolutionPageId} templateSet={selected.templateSet} /> : null}
                   <label className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.035] px-2.5 py-2 text-xs font-semibold text-slate-300">
                     답안 페이지 사용
                     <input type="checkbox" checked={includeAnswerPage} onChange={(event) => setIncludeAnswerPage(event.target.checked)} />

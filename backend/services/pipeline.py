@@ -60,7 +60,9 @@ For each problem return a JSON object with:
 {
   "problem_number": <integer>,
   "problem_text": "<question stem only in Korean, absolutely no answer choices>",
-  "choices": [],
+  "choices": [
+    {"label": "①", "text": "<visible answer choice text only>"}
+  ],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "is_exercise": <true only for standalone unsolved exercises>,
   "skip_reason": null,
@@ -71,11 +73,12 @@ For each problem return a JSON object with:
 Return a JSON array of all problems found on this page.
 If there are no valid standalone exercises, return [].
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
-For the math engine, discard visible answer choices completely. Remove choices from problem_text and always return "choices": [].
+For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 Convert every mathematical expression, function, interval, limit, summation, fraction, root, exponent, coordinate, and equation into LaTeX.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 Use inline LaTeX delimiters like $f(x)=x^2$ inside Korean sentences.
 Use display LaTeX delimiters like $$\lim_{x \to 0} f(x)$$ for standalone formulas.
+Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑; never write those expressions as inline $...$ math.
 Do not leave plain-text math such as x^2, f'(x), lim x->1, or a/b when it should be LaTeX.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
 Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit/exam-round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
@@ -94,7 +97,9 @@ For each problem return a JSON object with:
 {
   "problem_number": <integer>,
   "problem_text": "<question stem only in Korean, no answer choices>",
-  "choices": [],
+  "choices": [
+    {"label": "①", "text": "<visible answer choice text only>"}
+  ],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "is_exercise": <true only for standalone exercises>,
   "skip_reason": null,
@@ -104,8 +109,9 @@ For each problem return a JSON object with:
 }
 
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
-For the math engine, discard visible answer choices completely. Remove choices from problem_text and always return "choices": [].
+For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 Convert mathematical expressions into LaTeX.
+Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑; never write those expressions as inline $...$ math.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
 Detect structural markers before extracting problem text. section_label must come only from visible page headers, footers, section titles, day/chapter/unit/exam-round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
@@ -138,7 +144,7 @@ def _candidate_instruction(label: str, values: list[str]) -> str:
 def has_solution_content(solution: dict[str, Any] | None) -> bool:
     if not solution:
         return False
-    return any(str(solution.get(key) or "").strip() for key in ("answer", "solution_steps", "key_concept"))
+    return bool(str(solution.get("answer") or "").strip())
 
 
 STRUCTURAL_SECTION_RE = re.compile(
@@ -322,9 +328,9 @@ def apply_solutions_to_existing_problems(
         matched = matched_by_id.get(str(problem.id)) or {}
         solution = matched.get("solution")
         if has_solution_content(solution):
-            problem.answer = clean_solution_answer(solution.get("answer"))
-            problem.solution_steps = solution.get("solution_steps")
-            problem.key_concept = solution.get("key_concept")
+            problem.answer = answer_for_subject(solution.get("answer"), problem.choices, batch.subject_engine)
+            problem.solution_steps = None
+            problem.key_concept = None
             problem.needs_review = True
             matched_count += 1
         else:
@@ -367,60 +373,57 @@ def build_extraction_prompt(subject_candidates: list[str] | None = None, unit_ca
         + "\nDo not classify source/book titles such as Single Connection/싱글 커넥션 or subject-only labels such as 수학Ⅰ/수1 as units."
     )
 
-SOLUTION_PROMPT = r"""You are extracting answers and solutions from a Korean exam solution booklet.
+SOLUTION_PROMPT = r"""You are extracting answer metadata from a Korean exam answer or solution booklet.
 For each problem on this page return:
 {
   "problem_number": "<problem number exactly as written in the source>",
-  "answer": "<final answer as value, number, or expression ??never a choice number like ??",
-  "solution_steps": "<full step-by-step solution in Korean>",
-  "key_concept": "<one sentence: the core concept this problem tests>",
+  "answer": "<final answer>",
+  "solution_steps": null,
+  "key_concept": null,
   "section_label": "<section/unit/exam label from page header/footer or unit title only, or null>",
   "page_idx": <0-based solution PDF page index supplied by the system>,
   "referenced_problem_snippet": "<30-120 chars of explicitly quoted problem text from the solution, or null>",
   "solution_first_line": "<first line of the solution explanation>"
 }
-If the answer is given as a choice number (e.g. ?뺣떟: ??, resolve it to the actual value from the solution text. If unresolvable, set answer to null.
+For math, if the answer is given as a choice number or symbol, resolve it to the actual choice value when visible. If only the choice marker is visible, return that marker so the matcher can resolve it from the stored choices.
+For Korean Language and English, keep objective answers as the visible choice label or number.
 problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
-Convert every mathematical expression in answer, solution_steps, and key_concept into LaTeX.
+Do not transcribe, summarize, or return explanations. Keep solution_steps and key_concept null.
+Convert every mathematical expression in answer into LaTeX.
 Use inline LaTeX delimiters like $x=2$ inside Korean sentences.
 Use display LaTeX delimiters like $$\int_0^1 f(x)\,dx$$ for standalone formulas.
+Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑; never write those expressions as inline $...$ math.
 Do not leave plain-text math such as x^2, f'(x), lim x->1, or a/b when it should be LaTeX.
 Return raw JSON array only."""
 
-SOLUTION_TRANSCRIPTION_PROMPT = r"""You are OCR-transcribing a Korean exam solution booklet page.
-Your highest priority is faithful transcription, not summarization.
+SOLUTION_TRANSCRIPTION_PROMPT = r"""You are extracting answer metadata from a Korean exam answer or solution booklet page.
+Your highest priority is final answer accuracy and problem-number matching.
 
-Identify every solution visible on this page.
+Identify every answer visible on this page.
 For each problem return:
 {
   "problem_number": "<problem number exactly as written in the source>",
-  "answer": "<final answer as value, number, or expression; never a choice symbol like ??",
-  "solution_steps": "<verbatim full Korean solution text visible for this problem, preserving all steps, equations, conditions, cases, line breaks, and explanatory sentences>",
-  "key_concept": "<one short sentence describing the core concept tested>",
+  "answer": "<final answer>",
+  "solution_steps": null,
+  "key_concept": null,
   "section_label": "<section/unit/exam label from page header/footer or unit title only, or null>",
   "page_idx": <0-based solution PDF page index supplied by the system>,
   "referenced_problem_snippet": "<30-120 chars of explicitly quoted problem text from the solution, or null>",
   "solution_first_line": "<first line of the solution explanation>"
 }
 
-Rules for solution_steps:
-- Do NOT summarize, shorten, paraphrase, or rewrite the explanation.
-- Do NOT invent missing intermediate steps.
-- Include every visible equation, substitution, case split, table value, and conclusion belonging to the solution.
-- Preserve the original order and line breaks as much as possible.
-- If text is partially unclear, transcribe the readable part and insert [遺덈챸?? only for the unreadable fragment.
-- If a problem's solution continues from a previous page or to the next page, transcribe only the visible part and include [?댁쟾 ?섏씠吏?먯꽌 怨꾩냽] or [?ㅼ쓬 ?섏씠吏??怨꾩냽] when appropriate.
-- Convert mathematical expressions into LaTeX while preserving the original meaning exactly.
-- Use inline LaTeX delimiters like $x=2$ inside Korean sentences.
-- Use display LaTeX delimiters like $$\int_0^1 f(x)\,dx$$ for standalone formulas.
-- Do not leave plain-text math such as x^2, f'(x), lim x->1, or a/b when it should be LaTeX.
+Rules for explanations:
+- Do not transcribe, summarize, or return explanations.
+- Keep solution_steps and key_concept null even when a full explanation is visible.
 
 Rules for answer:
-- If the answer is given as a choice number or symbol, resolve it to the actual value from the visible solution text.
-- If the actual value cannot be resolved from the visible page, set answer to null.
+- For math, if the answer is given as a choice number or symbol, resolve it to the actual choice value when visible. If only the choice marker is visible, return that marker so the matcher can resolve it from the stored choices.
+- For Korean Language and English, keep objective answers as the visible choice label or number.
+- If the answer cannot be found, set answer to null.
+- Convert mathematical expressions in answer into LaTeX.
 
 Rules for matching metadata:
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
@@ -432,15 +435,15 @@ Rules for matching metadata:
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
-SOLUTION_FAST_PROMPT = r"""You are extracting answer metadata from a Korean exam solution page.
+SOLUTION_FAST_PROMPT = r"""You are extracting answer metadata from a Korean exam answer or solution page.
 
-Identify every solution visible on this page.
+Identify every answer visible on this page.
 For each problem return:
 {
   "problem_number": "<problem number exactly as written in the source>",
-  "answer": "<final answer as value, number, or expression; never a choice symbol like ①>",
-  "solution_steps": "<concise Korean solution summary, maximum 3 sentences>",
-  "key_concept": "<one short Korean phrase describing the core concept>",
+  "answer": "<final answer>",
+  "solution_steps": null,
+  "key_concept": null,
   "section_label": "<section/unit/exam label from page header/footer or unit title only, or null>",
   "page_idx": <0-based solution PDF page index supplied by the system>,
   "referenced_problem_snippet": "<30-120 chars of explicitly quoted problem text from the solution, or null>",
@@ -449,10 +452,13 @@ For each problem return:
 
 Rules:
 - Prioritize final answers and problem-number matching.
-- Do not transcribe the full solution text.
-- Do not invent missing steps.
-- Convert mathematical expressions into LaTeX.
-- If the actual answer cannot be resolved from the visible page, set answer to null.
+- Do not transcribe, summarize, or return explanation text.
+- Keep solution_steps and key_concept null.
+- Convert mathematical expressions in answer into LaTeX.
+- Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑; never write those expressions as inline $...$ math.
+- For math, if the answer is given as a choice number or symbol, resolve it to the actual choice value when visible. If only the choice marker is visible, return that marker so the matcher can resolve it from the stored choices.
+- For Korean Language and English, keep objective answers as the visible choice label or number.
+- If the answer cannot be found, set answer to null.
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 - section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
@@ -924,7 +930,7 @@ def extract_page_metadata(
     client = _openai_client()
     model_pool = _ai_model_pool(settings.ai_solution_model_pool if doc_kind == "solution" else settings.ai_model_pool, settings.ai_model)
     total_steps = total or len(pages)
-    label = "해설 구조 분석 중" if doc_kind == "solution" else "문제 구조 분석 중"
+    label = "답안 구조 분석 중" if doc_kind == "solution" else "문제 구조 분석 중"
     if batch_id:
         set_progress(batch_id, f"{label} (0/{len(pages)}페이지)", offset, total_steps)
 
@@ -1420,7 +1426,7 @@ def collect_page_metadata_for_pdf(
     model_pool = _ai_model_pool(get_settings().ai_solution_model_pool if doc_kind == "solution" else get_settings().ai_model_pool, get_settings().ai_model)
     metadata: list[dict[str, Any]] = []
     processed_pages = 0
-    render_label = "해설 구조 분석용 렌더링 중" if doc_kind == "solution" else "문제 구조 분석용 렌더링 중"
+    render_label = "답안 구조 분석용 렌더링 중" if doc_kind == "solution" else "문제 구조 분석용 렌더링 중"
     for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
         chunk_len = sum(end - start for start, end in range_group)
         base = offset + processed_pages * 2
@@ -1489,7 +1495,7 @@ Rules:
 - Link every recovered question to the supplied passage_id.
 - Preserve exact Korean text, 보기 blocks, circled choices ①②③④⑤, and source page number.
 - When any visible text is underlined, wrap only the exact underlined characters in <u>...</u> in the appropriate field: question_stem, additional_material, or choice_text.
-- Do not extract answers or solutions from the problem file."""
+- Do not extract answers from the problem file."""
 
 
 def _question_number_key(value: Any) -> str:
@@ -1696,7 +1702,7 @@ def _extract_korean_solution_items(
             rendered = render_pdf(
                 path,
                 batch_id=batch_id,
-                label=f"{engine_label} 정답/해설 PDF 렌더링 중",
+                label=f"{engine_label} 답안 PDF 렌더링 중",
                 start_page=start,
                 end_page=end,
                 dpi=dpi,
@@ -1724,7 +1730,7 @@ def _extract_korean_solution_items(
             for future, page in _completed_futures_with_heartbeat(
                 futures,
                 batch_id=batch_id,
-                message_factory=lambda: f"{engine_label} 정답/해설 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+                message_factory=lambda: f"{engine_label} 답안 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
                 current_factory=lambda: base + chunk_len + completed,
                 total=total_units,
             ):
@@ -1732,7 +1738,7 @@ def _extract_korean_solution_items(
                 completed += 1
                 set_progress(
                     batch_id,
-                    f"{engine_label} 정답/해설 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
+                    f"{engine_label} 답안 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
                     base + chunk_len + completed,
                     total_units,
                 )
@@ -1825,7 +1831,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
                 additional_material=question.get("additional_material"),
                 choices=question.get("choices") or [],
                 answer=question.get("answer"),
-                solution=question.get("solution"),
+                solution=None,
                 extraction_confidence=float(question.get("extraction_confidence") or 0),
                 warnings=question.get("warnings") or [],
             )
@@ -1845,8 +1851,8 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
             review_page_image_url=(review_page_urls or {}).get(first_page),
             review_page_number=first_page,
             answer=question.get("answer"),
-            solution_steps=question.get("solution"),
-            key_concept=passage.get("passage_type") if passage else None,
+            solution_steps=None,
+            key_concept=None,
             needs_review=True,
             source_batch_id=batch.id,
             source_type=batch.source_type,
@@ -2063,7 +2069,7 @@ def process_batch(batch_id: UUID) -> None:
                     rendered = render_pdf(
                         batch.solution_pdf_filename,
                         batch_id=batch_id,
-                        label="해설 PDF 렌더링 중",
+                        label="답안 PDF 렌더링 중",
                         start_page=start,
                         end_page=end,
                         dpi=solution_dpi,
@@ -2086,7 +2092,7 @@ def process_batch(batch_id: UUID) -> None:
                 processed_solution_pages += chunk_len
             solutions = _apply_structure_indexes(solutions, page_key="page_idx")
             if not any(has_solution_content(solution) for solution in solutions):
-                raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
+                raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
         _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
 
         problem_model_pool = _ai_model_pool()
@@ -2130,7 +2136,6 @@ def process_batch(batch_id: UUID) -> None:
             for problem in extracted:
                 cleaned, suspicious = strip_answer_choices(problem["problem_text"])
                 problem["problem_text"] = normalize_geometry_notation(cleaned)
-                problem["choices"] = []
                 problem["needs_review"] = problem["needs_review"] or suspicious
 
             set_progress(batch_id, f"문항 저장 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
@@ -2143,7 +2148,7 @@ def process_batch(batch_id: UUID) -> None:
         structure_report = build_structure_validation_report(page_metadata, problem_sections, solution_sections, all_extracted, solutions)
         _mark_section_validation_warnings(all_extracted, structure_report)
         _write_batch_artifact(batch_id, "structure_validation_report.json", structure_report)
-        set_progress(batch_id, "문항-해설 매칭 중", total_units, total_units)
+        set_progress(batch_id, "문항-답안 매칭 중", total_units, total_units)
         matching_result = match_with_summary(all_extracted, solutions)
         matched_problems = matching_result["problems"]
         _write_batch_artifact(batch_id, "matches_by_section.json", matching_result.get("matches_by_section", {}))
@@ -2199,14 +2204,14 @@ def process_solutions_only(batch_id: UUID) -> None:
         if not batch:
             return
         if not batch.solution_pdf_filename:
-            raise RuntimeError("Solution PDF is required for solution-only reprocessing.")
+            raise RuntimeError("Answer PDF is required for answer-only reprocessing.")
         existing_problem_count = db.query(Problem).filter(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None)).count()
         if existing_problem_count <= 0:
-            raise RuntimeError("Existing problems are required before reprocessing solutions.")
+            raise RuntimeError("Existing problems are required before reprocessing answers.")
 
         batch.status = BatchStatus.processing
         batch.processing_task = "solution_only"
-        batch.progress_message = "해설 재처리 시작"
+        batch.progress_message = "답안 재처리 시작"
         batch.progress_current = 0
         batch.progress_total = None
         batch.progress_started_at = datetime.utcnow()
@@ -2216,11 +2221,11 @@ def process_solutions_only(batch_id: UUID) -> None:
         batch.failure_hint = None
         batch.failed_at = None
         db.commit()
-        set_progress(batch_id, "해설 재처리 시작", 0, 0, reset=True)
+        set_progress(batch_id, "답안 재처리 시작", 0, 0, reset=True)
         if not get_settings().openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is required for processing")
         if is_language_passage_engine(batch.subject_engine):
-            raise RuntimeError("Language beta solution-only reprocessing is not supported yet. Retry the full batch to remap answers and explanations.")
+            raise RuntimeError("Language beta answer-only reprocessing is not supported yet. Retry the full batch to remap answers.")
 
         settings = get_settings()
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
@@ -2248,7 +2253,7 @@ def process_solutions_only(batch_id: UUID) -> None:
         total_units = max(structure_units + solution_units, 1)
         problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
         solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
-        set_progress(batch_id, "해설 PDF 페이지 수 확인 완료", 0, total_units)
+        set_progress(batch_id, "답안 PDF 페이지 수 확인 완료", 0, total_units)
 
         if reuse_problem_sections:
             set_progress(batch_id, "기존 문제 섹션맵 재사용 중", 0, total_units)
@@ -2291,7 +2296,7 @@ def process_solutions_only(batch_id: UUID) -> None:
                 rendered = render_pdf(
                     batch.solution_pdf_filename,
                     batch_id=batch_id,
-                    label="해설 PDF 렌더링 중",
+                    label="답안 PDF 렌더링 중",
                     start_page=start,
                     end_page=end,
                     dpi=solution_dpi,
@@ -2314,9 +2319,9 @@ def process_solutions_only(batch_id: UUID) -> None:
             processed_solution_pages += chunk_len
         solutions = _apply_structure_indexes(solutions, page_key="page_idx")
         if not any(has_solution_content(solution) for solution in solutions):
-            raise RuntimeError("Solution PDF was provided, but no answer or solution content was extracted.")
+            raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
 
-        set_progress(batch_id, "기존 문항과 해설 재매칭 중", total_units, total_units)
+        set_progress(batch_id, "기존 문항과 답안 재매칭 중", total_units, total_units)
         ensure_batch_active(batch_id)
         stats = apply_solutions_to_existing_problems(
             db,
@@ -2346,9 +2351,9 @@ def process_solutions_only(batch_id: UUID) -> None:
         batch.status = BatchStatus.done
         batch.processing_task = "solution_only"
         batch.progress_message = (
-            f"해설 재처리 완료({solution_mode}): "
+            f"답안 재처리 완료({solution_mode}): "
             f"{stats['matched_count']}개 매칭, {stats['unmatched_count']}개 확인 필요, "
-            f"{stats['cleared_stale_count']}개 기존 해설 비움"
+            f"{stats['cleared_stale_count']}개 기존 답안 비움"
         )
         batch.progress_current = total_units
         batch.progress_total = total_units
@@ -2370,8 +2375,8 @@ def process_solutions_only(batch_id: UUID) -> None:
             reason, hint = explain_failure(exc)
             failed.status = BatchStatus.error
             failed.processing_task = "solution_only"
-            failed.progress_message = "해설 재처리에 실패했습니다."
-            failed.failure_stage = last_stage or failed.progress_message or "해설 재처리 단계 확인 불가"
+            failed.progress_message = "답안 재처리에 실패했습니다."
+            failed.failure_stage = last_stage or failed.progress_message or "답안 재처리 단계 확인 불가"
             failed.failure_reason = reason
             failed.failure_hint = hint
             failed.failed_at = datetime.utcnow()
@@ -3044,6 +3049,7 @@ CHOICE_PATTERN = re.compile(
 )
 CHOICE_SYMBOL_PATTERN = re.compile(r"^(정답|답)\s*[:：]?\s*[①②③④⑤1-5]$")
 ANSWER_PREFIX_PATTERN = re.compile(r"^(?:정답|답)\s*[:：]?\s*", re.IGNORECASE)
+CHOICE_ANSWER_PATTERN = re.compile(r"^(?:정답|답)?\s*[:：]?\s*([①②③④⑤]|[1-5])\s*(?:번|선지)?\s*$", re.IGNORECASE)
 
 
 def clean_solution_answer(value: Any) -> str | None:
@@ -3052,6 +3058,37 @@ def clean_solution_answer(value: Any) -> str | None:
         return None
     text = ANSWER_PREFIX_PATTERN.sub("", text).strip()
     return text or None
+
+
+def _choice_index_from_answer(value: Any) -> int | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    match = CHOICE_ANSWER_PATTERN.fullmatch(unicodedata.normalize("NFKC", text))
+    if not match:
+        match = CHOICE_ANSWER_PATTERN.fullmatch(text)
+    if not match:
+        return None
+    token = match.group(1)
+    if token in CHOICE_LABELS:
+        return CHOICE_LABELS.index(token)
+    if token.isdigit() and 1 <= int(token) <= len(CHOICE_LABELS):
+        return int(token) - 1
+    return None
+
+
+def answer_for_subject(answer: Any, choices: Any, subject_engine: Any) -> str | None:
+    cleaned = clean_solution_answer(answer)
+    if not cleaned:
+        return None
+    if normalize_subject_engine(subject_engine) != "math":
+        return cleaned
+    choice_index = _choice_index_from_answer(cleaned)
+    normalized_choices = _normalize_problem_choices(choices)
+    if choice_index is None or choice_index >= len(normalized_choices):
+        return cleaned
+    choice_text = str(normalized_choices[choice_index].get("text") or "").strip()
+    return choice_text or cleaned
 
 
 def strip_answer_choices(text: str) -> tuple[str, bool]:
@@ -3080,7 +3117,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
     if batch_id:
         model_note = f", 모델 {len(model_pool)}개" if len(model_pool) > 1 else ""
         mode_label = "원문 검사" if solution_mode == "full" else "빠른 검사"
-        set_progress(batch_id, f"해설 {mode_label} 중 (0/{len(tasks)}요청 완료{model_note})", offset, total_steps)
+        set_progress(batch_id, f"답안 {mode_label} 중 (0/{len(tasks)}요청 완료{model_note})", offset, total_steps)
 
     completed = 0
     with ThreadPoolExecutor(max_workers=_ai_worker_count(len(tasks), len(model_pool))) as executor:
@@ -3100,7 +3137,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
         for future, (local_index, page, run_index) in _completed_futures_with_heartbeat(
             futures,
             batch_id=batch_id,
-            message_factory=lambda: f"해설 {mode_label} 중 ({completed}/{len(tasks)}요청 완료, AI 응답 대기 중)",
+            message_factory=lambda: f"답안 {mode_label} 중 ({completed}/{len(tasks)}요청 완료, AI 응답 대기 중)",
             current_factory=lambda: offset + completed,
             total=total_steps,
         ):
@@ -3109,7 +3146,7 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
             if batch_id:
                 set_progress(
                     batch_id,
-                    f"해설 {mode_label} 중 ({completed}/{len(tasks)}요청 완료, {page.page_index + 1}/{display_total_pages or len(pages)}페이지)",
+                    f"답안 {mode_label} 중 ({completed}/{len(tasks)}요청 완료, {page.page_index + 1}/{display_total_pages or len(pages)}페이지)",
                     offset + completed,
                     total_steps,
                 )
@@ -3127,8 +3164,8 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
                         "problem_number": number,
                         "problem_no": number,
                         "answer": item.get("answer"),
-                        "solution_steps": item.get("solution_steps"),
-                        "key_concept": item.get("key_concept"),
+                        "solution_steps": None,
+                        "key_concept": None,
                         "section_label": section_label,
                         "page_idx": page.page_index,
                         "_source_order": page.page_index * 10000 + int(getattr(page, "column_index", 0) or 0) * 1000 + item_order,
@@ -3140,30 +3177,25 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
 
     solutions: list[dict[str, Any]] = []
     for (page_idx, _section_label, number, occurrence), runs in sorted(by_key.items(), key=lambda value: min(run.get("_source_order", 0) for run in value[1])):
-        solution_texts = [str(run.get("solution_steps") or "").strip() for run in runs if str(run.get("solution_steps") or "").strip()]
         answer_texts = [str(run.get("answer") or "").strip() for run in runs if str(run.get("answer") or "").strip()]
-        concept_texts = [str(run.get("key_concept") or "").strip() for run in runs if str(run.get("key_concept") or "").strip()]
         snippets = [str(run.get("referenced_problem_snippet") or "").strip() for run in runs if str(run.get("referenced_problem_snippet") or "").strip()]
         first_lines = [str(run.get("solution_first_line") or "").strip() for run in runs if str(run.get("solution_first_line") or "").strip()]
         section_labels = [str(run.get("section_label") or "").strip() for run in runs if str(run.get("section_label") or "").strip()]
         source_order = min(int(run.get("_source_order", 0) or 0) for run in runs)
-        solution_steps = _longer_text(solution_texts)
         solution_first_line = _longer_text(first_lines)
-        if not solution_first_line and solution_steps:
-            solution_first_line = solution_steps.splitlines()[0]
         solutions.append({
             "problem_number": number,
             "problem_no": number,
             "answer": _longer_text(answer_texts),
-            "solution_steps": solution_steps,
-            "key_concept": _longer_text(concept_texts),
+            "solution_steps": None,
+            "key_concept": None,
             "section_label": _longer_text(section_labels),
             "page_idx": page_idx,
             "_source_order": source_order,
             "page_number_occurrence": occurrence,
             "referenced_problem_snippet": _longer_text(snippets),
             "solution_first_line": solution_first_line,
-            "needs_review": len(runs) < extraction_passes or len(set(solution_texts)) > 1 or len(set(answer_texts)) > 1,
+            "needs_review": len(runs) < extraction_passes or len(set(answer_texts)) > 1,
         })
     return _apply_structure_indexes(solutions, page_key="page_idx")
 
@@ -3171,7 +3203,6 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
 def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> None:
     batch_name = (batch.name or "이름 없는 배치").strip()
     subject_engine = normalize_subject_engine(batch.subject_engine)
-    preserve_choices = is_language_passage_engine(subject_engine)
     ensure_batch_active(batch.id)
     for index, item in enumerate(problems):
         if index and index % 20 == 0:
@@ -3184,14 +3215,14 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
         problem = Problem(
             problem_number=item["problem_number"],
             problem_text=item["problem_text"],
-            choices=_normalize_problem_choices(item.get("choices")) if preserve_choices else [],
+            choices=_normalize_problem_choices(item.get("choices")),
             has_visual=item["has_visual"],
             visual_url=item.get("visual_url"),
             review_page_image_url=item.get("review_page_image_url"),
             review_page_number=item.get("review_page_number"),
-            answer=clean_solution_answer(solution.get("answer")),
-            solution_steps=solution.get("solution_steps"),
-            key_concept=solution.get("key_concept"),
+            answer=answer_for_subject(solution.get("answer"), item.get("choices"), subject_engine),
+            solution_steps=None,
+            key_concept=None,
             needs_review=True,
             source_batch_id=batch.id,
             source_type=batch.source_type,

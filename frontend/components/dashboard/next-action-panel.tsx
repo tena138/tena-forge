@@ -28,10 +28,10 @@ export function NextActionPanel({
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Link
-              href="/problems/review"
+              href="/problems?needs_review=true"
               className="inline-flex h-10 items-center justify-center gap-2 rounded-[7px] border border-white/20 bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition-all duration-150 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              문항 검토 시작
+              문항 목록 보기
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link

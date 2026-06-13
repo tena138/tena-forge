@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ChevronDown, ClipboardCheck, ExternalLink, FileUp, Info } from "lucide-react";
+import { AlertTriangle, ChevronDown, ExternalLink, FileUp, Info } from "lucide-react";
 
 import { StatusBadge } from "@/components/status-badge";
 import type { Batch } from "@/lib/api";
@@ -44,7 +44,7 @@ function BatchDetail({ batch }: { batch: Batch }) {
             <dd className="mt-0.5 break-all text-slate-200">{fileName(batch.problem_pdf_filename)}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">해설 PDF</dt>
+            <dt className="text-slate-500">답안 PDF</dt>
             <dd className="mt-0.5 break-all text-slate-200">{fileName(batch.solution_pdf_filename)}</dd>
           </div>
           <div>
@@ -133,10 +133,6 @@ export function RecentBatchTable({ batches }: { batches: Batch[] }) {
                         <Link href={`/problems?batch_id=${batch.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-[7px] border border-white/10 bg-white/[0.05] px-2.5 text-xs font-semibold text-slate-200 shadow-sm transition-colors hover:border-white/18 hover:bg-white/[0.08]">
                           문항 보기
                           <ExternalLink className="h-3.5 w-3.5" />
-                        </Link>
-                        <Link href={`/problems/review?batch_id=${batch.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-[7px] border border-amber-300/20 bg-amber-300/10 px-2.5 text-xs font-semibold text-amber-100 shadow-sm transition-colors hover:border-amber-200/35 hover:bg-amber-300/15">
-                          검토
-                          <ClipboardCheck className="h-3.5 w-3.5" />
                         </Link>
                       </div>
                     </td>

@@ -143,13 +143,13 @@ def render_template_document(template: HubTemplate, data: dict[str, Any]) -> str
 
 
 def _has_solution(problem: Problem) -> bool:
-    return bool(str(problem.solution_steps or "").strip())
+    return bool(str(problem.answer or "").strip())
 
 
 def _source_lookup_metadata(problem: Problem) -> str:
     tags = problem.tags
     batch = getattr(problem, "batch", None)
-    lines = ["해설이 저장되어 있지 않습니다. 원본 자료에서 답지/해설을 확인하세요."]
+    lines = ["답안이 저장되어 있지 않습니다. 원본 자료에서 답지를 확인하세요."]
     if tags and tags.source:
         lines.append(f"저장된 출처: {tags.source}")
     if batch and getattr(batch, "name", None):
@@ -165,8 +165,8 @@ def _source_lookup_metadata(problem: Problem) -> str:
 
 
 def _solution_text_for_export(problem: Problem, base_data: dict[str, Any]) -> str:
-    if _has_solution(problem):
-        return problem.solution_steps or ""
+    if problem.answer:
+        return problem.answer or ""
     if base_data.get("include_missing_solution_metadata"):
         return _source_lookup_metadata(problem)
     return ""
@@ -467,7 +467,7 @@ def _problem_export_data(problem: Problem, index: int, total: int, base_data: di
         "solution_text": solution_text,
         "source_lookup_metadata": source_lookup_metadata,
         "has_solution": _has_solution(problem),
-        "key_concept": problem.key_concept or "",
+        "key_concept": "",
         "difficulty": tags.difficulty if tags else "",
         "subject": tags.subject if tags else base_data.get("subject", ""),
         "unit": tags.unit if tags else base_data.get("unit", ""),
@@ -510,6 +510,7 @@ def _korean_question_export_data(question: KoreanQuestion, fallback_problem: dic
     reviewed_choices = fallback_problem.get("choices") if isinstance(fallback_problem.get("choices"), list) else None
     reviewed_answer = str(fallback_problem.get("answer") or "").strip()
     reviewed_solution = str(fallback_problem.get("solution") or fallback_problem.get("solution_text") or "").strip()
+    answer_text = reviewed_answer or question.answer or ""
     return {
         "id": str(fallback_problem.get("id") or question.id),
         "layout_type": "korean_question",
@@ -518,9 +519,9 @@ def _korean_question_export_data(question: KoreanQuestion, fallback_problem: dic
         "text": normalize_geometry_notation(reviewed_text or text),
         "problem_text": normalize_geometry_notation(reviewed_text or text),
         "choices": reviewed_choices if reviewed_choices is not None else question.choices or [],
-        "answer": reviewed_answer or question.answer or "",
-        "solution": reviewed_solution or question.solution or "",
-        "solution_text": reviewed_solution or question.solution or "",
+        "answer": answer_text,
+        "solution": reviewed_solution or answer_text,
+        "solution_text": reviewed_solution or answer_text,
         "visual_url": fallback_problem.get("visual_url") or "",
         "page_number": order,
         "total_pages": total,
@@ -677,9 +678,7 @@ def _binding_key(region: dict[str, Any]) -> str:
     binding = region.get("binding")
     if binding == "counseling" or region.get("type") == "counselingRegion":
         return "counseling"
-    if binding == "solutions" or region.get("type") == "solutionRegion":
-        return "solutions"
-    if binding == "answers" or region.get("type") == "answerRegion":
+    if binding in {"answers", "solutions"} or region.get("type") in {"answerRegion", "solutionRegion"}:
         return "answers"
     return "problems"
 
@@ -1259,7 +1258,7 @@ def _build_visual_template_export_pages_with_plan(
 
     solution_page = _template_page_by_id(template_set, plan.get("solution_page_id"))
     if solution_page:
-        _append_planned_dynamic_pages(rendered_pages, [solution_page], "solutions", remaining)
+        _append_planned_dynamic_pages(rendered_pages, [solution_page], "answers", remaining)
 
     answer_page = _template_page_by_id(template_set, plan.get("answer_page_id"))
     if answer_page:
@@ -1316,7 +1315,7 @@ def build_visual_template_export_pages(template_set: dict[str, Any], problems: l
             _consume_region(region, remaining, placements)
         rendered_pages.append((page, placements))
 
-    for role, key in (("problem", "problems"), ("solution", "solutions"), ("answer", "answers"), ("report", "counseling")):
+    for role, key in (("problem", "problems"), ("solution", "answers"), ("answer", "answers"), ("report", "counseling")):
         safety = 0
         while remaining.get(key) and safety < 80:
             page = _choose_template_page(template_set, role)

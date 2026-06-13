@@ -47,7 +47,7 @@ export function legacyTemplateDocument(template: ExamTemplate): CanvasDocument {
     element({ type: "divider", name: "상단 구분선", x: 48, y: 142, width: 698, height: 4, stroke: "#111827", strokeWidth: 2 }),
     element({ type: "question_area", name: "문항 영역", x: 56, y: 168, width: 682, height: hasSolution ? 650 : 820, fill: "transparent", stroke: "#d1d5db", strokeWidth: 1, columns, questionNumberFormat: "{n}.", questionFontSize: template.font_size || 11 }),
     ...(hasSolution
-      ? [element({ type: "solution_area", name: "해설 영역", x: 56, y: 840, width: 682, height: 136, fill: "#f8fafc", stroke: "#cbd5e1", strokeWidth: 1, answerFormat: "정답: {a}" })]
+      ? [element({ type: "solution_area", name: "답안 영역", x: 56, y: 840, width: 682, height: 136, fill: "#f8fafc", stroke: "#cbd5e1", strokeWidth: 1, answerFormat: "정답: {a}" })]
       : []),
     element({ type: "answer_table", name: "답안표", x: 56, y: hasSolution ? 994 : 1010, width: 682, height: 72, fill: "#ffffff", stroke: "#111827", strokeWidth: 1, rows: 2, answersPerRow: 5 }),
     element({ type: "dynamic_field", name: "페이지", fieldKey: "page_number", previewValue: "1 / 1", text: "{{page}} / {{total}}", x: 320, y: 1080, width: 154, height: 22, fontSize: 9, textAlign: "center", color: "#6b7280" }),

@@ -53,7 +53,7 @@ export const templateCategories: Array<{ value: TemplateCategory; label: string 
   { value: "workbook", label: "교재" },
   { value: "worksheet", label: "워크북" },
   { value: "wrong_answer_note", label: "오답노트" },
-  { value: "solution_book", label: "해설지" },
+  { value: "solution_book", label: "답안지" },
   { value: "concept_note", label: "개념노트" },
   { value: "unit_test", label: "단원평가지" },
   { value: "cover", label: "표지" },

@@ -80,10 +80,8 @@ function ProblemDetailContent() {
   const [tags, setTags] = useState<Tag>(emptyTags);
   const [draftText, setDraftText] = useState("");
   const [draftAnswer, setDraftAnswer] = useState("");
-  const [draftSolution, setDraftSolution] = useState("");
   const [savingText, setSavingText] = useState(false);
   const [savingAnswer, setSavingAnswer] = useState(false);
-  const [savingSolution, setSavingSolution] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
   const [dragStart, setDragStart] = useState<Point | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -122,7 +120,6 @@ function ProblemDetailContent() {
         setProblem(data);
         setDraftText(data.problem_text);
         setDraftAnswer(data.answer || "");
-        setDraftSolution(data.solution_steps || "");
         setTags(normalizedTags(data.tags));
       })
       .catch((error) => {
@@ -158,8 +155,6 @@ function ProblemDetailContent() {
     if (!textSaved) return;
     const answerSaved = await saveProblemAnswer();
     if (!answerSaved) return;
-    const solutionSaved = await saveProblemSolution();
-    if (!solutionSaved) return;
     const tagsSaved = await saveTags();
     if (!tagsSaved) return;
     router.push(`/problems/${problemId}${detailQuerySuffix}`);
@@ -301,30 +296,6 @@ function ProblemDetailContent() {
     }
   }, [draftAnswer, problem]);
 
-  const saveProblemSolution = useCallback(async (nextSolution = draftSolution) => {
-    if (!problem) return true;
-    if (nextSolution === (problem.solution_steps || "")) {
-      return true;
-    }
-    setSavingSolution(true);
-    setActionError("");
-    try {
-      const updated = await api<Problem>(`/api/problems/${problem.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ solution_steps: nextSolution.trim() ? nextSolution : null }),
-      });
-      setProblem(updated);
-      setDraftSolution(updated.solution_steps || "");
-      return true;
-    } catch {
-      setActionError("해설 저장에 실패했습니다.");
-      return false;
-    } finally {
-      setSavingSolution(false);
-    }
-  }, [draftSolution, problem]);
-
   async function deleteVisual() {
     if (!problem || !problem.visual_url) return;
     setDeletingVisual(true);
@@ -427,8 +398,6 @@ function ProblemDetailContent() {
     if (!textSaved) return;
     const answerSaved = await saveProblemAnswer();
     if (!answerSaved) return;
-    const solutionSaved = await saveProblemSolution();
-    if (!solutionSaved) return;
     const tagsSaved = await saveTags();
     if (!tagsSaved) return;
     const updated = await api<Problem>(`/api/problems/${problem.id}/review`, {
@@ -598,7 +567,7 @@ function ProblemDetailContent() {
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid gap-3">
             <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-bold text-white">정답</h3>
@@ -613,22 +582,6 @@ function ProblemDetailContent() {
                 value={draftAnswer}
                 onChange={(event) => setDraftAnswer(event.target.value)}
                 placeholder="정답 데이터 없음"
-              />
-            </div>
-            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-bold text-white">해설</h3>
-                <Button size="sm" variant="outline" onClick={() => void saveProblemSolution()} disabled={savingSolution || draftSolution === (problem.solution_steps || "")}>
-                  <Save className="h-3.5 w-3.5" />
-                  저장
-                </Button>
-              </div>
-              <textarea
-                aria-label="해설 수정"
-                className="min-h-24 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15"
-                value={draftSolution}
-                onChange={(event) => setDraftSolution(event.target.value)}
-                placeholder="해설 데이터 없음"
               />
             </div>
           </div>

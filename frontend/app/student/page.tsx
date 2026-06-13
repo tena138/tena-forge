@@ -362,7 +362,6 @@ export default function StudentAppPage() {
                                 {problem.review_page_image_url && <img src={problem.review_page_image_url} alt="" className="mt-3 max-h-56 rounded-[8px] border border-white/10 object-contain" />}
                                 <Input className="mt-3" value={answers[problem.id] || ""} onChange={(event) => setAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
                                 {problem.answer && <p className="mt-2 text-xs text-emerald-200">정답: {problem.answer}</p>}
-                                {problem.solution_steps && <p className="mt-1 text-xs leading-5 text-slate-400">{problem.solution_steps}</p>}
                               </div>
                             ))}
                           </div>

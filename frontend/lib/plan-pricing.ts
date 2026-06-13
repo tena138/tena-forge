@@ -55,7 +55,7 @@ export const SUBJECT_ENGINES: Array<{
     code: "math",
     label: "수학",
     version: "1.0",
-    description: "수식, 객관식, 정답, 해설을 수학 문항 구조로 추출합니다.",
+    description: "수식, 객관식, 정답을 수학 문항 구조로 추출합니다.",
   },
   {
     code: "korean",

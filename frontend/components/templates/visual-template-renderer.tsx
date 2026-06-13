@@ -502,7 +502,7 @@ function CounselingCard({ section, region }: { section: { id: string; label: str
 
 function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = [], showChrome = false) {
   const isCounseling = region.type === "counselingRegion" || region.binding === "counseling";
-  const label = isCounseling ? "Counseling Region" : region.binding === "problems" ? "Problem Region" : region.binding === "solutions" ? "Solution Region" : region.binding === "answers" ? "Answer Region" : "Content Region";
+  const label = isCounseling ? "Counseling Region" : region.binding === "problems" ? "Problem Region" : region.binding === "solutions" || region.binding === "answers" ? "Answer Region" : "Content Region";
   const rowCount = region.rows ? Math.max(1, region.rows) : 0;
   const dividerStyle = columnDividerLineStyle(region);
   const dividers = dividerStyle
@@ -536,7 +536,7 @@ function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = 
         alignItems: rowCount ? "stretch" : "start",
       }}
     >
-      {problems.length ? problems.map((problem) => <ProblemCard key={problem.id} problem={problem} region={region} />) : <div className="rounded border border-dashed border-violet-200 bg-white/75 p-3 text-xs text-violet-700">내보내기 시 문항, 해설, 답안이 이 영역에 자동 배치됩니다.</div>}
+      {problems.length ? problems.map((problem) => <ProblemCard key={problem.id} problem={region.type === "solutionRegion" ? { ...problem, solution: problem.answer || "" } : problem} region={region} />) : <div className="rounded border border-dashed border-violet-200 bg-white/75 p-3 text-xs text-violet-700">내보내기 시 문항과 답안이 이 영역에 자동 배치됩니다.</div>}
     </div>
   );
   const body = (

@@ -13,6 +13,7 @@ from services.pipeline import (  # noqa: E402
     _is_structural_section_label,
     _normalize_extracted_items,
     _normalize_page_metadata,
+    answer_for_subject,
     build_section_ranges_from_metadata,
     build_structure_validation_report,
     clean_solution_answer,
@@ -330,6 +331,25 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertEqual(clean_solution_answer("정답: ③"), "③")
         self.assertEqual(clean_solution_answer("답 5"), "5")
         self.assertIsNone(clean_solution_answer(""))
+
+    def test_math_choice_answer_resolves_to_choice_text(self):
+        choices = [
+            {"label": "①", "text": "$x=1$"},
+            {"label": "②", "text": "$x=2$"},
+            {"label": "③", "text": "$x=3$"},
+        ]
+
+        self.assertEqual(answer_for_subject("정답: ③", choices, "math"), "$x=3$")
+        self.assertEqual(answer_for_subject("답 2", choices, "math"), "$x=2$")
+
+    def test_language_choice_answer_keeps_choice_label(self):
+        choices = [
+            {"label": "①", "text": "first"},
+            {"label": "②", "text": "second"},
+        ]
+
+        self.assertEqual(answer_for_subject("정답: ②", choices, "korean"), "②")
+        self.assertEqual(answer_for_subject("답 2", choices, "english"), "2")
 
 
 if __name__ == "__main__":

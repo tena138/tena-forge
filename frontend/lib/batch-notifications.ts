@@ -53,9 +53,9 @@ export function addBatchStatusNotification(statusData: BatchStatusResponse) {
     status: statusData.status,
     title: isDone ? "추출 완료" : "추출 실패",
     body: isDone
-      ? "배치 처리가 끝났습니다. 문항 검토를 시작할 수 있습니다."
+      ? "배치 처리가 끝났습니다. 문항 아카이브에서 결과를 확인할 수 있습니다."
       : statusData.failure_reason || statusData.progress_message || "처리 중 오류가 발생했습니다.",
-    href: isDone ? `/problems/review?batch_id=${statusData.batch_id}` : "/batches",
+    href: isDone ? `/problems?batch_id=${statusData.batch_id}` : "/batches",
     createdAt: new Date().toISOString(),
     read: false,
   };

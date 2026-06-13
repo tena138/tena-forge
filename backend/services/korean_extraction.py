@@ -66,27 +66,27 @@ Rules:
 - Link questions to a passage when the page shows a shared passage range such as [1~3], [1-3], 1~3, or an instruction such as 다음 글을 읽고 물음에 답하시오.
 - Before returning, audit every visible passage range. If the source says [1~3], questions 1, 2, and 3 must all be present and linked to that passage. Never skip a middle question in a range.
 - If uncertain, add warnings instead of guessing.
-- Do not extract answers or solutions from the problem file. Only answer/solution files may fill answer and solution later."""
+- Do not extract answers from the problem file. Only answer files may fill answer later. Keep solution null."""
 
 
-KOREAN_SOLUTION_PROMPT = r"""You are extracting answers and explanations for Korean Language exam questions.
+KOREAN_SOLUTION_PROMPT = r"""You are extracting answers for Korean Language exam questions.
 
 Return raw JSON array only:
 [
   {
     "question_number": "<visible question number>",
-    "answer": "<final answer label or text, or null>",
-    "solution": "<explanation text exactly as visible, or null>",
+    "answer": "<final answer choice label/number, or null>",
+    "solution": null,
     "source_pages": [<1-based source page numbers>],
     "warnings": []
   }
 ]
 
 Rules:
-- Preserve Korean explanation text as visible.
+- For objective questions, keep the visible choice label or number as the answer.
 - When any visible text is underlined, wrap only the exact underlined characters in <u>...</u>.
 - Do not invent answers.
-- If only an answer key is visible, fill answer and leave solution null.
+- Do not transcribe, summarize, or return explanations. Always leave solution null.
 - If a question number is unclear, include a warning."""
 
 PASSAGE_RANGE_RE = re.compile(r"(?:\[|\()?0*(\d{1,3})\s*[~\-∼]\s*0*(\d{1,3})(?:\]|\))?")
@@ -813,9 +813,7 @@ def map_korean_answers(document: dict[str, Any], answer_items: list[dict[str, An
         if not match:
             continue
         answer = _text(match.get("answer"))
-        solution = str(match.get("solution") or "").strip()
         if answer:
             question["answer"] = answer
-        if solution:
-            question["solution"] = solution
+        question["solution"] = None
     return validate_korean_document(doc)

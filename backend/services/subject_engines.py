@@ -22,7 +22,7 @@ SUBJECT_ENGINES: dict[str, SubjectEngineDefinition] = {
     MATH_ENGINE: SubjectEngineDefinition(
         code=MATH_ENGINE,
         label="수학 1.0",
-        description="Math extraction for formulas, problem stems, choices, answers, and LaTeX-preserved solutions.",
+        description="Math extraction for formulas, problem stems, choices, answers, and LaTeX-preserved answer values.",
     ),
     KOREAN_ENGINE: SubjectEngineDefinition(
         code=KOREAN_ENGINE,

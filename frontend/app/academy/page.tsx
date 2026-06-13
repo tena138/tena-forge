@@ -477,7 +477,7 @@ function AcademyConsoleHome() {
           </div>
         </StageCard>
 
-        <StageCard title="검토" icon={ClipboardCheck} action={{ href: "/problems/review", label: "검토 열기" }}>
+        <StageCard title="문항 확인" icon={Archive} action={{ href: "/problems?needs_review=true", label: "문항 보기" }}>
           <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
             <div className="text-xs text-slate-500">검토 대기 문항</div>
             <div className="mt-1 text-2xl font-semibold text-white">{count(problemStats.needs_review)}</div>
@@ -489,7 +489,7 @@ function AcademyConsoleHome() {
                 reviewBatches.map((batch) => (
                   <Link
                     key={batch.id}
-                    href={`/problems/review?batch_id=${batch.id}`}
+                    href={`/problems?batch_id=${batch.id}&needs_review=true`}
                     className="flex items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 transition hover:border-white/18 hover:bg-white/[0.055]"
                   >
                     <div className="min-w-0">

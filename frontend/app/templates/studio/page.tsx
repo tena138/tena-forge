@@ -81,7 +81,7 @@ const elementPalette: Array<{ type: TemplateElementType; label: string; descript
   { type: "headerBlock", label: "헤더", description: "제목과 브랜드 블록", group: "문서 블록", icon: PanelTop },
   { type: "footerBlock", label: "푸터", description: "하단 정보 블록", group: "문서 블록", icon: PanelBottom },
   { type: "problemRegion", label: "문항 영역", description: "문항 자동 배치", group: "동적 영역", icon: FileStack },
-  { type: "solutionRegion", label: "해설 영역", description: "해설 자동 배치", group: "동적 영역", icon: FileText },
+  { type: "solutionRegion", label: "답안 영역", description: "답안 자동 배치", group: "동적 영역", icon: FileText },
   { type: "answerRegion", label: "답안 영역", description: "답안 자동 배치", group: "동적 영역", icon: Grid3X3 },
   { type: "contentRegion", label: "콘텐츠 영역", description: "범용 동적 영역", group: "동적 영역", icon: BoxSelect },
   { type: "examStatsChart", label: "시험 통계 차트", description: "평균, 최고/최저, 분위수 추이", group: "동적 영역", icon: LineChart },

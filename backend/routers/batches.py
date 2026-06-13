@@ -256,7 +256,7 @@ def upload_batch(
     if not problem_pdf.filename or not problem_pdf.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="문항 자료는 PDF 파일만 업로드할 수 있습니다.")
     if solution_pdf and solution_pdf.filename and not solution_pdf.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="해설 자료는 PDF 파일만 업로드할 수 있습니다.")
+        raise HTTPException(status_code=400, detail="답안 자료는 PDF 파일만 업로드할 수 있습니다.")
     if source_type not in SOURCE_TYPES:
         raise HTTPException(status_code=400, detail="지원하지 않는 출처 유형입니다.")
     if not rights_confirmed:
@@ -775,9 +775,9 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     if batch.status == BatchStatus.processing:
-        raise HTTPException(status_code=400, detail="처리 중인 배치는 해설만 재처리할 수 없습니다.")
+        raise HTTPException(status_code=400, detail="처리 중인 배치는 답안만 재처리할 수 없습니다.")
     if not batch.solution_pdf_filename:
-        raise HTTPException(status_code=400, detail="해설 PDF가 있는 배치만 해설 재처리할 수 있습니다.")
+        raise HTTPException(status_code=400, detail="답안 PDF가 있는 배치만 답안 재처리할 수 있습니다.")
     problem_count = db.scalar(
         select(func.count(Problem.id)).where(
             Problem.source_batch_id == batch.id,
@@ -786,7 +786,7 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
         )
     ) or 0
     if problem_count <= 0:
-        raise HTTPException(status_code=400, detail="기존 문항이 있어야 해설만 재처리할 수 있습니다.")
+        raise HTTPException(status_code=400, detail="기존 문항이 있어야 답안만 재처리할 수 있습니다.")
 
     solution_pages = count_pdf_pages(batch.solution_pdf_filename)
     solution_file_mb = _file_size_mb(batch.solution_pdf_filename)
@@ -801,7 +801,7 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
 
     batch.status = BatchStatus.pending
     batch.processing_task = "solution_only"
-    batch.progress_message = "해설 재처리 대기 중"
+    batch.progress_message = "답안 재처리 대기 중"
     batch.progress_current = 0
     batch.progress_total = None
     batch.progress_started_at = None
@@ -819,13 +819,13 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
     except Exception as exc:
         batch.status = BatchStatus.error
         batch.processing_task = "full"
-        batch.progress_message = "해설 재처리 작업을 시작하지 못했습니다."
-        batch.failure_stage = "해설 재처리 시작"
+        batch.progress_message = "답안 재처리 작업을 시작하지 못했습니다."
+        batch.failure_stage = "답안 재처리 시작"
         batch.failure_reason = str(exc)
         batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
         batch.failed_at = datetime.utcnow()
         db.commit()
-        raise HTTPException(status_code=500, detail="해설 재처리 작업을 시작하지 못했습니다.")
+        raise HTTPException(status_code=500, detail="답안 재처리 작업을 시작하지 못했습니다.")
     db.refresh(batch)
     return {"batch_id": batch.id, "status": batch.status}
 

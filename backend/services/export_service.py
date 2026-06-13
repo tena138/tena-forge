@@ -241,13 +241,13 @@ def _tex_problem(problem: Problem, image_height: str = "0.28\\textheight") -> st
 
 
 def _has_solution(problem: Problem) -> bool:
-    return bool(str(problem.solution_steps or "").strip())
+    return bool(str(problem.answer or "").strip())
 
 
 def _source_lookup_metadata(problem: Problem) -> str:
     tags = problem.tags
     batch = getattr(problem, "batch", None)
-    lines = ["해설이 저장되어 있지 않습니다. 원본 자료에서 답지/해설을 확인하세요."]
+    lines = ["답안이 저장되어 있지 않습니다. 원본 자료에서 답지를 확인하세요."]
     if tags and tags.source:
         lines.append(f"저장된 출처: {tags.source}")
     if batch and getattr(batch, "name", None):
@@ -263,11 +263,11 @@ def _source_lookup_metadata(problem: Problem) -> str:
 
 
 def _solution_body(problem: Problem, include_missing_solution_metadata: bool) -> str:
-    if _has_solution(problem):
-        return problem.solution_steps or ""
+    if problem.answer:
+        return problem.answer or ""
     if include_missing_solution_metadata:
         return _source_lookup_metadata(problem)
-    return "해설이 없습니다."
+    return "답안이 없습니다."
 
 
 def _solution_export_problems(problems: Iterable[Problem], include_solution: bool, include_missing_solution_metadata: bool) -> list[Problem]:
@@ -280,7 +280,7 @@ def _solution_export_problems(problems: Iterable[Problem], include_solution: boo
 
 
 def _solution_section_title(include_solution: bool) -> str:
-    return "정답 및 해설" if include_solution else "해설 미등록 문항 원본 위치"
+    return "정답" if include_solution else "답안 미등록 문항 원본 위치"
 
 
 def _tex_solution(problem: Problem, include_missing_solution_metadata: bool = False) -> str:
@@ -288,10 +288,9 @@ def _tex_solution(problem: Problem, include_missing_solution_metadata: bool = Fa
     parts = [
         r"\noindent\textbf{" + _tex_escape(source_label) + r". 정답: " + _tex_content(problem.answer or "미확인") + r"}\par",
     ]
-    if problem.key_concept:
-        parts.append(r"\smallskip\noindent\textbf{핵심 개념:} " + _tex_content(problem.key_concept))
-    parts.append(r"\smallskip")
-    parts.append(_tex_content(_solution_body(problem, include_missing_solution_metadata)))
+    if not problem.answer and include_missing_solution_metadata:
+        parts.append(r"\smallskip")
+        parts.append(_tex_content(_solution_body(problem, include_missing_solution_metadata)))
     parts.append(r"\par\medskip\hrule\medskip")
     return "\n".join(parts)
 
@@ -909,9 +908,9 @@ def _build_solution_story(
         answer = _latex_paragraph_markup(problem.answer or "미확인", styles["problem_title"])
         source_label = html.escape(problem.tags.source if problem.tags and problem.tags.source else f"문 {problem.problem_number}")
         story.append(Paragraph(f"<b>{source_label}. 정답: {answer}</b>", styles["problem_title"]))
-        if problem.key_concept:
-            story.extend([Spacer(1, 2 * mm), _paragraph(f"핵심 개념: {problem.key_concept}", styles["chip"])])
-        story.extend([Spacer(1, 3 * mm), _paragraph(_solution_body(problem, include_missing_solution_metadata), styles["problem"]), Spacer(1, 4 * mm), HRFlowable(width="100%", color=colors.HexColor("#ddd6ef"), thickness=0.6), Spacer(1, 4 * mm)])
+        if not problem.answer and include_missing_solution_metadata:
+            story.extend([Spacer(1, 3 * mm), _paragraph(_solution_body(problem, include_missing_solution_metadata), styles["problem"])])
+        story.extend([Spacer(1, 4 * mm), HRFlowable(width="100%", color=colors.HexColor("#ddd6ef"), thickness=0.6), Spacer(1, 4 * mm)])
     return story
 
 
@@ -1267,10 +1266,11 @@ def _draw_visual_problem_region(pdf: canvas.Canvas, element: dict, items: list[d
         max_item_h = max(_visual_num(element.get("minItemHeight"), 120), _visual_num(element.get("maxItemHeight"), 420)) * scale
         text_used_h = _paragraph_height(str(item.get("text") or ""), body_width, max_item_h, body_paragraph)
         solution_used_h = 0.0
+        answer_text = str(item.get("answer") or item.get("solution") or "")
         if element.get("type") == "solutionRegion" or base_data.get("include_solution"):
-            solution_used_h = _paragraph_height(str(item.get("solution") or ""), body_width, 80 * scale, solution_style)
+            solution_used_h = _paragraph_height(answer_text, body_width, 80 * scale, solution_style)
         elif element.get("type") == "answerRegion":
-            solution_used_h = _paragraph_height(str(item.get("answer") or ""), body_width, 36 * scale, body_paragraph)
+            solution_used_h = _paragraph_height(answer_text, body_width, 36 * scale, body_paragraph)
 
         estimated_h = max(78 * scale, _visual_num(element.get("minItemHeight"), 120) * scale)
         estimated_h = max(estimated_h, inner * 2 + 24 * scale + min(text_used_h, 260 * scale))
@@ -1327,10 +1327,10 @@ def _draw_visual_problem_region(pdf: canvas.Canvas, element: dict, items: list[d
 
         if element.get("type") == "solutionRegion" or base_data.get("include_solution"):
             solution_height = max(38 * scale, min(solution_used_h + 4 * scale, 78 * scale))
-            _draw_paragraph_box(pdf, str(item.get("solution") or ""), card_x + inner, max(card_y + inner, cursor_top - solution_height), col_w - inner * 2, solution_height, solution_style)
+            _draw_paragraph_box(pdf, answer_text, card_x + inner, max(card_y + inner, cursor_top - solution_height), col_w - inner * 2, solution_height, solution_style)
         elif element.get("type") == "answerRegion":
             answer_height = max(24 * scale, min(solution_used_h + 4 * scale, 36 * scale))
-            _draw_paragraph_box(pdf, str(item.get("answer") or ""), card_x + inner, max(card_y + inner, cursor_top - answer_height), col_w - inner * 2, answer_height, body_paragraph)
+            _draw_paragraph_box(pdf, answer_text, card_x + inner, max(card_y + inner, cursor_top - answer_height), col_w - inner * 2, answer_height, body_paragraph)
         else:
             answer_fill = _visual_color(answer_space_style.get("fill"), None)
             answer_stroke = _visual_color(answer_space_style.get("stroke"), colors.HexColor("#cbd5e1")) or colors.HexColor("#cbd5e1")
@@ -1622,7 +1622,7 @@ def generate_canvas_preview_pdf(canvas_json: dict) -> BytesIO:
                 else:
                     pdf.rect(x, y, w, h, stroke=1 if stroke_width > 0 else 0, fill=1 if fill else 0)
                 if kind in {"question_area", "solution_area", "answer_table"}:
-                    label = {"question_area": "문항 영역", "solution_area": "해설 영역", "answer_table": "답안표 영역"}[kind]
+                    label = {"question_area": "문항 영역", "solution_area": "답안 영역", "answer_table": "답안표 영역"}[kind]
                     pdf.setFillColor(colors.HexColor("#6b7280"))
                     pdf.setFont(FONT_NAME, max(8, float(element.get("fontSize", 12)) * scale))
                     pdf.drawCentredString(x + w / 2, y + h / 2, label)

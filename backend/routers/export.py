@@ -68,8 +68,8 @@ def _export_values(payload: ExportRequest) -> dict[str, Any]:
         "exam_time": exam_time,
         "exam_datetime": exam_datetime,
         "printed_at": datetime.now().strftime("%Y.%m.%d %H:%M"),
-        "include_solution": payload.include_solution,
-        "include_missing_solution_metadata": payload.include_missing_solution_metadata,
+        "include_solution": False,
+        "include_missing_solution_metadata": False,
     }
     for key, value in (payload.custom_variables or {}).items():
         clean_key = str(key).strip()
@@ -150,14 +150,14 @@ def export_pdf(payload: ExportRequest, request: Request, db: Session = Depends(g
     if not template:
         raise HTTPException(status_code=404, detail="템플릿을 찾을 수 없습니다.")
 
-    include_solution = payload.include_solution or template.include_solution
+    include_solution = False
     export_values = _export_values(payload)
     buffer = generate_exam_pdf(
         problems,
         template,
         export_values,
         include_solution=include_solution,
-        include_missing_solution_metadata=payload.include_missing_solution_metadata,
+        include_missing_solution_metadata=False,
     )
     filename = f"{_safe_filename(payload.exam_title)}_{_safe_filename(payload.date)}.pdf"
     encoded_filename = quote(filename, safe="")

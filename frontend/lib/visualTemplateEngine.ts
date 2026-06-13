@@ -214,7 +214,7 @@ export function estimateProblemHeight(problem: SampleProblem, region: ContentReg
   const lineHeight = region.bodyStyle.lineHeight || 1.6;
   const textLines = Math.max(2, Math.ceil(problem.text.length / 38));
   const choicesLines = problem.choices?.length ? Math.ceil(problem.choices.join("   ").length / 44) : 0;
-  const answerSpace = region.type === "answerRegion" ? 0 : 42;
+  const answerSpace = region.type === "answerRegion" || region.type === "solutionRegion" ? 0 : 42;
   const solutionSpace = region.type === "solutionRegion" ? Math.max(36, Math.ceil((problem.solution || "").length / 46) * bodyFontSize * lineHeight) : 0;
   const visualSpace = problem.visualUrl || problem.visual_url ? 210 : 0;
   const height = 44 + textLines * bodyFontSize * lineHeight + choicesLines * (bodyFontSize + 8) + visualSpace + answerSpace + solutionSpace + region.padding;
@@ -340,7 +340,7 @@ export function validateTemplateSet(templateSet: TemplateSet): PreflightIssue[] 
       issues.push({ id: `missing-problem-region-${page.id}`, level: "warning", message: `${page.name}에 문항 영역이 없습니다.`, pageId: page.id });
     }
     if (page.role === "solution" && !regions.some((region) => region.binding === "solutions")) {
-      issues.push({ id: `missing-solution-region-${page.id}`, level: "warning", message: `${page.name}에 해설 영역이 없습니다.`, pageId: page.id });
+      issues.push({ id: `missing-solution-region-${page.id}`, level: "warning", message: `${page.name}에 답안 영역이 없습니다.`, pageId: page.id });
     }
     if (page.role === "answer" && !regions.some((region) => region.binding === "answers")) {
       issues.push({ id: `missing-answer-region-${page.id}`, level: "warning", message: `${page.name}에 답안 영역이 없습니다.`, pageId: page.id });

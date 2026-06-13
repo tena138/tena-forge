@@ -716,7 +716,7 @@ const consoleSidebarSections: Array<{
     items: [
       { href: "/academy", label: "제작 콘솔", icon: LayoutDashboard, scenes: ["ai"] },
       { href: "/archive/new", label: "추출", icon: FileUp, scenes: [] },
-      { href: "/problems/review", label: "검토", icon: ClipboardCheck, scenes: [] },
+      { href: "/problems?needs_review=true", label: "문항 확인", icon: ClipboardCheck, scenes: [] },
       { href: "/problems", label: "보관", icon: Archive, scenes: ["storage"] },
       { href: "/problem-sets", label: "문항 세트", icon: FolderKanban, scenes: [] },
       { href: "/templates/mine", label: "템플릿", icon: LayoutTemplate, scenes: [] },
@@ -850,7 +850,7 @@ function AiUsageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
         <AcademyStat label="템플릿" value={formatNumber(animatedTemplates)} icon={LayoutTemplate} detail="출력 양식" />
       </div>
 
-      <ConsoleNextAction reviewCount={Math.round(animatedReview)} untaggedCount={Math.round(animatedUntagged)} actionLabel="문항 검토 시작" />
+      <ConsoleNextAction reviewCount={Math.round(animatedReview)} untaggedCount={Math.round(animatedUntagged)} actionLabel="문항 확인" />
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded-[10px] border border-white/10 bg-black/30 p-4">
@@ -980,7 +980,7 @@ function StorageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1fr_auto]">
-          <StorageFilter label="문항 유형" values={["객관식", "서술형", "응용", "해설 포함"]} activeIndex={capacity >= 50 ? 3 : 1} wide />
+          <StorageFilter label="문항 유형" values={["객관식", "서술형", "응용", "답안 포함"]} activeIndex={capacity >= 50 ? 3 : 1} wide />
           <label className="flex h-12 items-center justify-between gap-4 rounded-md border border-white/10 bg-card/70 p-3 text-sm text-slate-200 xl:self-end">
             검토 필요만 보기
             <span className="h-4 w-4 rounded border border-primary bg-primary/80 shadow-[0_0_18px_rgba(124,58,237,0.25)]" />
@@ -1780,7 +1780,7 @@ function AiScene({ specs }: { specs: ReturnType<typeof getResolvedSpecs> }) {
     <div className="grid gap-4">
       <StageCard icon={FileText} title="AI extracting questions..." value={`${specs.monthlyAiCredits.toLocaleString()} monthly credits`} />
       <div className="grid gap-3 sm:grid-cols-2">
-        {["단원", "난이도", "유형", "정답", "해설"].map((tag) => <span key={tag} className="rounded-[8px] border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white shadow-sm">{tag}</span>)}
+        {["단원", "난이도", "유형", "정답", "답안"].map((tag) => <span key={tag} className="rounded-[8px] border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white shadow-sm">{tag}</span>)}
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-white/10">
         <div className="h-full w-2/3 rounded-full bg-cyan-400" />

@@ -7,7 +7,6 @@ import {
   BookOpen,
   BookOpenCheck,
   CalendarDays,
-  ClipboardCheck,
   FileUp,
   FolderKanban,
   GraduationCap,
@@ -60,7 +59,6 @@ const sections: NavSection[] = [
     items: [
       { href: "/academy", label: "홈", icon: LayoutDashboard },
       { href: "/archive/new", label: "자료 업로드", icon: FileUp },
-      { href: "/problems/review", label: "문항 검토", icon: ClipboardCheck },
       { href: "/problems", label: "문항 보관함", icon: Archive },
       { href: "/problem-sets", label: "문항 세트", icon: FolderKanban },
       { href: "/templates/mine", label: "템플릿", icon: LayoutTemplate },

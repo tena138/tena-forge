@@ -445,7 +445,7 @@ export default function ProblemSetDetailPage() {
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <Badge variant="secondary">{item.count}문항</Badge>
                     {item.templateTitle && <Badge variant="outline">{item.templateTitle}</Badge>}
-                    <Badge variant={item.includeSolution ? "success" : "secondary"}>{item.includeSolution ? "해설 포함" : "문제만"}</Badge>
+                    <Badge variant={item.includeSolution ? "success" : "secondary"}>{item.includeSolution ? "답안 포함" : "문제만"}</Badge>
                     {item.includeMissingSolutionMetadata ? <Badge variant="outline">원본 위치 포함</Badge> : null}
                   </div>
                 </div>

@@ -108,8 +108,6 @@ def _problem_search_condition(term: str):
     return or_(
         Problem.problem_text.ilike(like),
         Problem.answer.ilike(like),
-        Problem.solution_steps.ilike(like),
-        Problem.key_concept.ilike(like),
         Problem.source_label.ilike(like),
         Problem.source_type.ilike(like),
         cast(Problem.problem_number, String).ilike(like),
@@ -136,6 +134,8 @@ def _serialize_problem(problem: Problem, schema=ProblemRead):
             "review_page_image_url": sign_static_url(getattr(item, "review_page_image_url", None), owner_id),
             "batch_name": getattr(batch, "name", None),
             "batch_accent_color": normalize_batch_color(getattr(batch, "accent_color", None)) or batch_color_for_seed(getattr(batch, "id", None) or problem.source_batch_id),
+            "solution_steps": None,
+            "key_concept": None,
         }
     )
 
@@ -539,10 +539,6 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
         answer = (payload.answer or "").strip()
         problem.answer = answer or None
         changed = True
-    if "solution_steps" in fields_set:
-        solution_steps = (payload.solution_steps or "").strip()
-        problem.solution_steps = normalize_geometry_notation(solution_steps) if solution_steps else None
-        changed = True
     if changed:
         problem.needs_review = True
     db.commit()
@@ -570,8 +566,8 @@ def duplicate_problem(problem_id: UUID, request: Request, db: Session = Depends(
         review_page_image_url=problem.review_page_image_url,
         review_page_number=problem.review_page_number,
         answer=problem.answer,
-        solution_steps=problem.solution_steps,
-        key_concept=problem.key_concept,
+        solution_steps=None,
+        key_concept=None,
         needs_review=True,
         source_batch_id=problem.source_batch_id,
         source_type=problem.source_type,

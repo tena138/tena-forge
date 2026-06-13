@@ -38,7 +38,7 @@ export function friendlyProgressMessage(status: BatchStatus | null, message: str
   if (message.includes("문항") && message.includes("추출")) return "문항을 추출하는 중입니다.";
   if (message.includes("시각") || message.includes("캡처")) return "시각 자료를 정리하는 중입니다.";
   if (message.includes("선지") || message.includes("정리")) return "선지를 정리하는 중입니다.";
-  if (message.includes("해설")) return "해설과 정답을 매칭하는 중입니다.";
+  if (message.includes("답안")) return "답안을 문항과 매칭하는 중입니다.";
   if (message.includes("저장")) return "추출한 문항을 저장하는 중입니다.";
   return message;
 }

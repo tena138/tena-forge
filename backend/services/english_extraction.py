@@ -65,27 +65,27 @@ Rules:
 - Extract 보기 blocks, underlined phrases, blank options, and grammar/vocabulary tables into additional_material when they are part of a question.
 - Extract choices ①②③④⑤ exactly, including choices printed below a long passage box. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
 - If uncertain, add warnings instead of guessing.
-- Do not extract answers or solutions from the problem file. Only answer/solution files may fill answer and solution later."""
+- Do not extract answers from the problem file. Only answer files may fill answer later. Keep solution null."""
 
 
-ENGLISH_SOLUTION_PROMPT = r"""You are extracting answers and explanations for English exam questions.
+ENGLISH_SOLUTION_PROMPT = r"""You are extracting answers for English exam questions.
 
 Return raw JSON array only:
 [
   {
     "question_number": "<visible question number>",
-    "answer": "<final answer label or text, or null>",
-    "solution": "<explanation text exactly as visible, preserving Korean and English, or null>",
+    "answer": "<final answer choice label/number, or null>",
+    "solution": null,
     "source_pages": [<1-based source page numbers>],
     "warnings": []
   }
 ]
 
 Rules:
-- Preserve Korean and English explanation text exactly as visible.
+- For objective questions, keep the visible choice label or number as the answer.
 - When any visible text is underlined, wrap only the exact underlined characters in <u>...</u>.
 - Do not invent answers.
-- If only an answer key is visible, fill answer and leave solution null.
+- Do not transcribe, summarize, or return explanations. Always leave solution null.
 - If a question number is unclear, include a warning."""
 
 

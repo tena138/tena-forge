@@ -53,7 +53,7 @@ function ActiveBatchPanel({ statusData }: { statusData: BatchStatusResponse }) {
   const progress = statusData.progress_percent ?? 0;
   const detail = safeProgressDetail(statusData);
   const message = friendlyProgressMessage(statusData.status, detail);
-  const taskLabel = statusData.processing_task === "solution_only" ? "해설 재처리" : "PDF 추출";
+  const taskLabel = statusData.processing_task === "solution_only" ? "답안 재처리" : "PDF 추출";
 
   return (
     <Link

@@ -95,7 +95,7 @@ const mobileWorkflow = [
   {
     eyebrow: "01",
     title: "PDF를 올리면 문항 후보로 정리",
-    body: "원본, 해설, 선택지, 이미지까지 검수 가능한 형태로 모읍니다.",
+    body: "원본, 답안, 선택지, 이미지까지 확인 가능한 형태로 모읍니다.",
     icon: FileUp,
   },
   {
@@ -525,7 +525,7 @@ function ProductPreview() {
                 items={[
                   ["홈", LayoutDashboard, true],
                   ["자료 업로드", FileUp, false],
-                  ["문항 검토", ClipboardCheck, false],
+                  ["문항 확인", ClipboardCheck, false],
                   ["문항 보관함", Archive, true],
                   ["문항 세트", FolderKanban, false],
                 ]}
@@ -567,7 +567,7 @@ function ProductPreview() {
 function MobileProductPreview() {
   const previewSteps: Array<[string, string, IconComponent, string]> = [
     ["PDF 업로드", "모의고사_수학.pdf", FileUp, "bg-violet-400/15 text-violet-100 border-violet-300/20"],
-    ["문항 검토", "58문항 · 태그 대기", ClipboardCheck, "bg-cyan-400/12 text-cyan-100 border-cyan-300/20"],
+    ["문항 확인", "58문항 · 태그 대기", ClipboardCheck, "bg-cyan-400/12 text-cyan-100 border-cyan-300/20"],
     ["과제 제작", "선택 12문항", Send, "bg-emerald-400/12 text-emerald-100 border-emerald-300/20"],
   ];
 

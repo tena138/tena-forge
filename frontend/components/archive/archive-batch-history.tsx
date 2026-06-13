@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Ban, BookOpenCheck, ClipboardCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, Ban, BookOpenCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -202,20 +202,6 @@ export function ArchiveBatchHistory({
     }
   }
 
-  async function markBatchReviewNeeded(batch: Batch) {
-    if (!batch.problem_count || busyId === batch.id) return;
-    const ok = window.confirm(`'${batch.name}' 배치의 문항 ${batch.problem_count}개를 다시 검토 필요 상태로 표시할까요?`);
-    if (!ok) return;
-    setBusyId(batch.id);
-    try {
-      const updated = await api<Batch>(`/api/batches/${batch.id}/review-needed`, { method: "POST" });
-      setBatches((items) => items.map((item) => (item.id === updated.id ? updated : item)));
-      if (activeBatchId === updated.id) onActiveBatchSnapshot?.(updated);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function cancelBatch(batch: Batch) {
     if (batch.status !== "pending" && batch.status !== "processing") return;
     const ok = window.confirm(`'${batch.name}' 배치 추출을 중단할까요? 지금까지 생성된 캐시와 일부 문항은 삭제됩니다.`);
@@ -233,7 +219,7 @@ export function ArchiveBatchHistory({
 
   async function reprocessSolutions(batch: Batch) {
     if (!batch.problem_count || !batch.solution_pdf_filename || batch.status === "pending" || batch.status === "processing" || busyId === batch.id) return;
-    const ok = window.confirm(`'${batch.name}' 배치의 해설 PDF만 다시 추출할까요? 기존 문항은 유지하고 정답/해설만 새로 매칭합니다.`);
+    const ok = window.confirm(`'${batch.name}' 배치의 답안 PDF만 다시 추출할까요? 기존 문항은 유지하고 정답만 새로 매칭합니다.`);
     if (!ok) return;
     setBusyId(batch.id);
     try {
@@ -341,20 +327,14 @@ export function ArchiveBatchHistory({
                   <p className="mt-1 text-sm text-slate-500">{formatDate(batch.created_at)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" disabled={!batch.problem_count} onClick={() => router.push(`/problems/review?batch_id=${batch.id}`)}>
-                    <ClipboardCheck className="h-4 w-4" />
-                    배치 검토
+                  <Button variant="outline" size="sm" disabled={!batch.problem_count} onClick={() => router.push(`/problems?batch_id=${batch.id}`)}>
+                    <Eye className="h-4 w-4" />
+                    문항 보기
                   </Button>
-                  {batch.status === "done" && batch.problem_count > 0 && batch.review_count === 0 ? (
-                    <Button variant="outline" size="sm" disabled={busyId === batch.id} onClick={() => markBatchReviewNeeded(batch)}>
-                      <RotateCcw className="h-4 w-4" />
-                      검토 대기열로 복구
-                    </Button>
-                  ) : null}
                   {batch.solution_pdf_filename && batch.problem_count > 0 ? (
                     <Button variant="outline" size="sm" disabled={batch.status === "pending" || batch.status === "processing" || busyId === batch.id} onClick={() => reprocessSolutions(batch)}>
                       <FileText className="h-4 w-4" />
-                      해설만 재처리
+                      답안만 재처리
                     </Button>
                   ) : null}
                   <Button
@@ -397,7 +377,7 @@ export function ArchiveBatchHistory({
                   <p className="mt-1 break-all text-sm text-slate-500">{fileName(batch.problem_pdf_filename)}</p>
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-violet-200" />해설 PDF</div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-violet-200" />답안 PDF</div>
                   <p className="mt-1 break-all text-sm text-slate-500">{fileName(batch.solution_pdf_filename)}</p>
                 </div>
               </div>
