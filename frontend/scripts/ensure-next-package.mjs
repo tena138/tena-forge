@@ -1,4 +1,4 @@
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 const nextDir = join(process.cwd(), ".next");
@@ -15,8 +15,18 @@ async function ensurePackageManifest(targetDir) {
 await ensurePackageManifest(nextDir);
 
 if (basename(process.cwd()) === "frontend") {
-  const parentNextDir = join(dirname(process.cwd()), ".next");
+  const parentDir = dirname(process.cwd());
+  const parentNextDir = join(parentDir, ".next");
   await rm(parentNextDir, { recursive: true, force: true });
   await cp(nextDir, parentNextDir, { recursive: true });
   await ensurePackageManifest(parentNextDir);
+
+  const parentNodeModules = join(parentDir, "node_modules");
+  const localNodeModules = join(process.cwd(), "node_modules");
+  await lstat(parentNodeModules).catch(async (error) => {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+    await symlink(localNodeModules, parentNodeModules, process.platform === "win32" ? "junction" : "dir");
+  });
 }
