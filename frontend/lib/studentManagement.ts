@@ -19,6 +19,7 @@ export type StudentCard = {
   unresolved_wrong_count: number;
   recent_weakness_label?: string | null;
   invite_code?: string;
+  joined_at?: string | null;
 };
 
 export type ClassCard = {
@@ -286,6 +287,19 @@ export function addStudentToClass(classId: string, studentMembershipId: string) 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ student_membership_id: studentMembershipId }),
+  });
+}
+
+export function mergeStudents(studentId: string, otherStudentId: string) {
+  return api<{
+    primary_student_id: string;
+    merged_student_id: string;
+    primary_student: StudentCard;
+    counts: Record<string, number>;
+  }>(`/api/student-management/students/${studentId}/merge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ other_student_id: otherStudentId }),
   });
 }
 

@@ -16,22 +16,39 @@ from sqlalchemy.orm import Session, joinedload
 from database import get_db
 from models import (
     AcademyClass,
+    AcademyMaterialAssignment,
     AcademySeat,
     AcademyStudentSubscription,
+    ArchiveAccessGrant,
+    AssignmentSubmission,
     Batch,
+    CalendarEvent,
     ClassScheduleEvent,
     ClassStudent,
     ContentVersion,
+    DailyStudentQuotaUsage,
     HubTemplate,
+    LearningAssignmentTarget,
+    LearningSubmission,
+    MaterialDeliveryLog,
     PaperSession,
     PaperSessionResult,
     Problem,
+    ProblemAttempt,
     ProblemResult,
     ProblemSet,
     ProblemSetItem,
     SeatAssignmentHistory,
     StudentAcademyMembership,
+    StudentNotification,
+    StudentPersonalSet,
+    StudentPersonalSetItem,
+    TestSession,
+    WatermarkedExport,
+    WrongAnswerAttempt,
+    WrongAnswerItem,
     WrongAnswerRecord,
+    WrongAnswerReview,
 )
 from services.export_service import generate_hub_context_pdf
 from services.academy_student_access import create_seat, ensure_academy_subscription, hash_invite_code, rotate_seat_code
@@ -1138,6 +1155,379 @@ def _sync_wrong_answer(
         record.updated_at = _now()
 
 
+def _merge_row_time(*values: datetime | None) -> datetime:
+    candidates = [value for value in values if value is not None]
+    return max(candidates) if candidates else datetime.min
+
+
+def _paper_result_time(row: PaperSessionResult) -> datetime:
+    return _merge_row_time(row.updated_at, row.graded_at, row.created_at)
+
+
+def _problem_result_time(row: ProblemResult) -> datetime:
+    return _merge_row_time(row.updated_at, row.created_at)
+
+
+def _merge_strings(left: str | None, right: str | None) -> str | None:
+    left_text = (left or "").strip()
+    right_text = (right or "").strip()
+    if not left_text:
+        return right_text or None
+    if not right_text or right_text in left_text:
+        return left_text
+    return f"{left_text}\n\n--- 병합된 기록 ---\n{right_text}"
+
+
+def _merge_unique_list(left: list | None, right: list | None) -> list:
+    values: list = []
+    for item in [*(left or []), *(right or [])]:
+        if item not in values:
+            values.append(item)
+    return values
+
+
+def _merged_wrong_status(left: str | None, right: str | None) -> str:
+    priority = {"unresolved": 0, "reviewing": 1, "resolved": 2, "mastered": 3}
+    candidates = [status for status in [left, right] if status]
+    if not candidates:
+        return "unresolved"
+    return sorted(candidates, key=lambda status: priority.get(status, 99))[0]
+
+
+def _merge_counseling_logs(primary_logs: list | None, secondary_logs: list | None) -> list:
+    rows: dict[str, dict] = {}
+    for row in [*(secondary_logs or []), *(primary_logs or [])]:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("id") or f"{row.get('counseling_date') or row.get('created_at')}-{row.get('title')}-{row.get('notes')}")
+        rows[key] = row
+    return sorted(rows.values(), key=lambda row: str(row.get("counseling_date") or row.get("created_at") or ""), reverse=True)[:200]
+
+
+def _merge_membership_metadata(primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> None:
+    now = _now().isoformat()
+    primary_metadata = dict(primary.metadata_json or {})
+    secondary_metadata = dict(secondary.metadata_json or {})
+    for key in ["grade_level", "grade", "school", "memo"]:
+        if not primary_metadata.get(key) and secondary_metadata.get(key):
+            primary_metadata[key] = secondary_metadata.get(key)
+    primary_metadata["counseling_logs"] = _merge_counseling_logs(
+        primary_metadata.get("counseling_logs") if isinstance(primary_metadata.get("counseling_logs"), list) else [],
+        secondary_metadata.get("counseling_logs") if isinstance(secondary_metadata.get("counseling_logs"), list) else [],
+    )
+    merged_from = list(primary_metadata.get("merged_from") or [])
+    merged_from.append(
+        {
+            "id": str(secondary.id),
+            "student_user_id": secondary.student_user_id,
+            "name": _student_name(secondary),
+            "merged_at": now,
+        }
+    )
+    primary_metadata["merged_from"] = merged_from
+    secondary_metadata["merged_into"] = str(primary.id)
+    secondary_metadata["merged_at"] = now
+    secondary_metadata["merged_into_name"] = _student_name(primary)
+    if not primary.display_name_in_academy and secondary.display_name_in_academy:
+        primary.display_name_in_academy = secondary.display_name_in_academy
+    primary.metadata_json = primary_metadata
+    secondary.metadata_json = secondary_metadata
+
+
+def _merge_class_links(db: Session, primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> int:
+    moved = 0
+    source_links = db.scalars(
+        select(ClassStudent).where(
+            _id_equals(ClassStudent.student_membership_id, secondary.id),
+            ClassStudent.left_at.is_(None),
+        )
+    ).all()
+    for source_link in source_links:
+        target_link = db.scalar(
+            select(ClassStudent).where(
+                _id_equals(ClassStudent.class_id, source_link.class_id),
+                _id_equals(ClassStudent.student_membership_id, primary.id),
+            )
+        )
+        if target_link:
+            target_link.left_at = None
+        else:
+            db.add(ClassStudent(class_id=source_link.class_id, student_membership_id=primary.id, joined_at=source_link.joined_at))
+        source_link.left_at = _now()
+        moved += 1
+    return moved
+
+
+def _merge_problem_results(
+    db: Session,
+    *,
+    target_result: PaperSessionResult,
+    source_result: PaperSessionResult,
+    primary: StudentAcademyMembership,
+    prefer_source: bool,
+) -> int:
+    moved = 0
+    target_rows = {
+        row.problem_id: row
+        for row in db.scalars(
+            select(ProblemResult).where(
+                _id_equals(ProblemResult.paper_session_result_id, target_result.id),
+            )
+        ).all()
+    }
+    source_rows = db.scalars(
+        select(ProblemResult).where(
+            _id_equals(ProblemResult.paper_session_result_id, source_result.id),
+        )
+    ).all()
+    for source_row in source_rows:
+        target_row = target_rows.get(source_row.problem_id)
+        if target_row:
+            if prefer_source or _problem_result_time(source_row) > _problem_result_time(target_row):
+                target_row.problem_number = source_row.problem_number
+                target_row.problem_version_id = source_row.problem_version_id
+                target_row.result_status = source_row.result_status
+                target_row.updated_at = _now()
+            db.delete(source_row)
+        else:
+            source_row.paper_session_result_id = target_result.id
+            source_row.student_membership_id = primary.id
+            source_row.student_user_id = primary.student_user_id
+            source_row.updated_at = _now()
+        moved += 1
+    return moved
+
+
+def _merge_paper_session_results(db: Session, academy_ids: set[str], primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> int:
+    moved = 0
+    source_results = db.scalars(
+        select(PaperSessionResult).where(
+            PaperSessionResult.academy_id.in_(list(academy_ids)),
+            _id_equals(PaperSessionResult.student_membership_id, secondary.id),
+        )
+    ).all()
+    for source_result in source_results:
+        target_result = db.scalar(
+            select(PaperSessionResult).where(
+                PaperSessionResult.academy_id.in_(list(academy_ids)),
+                _id_equals(PaperSessionResult.paper_session_id, source_result.paper_session_id),
+                _id_equals(PaperSessionResult.student_membership_id, primary.id),
+            )
+        )
+        if target_result:
+            prefer_source = _paper_result_time(source_result) > _paper_result_time(target_result)
+            _merge_problem_results(db, target_result=target_result, source_result=source_result, primary=primary, prefer_source=prefer_source)
+            if prefer_source:
+                target_result.status = source_result.status
+                target_result.score = source_result.score
+                target_result.correct_count = source_result.correct_count
+                target_result.wrong_count = source_result.wrong_count
+                target_result.total_count = source_result.total_count
+                target_result.graded_by = source_result.graded_by
+                target_result.graded_at = source_result.graded_at
+            target_result.student_user_id = primary.student_user_id
+            target_result.updated_at = _now()
+            db.delete(source_result)
+        else:
+            source_result.student_membership_id = primary.id
+            source_result.student_user_id = primary.student_user_id
+            source_result.updated_at = _now()
+            for row in db.scalars(select(ProblemResult).where(_id_equals(ProblemResult.paper_session_result_id, source_result.id))).all():
+                row.student_membership_id = primary.id
+                row.student_user_id = primary.student_user_id
+                row.updated_at = _now()
+        moved += 1
+
+    sessions = db.scalars(select(PaperSession).where(PaperSession.academy_id.in_(list(academy_ids)))).all()
+    primary_id = str(primary.id)
+    secondary_id = str(secondary.id)
+    for session in sessions:
+        ids = [str(value) for value in (session.student_membership_ids or [])]
+        if secondary_id not in ids:
+            continue
+        next_ids: list[str] = []
+        for value in ids:
+            next_value = primary_id if value == secondary_id else value
+            if next_value not in next_ids:
+                next_ids.append(next_value)
+        session.student_membership_ids = next_ids
+        session.updated_at = _now()
+    return moved
+
+
+def _merge_wrong_answer_records(db: Session, academy_ids: set[str], primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> int:
+    moved = 0
+    source_rows = db.scalars(
+        select(WrongAnswerRecord).where(
+            WrongAnswerRecord.academy_id.in_(list(academy_ids)),
+            WrongAnswerRecord.student_id == secondary.student_user_id,
+        )
+    ).all()
+    for source_row in source_rows:
+        target_row = db.scalar(
+            select(WrongAnswerRecord).where(
+                WrongAnswerRecord.academy_id == source_row.academy_id,
+                WrongAnswerRecord.student_id == primary.student_user_id,
+                _id_equals(WrongAnswerRecord.problem_id, source_row.problem_id),
+            )
+        )
+        if target_row:
+            source_latest = source_row.latest_wrong_at or source_row.updated_at or source_row.created_at
+            target_latest = target_row.latest_wrong_at or target_row.updated_at or target_row.created_at
+            target_row.problem_version_id = source_row.problem_version_id if source_latest and (not target_latest or source_latest >= target_latest) else target_row.problem_version_id
+            target_row.first_wrong_at = min([value for value in [target_row.first_wrong_at, source_row.first_wrong_at] if value] or [_now()])
+            target_row.latest_wrong_at = max([value for value in [target_row.latest_wrong_at, source_row.latest_wrong_at] if value] or [_now()])
+            target_row.wrong_count = (target_row.wrong_count or 0) + (source_row.wrong_count or 0)
+            target_row.retry_count = (target_row.retry_count or 0) + (source_row.retry_count or 0)
+            target_row.resolved_status = _merged_wrong_status(target_row.resolved_status, source_row.resolved_status)
+            target_row.source_assignment_ids = _merge_unique_list(target_row.source_assignment_ids, source_row.source_assignment_ids)
+            target_row.student_memo = _merge_strings(target_row.student_memo, source_row.student_memo)
+            target_row.teacher_memo = _merge_strings(target_row.teacher_memo, source_row.teacher_memo)
+            if source_latest and (not target_latest or source_latest >= target_latest):
+                target_row.last_attempt_id = source_row.last_attempt_id or target_row.last_attempt_id
+            target_row.updated_at = _now()
+            db.delete(source_row)
+        else:
+            source_row.student_id = primary.student_user_id
+            source_row.updated_at = _now()
+        moved += 1
+    return moved
+
+
+def _merge_daily_quota_usage(db: Session, primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> int:
+    moved = 0
+    rows = db.scalars(select(DailyStudentQuotaUsage).where(DailyStudentQuotaUsage.student_user_id == secondary.student_user_id)).all()
+    for row in rows:
+        target = db.scalar(
+            select(DailyStudentQuotaUsage).where(
+                DailyStudentQuotaUsage.student_user_id == primary.student_user_id,
+                DailyStudentQuotaUsage.date == row.date,
+                DailyStudentQuotaUsage.source == row.source,
+            )
+        )
+        if target:
+            target.upload_count += row.upload_count or 0
+            target.extraction_count += row.extraction_count or 0
+            target.export_count += row.export_count or 0
+            target.updated_at = _now()
+            db.delete(row)
+        else:
+            row.student_user_id = primary.student_user_id
+            row.updated_at = _now()
+        moved += 1
+    return moved
+
+
+def _merge_direct_student_user_rows(db: Session, academy_ids: set[str], primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> int:
+    moved = 0
+    source_user = secondary.student_user_id
+    target_user = primary.student_user_id
+    for model, column_name in [
+        (ArchiveAccessGrant, "student_id"),
+        (LearningSubmission, "student_id"),
+        (ProblemAttempt, "student_id"),
+        (StudentPersonalSet, "student_id"),
+        (StudentPersonalSetItem, "student_id"),
+        (StudentNotification, "student_user_id"),
+        (MaterialDeliveryLog, "student_user_id"),
+        (WatermarkedExport, "student_user_id"),
+        (WrongAnswerItem, "student_user_id"),
+        (WrongAnswerReview, "student_user_id"),
+        (WrongAnswerAttempt, "student_user_id"),
+    ]:
+        column = getattr(model, column_name)
+        stmt = select(model).where(column == source_user)
+        if hasattr(model, "academy_id"):
+            academy_column = getattr(model, "academy_id")
+            stmt = stmt.where((academy_column.is_(None)) | (academy_column.in_(list(academy_ids))))
+        rows = db.scalars(stmt).all()
+        for row in rows:
+            setattr(row, column_name, target_user)
+            if hasattr(row, "student_membership_id"):
+                setattr(row, "student_membership_id", primary.id)
+            if hasattr(row, "updated_at"):
+                row.updated_at = _now()
+            moved += 1
+
+    for row in db.scalars(
+        select(LearningAssignmentTarget).where(
+            LearningAssignmentTarget.academy_id.in_(list(academy_ids)),
+            LearningAssignmentTarget.student_id == source_user,
+        )
+    ).all():
+        target = db.scalar(
+            select(LearningAssignmentTarget).where(
+                _id_equals(LearningAssignmentTarget.assignment_id, row.assignment_id),
+                LearningAssignmentTarget.academy_id == row.academy_id,
+                LearningAssignmentTarget.student_id == target_user,
+            )
+        )
+        if target:
+            db.delete(row)
+        else:
+            row.student_id = target_user
+        moved += 1
+
+    for row in db.scalars(
+        select(AcademyMaterialAssignment).where(
+            AcademyMaterialAssignment.target_type == "student",
+            AcademyMaterialAssignment.target_id == source_user,
+        )
+    ).all():
+        row.target_id = target_user
+        moved += 1
+    return moved
+
+
+def _merge_membership_rows(db: Session, academy_ids: set[str], primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> int:
+    moved = 0
+    for model, column_name in [
+        (AssignmentSubmission, "student_membership_id"),
+        (TestSession, "student_membership_id"),
+        (CalendarEvent, "student_membership_id"),
+        (WatermarkedExport, "student_membership_id"),
+        (WrongAnswerItem, "student_membership_id"),
+    ]:
+        column = getattr(model, column_name)
+        stmt = select(model).where(_id_equals(column, secondary.id))
+        if hasattr(model, "academy_id"):
+            academy_column = getattr(model, "academy_id")
+            stmt = stmt.where((academy_column.is_(None)) | (academy_column.in_(list(academy_ids))))
+        rows = db.scalars(stmt).all()
+        for row in rows:
+            setattr(row, column_name, primary.id)
+            if hasattr(row, "student_user_id"):
+                row.student_user_id = primary.student_user_id
+            if hasattr(row, "updated_at"):
+                row.updated_at = _now()
+            moved += 1
+    return moved
+
+
+def _merge_seats(db: Session, primary: StudentAcademyMembership, secondary: StudentAcademyMembership) -> None:
+    primary_seat = db.get(AcademySeat, primary.academy_seat_id) if primary.academy_seat_id else None
+    secondary_seat = db.get(AcademySeat, secondary.academy_seat_id) if secondary.academy_seat_id else None
+    if secondary_seat and not primary_seat:
+        primary.academy_seat_id = secondary_seat.id
+        secondary_seat.current_student_membership_id = primary.id
+        secondary_seat.released_at = None
+        secondary.academy_seat_id = None
+        return
+    if secondary_seat and secondary_seat.current_student_membership_id == secondary.id:
+        secondary_seat.current_student_membership_id = None
+        secondary_seat.released_at = _now()
+        rotate_seat_code(db, secondary_seat)
+    history = db.scalar(
+        select(SeatAssignmentHistory)
+        .where(_id_equals(SeatAssignmentHistory.membership_id, secondary.id), SeatAssignmentHistory.released_at.is_(None))
+        .order_by(SeatAssignmentHistory.assigned_at.desc())
+    )
+    if history:
+        history.released_at = _now()
+        history.released_by = "student_merge"
+        history.reason = "merged_into_primary_student"
+
+
 class ClassPayload(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str | None = None
@@ -1177,6 +1567,10 @@ class StudentUpdatePayload(BaseModel):
 
 class ClassStudentPayload(BaseModel):
     student_membership_id: UUID
+
+
+class StudentMergePayload(BaseModel):
+    other_student_id: UUID
 
 
 class PaperSessionPayload(BaseModel):
@@ -1780,6 +2174,64 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         "unresolved_wrong_count": len([row for row in wrongs if row["resolved_status"] in {"unresolved", "reviewing"}]),
     }
     return data
+
+
+@router.post("/students/{student_id}/merge")
+def merge_student(student_id: UUID, payload: StudentMergePayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    left = _get_membership(db, academy_id, student_id, visible_academy_ids)
+    right = _get_membership(db, academy_id, payload.other_student_id, visible_academy_ids)
+    if str(left.id) == str(right.id):
+        raise HTTPException(status_code=400, detail="Select a different student to merge.")
+    if left.academy_id != right.academy_id:
+        raise HTTPException(status_code=400, detail="Students from different academy contexts cannot be merged.")
+
+    primary, secondary = sorted(
+        [left, right],
+        key=lambda membership: (membership.joined_at or datetime.min, str(membership.id)),
+    )
+    counts = {
+        "class_links": 0,
+        "paper_session_results": 0,
+        "wrong_answers": 0,
+        "membership_rows": 0,
+        "student_user_rows": 0,
+        "usage_rows": 0,
+    }
+    try:
+        _merge_membership_metadata(primary, secondary)
+        _merge_seats(db, primary, secondary)
+        counts["class_links"] = _merge_class_links(db, primary, secondary)
+        counts["paper_session_results"] = _merge_paper_session_results(db, visible_academy_ids, primary, secondary)
+        counts["wrong_answers"] = _merge_wrong_answer_records(db, visible_academy_ids, primary, secondary)
+        counts["membership_rows"] = _merge_membership_rows(db, visible_academy_ids, primary, secondary)
+        counts["student_user_rows"] = _merge_direct_student_user_rows(db, visible_academy_ids, primary, secondary)
+        counts["usage_rows"] = _merge_daily_quota_usage(db, primary, secondary)
+
+        for event in db.scalars(
+            select(CalendarEvent).where(
+                CalendarEvent.owner_type == "student",
+                CalendarEvent.owner_id == secondary.student_user_id,
+                (CalendarEvent.academy_id.is_(None)) | (CalendarEvent.academy_id.in_(list(visible_academy_ids))),
+            )
+        ).all():
+            event.owner_id = primary.student_user_id
+            event.updated_at = _now()
+
+        secondary.status = "merged"
+        secondary.ended_at = _now()
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Student merge failed. Please try again.") from exc
+
+    return {
+        "primary_student_id": str(primary.id),
+        "merged_student_id": str(secondary.id),
+        "primary_student": _student_payload(db, academy_id, primary),
+        "counts": counts,
+    }
 
 
 @router.get("/students/{student_id}/exam-stats-series")

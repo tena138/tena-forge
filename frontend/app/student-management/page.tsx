@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Check,
@@ -52,6 +52,7 @@ import {
   getStudentManagementDashboard,
   listPaperSessions,
   listWrongAnswers,
+  mergeStudents,
   savePaperSessionGrade,
   updateClassOrder,
 } from "@/lib/studentManagement";
@@ -82,6 +83,7 @@ type ProblemPageGroup = {
   label: string;
   problems: SessionProblem[];
 };
+type StudentMergeMenuState = { student: StudentCard; classId: string; x: number; y: number };
 
 const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
 
@@ -112,6 +114,14 @@ function studentDirectoryText(student: StudentCard) {
 
 function studentMetaText(student: StudentCard) {
   return [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "소속 없음";
+}
+
+function mergePrimaryPreview(left: StudentCard | null, right: StudentCard | null) {
+  if (!left || !right) return left || right;
+  const leftTime = left.joined_at ? new Date(left.joined_at).getTime() : Number.MAX_SAFE_INTEGER;
+  const rightTime = right.joined_at ? new Date(right.joined_at).getTime() : Number.MAX_SAFE_INTEGER;
+  if (leftTime !== rightTime) return leftTime < rightTime ? left : right;
+  return left.id.localeCompare(right.id) <= 0 ? left : right;
 }
 const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel: string; color: string }> = [
   { key: "selected", label: "본인 점수", shortLabel: "본인", color: "#f8fafc" },
@@ -199,9 +209,17 @@ function errorMessage(error: unknown, fallback: string) {
   return candidate.message || fallback;
 }
 
-function ClassStudentCard({ student }: { student: StudentCard }) {
+function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; onMergeContext?: (event: MouseEvent<HTMLElement>, student: StudentCard) => void }) {
   return (
-    <Link href={`/student-management/students/${student.id}`} className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10">
+    <Link
+      href={`/student-management/students/${student.id}`}
+      onContextMenu={(event) => {
+        if (!onMergeContext) return;
+        event.preventDefault();
+        onMergeContext(event, student);
+      }}
+      className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{student.name}</p>
@@ -918,6 +936,11 @@ export default function StudentManagementPage() {
   const [newKeyCodes, setNewKeyCodes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [studentMergeMenu, setStudentMergeMenu] = useState<StudentMergeMenuState | null>(null);
+  const [mergeSourceStudent, setMergeSourceStudent] = useState<StudentCard | null>(null);
+  const [mergeSearch, setMergeSearch] = useState("");
+  const [mergeTargetStudentId, setMergeTargetStudentId] = useState("");
+  const [mergingStudent, setMergingStudent] = useState(false);
 
   const [classForm, setClassForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
   const [studentForm, setStudentForm] = useState(emptyStudentForm);
@@ -943,10 +966,34 @@ export default function StudentManagementPage() {
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [classes]);
+  const mergeTargetStudent = useMemo(
+    () => allStudents.find((student) => student.id === mergeTargetStudentId) || null,
+    [allStudents, mergeTargetStudentId]
+  );
+  const mergeCandidates = useMemo(() => {
+    if (!mergeSourceStudent) return [];
+    const query = mergeSearch.trim().toLowerCase();
+    return allStudents.filter((student) => {
+      if (student.id === mergeSourceStudent.id) return false;
+      return !query || studentDirectoryText(student).includes(query);
+    });
+  }, [allStudents, mergeSearch, mergeSourceStudent]);
+  const mergePrimaryStudent = useMemo(() => mergePrimaryPreview(mergeSourceStudent, mergeTargetStudent), [mergeSourceStudent, mergeTargetStudent]);
 
   useEffect(() => {
     classOrderRef.current = classes;
   }, [classes]);
+
+  useEffect(() => {
+    if (!studentMergeMenu) return;
+    const close = () => setStudentMergeMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [studentMergeMenu]);
 
   useEffect(() => {
     const stored = readStoredAuthProfile<AcademyProfile>();
@@ -1147,6 +1194,35 @@ export default function StudentManagementPage() {
       setMessage(errorMessage(error, "좌석을 비우지 못했습니다."));
     } finally {
       setKeyBusySeatId("");
+    }
+  }
+
+  function openStudentMerge(student: StudentCard) {
+    setStudentMergeMenu(null);
+    setMergeSourceStudent(student);
+    setMergeSearch("");
+    setMergeTargetStudentId("");
+  }
+
+  function closeStudentMerge() {
+    setMergeSourceStudent(null);
+    setMergeSearch("");
+    setMergeTargetStudentId("");
+    setMergingStudent(false);
+  }
+
+  async function submitStudentMerge() {
+    if (!mergeSourceStudent || !mergeTargetStudentId) return;
+    setMergingStudent(true);
+    try {
+      const result = await mergeStudents(mergeSourceStudent.id, mergeTargetStudentId);
+      const primary = result.primary_student;
+      closeStudentMerge();
+      setMessage(`${primary.name} 기준으로 학생을 통합했습니다.`);
+      await refresh();
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 통합에 실패했습니다. 잠시 후 다시 시도해주세요."));
+      setMergingStudent(false);
     }
   }
 
@@ -1573,7 +1649,18 @@ export default function StudentManagementPage() {
                       {classRow.students.length ? (
                         <div className="flex min-h-[136px] flex-1 items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
                           {classRow.students.map((student) => (
-                            <ClassStudentCard key={student.id} student={student} />
+                            <ClassStudentCard
+                              key={student.id}
+                              student={student}
+                              onMergeContext={(event, selectedStudent) =>
+                                setStudentMergeMenu({
+                                  student: selectedStudent,
+                                  classId: classRow.id,
+                                  x: Math.min(event.clientX, window.innerWidth - 180),
+                                  y: Math.min(event.clientY, window.innerHeight - 96),
+                                })
+                              }
+                            />
                           ))}
                         </div>
                       ) : (
@@ -1962,6 +2049,78 @@ export default function StudentManagementPage() {
               </CardContent>
             </Card>
           </section>
+        ) : null}
+        {studentMergeMenu ? (
+          <div
+            className="fixed z-50 w-44 rounded-md border border-white/10 bg-[#11121a] p-1 shadow-2xl shadow-black/50"
+            style={{ left: studentMergeMenu.x, top: studentMergeMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-semibold text-slate-100 hover:bg-violet-500/15"
+              onClick={() => openStudentMerge(studentMergeMenu.student)}
+            >
+              <UserPlus className="h-4 w-4 text-violet-200" />
+              통합하기
+            </button>
+          </div>
+        ) : null}
+        {mergeSourceStudent ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
+            <section className="w-full max-w-xl rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/60">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-black text-white">학생 통합</h2>
+                  <p className="mt-1 text-sm text-slate-400">{mergeSourceStudent.name}</p>
+                </div>
+                <button type="button" onClick={closeStudentMerge} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="닫기">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                <Input
+                  placeholder="합칠 학생 검색"
+                  value={mergeSearch}
+                  onChange={(event) => {
+                    setMergeSearch(event.target.value);
+                    setMergeTargetStudentId("");
+                  }}
+                />
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {mergeCandidates.map((student) => (
+                    <button
+                      key={student.id}
+                      type="button"
+                      onClick={() => setMergeTargetStudentId(student.id)}
+                      className={cn(
+                        "w-full rounded-md border px-3 py-2 text-left transition",
+                        mergeTargetStudentId === student.id ? "border-violet-300/50 bg-violet-500/15" : "border-white/10 bg-white/[0.035] hover:border-violet-300/35"
+                      )}
+                    >
+                      <span className="block truncate text-sm font-bold text-white">{student.name}</span>
+                      <span className="mt-1 block truncate text-xs text-slate-500">{studentMetaText(student)}</span>
+                    </button>
+                  ))}
+                  {!mergeCandidates.length ? (
+                    <div className="rounded-md border border-dashed border-white/10 px-3 py-6 text-center text-sm text-slate-500">검색 결과 없음</div>
+                  ) : null}
+                </div>
+                {mergeTargetStudent ? (
+                  <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
+                    기준 학생: <span className="font-bold text-white">{mergePrimaryStudent?.name || "-"}</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={closeStudentMerge}>취소</Button>
+                  <Button type="button" onClick={submitStudentMerge} disabled={!mergeTargetStudentId || mergingStudent}>
+                    {mergingStudent ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    확인
+                  </Button>
+                </div>
+              </div>
+            </section>
+          </div>
         ) : null}
         {activeTab === "classes" ? (
           <>
