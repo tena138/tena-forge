@@ -936,7 +936,13 @@ function DropZone({
           {label} {required && <span className="text-red-300">*</span>}
         </span>
         {file || isDragging ? <span className="mt-2 text-sm text-slate-400">{file ? file.name : "여기에 PDF를 놓으세요"}</span> : null}
-        <input className="hidden" type="file" accept="application/pdf" onChange={(event) => pickFile(event.target.files?.[0] ?? null)} />
+        <input
+          key={file ? `${file.name}:${file.size}:${file.lastModified}` : "empty"}
+          className="hidden"
+          type="file"
+          accept="application/pdf"
+          onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
+        />
       </label>
       {file && (
         <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
@@ -1205,6 +1211,16 @@ export default function UploadPage() {
     setBatchAccentColor(color);
   }
 
+  function resetUploadDraft() {
+    setProblemPdf(null);
+    setSolutionPdf(null);
+    setBatchName("");
+    setAutoBatchName("");
+    setBatchAccentColor(defaultTagColor("new-batch", "batch"));
+    setBatchColorTouched(false);
+    setRightsNote("");
+  }
+
   function handleProblemPdfChange(file: File | null) {
     const nextAutoBatchName = file ? fileNameToBatchName(file.name) : "";
     const inferredSubjects = inferSubjectsFromFilename(file?.name);
@@ -1270,6 +1286,7 @@ export default function UploadPage() {
     setUploadPercent(null);
     setBatchId(data.batch_id);
     rememberActiveBatch(data.batch_id);
+    resetUploadDraft();
     await refreshArchiveBatches();
     setMessage("업로드 완료. 아래 아카이빙 기록에서 진행률을 확인할 수 있습니다.");
   }
