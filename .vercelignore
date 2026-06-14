@@ -21,6 +21,8 @@ latex-smoke*
 *.log
 *.pdf
 *.png
+!frontend/public/*.png
+!frontend/public/**/*.png
 *.sln
 *.uproject
 frontend/node_modules
