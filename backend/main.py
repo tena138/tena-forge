@@ -268,6 +268,8 @@ def health_db():
             "subscription_orders",
             "subscription_billing_keys",
             "subscription_payment_attempts",
+            "routine_actions",
+            "routine_messages",
         }
         academy_columns = {column["name"] for column in inspector.get_columns("academies")} if "academies" in tables else set()
         batch_columns = {column["name"] for column in inspector.get_columns("batches")} if "batches" in tables else set()

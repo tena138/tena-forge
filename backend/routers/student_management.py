@@ -2,7 +2,7 @@ import json
 import math
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from urllib.parse import quote
 from uuid import UUID
@@ -40,6 +40,8 @@ from models import (
     ProblemResult,
     ProblemSet,
     ProblemSetItem,
+    RoutineAction,
+    RoutineMessage,
     SeatAssignmentHistory,
     StudentAcademyMembership,
     StudentNotification,
@@ -61,6 +63,10 @@ router = APIRouter(prefix="/api/student-management", tags=["student management"]
 CLASS_ORDER_METADATA_KEY = "student_management_class_order"
 COUNSELING_FORMATS_METADATA_KEY = "student_management_counseling_formats"
 COUNSELING_PRESETS_METADATA_KEY = "student_management_counseling_presets"
+ROUTINE_CHANNEL = "student_notification"
+ROUTINE_ACTIVE_STATUSES = {"suggested", "reviewing"}
+ROUTINE_RECENT_DAYS = 14
+ROUTINE_MAX_NEW_PER_REFRESH = 8
 EXPORTED_REVIEW_SOURCE_STUDENT = "\uc774\uc6b0\ub178"
 EXPORTED_REVIEW_TARGET_STUDENTS = {"\uc774\uc6b0\ub178", "\uc774\ub098\uc740", "\uc774\uc218\ud604", "\ud669\uc9c0\uc724"}
 EXPORTED_REVIEW_TITLE_KEYWORDS = ("\ubbf8\uce5c\uac1c\ub150", "\uc2182", "\ubcf5\uc2b5", "(2)")
@@ -1669,6 +1675,11 @@ class CounselingCleanPreviewResponse(BaseModel):
     sections: list[CounselingCleanPreviewSection]
 
 
+class RoutineMessagePatchPayload(BaseModel):
+    message_body: str | None = Field(default=None, max_length=4000)
+    status: str | None = Field(default=None, max_length=40)
+
+
 def _resolve_counseling_class(db: Session, academy_id: str, membership: StudentAcademyMembership, class_id: UUID | None) -> AcademyClass | None:
     if not class_id:
         return None
@@ -1818,6 +1829,393 @@ def _align_cleaned_counseling_sections(original_sections: list[dict], ai_section
             }
         )
     return cleaned
+
+
+def _parse_routine_datetime(value: object) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _routine_date_label(value: datetime | str | None) -> str:
+    parsed = _parse_routine_datetime(value)
+    return parsed.strftime("%Y.%m.%d") if parsed else str(value or "")[:10]
+
+
+def _routine_message_payload(message: RoutineMessage) -> dict:
+    return {
+        "id": str(message.id),
+        "action_id": str(message.action_id),
+        "student_membership_id": str(message.student_membership_id) if message.student_membership_id else None,
+        "student_user_id": message.student_user_id,
+        "student_name": message.student_name,
+        "class_id": str(message.class_id) if message.class_id else None,
+        "class_name": message.class_name,
+        "message_body": message.message_body,
+        "status": message.status,
+        "channel": message.channel,
+        "delivery_status": message.delivery_status,
+        "notification_id": str(message.notification_id) if message.notification_id else None,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "metadata": message.metadata_json or {},
+        "updated_at": message.updated_at.isoformat() if message.updated_at else None,
+    }
+
+
+def _routine_action_payload(action: RoutineAction) -> dict:
+    messages = sorted(action.messages or [], key=lambda item: (item.created_at, str(item.id)))
+    return {
+        "id": str(action.id),
+        "academy_id": action.academy_id,
+        "routine_type": action.routine_type,
+        "source_type": action.source_type,
+        "source_id": action.source_id,
+        "class_id": str(action.class_id) if action.class_id else None,
+        "status": action.status,
+        "title": action.title,
+        "summary": action.summary,
+        "channel": action.channel,
+        "message_count": len(messages),
+        "sendable_count": len([message for message in messages if message.status != "excluded"]),
+        "sent_count": len([message for message in messages if message.delivery_status == "sent"]),
+        "created_at": action.created_at.isoformat() if action.created_at else None,
+        "updated_at": action.updated_at.isoformat() if action.updated_at else None,
+        "approved_at": action.approved_at.isoformat() if action.approved_at else None,
+        "sent_at": action.sent_at.isoformat() if action.sent_at else None,
+        "ai_payload": action.ai_payload or {},
+        "messages": [_routine_message_payload(message) for message in messages],
+    }
+
+
+def _routine_ai_prompt(action: RoutineAction, context: dict) -> str:
+    payload = {
+        "routine_type": action.routine_type,
+        "title": action.title,
+        "summary": action.summary,
+        "source": context.get("source") if isinstance(context, dict) else {},
+        "messages": [
+            {
+                "student_user_id": message.student_user_id,
+                "student_name": message.student_name,
+                "message_body": message.message_body,
+                "metadata": message.metadata_json or {},
+            }
+            for message in sorted(action.messages or [], key=lambda item: (item.created_at, str(item.id)))
+            if message.status != "excluded"
+        ],
+    }
+    return f"""
+You are Tena Forge's routine assistant for Korean academies.
+
+Return only JSON:
+{{"title":"short Korean title","summary":"question-style Korean approval prompt","messages":[{{"student_user_id":"same id","message_body":"polite Korean message"}}]}}
+
+Rules:
+- The summary must ask the teacher whether to send the prepared messages.
+- Use polite, professional Korean suitable for students and parents.
+- Use only facts present in the input: titles, dates, scores, correct/wrong counts, schedules, counseling notes.
+- Do not invent attendance, attitude, parent reactions, Kakao/SMS delivery, health, family details, promises, or exact comments that are not present.
+- Keep each student message concise but useful.
+- Preserve student_user_id values exactly.
+- Do not include Markdown or explanations outside JSON.
+
+Input:
+{json.dumps(payload, ensure_ascii=False)}
+""".strip()
+
+
+def _apply_routine_ai(action: RoutineAction, context: dict) -> None:
+    stored_context = dict(context or {})
+    settings = get_settings()
+    if not settings.openai_api_key:
+        action.ai_payload = {**stored_context, "ai_status": "fallback_no_key"}
+        return
+
+    try:
+        client = OpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
+        parsed = _counseling_chat_completion_json(client, settings.ai_model, _routine_ai_prompt(action, stored_context), max_output_tokens=4096)
+        title = str(parsed.get("title") or "").strip()
+        summary = str(parsed.get("summary") or "").strip()
+        if title:
+            action.title = title[:255]
+        if summary:
+            action.summary = summary
+        rows = parsed.get("messages") if isinstance(parsed.get("messages"), list) else []
+        by_student = {
+            str(row.get("student_user_id") or ""): row
+            for row in rows
+            if isinstance(row, dict) and str(row.get("student_user_id") or "")
+        }
+        for index, message in enumerate(sorted(action.messages or [], key=lambda item: (item.created_at, str(item.id)))):
+            row = by_student.get(message.student_user_id)
+            if not row and index < len(rows) and isinstance(rows[index], dict):
+                row = rows[index]
+            body = str((row or {}).get("message_body") or "").strip() if isinstance(row, dict) else ""
+            if body and message.status != "excluded":
+                message.message_body = body
+        action.ai_payload = {**stored_context, "ai_status": "applied", "ai_response": parsed}
+    except Exception as exc:
+        action.ai_payload = {**stored_context, "ai_status": "fallback_error", "ai_error": str(exc)}
+    action.updated_at = _now()
+
+
+def _routine_active_memberships_for_class(db: Session, academy_ids: set[str], class_id: UUID) -> list[StudentAcademyMembership]:
+    return db.scalars(
+        select(StudentAcademyMembership)
+        .join(ClassStudent, ClassStudent.student_membership_id == StudentAcademyMembership.id)
+        .join(AcademyClass, AcademyClass.id == ClassStudent.class_id)
+        .where(
+            AcademyClass.academy_id.in_(list(academy_ids)),
+            ClassStudent.class_id == class_id,
+            ClassStudent.left_at.is_(None),
+            StudentAcademyMembership.status == "active",
+        )
+        .order_by(StudentAcademyMembership.display_name_in_academy.asc().nullslast(), StudentAcademyMembership.created_at.asc())
+    ).all()
+
+
+def _routine_existing_keys(db: Session, academy_id: str) -> set[tuple[str, str, str]]:
+    rows = db.scalars(select(RoutineAction).where(RoutineAction.academy_id == academy_id)).all()
+    return {(row.routine_type, row.source_type, row.source_id) for row in rows}
+
+
+def _add_routine_action(
+    db: Session,
+    academy_id: str,
+    actor_id: str,
+    routine_type: str,
+    source_type: str,
+    source_id: str,
+    class_id: UUID | None,
+    title: str,
+    summary: str,
+    messages: list[dict],
+    source_context: dict,
+) -> RoutineAction | None:
+    if not messages:
+        return None
+    existing = db.scalar(
+        select(RoutineAction).where(
+            RoutineAction.academy_id == academy_id,
+            RoutineAction.routine_type == routine_type,
+            RoutineAction.source_type == source_type,
+            RoutineAction.source_id == source_id,
+        )
+    )
+    if existing:
+        return None
+    action = RoutineAction(
+        academy_id=academy_id,
+        routine_type=routine_type,
+        source_type=source_type,
+        source_id=source_id,
+        class_id=class_id,
+        status="suggested",
+        title=title[:255],
+        summary=summary,
+        ai_payload={"source": source_context, "ai_status": "fallback"},
+        channel=ROUTINE_CHANNEL,
+        created_by=actor_id,
+    )
+    db.add(action)
+    db.flush()
+    for message in messages:
+        db.add(
+            RoutineMessage(
+                action_id=action.id,
+                student_membership_id=message.get("student_membership_id"),
+                student_user_id=message["student_user_id"],
+                student_name=message["student_name"],
+                class_id=message.get("class_id") or class_id,
+                class_name=message.get("class_name"),
+                message_body=message["message_body"],
+                status="pending",
+                channel=ROUTINE_CHANNEL,
+                delivery_status="draft",
+                metadata_json=message.get("metadata") or {},
+            )
+        )
+    db.flush()
+    db.refresh(action)
+    _apply_routine_ai(action, {"source": source_context})
+    return action
+
+
+def _grade_routine_for_session(db: Session, academy_id: str, visible_academy_ids: set[str], actor_id: str, session: PaperSession, summary: dict) -> RoutineAction | None:
+    detail = _paper_session_detail(db, academy_id, session)
+    students = [student for student in detail.get("students", []) if student.get("result", {}).get("status") == "graded"]
+    if not students:
+        return None
+    class_id = UUID(str(session.class_ids[0])) if len(session.class_ids or []) == 1 else None
+    class_name = ""
+    if class_id:
+        class_row = db.get(AcademyClass, class_id)
+        class_name = class_row.name if class_row else ""
+    title = f"{session.title} 리포트"
+    average = summary.get("average_score")
+    date_label = _routine_date_label(session.scheduled_at or session.created_at)
+    prompt_summary = f"{class_name or '대상 학생'}의 {date_label} {session.title} 리포트가 준비되었습니다. 학생별 피드백 {len(students)}건을 전송할까요?"
+    messages = []
+    for student in students:
+        result = student.get("result") or {}
+        score = result.get("score")
+        body = (
+            f"{student.get('name') or '학생'} 학생의 {session.title} 결과를 안내드립니다. "
+            f"점수는 {score if score is not None else '-'}점이며, 정답 {result.get('correct_count', 0)}개, "
+            f"오답/미풀이 {result.get('wrong_count', 0)}개로 확인되었습니다."
+        )
+        messages.append(
+            {
+                "student_membership_id": UUID(str(student["id"])) if student.get("id") else None,
+                "student_user_id": student.get("student_user_id") or "",
+                "student_name": student.get("name") or "학생",
+                "class_id": class_id,
+                "class_name": class_name,
+                "message_body": body,
+                "metadata": {
+                    "score": score,
+                    "correct_count": result.get("correct_count", 0),
+                    "wrong_count": result.get("wrong_count", 0),
+                    "total_count": result.get("total_count", 0),
+                },
+            }
+        )
+    messages = [message for message in messages if message["student_user_id"]]
+    context = {
+        "kind": "grade_report",
+        "session_title": session.title,
+        "class_name": class_name,
+        "date": date_label,
+        "average_score": average,
+        "graded_count": len(students),
+        "assigned_count": summary.get("assigned_count"),
+    }
+    return _add_routine_action(db, academy_id, actor_id, "grade_report", "paper_session", str(session.id), class_id, title, prompt_summary, messages, context)
+
+
+def _schedule_routine_for_event(db: Session, academy_id: str, visible_academy_ids: set[str], actor_id: str, event: ClassScheduleEvent) -> RoutineAction | None:
+    class_row = db.get(AcademyClass, event.class_id)
+    class_name = class_row.name if class_row else ""
+    memberships = _routine_active_memberships_for_class(db, visible_academy_ids, event.class_id)
+    if not memberships:
+        return None
+    date_label = _routine_date_label(event.starts_at)
+    title = f"{event.title} 수업 피드백"
+    summary = f"{class_name or '클래스'}의 {date_label} {event.title} 수업 피드백 {len(memberships)}건을 전송할까요?"
+    messages = [
+        {
+            "student_membership_id": membership.id,
+            "student_user_id": membership.student_user_id,
+            "student_name": _student_name(membership),
+            "class_id": event.class_id,
+            "class_name": class_name,
+            "message_body": f"{_student_name(membership)} 학생의 {date_label} {event.title} 수업 안내입니다. 수업 내용과 다음 학습 계획을 확인해 주세요.",
+            "metadata": {"event_title": event.title, "event_type": event.event_type, "date": date_label},
+        }
+        for membership in memberships
+    ]
+    context = {"kind": "class_feedback", "event_title": event.title, "class_name": class_name, "date": date_label, "description": event.description or ""}
+    return _add_routine_action(db, academy_id, actor_id, "class_feedback", "schedule_event", str(event.id), event.class_id, title, summary, messages, context)
+
+
+def _counseling_routine_for_log(db: Session, academy_id: str, actor_id: str, membership: StudentAcademyMembership, log: dict) -> RoutineAction | None:
+    log_id = str(log.get("id") or "")
+    if not log_id:
+        return None
+    date_label = _routine_date_label(str(log.get("counseling_date") or ""))
+    title = f"{_student_name(membership)} 상담 공유"
+    sections = _counseling_export_sections([log])
+    section_text = "\n".join([f"{section.get('label')}: {section.get('value')}" for section in sections[:4] if section.get("value")])
+    body = f"{_student_name(membership)} 학생의 {date_label} 상담 내용을 공유드립니다.\n{section_text}".strip()
+    summary = f"{_student_name(membership)} 학생의 {date_label} 상담 기록을 공유할까요?"
+    class_id = UUID(str(log["class_id"])) if log.get("class_id") else None
+    message = {
+        "student_membership_id": membership.id,
+        "student_user_id": membership.student_user_id,
+        "student_name": _student_name(membership),
+        "class_id": class_id,
+        "class_name": str(log.get("class_name") or ""),
+        "message_body": body,
+        "metadata": {"counseling_title": log.get("title"), "date": date_label},
+    }
+    context = {"kind": "counseling_share", "student_name": _student_name(membership), "date": date_label, "sections": sections}
+    return _add_routine_action(db, academy_id, actor_id, "counseling_share", "counseling_log", log_id, class_id, title, summary, [message], context)
+
+
+def _ensure_routine_candidates(db: Session, academy_id: str, visible_academy_ids: set[str], actor_id: str) -> int:
+    created = 0
+    existing = _routine_existing_keys(db, academy_id)
+    now = _now()
+    recent_start = now - timedelta(days=ROUTINE_RECENT_DAYS)
+
+    sessions = db.scalars(
+        select(PaperSession)
+        .where(PaperSession.academy_id.in_(list(visible_academy_ids)))
+        .options(joinedload(PaperSession.content_version))
+        .order_by(PaperSession.scheduled_at.desc().nullslast(), PaperSession.created_at.desc())
+        .limit(30)
+    ).all()
+    for session in sessions:
+        if created >= ROUTINE_MAX_NEW_PER_REFRESH:
+            break
+        key = ("grade_report", "paper_session", str(session.id))
+        if key in existing:
+            continue
+        summary = _session_summary(db, academy_id, session) or {}
+        if not summary.get("graded_count") or summary.get("graded_count") != summary.get("assigned_count"):
+            continue
+        event_time = session.scheduled_at or session.created_at
+        if event_time and event_time < recent_start:
+            continue
+        if _grade_routine_for_session(db, academy_id, visible_academy_ids, actor_id, session, summary):
+            existing.add(key)
+            created += 1
+
+    events = db.scalars(
+        select(ClassScheduleEvent)
+        .where(
+            ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)),
+            ClassScheduleEvent.starts_at >= recent_start,
+            ClassScheduleEvent.starts_at <= now + timedelta(hours=1),
+        )
+        .order_by(ClassScheduleEvent.starts_at.desc())
+        .limit(30)
+    ).all()
+    for event in events:
+        if created >= ROUTINE_MAX_NEW_PER_REFRESH:
+            break
+        key = ("class_feedback", "schedule_event", str(event.id))
+        if key in existing:
+            continue
+        if _schedule_routine_for_event(db, academy_id, visible_academy_ids, actor_id, event):
+            existing.add(key)
+            created += 1
+
+    memberships = _visible_student_memberships(db, visible_academy_ids)
+    for membership in memberships:
+        if created >= ROUTINE_MAX_NEW_PER_REFRESH:
+            break
+        for log in _counseling_logs(membership):
+            if created >= ROUTINE_MAX_NEW_PER_REFRESH:
+                break
+            key = ("counseling_share", "counseling_log", str(log.get("id") or ""))
+            if not key[2] or key in existing:
+                continue
+            event_time = _parse_routine_datetime(log.get("updated_at") or log.get("counseling_date"))
+            if event_time and event_time < recent_start:
+                continue
+            if _counseling_routine_for_log(db, academy_id, actor_id, membership, log):
+                existing.add(key)
+                created += 1
+
+    if created:
+        db.commit()
+    return created
 
 
 class ReviewSetPayload(BaseModel):
@@ -2067,6 +2465,124 @@ def remove_student_from_class(class_id: UUID, student_id: UUID, request: Request
         link.left_at = _now()
         db.commit()
     return Response(status_code=204)
+
+
+@router.get("/routines")
+def list_routines(request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    actor_id = current_owner_id(request)
+    _ensure_routine_candidates(db, academy_id, visible_academy_ids, actor_id)
+    recent_start = _now() - timedelta(days=ROUTINE_RECENT_DAYS)
+    actions = db.scalars(
+        select(RoutineAction)
+        .where(RoutineAction.academy_id == academy_id)
+        .order_by(RoutineAction.updated_at.desc(), RoutineAction.created_at.desc())
+        .limit(80)
+    ).all()
+    visible = [
+        action
+        for action in actions
+        if action.status in ROUTINE_ACTIVE_STATUSES or not action.sent_at or action.sent_at >= recent_start
+    ]
+    return [_routine_action_payload(action) for action in visible[:50]]
+
+
+def _get_routine_action(db: Session, academy_id: str, routine_id: UUID) -> RoutineAction:
+    action = db.get(RoutineAction, routine_id)
+    if not action or action.academy_id != academy_id:
+        raise HTTPException(status_code=404, detail="Routine action not found.")
+    return action
+
+
+@router.post("/routines/{routine_id}/refresh-ai")
+def refresh_routine_ai(routine_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    action = _get_routine_action(db, academy_id, routine_id)
+    if action.status == "sent":
+        raise HTTPException(status_code=400, detail="이미 전송된 루틴은 다시 생성할 수 없습니다.")
+    source_context = (action.ai_payload or {}).get("source") if isinstance(action.ai_payload, dict) else {}
+    _apply_routine_ai(action, {"source": source_context or {}})
+    action.status = "reviewing"
+    action.updated_at = _now()
+    db.commit()
+    db.refresh(action)
+    return _routine_action_payload(action)
+
+
+@router.patch("/routines/{routine_id}/messages/{message_id}")
+def update_routine_message(routine_id: UUID, message_id: UUID, payload: RoutineMessagePatchPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    action = _get_routine_action(db, academy_id, routine_id)
+    if action.status == "sent":
+        raise HTTPException(status_code=400, detail="이미 전송된 루틴 메시지는 수정할 수 없습니다.")
+    message = db.get(RoutineMessage, message_id)
+    if not message or message.action_id != action.id:
+        raise HTTPException(status_code=404, detail="Routine message not found.")
+    if payload.message_body is not None:
+        body = payload.message_body.strip()
+        if not body:
+            raise HTTPException(status_code=400, detail="메시지 내용을 입력해 주세요.")
+        message.message_body = body
+    if payload.status is not None:
+        if payload.status not in {"pending", "excluded"}:
+            raise HTTPException(status_code=400, detail="Routine message status must be pending or excluded.")
+        message.status = payload.status
+        message.delivery_status = "skipped" if payload.status == "excluded" else "draft"
+    message.updated_at = _now()
+    action.status = "reviewing"
+    action.updated_at = _now()
+    db.commit()
+    db.refresh(action)
+    return _routine_action_payload(action)
+
+
+@router.post("/routines/{routine_id}/send")
+def send_routine_action(routine_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    actor_id = current_owner_id(request)
+    action = _get_routine_action(db, academy_id, routine_id)
+    messages = [message for message in action.messages if message.status != "excluded"]
+    if not messages:
+        raise HTTPException(status_code=400, detail="전송할 메시지가 없습니다.")
+    now = _now()
+    for message in messages:
+        if message.delivery_status == "sent" and message.notification_id:
+            continue
+        notification = StudentNotification(
+            student_user_id=message.student_user_id,
+            academy_id=academy_id,
+            notification_type="routine_message",
+            title=action.title,
+            body=message.message_body,
+            metadata_json={
+                "routine_action_id": str(action.id),
+                "routine_message_id": str(message.id),
+                "routine_type": action.routine_type,
+                "source_type": action.source_type,
+                "source_id": action.source_id,
+                "channel": ROUTINE_CHANNEL,
+            },
+        )
+        db.add(notification)
+        db.flush()
+        message.notification_id = notification.id
+        message.status = "sent"
+        message.delivery_status = "sent"
+        message.sent_at = now
+        message.updated_at = now
+    for message in action.messages:
+        if message.status == "excluded":
+            message.delivery_status = "skipped"
+            message.updated_at = now
+    action.status = "sent"
+    action.approved_by = actor_id
+    action.approved_at = action.approved_at or now
+    action.sent_at = now
+    action.updated_at = now
+    db.commit()
+    db.refresh(action)
+    return _routine_action_payload(action)
 
 
 @router.get("/students")

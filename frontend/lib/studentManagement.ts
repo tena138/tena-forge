@@ -214,6 +214,46 @@ export type CounselingLog = {
   updated_at?: string | null;
 };
 
+export type RoutineMessage = {
+  id: string;
+  action_id: string;
+  student_membership_id?: string | null;
+  student_user_id: string;
+  student_name: string;
+  class_id?: string | null;
+  class_name?: string | null;
+  message_body: string;
+  status: string;
+  channel: string;
+  delivery_status: string;
+  notification_id?: string | null;
+  sent_at?: string | null;
+  metadata?: Record<string, unknown>;
+  updated_at?: string | null;
+};
+
+export type RoutineAction = {
+  id: string;
+  academy_id: string;
+  routine_type: string;
+  source_type: string;
+  source_id: string;
+  class_id?: string | null;
+  status: string;
+  title: string;
+  summary?: string | null;
+  channel: string;
+  message_count: number;
+  sendable_count: number;
+  sent_count: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+  approved_at?: string | null;
+  sent_at?: string | null;
+  ai_payload?: Record<string, unknown>;
+  messages: RoutineMessage[];
+};
+
 export type StudentManagementDashboard = {
   summary: {
     class_count: number;
@@ -435,6 +475,29 @@ export function cleanCounselingDraft(studentId: string, payload: CounselingLogPa
   return api<CounselingCleanPreview>(`/api/student-management/students/${studentId}/counseling-logs/clean-preview`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function listRoutineActions() {
+  return api<RoutineAction[]>("/api/student-management/routines");
+}
+
+export function refreshRoutineAi(routineId: string) {
+  return api<RoutineAction>(`/api/student-management/routines/${routineId}/refresh-ai`, {
+    method: "POST",
+  });
+}
+
+export function updateRoutineMessage(routineId: string, messageId: string, payload: { message_body?: string; status?: "pending" | "excluded" }) {
+  return api<RoutineAction>(`/api/student-management/routines/${routineId}/messages/${messageId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function sendRoutineAction(routineId: string) {
+  return api<RoutineAction>(`/api/student-management/routines/${routineId}/send`, {
+    method: "POST",
   });
 }
 

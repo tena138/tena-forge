@@ -1725,6 +1725,54 @@ class Announcement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class RoutineAction(Base):
+    __tablename__ = "routine_actions"
+    __table_args__ = (UniqueConstraint("academy_id", "routine_type", "source_type", "source_id", name="uq_routine_action_source"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    routine_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    class_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(40), default="suggested", nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_payload: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    channel: Mapped[str] = mapped_column(String(40), default="student_notification", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    messages: Mapped[list["RoutineMessage"]] = relationship("RoutineMessage", back_populates="action", cascade="all, delete-orphan", order_by="RoutineMessage.created_at")
+
+
+class RoutineMessage(Base):
+    __tablename__ = "routine_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    action_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("routine_actions.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    class_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    class_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    message_body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(40), default="student_notification", nullable=False)
+    delivery_status: Mapped[str] = mapped_column(String(40), default="draft", nullable=False, index=True)
+    notification_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("student_notifications.id", ondelete="SET NULL"), nullable=True, index=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    action: Mapped[RoutineAction] = relationship("RoutineAction", back_populates="messages")
+
+
 class StudentNotification(Base):
     __tablename__ = "student_notifications"
 
