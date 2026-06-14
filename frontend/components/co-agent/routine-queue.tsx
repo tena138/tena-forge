@@ -1,77 +1,36 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Archive,
+  ArrowRight,
   BellRing,
   Bot,
   CheckCircle2,
   ClipboardCheck,
+  ClipboardList,
   FileText,
+  FileUp,
+  FolderKanban,
   GraduationCap,
   Loader2,
   MessageSquareText,
   RotateCcw,
   Send,
-  Settings2,
   ShieldCheck,
   Sparkles,
+  UsersRound,
   X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { CoAgentAction, CoAgentNextActions } from "@/lib/coAgent";
+import { getCoAgentNextActions } from "@/lib/coAgent";
 import type { RoutineAction, RoutineMessage } from "@/lib/studentManagement";
 import { listRoutineActions, refreshRoutineAi, sendRoutineAction, updateRoutineMessage } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
-
-const CO_AGENT_SETTINGS_KEY = "tena.co-agent.settings.v1";
-
-type ApprovalMode = "suggest_only" | "draft_review" | "approval_send";
-type ToneMode = "concise" | "warm" | "formal";
-type DomainKey = "reports" | "feedback" | "counseling" | "schedule";
-
-type CoAgentSettings = {
-  approvalMode: ApprovalMode;
-  toneMode: ToneMode;
-  domains: Record<DomainKey, boolean>;
-};
-
-const defaultSettings: CoAgentSettings = {
-  approvalMode: "draft_review",
-  toneMode: "formal",
-  domains: {
-    reports: true,
-    feedback: true,
-    counseling: true,
-    schedule: false,
-  },
-};
-
-const approvalModes: Array<{ key: ApprovalMode; label: string; description: string }> = [
-  { key: "suggest_only", label: "추천만", description: "작업 후보만 보여줍니다." },
-  { key: "draft_review", label: "초안 작성", description: "메시지 초안까지 준비합니다." },
-  { key: "approval_send", label: "승인 후 실행", description: "확인된 항목만 전송합니다." },
-];
-
-const toneModes: Array<{ key: ToneMode; label: string }> = [
-  { key: "formal", label: "정중" },
-  { key: "concise", label: "간결" },
-  { key: "warm", label: "부드럽게" },
-];
-
-const domains: Array<{ key: DomainKey; label: string; description: string; icon: typeof FileText }> = [
-  { key: "reports", label: "채점 리포트", description: "완료된 시험 결과", icon: FileText },
-  { key: "feedback", label: "수업 피드백", description: "오늘/최근 수업", icon: GraduationCap },
-  { key: "counseling", label: "상담 공유", description: "최근 상담 기록", icon: MessageSquareText },
-  { key: "schedule", label: "일정 후속", description: "수업/과제 알림", icon: BellRing },
-];
-
-const automationCards = [
-  { title: "리포트 발송", status: "활성", detail: "채점 완료 후 학생별 메시지 초안 생성" },
-  { title: "수업 피드백", status: "활성", detail: "최근 수업 기준 클래스 단위 후보 생성" },
-  { title: "상담 공유", status: "활성", detail: "공유 가능한 상담일지 항목만 제안" },
-  { title: "학부모 채널", status: "대기", detail: "연락처/동의/provider 설정 후 확장" },
-];
 
 function routineTypeLabel(type: string) {
   if (type === "grade_report") return "채점 리포트";
@@ -111,23 +70,99 @@ function errorMessage(error: unknown, fallback: string) {
   return candidate.message || fallback;
 }
 
-function readSettings() {
-  if (typeof window === "undefined") return defaultSettings;
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(CO_AGENT_SETTINGS_KEY) || "null") as Partial<CoAgentSettings> | null;
-    return {
-      approvalMode: parsed?.approvalMode || defaultSettings.approvalMode,
-      toneMode: parsed?.toneMode || defaultSettings.toneMode,
-      domains: { ...defaultSettings.domains, ...(parsed?.domains || {}) },
-    };
-  } catch {
-    return defaultSettings;
-  }
+function categoryLabel(category: string) {
+  if (category === "extract") return "추출";
+  if (category === "archive") return "보관";
+  if (category === "sets") return "세트";
+  if (category === "classes") return "클래스";
+  if (category === "sessions") return "시험";
+  if (category === "routine") return "루틴";
+  return "추천";
+}
+
+function categoryTone(category: string) {
+  if (category === "extract") return "border-violet-300/20 bg-violet-500/15 text-violet-100";
+  if (category === "archive") return "border-sky-300/20 bg-sky-500/15 text-sky-100";
+  if (category === "sets") return "border-fuchsia-300/20 bg-fuchsia-500/15 text-fuchsia-100";
+  if (category === "classes") return "border-emerald-300/20 bg-emerald-500/15 text-emerald-100";
+  if (category === "sessions") return "border-cyan-300/20 bg-cyan-500/15 text-cyan-100";
+  if (category === "routine") return "border-amber-300/20 bg-amber-400/15 text-amber-100";
+  return "border-white/10 bg-white/[0.06] text-slate-200";
+}
+
+function CategoryIcon({ category, className }: { category: string; className?: string }) {
+  const Icon =
+    category === "extract"
+      ? FileUp
+      : category === "archive"
+        ? Archive
+        : category === "sets"
+          ? FolderKanban
+          : category === "classes"
+            ? UsersRound
+            : category === "sessions"
+              ? ClipboardList
+              : category === "routine"
+                ? BellRing
+                : Sparkles;
+  return <Icon className={className} />;
+}
+
+const statLabels: Record<string, string> = {
+  batches: "추출",
+  problems: "문항",
+  review_problems: "검토 필요",
+  problem_sets: "세트",
+  classes: "클래스",
+  students: "학생",
+  paper_sessions: "시험",
+  pending_grading_results: "채점 대기",
+  pending_routines: "루틴 대기",
+};
+
+function RecommendationCard({ action }: { action: CoAgentAction }) {
+  return (
+    <article className="rounded-lg border border-white/10 bg-black/15 p-4 transition hover:border-amber-300/35 hover:bg-amber-400/[0.06]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className={cn("mt-0.5 rounded-md border p-2", categoryTone(action.category))}>
+            <CategoryIcon category={action.category} className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={cn("border", categoryTone(action.category))}>{categoryLabel(action.category)}</Badge>
+              <span className="text-xs font-bold text-slate-500">{action.confidence === "high" ? "높은 확신" : "중간 확신"}</span>
+            </div>
+            <h2 className="mt-2 text-lg font-black text-white">{action.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{action.summary}</p>
+          </div>
+        </div>
+        <span className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-black text-slate-300">{action.priority}</span>
+      </div>
+      <p className="mt-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-slate-400">{action.reason}</p>
+      {action.signals.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {action.signals.map((signal) => (
+            <span key={signal} className="rounded border border-white/10 bg-black/20 px-2 py-1 text-xs font-semibold text-slate-400">
+              {signal}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <Link
+        href={action.href}
+        className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-[7px] border border-amber-300/35 bg-amber-300/12 px-3 text-sm font-bold text-amber-50 transition hover:bg-amber-300/18"
+      >
+        {action.cta}
+        <ArrowRight className="h-4 w-4" />
+      </Link>
+    </article>
+  );
 }
 
 export function RoutineQueue() {
-  const [settings, setSettings] = useState<CoAgentSettings>(defaultSettings);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [guidance, setGuidance] = useState<CoAgentNextActions | null>(null);
+  const [guidanceLoading, setGuidanceLoading] = useState(false);
   const [routines, setRoutines] = useState<RoutineAction[]>([]);
   const [routineLoading, setRoutineLoading] = useState(false);
   const [routineBusyId, setRoutineBusyId] = useState("");
@@ -140,7 +175,10 @@ export function RoutineQueue() {
     [routines, selectedRoutineId]
   );
   const pendingRoutineCount = useMemo(() => routines.filter((routine) => routine.status !== "sent").length, [routines]);
-  const enabledDomainCount = useMemo(() => domains.filter((domain) => settings.domains[domain.key]).length, [settings.domains]);
+  const displayedStats = useMemo(() => {
+    const stats = guidance?.stats || {};
+    return Object.entries(statLabels).map(([key, label]) => ({ key, label, value: stats[key] ?? 0 }));
+  }, [guidance]);
 
   const syncRoutineDrafts = useCallback((items: RoutineAction[]) => {
     setRoutineMessageDrafts((current) => {
@@ -154,14 +192,6 @@ export function RoutineQueue() {
     });
   }, []);
 
-  function updateSettings(next: Partial<CoAgentSettings>) {
-    setSettings((current) => ({ ...current, ...next }));
-  }
-
-  function setDomainEnabled(key: DomainKey, enabled: boolean) {
-    setSettings((current) => ({ ...current, domains: { ...current.domains, [key]: enabled } }));
-  }
-
   function upsertRoutine(updated: RoutineAction) {
     setRoutines((current) => {
       const exists = current.some((routine) => routine.id === updated.id);
@@ -170,6 +200,17 @@ export function RoutineQueue() {
     syncRoutineDrafts([updated]);
     setSelectedRoutineId(updated.id);
   }
+
+  const loadGuidance = useCallback(async () => {
+    setGuidanceLoading(true);
+    try {
+      setGuidance(await getCoAgentNextActions());
+    } catch (error) {
+      setMessage(errorMessage(error, "다음 추천 행동을 불러오지 못했습니다."));
+    } finally {
+      setGuidanceLoading(false);
+    }
+  }, []);
 
   const loadRoutines = useCallback(async () => {
     setRoutineLoading(true);
@@ -185,11 +226,16 @@ export function RoutineQueue() {
     }
   }, [syncRoutineDrafts]);
 
+  const refreshWorkspace = useCallback(async () => {
+    await Promise.all([loadGuidance(), loadRoutines()]);
+  }, [loadGuidance, loadRoutines]);
+
   async function regenerateRoutine(routine: RoutineAction) {
     setRoutineBusyId(routine.id);
     try {
       upsertRoutine(await refreshRoutineAi(routine.id));
       setMessage("AI가 루틴 문구를 다시 생성했습니다.");
+      void loadGuidance();
     } catch (error) {
       setMessage(errorMessage(error, "AI 루틴 문구를 다시 생성하지 못했습니다."));
     } finally {
@@ -216,6 +262,7 @@ export function RoutineQueue() {
     setRoutineBusyId(routineMessage.id);
     try {
       upsertRoutine(await updateRoutineMessage(routine.id, routineMessage.id, { status: nextStatus }));
+      void loadGuidance();
     } catch (error) {
       setMessage(errorMessage(error, "루틴 메시지 상태를 바꾸지 못했습니다."));
     } finally {
@@ -235,6 +282,7 @@ export function RoutineQueue() {
       const sent = await sendRoutineAction(routine.id);
       upsertRoutine(sent);
       setMessage(`${sent.sendable_count}건의 루틴 알림을 전송했습니다.`);
+      void loadGuidance();
     } catch (error) {
       setMessage(errorMessage(error, "루틴 알림 전송에 실패했습니다."));
     } finally {
@@ -243,18 +291,8 @@ export function RoutineQueue() {
   }
 
   useEffect(() => {
-    setSettings(readSettings());
-    setSettingsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!settingsLoaded || typeof window === "undefined") return;
-    window.localStorage.setItem(CO_AGENT_SETTINGS_KEY, JSON.stringify(settings));
-  }, [settings, settingsLoaded]);
-
-  useEffect(() => {
-    void loadRoutines();
-  }, [loadRoutines]);
+    void refreshWorkspace();
+  }, [refreshWorkspace]);
 
   return (
     <div className="space-y-6">
@@ -275,110 +313,74 @@ export function RoutineQueue() {
           </div>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-white">운영 코에이전트</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            테나 포지 내부 기능을 바탕으로 작업을 추천하고, 사용자가 확인한 일만 실행합니다.
+            현재 사용 상태를 읽고 Tena Forge 안에서 이어갈 다음 행동을 추천합니다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className="border border-amber-300/20 bg-amber-400/10 text-amber-100">대기 {pendingRoutineCount}건</Badge>
-          <Badge className="border border-white/10 bg-white/[0.04] text-slate-200">추천 영역 {enabledDomainCount}개</Badge>
-          <Button type="button" size="sm" variant="outline" onClick={() => loadRoutines()} disabled={routineLoading}>
-            {routineLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+          <Badge className="border border-amber-300/20 bg-amber-400/10 text-amber-100">추천 {guidance?.actions.length ?? 0}건</Badge>
+          <Badge className="border border-white/10 bg-white/[0.04] text-slate-200">루틴 대기 {pendingRoutineCount}건</Badge>
+          <Button type="button" size="sm" variant="outline" onClick={refreshWorkspace} disabled={guidanceLoading || routineLoading}>
+            {guidanceLoading || routineLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
             새로고침
           </Button>
         </div>
       </header>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex items-center gap-2 text-sm font-black text-white">
-                <Settings2 className="h-4 w-4 text-amber-200" />
-                초기 설정
+                <Sparkles className="h-4 w-4 text-amber-200" />
+                다음 추천 행동
               </div>
-              <p className="mt-1 text-xs text-slate-500">이 브라우저에 저장됩니다.</p>
+              <p className="mt-1 text-sm text-slate-500">사용자의 현재 데이터 상태를 기준으로 정렬됩니다.</p>
             </div>
-            <Badge className="border border-emerald-400/20 bg-emerald-500/10 text-emerald-100">저장됨</Badge>
+            {guidance?.current_stage ? <Badge className={cn("border", categoryTone(guidance.current_stage))}>현재 단계 {categoryLabel(guidance.current_stage)}</Badge> : null}
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">권한 단계</p>
-              <div className="grid gap-2">
-                {approvalModes.map((mode) => {
-                  const selected = settings.approvalMode === mode.key;
-                  return (
-                    <button
-                      key={mode.key}
-                      type="button"
-                      onClick={() => updateSettings({ approvalMode: mode.key })}
-                      className={cn(
-                        "rounded-md border p-3 text-left transition",
-                        selected ? "border-amber-300/45 bg-amber-400/10 text-white" : "border-white/10 bg-black/10 text-slate-300 hover:border-white/25"
-                      )}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-black">{mode.label}</span>
-                        {selected ? <CheckCircle2 className="h-4 w-4 text-amber-200" /> : null}
-                      </span>
-                      <span className="mt-1 block text-xs text-slate-500">{mode.description}</span>
-                    </button>
-                  );
-                })}
+          <div className="mt-4 grid gap-3">
+            {guidanceLoading && !guidance ? (
+              <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-slate-500">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                추천 행동을 계산하는 중입니다.
               </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">문체</p>
-              <div className="flex rounded-md border border-white/10 bg-black/10 p-1">
-                {toneModes.map((mode) => (
-                  <button
-                    key={mode.key}
-                    type="button"
-                    onClick={() => updateSettings({ toneMode: mode.key })}
-                    className={cn(
-                      "h-9 flex-1 rounded px-2 text-sm font-bold transition",
-                      settings.toneMode === mode.key ? "bg-white text-slate-950" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
-                    )}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
-              </div>
-
-              <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">추천 영역</p>
-              <div className="grid gap-2">
-                {domains.map((domain) => {
-                  const Icon = domain.icon;
-                  return (
-                    <label key={domain.key} className="flex items-center gap-3 rounded-md border border-white/10 bg-black/10 p-3 text-sm text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={settings.domains[domain.key]}
-                        onChange={(event) => setDomainEnabled(domain.key, event.target.checked)}
-                        className="h-4 w-4 accent-amber-300"
-                      />
-                      <Icon className="h-4 w-4 text-slate-500" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-bold text-white">{domain.label}</span>
-                        <span className="block truncate text-xs text-slate-500">{domain.description}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+            ) : null}
+            {!guidanceLoading && guidance && !guidance.actions.length ? (
+              <div className="rounded-lg border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">지금 바로 추천할 다음 행동이 없습니다.</div>
+            ) : null}
+            {guidance?.actions.map((action) => (
+              <RecommendationCard key={action.id} action={action} />
+            ))}
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+        <div className="space-y-3">
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+            <div className="flex items-center gap-2 text-sm font-black text-white">
+              <FileText className="h-4 w-4 text-sky-200" />
+              Tena Forge 기능 지도
+            </div>
+            <div className="mt-3 space-y-2">
+              {(guidance?.product_map || []).map((item, index) => (
+                <Link key={item.id} href={item.href} className="flex gap-3 rounded-md border border-white/10 bg-black/10 p-3 transition hover:border-white/25 hover:bg-white/[0.05]">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-white/[0.06] text-xs font-black text-slate-300">{index + 1}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-white">{item.label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">{item.summary}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <div className="flex items-center gap-2 text-sm font-black text-white">
               <ShieldCheck className="h-4 w-4 text-emerald-200" />
               실행 원칙
             </div>
             <div className="mt-3 grid gap-2">
-              {["내부 데이터 기준 추천", "메시지 초안 검토", "승인 후 알림 생성"].map((item) => (
+              {["추천은 내부 기능으로만 연결", "전송/수정은 사용자 승인 후 실행", "LLM은 제품 지도와 상태 설명에 사용"].map((item) => (
                 <div key={item} className="flex items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-slate-300">
                   <CheckCircle2 className="h-4 w-4 text-emerald-200" />
                   {item}
@@ -389,17 +391,14 @@ export function RoutineQueue() {
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <div className="flex items-center gap-2 text-sm font-black text-white">
-              <ClipboardCheck className="h-4 w-4 text-sky-200" />
-              자동화 후보
+              <ClipboardCheck className="h-4 w-4 text-violet-200" />
+              상태 신호
             </div>
-            <div className="mt-3 space-y-2">
-              {automationCards.map((card) => (
-                <div key={card.title} className="rounded-md border border-white/10 bg-black/10 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-bold text-white">{card.title}</p>
-                    <Badge className={cn("border", card.status === "활성" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : "border-slate-400/20 bg-slate-500/10 text-slate-300")}>{card.status}</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">{card.detail}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {displayedStats.map((stat) => (
+                <div key={stat.key} className="rounded-md border border-white/10 bg-black/10 p-2">
+                  <p className="text-[11px] font-bold text-slate-500">{stat.label}</p>
+                  <p className="mt-1 text-lg font-black text-white">{stat.value}</p>
                 </div>
               ))}
             </div>
