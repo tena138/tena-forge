@@ -1,8 +1,9 @@
 import json
+import logging
 import math
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from urllib.parse import quote
 from uuid import UUID
@@ -60,6 +61,7 @@ from services.ownership import LOCAL_OWNER_ID, current_owner_id, current_owner_i
 from services.template_renderer import render_hub_template_for_context
 
 router = APIRouter(prefix="/api/student-management", tags=["student management"])
+logger = logging.getLogger(__name__)
 CLASS_ORDER_METADATA_KEY = "student_management_class_order"
 COUNSELING_FORMATS_METADATA_KEY = "student_management_counseling_formats"
 COUNSELING_PRESETS_METADATA_KEY = "student_management_counseling_presets"
@@ -1835,10 +1837,15 @@ def _parse_routine_datetime(value: object) -> datetime | None:
     if not value:
         return None
     if isinstance(value, datetime):
-        return value
+        if value.tzinfo and value.utcoffset() is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.replace(tzinfo=None)
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
-    except ValueError:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo and parsed.utcoffset() is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed.replace(tzinfo=None)
+    except (TypeError, ValueError):
         return None
 
 
@@ -1868,7 +1875,7 @@ def _routine_message_payload(message: RoutineMessage) -> dict:
 
 
 def _routine_action_payload(action: RoutineAction) -> dict:
-    messages = sorted(action.messages or [], key=lambda item: (item.created_at, str(item.id)))
+    messages = sorted(action.messages or [], key=lambda item: (item.created_at or datetime.min, str(item.id)))
     return {
         "id": str(action.id),
         "academy_id": action.academy_id,
@@ -1905,7 +1912,7 @@ def _routine_ai_prompt(action: RoutineAction, context: dict) -> str:
                 "message_body": message.message_body,
                 "metadata": message.metadata_json or {},
             }
-            for message in sorted(action.messages or [], key=lambda item: (item.created_at, str(item.id)))
+            for message in sorted(action.messages or [], key=lambda item: (item.created_at or datetime.min, str(item.id)))
             if message.status != "excluded"
         ],
     }
@@ -1951,7 +1958,7 @@ def _apply_routine_ai(action: RoutineAction, context: dict) -> None:
             for row in rows
             if isinstance(row, dict) and str(row.get("student_user_id") or "")
         }
-        for index, message in enumerate(sorted(action.messages or [], key=lambda item: (item.created_at, str(item.id)))):
+        for index, message in enumerate(sorted(action.messages or [], key=lambda item: (item.created_at or datetime.min, str(item.id)))):
             row = by_student.get(message.student_user_id)
             if not row and index < len(rows) and isinstance(rows[index], dict):
                 row = rows[index]
@@ -2150,7 +2157,7 @@ def _counseling_routine_for_log(db: Session, academy_id: str, actor_id: str, mem
 def _ensure_routine_candidates(db: Session, academy_id: str, visible_academy_ids: set[str], actor_id: str) -> int:
     created = 0
     existing = _routine_existing_keys(db, academy_id)
-    now = _now()
+    now = _parse_routine_datetime(_now()) or _now()
     recent_start = now - timedelta(days=ROUTINE_RECENT_DAYS)
 
     sessions = db.scalars(
@@ -2163,18 +2170,24 @@ def _ensure_routine_candidates(db: Session, academy_id: str, visible_academy_ids
     for session in sessions:
         if created >= ROUTINE_MAX_NEW_PER_REFRESH:
             break
-        key = ("grade_report", "paper_session", str(session.id))
+        session_id = str(session.id)
+        key = ("grade_report", "paper_session", session_id)
         if key in existing:
             continue
-        summary = _session_summary(db, academy_id, session) or {}
-        if not summary.get("graded_count") or summary.get("graded_count") != summary.get("assigned_count"):
-            continue
-        event_time = session.scheduled_at or session.created_at
-        if event_time and event_time < recent_start:
-            continue
-        if _grade_routine_for_session(db, academy_id, visible_academy_ids, actor_id, session, summary):
-            existing.add(key)
-            created += 1
+        try:
+            summary = _session_summary(db, academy_id, session) or {}
+            if not summary.get("graded_count") or summary.get("graded_count") != summary.get("assigned_count"):
+                continue
+            event_time = _parse_routine_datetime(session.scheduled_at or session.created_at)
+            if event_time and event_time < recent_start:
+                continue
+            if _grade_routine_for_session(db, academy_id, visible_academy_ids, actor_id, session, summary):
+                db.commit()
+                existing.add(key)
+                created += 1
+        except Exception:
+            db.rollback()
+            logger.exception("Skipping routine grade_report candidate for session %s", session_id)
 
     events = db.scalars(
         select(ClassScheduleEvent)
@@ -2189,32 +2202,41 @@ def _ensure_routine_candidates(db: Session, academy_id: str, visible_academy_ids
     for event in events:
         if created >= ROUTINE_MAX_NEW_PER_REFRESH:
             break
-        key = ("class_feedback", "schedule_event", str(event.id))
+        event_id = str(event.id)
+        key = ("class_feedback", "schedule_event", event_id)
         if key in existing:
             continue
-        if _schedule_routine_for_event(db, academy_id, visible_academy_ids, actor_id, event):
-            existing.add(key)
-            created += 1
+        try:
+            if _schedule_routine_for_event(db, academy_id, visible_academy_ids, actor_id, event):
+                db.commit()
+                existing.add(key)
+                created += 1
+        except Exception:
+            db.rollback()
+            logger.exception("Skipping routine class_feedback candidate for event %s", event_id)
 
     memberships = _visible_student_memberships(db, visible_academy_ids)
     for membership in memberships:
         if created >= ROUTINE_MAX_NEW_PER_REFRESH:
             break
+        membership_id = str(membership.id)
         for log in _counseling_logs(membership):
             if created >= ROUTINE_MAX_NEW_PER_REFRESH:
                 break
             key = ("counseling_share", "counseling_log", str(log.get("id") or ""))
             if not key[2] or key in existing:
                 continue
-            event_time = _parse_routine_datetime(log.get("updated_at") or log.get("counseling_date"))
-            if event_time and event_time < recent_start:
-                continue
-            if _counseling_routine_for_log(db, academy_id, actor_id, membership, log):
-                existing.add(key)
-                created += 1
-
-    if created:
-        db.commit()
+            try:
+                event_time = _parse_routine_datetime(log.get("updated_at") or log.get("counseling_date"))
+                if event_time and event_time < recent_start:
+                    continue
+                if _counseling_routine_for_log(db, academy_id, actor_id, membership, log):
+                    db.commit()
+                    existing.add(key)
+                    created += 1
+            except Exception:
+                db.rollback()
+                logger.exception("Skipping routine counseling_share candidate for membership %s log %s", membership_id, log.get("id"))
     return created
 
 
@@ -2472,8 +2494,12 @@ def list_routines(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     actor_id = current_owner_id(request)
-    _ensure_routine_candidates(db, academy_id, visible_academy_ids, actor_id)
-    recent_start = _now() - timedelta(days=ROUTINE_RECENT_DAYS)
+    try:
+        _ensure_routine_candidates(db, academy_id, visible_academy_ids, actor_id)
+    except Exception:
+        db.rollback()
+        logger.exception("Routine candidate generation failed for academy %s", academy_id)
+    recent_start = (_parse_routine_datetime(_now()) or _now()) - timedelta(days=ROUTINE_RECENT_DAYS)
     actions = db.scalars(
         select(RoutineAction)
         .where(RoutineAction.academy_id == academy_id)
@@ -2483,9 +2509,17 @@ def list_routines(request: Request, db: Session = Depends(get_db)):
     visible = [
         action
         for action in actions
-        if action.status in ROUTINE_ACTIVE_STATUSES or not action.sent_at or action.sent_at >= recent_start
+        if action.status in ROUTINE_ACTIVE_STATUSES or not action.sent_at or (_parse_routine_datetime(action.sent_at) or datetime.min) >= recent_start
     ]
-    return [_routine_action_payload(action) for action in visible[:50]]
+    payloads = []
+    for action in visible[:50]:
+        action_id = str(action.id)
+        try:
+            payloads.append(_routine_action_payload(action))
+        except Exception:
+            db.rollback()
+            logger.exception("Skipping routine action payload %s", action_id)
+    return payloads
 
 
 def _get_routine_action(db: Session, academy_id: str, routine_id: UUID) -> RoutineAction:
