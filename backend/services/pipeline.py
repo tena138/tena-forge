@@ -10,6 +10,7 @@ import traceback
 import unicodedata
 from collections import defaultdict
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ from uuid import UUID
 import fitz
 from openai import OpenAI, RateLimitError
 from PIL import Image, ImageChops
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from database import SessionLocal, get_settings
@@ -2382,6 +2384,210 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     set_progress(batch_id, "완료", total_units, total_units, allow_inactive=True)
 
 
+def _language_document_without_answers(document: dict[str, Any]) -> dict[str, Any]:
+    payload = deepcopy(document or {})
+    for question in payload.get("questions") or []:
+        if isinstance(question, dict):
+            question["answer"] = None
+            question["solution"] = None
+    return payload
+
+
+def _language_answer_items_by_number(answer_items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    by_number: dict[str, dict[str, Any]] = {}
+    for item in answer_items:
+        if not isinstance(item, dict):
+            continue
+        number = _question_number_key(item.get("question_number"))
+        answer = str(item.get("answer") or "").strip()
+        if number and answer:
+            by_number[number] = item
+    return by_number
+
+
+def _apply_language_answers_to_existing_records(
+    db: Session,
+    batch: Batch,
+    document: KoreanExtractionDocument,
+    mapped_document: dict[str, Any],
+    answer_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    answer_by_number = _language_answer_items_by_number(answer_items)
+    questions = db.scalars(select(KoreanQuestion).where(KoreanQuestion.document_id == document.id)).all()
+    problems = db.scalars(
+        select(Problem)
+        .where(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None))
+        .order_by(
+            Problem.review_page_number.is_(None).asc(),
+            Problem.review_page_number.asc(),
+            Problem.problem_number.asc(),
+            Problem.created_at.asc(),
+            Problem.id.asc(),
+        )
+    ).all()
+
+    matched_question_count = 0
+    unmatched_question_count = 0
+    matched_problem_count = 0
+    unmatched_problem_count = 0
+    cleared_stale_count = 0
+    now = datetime.utcnow()
+
+    for question in questions:
+        number = _question_number_key(question.question_number)
+        item = answer_by_number.get(number)
+        answer = str(item.get("answer") or "").strip() if item else ""
+        if answer:
+            question.answer = answer
+            question.solution = None
+            matched_question_count += 1
+        else:
+            question.answer = None
+            question.solution = None
+            unmatched_question_count += 1
+
+    for problem in problems:
+        number = _question_number_key(problem.problem_number)
+        item = answer_by_number.get(number)
+        answer = str(item.get("answer") or "").strip() if item else ""
+        if answer:
+            problem.answer = answer
+            problem.solution_steps = None
+            problem.key_concept = None
+            problem.needs_review = True
+            matched_problem_count += 1
+        else:
+            if has_solution_content({"answer": problem.answer}):
+                cleared_stale_count += 1
+            problem.answer = None
+            problem.solution_steps = None
+            problem.key_concept = None
+            problem.needs_review = True
+            unmatched_problem_count += 1
+        problem.updated_at = now
+
+    document.payload = mapped_document
+    document.global_warnings = mapped_document.get("global_warnings") or []
+    document.updated_at = now
+    return {
+        "question_count": len(questions),
+        "problem_count": len(problems),
+        "solution_count": len(answer_by_number),
+        "matched_question_count": matched_question_count,
+        "unmatched_question_count": unmatched_question_count,
+        "matched_count": matched_problem_count,
+        "unmatched_count": unmatched_problem_count,
+        "cleared_stale_count": cleared_stale_count,
+    }
+
+
+def process_language_solutions_only(
+    db: Session,
+    batch: Batch,
+    batch_id: UUID,
+    existing_problem_count: int,
+    settings: Any,
+    solution_mode: str,
+) -> None:
+    engine = normalize_subject_engine(batch.subject_engine)
+    subject_label = language_engine_label(engine)
+    document = db.scalar(select(KoreanExtractionDocument).where(KoreanExtractionDocument.batch_id == batch.id))
+    if not document:
+        raise RuntimeError(f"Existing {subject_label} extraction document is required before reprocessing answers.")
+
+    solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
+    solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
+    total_units = max(solution_page_count * 2, 1)
+    set_progress(batch_id, f"{subject_label} 답안 PDF 페이지 수 확인 완료", 0, total_units)
+
+    answer_items: list[dict[str, Any]] = []
+    quick_answer_report = scan_quick_answer_table_pages(
+        batch.solution_pdf_filename,
+        solution_page_count,
+        solution_dpi,
+        batch_id,
+        progress_offset=0,
+        total_units=total_units,
+    )
+    selected_quick_pages = [int(index) for index in quick_answer_report.get("selected_page_indexes") or []]
+    if selected_quick_pages:
+        answer_items = _extract_korean_solution_items(
+            batch.solution_pdf_filename,
+            batch_id,
+            solution_page_count,
+            solution_dpi,
+            offset=0,
+            total_units=total_units,
+            subject_engine=engine,
+            page_indexes=selected_quick_pages,
+        )
+
+    quick_answer_count = len(_language_answer_items_by_number(answer_items))
+    quick_answer_report["expected_problem_count"] = existing_problem_count
+    quick_answer_report["extracted_answer_count"] = quick_answer_count
+    quick_answer_report["coverage_threshold_met"] = _quick_answers_cover_expected_count(quick_answer_count, existing_problem_count)
+    if _quick_answers_cover_expected_count(quick_answer_count, existing_problem_count):
+        quick_answer_report["used"] = True
+        quick_answer_report["final_used_source"] = "quick_answer_table"
+    else:
+        quick_answer_report["used"] = False
+        quick_answer_report.setdefault("fallback_reason", "quick_answer_count_below_existing_problem_count")
+        quick_answer_report["final_used_source"] = "full_solution_pdf"
+        answer_items = _extract_korean_solution_items(
+            batch.solution_pdf_filename,
+            batch_id,
+            solution_page_count,
+            solution_dpi,
+            offset=0,
+            total_units=total_units,
+            subject_engine=engine,
+        )
+        quick_answer_report["full_fallback_answer_count"] = len(_language_answer_items_by_number(answer_items))
+
+    if not answer_items:
+        raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+
+    base_document = _language_document_without_answers(document.payload or {})
+    mapped_document = map_korean_answers(base_document, answer_items)
+    stats = _apply_language_answers_to_existing_records(db, batch, document, mapped_document, answer_items)
+    _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
+    _write_batch_artifact(batch_id, "korean_answer_solution_items.json", answer_items)
+    _write_batch_artifact(batch_id, "korean_extraction_with_answers.json", mapped_document)
+    _write_batch_artifact(
+        batch_id,
+        "solution_reprocess_report.json",
+        {
+            "batch_id": str(batch_id),
+            "ai_solution_mode": solution_mode,
+            "ai_solution_model_pool": _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model),
+            "ai_solution_image_detail": settings.ai_solution_image_detail,
+            "subject_engine": engine,
+            "solution_page_count": solution_page_count,
+            "quick_answer_table": quick_answer_report,
+            "quick_answer_table_used": bool(quick_answer_report.get("used")),
+            "stats": stats,
+        },
+    )
+
+    ensure_batch_active(batch_id)
+    batch.status = BatchStatus.done
+    batch.processing_task = "solution_only"
+    batch.progress_message = (
+        f"{subject_label} 답안 재처리 완료({solution_mode}): "
+        f"{stats['matched_count']}개 매칭, {stats['unmatched_count']}개 확인 필요, "
+        f"{stats['cleared_stale_count']}개 기존 답안 비움"
+    )
+    batch.progress_current = total_units
+    batch.progress_total = total_units
+    batch.progress_updated_at = datetime.utcnow()
+    batch.failure_stage = None
+    batch.failure_reason = None
+    batch.failure_hint = None
+    batch.failed_at = None
+    db.commit()
+    set_progress(batch_id, batch.progress_message, total_units, total_units, allow_inactive=True)
+
+
 def get_progress_message(batch: Batch) -> str:
     return str(get_progress_detail(batch)["progress_message"])
 
@@ -2742,13 +2948,21 @@ def process_solutions_only(batch_id: UUID) -> None:
         set_progress(batch_id, "답안 재처리 시작", 0, 0, reset=True)
         if not get_settings().openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is required for processing")
-        if is_language_passage_engine(batch.subject_engine):
-            raise RuntimeError("Language beta answer-only reprocessing is not supported yet. Retry the full batch to remap answers.")
 
         settings = get_settings()
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
         if solution_mode == "skip":
             raise RuntimeError("AI solution extraction is disabled.")
+        if is_language_passage_engine(batch.subject_engine):
+            process_language_solutions_only(
+                db,
+                batch,
+                batch_id,
+                existing_problem_count,
+                settings,
+                solution_mode,
+            )
+            return
         extraction_passes = max(settings.ai_extraction_passes, 1)
         units_per_page = 1 + extraction_passes
         problem_page_count = count_pdf_pages(batch.problem_pdf_filename)

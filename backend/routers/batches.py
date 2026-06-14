@@ -818,12 +818,100 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
         schedule_next_batch()
     except Exception as exc:
         batch.status = BatchStatus.error
-        batch.processing_task = "full"
+        batch.processing_task = "solution_only"
         batch.progress_message = "답안 재처리 작업을 시작하지 못했습니다."
         batch.failure_stage = "답안 재처리 시작"
         batch.failure_reason = str(exc)
         batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
         batch.failed_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=500, detail="답안 재처리 작업을 시작하지 못했습니다.")
+    db.refresh(batch)
+    return {"batch_id": batch.id, "status": batch.status}
+
+
+@router.post("/{batch_id}/solution-pdf", response_model=BatchUploadResponse)
+def attach_batch_solution_pdf(
+    batch_id: UUID,
+    request: Request,
+    solution_pdf: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    owner_id = current_owner_id(request)
+    owner_ids = current_owner_ids(request, db)
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(owner_ids))).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
+    if batch.status in {BatchStatus.pending, BatchStatus.processing}:
+        raise HTTPException(status_code=400, detail="처리 중이거나 대기 중인 배치에는 답안 PDF를 추가할 수 없습니다.")
+    if batch.solution_pdf_filename:
+        raise HTTPException(status_code=400, detail="이미 답안 PDF가 있는 배치입니다. 답안만 재처리를 사용해 주세요.")
+    if not solution_pdf.filename or not solution_pdf.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="답안 자료는 PDF 파일만 업로드할 수 있습니다.")
+
+    problem_count = db.scalar(
+        select(func.count(Problem.id)).where(
+            Problem.source_batch_id == batch.id,
+            Problem.owner_id.in_(owner_ids),
+            Problem.deleted_at.is_(None),
+        )
+    ) or 0
+    if problem_count <= 0:
+        raise HTTPException(status_code=400, detail="기존 문항이 있어야 답안 PDF를 추가할 수 있습니다.")
+
+    solution_path = save_upload(solution_pdf)
+    try:
+        solution_pages = count_pdf_pages(solution_path)
+        solution_file_mb = _file_size_mb(solution_path)
+        estimate = estimate_extraction(
+            subject_engine=batch.subject_engine or "math",
+            problem_pages=0,
+            solution_pages=solution_pages,
+            solution_file_mb=solution_file_mb,
+            usage_type="solution_attach_estimate",
+        )
+        enforce_extraction_preflight(
+            db,
+            owner_id,
+            estimate,
+            file_size_mb=solution_file_mb,
+            page_count=solution_pages,
+            upload_mb_to_add=solution_file_mb,
+        )
+    except HTTPException:
+        _safe_unlink(solution_path)
+        raise
+    except Exception as exc:
+        _safe_unlink(solution_path)
+        raise HTTPException(status_code=400, detail=f"PDF 페이지 수를 확인하지 못했습니다. {exc}")
+
+    batch.solution_pdf_filename = solution_path
+    batch.status = BatchStatus.pending
+    batch.processing_task = "solution_only"
+    batch.progress_message = "답안 재처리 대기 중"
+    batch.progress_current = 0
+    batch.progress_total = None
+    batch.progress_started_at = None
+    batch.progress_updated_at = datetime.utcnow()
+    batch.failure_stage = None
+    batch.failure_reason = None
+    batch.failure_hint = None
+    batch.failed_at = None
+    record_usage_event(db, owner_id, estimate, job_id=batch.id, storage_mb=solution_file_mb)
+    db.commit()
+    db.refresh(batch)
+
+    try:
+        schedule_next_batch()
+    except Exception as exc:
+        batch.status = BatchStatus.error
+        batch.processing_task = "solution_only"
+        batch.progress_message = "답안 재처리 작업을 시작하지 못했습니다."
+        batch.failure_stage = "답안 재처리 시작"
+        batch.failure_reason = str(exc)
+        batch.failure_hint = "서버 실행 환경과 작업 로그 디렉터리 권한을 확인하세요."
+        batch.failed_at = datetime.utcnow()
+        batch.progress_updated_at = batch.failed_at
         db.commit()
         raise HTTPException(status_code=500, detail="답안 재처리 작업을 시작하지 못했습니다.")
     db.refresh(batch)

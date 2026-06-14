@@ -460,6 +460,18 @@ export async function updateBatchArchiveFolder(batchId: string, archiveFolderId:
   });
 }
 
+export async function attachBatchSolutionPdf(batchId: string, file: File, onProgress?: (progress: number) => void) {
+  const form = new FormData();
+  form.append("solution_pdf", file);
+  const response = await authHttp.post<{ batch_id: string; status: Batch["status"] }>(`/api/batches/${batchId}/solution-pdf`, form, {
+    onUploadProgress: (event) => {
+      if (!event.total) return;
+      onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    },
+  });
+  return response.data;
+}
+
 export async function getActiveDashboardAnnouncement() {
   return api<DashboardAnnouncement | null>("/api/dashboard-announcements/active");
 }
