@@ -383,7 +383,6 @@ function AcademyConsoleHome() {
         setDataError("");
       } catch {
         if (!cancelled) {
-          setBatches([]);
           setDataError("콘솔 데이터를 불러오지 못했습니다.");
         }
       }
@@ -391,31 +390,47 @@ function AcademyConsoleHome() {
 
     async function loadArchiveAndSets() {
       try {
-        const [stats, facets, setData] = await Promise.all([
+        const [statsResult, facetsResult, setResult] = await Promise.allSettled([
           api<ProblemStats>("/api/problems/stats"),
           api<ProblemFacets>("/api/problems/facets"),
           api<ProblemSetListItem[]>("/api/problem-sets"),
         ]);
-        const counts = await Promise.all(
-          (facets.subjects || []).map(async (subject) => {
-            const params = new URLSearchParams({ limit: "1" });
-            params.append("subject", subject);
-            const page = await api<ProblemPage>(`/api/problems?${params.toString()}`);
-            return { subject, count: page.total };
-          })
-        );
+
+        const stats = statsResult.status === "fulfilled" ? statsResult.value : null;
+        const facets = facetsResult.status === "fulfilled" ? facetsResult.value : null;
+        let nextSubjectCounts: SubjectCount[] | null = null;
+
+        if (stats && facets) {
+          const countResults = await Promise.allSettled(
+            (facets.subjects || []).map(async (subject) => {
+              const params = new URLSearchParams({ limit: "1" });
+              params.append("subject", subject);
+              const page = await api<ProblemPage>(`/api/problems?${params.toString()}`);
+              return { subject, count: page.total };
+            })
+          );
+          if (cancelled) return;
+          if (countResults.every((result) => result.status === "fulfilled")) {
+            const counts = countResults.map((result) => result.value);
+            const sortedCounts = counts.filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
+            const classifiedTotal = sortedCounts.reduce((sum, item) => sum + item.count, 0);
+            const uncategorized = Math.max(stats.total - classifiedTotal, 0);
+            nextSubjectCounts = uncategorized > 0 ? [...sortedCounts, { subject: "과목 미분류", count: uncategorized }] : sortedCounts;
+          }
+        }
+
         if (cancelled) return;
-        const sortedCounts = counts.filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
-        const classifiedTotal = sortedCounts.reduce((sum, item) => sum + item.count, 0);
-        const uncategorized = Math.max(stats.total - classifiedTotal, 0);
-        setProblemStats(stats);
-        setSubjectCounts(uncategorized > 0 ? [...sortedCounts, { subject: "과목 미분류", count: uncategorized }] : sortedCounts);
-        setSets(setData);
+        if (stats) setProblemStats(stats);
+        if (nextSubjectCounts) setSubjectCounts(nextSubjectCounts);
+        if (setResult.status === "fulfilled") setSets(setResult.value);
+        if (statsResult.status === "rejected" && facetsResult.status === "rejected" && setResult.status === "rejected") {
+          setDataError("콘솔 데이터를 불러오지 못했습니다.");
+        } else {
+          setDataError("");
+        }
       } catch {
         if (!cancelled) {
-          setProblemStats({ total: 0, needs_review: 0, tagged: 0, untagged: 0 });
-          setSubjectCounts([]);
-          setSets([]);
+          setDataError("콘솔 데이터를 불러오지 못했습니다.");
         }
       }
     }
@@ -616,21 +631,21 @@ function AcademyOperationsPanel() {
       listAcademyLearningStudents(id),
       listAcademyLearningAssignments(id),
     ]);
-    const classData = classResult.status === "fulfilled" ? classResult.value : [];
-    const setData = setResult.status === "fulfilled" ? setResult.value : [];
-    const batchData = batchResult.status === "fulfilled" ? batchResult.value : [];
-    const studentData = studentResult.status === "fulfilled" ? studentResult.value : [];
-    const learningAssignmentData = learningAssignmentResult.status === "fulfilled" ? learningAssignmentResult.value : [];
-    setClasses(classData);
-    setProblemSets(setData);
-    setBatches(batchData);
-    setLearningStudents(studentData);
-    setLearningAssignments(learningAssignmentData);
-    if (!selectedProblemSetId && setData[0]) {
+    const classData = classResult.status === "fulfilled" ? classResult.value : null;
+    const setData = setResult.status === "fulfilled" ? setResult.value : null;
+    const batchData = batchResult.status === "fulfilled" ? batchResult.value : null;
+    const studentData = studentResult.status === "fulfilled" ? studentResult.value : null;
+    const learningAssignmentData = learningAssignmentResult.status === "fulfilled" ? learningAssignmentResult.value : null;
+    if (classData) setClasses(classData);
+    if (setData) setProblemSets(setData);
+    if (batchData) setBatches(batchData);
+    if (studentData) setLearningStudents(studentData);
+    if (learningAssignmentData) setLearningAssignments(learningAssignmentData);
+    if (!selectedProblemSetId && setData?.[0]) {
       setSelectedProblemSetId(setData[0].id);
       if (learningAssignmentSourceMode === "archive" && selectedLearningSourceType === "problemSet" && !learningAssignmentTitle.trim()) setLearningAssignmentTitle(setData[0].name);
     }
-    if (!selectedBatchId) {
+    if (!selectedBatchId && batchData) {
       const requestedSourceId = searchParams.get("source_id");
       const requestedBatch = requestedSourceId ? batchData.find((batch) => batch.id === requestedSourceId) : null;
       const fallbackBatch = batchData.find((batch) => batch.status === "done" && batch.problem_count > 0);
