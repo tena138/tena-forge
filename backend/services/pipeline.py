@@ -18,7 +18,7 @@ from uuid import UUID
 
 import fitz
 from openai import OpenAI, RateLimitError
-from PIL import Image
+from PIL import Image, ImageChops
 from sqlalchemy.orm import Session, joinedload
 
 from database import SessionLocal, get_settings
@@ -64,6 +64,8 @@ For each problem return a JSON object with:
     {"label": "①", "text": "<visible answer choice text only>"}
   ],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
+  "problem_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>},
+  "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
   "is_exercise": <true only for standalone unsolved exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
@@ -73,6 +75,8 @@ For each problem return a JSON object with:
 Return a JSON array of all problems found on this page.
 If there are no valid standalone exercises, return [].
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
+problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
+visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 Convert every mathematical expression, function, interval, limit, summation, fraction, root, exponent, coordinate, and equation into LaTeX.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
@@ -101,6 +105,8 @@ For each problem return a JSON object with:
     {"label": "①", "text": "<visible answer choice text only>"}
   ],
   "has_visual": <true if figure/diagram/table/graph present, else false>,
+  "problem_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>},
+  "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
   "is_exercise": <true only for standalone exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
@@ -109,6 +115,8 @@ For each problem return a JSON object with:
 }
 
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
+problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
+visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 Convert mathematical expressions into LaTeX.
 Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑; never write those expressions as inline $...$ math.
@@ -2132,11 +2140,20 @@ def process_batch(batch_id: UUID) -> None:
             set_progress(batch_id, f"검토용 원본 페이지 저장 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
             attach_review_page_images(extracted, problem_pages, batch_id)
 
+            set_progress(batch_id, f"문항 미리보기 검증 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
+            refine_problem_previews(
+                extracted,
+                problem_pages,
+                batch_id,
+                progress_offset=base + chunk_len * units_per_page,
+                progress_total=total_units,
+            )
+
             set_progress(batch_id, f"선지 정리 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
             for problem in extracted:
                 cleaned, suspicious = strip_answer_choices(problem["problem_text"])
                 problem["problem_text"] = normalize_geometry_notation(cleaned)
-                problem["needs_review"] = problem["needs_review"] or suspicious
+                problem["needs_review"] = problem["needs_review"] or suspicious or text_has_suspicious_math(problem["problem_text"])
 
             set_progress(batch_id, f"문항 저장 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
             all_extracted.extend(extracted)
@@ -2697,6 +2714,103 @@ def _normalized_visual_bbox(value: Any) -> dict[str, float] | None:
     return {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
 
 
+def _bbox_area(bbox: dict[str, float] | None) -> float:
+    if not bbox:
+        return 0.0
+    return max(0.0, float(bbox["x2"]) - float(bbox["x1"])) * max(0.0, float(bbox["y2"]) - float(bbox["y1"]))
+
+
+def _preferred_bbox(boxes: list[dict[str, float]], *, largest: bool = False) -> dict[str, float] | None:
+    usable = [box for box in boxes if _bbox_area(box) > 0]
+    if not usable:
+        return None
+    return max(usable, key=_bbox_area) if largest else sorted(usable, key=_bbox_area)[len(usable) // 2]
+
+
+def _bbox_to_pixel_box(
+    bbox: dict[str, float],
+    width: int,
+    height: int,
+    *,
+    padding_ratio: float = 0.0,
+) -> tuple[int, int, int, int] | None:
+    if width <= 1 or height <= 1:
+        return None
+    pad_x = max(0, int(width * padding_ratio))
+    pad_y = max(0, int(height * padding_ratio))
+    left = max(0, min(width - 1, int(float(bbox["x1"]) * width) - pad_x))
+    top = max(0, min(height - 1, int(float(bbox["y1"]) * height) - pad_y))
+    right = max(left + 1, min(width, int(math.ceil(float(bbox["x2"]) * width)) + pad_x))
+    bottom = max(top + 1, min(height, int(math.ceil(float(bbox["y2"]) * height)) + pad_y))
+    if right - left < 8 or bottom - top < 8:
+        return None
+    return left, top, right, bottom
+
+
+def _crop_by_normalized_bbox(image: Image.Image, bbox: dict[str, float], *, padding_ratio: float = 0.0) -> Image.Image | None:
+    box = _bbox_to_pixel_box(bbox, image.width, image.height, padding_ratio=padding_ratio)
+    return image.crop(box) if box else None
+
+
+def _trim_visual_whitespace(image: Image.Image, padding: int = 16, threshold: int = 18) -> Image.Image:
+    if image.width < 20 or image.height < 20:
+        return image.copy()
+    rgb = image.convert("RGB")
+    corners = [
+        rgb.getpixel((0, 0)),
+        rgb.getpixel((rgb.width - 1, 0)),
+        rgb.getpixel((0, rgb.height - 1)),
+        rgb.getpixel((rgb.width - 1, rgb.height - 1)),
+    ]
+    background = max(corners, key=lambda color: color[0] + color[1] + color[2])
+    diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, background)).convert("L")
+    mask = diff.point(lambda value: 255 if value > threshold else 0)
+    crop_box = mask.getbbox()
+    if not crop_box:
+        return image.copy()
+    left = max(0, crop_box[0] - padding)
+    top = max(0, crop_box[1] - padding)
+    right = min(image.width, crop_box[2] + padding)
+    bottom = min(image.height, crop_box[3] + padding)
+    if right - left < 8 or bottom - top < 8:
+        return image.copy()
+    return image.crop((left, top, right, bottom))
+
+
+BROKEN_MATH_PATTERNS = (
+    re.compile(r"(?<!\\)/(?:w|frac|sqrt|sum|lim|int|left|right|overline|bar|cdot|times|theta|alpha|beta|gamma)\b", re.IGNORECASE),
+    re.compile(r"\\w(?:\s*\$\$|\b)"),
+    re.compile(r"\$\$\s*\$\$|\$\s+\$"),
+    re.compile(r"\$\$\s*(?:/|\\w)\w*"),
+)
+
+
+def _math_delimiters_balanced(text: str) -> bool:
+    index = 0
+    single_count = 0
+    display_count = 0
+    while index < len(text):
+        if text[index] != "$" or (index > 0 and text[index - 1] == "\\"):
+            index += 1
+            continue
+        if text.startswith("$$", index):
+            display_count += 1
+            index += 2
+        else:
+            single_count += 1
+            index += 1
+    return single_count % 2 == 0 and display_count % 2 == 0
+
+
+def text_has_suspicious_math(text: Any) -> bool:
+    value = str(text or "")
+    if not value:
+        return False
+    if not _math_delimiters_balanced(value):
+        return True
+    return any(pattern.search(value) for pattern in BROKEN_MATH_PATTERNS)
+
+
 def _extract_problem_number(value: Any) -> tuple[int, str] | None:
     raw = str(value or "").strip()
     if not raw:
@@ -2849,6 +2963,7 @@ def _normalize_extracted_items(
                 "subject": str(item.get("subject") or "").strip() or None,
                 "unit": _clean_unit_label(item.get("unit")),
                 "section_label": section_label,
+                "problem_bbox": _normalized_visual_bbox(item.get("problem_bbox")),
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
                 "page_index": page.page_index,
                 "page_number_occurrence": page_number_occurrence,
@@ -2986,6 +3101,7 @@ def extract_and_cross_check(
         texts = [item["problem_text"] for item in items if item["problem_text"]]
         longest = max(texts, key=len) if texts else ""
         visual_values = {item["has_visual"] for item in items}
+        problem_boxes = [item.get("problem_bbox") for item in items if item.get("problem_bbox")]
         visual_boxes = [item.get("visual_bbox") for item in items if item.get("visual_bbox")]
         section_labels = [item.get("section_label") for item in items if item.get("section_label")]
         problem_nos = [item.get("problem_no") for item in items if item.get("problem_no")]
@@ -2998,11 +3114,12 @@ def extract_and_cross_check(
                 "problem_no": _longer_text(problem_nos) or str(number),
                 "problem_text": longest,
                 "choices": choices,
-                "has_visual": any(visual_values),
+                "has_visual": any(visual_values) or bool(visual_boxes),
                 "subject": _most_common_text(items, "subject", subjects),
                 "unit": _most_common_text(items, "unit", units),
                 "section_label": _longer_text(section_labels),
-                "visual_bbox": visual_boxes[0] if visual_boxes else None,
+                "problem_bbox": _preferred_bbox(problem_boxes, largest=True),
+                "visual_bbox": _preferred_bbox(visual_boxes),
                 "visual_url": None,
                 "needs_review": True,
                 "page_index": page_index,
@@ -3013,15 +3130,232 @@ def extract_and_cross_check(
     return _apply_structure_indexes(merged)
 
 
-def attach_visuals(problems: list[dict[str, Any]], pages: list[RenderedPage], batch_id: UUID) -> None:
-    """Do not auto-crop problem visuals during extraction.
+PROBLEM_PREVIEW_QA_PROMPT = r"""You are a strict visual QA pass for one cropped problem preview.
 
-    Review page snapshots are stored separately by attach_review_page_images.
-    A human can then crop the exact visual from the review screen, which avoids
-    bad automatic crops becoming exported problem assets.
-    """
+You will receive an image cropped to one target problem and the current extraction JSON.
+Return a JSON array with exactly one object:
+[
+  {
+    "target_problem_ok": <true if the preview is centered on the target problem, false if neighboring problems dominate or the crop is ambiguous>,
+    "problem_text": "<corrected full question stem only, excluding answer choices>" or null,
+    "choices": [
+      {"label": "①", "text": "<visible answer choice text only>"}
+    ],
+    "has_visual": <true if this problem uses a non-text figure, graph, diagram, table, or image>,
+    "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
+    "latex_ok": <true if the corrected/current math text has balanced, valid LaTeX delimiters and no malformed tokens>,
+    "needs_review": <true if anything remains ambiguous>,
+    "warnings": ["short machine-readable reason", "..."]
+  }
+]
+
+Rules:
+- The source image is authoritative. Use the current extraction only as context.
+- If current text contains broken tokens like /w, \w, empty $$ $$, unbalanced $, or malformed LaTeX, correct them from the image.
+- problem_text must contain only the target problem stem and condition text. Do not include neighboring problems, answers, explanations, or choices.
+- Preserve Korean text faithfully and convert math expressions to LaTeX with $...$ or $$...$$.
+- Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑.
+- visual_bbox coordinates are relative to this cropped preview, not the full page.
+- visual_bbox must tightly enclose only the non-text figure/graph/diagram/table/image belonging to this problem. Exclude the problem stem, answer choices, and pure text condition boxes.
+- If there is no real visual asset, set has_visual false and visual_bbox null.
+- Return raw JSON only."""
+
+
+def _problem_preview_qa_prompt(problem: dict[str, Any]) -> str:
+    payload = {
+        "problem_number": problem.get("problem_number"),
+        "problem_no": problem.get("problem_no"),
+        "problem_text": problem.get("problem_text"),
+        "choices": problem.get("choices") or [],
+        "has_visual": bool(problem.get("has_visual")),
+        "page_number": int(problem.get("page_index") or 0) + 1,
+    }
+    return PROBLEM_PREVIEW_QA_PROMPT + "\n\nCurrent extraction JSON:\n" + json.dumps(payload, ensure_ascii=False)
+
+
+def _save_problem_visual_crop(problem: dict[str, Any], image: Image.Image, batch_id: UUID, source_label: str) -> bool:
+    if image.width < 16 or image.height < 16:
+        problem["needs_review"] = True
+        return False
+    cropped = _trim_visual_whitespace(image)
+    buffer = io.BytesIO()
+    cropped.save(buffer, format="PNG")
+    page_number = int(problem.get("page_index") or 0) + 1
+    problem_number = re.sub(r"[^0-9A-Za-z_-]+", "_", str(problem.get("problem_no") or problem.get("problem_number") or "problem"))
+    occurrence = int(problem.get("page_number_occurrence") or 0)
+    filename = f"{batch_id}_p{page_number}_{problem_number}_{occurrence}_{source_label}_visual.png"
+    problem["visual_url"] = save_visual_bytes(buffer.getvalue(), filename)
+    problem["has_visual"] = True
+    return True
+
+
+def _attach_visual_from_page_bbox(problem: dict[str, Any], page: RenderedPage, batch_id: UUID, *, mark_review: bool) -> bool:
+    visual_bbox = problem.get("visual_bbox")
+    if not visual_bbox:
+        return False
+    if _bbox_area(visual_bbox) > 0.65:
+        problem["needs_review"] = True
+        return False
+    with Image.open(io.BytesIO(page.png_bytes)) as source:
+        crop = _crop_by_normalized_bbox(source, visual_bbox, padding_ratio=0.006)
+        if not crop:
+            problem["needs_review"] = True
+            return False
+        saved = _save_problem_visual_crop(problem, crop, batch_id, "page")
+    if mark_review:
+        problem["needs_review"] = True
+    return saved
+
+
+def _build_problem_preview_payload(problem: dict[str, Any], page: RenderedPage) -> dict[str, Any] | None:
+    problem_bbox = problem.get("problem_bbox")
+    if not problem_bbox:
+        return None
+    if _bbox_area(problem_bbox) > 0.85:
+        problem["needs_review"] = True
+        return None
+    with Image.open(io.BytesIO(page.png_bytes)) as source:
+        preview = _crop_by_normalized_bbox(source, problem_bbox, padding_ratio=0.012)
+        if not preview:
+            problem["needs_review"] = True
+            return None
+        png_buffer = io.BytesIO()
+        preview.save(png_buffer, format="PNG")
+        preview_png = png_buffer.getvalue()
+        base64_image, _image_bytes, mime = _encode_image_for_ai(preview, page.ai_image_mime)
+    return {
+        "problem": problem,
+        "base64_image": base64_image,
+        "image_mime": mime,
+        "preview_png": preview_png,
+    }
+
+
+def _should_preview_qa(problem: dict[str, Any]) -> bool:
+    return bool(problem.get("has_visual")) or bool(problem.get("visual_bbox")) or text_has_suspicious_math(problem.get("problem_text"))
+
+
+def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: dict[str, Any], batch_id: UUID) -> None:
+    previous_has_visual = bool(problem.get("has_visual"))
+    if not bool(qa.get("target_problem_ok", True)):
+        problem["needs_review"] = True
+
+    corrected_text = str(qa.get("problem_text") or "").strip()
+    if corrected_text:
+        corrected_text = normalize_geometry_notation(corrected_text)
+        if text_has_suspicious_math(corrected_text):
+            problem["needs_review"] = True
+        else:
+            problem["problem_text"] = corrected_text
+
+    if isinstance(qa.get("choices"), list) and qa.get("choices"):
+        problem["choices"] = _normalize_problem_choices(qa.get("choices"), problem.get("problem_text"))
+
+    if isinstance(qa.get("has_visual"), bool):
+        problem["has_visual"] = bool(qa.get("has_visual"))
+        if previous_has_visual and not problem["has_visual"]:
+            problem["needs_review"] = True
+
+    if not bool(qa.get("latex_ok", True)) or bool(qa.get("needs_review")):
+        problem["needs_review"] = True
+
+    if problem.get("has_visual"):
+        visual_bbox = _normalized_visual_bbox(qa.get("visual_bbox"))
+        if visual_bbox and _bbox_area(visual_bbox) <= 0.70:
+            with Image.open(io.BytesIO(preview_png)) as preview:
+                crop = _crop_by_normalized_bbox(preview, visual_bbox, padding_ratio=0.006)
+                if crop:
+                    _save_problem_visual_crop(problem, crop, batch_id, "preview")
+                else:
+                    problem["needs_review"] = True
+        else:
+            problem["needs_review"] = True
+    else:
+        problem["visual_url"] = None
+
+    if text_has_suspicious_math(problem.get("problem_text")):
+        problem["needs_review"] = True
+
+
+def refine_problem_previews(
+    problems: list[dict[str, Any]],
+    pages: list[RenderedPage],
+    batch_id: UUID,
+    *,
+    progress_offset: int | None = None,
+    progress_total: int | None = None,
+) -> None:
+    page_by_index = {page.page_index: page for page in pages}
+    candidates: list[dict[str, Any]] = []
+    for problem in problems:
+        page = page_by_index.get(int(problem.get("page_index") or 0))
+        if not page:
+            problem["needs_review"] = True
+            continue
+        if not _should_preview_qa(problem):
+            continue
+        payload = _build_problem_preview_payload(problem, page)
+        if payload:
+            candidates.append(payload)
+            continue
+        if problem.get("has_visual"):
+            _attach_visual_from_page_bbox(problem, page, batch_id, mark_review=True)
+        if text_has_suspicious_math(problem.get("problem_text")):
+            problem["needs_review"] = True
+
+    if not candidates:
+        return
+
+    settings = get_settings()
+    client = _openai_client()
+    model_pool = _ai_model_pool(settings.ai_model_pool, settings.ai_model)
+    completed = 0
+    set_progress(batch_id, f"문항 미리보기 검증 중 (0/{len(candidates)}문항)", progress_offset, progress_total)
+    with ThreadPoolExecutor(max_workers=_ai_worker_count(len(candidates), len(model_pool))) as executor:
+        futures = {
+            executor.submit(
+                vision_json,
+                client,
+                payload["base64_image"],
+                _problem_preview_qa_prompt(payload["problem"]),
+                _page_split_model(model_pool, int(payload["problem"].get("page_index") or 0), len(pages)),
+                payload["image_mime"],
+                2048,
+                settings.ai_image_detail,
+            ): payload
+            for payload in candidates
+        }
+        for future, payload in _completed_futures_with_heartbeat(
+            futures,
+            batch_id=batch_id,
+            message_factory=lambda: f"문항 미리보기 검증 중 ({completed}/{len(candidates)}문항, AI 응답 대기 중)",
+            current_factory=lambda: progress_offset,
+            total=progress_total,
+        ):
+            problem = payload["problem"]
+            try:
+                items = future.result()
+                qa = items[0] if items and isinstance(items[0], dict) else {}
+                _apply_preview_qa_result(problem, payload["preview_png"], qa, batch_id)
+            except Exception:
+                problem["needs_review"] = True
+                page = page_by_index.get(int(problem.get("page_index") or 0))
+                if page and problem.get("has_visual"):
+                    _attach_visual_from_page_bbox(problem, page, batch_id, mark_review=True)
+            completed += 1
+            set_progress(batch_id, f"문항 미리보기 검증 중 ({completed}/{len(candidates)}문항)", progress_offset, progress_total)
+
+
+def attach_visuals(problems: list[dict[str, Any]], pages: list[RenderedPage], batch_id: UUID) -> None:
+    """Attach conservative automatic crops for problem visuals when bbox data is available."""
+    page_by_index = {page.page_index: page for page in pages}
     for problem in problems:
         problem["visual_url"] = None
+        if not problem.get("has_visual"):
+            continue
+        page = page_by_index.get(int(problem.get("page_index") or 0))
+        if not page or not _attach_visual_from_page_bbox(problem, page, batch_id, mark_review=True):
+            problem["needs_review"] = True
 
 
 def attach_review_page_images(problems: list[dict[str, Any]], pages: list[RenderedPage], batch_id: UUID) -> None:
