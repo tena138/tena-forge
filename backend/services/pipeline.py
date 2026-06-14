@@ -475,6 +475,59 @@ Rules:
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
+QUICK_ANSWER_TABLE_SCAN_PROMPT = r"""You are classifying one page from an answer or solution PDF.
+
+Decide whether this page is a compact quick answer key/table/list page.
+
+Return exactly one JSON object inside a JSON array:
+[
+  {
+    "is_quick_answer_table": true,
+    "confidence": 0.0,
+    "answer_count_estimate": 0,
+    "first_problem_number": "<first visible problem/question number, or null>",
+    "last_problem_number": "<last visible problem/question number, or null>",
+    "section_labels": ["<visible section/day/unit/round labels, if any>"],
+    "has_explanations": false,
+    "reason": "<short reason>"
+  }
+]
+
+Classify true only when the page is primarily a dense final-answer key: for example pages titled 빠른 정답, 빠른 답, 정답표, 답안표, 정답만 모아보기, answer key, quick answers, or a continuation page that is mostly problem-number/final-answer pairs.
+Classify false for ordinary solution/explanation pages, even when each explanation starts with a final answer.
+has_explanations must be true when the page contains paragraphs of solution reasoning, derivations, or worked explanations.
+answer_count_estimate should count visible problem-number/final-answer pairs only.
+Use 0-based page_idx only in the prompt context; do not include page_idx in the returned object.
+Return raw JSON array only. No markdown. No explanation outside JSON."""
+
+QUICK_ANSWER_TABLE_EXTRACTION_PROMPT = r"""You are extracting final answers from a compact quick answer key/table/list page.
+
+If this page is not primarily a quick final-answer key, return [].
+
+For every visible answer pair return:
+{
+  "problem_number": "<problem or question number exactly as written>",
+  "answer": "<final answer>",
+  "solution_steps": null,
+  "key_concept": null,
+  "section_label": "<visible section/unit/day/round label from the table header or nearby header, or null>",
+  "page_idx": <0-based solution PDF page index supplied by the system>,
+  "referenced_problem_snippet": null,
+  "solution_first_line": null
+}
+
+Rules:
+- Extract only final answers. Do not transcribe explanations, notes, or 풀이 text.
+- Keep solution_steps, key_concept, referenced_problem_snippet, and solution_first_line null.
+- For math, if an objective answer is shown only as a choice number or symbol, return that marker so the matcher can resolve it from the stored choices. If the actual choice value is visible, return the actual value.
+- For Korean Language and English, keep objective answers as the visible choice label or number.
+- Convert mathematical expressions in answer into LaTeX.
+- Preserve original problem labels such as "1", "1-1", "23-(가)", or "[보기 5]".
+- Read table/list order top-to-bottom and left-to-right unless the page clearly shows another order.
+- page_idx must be the exact 0-based solution PDF page index supplied by the system.
+
+Return raw JSON array only. No markdown. No explanation outside JSON."""
+
 PAGE_STRUCTURE_PROMPT = r"""You are reading one page from a Korean problem book or solution book.
 Extract page-level structure metadata only. Do not extract full problems or full solutions.
 
@@ -1468,6 +1521,323 @@ def collect_page_metadata_for_pdf(
     return sorted(metadata, key=lambda item: int(item.get("page_index") or 0))
 
 
+QUICK_ANSWER_EDGE_PAGE_COUNT = 6
+QUICK_ANSWER_MIN_ANSWER_COUNT = 5
+QUICK_ANSWER_STRONG_CONFIDENCE = 0.68
+QUICK_ANSWER_WEAK_CONFIDENCE = 0.55
+QUICK_ANSWER_EXPECTED_COVERAGE = 0.9
+
+
+def _quick_answer_candidate_page_indexes(page_count: int, edge_count: int = QUICK_ANSWER_EDGE_PAGE_COUNT) -> list[int]:
+    if page_count <= 0:
+        return []
+    edge = max(1, min(int(edge_count), page_count))
+    indexes = list(range(0, edge)) + list(range(max(0, page_count - edge), page_count))
+    return sorted(set(index for index in indexes if 0 <= index < page_count))
+
+
+def _contiguous_page_ranges(page_indexes: list[int]) -> list[tuple[int, int]]:
+    ordered = sorted(set(index for index in page_indexes if index >= 0))
+    if not ordered:
+        return []
+    ranges: list[tuple[int, int]] = []
+    start = previous = ordered[0]
+    for index in ordered[1:]:
+        if index == previous + 1:
+            previous = index
+            continue
+        ranges.append((start, previous + 1))
+        start = previous = index
+    ranges.append((start, previous + 1))
+    return ranges
+
+
+def render_pdf_page_indexes(
+    path: str,
+    page_indexes: list[int],
+    batch_id: UUID | None = None,
+    label: str = "PDF 렌더링 중",
+    dpi: int = DEFAULT_RENDER_DPI,
+    progress_offset: int = 0,
+    progress_total: int | None = None,
+) -> list[RenderedPage]:
+    ordered_indexes = sorted(set(index for index in page_indexes if index >= 0))
+    if not ordered_indexes:
+        return []
+    rendered_by_index: dict[int, RenderedPage] = {}
+    rendered_count = 0
+    for start, end in _contiguous_page_ranges(ordered_indexes):
+        rendered = render_pdf(
+            path,
+            batch_id=batch_id,
+            label=label,
+            start_page=start,
+            end_page=end,
+            dpi=dpi,
+            progress_offset=progress_offset + rendered_count,
+            progress_total=progress_total,
+        )
+        rendered_by_index.update({page.page_index: page for page in rendered})
+        rendered_count += end - start
+    return [rendered_by_index[index] for index in ordered_indexes if index in rendered_by_index]
+
+
+def _quick_answer_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value or "").strip().lower() in {"true", "1", "yes", "y", "예", "네"}
+
+
+def _quick_answer_float(value: Any, fallback: float = 0.0) -> float:
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _quick_answer_count(value: Any) -> int:
+    number = _int_or_none(value)
+    return max(int(number or 0), 0)
+
+
+def _solution_answer_count(solutions: list[dict[str, Any]]) -> int:
+    return sum(1 for solution in solutions if has_solution_content(solution))
+
+
+def _quick_answers_cover_expected_count(answer_count: int, expected_count: int | None) -> bool:
+    if answer_count <= 0:
+        return False
+    if expected_count is None or expected_count <= 0:
+        return answer_count >= QUICK_ANSWER_MIN_ANSWER_COUNT
+    if expected_count <= QUICK_ANSWER_MIN_ANSWER_COUNT:
+        return answer_count >= expected_count
+    return answer_count >= max(QUICK_ANSWER_MIN_ANSWER_COUNT, math.ceil(expected_count * QUICK_ANSWER_EXPECTED_COVERAGE))
+
+
+def scan_quick_answer_table_pages(
+    path: str,
+    page_count: int,
+    dpi: int,
+    batch_id: UUID | None,
+    progress_offset: int,
+    total_units: int | None,
+) -> dict[str, Any]:
+    candidate_indexes = _quick_answer_candidate_page_indexes(page_count)
+    report: dict[str, Any] = {
+        "strategy": "edge_page_scan",
+        "candidate_page_indexes": candidate_indexes,
+        "candidate_page_numbers": [index + 1 for index in candidate_indexes],
+        "selected_page_indexes": [],
+        "selected_page_numbers": [],
+        "pages": [],
+        "used": False,
+    }
+    if not candidate_indexes:
+        return report
+
+    pages = render_pdf_page_indexes(
+        path,
+        candidate_indexes,
+        batch_id=batch_id,
+        label="빠른 답안표 탐색용 렌더링 중",
+        dpi=dpi,
+        progress_offset=progress_offset,
+        progress_total=total_units,
+    )
+    if not pages:
+        return report
+
+    settings = get_settings()
+    client = _openai_client()
+    model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
+    completed = 0
+    if batch_id:
+        model_note = f", 모델 {len(model_pool)}개" if len(model_pool) > 1 else ""
+        set_progress(batch_id, f"빠른 답안표 탐색 중 (0/{len(pages)}페이지{model_note})", progress_offset + len(pages), total_units)
+
+    page_reports: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
+        futures = {
+            executor.submit(
+                vision_json,
+                client,
+                page.base64_png,
+                (
+                    f"{QUICK_ANSWER_TABLE_SCAN_PROMPT}\n\n"
+                    f"Current answer PDF page_idx: {page.page_index}.\n"
+                    f"Current answer PDF page number: {page.page_index + 1}."
+                ),
+                _page_split_model(model_pool, page.page_index, page_count),
+                page.ai_image_mime,
+                1024,
+                settings.ai_solution_image_detail,
+            ): page
+            for page in pages
+        }
+        for future, page in _completed_futures_with_heartbeat(
+            futures,
+            batch_id=batch_id,
+            message_factory=lambda: f"빠른 답안표 탐색 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+            current_factory=lambda: progress_offset + len(pages) + completed,
+            total=total_units,
+        ):
+            items = future.result()
+            raw = items[0] if items and isinstance(items[0], dict) else {}
+            is_quick = _quick_answer_bool(raw.get("is_quick_answer_table"))
+            confidence = _quick_answer_float(raw.get("confidence"))
+            answer_count = _quick_answer_count(raw.get("answer_count_estimate"))
+            has_explanations = _quick_answer_bool(raw.get("has_explanations"))
+            strong = (
+                is_quick
+                and not has_explanations
+                and confidence >= QUICK_ANSWER_STRONG_CONFIDENCE
+                and answer_count >= QUICK_ANSWER_MIN_ANSWER_COUNT
+            )
+            weak = (
+                is_quick
+                and not has_explanations
+                and confidence >= QUICK_ANSWER_WEAK_CONFIDENCE
+                and answer_count >= 3
+            )
+            page_report = {
+                "page_index": page.page_index,
+                "page_number": page.page_index + 1,
+                "is_quick_answer_table": is_quick,
+                "confidence": confidence,
+                "answer_count_estimate": answer_count,
+                "first_problem_number": raw.get("first_problem_number"),
+                "last_problem_number": raw.get("last_problem_number"),
+                "section_labels": raw.get("section_labels") if isinstance(raw.get("section_labels"), list) else [],
+                "has_explanations": has_explanations,
+                "reason": raw.get("reason"),
+                "strong_candidate": strong,
+                "weak_candidate": weak,
+            }
+            page_reports.append(page_report)
+            completed += 1
+            if batch_id:
+                set_progress(
+                    batch_id,
+                    f"빠른 답안표 탐색 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
+                    progress_offset + len(pages) + completed,
+                    total_units,
+                )
+
+    strong_indexes = {int(item["page_index"]) for item in page_reports if item.get("strong_candidate")}
+    selected_indexes: list[int] = []
+    if strong_indexes:
+        for item in page_reports:
+            page_index = int(item["page_index"])
+            if item.get("strong_candidate") or (item.get("weak_candidate") and any(abs(page_index - strong) <= 1 for strong in strong_indexes)):
+                selected_indexes.append(page_index)
+    else:
+        weak_reports = [item for item in page_reports if item.get("weak_candidate")]
+        if sum(int(item.get("answer_count_estimate") or 0) for item in weak_reports) >= QUICK_ANSWER_MIN_ANSWER_COUNT * 2:
+            selected_indexes = [int(item["page_index"]) for item in weak_reports]
+
+    selected_indexes = sorted(set(selected_indexes))
+    report["pages"] = sorted(page_reports, key=lambda item: int(item.get("page_index") or 0))
+    report["selected_page_indexes"] = selected_indexes
+    report["selected_page_numbers"] = [index + 1 for index in selected_indexes]
+    return report
+
+
+def extract_quick_answer_table_solutions(
+    path: str,
+    page_count: int,
+    dpi: int,
+    batch_id: UUID | None,
+    progress_offset: int,
+    total_units: int | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    report = scan_quick_answer_table_pages(path, page_count, dpi, batch_id, progress_offset, total_units)
+    selected_indexes = [int(index) for index in report.get("selected_page_indexes") or []]
+    if not selected_indexes:
+        report["extracted_answer_count"] = 0
+        report["fallback_reason"] = "quick_answer_table_not_found"
+        return [], report
+
+    pages = render_pdf_page_indexes(
+        path,
+        selected_indexes,
+        batch_id=batch_id,
+        label="빠른 답안표 렌더링 중",
+        dpi=dpi,
+        progress_offset=progress_offset + len(report.get("candidate_page_indexes") or []),
+        progress_total=total_units,
+    )
+    settings = get_settings()
+    solutions = extract_solutions(
+        pages,
+        batch_id=batch_id,
+        offset=progress_offset + len(report.get("candidate_page_indexes") or []) + len(pages),
+        total=total_units,
+        display_total_pages=page_count,
+        prompt_override=QUICK_ANSWER_TABLE_EXTRACTION_PROMPT,
+        mode_label_override="빠른 답안표 검사",
+        max_output_tokens_override=max(settings.ai_solution_max_output_tokens, settings.ai_max_output_tokens, 4096),
+    )
+    for solution in solutions:
+        solution["extraction_source"] = "quick_answer_table"
+    answer_count = _solution_answer_count(solutions)
+    report["extracted_answer_count"] = answer_count
+    report["used"] = answer_count >= QUICK_ANSWER_MIN_ANSWER_COUNT
+    if not report["used"]:
+        report["fallback_reason"] = "quick_answer_table_extracted_too_few_answers"
+    return solutions, report
+
+
+def extract_full_solution_pdf(
+    path: str,
+    page_count: int,
+    dpi: int,
+    batch_id: UUID,
+    offset: int,
+    total_units: int,
+    units_per_page: int,
+    solution_sections: list[dict[str, Any]],
+    solution_page_metadata: dict[int, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    settings = get_settings()
+    solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
+    solutions: list[dict[str, Any]] = []
+    processed_solution_pages = 0
+    for range_group in iter_split_page_range_groups(page_count, len(solution_model_pool)):
+        chunk_len = sum(end - start for start, end in range_group)
+        base = offset + processed_solution_pages * units_per_page
+        rendered_groups: list[list[RenderedPage]] = []
+        rendered_pages = 0
+        for start, end in range_group:
+            rendered = render_pdf(
+                path,
+                batch_id=batch_id,
+                label="답안 PDF 렌더링 중",
+                start_page=start,
+                end_page=end,
+                dpi=dpi,
+                progress_offset=base + rendered_pages,
+                progress_total=total_units,
+            )
+            rendered_groups.append(rendered)
+            rendered_pages += end - start
+        solution_pages = interleave_rendered_page_groups(rendered_groups)
+        if solution_page_metadata:
+            solution_pages = split_two_column_solution_pages(solution_pages, solution_page_metadata)
+        extracted_solutions = extract_solutions(
+            solution_pages,
+            batch_id,
+            offset=base + chunk_len,
+            total=total_units,
+            display_total_pages=page_count,
+        )
+        _apply_section_ranges_to_items(extracted_solutions, solution_sections, "page_idx")
+        solutions.extend(extracted_solutions)
+        processed_solution_pages += chunk_len
+    return _apply_structure_indexes(solutions, page_key="page_idx")
+
+
 KOREAN_RANGE_RECOVERY_PROMPT = r"""You are repairing a Korean Language extraction where a visible passage range was incomplete.
 
 Return raw JSON array only. The array must contain exactly one object:
@@ -1692,6 +2062,7 @@ def _extract_korean_solution_items(
     offset: int,
     total_units: int,
     subject_engine: str = KOREAN_ENGINE,
+    page_indexes: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     client = _openai_client()
@@ -1700,6 +2071,68 @@ def _extract_korean_solution_items(
     engine_label = language_engine_label(engine)
     solution_prompt = ENGLISH_SOLUTION_PROMPT if engine == ENGLISH_ENGINE else KOREAN_SOLUTION_PROMPT
     answer_items: list[dict[str, Any]] = []
+
+    def extract_answer_items_from_pages(pages: list[RenderedPage], progress_base: int) -> list[dict[str, Any]]:
+        if not pages:
+            return []
+        extracted_items: list[dict[str, Any]] = []
+        completed = 0
+        set_progress(batch_id, f"{engine_label} 답안 추출 중 (0/{len(pages)}페이지)", progress_base, total_units)
+        with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
+            futures = {
+                executor.submit(
+                    vision_json,
+                    client,
+                    page.base64_png,
+                    f"{solution_prompt}\n\nCurrent source page: {page.page_index + 1}. Use this page number in source_pages.",
+                    _page_split_model(model_pool, page.page_index, page_count),
+                    page.ai_image_mime,
+                    settings.ai_solution_max_output_tokens,
+                    settings.ai_solution_image_detail,
+                ): page
+                for page in pages
+            }
+            for future, page in _completed_futures_with_heartbeat(
+                futures,
+                batch_id=batch_id,
+                message_factory=lambda: f"{engine_label} 답안 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
+                current_factory=lambda: progress_base + completed,
+                total=total_units,
+            ):
+                items = future.result()
+                completed += 1
+                set_progress(
+                    batch_id,
+                    f"{engine_label} 답안 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
+                    progress_base + completed,
+                    total_units,
+                )
+                for item in items:
+                    if isinstance(item, dict) and str(item.get("question_number") or "").strip():
+                        extracted_items.append(item)
+        return extracted_items
+
+    if page_indexes is not None:
+        selected_indexes: list[int] = []
+        for raw_index in page_indexes:
+            try:
+                index = int(raw_index)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= index < page_count:
+                selected_indexes.append(index)
+        selected_indexes = sorted(set(selected_indexes))
+        pages = render_pdf_page_indexes(
+            path,
+            selected_indexes,
+            batch_id=batch_id,
+            label=f"{engine_label} 빠른 답안표 렌더링 중",
+            dpi=dpi,
+            progress_offset=offset,
+            progress_total=total_units,
+        )
+        return extract_answer_items_from_pages(pages, offset + len(pages))
+
     processed_pages = 0
     for range_group in iter_split_page_range_groups(page_count, len(model_pool)):
         chunk_len = sum(end - start for start, end in range_group)
@@ -1720,39 +2153,7 @@ def _extract_korean_solution_items(
             rendered_groups.append(rendered)
             rendered_pages += end - start
         pages = interleave_rendered_page_groups(rendered_groups)
-        completed = 0
-        with ThreadPoolExecutor(max_workers=_ai_worker_count(len(pages), len(model_pool))) as executor:
-            futures = {
-                executor.submit(
-                    vision_json,
-                    client,
-                    page.base64_png,
-                    f"{solution_prompt}\n\nCurrent source page: {page.page_index + 1}. Use this page number in source_pages.",
-                    _page_split_model(model_pool, page.page_index, page_count),
-                    page.ai_image_mime,
-                    settings.ai_solution_max_output_tokens,
-                    settings.ai_solution_image_detail,
-                ): page
-                for page in pages
-            }
-            for future, page in _completed_futures_with_heartbeat(
-                futures,
-                batch_id=batch_id,
-                message_factory=lambda: f"{engine_label} 답안 추출 중 ({completed}/{len(pages)}페이지, AI 응답 대기 중)",
-                current_factory=lambda: base + chunk_len + completed,
-                total=total_units,
-            ):
-                items = future.result()
-                completed += 1
-                set_progress(
-                    batch_id,
-                    f"{engine_label} 답안 추출 중 ({completed}/{len(pages)}페이지, {page.page_index + 1}/{page_count}페이지)",
-                    base + chunk_len + completed,
-                    total_units,
-                )
-                for item in items:
-                    if isinstance(item, dict) and str(item.get("question_number") or "").strip():
-                        answer_items.append(item)
+        answer_items.extend(extract_answer_items_from_pages(pages, base + chunk_len))
         processed_pages += chunk_len
     return answer_items
 
@@ -1907,15 +2308,62 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     _write_batch_artifact(batch_id, "korean_extraction.json", document)
 
     if batch.solution_pdf_filename:
-        answer_items = _extract_korean_solution_items(
+        answer_items: list[dict[str, Any]] = []
+        question_count = len([question for question in document.get("questions") or [] if isinstance(question, dict)])
+        quick_answer_report = scan_quick_answer_table_pages(
             batch.solution_pdf_filename,
-            batch_id,
             solution_page_count,
             solution_dpi,
-            offset=problem_page_count * 2,
+            batch_id,
+            progress_offset=problem_page_count * 2,
             total_units=total_units,
-            subject_engine=subject_engine,
         )
+        selected_quick_pages = [int(index) for index in quick_answer_report.get("selected_page_indexes") or []]
+        if selected_quick_pages:
+            answer_items = _extract_korean_solution_items(
+                batch.solution_pdf_filename,
+                batch_id,
+                solution_page_count,
+                solution_dpi,
+                offset=problem_page_count * 2,
+                total_units=total_units,
+                subject_engine=subject_engine,
+                page_indexes=selected_quick_pages,
+            )
+        quick_answer_count = len(
+            {
+                _question_number_key(item.get("question_number"))
+                for item in answer_items
+                if isinstance(item, dict) and _question_number_key(item.get("question_number"))
+            }
+        )
+        quick_answer_report["expected_problem_count"] = question_count
+        quick_answer_report["extracted_answer_count"] = quick_answer_count
+        quick_answer_report["coverage_threshold_met"] = _quick_answers_cover_expected_count(quick_answer_count, question_count)
+        if _quick_answers_cover_expected_count(quick_answer_count, question_count):
+            quick_answer_report["used"] = True
+            quick_answer_report["final_used_source"] = "quick_answer_table"
+        else:
+            quick_answer_report["used"] = False
+            quick_answer_report.setdefault("fallback_reason", "quick_answer_count_below_extracted_question_count")
+            quick_answer_report["final_used_source"] = "full_solution_pdf"
+            answer_items = _extract_korean_solution_items(
+                batch.solution_pdf_filename,
+                batch_id,
+                solution_page_count,
+                solution_dpi,
+                offset=problem_page_count * 2,
+                total_units=total_units,
+                subject_engine=subject_engine,
+            )
+            quick_answer_report["full_fallback_answer_count"] = len(
+                {
+                    _question_number_key(item.get("question_number"))
+                    for item in answer_items
+                    if isinstance(item, dict) and _question_number_key(item.get("question_number"))
+                }
+            )
+        _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         _write_batch_artifact(batch_id, "korean_answer_solution_items.json", answer_items)
         document = map_korean_answers(document, answer_items)
         _write_batch_artifact(batch_id, "korean_extraction_with_answers.json", document)
@@ -2034,18 +2482,39 @@ def process_batch(batch_id: UUID) -> None:
         set_progress(batch_id, "PDF 페이지 수 확인 완료", 0, total_units)
 
         page_metadata: list[dict[str, Any]] = []
+        solutions: list[dict[str, Any]] = []
+        quick_answer_report: dict[str, Any] | None = None
+        quick_answers_used = False
         if should_extract_solutions:
-            page_metadata.extend(
-                collect_page_metadata_for_pdf(
-                    batch.solution_pdf_filename,
-                    solution_page_count,
-                    solution_dpi,
-                    "solution",
-                    batch_id,
-                    offset=0,
-                    total_units=total_units,
-                )
+            quick_solutions, quick_answer_report = extract_quick_answer_table_solutions(
+                batch.solution_pdf_filename,
+                solution_page_count,
+                solution_dpi,
+                batch_id,
+                progress_offset=0,
+                total_units=total_units,
             )
+            quick_answer_count = _solution_answer_count(quick_solutions)
+            if _quick_answers_cover_expected_count(quick_answer_count, None):
+                solutions = quick_solutions
+                quick_answers_used = True
+                quick_answer_report["used"] = True
+                quick_answer_report["final_used_source"] = "quick_answer_table"
+            else:
+                if quick_answer_report is not None:
+                    quick_answer_report["used"] = False
+                    quick_answer_report.setdefault("fallback_reason", "quick_answer_table_not_complete")
+                page_metadata.extend(
+                    collect_page_metadata_for_pdf(
+                        batch.solution_pdf_filename,
+                        solution_page_count,
+                        solution_dpi,
+                        "solution",
+                        batch_id,
+                        offset=0,
+                        total_units=total_units,
+                    )
+                )
         page_metadata.extend(
             collect_page_metadata_for_pdf(
                 batch.problem_pdf_filename,
@@ -2064,43 +2533,22 @@ def process_batch(batch_id: UUID) -> None:
         _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
         solution_page_metadata = _metadata_by_page(page_metadata, "solution")
 
-        solutions: list[dict[str, Any]] = []
-        if should_extract_solutions:
-            solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
-            processed_solution_pages = 0
-            for range_group in iter_split_page_range_groups(solution_page_count, len(solution_model_pool)):
-                chunk_len = sum(end - start for start, end in range_group)
-                base = structure_units + processed_solution_pages * units_per_page
-                rendered_groups: list[list[RenderedPage]] = []
-                rendered_pages = 0
-                for start, end in range_group:
-                    rendered = render_pdf(
-                        batch.solution_pdf_filename,
-                        batch_id=batch_id,
-                        label="답안 PDF 렌더링 중",
-                        start_page=start,
-                        end_page=end,
-                        dpi=solution_dpi,
-                        progress_offset=base + rendered_pages,
-                        progress_total=total_units,
-                    )
-                    rendered_groups.append(rendered)
-                    rendered_pages += end - start
-                solution_pages = interleave_rendered_page_groups(rendered_groups)
-                solution_pages = split_two_column_solution_pages(solution_pages, solution_page_metadata)
-                extracted_solutions = extract_solutions(
-                    solution_pages,
-                    batch_id,
-                    offset=base + chunk_len,
-                    total=total_units,
-                    display_total_pages=solution_page_count,
-                )
-                _apply_section_ranges_to_items(extracted_solutions, solution_sections, "page_idx")
-                solutions.extend(extracted_solutions)
-                processed_solution_pages += chunk_len
-            solutions = _apply_structure_indexes(solutions, page_key="page_idx")
+        if should_extract_solutions and not quick_answers_used:
+            solutions = extract_full_solution_pdf(
+                batch.solution_pdf_filename,
+                solution_page_count,
+                solution_dpi,
+                batch_id,
+                offset=structure_units,
+                total_units=total_units,
+                units_per_page=units_per_page,
+                solution_sections=solution_sections,
+                solution_page_metadata=solution_page_metadata,
+            )
             if not any(has_solution_content(solution) for solution in solutions):
                 raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+        if quick_answer_report is not None:
+            _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
 
         problem_model_pool = _ai_model_pool()
@@ -2162,6 +2610,59 @@ def process_batch(batch_id: UUID) -> None:
         _apply_section_ranges_to_items(all_extracted, problem_sections, "page_index")
         all_extracted = _apply_structure_indexes(all_extracted, page_key="page_index")
         _write_batch_artifact(batch_id, "extracted_problems_by_section.json", _items_by_section(all_extracted, "page_index"))
+        if should_extract_solutions and quick_answers_used:
+            expected_problem_count = len(all_extracted)
+            quick_answer_count = _solution_answer_count(solutions)
+            if quick_answer_report is not None:
+                quick_answer_report["expected_problem_count"] = expected_problem_count
+                quick_answer_report["coverage_threshold_met"] = _quick_answers_cover_expected_count(quick_answer_count, expected_problem_count)
+            if not _quick_answers_cover_expected_count(quick_answer_count, expected_problem_count):
+                if quick_answer_report is not None:
+                    quick_answer_report["used"] = False
+                    quick_answer_report["fallback_reason"] = "quick_answer_count_below_extracted_problem_count"
+                    quick_answer_report["final_used_source"] = "full_solution_pdf"
+                fallback_extra_units = solution_page_count * (units_per_page + 2)
+                fallback_total_units = total_units + fallback_extra_units
+                fallback_metadata_offset = total_units
+                set_progress(batch_id, "빠른 답안표 부족으로 전체 답안 PDF 확인 중", total_units, fallback_total_units)
+                solution_metadata = collect_page_metadata_for_pdf(
+                    batch.solution_pdf_filename,
+                    solution_page_count,
+                    solution_dpi,
+                    "solution",
+                    batch_id,
+                    offset=fallback_metadata_offset,
+                    total_units=fallback_total_units,
+                )
+                problem_metadata = [item for item in page_metadata if item.get("document_kind") == "problem"]
+                page_metadata = solution_metadata + problem_metadata
+                solution_sections = build_section_ranges_from_metadata(solution_metadata, "solution", solution_page_count)
+                solution_page_metadata = _metadata_by_page(solution_metadata, "solution")
+                _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
+                _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
+                solutions = extract_full_solution_pdf(
+                    batch.solution_pdf_filename,
+                    solution_page_count,
+                    solution_dpi,
+                    batch_id,
+                    offset=fallback_metadata_offset + solution_page_count * 2,
+                    total_units=fallback_total_units,
+                    units_per_page=units_per_page,
+                    solution_sections=solution_sections,
+                    solution_page_metadata=solution_page_metadata,
+                )
+                total_units = fallback_total_units
+                if quick_answer_report is not None:
+                    quick_answer_report["full_fallback_answer_count"] = _solution_answer_count(solutions)
+                if not any(has_solution_content(solution) for solution in solutions):
+                    raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+                _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
+                if quick_answer_report is not None:
+                    _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
+            elif quick_answer_report is not None:
+                quick_answer_report["used"] = True
+                quick_answer_report["final_used_source"] = "quick_answer_table"
+                _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         structure_report = build_structure_validation_report(page_metadata, problem_sections, solution_sections, all_extracted, solutions)
         _mark_section_validation_warnings(all_extracted, structure_report)
         _write_batch_artifact(batch_id, "structure_validation_report.json", structure_report)
@@ -2270,6 +2771,7 @@ def process_solutions_only(batch_id: UUID) -> None:
         total_units = max(structure_units + solution_units, 1)
         problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
         solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
+        solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
         set_progress(batch_id, "답안 PDF 페이지 수 확인 완료", 0, total_units)
 
         if reuse_problem_sections:
@@ -2287,56 +2789,66 @@ def process_solutions_only(batch_id: UUID) -> None:
             problem_sections = build_section_ranges_from_metadata(problem_page_metadata, "problem", problem_page_count)
             _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
 
-        page_metadata = collect_page_metadata_for_pdf(
+        solutions: list[dict[str, Any]] = []
+        page_metadata: list[dict[str, Any]] = []
+        solution_sections: list[dict[str, Any]] = []
+        quick_answer_report: dict[str, Any] | None = None
+        quick_answers_used = False
+        quick_solutions, quick_answer_report = extract_quick_answer_table_solutions(
             batch.solution_pdf_filename,
             solution_page_count,
             solution_dpi,
-            "solution",
             batch_id,
-            offset=problem_structure_units,
+            progress_offset=problem_structure_units,
             total_units=total_units,
         )
-        _write_batch_artifact(batch_id, "pages_metadata.json", problem_page_metadata + page_metadata)
-        solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count)
-        _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
-        solution_page_metadata = _metadata_by_page(page_metadata, "solution")
-
-        solutions: list[dict[str, Any]] = []
-        solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
-        processed_solution_pages = 0
-        for range_group in iter_split_page_range_groups(solution_page_count, len(solution_model_pool)):
-            chunk_len = sum(end - start for start, end in range_group)
-            base = structure_units + processed_solution_pages * units_per_page
-            rendered_groups: list[list[RenderedPage]] = []
-            rendered_pages = 0
-            for start, end in range_group:
-                rendered = render_pdf(
-                    batch.solution_pdf_filename,
-                    batch_id=batch_id,
-                    label="답안 PDF 렌더링 중",
-                    start_page=start,
-                    end_page=end,
-                    dpi=solution_dpi,
-                    progress_offset=base + rendered_pages,
-                    progress_total=total_units,
-                )
-                rendered_groups.append(rendered)
-                rendered_pages += end - start
-            solution_pages = interleave_rendered_page_groups(rendered_groups)
-            solution_pages = split_two_column_solution_pages(solution_pages, solution_page_metadata)
-            extracted_solutions = extract_solutions(
-                solution_pages,
+        quick_answer_count = _solution_answer_count(quick_solutions)
+        if _quick_answers_cover_expected_count(quick_answer_count, existing_problem_count):
+            solutions = quick_solutions
+            quick_answers_used = True
+            quick_answer_report["used"] = True
+            quick_answer_report["expected_problem_count"] = existing_problem_count
+            quick_answer_report["coverage_threshold_met"] = True
+            quick_answer_report["final_used_source"] = "quick_answer_table"
+            _write_batch_artifact(batch_id, "pages_metadata.json", problem_page_metadata)
+            _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
+        else:
+            if quick_answer_report is not None:
+                quick_answer_report["used"] = False
+                quick_answer_report["expected_problem_count"] = existing_problem_count
+                quick_answer_report["coverage_threshold_met"] = False
+                quick_answer_report.setdefault("fallback_reason", "quick_answer_count_below_existing_problem_count")
+                quick_answer_report["final_used_source"] = "full_solution_pdf"
+            page_metadata = collect_page_metadata_for_pdf(
+                batch.solution_pdf_filename,
+                solution_page_count,
+                solution_dpi,
+                "solution",
                 batch_id,
-                offset=base + chunk_len,
-                total=total_units,
-                display_total_pages=solution_page_count,
+                offset=problem_structure_units,
+                total_units=total_units,
             )
-            _apply_section_ranges_to_items(extracted_solutions, solution_sections, "page_idx")
-            solutions.extend(extracted_solutions)
-            processed_solution_pages += chunk_len
-        solutions = _apply_structure_indexes(solutions, page_key="page_idx")
+            _write_batch_artifact(batch_id, "pages_metadata.json", problem_page_metadata + page_metadata)
+            solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count)
+            _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
+            solution_page_metadata = _metadata_by_page(page_metadata, "solution")
+            solutions = extract_full_solution_pdf(
+                batch.solution_pdf_filename,
+                solution_page_count,
+                solution_dpi,
+                batch_id,
+                offset=structure_units,
+                total_units=total_units,
+                units_per_page=units_per_page,
+                solution_sections=solution_sections,
+                solution_page_metadata=solution_page_metadata,
+            )
+            if quick_answer_report is not None:
+                quick_answer_report["full_fallback_answer_count"] = _solution_answer_count(solutions)
         if not any(has_solution_content(solution) for solution in solutions):
             raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+        if quick_answer_report is not None:
+            _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
 
         set_progress(batch_id, "기존 문항과 답안 재매칭 중", total_units, total_units)
         ensure_batch_active(batch_id)
@@ -2359,6 +2871,8 @@ def process_solutions_only(batch_id: UUID) -> None:
                 "problem_page_count": problem_page_count,
                 "solution_page_count": solution_page_count,
                 "reused_problem_sections": reuse_problem_sections,
+                "quick_answer_table": quick_answer_report,
+                "quick_answer_table_used": quick_answers_used,
                 "problem_sections": problem_sections,
                 "solution_sections": solution_sections,
                 "stats": stats,
@@ -3549,7 +4063,16 @@ def _longer_text(values: list[Any]) -> str | None:
     return max(texts, key=len) if texts else None
 
 
-def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, offset: int = 0, total: int | None = None, display_total_pages: int | None = None) -> list[dict[str, Any]]:
+def extract_solutions(
+    pages: list[RenderedPage],
+    batch_id: UUID | None = None,
+    offset: int = 0,
+    total: int | None = None,
+    display_total_pages: int | None = None,
+    prompt_override: str | None = None,
+    mode_label_override: str | None = None,
+    max_output_tokens_override: int | None = None,
+) -> list[dict[str, Any]]:
     settings = get_settings()
     client = _openai_client()
     by_key: dict[tuple[int, str | None, str, int], list[dict[str, Any]]] = {}
@@ -3557,12 +4080,15 @@ def extract_solutions(pages: list[RenderedPage], batch_id: UUID | None = None, o
     total_steps = total or len(pages) * extraction_passes
     model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
     solution_mode = str(settings.ai_solution_mode or "fast").strip().lower()
-    solution_prompt = SOLUTION_TRANSCRIPTION_PROMPT if solution_mode == "full" else SOLUTION_FAST_PROMPT
-    solution_max_tokens = max(settings.ai_max_output_tokens, settings.ai_solution_max_output_tokens) if solution_mode == "full" else settings.ai_solution_max_output_tokens
+    solution_prompt = prompt_override or (SOLUTION_TRANSCRIPTION_PROMPT if solution_mode == "full" else SOLUTION_FAST_PROMPT)
+    solution_max_tokens = (
+        max_output_tokens_override
+        or (max(settings.ai_max_output_tokens, settings.ai_solution_max_output_tokens) if solution_mode == "full" else settings.ai_solution_max_output_tokens)
+    )
     tasks = [(local_index, page, run_index) for local_index, page in enumerate(pages) for run_index in range(extraction_passes)]
+    mode_label = mode_label_override or ("원문 검사" if solution_mode == "full" else "빠른 검사")
     if batch_id:
         model_note = f", 모델 {len(model_pool)}개" if len(model_pool) > 1 else ""
-        mode_label = "원문 검사" if solution_mode == "full" else "빠른 검사"
         set_progress(batch_id, f"답안 {mode_label} 중 (0/{len(tasks)}요청 완료{model_note})", offset, total_steps)
 
     completed = 0
