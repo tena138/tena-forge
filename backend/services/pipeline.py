@@ -2811,6 +2811,89 @@ def text_has_suspicious_math(text: Any) -> bool:
     return any(pattern.search(value) for pattern in BROKEN_MATH_PATTERNS)
 
 
+ANCHOR_NUMBER_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:\d+(?:[.,]\d+)?)(?:\s*(?:cm|mm|m|km|°|도))?(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
+GEOMETRY_LATEX_LABEL_RE = re.compile(
+    r"\\(?:triangle|angle|overline|overrightarrow|overleftarrow|widehat)\s*\{?\s*([A-Z]{1,5})\s*\}?"
+)
+GEOMETRY_TEXT_LABEL_RE = re.compile(
+    r"(?:점|꼭짓점|교점|직선|선분|반직선|변|호|각|삼각형|사각형|원|중심)\s*([A-Z]{1,5}(?:\s*,\s*[A-Z]{1,5})*)"
+)
+COORDINATE_POINT_LABEL_RE = re.compile(r"(?<![A-Za-z])([A-Z])\s*\(")
+STANDALONE_POINT_LABEL_RE = re.compile(r"(?<![A-Za-z\\])([A-Z])(?![A-Za-z])")
+PLAIN_GEOMETRY_LABEL_RE = re.compile(r"(?:△|∠)\s*([A-Z]{1,5})")
+MEASURED_GEOMETRY_LABEL_RE = re.compile(r"(?<![A-Za-z])([A-Z]{1,5})\s*(?==|=|의\s*(?:길이|넓이))")
+
+
+def _unique_limited(values: list[str], limit: int = 24) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(value or "").strip()))
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        result.append(cleaned)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _anchor_numbers(text: str) -> list[str]:
+    values: list[str] = []
+    for match in ANCHOR_NUMBER_RE.finditer(text):
+        token = match.group(0).strip()
+        if not token:
+            continue
+        token = token.replace(",", "")
+        if token in {"0", "1", "2", "3", "4", "5"} and re.search(rf"[①②③④⑤]|{re.escape(token)}[\).]", text):
+            continue
+        values.append(token)
+    return _unique_limited(values)
+
+
+def _expand_geometry_label(raw: str) -> tuple[list[str], list[str]]:
+    points: list[str] = []
+    labels: list[str] = []
+    for part in re.split(r"\s*,\s*", raw or ""):
+        token = re.sub(r"[^A-Z]", "", part.upper())
+        if not token:
+            continue
+        labels.append(token)
+        points.extend(list(token))
+    return points, labels
+
+
+def _anchor_geometry(text: str) -> tuple[list[str], list[str]]:
+    points: list[str] = []
+    labels: list[str] = []
+    for pattern in (GEOMETRY_LATEX_LABEL_RE, GEOMETRY_TEXT_LABEL_RE, PLAIN_GEOMETRY_LABEL_RE, MEASURED_GEOMETRY_LABEL_RE):
+        for match in pattern.finditer(text):
+            next_points, next_labels = _expand_geometry_label(match.group(1))
+            points.extend(next_points)
+            labels.extend(next_labels)
+    points.extend(match.group(1).upper() for match in COORDINATE_POINT_LABEL_RE.finditer(text))
+    points.extend(match.group(1).upper() for match in STANDALONE_POINT_LABEL_RE.finditer(text))
+    return _unique_limited(points), _unique_limited(labels)
+
+
+def _problem_visual_anchor_hints(problem: dict[str, Any]) -> dict[str, list[str]]:
+    text = str(problem.get("problem_text") or "")
+    point_labels, geometry_labels = _anchor_geometry(text)
+    return {
+        "numbers": _anchor_numbers(text),
+        "point_labels": point_labels,
+        "geometry_labels": geometry_labels,
+    }
+
+
+def _has_visual_anchor_hints(problem: dict[str, Any]) -> bool:
+    hints = _problem_visual_anchor_hints(problem)
+    return any(hints.values())
+
+
 def _extract_problem_number(value: Any) -> tuple[int, str] | None:
     raw = str(value or "").strip()
     if not raw:
@@ -3143,6 +3226,11 @@ Return a JSON array with exactly one object:
     ],
     "has_visual": <true if this problem uses a non-text figure, graph, diagram, table, or image>,
     "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
+    "visible_numbers": ["<numbers/measurements visibly inside the visual only>"],
+    "visible_point_labels": ["A", "B", "..."],
+    "visible_geometry_labels": ["AB", "ABC", "..."],
+    "visual_anchor_consistency": "matched" | "mismatch" | "insufficient" | "not_applicable",
+    "visual_anchor_mismatch_reasons": ["short reason", "..."],
     "latex_ok": <true if the corrected/current math text has balanced, valid LaTeX delimiters and no malformed tokens>,
     "needs_review": <true if anything remains ambiguous>,
     "warnings": ["short machine-readable reason", "..."]
@@ -3158,6 +3246,9 @@ Rules:
 - visual_bbox coordinates are relative to this cropped preview, not the full page.
 - visual_bbox must tightly enclose only the non-text figure/graph/diagram/table/image belonging to this problem. Exclude the problem stem, answer choices, and pure text condition boxes.
 - If there is no real visual asset, set has_visual false and visual_bbox null.
+- Use expected_visual_anchors from the supplied extraction JSON as a consistency check. Compare numbers, measurements, point labels, and geometry labels in the visual against the target problem text.
+- Set visual_anchor_consistency to "matched" when visible diagram anchors agree with the expected anchors. Set it to "mismatch" when the diagram visibly contains different numbers/labels that suggest it belongs to a neighboring problem. Set it to "insufficient" when the target text has anchors but the visual has too few readable anchors to verify. Set it to "not_applicable" when neither the text nor the visual has useful anchors.
+- Do not reject a correct diagram merely because it has extra labels, but do reject when key labels or measurements conflict with the target problem.
 - Return raw JSON only."""
 
 
@@ -3169,6 +3260,7 @@ def _problem_preview_qa_prompt(problem: dict[str, Any]) -> str:
         "choices": problem.get("choices") or [],
         "has_visual": bool(problem.get("has_visual")),
         "page_number": int(problem.get("page_index") or 0) + 1,
+        "expected_visual_anchors": _problem_visual_anchor_hints(problem),
     }
     return PROBLEM_PREVIEW_QA_PROMPT + "\n\nCurrent extraction JSON:\n" + json.dumps(payload, ensure_ascii=False)
 
@@ -3235,6 +3327,21 @@ def _should_preview_qa(problem: dict[str, Any]) -> bool:
     return bool(problem.get("has_visual")) or bool(problem.get("visual_bbox")) or text_has_suspicious_math(problem.get("problem_text"))
 
 
+def _visual_anchor_status(qa: dict[str, Any]) -> str:
+    status = str(qa.get("visual_anchor_consistency") or "").strip().lower()
+    return status if status in {"matched", "mismatch", "insufficient", "not_applicable"} else ""
+
+
+def _visual_anchor_rejects_crop(problem: dict[str, Any], qa: dict[str, Any]) -> bool:
+    status = _visual_anchor_status(qa)
+    if status == "mismatch":
+        return True
+    if status == "insufficient" and _has_visual_anchor_hints(problem):
+        return True
+    warnings = [str(value or "").strip().lower() for value in qa.get("visual_anchor_mismatch_reasons") or []]
+    return any("mismatch" in warning or "neighbor" in warning or "different" in warning for warning in warnings)
+
+
 def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: dict[str, Any], batch_id: UUID) -> None:
     previous_has_visual = bool(problem.get("has_visual"))
     if not bool(qa.get("target_problem_ok", True)):
@@ -3259,9 +3366,14 @@ def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: di
     if not bool(qa.get("latex_ok", True)) or bool(qa.get("needs_review")):
         problem["needs_review"] = True
 
+    anchor_rejects_crop = _visual_anchor_rejects_crop(problem, qa)
+    if anchor_rejects_crop:
+        problem["needs_review"] = True
+        problem["visual_url"] = None
+
     if problem.get("has_visual"):
         visual_bbox = _normalized_visual_bbox(qa.get("visual_bbox"))
-        if visual_bbox and _bbox_area(visual_bbox) <= 0.70:
+        if visual_bbox and _bbox_area(visual_bbox) <= 0.70 and not anchor_rejects_crop:
             with Image.open(io.BytesIO(preview_png)) as preview:
                 crop = _crop_by_normalized_bbox(preview, visual_bbox, padding_ratio=0.006)
                 if crop:
