@@ -3480,6 +3480,248 @@ def _crop_by_normalized_bbox(image: Image.Image, bbox: dict[str, float], *, padd
     return image.crop(box) if box else None
 
 
+VISUAL_CROP_MARGIN_PT = 8
+VISUAL_CROP_CANDIDATE_MARGIN_PT = 28
+
+
+def _points_to_render_pixels(points: float) -> int:
+    return max(1, int(round(float(points) * DEFAULT_RENDER_DPI / 72)))
+
+
+def _clamp_pixel_box(box: tuple[int, int, int, int], width: int, height: int) -> tuple[int, int, int, int] | None:
+    left, top, right, bottom = box
+    left = max(0, min(width - 1, int(left)))
+    top = max(0, min(height - 1, int(top)))
+    right = max(left + 1, min(width, int(right)))
+    bottom = max(top + 1, min(height, int(bottom)))
+    if right - left < 8 or bottom - top < 8:
+        return None
+    return left, top, right, bottom
+
+
+def _intersect_pixel_box(
+    box: tuple[int, int, int, int],
+    bounds: tuple[int, int, int, int] | None,
+    width: int,
+    height: int,
+) -> tuple[int, int, int, int] | None:
+    if bounds:
+        left = max(box[0], bounds[0])
+        top = max(box[1], bounds[1])
+        right = min(box[2], bounds[2])
+        bottom = min(box[3], bounds[3])
+    else:
+        left, top, right, bottom = box
+    return _clamp_pixel_box((left, top, right, bottom), width, height)
+
+
+def _expand_pixel_box(
+    box: tuple[int, int, int, int],
+    width: int,
+    height: int,
+    margin_px: int,
+    bounds: tuple[int, int, int, int] | None = None,
+) -> tuple[int, int, int, int] | None:
+    expanded = (box[0] - margin_px, box[1] - margin_px, box[2] + margin_px, box[3] + margin_px)
+    return _intersect_pixel_box(expanded, bounds, width, height)
+
+
+def _visual_ink_mask(image: Image.Image, diff_threshold: int = 18, dark_threshold: int = 238) -> Image.Image:
+    rgb = image.convert("RGB")
+    corners = [
+        rgb.getpixel((0, 0)),
+        rgb.getpixel((rgb.width - 1, 0)),
+        rgb.getpixel((0, rgb.height - 1)),
+        rgb.getpixel((rgb.width - 1, rgb.height - 1)),
+    ]
+    background = max(corners, key=lambda color: color[0] + color[1] + color[2])
+    diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, background)).convert("L")
+    gray = rgb.convert("L")
+    diff_mask = diff.point(lambda value: 255 if value > diff_threshold else 0)
+    dark_mask = gray.point(lambda value: 255 if value < dark_threshold else 0)
+    return ImageChops.lighter(diff_mask, dark_mask)
+
+
+def _projection_counts(mask: Image.Image) -> tuple[list[int], list[int]]:
+    width, height = mask.size
+    data = mask.tobytes()
+    row_counts = [data[y * width : (y + 1) * width].count(255) for y in range(height)]
+    col_counts = [0] * width
+    for y in range(height):
+        row = data[y * width : (y + 1) * width]
+        for x, value in enumerate(row):
+            if value:
+                col_counts[x] += 1
+    return row_counts, col_counts
+
+
+def _active_projection_runs(counts: list[int], min_count: int, gap_tolerance: int) -> list[tuple[int, int, int]]:
+    runs: list[tuple[int, int, int]] = []
+    run_start: int | None = None
+    run_end = 0
+    run_total = 0
+    gap = 0
+    for index, count in enumerate(counts):
+        active = count >= min_count
+        if active:
+            if run_start is None:
+                run_start = index
+                run_total = 0
+            elif gap > gap_tolerance:
+                runs.append((run_start, run_end + 1, run_total))
+                run_start = index
+                run_total = 0
+            gap = 0
+            run_end = index
+            run_total += count
+        elif run_start is not None:
+            gap += 1
+    if run_start is not None:
+        runs.append((run_start, run_end + 1, run_total))
+    return runs
+
+
+def _distance_between_intervals(a_start: int, a_end: int, b_start: int, b_end: int) -> int:
+    if a_end < b_start:
+        return b_start - a_end
+    if b_end < a_start:
+        return a_start - b_end
+    return 0
+
+
+def _select_ink_interval(
+    counts: list[int],
+    seed_start: int,
+    seed_end: int,
+    *,
+    min_count: int,
+    gap_tolerance: int,
+    merge_distance: int,
+) -> tuple[int, int] | None:
+    runs = _active_projection_runs(counts, min_count, gap_tolerance)
+    if not runs:
+        return None
+    seed_start = max(0, min(len(counts) - 1, seed_start))
+    seed_end = max(seed_start + 1, min(len(counts), seed_end))
+    seed_mid = (seed_start + seed_end) / 2
+    seed_span = seed_end - seed_start
+    if seed_span > max(80, int(len(counts) * 0.35)):
+        focus_radius = max(merge_distance, int(len(counts) * 0.08))
+        seed_start = max(0, int(seed_mid - focus_radius))
+        seed_end = min(len(counts), int(seed_mid + focus_radius))
+    nearby = [
+        run
+        for run in runs
+        if _distance_between_intervals(run[0], run[1], seed_start, seed_end) <= merge_distance
+    ]
+    if nearby:
+        start = min(run[0] for run in nearby)
+        end = max(run[1] for run in nearby)
+    else:
+        def score(run: tuple[int, int, int]) -> tuple[float, int, int]:
+            run_mid = (run[0] + run[1]) / 2
+            return (abs(run_mid - seed_mid), -run[2], -(run[1] - run[0]))
+
+        selected = min(runs, key=score)
+        start, end = selected[0], selected[1]
+
+    changed = True
+    while changed:
+        changed = False
+        for run_start, run_end, _total in runs:
+            if run_end < start and start - run_end <= merge_distance:
+                start = run_start
+                changed = True
+            elif run_start > end and run_start - end <= merge_distance:
+                end = run_end
+                changed = True
+    return start, end
+
+
+def _ink_box_near_seed(
+    image: Image.Image,
+    seed_box: tuple[int, int, int, int],
+    *,
+    padding_px: int,
+) -> tuple[int, int, int, int] | None:
+    if image.width < 8 or image.height < 8:
+        return None
+    mask = _visual_ink_mask(image)
+    raw_box = mask.getbbox()
+    if not raw_box:
+        return None
+    row_counts, col_counts = _projection_counts(mask)
+    row_min = max(2, int(image.width * 0.0015))
+    col_min = max(2, int(image.height * 0.0015))
+    gap_tolerance = max(2, padding_px // 5)
+    merge_distance = max(padding_px * 2, 12)
+    row_interval = _select_ink_interval(
+        row_counts,
+        seed_box[1],
+        seed_box[3],
+        min_count=row_min,
+        gap_tolerance=gap_tolerance,
+        merge_distance=merge_distance,
+    )
+    col_interval = _select_ink_interval(
+        col_counts,
+        seed_box[0],
+        seed_box[2],
+        min_count=col_min,
+        gap_tolerance=gap_tolerance,
+        merge_distance=merge_distance,
+    )
+    if not row_interval or not col_interval:
+        left, top, right, bottom = raw_box
+    else:
+        left, right = col_interval
+        top, bottom = row_interval
+    left = max(0, left - padding_px)
+    top = max(0, top - padding_px)
+    right = min(image.width, right + padding_px)
+    bottom = min(image.height, bottom + padding_px)
+    if right - left < 8 or bottom - top < 8:
+        return None
+    return left, top, right, bottom
+
+
+def _crop_visual_ink_region(
+    image: Image.Image,
+    visual_bbox: dict[str, float],
+    *,
+    problem_bbox: dict[str, float] | None = None,
+) -> Image.Image | None:
+    seed_box = _bbox_to_pixel_box(visual_bbox, image.width, image.height)
+    if not seed_box:
+        return None
+    problem_box = _bbox_to_pixel_box(problem_bbox, image.width, image.height, padding_ratio=0.004) if problem_bbox else None
+    if problem_box:
+        seed_box = _intersect_pixel_box(seed_box, problem_box, image.width, image.height) or seed_box
+
+    seed_w = seed_box[2] - seed_box[0]
+    seed_h = seed_box[3] - seed_box[1]
+    candidate_margin = max(
+        _points_to_render_pixels(VISUAL_CROP_CANDIDATE_MARGIN_PT),
+        int(max(seed_w, seed_h) * 0.35),
+        int(min(image.width, image.height) * 0.015),
+    )
+    candidate_box = _expand_pixel_box(seed_box, image.width, image.height, candidate_margin, problem_box)
+    if not candidate_box:
+        return None
+    candidate = image.crop(candidate_box)
+    seed_relative = (
+        max(0, seed_box[0] - candidate_box[0]),
+        max(0, seed_box[1] - candidate_box[1]),
+        min(candidate.width, seed_box[2] - candidate_box[0]),
+        min(candidate.height, seed_box[3] - candidate_box[1]),
+    )
+    margin_px = _points_to_render_pixels(VISUAL_CROP_MARGIN_PT)
+    ink_box = _ink_box_near_seed(candidate, seed_relative, padding_px=margin_px)
+    if not ink_box:
+        return candidate
+    return candidate.crop(ink_box)
+
+
 def _trim_visual_whitespace(image: Image.Image, padding: int = 16, threshold: int = 18) -> Image.Image:
     if image.width < 20 or image.height < 20:
         return image.copy()
@@ -4017,7 +4259,7 @@ def _attach_visual_from_page_bbox(problem: dict[str, Any], page: RenderedPage, b
         problem["needs_review"] = True
         return False
     with Image.open(io.BytesIO(page.png_bytes)) as source:
-        crop = _crop_by_normalized_bbox(source, visual_bbox, padding_ratio=0.006)
+        crop = _crop_visual_ink_region(source, visual_bbox, problem_bbox=problem.get("problem_bbox"))
         if not crop:
             problem["needs_review"] = True
             return False
@@ -4103,7 +4345,7 @@ def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: di
         visual_bbox = _normalized_visual_bbox(qa.get("visual_bbox"))
         if visual_bbox and _bbox_area(visual_bbox) <= 0.70 and not anchor_rejects_crop:
             with Image.open(io.BytesIO(preview_png)) as preview:
-                crop = _crop_by_normalized_bbox(preview, visual_bbox, padding_ratio=0.006)
+                crop = _crop_visual_ink_region(preview, visual_bbox)
                 if crop:
                     _save_problem_visual_crop(problem, crop, batch_id, "preview")
                 else:
