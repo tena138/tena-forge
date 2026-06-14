@@ -281,6 +281,14 @@ export function createStudent(payload: {
   });
 }
 
+export function addStudentToClass(classId: string, studentMembershipId: string) {
+  return api<ClassCard>(`/api/student-management/classes/${classId}/students`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ student_membership_id: studentMembershipId }),
+  });
+}
+
 export function ensureStudentInviteCode(id: string) {
   return api<{ invite_code: string; invite_code_preview?: string | null }>(`/api/student-management/students/${id}/invite-code`, {
     method: "POST",

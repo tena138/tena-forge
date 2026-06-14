@@ -42,6 +42,7 @@ import {
   SessionProblem,
   StudentCard,
   WrongAnswer,
+  addStudentToClass,
   createClass,
   createPaperSession,
   createReviewSet,
@@ -57,6 +58,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type TabKey = "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
+type ClassStudentAddMode = "existing" | "new";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type TrendChartMode = "line" | "bar";
 type TrendMetricKey = "selected" | "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
@@ -82,6 +84,35 @@ type ProblemPageGroup = {
 };
 
 const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
+
+function mergeStudentCard(existing: StudentCard, next: StudentCard): StudentCard {
+  const classIds = [...existing.class_ids];
+  const classNames = [...existing.class_names];
+  const classSubjects = [...(existing.class_subjects || [])];
+  for (const [index, classId] of next.class_ids.entries()) {
+    if (classIds.includes(classId)) continue;
+    classIds.push(classId);
+    classNames.push(next.class_names[index] || "");
+    classSubjects.push(next.class_subjects?.[index] || null);
+  }
+  return {
+    ...existing,
+    recent_score: existing.recent_score ?? next.recent_score,
+    recent_completion_status: existing.recent_completion_status ?? next.recent_completion_status,
+    unresolved_wrong_count: Math.max(existing.unresolved_wrong_count || 0, next.unresolved_wrong_count || 0),
+    class_ids: classIds,
+    class_names: classNames,
+    class_subjects: classSubjects,
+  };
+}
+
+function studentDirectoryText(student: StudentCard) {
+  return [student.name, student.school, student.grade_level, student.class_names.join(" ")].filter(Boolean).join(" ").toLowerCase();
+}
+
+function studentMetaText(student: StudentCard) {
+  return [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "소속 없음";
+}
 const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel: string; color: string }> = [
   { key: "selected", label: "본인 점수", shortLabel: "본인", color: "#f8fafc" },
   { key: "average", label: "응시자 평균", shortLabel: "평균", color: "#a78bfa" },
@@ -874,6 +905,9 @@ export default function StudentManagementPage() {
   const [showClassCreator, setShowClassCreator] = useState(false);
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [addingStudentClassId, setAddingStudentClassId] = useState("");
+  const [classStudentMode, setClassStudentMode] = useState<ClassStudentAddMode>("existing");
+  const [classStudentSearch, setClassStudentSearch] = useState("");
+  const [selectedExistingStudentId, setSelectedExistingStudentId] = useState("");
   const [classStudentSavingId, setClassStudentSavingId] = useState("");
   const [copyingStudentKeyId, setCopyingStudentKeyId] = useState("");
   const [academyId, setAcademyId] = useState("");
@@ -902,7 +936,10 @@ export default function StudentManagementPage() {
   const allStudents = useMemo(() => {
     const map = new Map<string, StudentCard>();
     for (const classRow of classes) {
-      for (const student of classRow.students || []) map.set(student.id, student);
+      for (const student of classRow.students || []) {
+        const existing = map.get(student.id);
+        map.set(student.id, existing ? mergeStudentCard(existing, student) : student);
+      }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [classes]);
@@ -1114,7 +1151,12 @@ export default function StudentManagementPage() {
   }
 
   function startClassStudentAdd(classRow: ClassCard) {
+    const currentIds = classStudentMembershipIds(classRow);
+    const hasExistingCandidate = allStudents.some((student) => !currentIds.has(student.id));
     setAddingStudentClassId(classRow.id);
+    setClassStudentMode(hasExistingCandidate ? "existing" : "new");
+    setClassStudentSearch("");
+    setSelectedExistingStudentId("");
     setClassStudentForm({
       name: "",
       school: "",
@@ -1122,6 +1164,40 @@ export default function StudentManagementPage() {
       memo: "",
       class_id: classRow.id,
     });
+  }
+
+  function cancelClassStudentAdd() {
+    setAddingStudentClassId("");
+    setClassStudentMode("existing");
+    setClassStudentSearch("");
+    setSelectedExistingStudentId("");
+    setClassStudentForm(emptyStudentForm);
+  }
+
+  function existingStudentsForClass(classRow: ClassCard) {
+    const currentIds = classStudentMembershipIds(classRow);
+    const query = classStudentSearch.trim().toLowerCase();
+    return allStudents.filter((student) => {
+      if (currentIds.has(student.id)) return false;
+      return !query || studentDirectoryText(student).includes(query);
+    });
+  }
+
+  async function submitExistingClassStudent(classRow: ClassCard) {
+    if (!selectedExistingStudentId) return;
+    setClassStudentSavingId(classRow.id);
+    try {
+      const selectedStudent = allStudents.find((student) => student.id === selectedExistingStudentId);
+      const updated = await addStudentToClass(classRow.id, selectedExistingStudentId);
+      setClasses((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+      cancelClassStudentAdd();
+      setMessage(`${selectedStudent?.name || "선택한 학생"}을(를) ${classRow.name}에 연결했습니다.`);
+      await refresh();
+    } catch (error) {
+      setMessage(errorMessage(error, "기존 학생을 클래스에 연결하지 못했습니다. 잠시 후 다시 시도해주세요."));
+    } finally {
+      setClassStudentSavingId("");
+    }
   }
 
   async function submitClassStudent(classRow: ClassCard) {
@@ -1135,8 +1211,7 @@ export default function StudentManagementPage() {
         memo: classStudentForm.memo.trim(),
         class_ids: [classRow.id],
       });
-      setAddingStudentClassId("");
-      setClassStudentForm(emptyStudentForm);
+      cancelClassStudentAdd();
       setMessage(created.invite_code ? `${classRow.name}에 학생을 추가했습니다. 연결 키: ${created.invite_code}` : `${classRow.name}에 학생을 추가했습니다.`);
       await refresh();
     } catch (error) {
@@ -1410,27 +1485,90 @@ export default function StudentManagementPage() {
                     </aside>
                     <div className="col-start-2 flex min-w-0 flex-col gap-3 p-4 lg:col-start-auto">
                       {addingStudentClassId === classRow.id ? (
-                        <form
-                          className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3"
-                          onSubmit={(event) => {
-                            event.preventDefault();
-                            submitClassStudent(classRow);
-                          }}
-                        >
-                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                            <Input placeholder="학생 이름" value={classStudentForm.name} onChange={(event) => setClassStudentForm((current) => ({ ...current, name: event.target.value }))} />
-                            <Input placeholder="학교" value={classStudentForm.school} onChange={(event) => setClassStudentForm((current) => ({ ...current, school: event.target.value }))} />
-                            <Input placeholder="학년" value={classStudentForm.grade_level} onChange={(event) => setClassStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
-                            <Input placeholder="메모" value={classStudentForm.memo} onChange={(event) => setClassStudentForm((current) => ({ ...current, memo: event.target.value }))} />
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Button type="submit" size="sm" disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
-                              {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                              저장
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => { setAddingStudentClassId(""); setClassStudentForm(emptyStudentForm); }}>취소</Button>
-                          </div>
-                        </form>
+                        (() => {
+                          const existingStudents = existingStudentsForClass(classRow);
+                          return (
+                            <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3">
+                              <div className="mb-3 inline-flex rounded-md border border-white/10 bg-black/20 p-1">
+                                {[
+                                  ["existing", "기존 학생"] as const,
+                                  ["new", "새 학생"] as const,
+                                ].map(([mode, label]) => (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => {
+                                      setClassStudentMode(mode);
+                                      setSelectedExistingStudentId("");
+                                    }}
+                                    className={cn(
+                                      "rounded px-3 py-1.5 text-xs font-bold transition",
+                                      classStudentMode === mode ? "bg-white text-slate-950" : "text-slate-400 hover:text-white"
+                                    )}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+
+                              {classStudentMode === "existing" ? (
+                                <div className="space-y-3">
+                                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(220px,320px)]">
+                                    <Input
+                                      placeholder="이름, 학교, 클래스 검색"
+                                      value={classStudentSearch}
+                                      onChange={(event) => {
+                                        setClassStudentSearch(event.target.value);
+                                        setSelectedExistingStudentId("");
+                                      }}
+                                    />
+                                    <Select value={selectedExistingStudentId} onChange={(event) => setSelectedExistingStudentId(event.target.value)}>
+                                      <option value="">기존 학생 선택</option>
+                                      {existingStudents.map((student) => (
+                                        <option key={student.id} value={student.id}>
+                                          {student.name} · {studentMetaText(student)}
+                                        </option>
+                                      ))}
+                                    </Select>
+                                  </div>
+                                  {!existingStudents.length ? (
+                                    <p className="rounded-md border border-dashed border-white/10 px-3 py-2 text-xs text-slate-400">
+                                      연결할 기존 학생이 없습니다. 새 학생으로 등록하세요.
+                                    </p>
+                                  ) : null}
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button type="button" size="sm" onClick={() => submitExistingClassStudent(classRow)} disabled={classStudentSavingId === classRow.id || !selectedExistingStudentId}>
+                                      {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                                      연결
+                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={cancelClassStudentAdd}>취소</Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <form
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    submitClassStudent(classRow);
+                                  }}
+                                >
+                                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                                    <Input placeholder="학생 이름" value={classStudentForm.name} onChange={(event) => setClassStudentForm((current) => ({ ...current, name: event.target.value }))} />
+                                    <Input placeholder="학교" value={classStudentForm.school} onChange={(event) => setClassStudentForm((current) => ({ ...current, school: event.target.value }))} />
+                                    <Input placeholder="학년" value={classStudentForm.grade_level} onChange={(event) => setClassStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                                    <Input placeholder="메모" value={classStudentForm.memo} onChange={(event) => setClassStudentForm((current) => ({ ...current, memo: event.target.value }))} />
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <Button type="submit" size="sm" disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
+                                      {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                      생성
+                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={cancelClassStudentAdd}>취소</Button>
+                                  </div>
+                                </form>
+                              )}
+                            </div>
+                          );
+                        })()
                       ) : null}
                       {classRow.students.length ? (
                         <div className="flex min-h-[136px] flex-1 items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
