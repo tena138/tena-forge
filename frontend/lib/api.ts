@@ -472,6 +472,18 @@ export async function attachBatchSolutionPdf(batchId: string, file: File, onProg
   return response.data;
 }
 
+export async function uploadProblemVisual(problemId: string, file: File, onProgress?: (progress: number) => void) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await authHttp.post<Problem>(`/api/problems/${problemId}/visual`, form, {
+    onUploadProgress: (event) => {
+      if (!event.total) return;
+      onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    },
+  });
+  return response.data;
+}
+
 export async function getActiveDashboardAnnouncement() {
   return api<DashboardAnnouncement | null>("/api/dashboard-announcements/active");
 }

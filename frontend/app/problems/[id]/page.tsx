@@ -1,15 +1,15 @@
 "use client";
 
-import type { PointerEvent } from "react";
+import type { ChangeEvent, DragEvent, PointerEvent } from "react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, RefreshCcw, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ImagePlus, RefreshCcw, Save, Trash2 } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { api, assetUrl, Problem, Tag } from "@/lib/api";
+import { api, assetUrl, Problem, Tag, uploadProblemVisual } from "@/lib/api";
 
 type Facets = { subjects: string[]; units: string[]; problem_types: string[]; sources: string[] };
 type Point = { x: number; y: number };
@@ -18,6 +18,9 @@ type ProblemNavigation = { previous_id: string | null; next_id: string | null; p
 
 const emptyTags: Tag = { subject: "", unit: "", difficulty: "", problem_type: "", source: "" };
 const difficulties = ["하", "중", "상", "최상"];
+const visualUploadTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+const visualUploadExtensions = [".png", ".jpg", ".jpeg", ".webp"];
+const visualUploadMaxBytes = 10 * 1024 * 1024;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -61,6 +64,17 @@ function isEditableTarget(target: EventTarget | null) {
   return target.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select";
 }
 
+function validateVisualFile(file: File) {
+  const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
+  if (!visualUploadTypes.has(file.type) && !visualUploadExtensions.includes(extension)) {
+    return "PNG, JPG, WebP 이미지만 추가할 수 있습니다.";
+  }
+  if (file.size > visualUploadMaxBytes) {
+    return "이미지 파일은 10MB 이하만 추가할 수 있습니다.";
+  }
+  return "";
+}
+
 export default function ProblemDetailPage() {
   return (
     <Suspense fallback={<div className="py-20 text-center text-muted-foreground">문항을 불러오는 중입니다.</div>}>
@@ -74,6 +88,7 @@ function ProblemDetailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const imageRef = useRef<HTMLImageElement>(null);
+  const visualFileInputRef = useRef<HTMLInputElement>(null);
   const textAutoSaveTimerRef = useRef<number | null>(null);
   const tagAutoSaveTimerRef = useRef<number | null>(null);
   const textSaveSeqRef = useRef(0);
@@ -93,6 +108,9 @@ function ProblemDetailContent() {
   const [dragStart, setDragStart] = useState<Point | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [savingCrop, setSavingCrop] = useState(false);
+  const [uploadingVisual, setUploadingVisual] = useState(false);
+  const [visualUploadProgress, setVisualUploadProgress] = useState(0);
+  const [visualDragActive, setVisualDragActive] = useState(false);
   const [deletingVisual, setDeletingVisual] = useState(false);
   const [reextracting, setReextracting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -275,6 +293,50 @@ function ProblemDetailContent() {
     } finally {
       setSavingCrop(false);
     }
+  }
+
+  async function uploadVisualFile(file: File | null | undefined) {
+    if (!problem || !file || uploadingVisual) return;
+    const validationError = validateVisualFile(file);
+    if (validationError) {
+      setActionError(validationError);
+      return;
+    }
+    setUploadingVisual(true);
+    setVisualUploadProgress(0);
+    setVisualDragActive(false);
+    setActionError("");
+    try {
+      const updated = await uploadProblemVisual(problem.id, file, setVisualUploadProgress);
+      setProblem(updated);
+      setSelection(null);
+    } catch (error: any) {
+      setActionError(error?.response?.data?.detail || error?.message || "그림 추가에 실패했습니다.");
+    } finally {
+      setUploadingVisual(false);
+      setVisualUploadProgress(0);
+      if (visualFileInputRef.current) visualFileInputRef.current.value = "";
+    }
+  }
+
+  function handleVisualFileChange(event: ChangeEvent<HTMLInputElement>) {
+    void uploadVisualFile(event.target.files?.[0]);
+  }
+
+  function handleVisualDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!uploadingVisual) setVisualDragActive(true);
+  }
+
+  function handleVisualDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setVisualDragActive(false);
+  }
+
+  function handleVisualDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setVisualDragActive(false);
+    void uploadVisualFile(event.dataTransfer.files?.[0]);
   }
 
   const saveProblemAnswer = useCallback(async (nextAnswer = draftAnswer) => {
@@ -656,20 +718,60 @@ function ProblemDetailContent() {
             </div>
           </div>
 
-          {problem.visual_url ? (
-            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-bold text-white">저장된 사진</h3>
-                <Button size="sm" variant="outline" onClick={deleteVisual} disabled={deletingVisual}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                  삭제
-                </Button>
+          <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+            <input
+              ref={visualFileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+              className="hidden"
+              onChange={handleVisualFileChange}
+            />
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-white">문항 그림</h3>
+                {uploadingVisual ? <p className="mt-1 text-xs text-slate-500">업로드 중 {visualUploadProgress}%</p> : null}
               </div>
-              <div className="rounded-lg border border-white/10 bg-black/35 p-2">
-                <img src={assetUrl(problem.visual_url)} alt="저장된 사진" className="max-h-52 w-full rounded object-contain" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => visualFileInputRef.current?.click()} disabled={uploadingVisual}>
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {problem.visual_url ? "교체" : "추가"}
+                </Button>
+                {problem.visual_url ? (
+                  <Button size="sm" variant="outline" onClick={deleteVisual} disabled={deletingVisual || uploadingVisual}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    삭제
+                  </Button>
+                ) : null}
               </div>
             </div>
-          ) : null}
+            <div
+              className={`rounded-lg border p-2 transition ${
+                visualDragActive
+                  ? "border-violet-300/50 bg-violet-500/10"
+                  : problem.visual_url
+                    ? "border-white/10 bg-black/35"
+                    : "border-dashed border-white/12 bg-black/20"
+              }`}
+              onDragOver={handleVisualDragOver}
+              onDragLeave={handleVisualDragLeave}
+              onDrop={handleVisualDrop}
+            >
+              {problem.visual_url ? (
+                <img src={assetUrl(problem.visual_url)} alt="문항 그림" className="max-h-52 w-full rounded object-contain" />
+              ) : (
+                <button
+                  type="button"
+                  className="flex min-h-40 w-full flex-col items-center justify-center gap-2 rounded-[7px] text-center text-sm text-slate-400 transition hover:bg-white/[0.035] hover:text-slate-200"
+                  onClick={() => visualFileInputRef.current?.click()}
+                  disabled={uploadingVisual}
+                >
+                  <ImagePlus className="h-5 w-5" />
+                  <span className="font-semibold">{uploadingVisual ? `업로드 중 ${visualUploadProgress}%` : "그림 파일 추가"}</span>
+                  <span className="text-xs text-slate-600">PNG, JPG, WebP</span>
+                </button>
+              )}
+            </div>
+          </div>
 
           <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
             <div className="flex items-start justify-between gap-3">

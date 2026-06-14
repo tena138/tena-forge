@@ -9,9 +9,9 @@ from pathlib import Path
 from urllib.request import urlopen
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from openai import OpenAI
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from sqlalchemy import String, and_, cast, delete as sa_delete, distinct, func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -42,6 +42,11 @@ class RandomProblemSelectionResponse(BaseModel):
     items: list[ProblemListItem]
     total: int
     requested: int
+
+
+MAX_PROBLEM_VISUAL_UPLOAD_BYTES = 10 * 1024 * 1024
+PROBLEM_VISUAL_UPLOAD_TYPES = {"image/png", "image/jpeg", "image/webp"}
+PROBLEM_VISUAL_UPLOAD_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
 def _trim_visual_whitespace(image: Image.Image, padding: int = 16, threshold: int = 18) -> Image.Image:
@@ -685,6 +690,50 @@ def crop_visual(problem_id: UUID, payload: VisualCropUpdate, request: Request, d
         cropped.save(buffer, format="PNG")
 
     filename = f"{problem.id}_visual_crop_{int(time.time())}.png"
+    problem.visual_url = save_visual_bytes(buffer.getvalue(), filename)
+    problem.has_visual = True
+    problem.needs_review = True
+    db.commit()
+    db.refresh(problem)
+    return _serialize_problem(problem)
+
+
+@router.post("/{problem_id}/visual", response_model=ProblemRead)
+async def upload_visual(problem_id: UUID, request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    problem = db.scalars(
+        select(Problem)
+        .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
+        .options(joinedload(Problem.tags), joinedload(Problem.batch))
+    ).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
+
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    suffix = Path(file.filename or "").suffix.lower()
+    if content_type not in PROBLEM_VISUAL_UPLOAD_TYPES and suffix not in PROBLEM_VISUAL_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="PNG, JPG, WebP 이미지만 업로드할 수 있습니다.")
+
+    data = await file.read(MAX_PROBLEM_VISUAL_UPLOAD_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail="업로드할 이미지 파일이 비어 있습니다.")
+    if len(data) > MAX_PROBLEM_VISUAL_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="이미지 파일은 10MB 이하만 업로드할 수 있습니다.")
+
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image = ImageOps.exif_transpose(image)
+            if image.width < 4 or image.height < 4:
+                raise HTTPException(status_code=400, detail="이미지 크기가 너무 작습니다.")
+            if image.mode not in {"RGB", "RGBA"}:
+                image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(status_code=400, detail="이미지 파일을 읽을 수 없습니다.")
+
+    filename = f"{problem.id}_visual_upload_{int(time.time())}.png"
     problem.visual_url = save_visual_bytes(buffer.getvalue(), filename)
     problem.has_visual = True
     problem.needs_review = True
