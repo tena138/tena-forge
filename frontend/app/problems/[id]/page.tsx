@@ -55,6 +55,12 @@ function safeReturnHref(value: string | null) {
   return value;
 }
 
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName.toLowerCase();
+  return target.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select";
+}
+
 export default function ProblemDetailPage() {
   return (
     <Suspense fallback={<div className="py-20 text-center text-muted-foreground">문항을 불러오는 중입니다.</div>}>
@@ -83,6 +89,7 @@ function ProblemDetailContent() {
   const [savingText, setSavingText] = useState(false);
   const [savingAnswer, setSavingAnswer] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
+  const [savingReview, setSavingReview] = useState(false);
   const [dragStart, setDragStart] = useState<Point | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [savingCrop, setSavingCrop] = useState(false);
@@ -148,17 +155,6 @@ function ProblemDetailContent() {
       cancelled = true;
     };
   }, [params.id, navigationQuerySuffix]);
-
-  async function openProblem(problemId: string | null) {
-    if (!problemId) return;
-    const textSaved = await saveProblemText();
-    if (!textSaved) return;
-    const answerSaved = await saveProblemAnswer();
-    if (!answerSaved) return;
-    const tagsSaved = await saveTags();
-    if (!tagsSaved) return;
-    router.push(`/problems/${problemId}${detailQuerySuffix}`);
-  }
 
   function imagePoint(event: PointerEvent<HTMLDivElement>): Point {
     const image = imageRef.current;
@@ -226,14 +222,23 @@ function ProblemDetailContent() {
     }
   }, [draftText, problem]);
 
-  async function reextractProblem() {
-    if (!problem || !problem.review_page_image_url) return;
+  const reextractProblem = useCallback(async () => {
+    if (!problem || !problem.review_page_image_url || reextracting) return;
     setReextracting(true);
     setActionError("");
     try {
       const updated = await api<Problem>(`/api/problems/${problem.id}/reextract`, { method: "POST" });
-      setProblem(updated);
+      setProblem({ ...updated, needs_review: true });
       setDraftText(updated.problem_text);
+      setDraftAnswer(updated.answer || "");
+      setTags(normalizedTags(updated.tags));
+      api<Problem>(`/api/problems/${updated.id}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ needs_review: true }),
+      })
+        .then((marked) => setProblem(marked))
+        .catch(() => undefined);
     } catch (error: any) {
       setActionError(
         error?.response?.data?.detail ||
@@ -242,7 +247,7 @@ function ProblemDetailContent() {
     } finally {
       setReextracting(false);
     }
-  }
+  }, [problem, reextracting]);
 
   async function saveCrop() {
     const image = imageRef.current;
@@ -392,21 +397,80 @@ function ProblemDetailContent() {
     };
   }, [problem, saveTags, tags]);
 
-  async function completeReview() {
-    if (!problem) return;
+  const saveCurrentProblem = useCallback(async () => {
+    if (!problem || savingReview) return false;
     const textSaved = await saveProblemText();
-    if (!textSaved) return;
+    if (!textSaved) return false;
     const answerSaved = await saveProblemAnswer();
-    if (!answerSaved) return;
+    if (!answerSaved) return false;
     const tagsSaved = await saveTags();
-    if (!tagsSaved) return;
-    const updated = await api<Problem>(`/api/problems/${problem.id}/review`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ needs_review: false }),
-    });
-    setProblem(updated);
-  }
+    if (!tagsSaved) return false;
+    setSavingReview(true);
+    setActionError("");
+    try {
+      const updated = await api<Problem>(`/api/problems/${problem.id}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ needs_review: false }),
+      });
+      setProblem(updated);
+      setDraftText(updated.problem_text);
+      setDraftAnswer(updated.answer || "");
+      setTags(normalizedTags(updated.tags));
+      return true;
+    } catch {
+      setActionError("저장 상태를 반영하지 못했습니다.");
+      return false;
+    } finally {
+      setSavingReview(false);
+    }
+  }, [problem, saveProblemAnswer, saveProblemText, saveTags, savingReview]);
+
+  const openProblem = useCallback(async (problemId: string | null) => {
+    if (!problemId) return;
+    const saved = await saveCurrentProblem();
+    if (!saved) return;
+    router.push(`/problems/${problemId}${detailQuerySuffix}`);
+  }, [detailQuerySuffix, router, saveCurrentProblem]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
+      const key = event.key.toLowerCase();
+      const saveShortcut = key === "s" && (event.ctrlKey || event.metaKey);
+      if (saveShortcut) {
+        event.preventDefault();
+        void saveCurrentProblem();
+        return;
+      }
+      if (isEditableTarget(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
+
+      if (key === "arrowleft") {
+        if (!navigation?.previous_id) return;
+        event.preventDefault();
+        void openProblem(navigation.previous_id);
+        return;
+      }
+      if (key === "arrowright") {
+        if (!navigation?.next_id) return;
+        event.preventDefault();
+        void openProblem(navigation.next_id);
+        return;
+      }
+      if (key === "s") {
+        event.preventDefault();
+        void saveCurrentProblem();
+        return;
+      }
+      if (key === "r") {
+        event.preventDefault();
+        void reextractProblem();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigation?.next_id, navigation?.previous_id, openProblem, reextractProblem, saveCurrentProblem]);
 
   async function removeProblem() {
     if (!problem) return;
@@ -445,6 +509,11 @@ function ProblemDetailContent() {
       : navigation?.total === 0
         ? "조건 내 문항 없음"
         : "위치 계산 중";
+  const hasUnsavedEdits = draftText !== (problem.problem_text || "") || draftAnswer !== (problem.answer || "") || !sameTags(tags, problem.tags);
+  const hasPendingSave = hasUnsavedEdits || problem.needs_review;
+  const savingAny = savingText || savingAnswer || savingTags || savingReview;
+  const saveStatusLabel = savingAny ? "저장 중" : hasPendingSave ? "저장 필요" : "저장됨";
+  const saveStatusVariant = savingAny || hasPendingSave ? "warning" : "success";
 
   return (
     <div className="min-w-0 space-y-4">
@@ -456,7 +525,7 @@ function ProblemDetailContent() {
         <div className="rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-slate-200">
           {hasFilterContext ? "현재 검색 조건 기준" : "전체 문항 기준"} {navigationLabel}
         </div>
-        <Badge variant={problem.needs_review ? "error" : "success"}>{problem.needs_review ? "검토 필요" : "검토 완료"}</Badge>
+        <Badge variant={saveStatusVariant}>{saveStatusLabel}</Badge>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => openProblem(navigation?.previous_id || null)} disabled={!navigation?.previous_id}>
             <ChevronLeft className="h-4 w-4" />
@@ -466,8 +535,9 @@ function ProblemDetailContent() {
             다음
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button onClick={completeReview} disabled={!problem.needs_review}>
-            검토 완료
+          <Button onClick={() => void saveCurrentProblem()} disabled={savingAny || !hasPendingSave}>
+            <Save className="h-4 w-4" />
+            저장
           </Button>
         </div>
       </div>

@@ -609,7 +609,7 @@ function ProblemsBrowser() {
     if (unit.trim()) chips.push({ key: "unit", label: `단원: ${unit.trim()}`, onRemove: () => setUnit("") });
     subjects.forEach((value) => chips.push({ key: `subject-${value}`, label: `과목: ${subjectDisplayLabel(value)}`, onRemove: () => setSubjects(subjects.filter((item) => item !== value)) }));
     selectedDiffs.forEach((value) => chips.push({ key: `difficulty-${value}`, label: `난이도: ${value}`, onRemove: () => setSelectedDiffs(selectedDiffs.filter((item) => item !== value)) }));
-    if (reviewFilter !== "all") chips.push({ key: "review", label: reviewFilter === "needs" ? "검토 필요" : "검토 완료", onRemove: () => setReviewFilter("all") });
+    if (reviewFilter !== "all") chips.push({ key: "review", label: reviewFilter === "needs" ? "저장 필요" : "저장됨", onRemove: () => setReviewFilter("all") });
     return chips;
   }, [archiveFolders, parsedPageRange, reviewFilter, search, selectedBatch, selectedBatchFolderId, selectedBatchId, selectedDiffs, subjects, unit]);
 
@@ -1113,7 +1113,7 @@ function ProblemsBrowser() {
             </h3>
           </div>
           <span className={cn("shrink-0 rounded border px-2 py-1 text-[11px] font-semibold", passage.needs_review ? "border-amber-300/20 bg-amber-300/10 text-amber-100" : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100")}>
-            {passage.needs_review ? "검토 필요" : "검토 완료"}
+            {passage.needs_review ? "저장 필요" : "저장됨"}
           </span>
         </div>
         <MathText className="mt-3 line-clamp-3 text-sm leading-6 text-slate-300" value={passage.passage_text || "지문 본문이 비어 있습니다."} />
