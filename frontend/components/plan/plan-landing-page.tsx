@@ -348,7 +348,7 @@ function clampProgress(value: number) {
 function sceneProgress(progress: number, index: number) {
   const timing = storyTiming[index];
   const linearProgress = clampProgress((progress - timing.start) / Math.max(0.01, timing.end - timing.start));
-  return pacedSceneProgress(linearProgress);
+  return pacedSceneProgress(0.08 + linearProgress * 0.92);
 }
 
 function pacedSceneProgress(progress: number) {
@@ -391,7 +391,7 @@ export function PlanLandingPage() {
         <div className="relative z-10 mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-[104rem] flex-col items-center justify-start px-4 pb-10 pt-10 text-center sm:px-6 sm:pt-14 lg:min-h-[calc(100vh-4rem)] lg:justify-center lg:py-12 xl:px-8">
           <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
             <div className="flex w-full flex-col items-center">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
+              <p className="landing-hero-eyebrow text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
               <h1 className="landing-hero-title landing-keep-words mt-4 whitespace-nowrap bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
                 혼자서도 빠르고, 강력하게
               </h1>
@@ -407,7 +407,7 @@ export function PlanLandingPage() {
                 </Link>
                 <Link
                   href="/login?redirect=/academy"
-                  className="inline-flex h-12 items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:border-0 sm:bg-transparent sm:px-0"
+                  className="landing-hero-login-link inline-flex h-12 items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:border-0 sm:bg-transparent sm:px-0"
                 >
                   로그인
                 </Link>
@@ -435,14 +435,17 @@ export function PlanLandingPage() {
 
 function LandingNav() {
   return (
-    <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.08] bg-[rgba(10,10,15,0.78)] backdrop-blur-xl">
+    <nav className="landing-nav fixed inset-x-0 top-0 z-40 border-b border-white/[0.08] bg-[rgba(10,10,15,0.78)] backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-[104rem] items-center justify-between px-4 sm:px-6 xl:px-8">
         <Link href="/" className="inline-flex min-w-0 items-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25" aria-label="Tena Forge">
-          <img src="/tenaforgelogo-dark.png" alt="Tena Forge" className="h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
+          <span className="relative inline-flex h-9 w-[8.75rem] items-center sm:w-[9.75rem]">
+            <img src="/tenaforgelogo-dark.png?v=1" alt="" aria-hidden="true" className="landing-logo-dark h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
+            <img src="/tenaforgelogo.png?v=1" alt="" aria-hidden="true" className="landing-logo-light absolute left-0 top-0 h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
+          </span>
         </Link>
         <div className="flex items-center gap-2 text-sm font-black">
-          <a href="#plans" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">플랜</a>
-          <Link href="/login?redirect=/academy" className="hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">로그인</Link>
+          <a href="#plans" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">플랜</a>
+          <Link href="/login?redirect=/academy" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">로그인</Link>
           <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98] sm:px-4">
             <span className="sm:hidden">시작</span>
             <span className="hidden sm:inline">무료로 시작하기</span>
@@ -455,14 +458,17 @@ function LandingNav() {
 
 function LandingFooter() {
   return (
-    <footer className="border-t border-white/10 bg-[#07080d]">
+    <footer className="landing-footer border-t border-white/10 bg-[#07080d]">
       <div className="mx-auto grid w-full max-w-[104rem] gap-5 px-4 py-8 text-sm text-slate-500 sm:px-6 xl:px-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <img src="/tenaforge-mark-dark.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
-            <span className="font-semibold text-slate-300">Tena Forge</span>
+            <span className="relative h-8 w-8 shrink-0">
+              <img src="/tenaforge-mark-dark.png?v=1" alt="" className="landing-logo-dark h-8 w-8 object-contain" />
+              <img src="/tenaforge-mark.png?v=1" alt="" className="landing-logo-light absolute left-0 top-0 h-8 w-8 object-contain" />
+            </span>
+            <span className="landing-footer-brand font-semibold text-slate-300">Tena Forge</span>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <div className="landing-footer-links flex flex-wrap gap-x-4 gap-y-2">
             <Link href="/terms" className="hover:text-slate-300">
               이용약관
             </Link>
@@ -481,8 +487,8 @@ function LandingFooter() {
         <dl className="grid gap-x-5 gap-y-1 text-[11px] leading-5 sm:grid-cols-2 lg:grid-cols-3">
           {HOMEPAGE_BUSINESS_INFO_ROWS.map(([label, value]) => (
             <div key={label} className="flex min-w-0 flex-wrap gap-x-1.5">
-              <dt className="shrink-0 text-slate-600">{label}</dt>
-              <dd className="min-w-0 break-words text-slate-400">{value}</dd>
+              <dt className="landing-footer-label shrink-0 text-slate-600">{label}</dt>
+              <dd className="landing-footer-value min-w-0 break-words text-slate-400">{value}</dd>
             </div>
           ))}
         </dl>
@@ -1630,21 +1636,21 @@ function ProblemCard({ number, selected, style }: { number: number; selected: bo
 function PlanSection() {
   return (
     <section id="plans" className="landing-plan-section relative overflow-hidden px-4 py-20 sm:px-6">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[linear-gradient(180deg,rgba(8,8,15,0),rgba(8,8,15,0.30)_64%,rgba(8,8,15,0))]" />
-      <div className="pointer-events-none absolute left-[-12rem] top-16 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(45,212,191,0.14),transparent_68%)] blur-3xl" />
-      <div className="pointer-events-none absolute right-[-9rem] top-8 h-[38rem] w-[38rem] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.26),transparent_70%)] blur-3xl" />
-      <div className="pointer-events-none absolute inset-x-0 top-28 h-px bg-[linear-gradient(90deg,transparent,rgba(45,212,191,0.24),rgba(124,92,255,0.42),transparent)]" />
+      <div className="landing-plan-top-haze pointer-events-none absolute inset-x-0 top-0 h-48 bg-[linear-gradient(180deg,rgba(8,8,15,0),rgba(8,8,15,0.30)_64%,rgba(8,8,15,0))]" />
+      <div className="landing-plan-orb-left pointer-events-none absolute left-[-12rem] top-16 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(45,212,191,0.14),transparent_68%)] blur-3xl" />
+      <div className="landing-plan-orb-right pointer-events-none absolute right-[-9rem] top-8 h-[38rem] w-[38rem] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.26),transparent_70%)] blur-3xl" />
+      <div className="landing-plan-rule pointer-events-none absolute inset-x-0 top-28 h-px bg-[linear-gradient(90deg,transparent,rgba(45,212,191,0.24),rgba(124,92,255,0.42),transparent)]" />
 
       <div className="relative z-10 mx-auto w-full max-w-[104rem]">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-200/90">Plans</p>
-            <h2 className="landing-keep-words mt-3 text-4xl font-black tracking-normal text-white sm:text-5xl">필요한 만큼만 확장</h2>
-            <p className="landing-keep-words mt-3 text-sm font-semibold leading-6 text-slate-400 sm:text-base">
+            <p className="landing-plan-eyebrow text-xs font-black uppercase tracking-[0.22em] text-violet-200/90">Plans</p>
+            <h2 className="landing-plan-title landing-keep-words mt-3 text-4xl font-black tracking-normal text-white sm:text-5xl">필요한 만큼만 확장</h2>
+            <p className="landing-plan-copy landing-keep-words mt-3 text-sm font-semibold leading-6 text-slate-400 sm:text-base">
               무료로 시작하고, 수업 규모와 처리량에 맞춰 Basic 또는 Pro로 이어갑니다.
             </p>
           </div>
-          <Link href="/pricing" className="landing-motion-safe inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 bg-white/[0.035] px-4 text-sm font-black text-slate-100 shadow-[0_18px_42px_rgba(0,0,0,0.20)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25">
+          <Link href="/pricing" className="landing-plan-pricing-link landing-motion-safe inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 bg-white/[0.035] px-4 text-sm font-black text-slate-100 shadow-[0_18px_42px_rgba(0,0,0,0.20)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25">
             가격 보기 <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -1654,11 +1660,11 @@ function PlanSection() {
               <div className="relative z-10 flex w-full flex-1 flex-col">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-2xl font-black text-white">{plan.name}</h3>
-                    <p className="mt-2 text-xl font-black text-violet-50">{plan.price}</p>
+                    <h3 className="landing-plan-card-name text-2xl font-black text-white">{plan.name}</h3>
+                    <p className="landing-plan-card-price mt-2 text-xl font-black text-violet-50">{plan.price}</p>
                   </div>
                 </div>
-                <ul className="mt-6 space-y-3 text-sm font-semibold text-slate-200/90">
+                <ul className="landing-plan-card-points mt-6 space-y-3 text-sm font-semibold text-slate-200/90">
                   {plan.points.map((point) => (
                     <li key={point} className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-violet-100" />

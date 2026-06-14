@@ -55,6 +55,15 @@
     --graphite-soft: 220 20% 94%;
     --surface-raised: 0 0% 100%;
     --surface-subtle: 220 38% 96%;
+    --landing-bg-base: #edf3fb;
+    --landing-bg-deep: #e6eef8;
+    --landing-surface: #ffffff;
+    --landing-surface-soft: rgba(255, 255, 255, 0.78);
+    --landing-accent: #6f4df6;
+    --landing-accent-hover: #5f3fe2;
+    --landing-text-primary: #111827;
+    --landing-text-secondary: #526174;
+    --landing-border: rgba(79, 70, 229, 0.14);
   }
 
   .dark {
@@ -264,6 +273,77 @@
     background-size: 180px 180px;
   }
 
+  html[data-theme="light"] .landing-webgl-fallback {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(124, 92, 255, 0.20), transparent 24rem),
+      radial-gradient(ellipse at 16% 24%, rgba(45, 212, 191, 0.16), transparent 34rem),
+      radial-gradient(ellipse at 88% 20%, rgba(124, 92, 255, 0.13), transparent 32rem),
+      linear-gradient(180deg, #f7f9fe 0%, #edf3fb 46%, #e7eef8 100%);
+  }
+
+  html[data-theme="light"] .landing-film-grain {
+    opacity: 0.024;
+    mix-blend-mode: multiply;
+  }
+
+  html[data-theme="light"] .landing-bg-vignette {
+    background:
+      radial-gradient(ellipse at center, rgba(255, 255, 255, 0.64) 0%, rgba(237, 243, 251, 0.28) 58%, rgba(226, 234, 246, 0.66) 100%);
+  }
+
+  html[data-theme="light"] .landing-bg-bottom-fade {
+    background: linear-gradient(180deg, transparent, rgba(228, 236, 248, 0.72) 100%);
+  }
+
+  html[data-theme="light"] .landing-nav {
+    border-color: rgba(99, 102, 241, 0.16);
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 14px 42px rgba(67, 56, 202, 0.10);
+  }
+
+  .landing-logo-light {
+    display: none;
+  }
+
+  html[data-theme="light"] .landing-logo-dark {
+    display: none;
+  }
+
+  html[data-theme="light"] .landing-logo-light {
+    display: block;
+  }
+
+  html[data-theme="light"] .landing-nav-link {
+    color: #334155;
+  }
+
+  html[data-theme="light"] .landing-nav-link:hover {
+    color: #111827;
+    background: rgba(99, 102, 241, 0.08);
+  }
+
+  html[data-theme="light"] .landing-hero-eyebrow {
+    color: #6d28d9;
+    text-shadow: none;
+  }
+
+  html[data-theme="light"] .landing-hero-title {
+    background-image: linear-gradient(180deg, #141827 0%, #403083 54%, #7557f5 100%);
+    filter: drop-shadow(0 12px 34px rgba(109, 40, 217, 0.14));
+  }
+
+  html[data-theme="light"] .landing-hero-login-link {
+    border-color: rgba(99, 102, 241, 0.16);
+    background: rgba(255, 255, 255, 0.72);
+    color: #334155;
+    box-shadow: 0 12px 28px rgba(79, 70, 229, 0.08);
+  }
+
+  html[data-theme="light"] .landing-hero-login-link:hover {
+    background: rgba(255, 255, 255, 0.95);
+    color: #111827;
+  }
+
   .landing-plan-section {
     background:
       radial-gradient(ellipse at 15% -8%, rgba(45, 212, 191, 0.22), transparent 34rem),
@@ -418,6 +498,152 @@
       radial-gradient(ellipse at 78% 18%, rgba(196, 181, 253, 0.16), transparent 26rem),
       radial-gradient(ellipse at 24% 72%, rgba(124, 58, 237, 0.20), transparent 24rem);
     opacity: 0.9;
+  }
+
+  html[data-theme="light"] .landing-plan-section {
+    background:
+      radial-gradient(ellipse at 16% -10%, rgba(45, 212, 191, 0.18), transparent 32rem),
+      radial-gradient(ellipse at 82% 4%, rgba(124, 92, 255, 0.18), transparent 38rem),
+      linear-gradient(180deg, rgba(237, 243, 251, 0.42) 0%, #eef4fb 18%, #e9f0f9 100%);
+  }
+
+  html[data-theme="light"] .landing-plan-section::before {
+    mix-blend-mode: multiply;
+    opacity: 0.28;
+  }
+
+  html[data-theme="light"] .landing-plan-section::after {
+    background:
+      radial-gradient(circle at 18% 24%, rgba(99, 102, 241, 0.08), transparent 0.26rem),
+      radial-gradient(circle at 78% 18%, rgba(14, 165, 233, 0.07), transparent 0.22rem),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.30), rgba(226, 234, 246, 0.52));
+    opacity: 0.7;
+  }
+
+  html[data-theme="light"] .landing-plan-top-haze {
+    background: linear-gradient(180deg, rgba(237, 243, 251, 0), rgba(255, 255, 255, 0.42) 64%, rgba(237, 243, 251, 0));
+  }
+
+  html[data-theme="light"] .landing-plan-orb-left {
+    background: radial-gradient(circle, rgba(45, 212, 191, 0.18), transparent 68%);
+  }
+
+  html[data-theme="light"] .landing-plan-orb-right {
+    background: radial-gradient(circle, rgba(124, 92, 255, 0.18), transparent 70%);
+  }
+
+  html[data-theme="light"] .landing-plan-rule,
+  html[data-theme="light"] .landing-plan-rail::before {
+    background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.22), rgba(124, 92, 255, 0.30), transparent);
+  }
+
+  html[data-theme="light"] .landing-plan-eyebrow {
+    color: #6d28d9;
+  }
+
+  html[data-theme="light"] .landing-plan-title {
+    color: #111827;
+  }
+
+  html[data-theme="light"] .landing-plan-copy {
+    color: #526174;
+  }
+
+  html[data-theme="light"] .landing-plan-pricing-link {
+    border-color: rgba(99, 102, 241, 0.16);
+    background: rgba(255, 255, 255, 0.74);
+    color: #1f2937;
+    box-shadow: 0 16px 34px rgba(79, 70, 229, 0.12);
+  }
+
+  html[data-theme="light"] .landing-plan-pricing-link:hover {
+    background: rgba(255, 255, 255, 0.96);
+    color: #111827;
+  }
+
+  html[data-theme="light"] .landing-plan-card {
+    border-color: rgba(99, 102, 241, 0.16);
+    background: rgba(255, 255, 255, 0.74);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.7) inset,
+      0 28px 74px rgba(71, 85, 105, 0.16);
+  }
+
+  html[data-theme="light"] .landing-plan-card:hover {
+    border-color: rgba(99, 102, 241, 0.26);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.82) inset,
+      0 34px 92px rgba(71, 85, 105, 0.20),
+      0 0 62px rgba(124, 92, 255, 0.10);
+  }
+
+  html[data-theme="light"] .landing-plan-card::after {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.58), transparent 32%, rgba(226, 232, 240, 0.30) 100%),
+      radial-gradient(ellipse at 50% -12%, rgba(255, 255, 255, 0.86), transparent 21rem),
+      repeating-linear-gradient(90deg, transparent 0 5.5rem, rgba(99, 102, 241, 0.040) 5.5rem calc(5.5rem + 1px));
+  }
+
+  html[data-theme="light"] .landing-plan-card-free {
+    background:
+      radial-gradient(ellipse at 22% 0%, rgba(124, 92, 255, 0.10), transparent 34rem),
+      radial-gradient(ellipse at 85% 100%, rgba(14, 165, 233, 0.08), transparent 24rem),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(244, 247, 252, 0.88));
+  }
+
+  html[data-theme="light"] .landing-plan-card-basic {
+    border-color: rgba(14, 165, 233, 0.22);
+    background:
+      radial-gradient(ellipse at 14% 12%, rgba(45, 212, 191, 0.12), transparent 22rem),
+      radial-gradient(ellipse at 90% 18%, rgba(124, 92, 255, 0.12), transparent 26rem),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(239, 248, 252, 0.88));
+  }
+
+  html[data-theme="light"] .landing-plan-card-pro {
+    border-color: rgba(124, 92, 255, 0.22);
+    background:
+      radial-gradient(ellipse at 18% 8%, rgba(124, 92, 255, 0.14), transparent 24rem),
+      radial-gradient(ellipse at 86% 26%, rgba(168, 85, 247, 0.09), transparent 28rem),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(246, 244, 255, 0.88));
+  }
+
+  html[data-theme="light"] .landing-plan-card-name {
+    color: #111827;
+  }
+
+  html[data-theme="light"] .landing-plan-card-price {
+    color: #6d28d9;
+  }
+
+  html[data-theme="light"] .landing-plan-card-points {
+    color: #334155;
+  }
+
+  html[data-theme="light"] .landing-plan-card-points svg {
+    color: #7c3aed;
+  }
+
+  html[data-theme="light"] .landing-footer {
+    border-color: rgba(99, 102, 241, 0.14);
+    background: rgba(247, 249, 254, 0.94);
+    box-shadow: 0 -18px 54px rgba(71, 85, 105, 0.08);
+  }
+
+  html[data-theme="light"] .landing-footer-brand,
+  html[data-theme="light"] .landing-footer-links a:hover {
+    color: #1f2937;
+  }
+
+  html[data-theme="light"] .landing-footer-links {
+    color: #475569;
+  }
+
+  html[data-theme="light"] .landing-footer-label {
+    color: #64748b;
+  }
+
+  html[data-theme="light"] .landing-footer-value {
+    color: #475569;
   }
 
   .landing-story-copy,

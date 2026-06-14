@@ -278,8 +278,8 @@ export function AuroraWebGLBackground() {
       <div className="landing-webgl-fallback absolute inset-0" />
       <canvas ref={canvasRef} className={fallback ? "absolute inset-0 h-full w-full opacity-0" : "absolute inset-0 h-full w-full opacity-100"} />
       <div className="landing-film-grain absolute inset-0" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,7,18,0.18)_0%,rgba(8,8,18,0.30)_56%,rgba(5,5,10,0.96)_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-[42vh] bg-[linear-gradient(180deg,transparent,rgba(5,5,10,0.34)_100%)]" />
+      <div className="landing-bg-vignette absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,7,18,0.18)_0%,rgba(8,8,18,0.30)_56%,rgba(5,5,10,0.96)_100%)]" />
+      <div className="landing-bg-bottom-fade absolute inset-x-0 bottom-0 h-[42vh] bg-[linear-gradient(180deg,transparent,rgba(5,5,10,0.34)_100%)]" />
     </div>
   );
 }
