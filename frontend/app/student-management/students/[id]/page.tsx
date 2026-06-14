@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Download, Folder, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Trash2, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, ArrowUpRight, CalendarDays, Check, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Download, Folder, FolderPlus, GripVertical, Loader2, MessageSquareText, Pencil, Plus, RotateCcw, Save, Send, Settings, Sparkles, Trash2, UserRound, X } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
 import { CounselingExportModal } from "@/components/counseling-export-modal";
@@ -12,8 +12,10 @@ import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
+  CounselingCleanPreview,
   CounselingLog,
   CounselingFormat,
   CounselingFormatField,
@@ -22,6 +24,7 @@ import {
   SessionProblem,
   StudentCard,
   WrongAnswer,
+  cleanCounselingDraft,
   createCounselingLog,
   deleteCounselingLog,
   deletePaperSessionResult,
@@ -128,6 +131,15 @@ type CounselingDraft = {
   fields: CounselingFormatField[];
   values: Record<string, string>;
   savedAt: string;
+};
+
+type CounselingCleanPreviewState = {
+  sections: Array<{
+    field_id: string;
+    label: string;
+    original: string;
+    cleaned: string;
+  }>;
 };
 
 const DEFAULT_COUNSELING_FIELDS: CounselingFormatField[] = [
@@ -255,6 +267,22 @@ function logSections(log: CounselingLog): Array<{ field_id: string; label: strin
     { field_id: "weekly_report", label: "주간 리포트", value: log.weekly_report || "", include_in_report: false },
     { field_id: "next_plan", label: "다음 지도 계획", value: log.next_plan || "", include_in_report: true },
   ].filter((section) => section.value);
+}
+
+function csvCell(value: string | null | undefined) {
+  const text = String(value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function uniqueSectionLabels(logs: CounselingLog[]) {
+  const labels: string[] = [];
+  for (const log of logs) {
+    for (const section of logSections(log)) {
+      const label = section.label.trim();
+      if (label && !labels.includes(label)) labels.push(label);
+    }
+  }
+  return labels;
 }
 
 function tone(status?: string) {
@@ -603,6 +631,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   const [wrongArchiveExportOpen, setWrongArchiveExportOpen] = useState(false);
   const [counselingExportOpen, setCounselingExportOpen] = useState(false);
   const [counselingExportLogIds, setCounselingExportLogIds] = useState<string[]>([]);
+  const [counselingCleanPreviewOpen, setCounselingCleanPreviewOpen] = useState(false);
+  const [counselingCleanPreview, setCounselingCleanPreview] = useState<CounselingCleanPreviewState | null>(null);
+  const [counselingCleaning, setCounselingCleaning] = useState(false);
   const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const calendarInitializedRef = useRef(false);
   const [message, setMessage] = useState("");
@@ -726,6 +757,10 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   );
   const selectableWrongAnswerCount = useMemo(() => visibleWrongAnswers.filter((wrong) => wrong.problem_id).length, [visibleWrongAnswers]);
   const activeReportField = useMemo(() => reportField(counselingFields), [counselingFields]);
+  const hasCleanableCounselingContent = useMemo(
+    () => counselingFields.some((field) => field.include_in_report !== false && (counselingFieldValues[field.id] || "").trim()),
+    [counselingFieldValues, counselingFields]
+  );
   const selectedClassName = useMemo(() => {
     if (!data || !counselingClassId) return "";
     const index = data.class_ids.indexOf(counselingClassId);
@@ -1413,6 +1448,47 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
     };
   }
 
+  async function previewCleanCounselingLog() {
+    if (!data || counselingCleaning) return;
+    const payload = buildCounselingLogPayload();
+    const cleanableSections = (payload.sections || []).filter((section) => section.include_in_report !== false);
+    if (!cleanableSections.some((section) => (section.value || "").trim())) {
+      setMessage("AI로 정리할 상담 내용이 없습니다.");
+      return;
+    }
+    setCounselingCleaning(true);
+    try {
+      const preview: CounselingCleanPreview = await cleanCounselingDraft(data.id, payload);
+      const originals = new Map(cleanableSections.map((section) => [section.field_id, section.value || ""]));
+      setCounselingCleanPreview({
+        sections: preview.sections.map((section) => ({
+          field_id: section.field_id,
+          label: section.label,
+          original: originals.get(section.field_id) || "",
+          cleaned: section.value || "",
+        })),
+      });
+      setCounselingCleanPreviewOpen(true);
+    } catch (error: any) {
+      setMessage(error?.response?.data?.detail || error?.message || "AI 상담일지 정리에 실패했습니다.");
+    } finally {
+      setCounselingCleaning(false);
+    }
+  }
+
+  function applyCounselingCleanPreview() {
+    if (!counselingCleanPreview) return;
+    setCounselingFieldValues((current) => {
+      const next = { ...current };
+      for (const section of counselingCleanPreview.sections) {
+        next[section.field_id] = section.cleaned;
+      }
+      return next;
+    });
+    setCounselingCleanPreviewOpen(false);
+    setMessage("AI 정리본을 입력칸에 반영했습니다. 저장을 눌러 확정해 주세요.");
+  }
+
   function resetCounselingEntryForm(options: { clearDraft?: boolean } = {}) {
     if (options.clearDraft !== false) clearCounselingDraft(editingCounselingLogId);
     skipNextCounselingDraftSaveRef.current = true;
@@ -1509,23 +1585,24 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
 
   function exportCounselingLogs() {
     if (!data) return;
-    const content = [
-      `${data.name} 학습 상담 기록`,
-      `소속: ${data.class_names.join(", ") || "-"}`,
-      "",
-      ...(data.counseling_logs || []).flatMap((log) => [
-        `## ${shortDate(log.counseling_date)} ${log.title}`,
-        log.class_name ? `클래스: ${log.class_name}` : "",
-        "",
-        ...logSections(log).flatMap((section) => [`[${section.label}]`, section.value || "-", ""]),
-        "",
-      ]),
-    ].join("\n");
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const logs = data.counseling_logs || [];
+    const sectionLabels = uniqueSectionLabels(logs);
+    const headers = ["상담일", "클래스", "제목", ...sectionLabels];
+    const rows = logs.map((log) => {
+      const sections = logSections(log);
+      return [
+        shortDate(log.counseling_date),
+        log.class_name || "",
+        log.title || "",
+        ...sectionLabels.map((label) => sections.find((section) => section.label === label)?.value || ""),
+      ];
+    });
+    const content = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${data.name}_학습상담기록.txt`;
+    anchor.download = `${data.name}_학습상담기록.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -2309,6 +2386,16 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                     />
                   </div>
                 ))}
+                <Button
+                  type="button"
+                  className="w-full"
+                  variant="outline"
+                  onClick={previewCleanCounselingLog}
+                  disabled={counselingCleaning || !hasCleanableCounselingContent}
+                >
+                  {counselingCleaning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  AI 정리 미리보기
+                </Button>
                 <Button className="w-full" onClick={saveCounselingLog} disabled={counselingSaving || !counselingForm.title.trim()} aria-label={editingCounselingLogId ? "상담일지 수정 저장" : "상담일지 저장"}>
                   {counselingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 </Button>
@@ -2320,7 +2407,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                   <CardTitle className="text-white">상담 기록</CardTitle>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={exportCounselingLogs} disabled={!data.counseling_logs.length}>
-                      TXT
+                      CSV
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => { setCounselingExportLogIds([]); setCounselingExportOpen(true); }} disabled={!data.counseling_logs.length}>
                       <Download className="h-4 w-4" />
@@ -2401,6 +2488,47 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
         logs={data.counseling_logs}
         initialLogIds={counselingExportLogIds}
       />
+      <Dialog
+        open={counselingCleanPreviewOpen}
+        onOpenChange={(open) => {
+          setCounselingCleanPreviewOpen(open);
+          if (!open) setCounselingCleanPreview(null);
+        }}
+      >
+        <DialogContent className="max-w-5xl border-white/10 bg-[#14111f] text-slate-100">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-xl font-bold text-white">AI 정리 미리보기</h2>
+            </div>
+            <div className="max-h-[58vh] space-y-3 overflow-y-auto pr-1">
+              {counselingCleanPreview?.sections.map((section) => (
+                <div key={section.field_id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <p className="mb-3 text-sm font-bold text-violet-100">{section.label}</p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-md border border-white/10 bg-black/20 p-3">
+                      <p className="mb-2 text-xs font-bold text-slate-500">원문</p>
+                      <p className="whitespace-pre-line text-sm leading-6 text-slate-300">{section.original || "-"}</p>
+                    </div>
+                    <div className="rounded-md border border-violet-300/20 bg-violet-500/10 p-3">
+                      <p className="mb-2 text-xs font-bold text-violet-200">정리본</p>
+                      <p className="whitespace-pre-line text-sm leading-6 text-slate-100">{section.cleaned || "-"}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCounselingCleanPreviewOpen(false)}>
+                취소
+              </Button>
+              <Button type="button" onClick={applyCounselingCleanPreview} disabled={!counselingCleanPreview?.sections.length}>
+                <Check className="h-4 w-4" />
+                적용
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

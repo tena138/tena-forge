@@ -1,3 +1,4 @@
+import json
 import math
 import re
 import uuid
@@ -8,12 +9,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
+from openai import OpenAI
 from pydantic import BaseModel, Field
 from sqlalchemy import String, cast, delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
-from database import get_db
+from database import get_db, get_settings
 from models import (
     AcademyClass,
     AcademyMaterialAssignment,
@@ -1652,6 +1654,21 @@ class CounselingExportPayload(BaseModel):
     title: str | None = Field(default=None, max_length=255)
 
 
+class CounselingCleanPreviewPayload(CounselingLogPayload):
+    pass
+
+
+class CounselingCleanPreviewSection(BaseModel):
+    field_id: str
+    label: str
+    value: str
+    include_in_report: bool = True
+
+
+class CounselingCleanPreviewResponse(BaseModel):
+    sections: list[CounselingCleanPreviewSection]
+
+
 def _resolve_counseling_class(db: Session, academy_id: str, membership: StudentAcademyMembership, class_id: UUID | None) -> AcademyClass | None:
     if not class_id:
         return None
@@ -1694,6 +1711,113 @@ def _counseling_log_row(
         "updated_by": current_owner_id(request),
         "updated_at": now.isoformat(),
     }
+
+
+def _counseling_payload_sections(payload: CounselingLogPayload) -> list[dict]:
+    sections = _normalize_counseling_sections([section.model_dump() for section in payload.sections])
+    if sections:
+        return sections
+    fallback = [
+        {"field_id": "notes", "label": "상담 내용", "value": payload.notes or "", "include_in_report": True},
+        {"field_id": "weekly_report", "label": "주간 리포트", "value": payload.weekly_report or "", "include_in_report": False},
+        {"field_id": "next_plan", "label": "다음 지도 계획", "value": payload.next_plan or "", "include_in_report": True},
+    ]
+    return _normalize_counseling_sections(fallback)
+
+
+def _counseling_clean_prompt(membership: StudentAcademyMembership, class_row: AcademyClass | None, payload: CounselingLogPayload, sections: list[dict]) -> str:
+    source = {
+        "student_name": _student_name(membership),
+        "class_name": class_row.name if class_row else "",
+        "title": payload.title.strip() or "학습 상담",
+        "counseling_date": payload.counseling_date.isoformat() if payload.counseling_date else "",
+        "sections": [
+            {
+                "field_id": section["field_id"],
+                "label": section["label"],
+                "value": section.get("value") or "",
+            }
+            for section in sections
+        ],
+    }
+    return f"""
+You clean Korean teacher counseling notes before they are saved.
+
+Return only a JSON object in this exact shape:
+{{"sections":[{{"field_id":"same id","label":"same label","value":"cleaned Korean text"}}]}}
+
+Rules:
+- Preserve the section count, field_id, label, and order exactly.
+- Rewrite values in polite Korean counseling-log style suitable for teachers, students, and parents.
+- Improve grammar, spacing, clarity, and professional tone.
+- You may lightly enrich sparse notes only when the added wording is directly supported by the original text.
+- Do not invent scores, events, family details, medical information, emotions, diagnoses, quotes, attendance facts, or promises that are not present.
+- Keep empty values empty.
+- Soften negative wording into constructive professional language without changing the facts.
+- Do not add Markdown, bullets, headings, or explanations outside the JSON.
+
+Input:
+{json.dumps(source, ensure_ascii=False)}
+""".strip()
+
+
+def _counseling_chat_completion_json(client: OpenAI, model_name: str, prompt: str, max_output_tokens: int = 2048) -> dict:
+    messages = [{"role": "user", "content": prompt}]
+    attempts = [
+        {"response_format": {"type": "json_object"}, "max_tokens": max_output_tokens},
+        {"response_format": {"type": "json_object"}, "extra_body": {"max_completion_tokens": max_output_tokens}},
+        {"response_format": {"type": "json_object"}},
+        {"max_tokens": max_output_tokens},
+        {"extra_body": {"max_completion_tokens": max_output_tokens}},
+        {},
+    ]
+    last_error: Exception | None = None
+    for extra in attempts:
+        try:
+            response = client.chat.completions.create(model=model_name, messages=messages, **extra)
+            content = response.choices[0].message.content or "{}"
+            text = content.strip()
+            if text.startswith("```"):
+                text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.S).strip()
+            if not text.startswith("{"):
+                start = text.find("{")
+                end = text.rfind("}")
+                if start >= 0 and end > start:
+                    text = text[start : end + 1]
+            parsed = json.loads(text)
+            if not isinstance(parsed, dict):
+                raise ValueError("AI response was not a JSON object.")
+            return parsed
+        except Exception as exc:
+            last_error = exc
+            message = str(exc)
+            if not any(token in message for token in ("max_tokens", "max_completion_tokens", "response_format")):
+                raise
+    raise last_error or ValueError("AI response parsing failed.")
+
+
+def _align_cleaned_counseling_sections(original_sections: list[dict], ai_sections: object) -> list[dict]:
+    rows = ai_sections if isinstance(ai_sections, list) else []
+    rows_by_id = {
+        str(row.get("field_id") or ""): row
+        for row in rows
+        if isinstance(row, dict) and str(row.get("field_id") or "")
+    }
+    cleaned: list[dict] = []
+    for index, original in enumerate(original_sections):
+        candidate = rows_by_id.get(str(original["field_id"]))
+        if not candidate and index < len(rows) and isinstance(rows[index], dict):
+            candidate = rows[index]
+        cleaned_value = candidate.get("value") if isinstance(candidate, dict) else original.get("value")
+        cleaned.append(
+            {
+                "field_id": original["field_id"],
+                "label": original["label"],
+                "value": str(cleaned_value or ""),
+                "include_in_report": True,
+            }
+        )
+    return cleaned
 
 
 class ReviewSetPayload(BaseModel):
@@ -2285,6 +2409,30 @@ def student_exam_stats_series(student_id: UUID, request: Request, start_date: st
             }
         )
     return points[:200]
+
+
+@router.post("/students/{student_id}/counseling-logs/clean-preview", response_model=CounselingCleanPreviewResponse)
+def clean_counseling_log_preview(student_id: UUID, payload: CounselingCleanPreviewPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
+    class_row = _resolve_counseling_class(db, academy_id, membership, payload.class_id)
+    sections = [section for section in _counseling_payload_sections(payload) if section.get("include_in_report") is not False]
+    if not any(str(section.get("value") or "").strip() for section in sections):
+        raise HTTPException(status_code=400, detail="AI로 정리할 상담 내용이 없습니다.")
+
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=503, detail="AI 상담일지 정리를 위한 OPENAI_API_KEY가 설정되어 있지 않습니다.")
+
+    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
+    prompt = _counseling_clean_prompt(membership, class_row, payload, sections)
+    try:
+        ai_payload = _counseling_chat_completion_json(client, settings.ai_model, prompt)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 상담일지 정리에 실패했습니다: {exc}") from exc
+
+    return {"sections": _align_cleaned_counseling_sections(sections, ai_payload.get("sections"))}
 
 
 @router.post("/students/{student_id}/counseling-logs")

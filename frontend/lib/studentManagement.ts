@@ -165,6 +165,25 @@ export type CounselingLogSection = {
   include_in_report?: boolean;
 };
 
+export type CounselingLogPayload = {
+  counseling_date?: string | null;
+  title: string;
+  class_id?: string | null;
+  notes?: string | null;
+  weekly_report?: string | null;
+  next_plan?: string | null;
+  sections?: CounselingLogSection[];
+};
+
+export type CounselingCleanPreview = {
+  sections: Array<{
+    field_id: string;
+    label: string;
+    value: string;
+    include_in_report?: boolean;
+  }>;
+};
+
 export type StudentExamStatsPoint = {
   id: string;
   title: string;
@@ -393,20 +412,7 @@ export function deleteScheduleEvent(id: string) {
 
 export function createCounselingLog(
   studentId: string,
-  payload: {
-    counseling_date?: string | null;
-    title: string;
-    class_id?: string | null;
-    notes?: string | null;
-    weekly_report?: string | null;
-    next_plan?: string | null;
-    sections?: Array<{
-      field_id: string;
-      label: string;
-      value?: string | null;
-      include_in_report?: boolean;
-    }>;
-  }
+  payload: CounselingLogPayload
 ) {
   return api<CounselingLog>(`/api/student-management/students/${studentId}/counseling-logs`, {
     method: "POST",
@@ -417,23 +423,17 @@ export function createCounselingLog(
 export function updateCounselingLog(
   studentId: string,
   logId: string,
-  payload: {
-    counseling_date?: string | null;
-    title: string;
-    class_id?: string | null;
-    notes?: string | null;
-    weekly_report?: string | null;
-    next_plan?: string | null;
-    sections?: Array<{
-      field_id: string;
-      label: string;
-      value?: string | null;
-      include_in_report?: boolean;
-    }>;
-  }
+  payload: CounselingLogPayload
 ) {
   return api<CounselingLog>(`/api/student-management/students/${studentId}/counseling-logs/${logId}`, {
     method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cleanCounselingDraft(studentId: string, payload: CounselingLogPayload) {
+  return api<CounselingCleanPreview>(`/api/student-management/students/${studentId}/counseling-logs/clean-preview`, {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }
