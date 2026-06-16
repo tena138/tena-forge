@@ -8,7 +8,7 @@ from sqlalchemy import select
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import SessionLocal
-from models import Academy, AcademyPlan, Batch, HubTemplate, Problem, ProblemSet, UserRole
+from models import Academy, AcademyPlan, ArchiveFolder, Batch, HubTemplate, Problem, ProblemSet, UserRole
 from services.auth_security import hash_password
 
 
@@ -21,7 +21,7 @@ LEGACY_OWNER_ID = "local_user"
 def _claim_legacy_local_data(db, admin: Academy) -> None:
     admin_id = str(admin.id)
     total = 0
-    for model in (Batch, Problem, ProblemSet, HubTemplate):
+    for model in (ArchiveFolder, Batch, Problem, ProblemSet, HubTemplate):
         updates = {model.owner_id: admin_id}
         if hasattr(model, "academy_id"):
             updates[model.academy_id] = admin_id

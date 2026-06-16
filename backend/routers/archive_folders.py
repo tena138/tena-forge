@@ -10,7 +10,7 @@ from database import get_db
 from models import ArchiveFolder, Batch
 from schemas import ArchiveFolderCreate, ArchiveFolderRead, ArchiveFolderUpdate
 from services.batch_colors import normalize_batch_color
-from services.ownership import current_academy_id, current_owner_id
+from services.ownership import current_academy_id, current_owner_id, ensure_legacy_archive_claimed_for_request
 from services.subject_engines import normalize_subject_engine
 
 router = APIRouter(prefix="/api/archive-folders", tags=["archive-folders"])
@@ -82,6 +82,7 @@ def _validate_parent(db: Session, owner_id: str, parent_id: UUID | None, subject
 
 @router.get("", response_model=list[ArchiveFolderRead])
 def list_archive_folders(request: Request, db: Session = Depends(get_db), subject_engine: str | None = None):
+    ensure_legacy_archive_claimed_for_request(request, db)
     owner_id = current_owner_id(request)
     filters = [ArchiveFolder.owner_id == owner_id]
     if subject_engine:

@@ -20,7 +20,7 @@ from schemas import (
     ProblemSetUpdate,
 )
 from services.license_service import is_marketplace_publish_allowed
-from services.ownership import current_owner_id
+from services.ownership import current_owner_id, ensure_legacy_archive_claimed_for_request
 from services.private_files import sign_static_url
 from services.saas_security import require_admin
 
@@ -117,6 +117,7 @@ def create_problem_set(payload: ProblemSetCreate, request: Request, db: Session 
 @router.get("", response_model=list[ProblemSetListItem])
 @router.get("/mine", response_model=list[ProblemSetListItem])
 def list_problem_sets(request: Request, db: Session = Depends(get_db)):
+    ensure_legacy_archive_claimed_for_request(request, db)
     owner_id = current_owner_id(request)
     rows = db.execute(
         select(ProblemSet, func.count(ProblemSetItem.id).label("item_count"))

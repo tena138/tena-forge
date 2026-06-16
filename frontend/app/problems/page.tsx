@@ -66,7 +66,6 @@ type BatchFolderDropTarget = {
   mode: "inside" | "before" | "root" | "batch";
 };
 
-const emptyProblemPage: ProblemPage = { items: [], total: 0, page: 1, limit: 24, pages: 1 };
 const defaultReviewFilter: ReviewFilter = "all";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
 const batchFoldersStorageKey = "tena.problemBrowser.batchFolders";
@@ -228,6 +227,14 @@ function readSort(value: string | null): ProblemSort {
   return sortOptions.some((option) => option.value === value) ? (value as ProblemSort) : "source_order";
 }
 
+function problemLoadErrorMessage(error: unknown) {
+  const response = (error as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
+  if (response?.status === 401) return "로그인이 만료되어 문항을 불러오지 못했습니다. 다시 로그인해 주세요.";
+  const detail = response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  return "문항을 불러오지 못했습니다. 네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.";
+}
+
 function difficultyTone(value?: string | null) {
   const normalized = (value || "").trim();
   if (normalized === "하") return { label: "하", color: "#34d399", badge: "border-emerald-300/25 bg-emerald-400/10 text-emerald-100" };
@@ -300,6 +307,8 @@ function ProblemsBrowser() {
   const [deleting, setDeleting] = useState(false);
   const [duplicatingId, setDuplicatingId] = useState("");
   const [duplicateNotice, setDuplicateNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [loadingProblems, setLoadingProblems] = useState(false);
   const [randomCount, setRandomCount] = useState("10");
   const [randomSelecting, setRandomSelecting] = useState(false);
   const [dragBox, setDragBox] = useState<DragBox | null>(null);
@@ -540,13 +549,19 @@ function ProblemsBrowser() {
   async function loadProblems(requestQuery = query) {
     const requestId = loadRequestRef.current + 1;
     loadRequestRef.current = requestId;
+    setLoadingProblems(true);
     try {
       const nextData = await api<ProblemPage>(`/api/problems?${requestQuery}`);
-      if (requestId === loadRequestRef.current) setData(nextData);
+      if (requestId === loadRequestRef.current) {
+        setData(nextData);
+        setLoadError("");
+      }
       return nextData;
     } catch (error) {
-      if (requestId === loadRequestRef.current) setData(emptyProblemPage);
+      if (requestId === loadRequestRef.current) setLoadError(problemLoadErrorMessage(error));
       throw error;
+    } finally {
+      if (requestId === loadRequestRef.current) setLoadingProblems(false);
     }
   }
 
@@ -1365,6 +1380,18 @@ function ProblemsBrowser() {
             </button>
           </div>
         </div>
+        {loadError ? (
+          <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+            <span>{loadError}</span>
+            <button type="button" className="text-xs font-bold text-amber-50 underline-offset-4 hover:underline" onClick={() => void loadProblems(query)}>
+              다시 불러오기
+            </button>
+          </div>
+        ) : loadingProblems ? (
+          <div className="mt-3 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-semibold text-muted-foreground">
+            문항 목록을 새로고침하는 중입니다.
+          </div>
+        ) : null}
         {batchFolderDrag?.isDragging ? (
           <div
             className="pointer-events-none fixed z-[120]"
@@ -1472,7 +1499,7 @@ function ProblemsBrowser() {
           </div>
         </div>
 
-        {!data.items.length && !visibleKoreanPassages.length && (
+        {!loadError && !data.items.length && !visibleKoreanPassages.length && (
           <div className="forge-panel rounded-lg py-16 text-center text-muted-foreground">
             조건에 맞는 문항이 없습니다.
             <div className="mt-4"><Link href="/upload"><Button>PDF 업로드</Button></Link></div>
