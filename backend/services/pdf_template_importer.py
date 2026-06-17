@@ -12,8 +12,22 @@ import fitz
 
 PDF_POINT_TO_PX = 96 / 72
 MAX_IMPORT_PAGES = 6
+MAX_ANALYSIS_PAGES = 120
 MAX_ELEMENTS_PER_PAGE = 220
 MAX_INLINE_IMAGE_BYTES = 3 * 1024 * 1024
+
+ROLE_PRIORITY = {
+    "cover": 0,
+    "toc": 1,
+    "unitDivider": 2,
+    "textbookLeft": 3,
+    "textbookRight": 4,
+    "problem": 5,
+    "exam": 6,
+    "solution": 7,
+    "answer": 8,
+    "custom": 9,
+}
 
 
 def _id(prefix: str) -> str:
@@ -27,6 +41,14 @@ def _safe_name(filename: str | None) -> str:
 
 def _stem(filename: str) -> str:
     return Path(filename).stem[:80] or "PDF Template"
+
+
+def _compact_text(value: str) -> str:
+    return re.sub(r"\s+", "", value or "").lower()
+
+
+def _has_any(text: str, patterns: list[str]) -> bool:
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
 
 
 def _hex_from_int(value: int | None, fallback = "#111827") -> str:
@@ -262,9 +284,26 @@ def _is_body_text(text: str, frame: dict[str, int], size: dict[str, Any]) -> boo
         return False
     if frame["y"] < size["height"] * 0.15 or frame["y"] + frame["height"] > size["height"] * 0.94:
         return False
-    if len(compact) < 36 and re.search(r"(이름|성명|학교|학원|날짜|반|점수|page|페이지)", text, re.IGNORECASE):
+    if len(compact) < 36 and _has_any(
+        compact,
+        [
+            "name",
+            "student",
+            "school",
+            "academy",
+            "date",
+            "page",
+            "\uc774\ub984",
+            "\uc131\uba85",
+            "\ud559\uad50",
+            "\ud559\uc6d0",
+            "\ub0a0\uc9dc",
+            "\uc810\uc218",
+            "\ud398\uc774\uc9c0",
+        ],
+    ):
         return False
-    if re.search(r"(^|\n|\s)(\d{1,2}[.)]|문제\s*\d+|[①②③④⑤])", text):
+    if re.search("(^|\\n|\\s)(\\d{1,2}[.)]|\ubb38\uc81c\\s*\\d+|[\u2460-\u2468])", text):
         return True
     return len(compact) >= 42 or frame["height"] >= size["height"] * 0.08
 
@@ -284,6 +323,45 @@ def _span_style(span: dict[str, Any]) -> dict[str, Any]:
         fontWeight="bold" if re.search(r"bold|black|heavy", font, re.IGNORECASE) else "normal",
         fontStyle="italic" if re.search(r"italic|oblique", font, re.IGNORECASE) else "normal",
         lineHeight=1.25,
+    )
+
+
+def _variable_key_for_text(text: str, frame: dict[str, int], style: dict[str, Any], size: dict[str, Any]) -> str | None:
+    compact = _compact_text(text)
+    top_band = frame["y"] < size["height"] * 0.24
+    font_size = float(style.get("fontSize") or 12)
+
+    if _has_any(compact, ["student", "name", "\uc774\ub984", "\uc131\uba85", "\ud559\uc0dd"]):
+        if not _has_any(compact, ["academy", "\ud559\uc6d0"]):
+            return "student_name"
+    if _has_any(compact, ["class", "grade", "\ud559\ub144", "\ubc18"]):
+        return "class_name"
+    if _has_any(compact, ["teacher", "instructor", "\uc120\uc0dd", "\uad50\uc0ac", "\uac15\uc0ac"]):
+        return "teacher_name"
+    if _has_any(compact, ["date", "day", "\ub0a0\uc9dc", "\uc77c\uc790", r"\d{4}[./-]\d{1,2}[./-]\d{1,2}"]):
+        return "exam_date"
+    if _has_any(compact, ["academy", "school", "institute", "\ud559\uc6d0", "\ud559\uad50", "\uc5b4\ud559\uc6d0"]):
+        return "academy_name"
+    if _has_any(compact, ["subject", "\uacfc\ubaa9", "\uc218\ud559", "\uc601\uc5b4", "\uad6d\uc5b4", "\uacfc\ud559", "\uc0ac\ud68c"]):
+        return "subject"
+    if _has_any(compact, ["chapter", "unit", "lesson", "\ub2e8\uc6d0", "\ucc28\uc2dc", "\uc720\ub2db"]):
+        return "chapter_title"
+    if _has_any(compact, ["book", "textbook", "workbook", "\uad50\uc7ac", "\ubb38\uc81c\uc9d1"]):
+        return "book_title"
+    if top_band and (font_size >= 15 or _has_any(compact, ["exam", "test", "quiz", "midterm", "final", "practice", "\uc2dc\ud5d8", "\ud3c9\uac00", "\ubaa8\uc758", "\uc911\uac04", "\uae30\ub9d0"])):
+        return "test_title"
+    return None
+
+
+def _variable_element(text: str, frame: dict[str, int], style: dict[str, Any], key: str, z_index: int) -> dict[str, Any]:
+    return _base_element(
+        "variable",
+        f"PDF variable: {key}",
+        frame,
+        z_index,
+        variableKey=key,
+        fallback=text[:160],
+        style={**style, "fill": "transparent", "stroke": "transparent", "strokeWidth": 0, "borderStyle": "none"},
     )
 
 
@@ -313,6 +391,11 @@ def _text_elements(blocks: list[dict[str, Any]], size: dict[str, Any], z_index: 
                 continue
             first_span = (line.get("spans") or [{}])[0]
             frame = {**frame, "height": max(frame["height"], round(float(first_span.get("size") or 9) * PDF_POINT_TO_PX * 1.35))}
+            style = _span_style(first_span)
+            variable_key = _variable_key_for_text(line_text, frame, style, size)
+            if variable_key:
+                elements.append(_variable_element(line_text, frame, style, variable_key, z_index + len(elements) + 1))
+                continue
             elements.append(
                 _base_element(
                     "text",
@@ -320,7 +403,7 @@ def _text_elements(blocks: list[dict[str, Any]], size: dict[str, Any], z_index: 
                     frame,
                     z_index + len(elements) + 1,
                     text=line_text[:1000],
-                    style=_span_style(first_span),
+                    style=style,
                 )
             )
 
@@ -439,7 +522,199 @@ def _safe_area(size: dict[str, Any]) -> dict[str, int]:
     return {"x": margin_x, "y": margin_y, "width": size["width"] - margin_x * 2, "height": size["height"] - margin_y * 2}
 
 
-def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _analysis_indexes(page_count: int) -> list[int]:
+    if page_count <= MAX_ANALYSIS_PAGES:
+        return list(range(page_count))
+    indexes = {0, page_count - 1}
+    for slot in range(MAX_ANALYSIS_PAGES):
+        indexes.add(round(slot * (page_count - 1) / max(1, MAX_ANALYSIS_PAGES - 1)))
+    return sorted(indexes)[:MAX_ANALYSIS_PAGES]
+
+
+def _page_plain_text(blocks: list[dict[str, Any]]) -> str:
+    return "\n".join(_block_text(block) for block in blocks if block.get("type") == 0).strip()
+
+
+def _body_metrics(blocks: list[dict[str, Any]], size: dict[str, Any]) -> tuple[dict[str, int] | None, int]:
+    body_frames: list[dict[str, int]] = []
+    body_block_count = 0
+    for block in blocks:
+        if block.get("type") != 0:
+            continue
+        frame = _scale_rect(block.get("bbox"))
+        text = _block_text(block)
+        if frame and text and _is_body_text(text, frame, size):
+            body_frames.append(frame)
+            body_block_count += 1
+    return _union_rect(body_frames), body_block_count
+
+
+def _max_top_font_size(blocks: list[dict[str, Any]], size: dict[str, Any]) -> float:
+    maximum = 0.0
+    for block in blocks:
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines") or []:
+            frame = _scale_rect(line.get("bbox"))
+            if not frame or frame["y"] > size["height"] * 0.32:
+                continue
+            for span in line.get("spans") or []:
+                maximum = max(maximum, float(span.get("size") or 0) * PDF_POINT_TO_PX)
+    return maximum
+
+
+def _layout_signature(size: dict[str, Any], body_frame: dict[str, int] | None, body_count: int, drawing_count: int, image_count: int) -> tuple[Any, ...]:
+    if body_frame:
+        body_bucket = (
+            round(body_frame["x"] / 40),
+            round(body_frame["y"] / 40),
+            round(body_frame["width"] / 60),
+            round(body_frame["height"] / 60),
+        )
+    else:
+        body_bucket = (0, 0, 0, 0)
+    return (
+        size.get("preset"),
+        round(size["width"] / 80),
+        round(size["height"] / 80),
+        body_bucket,
+        min(8, body_count),
+        min(12, round(drawing_count / 4)),
+        min(6, image_count),
+    )
+
+
+def _role_display(role_key: str, source_page_number: int) -> tuple[str, str]:
+    if role_key == "cover":
+        return "cover", "PDF Cover"
+    if role_key == "toc":
+        return "toc", "PDF Table of Contents"
+    if role_key == "unitDivider":
+        return "custom", "PDF Unit Divider"
+    if role_key == "textbookLeft":
+        return "textbookLeft", "PDF Left Inner Page"
+    if role_key == "textbookRight":
+        return "textbookRight", "PDF Right Inner Page"
+    if role_key == "solution":
+        return "solution", "PDF Solution Page"
+    if role_key == "answer":
+        return "answer", "PDF Answer Page"
+    if role_key == "exam":
+        return "exam", "PDF Exam Page"
+    if role_key == "problemVariant":
+        return "problem", f"PDF Problem Variant {source_page_number}"
+    return "problem", "PDF Problem Page"
+
+
+def _classify_page_role(index: int, text: str, body_frame: dict[str, int] | None, body_count: int, word_count: int, max_top_font: float) -> str:
+    compact = _compact_text(text)
+    if _has_any(compact, ["contents", "tableofcontents", "\ubaa9\ucc28", "\ucc28\ub840"]):
+        return "toc"
+    if index == 0 and (word_count < 160 or max_top_font >= 26):
+        return "cover"
+    if _has_any(compact, ["answersheet", "\ub2f5\uc548\uc9c0", "\uc815\ub2f5\ud45c"]):
+        return "answer"
+    if _has_any(compact, ["solution", "answers", "\ud574\uc124", "\ud480\uc774", "\uc815\ub2f5"]):
+        return "solution"
+    if word_count < 110 and _has_any(compact, ["chapter", "unit", "lesson", "part", "\ub2e8\uc6d0", "\ucc55\ud130", "\ud30c\ud2b8"]):
+        return "unitDivider"
+    if body_frame or body_count:
+        return "textbookLeft" if (index + 1) % 2 == 0 else "textbookRight"
+    if max_top_font >= 18:
+        return "unitDivider"
+    return "custom"
+
+
+def _analyze_page(page: fitz.Page, index: int) -> dict[str, Any]:
+    size = _page_size(page)
+    text_dict = page.get_text("dict")
+    blocks = list(text_dict.get("blocks") or [])
+    text = _page_plain_text(blocks)
+    body_frame, body_count = _body_metrics(blocks, size)
+    word_count = len(re.findall(r"[A-Za-z0-9_]+|[\uac00-\ud7a3]+", text))
+    try:
+        drawing_count = len(page.get_drawings())
+    except Exception:
+        drawing_count = 0
+    image_count = sum(1 for block in blocks if block.get("type") == 1)
+    max_top_font = _max_top_font_size(blocks, size)
+    role_key = _classify_page_role(index, text, body_frame, body_count, word_count, max_top_font)
+    return {
+        "index": index,
+        "role_key": role_key,
+        "source_page_number": index + 1,
+        "size": size,
+        "text": text,
+        "body_frame": body_frame,
+        "body_count": body_count,
+        "word_count": word_count,
+        "drawing_count": drawing_count,
+        "image_count": image_count,
+        "max_top_font": max_top_font,
+        "signature": _layout_signature(size, body_frame, body_count, drawing_count, image_count),
+    }
+
+
+def _analysis_score(analysis: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        -int(analysis.get("body_count") or 0),
+        -int(analysis.get("drawing_count") or 0),
+        -int(analysis.get("image_count") or 0),
+        int(analysis.get("index") or 0),
+    )
+
+
+def _select_representative_pages(analyses: list[dict[str, Any]], max_pages: int) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    selected_indexes: set[int] = set()
+    selected_role_signatures: set[tuple[str, tuple[Any, ...]]] = set()
+
+    def add_candidate(candidate: dict[str, Any], role_override: str | None = None) -> bool:
+        if len(selected) >= max_pages:
+            return False
+        index = int(candidate["index"])
+        role_key = role_override or str(candidate["role_key"])
+        signature = tuple(candidate["signature"])
+        role_signature = (role_key, signature)
+        if index in selected_indexes or role_signature in selected_role_signatures:
+            return False
+        chosen = {**candidate, "role_key": role_key}
+        selected.append(chosen)
+        selected_indexes.add(index)
+        selected_role_signatures.add(role_signature)
+        return True
+
+    for role_key in sorted(ROLE_PRIORITY, key=lambda key: ROLE_PRIORITY[key]):
+        if role_key == "problemVariant":
+            continue
+        candidates = [analysis for analysis in analyses if analysis["role_key"] == role_key]
+        if not candidates:
+            continue
+        add_candidate(sorted(candidates, key=_analysis_score)[0])
+
+    problem_like = [
+        analysis
+        for analysis in analyses
+        if analysis["role_key"] in {"textbookLeft", "textbookRight", "problem", "exam"}
+        and int(analysis["index"]) not in selected_indexes
+    ]
+    seen_signatures = {tuple(item["signature"]) for item in selected}
+    for candidate in sorted(problem_like, key=_analysis_score):
+        if len(selected) >= max_pages:
+            break
+        signature = tuple(candidate["signature"])
+        if signature in seen_signatures:
+            continue
+        if add_candidate(candidate, "problemVariant"):
+            seen_signatures.add(signature)
+
+    if not selected and analyses:
+        add_candidate(analyses[0], "custom")
+
+    return sorted(selected, key=lambda item: (ROLE_PRIORITY.get(str(item["role_key"]), 99), int(item["index"])))
+
+
+def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: str | None = None, name: str | None = None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     size = _page_size(page)
     text_dict = page.get_text("dict")
     blocks = list(text_dict.get("blocks") or [])
@@ -473,10 +748,16 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str]) -> tuple[di
         elements = regular[: MAX_ELEMENTS_PER_PAGE - len(dynamic_regions)] + dynamic_regions
         warnings.append(f"{index + 1}page: too many PDF objects were detected, so the import was limited to {MAX_ELEMENTS_PER_PAGE} elements.")
 
+    page_role, page_name = _role_display(role_key or ("exam" if index == 0 else "problem"), index + 1)
+    if name:
+        page_name = name
+
     return {
         "id": _id("page"),
-        "name": f"PDF Page {index + 1}",
-        "role": "exam" if index == 0 else "problem",
+        "name": page_name,
+        "role": page_role,
+        "sourcePageNumber": index + 1,
+        "sourceRole": role_key or page_role,
         "pageSize": size,
         "background": {"color": "#ffffff"},
         "safeArea": _safe_area(size),
@@ -496,14 +777,23 @@ def build_visual_template_set_from_pdf(pdf_bytes: bytes, filename: str | None = 
             raise ValueError("PDF has no pages.")
 
         warnings: list[str] = []
-        page_limit = max(1, min(max_pages, MAX_IMPORT_PAGES, doc.page_count))
-        if doc.page_count > page_limit:
-            warnings.append(f"Only the first {page_limit} pages were imported from a {doc.page_count}-page PDF.")
+        page_limit = max(1, min(max_pages, MAX_IMPORT_PAGES))
+        analysis_indexes = _analysis_indexes(doc.page_count)
+        if doc.page_count > len(analysis_indexes):
+            warnings.append(f"{len(analysis_indexes)} representative positions were scanned across a {doc.page_count}-page PDF.")
+
+        analyses = [_analyze_page(doc[index], index) for index in analysis_indexes]
+        selected_analyses = _select_representative_pages(analyses, page_limit)
+        selected_indexes = [analysis["index"] + 1 for analysis in selected_analyses]
+        if doc.page_count > len(selected_analyses):
+            warnings.append(f"Selected {len(selected_analyses)} representative design page(s), not the first {len(selected_analyses)} page(s): {selected_indexes}.")
 
         pages: list[dict[str, Any]] = []
         assets: list[dict[str, Any]] = []
-        for index in range(page_limit):
-            page, page_assets = _page_from_pdf(doc[index], index, warnings)
+        for analysis in selected_analyses:
+            index = int(analysis["index"])
+            page_role, page_name = _role_display(str(analysis["role_key"]), index + 1)
+            page, page_assets = _page_from_pdf(doc[index], index, warnings, str(analysis["role_key"]), page_name)
             pages.append(page)
             assets.extend(page_assets)
 
@@ -534,7 +824,8 @@ def build_visual_template_set_from_pdf(pdf_bytes: bytes, filename: str | None = 
                 "source": "pdf",
                 "sourceFile": safe_filename,
                 "pageCount": doc.page_count,
-                "importedPageCount": page_limit,
+                "importedPageCount": len(pages),
+                "selectedPageNumbers": selected_indexes,
                 "importedAt": created_at,
                 "warnings": warnings,
             },
@@ -543,7 +834,7 @@ def build_visual_template_set_from_pdf(pdf_bytes: bytes, filename: str | None = 
             "templateSet": template_set,
             "warnings": warnings,
             "page_count": doc.page_count,
-            "imported_page_count": page_limit,
+            "imported_page_count": len(pages),
             "source_file": safe_filename,
         }
     finally:
