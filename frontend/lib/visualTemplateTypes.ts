@@ -1,5 +1,6 @@
 export type TemplateCategory = "exam" | "textbook" | "solution" | "worksheet" | "answerSheet" | "report" | "counseling" | "custom";
 export type TemplateVisibility = "private" | "academy" | "public" | "marketplace";
+export type ContentSourceType = "self_created" | "academy_internal" | "licensed" | "public_domain_or_open" | "personal_study_only" | "unknown";
 
 export type PageRole =
   | "cover"
@@ -244,6 +245,9 @@ export type TemplateSet = {
   assets: TemplateAsset[];
   createdAt?: string;
   updatedAt?: string;
+  sourceType?: ContentSourceType;
+  rightsConfirmed?: boolean;
+  importMeta?: Record<string, unknown>;
 };
 
 export type SampleProblem = {

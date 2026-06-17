@@ -53,7 +53,7 @@ import { importPowerPointFile } from "@/lib/powerpointPptxImport";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createBlankTemplateSet, createElement, createProblemRegion, pageRoleLabels } from "@/lib/visualTemplatePresets";
 import { ElementStyle, ExamStatsDataSource, ExamStatsMetricKey, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
-import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubTemplate, ensureTemplateHubSession, getHubTemplate, updateHubTemplate } from "@/lib/templateHub";
+import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubTemplate, ensureTemplateHubSession, getHubTemplate, importPdfTemplate, updateHubTemplate } from "@/lib/templateHub";
 
 const LOCAL_STORAGE_KEY = "tena-forge-visual-template-studio";
 
@@ -162,8 +162,8 @@ function visualTemplatePayload(templateSet: TemplateSet): HubTemplatePayload {
     css: "",
     schema_json: { visualTemplateSet: safeTemplateSet, schemaVersion: safeTemplateSet.schemaVersion },
     thumbnail_url: null,
-    source_type: "self_created",
-    rights_confirmed: true,
+    source_type: safeTemplateSet.sourceType || "self_created",
+    rights_confirmed: safeTemplateSet.rightsConfirmed ?? true,
   };
 }
 
@@ -888,6 +888,7 @@ function VisualTemplateStudioPageContent() {
   const [elementSearchQuery, setElementSearchQuery] = useState("");
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [importingPdf, setImportingPdf] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -899,6 +900,7 @@ function VisualTemplateStudioPageContent() {
   const templateSetRef = useRef(templateSet);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pptxInputRef = useRef<HTMLInputElement | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const persistedTemplateIdRef = useRef<string | null>(requestedId);
   const lastServerSavedSnapshotRef = useRef(templateSnapshot(templateSet));
   const saveInFlightRef = useRef(false);
@@ -1527,6 +1529,55 @@ function VisualTemplateStudioPageContent() {
     event.target.value = "";
   }
 
+  async function importPdfFile(file: File) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+      setNotice("PDF 파일만 가져올 수 있습니다.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setNotice("PDF 파일은 25MB 이하만 가져올 수 있습니다.");
+      return;
+    }
+    const hasCurrentWork = templateSet.pages.some((page) => page.elements.length > 0);
+    if (hasCurrentWork && !window.confirm("PDF 디자인을 새 템플릿 초안으로 가져오면 현재 스튜디오 문서가 교체됩니다. 계속할까요?")) {
+      return;
+    }
+
+    setImportingPdf(true);
+    setNotice("PDF 디자인을 분석하는 중입니다.");
+    try {
+      const imported = await importPdfTemplate(file);
+      const next = imported.templateSet;
+      if (!next?.pages?.length) {
+        setNotice("PDF에서 템플릿 페이지를 만들지 못했습니다.");
+        return;
+      }
+      pushHistory();
+      persistedTemplateIdRef.current = null;
+      setPersistedTemplateId(null);
+      lastServerSavedSnapshotRef.current = "";
+      setTemplateSet(next);
+      setSelectedPageId(next.pages[0]?.id || "");
+      setSelectedIds([]);
+      setEditingTextElementId(null);
+      setAutoSaveStatus("pending");
+      router.replace("/templates/studio?new=1");
+      const warningText = imported.warnings.length ? ` ${imported.warnings.length}개의 확인사항이 있습니다.` : "";
+      setNotice(`${imported.source_file}에서 ${imported.imported_page_count}개 페이지를 템플릿 초안으로 만들었습니다.${warningText}`);
+    } catch (error: any) {
+      setNotice(error?.response?.data?.detail || error?.message || "PDF 디자인을 가져오지 못했습니다.");
+    } finally {
+      setImportingPdf(false);
+    }
+  }
+
+  function handlePdfInput(event: ReactChangeEvent<HTMLInputElement>) {
+    const file = Array.from(event.target.files || [])[0];
+    if (file) void importPdfFile(file);
+    event.target.value = "";
+  }
+
   useEffect(() => {
     function onPaste(event: ClipboardEvent) {
       if (isEditableClipboardTarget(event.target)) return;
@@ -1794,6 +1845,7 @@ function VisualTemplateStudioPageContent() {
           <div className="rounded-[14px] border border-dashed border-violet-300/35 bg-violet-500/[0.08] p-3">
             <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml" multiple className="hidden" onChange={handleImageInput} />
             <input ref={pptxInputRef} type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={handlePptxInput} />
+            <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handlePdfInput} />
             <button
               type="button"
               className="flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-violet-300/45 hover:bg-violet-400/10"
@@ -1815,6 +1867,20 @@ function VisualTemplateStudioPageContent() {
               <span className="block min-w-0">
                 <span className="block text-sm font-bold text-white">PPTX 가져오기</span>
                 <span className="mt-0.5 block text-xs text-slate-400">첫 슬라이드를 편집 가능한 요소로 변환</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-emerald-300/45 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={importingPdf}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-emerald-400/15 text-emerald-100 ring-1 ring-emerald-300/20">
+                <FileText className="h-5 w-5" />
+              </span>
+              <span className="block min-w-0">
+                <span className="block text-sm font-bold text-white">{importingPdf ? "PDF 분석 중" : "PDF 디자인 추출"}</span>
+                <span className="mt-0.5 block text-xs text-slate-400">PDF 레이아웃을 템플릿 초안으로 변환</span>
               </span>
             </button>
             {imageAssets.length ? (

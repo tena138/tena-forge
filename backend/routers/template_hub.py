@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from models import HubTemplate, MarketplaceListing
 from schemas import MarketplaceSubmissionRequest, TemplateCreate, TemplateForkResponse, TemplateResponse, TemplateUpdate
 from services.auth_security import decode_access_token
 from services.license_service import is_marketplace_publish_allowed
+from services.pdf_template_importer import MAX_IMPORT_PAGES, build_visual_template_set_from_pdf
 from services.saas_security import ADMIN_ROLES, get_roles, require_admin
 from services.template_renderer import sanitize_template_css, sanitize_template_html
 
@@ -111,6 +112,22 @@ def list_public_templates(
     else:
         statement = statement.order_by(HubTemplate.updated_at.desc())
     return [_response(template, owner_id) for template in db.scalars(statement).all()]
+
+
+@router.post("/import/pdf")
+async def import_pdf_template(file: UploadFile = File(...)):
+    filename = file.filename or ""
+    if not filename.lower().endswith(".pdf") and file.content_type not in {"application/pdf", "application/x-pdf"}:
+        raise HTTPException(status_code=400, detail="PDF files only.")
+    pdf_bytes = await file.read()
+    if len(pdf_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF file is too large. Please use a file under 25MB.")
+    try:
+        return build_visual_template_set_from_pdf(pdf_bytes, filename, max_pages=MAX_IMPORT_PAGES)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Could not extract a visual template from this PDF.") from exc
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)

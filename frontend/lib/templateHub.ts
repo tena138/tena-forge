@@ -1,4 +1,5 @@
 import { authHttp, ensureAccessToken } from "@/lib/auth-client";
+import type { TemplateSet } from "@/lib/visualTemplateTypes";
 
 export type TemplateVisibility = "private" | "unlisted" | "public" | "marketplace";
 export type TemplateCategory =
@@ -46,6 +47,14 @@ export type HubTemplatePayload = {
   thumbnail_url?: string | null;
   source_type?: string;
   rights_confirmed?: boolean;
+};
+
+export type PdfTemplateImportResponse = {
+  templateSet: TemplateSet;
+  warnings: string[];
+  page_count: number;
+  imported_page_count: number;
+  source_file: string;
 };
 
 export const templateCategories: Array<{ value: TemplateCategory; label: string }> = [
@@ -243,6 +252,14 @@ export async function getHubTemplate(id: string) {
 export async function createHubTemplate(payload: HubTemplatePayload) {
   await ensureTemplateHubSession();
   const response = await authHttp.post<HubTemplate>("/templates", payload);
+  return response.data;
+}
+
+export async function importPdfTemplate(file: File) {
+  await ensureTemplateHubSession();
+  const form = new FormData();
+  form.append("file", file);
+  const response = await authHttp.post<PdfTemplateImportResponse>("/templates/import/pdf", form);
   return response.data;
 }
 
