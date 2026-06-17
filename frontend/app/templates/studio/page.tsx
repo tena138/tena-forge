@@ -56,6 +56,24 @@ import { ElementStyle, ExamStatsDataSource, ExamStatsMetricKey, PAGE_SIZES, Page
 import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubTemplate, ensureTemplateHubSession, getHubTemplate, importPdfTemplate, updateHubTemplate } from "@/lib/templateHub";
 
 const LOCAL_STORAGE_KEY = "tena-forge-visual-template-studio";
+const DEFAULT_TEMPLATE_RETURN_TO = "/templates/mine";
+
+function safeTemplateEditorReturnTo(value: string | null, fallback = DEFAULT_TEMPLATE_RETURN_TO) {
+  const candidate = (value || "").trim();
+  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) return fallback;
+  try {
+    const url = new URL(candidate, "https://tena.local");
+    if (url.origin !== "https://tena.local") return fallback;
+    if (url.pathname.startsWith("/templates/studio") || url.pathname.startsWith("/templates/editor")) return fallback;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
+function withReturnTo(path: string, returnTo: string) {
+  return `${path}${path.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(returnTo)}`;
+}
 
 type StudioPanel = "elements" | "pages" | "variables" | "search" | "layers";
 type PaletteGroup = "기본 요소" | "문서 블록" | "동적 영역" | "시스템";
@@ -874,6 +892,7 @@ function VisualTemplateStudioPageContent() {
   const router = useRouter();
   const requestedId = searchParams.get("id");
   const forceNewTemplate = searchParams.get("new") === "1" || searchParams.has("type");
+  const editorReturnTo = useMemo(() => safeTemplateEditorReturnTo(searchParams.get("returnTo")), [searchParams]);
 
   const [templateSet, setTemplateSet] = useState<TemplateSet>(() => createBlankTemplateSet());
   const [persistedTemplateId, setPersistedTemplateId] = useState<string | null>(requestedId);
@@ -1048,7 +1067,7 @@ function VisualTemplateStudioPageContent() {
         setAutoSaveStatus("saved");
         setLastSavedAt(new Date().toISOString());
         if (mode === "manual") setNotice("템플릿 세트를 저장했습니다.");
-        if (!templateId) router.replace(`/templates/studio?id=${saved.id}`);
+        if (!templateId) router.replace(withReturnTo(`/templates/studio?id=${saved.id}`, editorReturnTo));
       } catch (error) {
         console.error("Visual template save failed", error);
         window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(source));
@@ -1066,7 +1085,7 @@ function VisualTemplateStudioPageContent() {
         }
       }
     },
-    [router]
+    [editorReturnTo, router]
   );
 
   useEffect(() => {
@@ -1573,7 +1592,7 @@ function VisualTemplateStudioPageContent() {
       setSelectedIds([]);
       setEditingTextElementId(null);
       setAutoSaveStatus("pending");
-      router.replace("/templates/studio?new=1");
+      router.replace(withReturnTo("/templates/studio?new=1", editorReturnTo));
       const warningText = imported.warnings.length ? ` ${imported.warnings.length}개의 확인사항이 있습니다.` : "";
       setNotice(`${imported.source_file}에서 ${imported.imported_page_count}개 페이지를 템플릿 초안으로 만들었습니다.${warningText}`);
     } catch (error: any) {
@@ -1829,7 +1848,7 @@ function VisualTemplateStudioPageContent() {
       const saved = persistedTemplateId ? await updateHubTemplate(String(persistedTemplateId), payload) : await createHubTemplate(payload);
       setPersistedTemplateId(saved.id);
       setNotice("템플릿 세트를 저장했습니다.");
-      if (!persistedTemplateId) router.replace(`/templates/studio?id=${saved.id}`);
+      if (!persistedTemplateId) router.replace(withReturnTo(`/templates/studio?id=${saved.id}`, editorReturnTo));
     } catch (error) {
       console.error("Visual template save failed", error);
       window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(templateSet));
@@ -2093,7 +2112,7 @@ function VisualTemplateStudioPageContent() {
     <div className="-m-6 flex h-[calc(100vh-0px)] min-h-[840px] flex-col overflow-hidden bg-[#07080b] text-slate-100">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 bg-[#0b0d12]/95 px-3 shadow-[0_16px_40px_rgba(0,0,0,0.28)] backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
-          <Link href="/templates" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
+          <Link href={editorReturnTo} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex min-w-0 flex-col">

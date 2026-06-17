@@ -91,6 +91,24 @@ import { Alignment, LayerDirection, useEditorStore } from "@/store/editorStore";
 
 const fontFamilies = ["NanumGothic", "NanumMyeongjo", "NanumBarunGothic", "NanumSquare", "Malgun Gothic", "Dotum", "Gulim", "Batang", "Arial", "Georgia", "Times New Roman", "Courier New", "Helvetica"];
 const draftPrefix = "tena-forge-editor-draft:";
+const DEFAULT_TEMPLATE_RETURN_TO = "/templates/mine";
+
+function safeTemplateEditorReturnTo(value: string | null, fallback = DEFAULT_TEMPLATE_RETURN_TO) {
+  const candidate = (value || "").trim();
+  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) return fallback;
+  try {
+    const url = new URL(candidate, "https://tena.local");
+    if (url.origin !== "https://tena.local") return fallback;
+    if (url.pathname.startsWith("/templates/studio") || url.pathname.startsWith("/templates/editor")) return fallback;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
+function withReturnTo(path: string, returnTo: string) {
+  return `${path}${path.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(returnTo)}`;
+}
 
 type FabricModule = typeof import("fabric");
 type FabricCanvas = import("fabric").Canvas;
@@ -1687,7 +1705,7 @@ function CornerRadiusControl({ element, onChange }: { element: Pick<CanvasElemen
   );
 }
 
-function TopToolbar({ onPreview, onSave }: { onPreview: () => void; onSave: () => void }) {
+function TopToolbar({ onPreview, onSave, returnHref }: { onPreview: () => void; onSave: () => void; returnHref: string }) {
   const templateName = useEditorStore((state) => state.templateName);
   const setTemplateName = useEditorStore((state) => state.setTemplateName);
   const isDirty = useEditorStore((state) => state.isDirty);
@@ -1696,7 +1714,7 @@ function TopToolbar({ onPreview, onSave }: { onPreview: () => void; onSave: () =
   return (
     <header className="flex h-[58px] shrink-0 items-center justify-between border-b bg-background/85 backdrop-blur-xl px-3 text-foreground shadow-sm">
       <div className="flex min-w-0 items-center gap-3">
-        <Link href="/templates" aria-label="홈" className="flex h-10 w-10 items-center justify-center rounded-md transition hover:bg-accent">
+        <Link href={returnHref} aria-label="Back to templates" className="flex h-10 w-10 items-center justify-center rounded-md transition hover:bg-accent">
           <SiteLogoMark className="h-9 w-9 rounded-[9px] p-1" />
         </Link>
         <button type="button" className="rounded-md px-3 py-2 text-lg font-semibold hover:bg-accent">크기 조정</button>
@@ -1913,6 +1931,7 @@ function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => void })
 function VisualTemplateEditorPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const editorReturnTo = useMemo(() => safeTemplateEditorReturnTo(searchParams.get("returnTo")), [searchParams]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const setDocument = useEditorStore((state) => state.setDocument);
   const document = useEditorStore((state) => state.canvasJson);
@@ -2107,7 +2126,7 @@ function VisualTemplateEditorPageInner() {
       localStorage.removeItem(`${draftPrefix}${templateId || "new"}`);
       markSaved(result.id);
       setNotice("템플릿이 저장되었습니다");
-      if (!templateId) router.replace(`/templates/editor?id=${result.id}`);
+      if (!templateId) router.replace(withReturnTo(`/templates/editor?id=${result.id}`, editorReturnTo));
       return result;
     } catch (error) {
       setSaving(false);
@@ -2116,7 +2135,7 @@ function VisualTemplateEditorPageInner() {
     } finally {
       saveInFlight.current = false;
     }
-  }, [document, markSaved, router, setSaving, templateId, templateName]);
+  }, [document, editorReturnTo, markSaved, router, setSaving, templateId, templateName]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -2148,14 +2167,14 @@ function VisualTemplateEditorPageInner() {
       localStorage.removeItem(`${draftPrefix}${templateId || "new"}`);
       markSaved(result.id);
       setNotice("사본이 저장되었습니다");
-      router.replace(`/templates/editor?id=${result.id}`);
+      router.replace(withReturnTo(`/templates/editor?id=${result.id}`, editorReturnTo));
       return result;
     } catch (error) {
       setSaving(false);
       setNotice(error instanceof Error ? error.message : "사본 저장에 실패했습니다.");
       return null;
     }
-  }, [document, markSaved, router, setSaving, templateId, templateName]);
+  }, [document, editorReturnTo, markSaved, router, setSaving, templateId, templateName]);
 
   const openExport = useCallback(async () => {
     let id = useEditorStore.getState().templateId;
@@ -2298,7 +2317,7 @@ function VisualTemplateEditorPageInner() {
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <Tooltip.Provider delayDuration={250}>
         <div className="fixed inset-0 z-[80] flex min-h-0 w-full flex-col overflow-hidden text-slate-100" style={{ background: "radial-gradient(circle at 8% 0%, hsl(263 88% 58% / 0.20), transparent 28rem), radial-gradient(circle at 86% 12%, hsl(250 72% 42% / 0.12), transparent 26rem), linear-gradient(180deg, hsl(224 28% 7%), hsl(224 34% 3%))" }}>
-          <TopToolbar onPreview={preview} onSave={save} />
+          <TopToolbar onPreview={preview} onSave={save} returnHref={editorReturnTo} />
           <main className="flex min-h-0 flex-1">
             <CanvaLeftPanel onNotice={setNotice} onSave={save} onSaveCopy={saveCopy} onPreview={preview} onOpenExport={openExport} />
             <div className="flex min-w-0 flex-1 flex-col">

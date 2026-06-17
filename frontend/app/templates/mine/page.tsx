@@ -22,6 +22,12 @@ import {
 } from "@/lib/templateHub";
 import { TemplateSet } from "@/lib/visualTemplateTypes";
 
+const MY_TEMPLATES_PATH = "/templates/mine";
+
+function withReturnTo(path: string, returnTo = MY_TEMPLATES_PATH) {
+  return `${path}${path.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 function getVisualTemplateSet(template: HubTemplate): TemplateSet | null {
   const visual = template.schema_json?.visualTemplateSet;
   if (!visual || typeof visual !== "object") return null;
@@ -34,7 +40,7 @@ function hasVisualSchema(template: HubTemplate) {
 }
 
 function editorHref(template: HubTemplate) {
-  return hasVisualSchema(template) ? `/templates/studio?id=${template.id}` : `/templates/editor/${template.id}`;
+  return withReturnTo(hasVisualSchema(template) ? `/templates/studio?id=${template.id}` : `/templates/editor/${template.id}`);
 }
 
 function formatDate(value: string) {
@@ -116,7 +122,7 @@ export default function MyTemplatesPage() {
   return (
     <div className="space-y-6 pb-24">
       <Link
-        href="/templates/studio?new=1"
+        href={withReturnTo("/templates/studio?new=1")}
         className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-violet-300/40 bg-violet-600 text-white shadow-[0_18px_44px_rgba(124,58,237,0.42)] transition hover:bg-violet-500"
         aria-label="템플릿 만들기"
         title="템플릿 만들기"
@@ -199,7 +205,7 @@ export default function MyTemplatesPage() {
       ) : (
         <section className="rounded-[10px] border border-dashed border-white/15 bg-white/[0.035] p-10 text-center">
           <h2 className="text-lg font-bold text-white">저장된 템플릿이 없습니다</h2>
-          <Link href="/templates/studio?new=1" className="mt-5 inline-flex">
+          <Link href={withReturnTo("/templates/studio?new=1")} className="mt-5 inline-flex">
             <Button>
               <Plus className="h-4 w-4" />
               템플릿 만들기

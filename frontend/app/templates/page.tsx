@@ -24,6 +24,12 @@ import {
 import { createBlankTemplateSet } from "@/lib/visualTemplatePresets";
 import { TemplateSet } from "@/lib/visualTemplateTypes";
 
+const TEMPLATE_HUB_PATH = "/templates";
+
+function withReturnTo(path: string, returnTo = TEMPLATE_HUB_PATH) {
+  return `${path}${path.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 function getVisualTemplateSet(template: HubTemplate): TemplateSet | null {
   const visual = template.schema_json?.visualTemplateSet;
   if (!visual || typeof visual !== "object") return null;
@@ -36,8 +42,8 @@ function hasVisualSchema(template: HubTemplate) {
 }
 
 function openHref(template: HubTemplate) {
-  if (template.id === "starter") return "/templates/studio?new=1";
-  return hasVisualSchema(template) ? `/templates/studio?id=${template.id}` : `/templates/${template.id}`;
+  if (template.id === "starter") return withReturnTo("/templates/studio?new=1");
+  return hasVisualSchema(template) ? withReturnTo(`/templates/studio?id=${template.id}`) : `/templates/${template.id}`;
 }
 
 function formatDate(value: string) {
@@ -167,13 +173,13 @@ export default function TemplateHubPage() {
             <Link href="/templates/mine">
               <Button variant="outline">내 템플릿</Button>
             </Link>
-            <Link href="/templates/studio?new=1">
+            <Link href={withReturnTo("/templates/studio?new=1")}>
               <Button>
                 <Plus className="h-4 w-4" />
                 템플릿 만들기
               </Button>
             </Link>
-            <Link href="/templates/studio?new=1">
+            <Link href={withReturnTo("/templates/studio?new=1")}>
               <Button variant="secondary">
                 <LayoutTemplate className="h-4 w-4" />
                 Visual Studio

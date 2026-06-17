@@ -243,7 +243,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
   async function openTemplate(template: ExamTemplate) {
     if (isDirty) await onSave();
     bumpUsage(template.id);
-    router.push(`/templates/editor?id=${template.id}`);
+    router.push(`/templates/editor?id=${template.id}&returnTo=${encodeURIComponent("/templates/mine")}`);
   }
 
   async function duplicateSaved(template: ExamTemplate) {
