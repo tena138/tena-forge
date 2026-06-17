@@ -58,6 +58,7 @@ from models import (
 from services.export_service import generate_hub_context_pdf
 from services.academy_student_access import create_seat, ensure_academy_subscription, hash_invite_code, rotate_seat_code
 from services.ownership import LOCAL_OWNER_ID, current_owner_id, current_owner_ids
+from services.problem_usage_history import record_problem_set_usage
 from services.template_renderer import render_hub_template_for_context
 
 router = APIRouter(prefix="/api/student-management", tags=["student management"])
@@ -3662,6 +3663,7 @@ def create_review_set(payload: ReviewSetPayload, request: Request, db: Session =
     db.flush()
     for index, problem_id in enumerate(problem_ids):
         db.add(ProblemSetItem(problem_set_id=problem_set.id, problem_id=problem_id, order_index=index))
+    record_problem_set_usage(db, problem_set=problem_set, problem_ids=problem_ids, owner_id=owner_id)
     db.commit()
     return {
         "id": str(problem_set.id),

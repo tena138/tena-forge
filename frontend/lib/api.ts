@@ -266,6 +266,25 @@ export type ProblemSet = {
   items: ProblemSetItem[];
 };
 
+export type ProblemUsageHistoryItem = {
+  id: string;
+  problem_id: string;
+  usage_type: "problem_set" | "export";
+  problem_set_id?: string | null;
+  problem_set_name?: string | null;
+  export_title?: string | null;
+  export_date?: string | null;
+  template_id?: string | null;
+  hub_template_id?: string | null;
+  context_id?: string | null;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ProblemUsageHistoryResponse = {
+  histories: Record<string, ProblemUsageHistoryItem[]>;
+};
+
 export type ExamTemplate = {
   id: string;
   name: string;

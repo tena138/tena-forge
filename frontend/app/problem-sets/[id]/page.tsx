@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api, Problem, ProblemSet, ProblemSetItem } from "@/lib/api";
+import { api, Problem, ProblemSet, ProblemSetItem, ProblemUsageHistoryItem, ProblemUsageHistoryResponse } from "@/lib/api";
 import { PROBLEM_SET_EXPORT_HISTORY_EVENT, ProblemSetExportHistoryItem, readProblemSetExportHistory, rememberProblemSetExport } from "@/lib/exportHistory";
 
 type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
@@ -27,6 +27,13 @@ const difficulties = ["하", "중", "상", "최상"];
 function exportHistoryTime(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function usageLabel(item: ProblemUsageHistoryItem) {
+  if (item.usage_type === "export") {
+    return item.export_title ? `시험지: ${item.export_title}` : "시험지 내보내기";
+  }
+  return item.problem_set_name ? `세트: ${item.problem_set_name}` : "세트 추가 기록";
 }
 
 function SortableRow({ item, returnHref, onRemove }: { item: ProblemSetItem; returnHref: string; onRemove: (problemId: string) => void }) {
@@ -69,11 +76,13 @@ function toggleValue(value: string, list: string[], setList: (next: string[]) =>
 function ProblemPickerModal({
   open,
   onOpenChange,
+  currentSetId,
   existingIds,
   onAdd,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  currentSetId: string;
   existingIds: string[];
   onAdd: (problemIds: string[]) => Promise<void>;
 }) {
@@ -89,6 +98,8 @@ function ProblemPickerModal({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [usageByProblem, setUsageByProblem] = useState<Record<string, ProblemUsageHistoryItem[]>>({});
+  const [usageLoading, setUsageLoading] = useState(false);
 
   const existing = useMemo(() => new Set(existingIds), [existingIds]);
 
@@ -122,6 +133,36 @@ function ProblemPickerModal({
     if (!open) return;
     loadProblems(page).catch(() => setData({ items: [], total: 0, page: 1, limit: PICKER_PAGE_LIMIT, pages: 1 }));
   }, [open, page, search, unit, needsReview, subjects, types, diffs]);
+
+  useEffect(() => {
+    if (!open || !data.items.length) {
+      setUsageByProblem({});
+      setUsageLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setUsageLoading(true);
+    api<ProblemUsageHistoryResponse>("/api/problem-sets/usage-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        problem_ids: data.items.map((problem) => problem.id),
+        exclude_problem_set_id: currentSetId,
+      }),
+    })
+      .then((result) => {
+        if (!cancelled) setUsageByProblem(result.histories || {});
+      })
+      .catch(() => {
+        if (!cancelled) setUsageByProblem({});
+      })
+      .finally(() => {
+        if (!cancelled) setUsageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, data.items, currentSetId]);
 
   useEffect(() => {
     if (!open) return;
@@ -188,6 +229,7 @@ function ProblemPickerModal({
   }
 
   const availableOnPage = data.items.filter((problem) => !existing.has(problem.id)).length;
+  const usedOnPage = data.items.filter((problem) => (usageByProblem[problem.id] || []).length > 0).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -244,7 +286,10 @@ function ProblemPickerModal({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-md border bg-card/60 px-3 py-2 text-sm">
-            <span>조건 결과 {data.total.toLocaleString("ko-KR")}개 / 현재 화면 {data.items.length}개 / 선택 {selectedIds.length}개</span>
+            <span>
+              조건 결과 {data.total.toLocaleString("ko-KR")}개 / 현재 화면 {data.items.length}개 / 선택 {selectedIds.length}개
+              {usageLoading ? " / 사용 이력 확인 중" : usedOnPage > 0 ? ` / 사용 이력 ${usedOnPage}개` : ""}
+            </span>
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -266,6 +311,8 @@ function ProblemPickerModal({
                 {data.items.map((problem) => {
                   const alreadyAdded = existing.has(problem.id);
                   const selected = selectedIds.includes(problem.id);
+                  const histories = usageByProblem[problem.id] || [];
+                  const latestHistory = histories[0];
                   return (
                     <button
                       key={problem.id}
@@ -281,7 +328,9 @@ function ProblemPickerModal({
                           <Badge variant="outline">{problem.tags?.unit || "단원 미지정"}</Badge>
                           <Badge variant="outline">{problem.tags?.difficulty || "난이도 미지정"}</Badge>
                           {alreadyAdded && <Badge variant="success">이미 추가됨</Badge>}
+                          {histories.length > 0 && <Badge variant="warning">사용 이력 {histories.length}</Badge>}
                         </div>
+                        {latestHistory && <p className="mt-1 truncate text-xs text-violet-200">최근 {usageLabel(latestHistory)}</p>}
                         <MathText className="mt-1 text-sm text-muted-foreground" clamp value={problem.problem_text} />
                       </div>
                     </button>
@@ -459,7 +508,7 @@ export default function ProblemSetDetailPage() {
         </CardContent>
       </Card>
 
-      <ProblemPickerModal open={addOpen} onOpenChange={setAddOpen} existingIds={ids} onAdd={addProblems} />
+      <ProblemPickerModal open={addOpen} onOpenChange={setAddOpen} currentSetId={problemSet.id} existingIds={ids} onAdd={addProblems} />
       <ExportModal
         open={exportOpen}
         onOpenChange={setExportOpen}

@@ -528,6 +528,30 @@ class ProblemSetReorder(BaseModel):
     ordered_problem_ids: list[UUID]
 
 
+class ProblemUsageHistoryQuery(BaseModel):
+    problem_ids: list[UUID] = Field(default_factory=list)
+    exclude_problem_set_id: UUID | None = None
+
+
+class ProblemUsageHistoryRead(BaseModel):
+    id: UUID
+    problem_id: UUID
+    usage_type: Literal["problem_set", "export"]
+    problem_set_id: UUID | None = None
+    problem_set_name: str | None = None
+    export_title: str | None = None
+    export_date: str | None = None
+    template_id: UUID | None = None
+    hub_template_id: UUID | None = None
+    context_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class ProblemUsageHistoryResponse(BaseModel):
+    histories: dict[str, list[ProblemUsageHistoryRead]]
+
+
 class ProblemSetItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

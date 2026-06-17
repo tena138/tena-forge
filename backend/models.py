@@ -433,6 +433,28 @@ class ProblemSetItem(Base):
     problem: Mapped[Problem] = relationship("Problem")
 
 
+class ProblemUsageHistory(Base):
+    __tablename__ = "problem_usage_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    problem_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False, index=True)
+    usage_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    problem_set_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("problem_sets.id", ondelete="SET NULL"), nullable=True, index=True)
+    export_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    export_date: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    template_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("exam_templates.id", ondelete="SET NULL"), nullable=True, index=True)
+    hub_template_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("template_hub_templates.id", ondelete="SET NULL"), nullable=True, index=True)
+    context_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    problem: Mapped[Problem] = relationship("Problem")
+    problem_set: Mapped[ProblemSet | None] = relationship("ProblemSet")
+
+
 class ExamTemplate(Base):
     __tablename__ = "exam_templates"
 

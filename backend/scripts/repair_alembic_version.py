@@ -10,7 +10,7 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0029_routine_actions"
+HEAD_REVISION = "0030_problem_usage_history"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -475,6 +475,7 @@ def _schema_is_at_head(inspector) -> bool:
         "subscription_payment_attempts",
         "routine_actions",
         "routine_messages",
+        "problem_usage_history",
     }
     tables = set(inspector.get_table_names())
     return (

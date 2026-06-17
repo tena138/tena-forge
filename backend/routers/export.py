@@ -14,6 +14,7 @@ from models import ExamTemplate, HubTemplate, Problem, ProblemSet, ProblemSetIte
 from schemas import ExportPreviewRequest, ExportRequest
 from services.export_service import generate_canvas_preview_pdf, generate_exam_pdf, generate_hub_template_pdf
 from services.ownership import current_owner_id
+from services.problem_usage_history import record_export_usage
 from services.template_renderer import render_hub_template_for_export
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -123,11 +124,12 @@ def export_pdf(payload: ExportRequest, request: Request, db: Session = Depends(g
         hub_template = db.get(HubTemplate, payload.hub_template_id)
         if not hub_template or (hub_template.visibility == "private" and hub_template.owner_id != owner_id):
             raise HTTPException(status_code=404, detail="템플릿 허브 템플릿을 찾을 수 없습니다.")
-        hub_template.use_count += 1
         export_values = _export_values(payload)
-        db.commit()
         if isinstance(hub_template.schema_json, dict) and isinstance(hub_template.schema_json.get("visualTemplateSet"), dict):
             buffer = generate_hub_template_pdf(hub_template, problems, export_values)
+            hub_template.use_count += 1
+            record_export_usage(db, owner_id=owner_id, problems=problems, payload=payload, output_type="pdf")
+            db.commit()
             filename = f"{_safe_filename(payload.exam_title)}_{_safe_filename(payload.date)}.pdf"
             encoded_filename = quote(filename, safe="")
             return StreamingResponse(
@@ -136,6 +138,9 @@ def export_pdf(payload: ExportRequest, request: Request, db: Session = Depends(g
                 headers={"Content-Disposition": f"attachment; filename=template.pdf; filename*=UTF-8''{encoded_filename}"},
             )
         html = render_hub_template_for_export(hub_template, problems, export_values)
+        hub_template.use_count += 1
+        record_export_usage(db, owner_id=owner_id, problems=problems, payload=payload, output_type="html")
+        db.commit()
         filename = f"{_safe_filename(payload.exam_title)}_{_safe_filename(payload.date)}.html"
         encoded_filename = quote(filename, safe="")
         return StreamingResponse(
@@ -159,6 +164,8 @@ def export_pdf(payload: ExportRequest, request: Request, db: Session = Depends(g
         include_solution=include_solution,
         include_missing_solution_metadata=False,
     )
+    record_export_usage(db, owner_id=owner_id, problems=problems, payload=payload, output_type="pdf")
+    db.commit()
     filename = f"{_safe_filename(payload.exam_title)}_{_safe_filename(payload.date)}.pdf"
     encoded_filename = quote(filename, safe="")
     return StreamingResponse(

@@ -18,9 +18,12 @@ from schemas import (
     ProblemSetRead,
     ProblemSetReorder,
     ProblemSetUpdate,
+    ProblemUsageHistoryQuery,
+    ProblemUsageHistoryResponse,
 )
 from services.license_service import is_marketplace_publish_allowed
 from services.ownership import current_owner_id, ensure_legacy_archive_claimed_for_request
+from services.problem_usage_history import backfill_problem_set_usage, load_problem_usage_history, record_problem_set_usage
 from services.private_files import sign_static_url
 from services.saas_security import require_admin
 
@@ -87,6 +90,7 @@ def _replace_items(db: Session, problem_set: ProblemSet, problem_ids: list[UUID]
         problem_set.items.append(ProblemSetItem(problem_id=problem_id, order_index=index))
     _sync_marketplace_eligibility(problem_set)
     problem_set.updated_at = datetime.utcnow()
+    record_problem_set_usage(db, problem_set=problem_set, problem_ids=unique_ids, owner_id=owner_id)
 
 
 @router.post("", response_model=ProblemSetRead)
@@ -157,6 +161,21 @@ def list_problem_sets(request: Request, db: Session = Depends(get_db)):
     return result
 
 
+@router.post("/usage-history", response_model=ProblemUsageHistoryResponse)
+def get_problem_usage_history(payload: ProblemUsageHistoryQuery, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_owner_id(request)
+    if backfill_problem_set_usage(db, owner_id=owner_id, problem_ids=payload.problem_ids):
+        db.commit()
+    return {
+        "histories": load_problem_usage_history(
+            db,
+            owner_id=owner_id,
+            problem_ids=payload.problem_ids,
+            exclude_problem_set_id=payload.exclude_problem_set_id,
+        )
+    }
+
+
 @router.get("/{set_id}", response_model=ProblemSetRead)
 def get_problem_set(set_id: UUID, request: Request, db: Session = Depends(get_db)):
     return _serialize_problem_set(_get_set(db, set_id, current_owner_id(request)))
@@ -203,10 +222,13 @@ def append_problem_set_item(set_id: UUID, payload: ProblemSetAppendItem, request
     if not db.scalars(select(Problem).where(Problem.id == payload.problem_id, Problem.owner_id == owner_id)).first():
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
     if any(item.problem_id == payload.problem_id for item in problem_set.items):
+        record_problem_set_usage(db, problem_set=problem_set, problem_ids=[payload.problem_id], owner_id=owner_id)
+        db.commit()
         return _serialize_problem_set(problem_set)
     next_index = max([item.order_index for item in problem_set.items], default=-1) + 1
     db.add(ProblemSetItem(problem_set_id=set_id, problem_id=payload.problem_id, order_index=next_index))
     problem_set.updated_at = datetime.utcnow()
+    record_problem_set_usage(db, problem_set=problem_set, problem_ids=[payload.problem_id], owner_id=owner_id)
     db.commit()
     return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
@@ -225,6 +247,8 @@ def append_problem_set_items(set_id: UUID, payload: ProblemSetAppendItems, reque
           seen.add(problem_id)
 
     if not unique_ids:
+        record_problem_set_usage(db, problem_set=problem_set, problem_ids=payload.problem_ids, owner_id=owner_id)
+        db.commit()
         return _serialize_problem_set(problem_set)
 
     found = set(
@@ -244,6 +268,7 @@ def append_problem_set_items(set_id: UUID, payload: ProblemSetAppendItems, reque
     for offset, problem_id in enumerate(unique_ids):
         db.add(ProblemSetItem(problem_set_id=set_id, problem_id=problem_id, order_index=next_index + offset))
     problem_set.updated_at = datetime.utcnow()
+    record_problem_set_usage(db, problem_set=problem_set, problem_ids=unique_ids, owner_id=owner_id)
     db.commit()
     return _serialize_problem_set(_get_set(db, set_id, owner_id))
 
