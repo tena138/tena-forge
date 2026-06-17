@@ -889,6 +889,9 @@ function VisualTemplateStudioPageContent() {
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importingPdf, setImportingPdf] = useState(false);
+  const [pdfImportProgress, setPdfImportProgress] = useState<number | null>(null);
+  const [pdfImportMessage, setPdfImportMessage] = useState("");
+  const [pdfImportFileName, setPdfImportFileName] = useState("");
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1545,9 +1548,17 @@ function VisualTemplateStudioPageContent() {
     }
 
     setImportingPdf(true);
+    setPdfImportProgress(0);
+    setPdfImportFileName(file.name);
+    setPdfImportMessage("PDF 파일을 업로드하는 중입니다.");
     setNotice("PDF 디자인을 분석하는 중입니다.");
     try {
-      const imported = await importPdfTemplate(file);
+      const imported = await importPdfTemplate(file, (progress) => {
+        setPdfImportProgress(progress);
+        setPdfImportMessage(progress >= 100 ? "업로드 완료. 대표 디자인 페이지를 분석하는 중입니다." : `PDF 파일을 업로드하는 중입니다. ${progress}%`);
+      });
+      setPdfImportProgress(100);
+      setPdfImportMessage("분석 결과를 편집 가능한 템플릿으로 적용하는 중입니다.");
       const next = imported.templateSet;
       if (!next?.pages?.length) {
         setNotice("PDF에서 템플릿 페이지를 만들지 못했습니다.");
@@ -1569,6 +1580,9 @@ function VisualTemplateStudioPageContent() {
       setNotice(error?.response?.data?.detail || error?.message || "PDF 디자인을 가져오지 못했습니다.");
     } finally {
       setImportingPdf(false);
+      setPdfImportProgress(null);
+      setPdfImportMessage("");
+      setPdfImportFileName("");
     }
   }
 
@@ -2578,6 +2592,38 @@ function VisualTemplateStudioPageContent() {
           </div>
         </aside>
       </div>
+
+      {notice ? (
+        <div className="fixed right-5 top-16 z-[60] max-w-[420px] rounded-[10px] border border-white/10 bg-[#111827]/95 px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur">
+          {notice}
+        </div>
+      ) : null}
+
+      {importingPdf ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm">
+          <div className="w-full max-w-[460px] rounded-[14px] border border-white/12 bg-[#0b0f19]/95 p-5 shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-400/12 ring-1 ring-emerald-300/25">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-200/25 border-t-emerald-200" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-base font-bold text-white">PDF 디자인 추출 중</div>
+                <div className="mt-1 truncate text-xs font-semibold text-slate-400">{pdfImportFileName}</div>
+                <div className="mt-3 text-sm leading-6 text-slate-200">{pdfImportMessage || "PDF 레이아웃을 분석하는 중입니다."}</div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-emerald-300 transition-all duration-300"
+                    style={{ width: `${pdfImportProgress == null ? 24 : Math.max(8, pdfImportProgress)}%` }}
+                  />
+                </div>
+                <div className="mt-3 text-xs leading-5 text-slate-500">
+                  여러 페이지 PDF는 전체 구조를 훑어 표지, 내지, 단원 구분 같은 대표 디자인을 고르는 중입니다.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {preview ? (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/88 p-6 backdrop-blur">

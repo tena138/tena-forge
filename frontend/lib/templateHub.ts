@@ -255,11 +255,16 @@ export async function createHubTemplate(payload: HubTemplatePayload) {
   return response.data;
 }
 
-export async function importPdfTemplate(file: File) {
+export async function importPdfTemplate(file: File, onProgress?: (progress: number) => void) {
   await ensureTemplateHubSession();
   const form = new FormData();
   form.append("file", file);
-  const response = await authHttp.post<PdfTemplateImportResponse>("/templates/import/pdf", form);
+  const response = await authHttp.post<PdfTemplateImportResponse>("/templates/import/pdf", form, {
+    onUploadProgress: (event) => {
+      if (!event.total) return;
+      onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    },
+  });
   return response.data;
 }
 
