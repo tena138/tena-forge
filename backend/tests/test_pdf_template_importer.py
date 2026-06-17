@@ -40,12 +40,14 @@ class PdfTemplateImporterTests(unittest.TestCase):
         page = template_set["pages"][0]
         elements = page["elements"]
 
+        self.assertTrue(page["background"]["imageUrl"].startswith("data:image/png;base64,"))
         text_values = [element.get("text", "") for element in elements if element.get("type") == "text"]
         variable_keys = [element.get("variableKey", "") for element in elements if element.get("type") == "variable"]
         self.assertIn("academy_name", variable_keys)
         self.assertIn("test_title", variable_keys)
         self.assertFalse(any("Tena Academy" in value for value in text_values))
         self.assertFalse(any("quadratic equation" in value for value in text_values))
+        self.assertTrue(any(element.get("name") == "PDF dynamic content mask" for element in elements))
         self.assertTrue(any(element.get("type") == "problemRegion" for element in elements))
         self.assertTrue(any(element.get("type") in {"shape", "line"} for element in elements))
         self.assertEqual(template_set["sourceType"], "unknown")
@@ -64,6 +66,7 @@ class PdfTemplateImporterTests(unittest.TestCase):
 
         self.assertLessEqual(result["imported_page_count"], 6)
         self.assertEqual(len(result["templateSet"]["pages"]), result["imported_page_count"])
+        self.assertTrue(all(page["background"].get("imageUrl", "").startswith("data:image/png;base64,") for page in result["templateSet"]["pages"]))
         self.assertTrue(result["warnings"])
 
     def test_selects_representative_roles_beyond_the_first_six_pages(self):

@@ -15,6 +15,7 @@ MAX_IMPORT_PAGES = 6
 MAX_ANALYSIS_PAGES = 120
 MAX_ELEMENTS_PER_PAGE = 220
 MAX_INLINE_IMAGE_BYTES = 3 * 1024 * 1024
+MAX_TEXT_MASKS_PER_PAGE = 80
 
 ROLE_PRIORITY = {
     "cover": 0,
@@ -499,21 +500,34 @@ def _problem_region(frame: dict[str, int], size: dict[str, Any], columns: int, z
     )
 
 
-def _snapshot_element(page: fitz.Page, size: dict[str, Any], z_index: int) -> dict[str, Any]:
+def _page_snapshot_data_url(page: fitz.Page, size: dict[str, Any]) -> str:
     zoom_x = size["width"] / max(1, page.rect.width)
     zoom_y = size["height"] / max(1, page.rect.height)
     pix = page.get_pixmap(matrix=fitz.Matrix(zoom_x, zoom_y), alpha=False)
-    src = f"data:image/png;base64,{base64.b64encode(pix.tobytes('png')).decode('ascii')}"
+    return f"data:image/png;base64,{base64.b64encode(pix.tobytes('png')).decode('ascii')}"
+
+
+def _content_mask(frame: dict[str, int], size: dict[str, Any], name: str, z_index: int, padding: int = 3) -> dict[str, Any] | None:
+    x = max(0, frame["x"] - padding)
+    y = max(0, frame["y"] - padding)
+    width = min(size["width"] - x, frame["width"] + padding * 2)
+    height = min(size["height"] - y, frame["height"] + padding * 2)
+    if width <= 2 or height <= 2:
+        return None
     return _base_element(
-        "image",
-        "PDF page snapshot",
-        {"x": 0, "y": 0, "width": size["width"], "height": size["height"]},
+        "shape",
+        name,
+        {"x": x, "y": y, "width": width, "height": height},
         z_index,
-        src=src,
-        objectFit="fill",
+        shape="rect",
         locked=True,
-        style=_base_style(fill="transparent", stroke="transparent", strokeWidth=0),
+        style=_base_style(fill="#ffffff", stroke="transparent", strokeWidth=0, borderStyle="none"),
     )
+
+
+def _renumber_z_indexes(elements: list[dict[str, Any]]) -> None:
+    for index, element in enumerate(elements, start=1):
+        element["zIndex"] = index
 
 
 def _safe_area(size: dict[str, Any]) -> dict[str, int]:
@@ -719,28 +733,41 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: s
     text_dict = page.get_text("dict")
     blocks = list(text_dict.get("blocks") or [])
     page_assets: list[dict[str, Any]] = []
-    elements: list[dict[str, Any]] = []
 
-    drawing_elements = _drawing_elements(page, size, len(elements))
-    elements.extend(drawing_elements)
+    drawing_elements = _drawing_elements(page, size, 0)
 
-    image_elements, image_assets, skipped_images = _image_elements(blocks, size, len(elements))
-    elements.extend(image_elements)
+    image_elements, image_assets, skipped_images = _image_elements(blocks, size, len(drawing_elements))
     page_assets.extend(image_assets)
     if skipped_images:
         warnings.append(f"{index + 1}page: {skipped_images} large or full-page image(s) were not converted as separate editable images.")
 
-    text_elements, body_frame, body_block_count = _text_elements(blocks, size, len(elements))
-    elements.extend(text_elements)
+    text_elements, body_frame, body_block_count = _text_elements(blocks, size, len(drawing_elements) + len(image_elements))
 
+    region_element: dict[str, Any] | None = None
     if body_frame:
-        elements.append(_problem_region(body_frame, size, _estimate_columns(body_frame, body_block_count, size), len(elements) + 1))
+        region_element = _problem_region(body_frame, size, _estimate_columns(body_frame, body_block_count, size), 0)
+
+    masks: list[dict[str, Any]] = []
+    text_mask_candidates = text_elements if len(text_elements) <= MAX_TEXT_MASKS_PER_PAGE else [element for element in text_elements if element.get("type") == "variable"]
+    for text_element in text_mask_candidates[:MAX_TEXT_MASKS_PER_PAGE]:
+        mask = _content_mask(text_element, size, "PDF editable text mask", 0)
+        if mask:
+            masks.append(mask)
+    if len(text_elements) > MAX_TEXT_MASKS_PER_PAGE:
+        warnings.append(f"{index + 1}page: text masks were limited to variable fields to keep the imported template responsive.")
+    if body_frame:
+        mask = _content_mask(body_frame, size, "PDF dynamic content mask", 0, padding=12)
+        if mask:
+            masks.append(mask)
+
+    elements = [*drawing_elements, *image_elements, *masks, *text_elements]
+    if region_element:
+        elements.append(region_element)
 
     if not elements:
-        elements.append(_snapshot_element(page, size, 1))
         fallback_frame = {"x": 64, "y": round(size["height"] * 0.18), "width": size["width"] - 128, "height": round(size["height"] * 0.68)}
-        elements.append(_problem_region(fallback_frame, size, 1, 2))
-        warnings.append(f"{index + 1}page: no editable structure was detected, so a locked page snapshot was inserted.")
+        elements.append(_problem_region(fallback_frame, size, 1, 1))
+        warnings.append(f"{index + 1}page: no editable structure was detected, so the rendered PDF page was preserved as the background.")
 
     if len(elements) > MAX_ELEMENTS_PER_PAGE:
         dynamic_regions = [element for element in elements if element.get("type", "").endswith("Region")]
@@ -752,6 +779,9 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: s
     if name:
         page_name = name
 
+    _renumber_z_indexes(elements)
+    snapshot_url = _page_snapshot_data_url(page, size)
+
     return {
         "id": _id("page"),
         "name": page_name,
@@ -759,7 +789,7 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: s
         "sourcePageNumber": index + 1,
         "sourceRole": role_key or page_role,
         "pageSize": size,
-        "background": {"color": "#ffffff"},
+        "background": {"color": "#ffffff", "imageUrl": snapshot_url, "opacity": 1},
         "safeArea": _safe_area(size),
         "guides": [],
         "elements": elements,
