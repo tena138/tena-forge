@@ -25,7 +25,7 @@ export function DashboardHeader() {
           <div className="flex flex-wrap gap-2">
             <Link
               href="/archive/new"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-[7px] border border-violet-400/40 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_10px_28px_rgba(124,58,237,0.28)] transition-all duration-150 hover:bg-primary/90 hover:shadow-[0_14px_34px_rgba(124,58,237,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-[7px] border border-zinc-400/40 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_10px_28px_rgba(124,58,237,0.28)] transition-all duration-150 hover:bg-primary/90 hover:shadow-[0_14px_34px_rgba(124,58,237,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <FileUp className="h-4 w-4" />
               새 PDF 업로드
@@ -45,7 +45,7 @@ export function DashboardHeader() {
             <div>
               <div className="text-xs font-bold text-white">Production Pipeline</div>
             </div>
-            <ArrowRight className="h-4 w-4 text-violet-300" />
+            <ArrowRight className="h-4 w-4 text-zinc-300" />
           </div>
           <div className="grid gap-2 sm:grid-cols-5">
             {forgeFlow.map((step, index) => (

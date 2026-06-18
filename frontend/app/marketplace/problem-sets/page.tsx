@@ -50,7 +50,7 @@ export default function ProblemSetMarketPage() {
           {listings.map((listing) => (
             <article key={listing.id} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4">
               <div className="mb-4 flex h-36 items-center justify-center rounded-md border border-white/10 bg-black/35 text-sm text-slate-500">문항 세트</div>
-              <div className="flex flex-wrap gap-2 text-xs text-violet-200">
+              <div className="flex flex-wrap gap-2 text-xs text-zinc-200">
                 {listing.subject && <span>{listing.subject}</span>}
                 {listing.grade && <span>· {listing.grade}</span>}
               </div>

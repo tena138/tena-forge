@@ -45,9 +45,9 @@ function statusLabel(status: Batch["status"]) {
 function statusClass(status: Batch["status"]) {
   return {
     pending: "border-white/10 bg-white/[0.06] text-slate-300",
-    processing: "border-blue-400/25 bg-blue-400/12 text-blue-200",
-    done: "border-violet-400/40 bg-violet-500/90 text-white",
-    error: "border-red-400/25 bg-red-400/12 text-red-200",
+    processing: "border-zinc-400/25 bg-zinc-400/12 text-zinc-200",
+    done: "border-zinc-400/40 bg-zinc-500/90 text-white",
+    error: "border-zinc-400/25 bg-zinc-400/12 text-zinc-200",
   }[status];
 }
 
@@ -59,26 +59,26 @@ function BatchErrorPanel({ batch }: { batch: Batch }) {
   if (batch.status !== "error") return null;
 
   return (
-    <div className="rounded-lg border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
+    <div className="rounded-lg border border-zinc-400/20 bg-zinc-400/10 p-4 text-sm text-zinc-100">
       <div className="flex items-center gap-2 font-semibold">
         <AlertTriangle className="h-4 w-4" />
         처리 실패 원인
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         <div>
-          <p className="text-xs text-red-200/70">실패 단계</p>
+          <p className="text-xs text-zinc-200/70">실패 단계</p>
           <p className="mt-1 leading-6">{batch.failure_stage || "확인되지 않음"}</p>
         </div>
         <div>
-          <p className="text-xs text-red-200/70">원인</p>
+          <p className="text-xs text-zinc-200/70">원인</p>
           <p className="mt-1 leading-6">{errorReason(batch)}</p>
         </div>
         <div>
-          <p className="text-xs text-red-200/70">대응</p>
+          <p className="text-xs text-zinc-200/70">대응</p>
           <p className="mt-1 leading-6">{batch.failure_hint || "다시 처리하거나 원본 파일과 서버 설정을 확인하세요."}</p>
         </div>
       </div>
-      {batch.failed_at ? <p className="mt-3 text-xs text-red-200/60">실패 시각: {formatDate(batch.failed_at)}</p> : null}
+      {batch.failed_at ? <p className="mt-3 text-xs text-zinc-200/60">실패 시각: {formatDate(batch.failed_at)}</p> : null}
     </div>
   );
 }
@@ -90,7 +90,7 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
     <>
       <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
-          <Info className="h-4 w-4 text-violet-200" />
+          <Info className="h-4 w-4 text-zinc-200" />
           처리 정보
         </div>
         <p className="mt-2 text-xs text-slate-500">최근 단계</p>
@@ -98,14 +98,14 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
       </div>
       <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
-          <Info className="h-4 w-4 text-violet-200" />
+          <Info className="h-4 w-4 text-zinc-200" />
           진행률
         </div>
         {isActive ? (
           <>
-            <p className="mt-2 text-lg font-bold leading-none text-violet-100">{progress == null ? "계산 중" : `${progress}%`}</p>
+            <p className="mt-2 text-lg font-bold leading-none text-zinc-100">{progress == null ? "계산 중" : `${progress}%`}</p>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-violet-400 transition-all duration-500" style={{ width: `${progress ?? 0}%` }} />
+              <div className="h-full rounded-full bg-zinc-400 transition-all duration-500" style={{ width: `${progress ?? 0}%` }} />
             </div>
           </>
         ) : (
@@ -342,13 +342,13 @@ export function ArchiveBatchHistory({
       ) : null}
 
       {loadError ? (
-        <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">
+        <div className="rounded-lg border border-zinc-400/25 bg-zinc-400/10 p-4 text-sm text-zinc-100">
           {loadError}
         </div>
       ) : null}
 
       {assignNotice ? (
-        <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-4 text-sm text-emerald-100">
+        <div className="rounded-lg border border-zinc-400/25 bg-zinc-400/10 p-4 text-sm text-zinc-100">
           {assignNotice}
         </div>
       ) : null}
@@ -419,11 +419,11 @@ export function ArchiveBatchHistory({
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <BatchInfoPanel batch={batch} />
                 <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-violet-200" />문항 PDF</div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-zinc-200" />문항 PDF</div>
                   <p className="mt-1 break-all text-sm text-slate-500">{fileName(batch.problem_pdf_filename)}</p>
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-violet-200" />답안 PDF</div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-zinc-200" />답안 PDF</div>
                   <p className="mt-1 break-all text-sm text-slate-500">{fileName(batch.solution_pdf_filename)}</p>
                 </div>
               </div>
@@ -464,7 +464,7 @@ export function ArchiveBatchHistory({
           <div className="w-full max-w-3xl overflow-hidden rounded-[14px] border border-white/10 bg-[#12111a] shadow-2xl shadow-black/50">
             <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Batch Assignment</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Batch Assignment</p>
                 <h2 className="mt-1 text-xl font-black text-white">클래스/학생에게 할당</h2>
                 <p className="mt-1 text-sm text-slate-400">{assignBatch.name} · {assignBatch.problem_count}문항</p>
               </div>
@@ -484,7 +484,7 @@ export function ArchiveBatchHistory({
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={(event) => setScheduledAt(event.target.value)}
-                  className="mt-2 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none focus:border-violet-300/50"
+                  className="mt-2 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none focus:border-zinc-300/50"
                 />
               </label>
 
@@ -500,7 +500,7 @@ export function ArchiveBatchHistory({
                         type="checkbox"
                         checked={selectedClassIds.includes(classRow.id)}
                         onChange={() => toggleClass(classRow.id)}
-                        className="h-5 w-5 accent-violet-500"
+                        className="h-5 w-5 accent-zinc-500"
                       />
                     </label>
                     {classRow.students.length ? (
@@ -515,7 +515,7 @@ export function ArchiveBatchHistory({
                               type="checkbox"
                               checked={selectedStudentIds.includes(student.id)}
                               onChange={() => toggleStudent(student.id)}
-                              className="h-4 w-4 shrink-0 accent-violet-500"
+                              className="h-4 w-4 shrink-0 accent-zinc-500"
                             />
                           </label>
                         ))}
@@ -528,7 +528,7 @@ export function ArchiveBatchHistory({
                 ) : null}
               </div>
 
-              {assignError ? <p className="mt-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{assignError}</p> : null}
+              {assignError ? <p className="mt-4 rounded-lg border border-zinc-400/20 bg-zinc-400/10 p-3 text-sm text-zinc-200">{assignError}</p> : null}
             </div>
             <div className="flex flex-col gap-2 border-t border-white/10 p-5 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setAssignBatch(null)}>취소</Button>

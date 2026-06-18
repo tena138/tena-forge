@@ -440,7 +440,7 @@ function SubjectTreeSelector({
           type="button"
           className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-[8px] border transition",
-            editing ? "border-violet-300/60 bg-violet-400/20 text-violet-100 shadow-[0_0_22px_rgba(139,92,246,0.24)]" : "border-white/10 bg-black/20 text-slate-300 hover:bg-white/[0.07] hover:text-white"
+            editing ? "border-zinc-300/60 bg-zinc-400/20 text-zinc-100 shadow-[0_0_22px_rgba(139,92,246,0.24)]" : "border-white/10 bg-black/20 text-slate-300 hover:bg-white/[0.07] hover:text-white"
           )}
           onClick={() => {
             setEditing((current) => !current);
@@ -491,7 +491,7 @@ function SubjectTreeSelector({
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
-                        className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
+                        className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-zinc-300/50 hover:bg-zinc-400/15 hover:text-white"
                         onClick={() => openEdit(nodeKey, node.label, groupColor)}
                         aria-label={`${node.label} 수정`}
                         title={`${node.label} 수정`}
@@ -501,8 +501,8 @@ function SubjectTreeSelector({
                       <button
                         type="button"
                         className={cn(
-                          "grid h-7 w-7 place-items-center rounded-full border transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white",
-                          addTarget === nodeKey ? "border-violet-300/70 bg-violet-400/20 text-violet-50" : "border-white/12 bg-black/25 text-slate-200"
+                          "grid h-7 w-7 place-items-center rounded-full border transition hover:border-zinc-300/50 hover:bg-zinc-400/15 hover:text-white",
+                          addTarget === nodeKey ? "border-zinc-300/70 bg-zinc-400/20 text-zinc-50" : "border-white/12 bg-black/25 text-slate-200"
                         )}
                         onClick={() => openDraft(nodeKey)}
                         aria-label={`${node.label} 하위 항목 추가`}
@@ -513,7 +513,7 @@ function SubjectTreeSelector({
                       </button>
                       <button
                         type="button"
-                        className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/15 hover:text-rose-50"
+                        className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-zinc-200 transition hover:border-zinc-300/50 hover:bg-zinc-500/15 hover:text-zinc-50"
                         onClick={() => deleteSubject(nodeKey, node.label)}
                         aria-label={`${node.label} 삭제`}
                         title={`${node.label} 삭제`}
@@ -576,7 +576,7 @@ function SubjectTreeSelector({
         })}
         {editing ? (
           addTarget === "root" ? (
-            <div className="min-w-0 rounded-[8px] border border-dashed border-violet-300/40 bg-violet-400/[0.06] p-3">
+            <div className="min-w-0 rounded-[8px] border border-dashed border-zinc-300/40 bg-zinc-400/[0.06] p-3">
               <SubjectDraftRow
                 value={draftLabel}
                 color={draftColor}
@@ -591,7 +591,7 @@ function SubjectTreeSelector({
             <div className="min-w-0 rounded-[8px] border border-dashed border-white/10 bg-white/[0.025] p-3">
               <button
                 type="button"
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:border-violet-300/40 hover:bg-violet-400/10"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.035] text-sm font-black text-slate-100 transition hover:border-zinc-300/40 hover:bg-zinc-400/10"
                 onClick={() => openDraft("root")}
               >
                 <Plus className="h-5 w-5" />
@@ -604,7 +604,7 @@ function SubjectTreeSelector({
         {!nodes.length && !editing ? (
           <button
             type="button"
-            className="flex min-h-24 items-center justify-center gap-2 rounded-[8px] border border-dashed border-white/12 bg-white/[0.025] px-3 py-4 text-sm font-bold text-slate-300 transition hover:border-violet-300/40 hover:bg-violet-400/10 hover:text-violet-50 md:col-span-2 xl:col-span-3"
+            className="flex min-h-24 items-center justify-center gap-2 rounded-[8px] border border-dashed border-white/12 bg-white/[0.025] px-3 py-4 text-sm font-bold text-slate-300 transition hover:border-zinc-300/40 hover:bg-zinc-400/10 hover:text-zinc-50 md:col-span-2 xl:col-span-3"
             onClick={() => {
               openDraft("root");
             }}
@@ -707,7 +707,7 @@ function SubjectFolderRow({
             <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
-                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
+                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-zinc-300/50 hover:bg-zinc-400/15 hover:text-white"
                 onClick={() => onOpenEdit(value, node.label, color)}
                 aria-label={`${node.label} 수정`}
                 title={`${node.label} 수정`}
@@ -716,7 +716,7 @@ function SubjectFolderRow({
               </button>
               <button
                 type="button"
-                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-violet-300/50 hover:bg-violet-400/15 hover:text-white"
+                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-slate-200 transition hover:border-zinc-300/50 hover:bg-zinc-400/15 hover:text-white"
                 onClick={() => onOpenDraft(value)}
                 aria-label={`${node.label} 하위 항목 추가`}
                 title={`${node.label} 하위 항목 추가`}
@@ -725,7 +725,7 @@ function SubjectFolderRow({
               </button>
               <button
                 type="button"
-                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/15 hover:text-rose-50"
+                className="grid h-7 w-7 place-items-center rounded-full border border-white/12 bg-black/25 text-zinc-200 transition hover:border-zinc-300/50 hover:bg-zinc-500/15 hover:text-zinc-50"
                 onClick={() => onDelete(value, node.label)}
                 aria-label={`${node.label} 삭제`}
                 title={`${node.label} 삭제`}
@@ -799,7 +799,7 @@ function SubjectDraftRow({
   onSubmit: () => void;
 }) {
   return (
-    <div className="rounded-[7px] border border-dashed border-violet-300/30 bg-violet-400/[0.055] p-2 shadow-[0_12px_26px_rgba(76,29,149,0.12)]">
+    <div className="rounded-[7px] border border-dashed border-zinc-300/30 bg-zinc-400/[0.055] p-2 shadow-[0_12px_26px_rgba(255,255,255,0.12)]">
       <Input
         autoFocus
         aria-label={label}
@@ -846,7 +846,7 @@ function SubjectEditRow({
   onCancel: () => void;
 }) {
   return (
-    <div className="rounded-[7px] border border-violet-300/35 bg-violet-400/[0.07] p-2 shadow-[0_12px_26px_rgba(76,29,149,0.12)]">
+    <div className="rounded-[7px] border border-zinc-300/35 bg-zinc-400/[0.07] p-2 shadow-[0_12px_26px_rgba(255,255,255,0.12)]">
       <Input
         autoFocus
         aria-label={label}
@@ -909,8 +909,8 @@ function DropZone({
     <div className="space-y-2">
       <label
         className={cn(
-          "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-white/12 bg-white/[0.035] p-6 text-center transition-colors hover:border-violet-400/60 hover:bg-white/[0.055]",
-          isDragging && "border-violet-400 bg-violet-500/10 text-white ring-2 ring-violet-400/25"
+          "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-white/12 bg-white/[0.035] p-6 text-center transition-colors hover:border-zinc-400/60 hover:bg-white/[0.055]",
+          isDragging && "border-zinc-400 bg-zinc-500/10 text-white ring-2 ring-zinc-400/25"
         )}
         onDragEnter={(event) => {
           event.preventDefault();
@@ -931,9 +931,9 @@ function DropZone({
           pickFile(event.dataTransfer.files?.[0] ?? null);
         }}
       >
-        <UploadCloud className="mb-3 h-9 w-9 text-violet-300" />
+        <UploadCloud className="mb-3 h-9 w-9 text-zinc-300" />
         <span className="font-semibold text-white">
-          {label} {required && <span className="text-red-300">*</span>}
+          {label} {required && <span className="text-zinc-300">*</span>}
         </span>
         {file || isDragging ? <span className="mt-2 text-sm text-slate-400">{file ? file.name : "여기에 PDF를 놓으세요"}</span> : null}
         <input
@@ -1338,10 +1338,10 @@ export default function UploadPage() {
   const creditEstimateExceedsRemaining = Boolean(creditEstimate && creditsRemaining !== null && creditEstimate.credits > creditsRemaining);
   const canSubmit = Boolean(batchName && problemPdf && selectedArchiveFolderId && rightsConfirmed && !submitting && !selectedEngineLocked);
   const creditEstimatePanel = problemPdf ? (
-    <div className="rounded-lg border border-violet-300/20 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),rgba(255,255,255,0.035)_52%,rgba(0,0,0,0.18))] p-4 shadow-[0_18px_52px_rgba(76,29,149,0.16)]">
+    <div className="rounded-lg border border-zinc-300/20 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),rgba(255,255,255,0.035)_52%,rgba(0,0,0,0.18))] p-4 shadow-[0_18px_52px_rgba(255,255,255,0.16)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-violet-200">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-zinc-200">
             <Sparkles className="h-4 w-4" />
             예상 credits
           </div>
@@ -1363,10 +1363,10 @@ export default function UploadPage() {
         <div className="rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : isLanguagePassageEngine(subjectEngine) ? `${subjectEngineLabel(subjectEngine)} 가중치` : "기본 가중치"}</div>
       </div>
       {creditEstimate?.approximate || problemPdfEstimate.error || solutionPdfEstimate.error ? (
-        <p className="mt-3 text-xs font-semibold text-amber-200">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>
+        <p className="mt-3 text-xs font-semibold text-zinc-200">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>
       ) : null}
       {creditEstimateExceedsRemaining ? (
-        <p className="mt-3 text-xs font-semibold text-red-200">현재 남은 credits보다 예상 소모량이 큽니다. 플랜 사용량을 확인해주세요.</p>
+        <p className="mt-3 text-xs font-semibold text-zinc-200">현재 남은 credits보다 예상 소모량이 큽니다. 플랜 사용량을 확인해주세요.</p>
       ) : null}
     </div>
   ) : null;
@@ -1374,7 +1374,7 @@ export default function UploadPage() {
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-6">
       <section className="hidden">
-        <div className="inline-flex items-center gap-2 rounded-md border border-violet-400/20 bg-violet-400/10 px-2.5 py-1 text-xs font-semibold text-violet-100">
+        <div className="inline-flex items-center gap-2 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-2.5 py-1 text-xs font-semibold text-zinc-100">
           <ShieldCheck className="h-4 w-4" />
           권리 보유 자료 문항화
         </div>
@@ -1403,7 +1403,7 @@ export default function UploadPage() {
                         disabled={locked}
                         className={cn(
                           "rounded-[8px] border px-3 py-2 text-sm font-semibold transition",
-                          selected ? "border-violet-300/70 bg-violet-500/20 text-violet-50" : "border-white/10 bg-black/20 text-slate-300 hover:border-white/25",
+                          selected ? "border-zinc-300/70 bg-zinc-500/20 text-zinc-50" : "border-white/10 bg-black/20 text-slate-300 hover:border-white/25",
                           locked && "cursor-not-allowed opacity-45"
                         )}
                         onClick={() => {
@@ -1422,7 +1422,7 @@ export default function UploadPage() {
                     );
                   })}
                 </div>
-                {selectedEngineLocked ? <p className="mt-3 text-xs text-amber-200">선택한 엔진은 현재 플랜에서 사용할 수 없습니다.</p> : null}
+                {selectedEngineLocked ? <p className="mt-3 text-xs text-zinc-200">선택한 엔진은 현재 플랜에서 사용할 수 없습니다.</p> : null}
               </div>
 
               <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
@@ -1448,7 +1448,7 @@ export default function UploadPage() {
                   <label className="block">
                     <span className="mb-2 block text-xs font-semibold text-slate-400">배치 메모</span>
                     <textarea
-                      className="min-h-20 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400"
+                      className="min-h-20 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-zinc-400"
                       placeholder="선택 사항: 배치에 남겨둘 메모를 입력하세요."
                       value={rightsNote}
                       onChange={(event) => setRightsNote(event.target.value)}
@@ -1468,7 +1468,7 @@ export default function UploadPage() {
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <h2 className="flex items-center gap-2 text-sm font-bold text-white">
-              <ShieldCheck className="h-4 w-4 text-violet-200" />
+              <ShieldCheck className="h-4 w-4 text-zinc-200" />
               업로드 권리 확인
             </h2>
             <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
@@ -1489,7 +1489,7 @@ export default function UploadPage() {
           {uploadPercent !== null ? (
             <div className="space-y-1">
               <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-violet-400 transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+                <div className="h-full rounded-full bg-zinc-400 transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
               </div>
               <p className="text-xs text-slate-500">{uploadPercent >= 100 ? "서버에서 배치 생성 중" : `업로드 ${uploadPercent}%`}</p>
             </div>

@@ -101,9 +101,9 @@ function groupLearningProblemsByPage(problems: LearningProblem[]): AssignmentPro
 
 function StatusChip({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "good" | "warn" | "locked" }) {
   const toneClass = {
-    default: "border-violet-300/25 bg-violet-300/10 text-violet-100",
-    good: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
-    warn: "border-amber-300/25 bg-amber-300/10 text-amber-100",
+    default: "border-zinc-300/25 bg-zinc-300/10 text-zinc-100",
+    good: "border-zinc-300/25 bg-zinc-300/10 text-zinc-100",
+    warn: "border-zinc-300/25 bg-zinc-300/10 text-zinc-100",
     locked: "border-slate-300/20 bg-slate-300/10 text-slate-200",
   }[tone];
   return <span className={`inline-flex h-6 items-center rounded-full border px-2 text-xs font-semibold ${toneClass}`}>{children}</span>;
@@ -250,7 +250,7 @@ export default function StudentAppPage() {
 
   if (profile?.account_type !== "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] border border-sky-300/20 bg-sky-300/[0.045] p-6 text-center">
+      <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
         <h1 className="text-xl font-bold text-white">학생 계정 전용 학습 공간입니다</h1>
         <a href="/academy" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
           Academy OS로 이동
@@ -264,7 +264,7 @@ export default function StudentAppPage() {
       <section className="rounded-[16px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.22),rgba(8,10,16,0.95)_46%)] p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-violet-200">Student Learning Workspace</p>
+            <p className="text-sm font-semibold text-zinc-200">Student Learning Workspace</p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">모든 학원의 과제와 학습 기록을 한 곳에서</h1>
           </div>
           <select
@@ -282,8 +282,8 @@ export default function StudentAppPage() {
 
       {(notice || error) && (
         <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-3 text-sm">
-          {notice && <div className="text-emerald-200">{notice}</div>}
-          {error && <div className="text-red-300">{error}</div>}
+          {notice && <div className="text-zinc-200">{notice}</div>}
+          {error && <div className="text-zinc-300">{error}</div>}
         </div>
       )}
 
@@ -292,7 +292,7 @@ export default function StudentAppPage() {
           <button
             key={item.key}
             onClick={() => setTab(item.key)}
-            className={`flex h-12 flex-col items-center justify-center gap-1 rounded-[8px] text-xs font-semibold transition sm:flex-row sm:text-sm ${tab === item.key ? "bg-violet-500 text-white" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"}`}
+            className={`flex h-12 flex-col items-center justify-center gap-1 rounded-[8px] text-xs font-semibold transition sm:flex-row sm:text-sm ${tab === item.key ? "bg-zinc-500 text-white" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"}`}
           >
             <item.icon className="h-4 w-4" />
             {item.label}
@@ -307,7 +307,7 @@ export default function StudentAppPage() {
             <CardContent className="space-y-3">
               {filteredAssignments.length === 0 && <p className="text-sm text-muted-foreground">표시할 과제가 없습니다.</p>}
               {filteredAssignments.map((item) => (
-                <button key={item.id} onClick={() => void openAssignment(item)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-violet-300/30 hover:bg-violet-300/[0.06]">
+                <button key={item.id} onClick={() => void openAssignment(item)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/30 hover:bg-zinc-300/[0.06]">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-semibold text-white">{item.title}</div>
@@ -317,7 +317,7 @@ export default function StudentAppPage() {
                       {assignmentStatusLabel(item)}
                     </StatusChip>
                   </div>
-                  {item.submission?.score !== null && item.submission?.score !== undefined && <div className="mt-2 text-sm text-violet-100">Score {item.submission.score}</div>}
+                  {item.submission?.score !== null && item.submission?.score !== undefined && <div className="mt-2 text-sm text-zinc-100">Score {item.submission.score}</div>}
                 </button>
               ))}
             </CardContent>
@@ -361,7 +361,7 @@ export default function StudentAppPage() {
                                 <MathText className="text-sm leading-6 text-slate-200" value={problem.problem_text} />
                                 {problem.review_page_image_url && <img src={problem.review_page_image_url} alt="" className="mt-3 max-h-56 rounded-[8px] border border-white/10 object-contain" />}
                                 <Input className="mt-3" value={answers[problem.id] || ""} onChange={(event) => setAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
-                                {problem.answer && <p className="mt-2 text-xs text-emerald-200">정답: {problem.answer}</p>}
+                                {problem.answer && <p className="mt-2 text-xs text-zinc-200">정답: {problem.answer}</p>}
                               </div>
                             ))}
                           </div>
@@ -383,7 +383,7 @@ export default function StudentAppPage() {
             <CardHeader><CardTitle>Accessible Archives</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {filteredArchives.map((grant) => (
-                <button key={grant.id} onClick={() => void openArchive(grant)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-violet-300/30">
+                <button key={grant.id} onClick={() => void openArchive(grant)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/30">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="font-semibold text-white">{grant.title}</div>

@@ -219,8 +219,8 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
           <aside className="h-fit rounded-[28px] border border-slate-950/10 bg-slate-950 p-6 text-white shadow-[0_24px_90px_rgba(15,23,42,0.22)]">
             <CreditCard className="h-6 w-6" />
             <h2 className="mt-5 text-2xl font-black">결제 금액</h2>
-            <div className="mt-4 rounded-[14px] border border-cyan-100/20 bg-white/[0.06] px-4 py-3">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Primary PG</p>
+            <div className="mt-4 rounded-[14px] border border-zinc-100/20 bg-white/[0.06] px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-100">Primary PG</p>
               <p className="mt-1 text-sm font-black">KG Inicis via PortOne</p>
               <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">Toss Payments remains available as fallback.</p>
             </div>
@@ -240,13 +240,13 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                 value={phoneNumber}
                 onChange={(event) => setPhoneNumber(event.target.value)}
                 placeholder="01012345678"
-                className="mt-2 h-11 w-full rounded-[10px] border border-white/10 bg-white/[0.08] px-3 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/70"
+                className="mt-2 h-11 w-full rounded-[10px] border border-white/10 bg-white/[0.08] px-3 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-zinc-200/70"
               />
             </label>
-            <button disabled={!agreed || loading || !phoneReady} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
+            <button disabled={!agreed || loading || !phoneReady} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50">
               {loading ? "결제 준비 중..." : "월 자동결제 시작하기"}
             </button>
-            {error && <p className="mt-4 rounded-[12px] bg-rose-500/14 px-4 py-3 text-sm font-bold text-rose-100">{error}</p>}
+            {error && <p className="mt-4 rounded-[12px] bg-zinc-500/14 px-4 py-3 text-sm font-bold text-zinc-100">{error}</p>}
             <p className="mt-5 flex gap-2 text-xs leading-5 text-slate-400">
               <ShieldCheck className="h-4 w-4 shrink-0" />
               서버가 금액과 패키지를 검증한 뒤 PortOne V2 billing key로 월 자동결제를 처리합니다.
@@ -280,7 +280,7 @@ function PriceLine({ label, value, positive }: { label: string; value: string; p
   return (
     <div className="flex justify-between gap-3">
       <span className="text-slate-400">{label}</span>
-      <span className={positive ? "font-black text-emerald-200" : "font-black"}>{value}</span>
+      <span className={positive ? "font-black text-zinc-200" : "font-black"}>{value}</span>
     </div>
   );
 }

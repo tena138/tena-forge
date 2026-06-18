@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
     <AuthCard title="비밀번호 찾기" subtitle="가입한 이메일을 입력하시면 재설정 링크를 보내드립니다.">
       {sent ? (
         <div className="space-y-4 text-center">
-          <p className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-4 py-5 text-sm font-medium text-emerald-100">이메일을 발송했습니다. 받은 편지함을 확인해주세요.</p>
+          <p className="rounded-lg border border-zinc-300/20 bg-zinc-400/10 px-4 py-5 text-sm font-medium text-zinc-100">이메일을 발송했습니다. 받은 편지함을 확인해주세요.</p>
           <Link href="/login" className="block text-sm font-semibold text-primary hover:underline">로그인으로 돌아가기</Link>
         </div>
       ) : (

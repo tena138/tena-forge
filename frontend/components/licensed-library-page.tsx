@@ -72,7 +72,7 @@ export function LicensedLibraryPage() {
                 onClick={() => setFilter(item.key)}
                 className={`rounded-[8px] border px-3 py-2 text-sm font-semibold transition ${
                   filter === item.key
-                    ? "border-cyan-300/50 bg-cyan-300/15 text-cyan-100"
+                    ? "border-zinc-300/50 bg-zinc-300/15 text-zinc-100"
                     : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
                 }`}
               >
@@ -85,7 +85,7 @@ export function LicensedLibraryPage() {
       </section>
 
       {error && (
-        <div className="rounded-[10px] border border-red-400/20 bg-red-400/10 p-4 text-sm font-medium text-red-100">
+        <div className="rounded-[10px] border border-zinc-400/20 bg-zinc-400/10 p-4 text-sm font-medium text-zinc-100">
           {error}
         </div>
       )}
@@ -115,7 +115,7 @@ export function LicensedLibraryPage() {
                 <p className="mt-2 text-sm text-slate-400">{licenseTypeLabels[item.license_type]}</p>
                 {item.ends_at && <p className="mt-1 text-xs text-slate-500">만료일 {new Date(item.ends_at).toLocaleDateString("ko-KR")}</p>}
                 {locked ? (
-                  <div className="mt-4 rounded-md border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
+                  <div className="mt-4 rounded-md border border-zinc-400/20 bg-zinc-400/10 p-3 text-sm text-zinc-100">
                     구독 기간이 만료되어 이 자료를 사용할 수 없습니다.
                     <Button className="mt-3 w-full" size="sm" variant="outline">
                       <RefreshCw className="mr-2 h-4 w-4" />

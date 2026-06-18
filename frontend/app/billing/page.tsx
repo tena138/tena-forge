@@ -41,7 +41,7 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Billing</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Billing</p>
         <h1 className="mt-2 text-3xl font-bold text-white">구독 및 사용량</h1>
       </section>
 
@@ -71,7 +71,7 @@ export default function BillingPage() {
               type="button"
               className={`rounded-[8px] border px-3 py-2 text-sm font-semibold transition ${
                 selectedEngines.includes(engine.code)
-                  ? "border-violet-300/70 bg-violet-500/20 text-violet-50"
+                  ? "border-zinc-300/70 bg-zinc-500/20 text-zinc-50"
                   : "border-white/10 bg-black/20 text-slate-300 hover:border-white/25"
               }`}
               onClick={() => toggleEngine(engine.code)}
@@ -90,7 +90,7 @@ export default function BillingPage() {
           return (
             <div key={plan.code} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5">
               <h2 className="text-lg font-bold text-white">{plan.name}</h2>
-              <p className="mt-2 text-2xl font-bold text-violet-200">{won(monthlyPrice)}</p>
+              <p className="mt-2 text-2xl font-bold text-zinc-200">{won(monthlyPrice)}</p>
               <p className="mt-1 text-xs text-slate-500">
                 Base {won(plan.monthly_price)}{engineDelta ? ` + engine ${won(engineDelta)}` : ""}
               </p>

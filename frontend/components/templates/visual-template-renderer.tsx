@@ -461,7 +461,7 @@ function renderKoreanPassageFlowRegion(region: ContentRegionElement, problems: S
       </div>
       {dividers}
       {showChrome ? (
-        <div className="pointer-events-none absolute left-2 top-2 z-10 flex items-center gap-2 rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-violet-700 shadow-sm ring-1 ring-violet-200/70">
+        <div className="pointer-events-none absolute left-2 top-2 z-10 flex items-center gap-2 rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-700 shadow-sm ring-1 ring-zinc-200/70">
           <span>{label}</span>
           <span>{region.columns}열 국어형</span>
         </div>
@@ -536,7 +536,7 @@ function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = 
         alignItems: rowCount ? "stretch" : "start",
       }}
     >
-      {problems.length ? problems.map((problem) => <ProblemCard key={problem.id} problem={region.type === "solutionRegion" ? { ...problem, solution: problem.answer || "" } : problem} region={region} />) : <div className="rounded border border-dashed border-violet-200 bg-white/75 p-3 text-xs text-violet-700">내보내기 시 문항과 답안이 이 영역에 자동 배치됩니다.</div>}
+      {problems.length ? problems.map((problem) => <ProblemCard key={problem.id} problem={region.type === "solutionRegion" ? { ...problem, solution: problem.answer || "" } : problem} region={region} />) : <div className="rounded border border-dashed border-zinc-200 bg-white/75 p-3 text-xs text-zinc-700">내보내기 시 문항과 답안이 이 영역에 자동 배치됩니다.</div>}
     </div>
   );
   const body = (
@@ -544,7 +544,7 @@ function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = 
       {grid}
       {dividers}
       {showChrome ? (
-        <div className="pointer-events-none absolute left-2 top-2 z-10 flex items-center gap-2 rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-violet-700 shadow-sm ring-1 ring-violet-200/70">
+        <div className="pointer-events-none absolute left-2 top-2 z-10 flex items-center gap-2 rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-700 shadow-sm ring-1 ring-zinc-200/70">
           <span>{label}</span>
           <span>{region.columns}열{rowCount ? ` x ${rowCount}행` : ""}</span>
         </div>
@@ -729,20 +729,20 @@ export function TemplatePageView({
       {interactive && page.guides?.map((guide) => (
         <div
           key={guide.id}
-          className="pointer-events-none absolute bg-cyan-400/70"
+          className="pointer-events-none absolute bg-zinc-400/70"
           style={guide.axis === "x" ? { left: guide.position, top: 0, width: 1, height: "100%" } : { left: 0, top: guide.position, height: 1, width: "100%" }}
         />
       ))}
       {alignmentGuides.map((guide) => (
         <div
           key={guide.id}
-          className="pointer-events-none absolute z-[1400] bg-violet-500/85 shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_0_18px_rgba(139,92,246,0.55)]"
+          className="pointer-events-none absolute z-[1400] bg-zinc-500/85 shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_0_18px_rgba(139,92,246,0.55)]"
           style={guide.axis === "x" ? { left: guide.position, top: 0, width: 1, height: "100%" } : { left: 0, top: guide.position, height: 1, width: "100%" }}
         />
       ))}
       {interactive && selectionBox ? (
         <div
-          className="pointer-events-none absolute z-[1500] rounded-[6px] border border-violet-300 bg-violet-400/15 shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
+          className="pointer-events-none absolute z-[1500] rounded-[6px] border border-zinc-300 bg-zinc-400/15 shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
           style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.width, height: selectionBox.height }}
         />
       ) : null}
@@ -753,7 +753,7 @@ export function TemplatePageView({
           <div
             key={element.id}
             data-element-id={element.id}
-            className={`${selected ? "ring-2 ring-violet-500" : interactive ? "hover:ring-1 hover:ring-violet-300" : ""} outline-none`}
+            className={`${selected ? "ring-2 ring-zinc-500" : interactive ? "hover:ring-1 hover:ring-zinc-300" : ""} outline-none`}
             tabIndex={interactive ? -1 : undefined}
             style={{ ...elementStyle(element, selected), overflow: interactive && selected ? "visible" : "hidden" }}
             onPointerDown={(event) => {
@@ -765,12 +765,12 @@ export function TemplatePageView({
             <div className="h-full w-full overflow-hidden">{renderElementContent ? renderElementContent(element, defaultContent) : defaultContent}</div>
             {interactive && selected && !element.locked ? (
               <>
-                <div className="absolute left-1/2 -top-8 h-5 w-5 -translate-x-1/2 cursor-grab rounded-full border border-white bg-violet-500 shadow-[0_8px_24px_rgba(109,40,217,0.35)]" onPointerDown={(event) => onRotatePointerDown?.(event, element)} />
-                <div className="absolute left-1/2 -top-4 h-4 w-px -translate-x-1/2 bg-violet-400/75" />
+                <div className="absolute left-1/2 -top-8 h-5 w-5 -translate-x-1/2 cursor-grab rounded-full border border-white bg-zinc-500 shadow-[0_8px_24px_rgba(109,40,217,0.35)]" onPointerDown={(event) => onRotatePointerDown?.(event, element)} />
+                <div className="absolute left-1/2 -top-4 h-4 w-px -translate-x-1/2 bg-zinc-400/75" />
                 {resizeHandles.map((handle) => (
                   <div
                     key={handle.direction}
-                    className={`absolute h-4 w-4 rounded-[4px] border border-violet-500 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.22)] ${handle.className}`}
+                    className={`absolute h-4 w-4 rounded-[4px] border border-zinc-500 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.22)] ${handle.className}`}
                     onPointerDown={(event) => onResizePointerDown?.(event, element, handle.direction)}
                   />
                 ))}

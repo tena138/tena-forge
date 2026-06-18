@@ -39,7 +39,7 @@ export default function CreatorApplyPage() {
   if (application) {
     return (
       <div className="rounded-[14px] border border-white/10 bg-white/[0.045] p-8">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Creator Application</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Creator Application</p>
         <h1 className="mt-2 text-3xl font-bold text-white">신청 상태: {application.status}</h1>
         <p className="mt-3 text-sm text-slate-400">{application.rejection_reason || "관리자 검토가 완료되면 크리에이터 관리 화면이 활성화됩니다."}</p>
       </div>
@@ -49,7 +49,7 @@ export default function CreatorApplyPage() {
   return (
     <form onSubmit={submit} className="mx-auto max-w-3xl space-y-5 rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Creator Onboarding</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Creator Onboarding</p>
         <h1 className="mt-2 text-3xl font-bold text-white">크리에이터 신청</h1>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
@@ -67,7 +67,7 @@ export default function CreatorApplyPage() {
         본인은 판매 콘텐츠에 대한 정당한 권리를 보유하며, 마켓플레이스 판매자 약관과 저작권 침해 시 제재 및 정산 보류 정책에 동의합니다.
       </div>
       <Button type="submit">신청 제출</Button>
-      {message && <p className="text-sm text-violet-200">{message}</p>}
+      {message && <p className="text-sm text-zinc-200">{message}</p>}
     </form>
   );
 }

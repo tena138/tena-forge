@@ -77,20 +77,20 @@ function displayPlan(profile: AcademyProfile) {
   const roles = profile.roles || [];
   const isAdmin = String(profile.plan || "").toLowerCase() === "admin" || roles.includes("admin") || roles.includes("super_admin");
   if (isAdmin) {
-    return { label: "Admin", tone: "admin" as PlanTone, status: "무제한", statusClass: "text-violet-600 dark:text-violet-200" };
+    return { label: "Admin", tone: "admin" as PlanTone, status: "무제한", statusClass: "text-zinc-600 dark:text-zinc-200" };
   }
 
   const trialEndsAt = profile.trial_ends_at || profile.plan_expires_at;
   const isTrial = profile.account_type !== "student" && !profile.requires_payment && isFutureDate(trialEndsAt);
   if (isTrial) {
-    return { label: "Trial", tone: "trial" as PlanTone, status: "체험 중", statusClass: "text-cyan-600 dark:text-cyan-200" };
+    return { label: "Trial", tone: "trial" as PlanTone, status: "체험 중", statusClass: "text-zinc-600 dark:text-zinc-200" };
   }
   if (profile.requires_payment) {
-    return { label: "Trial Expired", tone: "free" as PlanTone, status: "결제 필요", statusClass: "text-rose-600 dark:text-rose-200" };
+    return { label: "Trial Expired", tone: "free" as PlanTone, status: "결제 필요", statusClass: "text-zinc-600 dark:text-zinc-200" };
   }
   const normalizedPlan = String(profile.plan || "free").toLowerCase();
   const plan = planNames[normalizedPlan] || { label: normalizedPlan || "Free", tone: "free" as PlanTone };
-  return { ...plan, status: profile.is_active ? "활성" : "비활성", statusClass: profile.is_active ? "text-emerald-600" : "text-rose-600" };
+  return { ...plan, status: profile.is_active ? "활성" : "비활성", statusClass: profile.is_active ? "text-zinc-600" : "text-zinc-600" };
 }
 
 function PlanBadge({ label, tone }: { label: string; tone: PlanTone }) {
@@ -226,7 +226,7 @@ export function HeaderAccountSummary() {
           onClick={() => setOpen((value) => !value)}
           aria-label="계정 메뉴"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-violet-500 text-sm font-bold text-white">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-zinc-500 text-sm font-bold text-white">
             {initials}
           </span>
           <span className="hidden min-w-0 sm:block">
@@ -306,7 +306,7 @@ export function HeaderAccountSummary() {
               <Settings className="h-4 w-4" />
               보안 설정
             </Link>
-            <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-red-600 hover:bg-red-50" onClick={signOut}>
+            <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-zinc-600 hover:bg-zinc-50" onClick={signOut}>
               <LogOut className="h-4 w-4" />
               로그아웃
             </button>
@@ -389,8 +389,8 @@ export function HeaderAccountSummary() {
               </div>
             </div>
 
-            {notice && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{notice}</p>}
-            {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+            {notice && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{notice}</p>}
+            {error && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{error}</p>}
           </div>
 
           <div className="flex justify-end gap-2 border-t px-5 py-4">

@@ -309,7 +309,7 @@ function highlightedVariableParts(value: string) {
     if (start > cursor) parts.push(value.slice(cursor, start));
     if (knownVariableTokens.has(token)) {
       parts.push(
-        <span key={`${token}-${index}`} className="rounded bg-cyan-400/18 font-semibold text-cyan-200 ring-1 ring-cyan-300/20">
+        <span key={`${token}-${index}`} className="rounded bg-zinc-400/18 font-semibold text-zinc-200 ring-1 ring-zinc-300/20">
           {token}
         </span>
       );
@@ -392,7 +392,7 @@ function VariableTextArea({
 
   return (
     <div className="relative">
-      <div className="relative rounded-md border border-white/10 bg-white/[0.04] focus-within:border-violet-400/50">
+      <div className="relative rounded-md border border-white/10 bg-white/[0.04] focus-within:border-zinc-400/50">
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-md">
           <div
             aria-hidden="true"
@@ -404,7 +404,7 @@ function VariableTextArea({
         </div>
         <textarea
           ref={textareaRef}
-          className={cls(textClassName, "relative z-10 border-0 bg-transparent text-transparent caret-white outline-none selection:bg-violet-400/30")}
+          className={cls(textClassName, "relative z-10 border-0 bg-transparent text-transparent caret-white outline-none selection:bg-zinc-400/30")}
           value={value}
           spellCheck={false}
           onChange={(event) => {
@@ -427,7 +427,7 @@ function VariableTextArea({
               type="button"
               className={cls(
                 "flex w-full items-center justify-between gap-3 rounded-[7px] px-2.5 py-2 text-left text-sm transition",
-                index === activeIndex ? "bg-cyan-400/14 text-cyan-100" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
+                index === activeIndex ? "bg-zinc-400/14 text-zinc-100" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
               )}
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -485,7 +485,7 @@ function InlineTextEditor({
     <textarea
       ref={textareaRef}
       aria-label="Edit text box"
-      className="h-full w-full cursor-text resize-none select-text whitespace-pre-wrap bg-transparent p-1 outline-none ring-0 selection:bg-violet-400/25"
+      className="h-full w-full cursor-text resize-none select-text whitespace-pre-wrap bg-transparent p-1 outline-none ring-0 selection:bg-zinc-400/25"
       style={style}
       value={element.text}
       spellCheck={false}
@@ -1875,26 +1875,26 @@ function VisualTemplateStudioPageContent() {
             <Input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="요소 검색" className="h-9 bg-white/[0.035] pl-9 text-sm" />
           </label>
 
-          <div className="rounded-[14px] border border-dashed border-violet-300/35 bg-violet-500/[0.08] p-3">
+          <div className="rounded-[14px] border border-dashed border-zinc-300/35 bg-zinc-500/[0.08] p-3">
             <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml" multiple className="hidden" onChange={handleImageInput} />
             <input ref={pptxInputRef} type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={handlePptxInput} />
             <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handlePdfInput} />
             <button
               type="button"
-              className="flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-violet-300/45 hover:bg-violet-400/10"
+              className="flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-zinc-300/45 hover:bg-zinc-400/10"
               onClick={() => imageInputRef.current?.click()}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-violet-400/15 text-violet-100 ring-1 ring-violet-300/20">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-zinc-400/15 text-zinc-100 ring-1 ring-zinc-300/20">
                 <ImageIcon className="h-5 w-5" />
               </span>
               <span className="block text-sm font-bold text-white">이미지 업로드</span>
             </button>
             <button
               type="button"
-              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-cyan-300/45 hover:bg-cyan-400/10"
+              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-zinc-300/45 hover:bg-zinc-400/10"
               onClick={() => pptxInputRef.current?.click()}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-cyan-400/15 text-cyan-100 ring-1 ring-cyan-300/20">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-zinc-400/15 text-zinc-100 ring-1 ring-zinc-300/20">
                 <FileStack className="h-5 w-5" />
               </span>
               <span className="block min-w-0">
@@ -1904,11 +1904,11 @@ function VisualTemplateStudioPageContent() {
             </button>
             <button
               type="button"
-              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-emerald-300/45 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-zinc-300/45 hover:bg-zinc-400/10 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => pdfInputRef.current?.click()}
               disabled={importingPdf}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-emerald-400/15 text-emerald-100 ring-1 ring-emerald-300/20">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-zinc-400/15 text-zinc-100 ring-1 ring-zinc-300/20">
                 <FileText className="h-5 w-5" />
               </span>
               <span className="block min-w-0">
@@ -1950,10 +1950,10 @@ function VisualTemplateStudioPageContent() {
                         draggable
                         onDragStart={(event) => event.dataTransfer.setData("application/x-template-element", item.type)}
                         onClick={() => addElement(item.type)}
-                        className="group min-h-[74px] rounded-[11px] border border-white/10 bg-white/[0.045] p-2.5 text-left shadow-[0_10px_26px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/10"
+                        className="group min-h-[74px] rounded-[11px] border border-white/10 bg-white/[0.045] p-2.5 text-left shadow-[0_10px_26px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:border-zinc-300/45 hover:bg-zinc-500/10"
                         title={item.description}
                       >
-                        <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-[9px] border border-white/10 bg-black/30 text-violet-200 transition group-hover:border-violet-300/40 group-hover:bg-violet-400/15">
+                        <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-[9px] border border-white/10 bg-black/30 text-zinc-200 transition group-hover:border-zinc-300/40 group-hover:bg-zinc-400/15">
                           <Icon className="h-4 w-4" />
                         </span>
                         <span className="block text-sm font-bold text-white">{item.label}</span>
@@ -1987,11 +1987,11 @@ function VisualTemplateStudioPageContent() {
                 key={element.id}
                 className={cls(
                   "flex w-full items-center gap-2 rounded-[11px] border px-3 py-2.5 text-left transition",
-                  selectedIds.includes(element.id) ? "border-violet-300/55 bg-violet-500/14" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                  selectedIds.includes(element.id) ? "border-zinc-300/55 bg-zinc-500/14" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
                 )}
                 onClick={() => selectSingleElement(element)}
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-white/10 bg-black/25 text-violet-200">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-white/10 bg-black/25 text-zinc-200">
                   <Layers className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -2001,7 +2001,7 @@ function VisualTemplateStudioPageContent() {
                   </span>
                 </span>
                 {element.hidden ? <EyeOff className="h-4 w-4 shrink-0 text-slate-500" /> : null}
-                {element.locked ? <Lock className="h-4 w-4 shrink-0 text-amber-200" /> : null}
+                {element.locked ? <Lock className="h-4 w-4 shrink-0 text-zinc-200" /> : null}
               </button>
             ))}
             {!filteredPageElements.length ? (
@@ -2022,7 +2022,7 @@ function VisualTemplateStudioPageContent() {
                 key={page.id}
                 className={cls(
                   "flex w-full items-center gap-3 rounded-[12px] border p-2 text-left transition",
-                  page.id === selectedPageId ? "border-violet-300/55 bg-violet-500/14 shadow-[0_0_0_1px_rgba(167,139,250,0.12)]" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                  page.id === selectedPageId ? "border-zinc-300/55 bg-zinc-500/14 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
                 )}
                 onClick={() => {
                   setSelectedPageId(page.id);
@@ -2036,7 +2036,7 @@ function VisualTemplateStudioPageContent() {
                 </div>
                 <span
                   role="button"
-                  className="rounded-[7px] p-1.5 text-slate-500 hover:bg-red-500/15 hover:text-red-200"
+                  className="rounded-[7px] p-1.5 text-slate-500 hover:bg-zinc-500/15 hover:text-zinc-200"
                   onClick={(event) => {
                     event.stopPropagation();
                     removePage(page.id);
@@ -2095,7 +2095,7 @@ function VisualTemplateStudioPageContent() {
                 key={element.id}
                 className={cls(
                   "flex w-full items-center gap-2 rounded-[10px] border px-3 py-2 text-left text-sm transition",
-                  selectedIds.includes(element.id) ? "border-violet-300/55 bg-violet-500/14" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                  selectedIds.includes(element.id) ? "border-zinc-300/55 bg-zinc-500/14" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
                 )}
                 onClick={() => selectSingleElement(element)}
               >
@@ -2117,7 +2117,7 @@ function VisualTemplateStudioPageContent() {
           </Link>
           <div className="flex min-w-0 flex-col">
             <Input
-              className="h-8 w-[280px] border-transparent bg-transparent px-1 text-sm font-bold text-white hover:bg-white/[0.04] focus-visible:border-violet-400/40"
+              className="h-8 w-[280px] border-transparent bg-transparent px-1 text-sm font-bold text-white hover:bg-white/[0.04] focus-visible:border-zinc-400/40"
               value={templateSet.title}
               onChange={(event) =>
                 updateTemplateSet((draft) => {
@@ -2135,7 +2135,7 @@ function VisualTemplateStudioPageContent() {
           <button className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-35" onClick={redo} disabled={!redoStack.length} title="다시 실행">
             <Redo2 className="h-4 w-4" />
           </button>
-          <select className="h-9 rounded-[8px] border border-white/10 bg-white/[0.04] px-2 text-sm text-white outline-none transition focus:border-violet-400/50" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
+          <select className="h-9 rounded-[8px] border border-white/10 bg-white/[0.04] px-2 text-sm text-white outline-none transition focus:border-zinc-400/50" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
             <option value={0.5}>50%</option>
             <option value={0.72}>72%</option>
             <option value={0.84}>84%</option>
@@ -2145,7 +2145,7 @@ function VisualTemplateStudioPageContent() {
           <Button variant="outline" onClick={() => setPreview(true)}>
             <Eye className="h-4 w-4" /> 미리보기
           </Button>
-          <span className={cls("min-w-[108px] text-right text-[11px] font-semibold", autoSaveStatus === "error" ? "text-rose-300" : autoSaveStatus === "pending" ? "text-amber-200" : "text-slate-400")}>{autoSaveLabel}</span>
+          <span className={cls("min-w-[108px] text-right text-[11px] font-semibold", autoSaveStatus === "error" ? "text-zinc-300" : autoSaveStatus === "pending" ? "text-zinc-200" : "text-slate-400")}>{autoSaveLabel}</span>
           <Button onClick={saveTemplate} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? "저장 중" : "저장"}
           </Button>
@@ -2163,12 +2163,12 @@ function VisualTemplateStudioPageContent() {
                   key={tab.key}
                   className={cls(
                     "group relative flex h-11 w-11 items-center justify-center rounded-[11px] transition",
-                    active ? "bg-violet-500/18 text-violet-100 ring-1 ring-violet-300/25" : "text-slate-500 hover:bg-white/[0.06] hover:text-slate-200"
+                    active ? "bg-zinc-500/18 text-zinc-100 ring-1 ring-zinc-300/25" : "text-slate-500 hover:bg-white/[0.06] hover:text-slate-200"
                   )}
                   onClick={() => setLeftPanel(tab.key)}
                   title={tab.label}
                 >
-                  {active ? <span className="absolute -left-2 h-6 w-0.5 rounded-full bg-violet-300" /> : null}
+                  {active ? <span className="absolute -left-2 h-6 w-0.5 rounded-full bg-zinc-300" /> : null}
                   <Icon className="h-5 w-5" />
                   <span className="sr-only">{tab.label}</span>
                 </button>
@@ -2190,7 +2190,7 @@ function VisualTemplateStudioPageContent() {
                 <section key={page.id} className="space-y-3">
                   <div className="flex items-center justify-between rounded-[9px] border border-white/10 bg-white/[0.035] px-2.5 py-1.5 text-[11px] text-slate-400">
                     <button
-                      className={cls("rounded px-2 py-1 font-bold transition", page.id === selectedPageId ? "bg-violet-500/20 text-violet-100" : "hover:bg-white/[0.06]")}
+                      className={cls("rounded px-2 py-1 font-bold transition", page.id === selectedPageId ? "bg-zinc-500/20 text-zinc-100" : "hover:bg-white/[0.06]")}
                       onClick={() => {
                         setSelectedPageId(page.id);
                         setSelectedIds([]);
@@ -2254,7 +2254,7 @@ function VisualTemplateStudioPageContent() {
                 {templateColors.slice(0, 10).map((token) => (
                   <label
                     key={token.color}
-                    className="relative flex h-9 cursor-pointer items-center gap-2 overflow-hidden rounded-[9px] border border-white/10 bg-white/[0.035] px-2 transition hover:border-violet-300/45 hover:bg-violet-500/10"
+                    className="relative flex h-9 cursor-pointer items-center gap-2 overflow-hidden rounded-[9px] border border-white/10 bg-white/[0.035] px-2 transition hover:border-zinc-300/45 hover:bg-zinc-500/10"
                     title={`${token.color.toUpperCase()} · ${token.count}곳`}
                   >
                     <span className="h-5 w-5 shrink-0 rounded-[5px] border border-white/20 shadow-inner" style={{ backgroundColor: token.color }} />
@@ -2425,7 +2425,7 @@ function VisualTemplateStudioPageContent() {
                                 onClick={() => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, chartMode: option.value as typeof element.chartMode } : element))}
                                 className={cls(
                                   "flex h-9 items-center justify-center gap-2 rounded-md border text-xs font-bold transition",
-                                  active ? "border-violet-300/50 bg-violet-500/20 text-white" : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
+                                  active ? "border-zinc-300/50 bg-zinc-500/20 text-white" : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
                                 )}
                               >
                                 <Icon className="h-4 w-4" />
@@ -2477,7 +2477,7 @@ function VisualTemplateStudioPageContent() {
                                 key={preset.label}
                                 type="button"
                                 onClick={() => updateSelectedElement((element) => (element.type === "examStatsChart" ? { ...element, metrics: preset.metrics } : element))}
-                                className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-bold text-slate-400 transition hover:border-violet-300/35 hover:text-white"
+                                className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-bold text-slate-400 transition hover:border-zinc-300/35 hover:text-white"
                               >
                                 {preset.label}
                               </button>
@@ -2555,7 +2555,7 @@ function VisualTemplateStudioPageContent() {
                           step={1}
                           value={selectedCornerRadius}
                           onChange={(event) => updateSelectedCornerRadius(Number(event.target.value))}
-                          className="h-2 flex-1 accent-violet-400"
+                          className="h-2 flex-1 accent-zinc-400"
                           aria-label="모서리 둥글기"
                         />
                         <Input
@@ -2622,8 +2622,8 @@ function VisualTemplateStudioPageContent() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm">
           <div className="w-full max-w-[460px] rounded-[14px] border border-white/12 bg-[#0b0f19]/95 p-5 shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
             <div className="flex items-start gap-4">
-              <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-400/12 ring-1 ring-emerald-300/25">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-200/25 border-t-emerald-200" />
+              <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-400/12 ring-1 ring-zinc-300/25">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-200/25 border-t-zinc-200" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-base font-bold text-white">PDF 디자인 추출 중</div>
@@ -2631,7 +2631,7 @@ function VisualTemplateStudioPageContent() {
                 <div className="mt-3 text-sm leading-6 text-slate-200">{pdfImportMessage || "PDF 레이아웃을 분석하는 중입니다."}</div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
                   <div
-                    className="h-full rounded-full bg-emerald-300 transition-all duration-300"
+                    className="h-full rounded-full bg-zinc-300 transition-all duration-300"
                     style={{ width: `${pdfImportProgress == null ? 24 : Math.max(8, pdfImportProgress)}%` }}
                   />
                 </div>

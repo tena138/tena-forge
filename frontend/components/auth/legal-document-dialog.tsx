@@ -84,7 +84,7 @@ export function LegalDocumentDialog({
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.055] px-3 text-sm font-bold text-slate-100 transition hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.055] px-3 text-sm font-bold text-slate-100 transition hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60"
             aria-label="닫기"
           >
             닫기
@@ -102,7 +102,7 @@ export function LegalDocumentDialog({
               id={`legal-tab-${key}`}
               onClick={() => onActiveKeyChange(key)}
               className={clsx(
-                "mr-2 rounded-t-md border border-b-0 px-3 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60",
+                "mr-2 rounded-t-md border border-b-0 px-3 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60",
                 activeKey === key ? "border-white/10 bg-white/[0.08] text-white" : "border-transparent text-slate-400 hover:text-white",
               )}
             >
@@ -173,7 +173,7 @@ function LegalBlockView({ block }: { block: LegalBlock }) {
   }
 
   if (block.type === "note") {
-    return <p className="rounded-md border border-amber-300/20 bg-amber-400/10 p-3 text-sm leading-7 text-amber-100">{block.text}</p>;
+    return <p className="rounded-md border border-zinc-300/20 bg-zinc-400/10 p-3 text-sm leading-7 text-zinc-100">{block.text}</p>;
   }
 
   if (block.type === "list") {

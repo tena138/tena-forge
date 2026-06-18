@@ -11,7 +11,7 @@ export default function PurchasesPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Library</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Library</p>
         <h1 className="mt-2 text-3xl font-bold text-white">구매한 자료</h1>
       </section>
       {licenses.length ? (

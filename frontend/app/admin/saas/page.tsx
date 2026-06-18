@@ -22,7 +22,7 @@ export default function AdminSaasPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Admin</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Admin</p>
         <h1 className="mt-2 text-3xl font-bold text-white">SaaS / Marketplace 관리</h1>
       </section>
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">

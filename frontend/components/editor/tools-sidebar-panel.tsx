@@ -183,7 +183,7 @@ export function ToolsSidebarPanel() {
         <h3 className="mb-2 text-xs font-bold text-slate-600">그리기 도구</h3>
         <div className="grid grid-cols-2 gap-2">
           {drawingTools.map((tool) => (
-            <button key={tool.key} type="button" onClick={() => setDrawingTool(activeDrawingTool === tool.key ? "select" : tool.key)} className={`flex h-12 items-center justify-center gap-2 rounded-md border text-sm font-semibold transition ${activeDrawingTool === tool.key ? "border-sky-600 bg-sky-600 text-white" : "bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50"}`}>
+            <button key={tool.key} type="button" onClick={() => setDrawingTool(activeDrawingTool === tool.key ? "select" : tool.key)} className={`flex h-12 items-center justify-center gap-2 rounded-md border text-sm font-semibold transition ${activeDrawingTool === tool.key ? "border-zinc-600 bg-zinc-600 text-white" : "bg-white text-slate-700 hover:border-zinc-300 hover:bg-zinc-50"}`}>
               {tool.icon}
               {tool.label}
             </button>
@@ -286,7 +286,7 @@ export function ToolsSidebarPanel() {
         {historyOpen && (
           <div className="max-h-56 overflow-y-auto border-t p-1">
             {recentHistory.map(({ entry, index }) => (
-              <button key={entry.id} type="button" onClick={() => jumpToHistory(index)} className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${historyIndex === index ? "bg-sky-50 text-sky-900" : "hover:bg-slate-50"}`}>
+              <button key={entry.id} type="button" onClick={() => jumpToHistory(index)} className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${historyIndex === index ? "bg-zinc-50 text-zinc-900" : "hover:bg-slate-50"}`}>
                 <span className="w-5 text-center">{actionIcon(entry.name)}</span>
                 <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                 <span className="font-mono text-[10px] text-slate-500">{timeLabel(entry.timestamp)}</span>

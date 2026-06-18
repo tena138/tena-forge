@@ -63,7 +63,7 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
         <div className="rounded-[12px] border border-white/10 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">{categoryLabel(template.category)} · {visibilityLabels[template.visibility]}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-200">{categoryLabel(template.category)} · {visibilityLabels[template.visibility]}</p>
               <h1 className="mt-2 text-3xl font-bold text-white">{template.title}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">{template.description || "설명이 없는 템플릿입니다."}</p>
             </div>
@@ -82,7 +82,7 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
           {duplicateMessage ? (
-            <div className="mt-4 rounded-[8px] border border-violet-300/20 bg-violet-400/10 px-3 py-2 text-sm font-semibold text-violet-100">
+            <div className="mt-4 rounded-[8px] border border-zinc-300/20 bg-zinc-400/10 px-3 py-2 text-sm font-semibold text-zinc-100">
               {duplicateMessage}
             </div>
           ) : null}
@@ -108,7 +108,7 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
         <h2 className="text-lg font-bold text-white">지원 변수</h2>
         <div className="flex flex-wrap gap-2 text-xs">
           {["test_title", "student_name", "problem_text", "solution", "answer", "page_number", "total_pages", "subject", "unit", "difficulty", "tags"].map((key) => (
-            <code key={key} className="rounded border border-white/10 bg-black/30 px-2 py-1 text-violet-100">{`{{ ${key} }}`}</code>
+            <code key={key} className="rounded border border-white/10 bg-black/30 px-2 py-1 text-zinc-100">{`{{ ${key} }}`}</code>
           ))}
         </div>
       </aside>

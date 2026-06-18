@@ -135,7 +135,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
       {plan === "basic" && <ProPlanBackdrop />}
       {plan === "pro" && <BasicPlanBackdrop />}
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:72px_72px] opacity-25" />
-      <div data-plan-divider className="pointer-events-none fixed inset-x-0 top-16 h-px bg-gradient-to-r from-transparent via-cyan-200/30 to-transparent" />
+      <div data-plan-divider className="pointer-events-none fixed inset-x-0 top-16 h-px bg-gradient-to-r from-transparent via-zinc-200/30 to-transparent" />
       <section ref={transitionSceneRef} data-plan-journey className="relative z-10 bg-transparent px-4 pb-16 pt-24 sm:px-6">
         <div data-plan-sticky className="mx-auto max-w-[92rem] bg-transparent">
           <PlanIntroStage
@@ -172,7 +172,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
                 <ConfigSection id="marketplace" register={sectionRefs} eyebrow="Marketplace" title="마켓플레이스 포함">
                   <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_18px_52px_rgba(0,0,0,0.24)]">
                     <div className="flex items-center gap-3">
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.06] text-cyan-100">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.06] text-zinc-100">
                         <Store className="h-5 w-5" />
                       </span>
                       <div>
@@ -185,7 +185,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
                         <SpecPill key={item} icon={Check} label={item} />
                       ))}
                     </div>
-                    <p className="mt-5 rounded-[8px] border border-amber-200/20 bg-amber-200/10 px-4 py-3 text-sm font-bold text-amber-100">
+                    <p className="mt-5 rounded-[8px] border border-zinc-200/20 bg-zinc-200/10 px-4 py-3 text-sm font-bold text-zinc-100">
                       본인이 권리를 보유하거나 사용 허가를 받은 자료만 등록할 수 있습니다.
                     </p>
                   </div>
@@ -229,8 +229,8 @@ function BasicPlanBackdrop() {
 function ProPlanBackdrop() {
   return (
     <div className="pro-plan-backdrop" aria-hidden="true">
-      <span className="pro-plan-violet-field pro-plan-violet-field-a" />
-      <span className="pro-plan-violet-field pro-plan-violet-field-b" />
+      <span className="pro-plan-zinc-field pro-plan-zinc-field-a" />
+      <span className="pro-plan-zinc-field pro-plan-zinc-field-b" />
       <span className="pro-plan-rail pro-plan-rail-a" />
       <span className="pro-plan-rail pro-plan-rail-b" />
       <span className="pro-plan-prism" />
@@ -248,7 +248,7 @@ function ConfiguratorNav({ plan }: { plan: PaidPlanType }) {
             <ArrowLeft className="h-4 w-4" /> 플랜 다시 선택
           </span>
         </Link>
-        <span data-plan-badge className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-cyan-100">{PLANS[plan].name}</span>
+        <span data-plan-badge className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-zinc-100">{PLANS[plan].name}</span>
       </div>
     </nav>
   );
@@ -278,7 +278,7 @@ function PlanIntroStage({
     <section className="relative z-10 flex min-h-screen items-center px-4 pt-16 sm:px-6">
       <div className="mx-auto w-full max-w-5xl py-20 transition-transform duration-300 ease-out" style={style}>
         <div className="mx-auto max-w-3xl text-center">
-          <p data-plan-kicker className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">Plan</p>
+          <p data-plan-kicker className="text-xs font-black uppercase tracking-[0.22em] text-zinc-200">Plan</p>
           <h1 className="mt-5 text-5xl font-black tracking-normal text-white sm:text-7xl">{planConfig.name} 구성하기</h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-slate-400 sm:text-lg">{planConfig.positioning}</p>
         </div>
@@ -290,8 +290,8 @@ function PlanIntroStage({
           <PlanIntroMetric icon={School} label="Student keys" value={`${specs.studentKeys.toLocaleString()}개`} />
         </div>
 
-        <div data-plan-intro-callout className="mx-auto mt-8 max-w-2xl rounded-[12px] border border-cyan-200/20 bg-cyan-200/10 p-5 text-center shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
-          <p className="text-sm font-bold leading-6 text-cyan-100">PDF 추출은 AI credits를 사용합니다. 별도의 PDF 페이지 제한 없이, 선택한 AI 사용량 안에서 작업할 수 있습니다.</p>
+        <div data-plan-intro-callout className="mx-auto mt-8 max-w-2xl rounded-[12px] border border-zinc-200/20 bg-zinc-200/10 p-5 text-center shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
+          <p className="text-sm font-bold leading-6 text-zinc-100">PDF 추출은 AI credits를 사용합니다. 별도의 PDF 페이지 제한 없이, 선택한 AI 사용량 안에서 작업할 수 있습니다.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm font-black">
             <span className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1.5 text-white">
               {selectedSubjectEngines.map(subjectEngineLabel).join(" + ")}
@@ -315,7 +315,7 @@ function PlanIntroMetric({ icon: Icon, label, value }: { icon: React.ComponentTy
     <div data-plan-intro-metric className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4 text-left shadow-[0_18px_52px_rgba(0,0,0,0.24)] backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-bold text-slate-500">{label}</p>
-        <Icon data-plan-intro-icon className="h-4 w-4 text-cyan-100" />
+        <Icon data-plan-intro-icon className="h-4 w-4 text-zinc-100" />
       </div>
       <p className="mt-3 text-lg font-black text-white">{value}</p>
     </div>
@@ -325,7 +325,7 @@ function PlanIntroMetric({ icon: Icon, label, value }: { icon: React.ComponentTy
 function ConfigSection({ id, register, eyebrow, title, children }: { id: string; register: React.MutableRefObject<Record<string, HTMLElement | null>>; eyebrow: string; title: string; children: React.ReactNode }) {
   return (
     <section id={id} data-config-section ref={(node) => { register.current[id] = node; }} className="scroll-mt-24 rounded-[10px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)] backdrop-blur-md sm:p-7">
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">{eyebrow}</p>
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-200">{eyebrow}</p>
       <h2 className="mt-2 text-2xl font-black tracking-normal text-white sm:text-3xl">{title}</h2>
       <div className="mt-5">{children}</div>
     </section>
@@ -349,8 +349,8 @@ function PackageSection({ plan, group, selectedPackageIds, onSelect, register, c
               data-selected={selected}
               onClick={() => onSelect(group, option.id)}
               className={cn(
-                "rounded-[10px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200/30",
-                selected ? "border-cyan-200/60 bg-cyan-200/10 text-white shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] text-white hover:border-white/20 hover:bg-white/[0.065]"
+                "rounded-[10px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-200/30",
+                selected ? "border-zinc-200/60 bg-zinc-200/10 text-white shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] text-white hover:border-white/20 hover:bg-white/[0.065]"
               )}
             >
               <div className="flex items-start justify-between gap-3">
@@ -358,11 +358,11 @@ function PackageSection({ plan, group, selectedPackageIds, onSelect, register, c
                   <h3 className="text-lg font-black">{option.name}</h3>
                   <p className={cn("mt-1 text-sm leading-6", selected ? "text-slate-300" : "text-slate-400")}>{option.description}</p>
                 </div>
-                <span data-plan-check-dot className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full border", selected ? "border-cyan-100 bg-cyan-100 text-slate-950" : "border-white/15 text-transparent")}>
+                <span data-plan-check-dot className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full border", selected ? "border-zinc-100 bg-zinc-100 text-slate-950" : "border-white/15 text-transparent")}>
                   <Check className="h-4 w-4" />
                 </span>
               </div>
-              <p data-plan-option-label className={cn("mt-4 text-sm font-black", selected ? "text-cyan-100" : "text-slate-200")}>{option.label}</p>
+              <p data-plan-option-label className={cn("mt-4 text-sm font-black", selected ? "text-zinc-100" : "text-slate-200")}>{option.label}</p>
             </button>
           );
         })}
@@ -398,8 +398,8 @@ function StudentKeyPackageSection({ plan, selectedPackageIds, onSelect, register
             <p className="mt-2 text-4xl font-black text-white">{studentKeys.toLocaleString("ko-KR")}명</p>
             <p className="mt-2 text-sm font-semibold text-slate-400">포함 {includedKeys}명 · 추가 {additionalKeys}명 · 최대 {maxKeys}명</p>
           </div>
-          <div className="rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 px-4 py-3 text-right">
-            <p className="text-xs font-bold text-cyan-100">Student key addon</p>
+          <div className="rounded-[8px] border border-zinc-200/20 bg-zinc-200/10 px-4 py-3 text-right">
+            <p className="text-xs font-bold text-zinc-100">Student key addon</p>
             <p className="mt-1 text-lg font-black text-white">{selectedOption?.label || "포함"}</p>
           </div>
         </div>
@@ -415,7 +415,7 @@ function StudentKeyPackageSection({ plan, selectedPackageIds, onSelect, register
             step={1}
             value={selectedIndex}
             onChange={(event) => selectIndex(Number(event.target.value))}
-            className="h-2 w-full accent-cyan-200"
+            className="h-2 w-full accent-zinc-200"
             aria-label="학생 키 수 선택"
           />
           <button type="button" disabled={!canIncrease} onClick={() => selectIndex(selectedIndex + 1)} className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-white/10 bg-white/[0.05] text-white transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-35" aria-label="학생 키 1명 늘리기">
@@ -461,8 +461,8 @@ function SubjectEngineSection({
               disabled={disabled}
               onClick={() => onToggle(engine.code)}
               className={cn(
-                "rounded-[10px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200/30 disabled:cursor-not-allowed",
-                selected ? "border-cyan-200/60 bg-cyan-200/10 text-white shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] text-white hover:border-white/20 hover:bg-white/[0.065]",
+                "rounded-[10px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-200/30 disabled:cursor-not-allowed",
+                selected ? "border-zinc-200/60 bg-zinc-200/10 text-white shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] text-white hover:border-white/20 hover:bg-white/[0.065]",
                 disabled && "opacity-85"
               )}
             >
@@ -471,7 +471,7 @@ function SubjectEngineSection({
                   <h3 className="text-lg font-black">{engine.label} {engine.version}</h3>
                   <p className={cn("mt-1 text-sm leading-6", selected ? "text-slate-300" : "text-slate-400")}>{engine.description}</p>
                 </div>
-                <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full border", selected ? "border-cyan-100 bg-cyan-100 text-slate-950" : "border-white/15 text-transparent")}>
+                <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full border", selected ? "border-zinc-100 bg-zinc-100 text-slate-950" : "border-white/15 text-transparent")}>
                   <Check className="h-4 w-4" />
                 </span>
               </div>
@@ -517,12 +517,12 @@ function LockedCard({ title, body }: { title: string; body: string }) {
 
 function BillingCard({ active, title, price, detail, badge, onClick }: { active: boolean; title: string; price: string; detail: string; badge?: string; onClick: () => void }) {
   return (
-    <button type="button" data-plan-billing-card data-active={active} onClick={onClick} className={cn("rounded-[10px] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200/30", active ? "border-cyan-200/60 bg-cyan-200/10 shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.065]")}>
+    <button type="button" data-plan-billing-card data-active={active} onClick={onClick} className={cn("rounded-[10px] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-200/30", active ? "border-zinc-200/60 bg-zinc-200/10 shadow-[0_18px_50px_rgba(34,211,238,0.12)]" : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.065]")}>
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-black text-white">{title}</h3>
-        {badge && <span data-plan-discount-badge className="rounded-[6px] bg-emerald-200 px-2 py-1 text-[11px] font-black text-slate-950">{badge}</span>}
+        {badge && <span data-plan-discount-badge className="rounded-[6px] bg-zinc-200 px-2 py-1 text-[11px] font-black text-slate-950">{badge}</span>}
       </div>
-      <p data-plan-billing-price className="mt-4 text-2xl font-black text-cyan-100">{price}</p>
+      <p data-plan-billing-price className="mt-4 text-2xl font-black text-zinc-100">{price}</p>
       <p className="mt-1 text-sm font-semibold text-slate-400">{detail}</p>
     </button>
   );
@@ -601,7 +601,7 @@ function ProductStage({
           </div>
           <div className="flex items-center gap-2">
             <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[11px] font-bold text-slate-300 sm:inline-flex">{consoleSectionMeta[scene].route}</span>
-            <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-black text-cyan-100 sm:inline-flex">{PLANS[plan].name}</span>
+            <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-black text-zinc-100 sm:inline-flex">{PLANS[plan].name}</span>
             <span className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/[0.055] text-slate-300">
               <UserCircle className="h-3.5 w-3.5" />
             </span>
@@ -640,8 +640,8 @@ function ProductStage({
                           )}
                           style={{ transform: active ? "translateX(2px)" : "translateX(0)" }}
                         >
-                          <span className={cn("absolute left-0 top-1/2 hidden h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent transition-colors sm:block", active && "bg-violet-400")} />
-                          <Icon className={cn("h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200", active && "text-violet-300 group-hover:text-violet-300")} />
+                          <span className={cn("absolute left-0 top-1/2 hidden h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent transition-colors sm:block", active && "bg-zinc-400")} />
+                          <Icon className={cn("h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200", active && "text-zinc-300 group-hover:text-zinc-300")} />
                           <span className="hidden truncate sm:inline">{item.label}</span>
                         </div>
                       );
@@ -655,11 +655,11 @@ function ProductStage({
           <div className="flex min-h-0 min-w-0 flex-col bg-[#090b10]/[0.92]">
             <div data-console-header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">{consoleSectionMeta[scene].eyebrow}</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">{consoleSectionMeta[scene].eyebrow}</p>
                 <p className="mt-0.5 text-sm font-black text-slate-100">{consoleSectionMeta[scene].pageTitle}</p>
               </div>
               <div className="hidden items-center gap-2 sm:flex">
-                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.7)]" />
+                <span className="h-2 w-2 rounded-full bg-zinc-300 shadow-[0_0_18px_rgba(255,255,255,0.7)]" />
                 <span className="text-xs font-bold text-slate-400">Live console preview</span>
               </div>
             </div>
@@ -711,9 +711,9 @@ const consoleSidebarSections: Array<{
   {
     title: "Private Studio",
     description: "내 자료 제작",
-    accent: "bg-violet-400",
-    panel: "border-violet-400/20 bg-violet-400/[0.055]",
-    header: "text-violet-100",
+    accent: "bg-zinc-400",
+    panel: "border-zinc-400/20 bg-zinc-400/[0.055]",
+    header: "text-zinc-100",
     items: [
       { href: "/academy", label: "제작 콘솔", icon: LayoutDashboard, scenes: ["ai"] },
       { href: "/archive/new", label: "추출", icon: FileUp, scenes: [] },
@@ -726,9 +726,9 @@ const consoleSidebarSections: Array<{
   {
     title: "Licensed Library",
     description: "구독 및 구매 콘텐츠",
-    accent: "bg-cyan-300",
-    panel: "border-cyan-300/20 bg-cyan-300/[0.045]",
-    header: "text-cyan-100",
+    accent: "bg-zinc-300",
+    panel: "border-zinc-300/20 bg-zinc-300/[0.045]",
+    header: "text-zinc-100",
     items: [
       { href: "/licensed-library", label: "라이선스 보관함", icon: Library, scenes: [] },
     ],
@@ -736,9 +736,9 @@ const consoleSidebarSections: Array<{
   {
     title: "Marketplace",
     description: "공개 허브 및 스토어",
-    accent: "bg-emerald-300",
-    panel: "border-emerald-300/20 bg-emerald-300/[0.045]",
-    header: "text-emerald-100",
+    accent: "bg-zinc-300",
+    panel: "border-zinc-300/20 bg-zinc-300/[0.045]",
+    header: "text-zinc-100",
     items: [
       { href: "/templates", label: "템플릿 허브", icon: LayoutTemplate, scenes: [] },
       { href: "/marketplace/problem-sets", label: "문항 세트 마켓", icon: Store, scenes: [] },
@@ -750,9 +750,9 @@ const consoleSidebarSections: Array<{
   {
     title: "Academy OS",
     description: "Seats, classes, assignments",
-    accent: "bg-sky-300",
-    panel: "border-sky-300/20 bg-sky-300/[0.045]",
-    header: "text-sky-100",
+    accent: "bg-zinc-300",
+    panel: "border-zinc-300/20 bg-zinc-300/[0.045]",
+    header: "text-zinc-100",
     items: [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap, scenes: [] },
       { href: "/academy?panel=seats", label: "좌석 / 키", icon: KeyRound, scenes: ["student"] },
@@ -801,14 +801,14 @@ function ConsoleSection({
       className={cn(
         "relative mb-6 origin-center rounded-[8px] border p-4 transition-all duration-700 ease-out sm:p-5",
         active
-          ? cn("z-10 border-cyan-200/[0.55] bg-[#111a24] opacity-100 shadow-[0_0_0_1px_rgba(34,211,238,0.12),0_24px_70px_rgba(8,145,178,0.24)]", activeScale)
+          ? cn("z-10 border-zinc-200/[0.55] bg-[#111a24] opacity-100 shadow-[0_0_0_1px_rgba(34,211,238,0.12),0_24px_70px_rgba(8,145,178,0.24)]", activeScale)
           : "border-white/[0.08] bg-[#0d131c]/72 opacity-45 scale-[0.985]"
       )}
       style={{ animation: active && !settled ? "consoleFocusPulse 1550ms ease-out 1" : undefined }}
     >
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div className="flex items-center gap-3">
-          <span className={cn("grid h-8 w-8 place-items-center rounded-[7px] border", active ? "border-cyan-200/30 bg-cyan-200/[0.12] text-cyan-100" : "border-white/10 bg-white/[0.04] text-slate-500")}>
+          <span className={cn("grid h-8 w-8 place-items-center rounded-[7px] border", active ? "border-zinc-200/30 bg-zinc-200/[0.12] text-zinc-100" : "border-white/10 bg-white/[0.04] text-slate-500")}>
             <Icon className="h-4 w-4" />
           </span>
           <div>
@@ -816,7 +816,7 @@ function ConsoleSection({
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Console section</p>
           </div>
         </div>
-        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", active ? "bg-cyan-200 text-slate-950" : "bg-white/[0.05] text-slate-500")}>{active ? "Focused" : "Live"}</span>
+        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", active ? "bg-zinc-200 text-slate-950" : "bg-white/[0.05] text-slate-500")}>{active ? "Focused" : "Live"}</span>
       </div>
       {children}
     </section>
@@ -861,10 +861,10 @@ function AiUsageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
               <p className="text-xs font-bold text-slate-400">AI usage meter</p>
               <p className="mt-1 text-3xl font-black text-white">{formatNumber(animatedCredits)} credits</p>
             </div>
-            <span className="rounded-[6px] bg-violet-300/[0.14] px-2.5 py-1 text-xs font-black text-violet-100">limit expanded</span>
+            <span className="rounded-[6px] bg-zinc-300/[0.14] px-2.5 py-1 text-xs font-black text-zinc-100">limit expanded</span>
           </div>
           <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-gradient-to-r from-violet-300 via-cyan-300 to-emerald-300 transition-[width] duration-700 ease-out" style={{ width: `${capacityPercent}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-zinc-300 via-zinc-300 to-zinc-300 transition-[width] duration-700 ease-out" style={{ width: `${capacityPercent}%` }} />
           </div>
           <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
             <span>선택된 패키지 한도</span>
@@ -889,7 +889,7 @@ function AiUsageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
             {chartBars.map((bar, index) => (
               <div key={index} className="flex-1 overflow-hidden rounded-t-[5px] bg-white/[0.055]">
                 <div
-                  className="rounded-t-[5px] bg-gradient-to-t from-violet-500/70 via-cyan-400/80 to-cyan-100 transition-[height] duration-700 ease-out"
+                  className="rounded-t-[5px] bg-gradient-to-t from-zinc-500/70 via-zinc-400/80 to-zinc-100 transition-[height] duration-700 ease-out"
                   style={{ height: `${Math.max(18, Math.min(96, bar * capacityPercent + 18))}%`, transitionDelay: `${index * 55}ms` }}
                 />
               </div>
@@ -948,7 +948,7 @@ function StorageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
             <p className="mt-1 text-sm text-slate-400">{formatNumber(animatedDb)}개 문항 · {formatStorageLabel(animatedCapacity)} 파일 저장소</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-[7px] border border-cyan-200/25 bg-cyan-200/[0.10] px-3 py-2 text-xs font-black text-cyan-100">
+            <span className="rounded-[7px] border border-zinc-200/25 bg-zinc-200/[0.10] px-3 py-2 text-xs font-black text-zinc-100">
               +{formatStorageLabel(animatedStorageIncrease)} 확보
             </span>
             <MockButton icon={UploadCloud} label="PDF 업로드" active />
@@ -968,7 +968,7 @@ function StorageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
         />
 
         <div className="flex h-11 items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3">
-          <Search className="h-4 w-4 text-violet-300" />
+          <Search className="h-4 w-4 text-zinc-300" />
           <span className="min-w-0 flex-1 truncate text-sm text-slate-500">문항 검색</span>
         </div>
 
@@ -1015,7 +1015,7 @@ function StorageConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: Ret
             <MockButton icon={ArrowRight} label="다음" />
           </div>
 
-          <div className="mx-auto flex w-[min(92%,680px)] items-center justify-between gap-3 rounded-full border border-white/10 bg-card/95 px-4 py-3 shadow-[0_18px_45px_rgba(76,29,149,0.20)] backdrop-blur">
+          <div className="mx-auto flex w-[min(92%,680px)] items-center justify-between gap-3 rounded-full border border-white/10 bg-card/95 px-4 py-3 shadow-[0_18px_45px_rgba(255,255,255,0.20)] backdrop-blur">
             <span className="text-sm font-medium text-white">문항 {Math.max(2, Math.round(visibleCards / 2))}개 선택됨</span>
             <div className="flex gap-2">
               <MockButton icon={FolderKanban} label="세트에 추가" />
@@ -1043,21 +1043,21 @@ function StudentKeyConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: 
 
   return (
     <div className="space-y-4">
-      <div className="rounded-[12px] border border-violet-300/18 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.22),rgba(8,10,16,0.72)_48%)] p-4">
+      <div className="rounded-[12px] border border-zinc-300/18 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.22),rgba(8,10,16,0.72)_48%)] p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold text-violet-200">Academy Operations</p>
+            <p className="text-xs font-semibold text-zinc-200">Academy Operations</p>
             <h3 className="mt-1 text-xl font-black tracking-normal text-white">학생 좌석, 과제, 클래스 운영</h3>
             <p className="mt-2 max-w-xl text-xs leading-5 text-slate-400">좌석은 학원이 소유하는 재사용 가능한 접근 단위이고, 초대 코드는 학생이 좌석을 claim하는 자격 증명입니다.</p>
           </div>
-          <button type="button" className="inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-violet-500 px-3 text-xs font-black text-white shadow-[0_10px_28px_rgba(124,58,237,0.28)]">
+          <button type="button" className="inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-zinc-500 px-3 text-xs font-black text-white shadow-[0_10px_28px_rgba(124,58,237,0.28)]">
             <PlusGlyph /> 좌석 추가
           </button>
         </div>
       </div>
 
-      <div className="rounded-[12px] border border-violet-300/20 bg-violet-400/[0.08] p-4 text-sm transition-all duration-700">
-        <div className="text-violet-100">좌석을 만들었습니다. 초대 코드는 지금 한 번만 전체 표시됩니다.</div>
+      <div className="rounded-[12px] border border-zinc-300/20 bg-zinc-400/[0.08] p-4 text-sm transition-all duration-700">
+        <div className="text-zinc-100">좌석을 만들었습니다. 초대 코드는 지금 한 번만 전체 표시됩니다.</div>
         <div className="mt-2 flex items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/35 px-3 py-2">
           <span className="truncate font-mono text-xs text-slate-100">TF-{plan.toUpperCase()}-{String(2000 + studentKeys * 19).slice(-4)}-{String(8471 + studentKeys * 13).slice(-4)}</span>
           <MockButton icon={ClipboardCheck} label="복사" />
@@ -1075,7 +1075,7 @@ function StudentKeyConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: 
         <div className="rounded-[10px] border border-white/10 bg-black/30 p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="flex items-center gap-2 text-sm font-black text-white"><KeyRound className="h-4 w-4" /> 좌석 / 키 관리</p>
-            <span className="rounded-[6px] bg-emerald-200/[0.12] px-2.5 py-1 text-xs font-black text-emerald-100">auto-provision</span>
+            <span className="rounded-[6px] bg-zinc-200/[0.12] px-2.5 py-1 text-xs font-black text-zinc-100">auto-provision</span>
           </div>
           <div className="grid gap-2">
             {Array.from({ length: 8 }).map((_, index) => {
@@ -1085,13 +1085,13 @@ function StudentKeyConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: 
               return (
                 <div
                   key={index}
-                  className={cn("grid gap-3 rounded-[10px] border px-3 py-3 transition-all duration-500 md:grid-cols-[1fr_auto] md:items-center", enabled ? "border-white/10 bg-white/[0.035] opacity-100" : "border-white/5 bg-white/[0.02] opacity-30", newlyEnabled && "border-cyan-200/[0.45] bg-cyan-200/10 shadow-[0_0_24px_rgba(34,211,238,0.16)]")}
+                  className={cn("grid gap-3 rounded-[10px] border px-3 py-3 transition-all duration-500 md:grid-cols-[1fr_auto] md:items-center", enabled ? "border-white/10 bg-white/[0.035] opacity-100" : "border-white/5 bg-white/[0.02] opacity-30", newlyEnabled && "border-zinc-200/[0.45] bg-zinc-200/10 shadow-[0_0_24px_rgba(34,211,238,0.16)]")}
                   style={{ transform: enabled ? "translateY(0)" : "translateY(8px)", transitionDelay: `${index * 70}ms` }}
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold text-white">Seat {String(index + 1).padStart(2, "0")}</span>
-                      <span className={cn("rounded-[6px] px-2 py-0.5 text-[11px] font-black", assigned ? "bg-violet-200 text-slate-950" : "bg-white/[0.08] text-slate-300")}>{assigned ? "배정됨" : "미배정"}</span>
+                      <span className={cn("rounded-[6px] px-2 py-0.5 text-[11px] font-black", assigned ? "bg-zinc-200 text-slate-950" : "bg-white/[0.08] text-slate-300")}>{assigned ? "배정됨" : "미배정"}</span>
                     </div>
                     <p className="mt-1 truncate font-mono text-xs text-slate-500">코드 미리보기: ****{String(8471 + index * 137).slice(-4)} · 학생: {assigned ? `student_${index + 1}` : "-"}</p>
                   </div>
@@ -1128,7 +1128,7 @@ function StudentKeyConsoleSection({ plan, specs }: { plan: PaidPlanType; specs: 
                 <span>{formatNumber(studentKeys)} / {formatNumber(keyMax)}</span>
               </div>
               <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-gradient-to-r from-violet-300 to-cyan-300 transition-[width] duration-700 ease-out" style={{ width: `${percentage(studentKeys, keyMax)}%` }} />
+                <div className="h-full rounded-full bg-gradient-to-r from-zinc-300 to-zinc-300 transition-[width] duration-700 ease-out" style={{ width: `${percentage(studentKeys, keyMax)}%` }} />
               </div>
             </div>
           </div>
@@ -1205,9 +1205,9 @@ function SummaryConsoleSection({
             <p className="text-xs font-bold text-slate-400">Checkout review</p>
             <p className="mt-1 text-3xl font-black text-white">{formatKRW(Math.round(animatedPrice))} / 월</p>
           </div>
-          <span className="rounded-[6px] bg-cyan-200/[0.12] px-2.5 py-1 text-xs font-black text-cyan-100">Monthly</span>
+          <span className="rounded-[6px] bg-zinc-200/[0.12] px-2.5 py-1 text-xs font-black text-zinc-100">Monthly</span>
         </div>
-        <div className="mt-5 rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 p-3 text-xs font-bold leading-5 text-cyan-100">
+        <div className="mt-5 rounded-[8px] border border-zinc-200/20 bg-zinc-200/10 p-3 text-xs font-bold leading-5 text-zinc-100">
           결제 전 마지막 단계에서 선택한 Basic Plan 옵션이 한 번 더 정리됩니다.
         </div>
       </div>
@@ -1254,7 +1254,7 @@ function FullPlanSummarySection({
     <section id="summary" data-plan-summary className="relative z-20 min-h-screen bg-transparent px-4 py-24 sm:px-6 lg:py-28">
       <div className="mx-auto max-w-[92rem]">
         <div className="max-w-3xl">
-          <p data-plan-summary-kicker className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Summary</p>
+          <p data-plan-summary-kicker className="text-xs font-black uppercase tracking-[0.18em] text-zinc-200">Summary</p>
           <h2 className="mt-3 text-4xl font-black tracking-normal text-white sm:text-5xl">구성 요약</h2>
           <p className="mt-4 text-base leading-7 text-slate-400">콘솔 데모를 벗어나 결제 전 마지막 구성만 넓게 다시 확인합니다.</p>
         </div>
@@ -1266,7 +1266,7 @@ function FullPlanSummarySection({
                 <p className="text-sm font-bold text-slate-400">{planConfig.name}</p>
                 <p className="mt-2 text-4xl font-black text-white">{formatKRW(displayPrice)} / 월</p>
               </div>
-              <span data-plan-cycle-badge className="w-fit rounded-[7px] bg-cyan-200 px-3 py-1.5 text-xs font-black text-slate-950">Monthly</span>
+              <span data-plan-cycle-badge className="w-fit rounded-[7px] bg-zinc-200 px-3 py-1.5 text-xs font-black text-slate-950">Monthly</span>
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2">
@@ -1297,8 +1297,8 @@ function FullPlanSummarySection({
             </div>
           </div>
 
-          <aside data-plan-checkout className="rounded-[12px] border border-cyan-200/18 bg-cyan-200/[0.08] p-6 shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Checkout</p>
+          <aside data-plan-checkout className="rounded-[12px] border border-zinc-200/18 bg-zinc-200/[0.08] p-6 shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-100">Checkout</p>
             <h3 className="mt-3 text-2xl font-black text-white">마지막 확인</h3>
             <div className="mt-6 space-y-3 text-sm">
               <InvoiceRow label="Subject engines" value={selectedSubjectEngines.map(subjectEngineLabel).join(" + ")} highlighted />
@@ -1306,7 +1306,7 @@ function FullPlanSummarySection({
               <InvoiceRow label="Monthly equivalent" value={formatKRW(displayPrice)} />
               <InvoiceRow label="Today" value={formatKRW(monthlyPrice)} highlighted />
             </div>
-            <Link href={reviewHref} data-plan-checkout-link className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] bg-cyan-200 text-sm font-black text-slate-950 transition hover:bg-white">
+            <Link href={reviewHref} data-plan-checkout-link className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] bg-zinc-200 text-sm font-black text-slate-950 transition hover:bg-white">
               구성 확인하기 <ArrowRight className="h-4 w-4" />
             </Link>
             <p className="mt-3 text-center text-xs text-slate-500">결제 전 마지막 단계에서 구성을 다시 확인할 수 있습니다.</p>
@@ -1339,14 +1339,14 @@ function StorageQuotaStrip({
   problemDb: number;
 }) {
   return (
-    <div className="grid gap-3 rounded-[10px] border border-cyan-200/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.10),rgba(124,58,237,0.07)_44%,rgba(255,255,255,0.035))] p-3 shadow-[0_20px_60px_rgba(8,145,178,0.13)] xl:grid-cols-[0.92fr_1.08fr]">
+    <div className="grid gap-3 rounded-[10px] border border-zinc-200/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.10),rgba(124,58,237,0.07)_44%,rgba(255,255,255,0.035))] p-3 shadow-[0_20px_60px_rgba(8,145,178,0.13)] xl:grid-cols-[0.92fr_1.08fr]">
       <div className="rounded-[8px] border border-white/10 bg-black/25 p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-100">Storage Pack applied</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-100">Storage Pack applied</p>
             <p className="mt-1 text-2xl font-black text-white">{formatStorageLabel(capacity)}</p>
           </div>
-          <span className="rounded-[6px] bg-emerald-200 text-slate-950 px-2 py-1 text-[11px] font-black">
+          <span className="rounded-[6px] bg-zinc-200 text-slate-950 px-2 py-1 text-[11px] font-black">
             +{formatStorageLabel(storageIncrease || Math.max(0, capacity - baseStorage))}
           </span>
         </div>
@@ -1366,7 +1366,7 @@ function StorageQuotaStrip({
               <span>{formatStorageLabel(availableStorage)} available</span>
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-cyan-300 to-violet-300 transition-[width] duration-700 ease-out" style={{ width: `${capacityPercent}%` }} />
+              <div className="h-full rounded-full bg-gradient-to-r from-zinc-300 via-zinc-300 to-zinc-300 transition-[width] duration-700 ease-out" style={{ width: `${capacityPercent}%` }} />
             </div>
           </div>
         </div>
@@ -1376,7 +1376,7 @@ function StorageQuotaStrip({
         <div className="rounded-[8px] border border-white/10 bg-white/[0.04] p-3">
           <p className="text-xs font-bold text-slate-500">문항 DB 상한</p>
           <p className="mt-1 text-xl font-black text-white">{formatNumber(problemDb)}</p>
-          <p className="mt-1 text-[11px] font-bold text-cyan-100">+{formatNumber(dbIncrease)} rows</p>
+          <p className="mt-1 text-[11px] font-bold text-zinc-100">+{formatNumber(dbIncrease)} rows</p>
         </div>
         <div className="rounded-[8px] border border-white/10 bg-white/[0.04] p-3">
           <p className="text-xs font-bold text-slate-500">PDF source</p>
@@ -1416,15 +1416,15 @@ function ArchiveProblemCard({
     <div
       className={cn(
         "relative overflow-hidden rounded-[10px] border bg-white/[0.04] p-4 transition-all duration-700 hover:-translate-y-0.5",
-        enabled ? "border-white/10 opacity-100 shadow-[0_18px_45px_rgba(76,29,149,0.10)]" : "border-white/5 opacity-28",
-        newlyStored && "ring-1 ring-cyan-200/25 shadow-[0_0_26px_rgba(34,211,238,0.12)]"
+        enabled ? "border-white/10 opacity-100 shadow-[0_18px_45px_rgba(255,255,255,0.10)]" : "border-white/5 opacity-28",
+        newlyStored && "ring-1 ring-zinc-200/25 shadow-[0_0_26px_rgba(34,211,238,0.12)]"
       )}
       style={{ transform: enabled ? "translateY(0)" : "translateY(12px)", transitionDelay: `${index * 70}ms` }}
     >
-      {newlyStored && <span className="absolute right-3 top-3 rounded-[6px] bg-cyan-200 px-2 py-0.5 text-[10px] font-black text-slate-950">저장됨</span>}
+      {newlyStored && <span className="absolute right-3 top-3 rounded-[6px] bg-zinc-200 px-2 py-0.5 text-[10px] font-black text-slate-950">저장됨</span>}
       <div className="mb-3 flex items-start justify-between gap-2 pr-12">
         <div className="truncate font-semibold text-white">{title}</div>
-        <span className={cn("rounded-[6px] px-2 py-0.5 text-[11px] font-black", state === "검토 필요" ? "bg-amber-300/12 text-amber-100" : state === "신규 저장" ? "bg-cyan-300/12 text-cyan-100" : "bg-violet-300/12 text-violet-100")}>{state}</span>
+        <span className={cn("rounded-[6px] px-2 py-0.5 text-[11px] font-black", state === "검토 필요" ? "bg-zinc-300/12 text-zinc-100" : state === "신규 저장" ? "bg-zinc-300/12 text-zinc-100" : "bg-zinc-300/12 text-zinc-100")}>{state}</span>
       </div>
       <div className="mb-3 flex flex-wrap gap-2">
         <span className="rounded-[6px] border border-white/10 bg-white/[0.055] px-2 py-0.5 text-[11px] font-bold text-slate-300">{subject}</span>
@@ -1475,7 +1475,7 @@ function StorageFilter({ label, values, activeIndex, wide = false }: { label: st
 
 function ConsoleMiniCard({ label, value, tone }: { label: string; value: string; tone: "cyan" | "emerald" }) {
   return (
-    <div className={cn("rounded-[8px] border p-4", tone === "cyan" ? "border-cyan-200/[0.16] bg-cyan-200/[0.08]" : "border-emerald-200/[0.16] bg-emerald-200/[0.08]")}>
+    <div className={cn("rounded-[8px] border p-4", tone === "cyan" ? "border-zinc-200/[0.16] bg-zinc-200/[0.08]" : "border-zinc-200/[0.16] bg-zinc-200/[0.08]")}>
       <p className="text-xs font-bold text-slate-400">{label}</p>
       <p className="mt-2 text-xl font-black text-white">{value}</p>
     </div>
@@ -1514,7 +1514,7 @@ function ConsoleHero({ title, body, activeLabel, secondaryLabel }: { title: stri
               <div className="text-xs font-bold text-white">Production Pipeline</div>
               <div className="mt-0.5 text-[11px] text-slate-400">원자료에서 완성본까지</div>
             </div>
-            <ArrowRight className="h-4 w-4 text-violet-300" />
+            <ArrowRight className="h-4 w-4 text-zinc-300" />
           </div>
           <div className="grid grid-cols-5 gap-2">
             {flow.map((step, index) => {
@@ -1546,8 +1546,8 @@ function AcademyStat({ label, value, icon: Icon, detail, tone = "neutral" }: { l
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-[7px] border",
             tone === "neutral" && "border-white/10 bg-white/[0.08] text-slate-200",
-            tone === "violet" && "border-violet-400/30 bg-violet-400/[0.18] text-violet-100",
-            tone === "warning" && "border-amber-400/25 bg-amber-400/10 text-amber-200"
+            tone === "violet" && "border-zinc-400/30 bg-zinc-400/[0.18] text-zinc-100",
+            tone === "warning" && "border-zinc-400/25 bg-zinc-400/10 text-zinc-200"
           )}
         >
           <Icon className="h-4 w-4" />
@@ -1565,7 +1565,7 @@ function ConsoleNextAction({ reviewCount, untaggedCount, actionLabel }: { review
       <div className="rounded-[10px] border border-white/10 bg-black/45 p-4 text-white shadow-[0_20px_60px_rgba(0,0,0,0.34)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-200">
               <Gauge className="h-3.5 w-3.5" />
               Next Action
             </div>
@@ -1581,7 +1581,7 @@ function ConsoleNextAction({ reviewCount, untaggedCount, actionLabel }: { review
 
       <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4 shadow-[0_18px_52px_rgba(0,0,0,0.28)]">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-          <CheckCircle2 className="h-3.5 w-3.5 text-violet-300" />
+          <CheckCircle2 className="h-3.5 w-3.5 text-zinc-300" />
           Refinement Queue
         </div>
         <div className="mt-3 flex items-end justify-between">
@@ -1602,7 +1602,7 @@ function MockButton({ icon: Icon, label, active = false, light = false }: { icon
       className={cn(
         "inline-flex h-10 items-center justify-center gap-2 rounded-[7px] border px-4 py-2 text-sm font-semibold shadow-sm transition-all duration-500",
         active && light && "border-white/20 bg-white text-slate-950 hover:bg-slate-100",
-        active && !light && "border-violet-400/40 bg-primary text-primary-foreground shadow-[0_10px_28px_rgba(124,58,237,0.28)]",
+        active && !light && "border-zinc-400/40 bg-primary text-primary-foreground shadow-[0_10px_28px_rgba(124,58,237,0.28)]",
         !active && "border-white/12 bg-white/[0.04] text-slate-100 hover:border-white/20 hover:bg-white/[0.08]"
       )}
       style={{ transform: active ? "translateY(-1px)" : "translateY(0)" }}
@@ -1617,9 +1617,9 @@ function ConsoleBatchRow({ file, status, count, stage, index }: { file: string; 
   return (
     <div className={cn("grid grid-cols-[1.1fr_0.75fr_0.7fr_0.85fr] items-center gap-3 border-t border-white/10 px-3 py-2.5 text-xs first:border-t-0", index % 2 === 0 ? "bg-white/[0.025]" : "bg-transparent")}>
       <span className="truncate font-black text-slate-100">{file}</span>
-      <span className={cn("w-fit rounded-[6px] px-2 py-0.5 font-black", status === "done" ? "bg-emerald-300/12 text-emerald-100" : status === "needs_review" ? "bg-amber-300/12 text-amber-100" : "bg-violet-300/12 text-violet-100")}>{status}</span>
+      <span className={cn("w-fit rounded-[6px] px-2 py-0.5 font-black", status === "done" ? "bg-zinc-300/12 text-zinc-100" : status === "needs_review" ? "bg-zinc-300/12 text-zinc-100" : "bg-zinc-300/12 text-zinc-100")}>{status}</span>
       <span className="font-semibold text-slate-500">{count.toLocaleString("ko-KR")}문항</span>
-      <span className="truncate font-bold text-cyan-100">{stage}</span>
+      <span className="truncate font-bold text-zinc-100">{stage}</span>
     </div>
   );
 }
@@ -1630,10 +1630,10 @@ function TagsGlyph({ className }: { className?: string }) {
 
 function ConsoleStat({ label, value, icon: Icon, tone = "neutral" }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; tone?: "neutral" | "violet" }) {
   return (
-    <div className={cn("rounded-[10px] border p-3", tone === "violet" ? "border-violet-300/20 bg-violet-300/[0.08]" : "border-white/10 bg-black/30")}>
+    <div className={cn("rounded-[10px] border p-3", tone === "violet" ? "border-zinc-300/20 bg-zinc-300/[0.08]" : "border-white/10 bg-black/30")}>
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-[11px] font-bold text-slate-500">{label}</p>
-        <Icon className={cn("h-4 w-4 shrink-0", tone === "violet" ? "text-violet-100" : "text-slate-500")} />
+        <Icon className={cn("h-4 w-4 shrink-0", tone === "violet" ? "text-zinc-100" : "text-slate-500")} />
       </div>
       <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
     </div>
@@ -1644,7 +1644,7 @@ function ConsoleTableRow({ columns, index }: { columns: string[]; index: number 
   return (
     <div className={cn("grid items-center gap-3 border-t border-white/10 px-3 py-2.5 text-xs first:border-t-0", columns.length === 4 ? "grid-cols-[1.2fr_0.8fr_0.8fr_0.6fr]" : "grid-cols-[1fr_0.7fr_0.7fr]", index % 2 === 0 ? "bg-white/[0.025]" : "bg-transparent")}>
       {columns.map((column, columnIndex) => (
-        <span key={`${column}-${columnIndex}`} className={cn("truncate", columnIndex === 0 ? "font-black text-slate-100" : columnIndex === columns.length - 1 ? "font-bold text-cyan-100" : "font-semibold text-slate-500")}>
+        <span key={`${column}-${columnIndex}`} className={cn("truncate", columnIndex === 0 ? "font-black text-slate-100" : columnIndex === columns.length - 1 ? "font-bold text-zinc-100" : "font-semibold text-slate-500")}>
           {column}
         </span>
       ))}
@@ -1672,9 +1672,9 @@ function PlusGlyph() {
 
 function InvoiceRow({ label, value, highlighted = false, positive = false }: { label: string; value: string; highlighted?: boolean; positive?: boolean }) {
   return (
-    <div className={cn("flex items-center justify-between rounded-[7px] border px-3 py-2.5 text-sm transition-all duration-500", highlighted ? "border-emerald-200/30 bg-emerald-200/10" : "border-white/10 bg-black/[0.18]")}>
+    <div className={cn("flex items-center justify-between rounded-[7px] border px-3 py-2.5 text-sm transition-all duration-500", highlighted ? "border-zinc-200/30 bg-zinc-200/10" : "border-white/10 bg-black/[0.18]")}>
       <span className="font-bold text-slate-500">{label}</span>
-      <span className={cn("font-black", positive ? "text-emerald-100" : "text-white")}>{value}</span>
+      <span className={cn("font-black", positive ? "text-zinc-100" : "text-white")}>{value}</span>
     </div>
   );
 }
@@ -1684,7 +1684,7 @@ function SummaryConsoleItem({ label, value, detail }: { label: string; value: st
     <div className="rounded-[7px] border border-white/10 bg-black/[0.18] px-3 py-3 transition-all duration-500">
       <p className="text-xs font-bold text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-black text-white">{value}</p>
-      <p className="mt-1 text-xs font-bold text-cyan-100">{detail}</p>
+      <p className="mt-1 text-xs font-bold text-zinc-100">{detail}</p>
     </div>
   );
 }
@@ -1747,7 +1747,7 @@ function LegacyProductStage({ scene, plan, specs }: { scene: any; plan: PaidPlan
       <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.075)_0%,rgba(15,23,42,0.62)_52%,rgba(8,145,178,0.16)_100%)]" />
       <div className="relative z-10">
         <div className="flex items-center justify-between">
-          <span className="rounded-[6px] bg-cyan-200 px-3 py-1 text-xs font-black text-slate-950">{PLANS[plan].name}</span>
+          <span className="rounded-[6px] bg-zinc-200 px-3 py-1 text-xs font-black text-slate-950">{PLANS[plan].name}</span>
           <span className="rounded-[6px] border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-slate-300">{scene}</span>
         </div>
         <div className="mt-8 transition-all duration-500 motion-reduce:transition-none">
@@ -1785,7 +1785,7 @@ function AiScene({ specs }: { specs: ReturnType<typeof getResolvedSpecs> }) {
         {["단원", "난이도", "유형", "정답", "답안"].map((tag) => <span key={tag} className="rounded-[8px] border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white shadow-sm">{tag}</span>)}
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full w-2/3 rounded-full bg-cyan-400" />
+        <div className="h-full w-2/3 rounded-full bg-zinc-400" />
       </div>
     </div>
   );
@@ -1818,7 +1818,7 @@ function StudentScene({ specs }: { specs: ReturnType<typeof getResolvedSpecs> })
       </div>
       <div className="rounded-[14px] border border-white/10 bg-black/35 p-3 text-white shadow-xl">
         <div className="rounded-[10px] border border-white/10 bg-white/[0.06] p-4 text-white">
-          <p className="text-xs font-black text-cyan-100">학생 앱</p>
+          <p className="text-xs font-black text-zinc-100">학생 앱</p>
           <p className="mt-5 text-3xl font-black">{specs.studentKeys.toLocaleString()}</p>
           <p className="text-sm font-bold text-slate-400">student keys</p>
         </div>
@@ -1836,7 +1836,7 @@ function ProcessingScene({ plan, specs }: { plan: PaidPlanType; specs: ReturnTyp
         {Array.from({ length: Math.min(jobs, 5) }).map((_, index) => (
           <div key={index} className="rounded-[8px] border border-white/10 bg-white/[0.06] p-4 shadow-sm">
             <div className="flex justify-between text-sm font-black"><span>PDF Queue {index + 1}</span><span>AI credits 사용</span></div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-400" style={{ width: `${50 + index * 8}%` }} /></div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-zinc-400" style={{ width: `${50 + index * 8}%` }} /></div>
           </div>
         ))}
       </div>
@@ -1884,7 +1884,7 @@ function SpecPill({ icon: Icon, label }: { icon: React.ComponentType<{ className
 function SummaryLine({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex gap-2">
-      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+      <Check className="mt-0.5 h-4 w-4 shrink-0 text-zinc-200" />
       <span>{children}</span>
     </div>
   );

@@ -46,7 +46,7 @@ export default function MarketplaceListingDetailPage({ params }: { params: Promi
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <section className="space-y-5">
         <div className="rounded-[12px] border border-white/10 bg-black/45 p-6">
-          <div className="flex flex-wrap gap-2 text-xs font-semibold text-violet-200">
+          <div className="flex flex-wrap gap-2 text-xs font-semibold text-zinc-200">
             <span>{contentTypeLabels[listing.content_type]}</span>
             <span>·</span>
             <span>{pricingTypeLabels[listing.pricing_type]}</span>
@@ -63,7 +63,7 @@ export default function MarketplaceListingDetailPage({ params }: { params: Promi
           </div>
         </div>
 
-        <div className="rounded-[10px] border border-violet-300/20 bg-violet-300/10 p-4 text-sm leading-6 text-violet-50">
+        <div className="rounded-[10px] border border-zinc-300/20 bg-zinc-300/10 p-4 text-sm leading-6 text-zinc-50">
           <div className="flex items-center gap-2 font-bold"><ShieldCheck className="h-4 w-4" />라이선스 안내</div>
           <p className="mt-2">이 콘텐츠는 구매자에게 소유권이 이전되는 것이 아니라, 표시된 라이선스 조건에 따라 이용 권한이 부여됩니다.</p>
         </div>
@@ -79,7 +79,7 @@ export default function MarketplaceListingDetailPage({ params }: { params: Promi
         </dl>
         <Button className="mt-5 w-full" onClick={claim}>{actionLabel}</Button>
         {message && (
-          <div className="mt-3 rounded-md border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">
+          <div className="mt-3 rounded-md border border-zinc-400/20 bg-zinc-400/10 p-3 text-sm text-zinc-100">
             {message}
             <Button className="mt-3 w-full" size="sm" variant="outline" onClick={() => router.push("/licensed-library")}>라이선스 보관함 보기</Button>
           </div>

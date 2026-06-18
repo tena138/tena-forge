@@ -274,7 +274,7 @@ export default function AdminAnnouncementsPage() {
       <section className="rounded-[14px] border border-white/10 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-md border border-violet-400/20 bg-violet-400/10 px-2.5 py-1 text-xs font-semibold text-violet-100">
+            <div className="inline-flex items-center gap-2 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-2.5 py-1 text-xs font-semibold text-zinc-100">
               <Megaphone className="h-4 w-4" />
               Operations News
             </div>
@@ -308,8 +308,8 @@ export default function AdminAnnouncementsPage() {
                   key={item.id}
                   className={`rounded-[10px] border p-3 transition ${
                     selectedId === item.id
-                      ? "border-violet-300/45 bg-violet-400/10 shadow-[0_14px_36px_rgba(109,40,217,0.16)]"
-                      : "border-white/10 bg-black/25 hover:border-violet-300/30 hover:bg-white/[0.06]"
+                      ? "border-zinc-300/45 bg-zinc-400/10 shadow-[0_14px_36px_rgba(109,40,217,0.16)]"
+                      : "border-white/10 bg-black/25 hover:border-zinc-300/30 hover:bg-white/[0.06]"
                   }`}
                 >
                   <div className="flex gap-3">
@@ -322,15 +322,15 @@ export default function AdminAnnouncementsPage() {
                       {item.media_type === "image" && item.media_url ? (
                         <img src={assetUrl(item.media_url)} alt="" className="h-full w-full object-cover" />
                       ) : item.media_type === "video" && item.media_url ? (
-                        <div className="flex h-full w-full items-center justify-center bg-violet-400/10 text-[10px] font-semibold text-violet-100">VIDEO</div>
+                        <div className="flex h-full w-full items-center justify-center bg-zinc-400/10 text-[10px] font-semibold text-zinc-100">VIDEO</div>
                       ) : (
-                        <div className="h-full w-full bg-[radial-gradient(circle_at_30%_25%,rgba(167,139,250,0.26),transparent_36%),linear-gradient(135deg,#080914,#151027)]" />
+                        <div className="h-full w-full bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.26),transparent_36%),linear-gradient(135deg,#080914,#151027)]" />
                       )}
                     </button>
                     <button type="button" className="min-w-0 flex-1 text-left" onClick={() => editItem(item)}>
                       <div className="flex items-center justify-between gap-2">
                         <span className="line-clamp-1 text-sm font-semibold text-white">{item.title}</span>
-                        <span className={item.is_active ? "shrink-0 text-xs text-emerald-300" : "shrink-0 text-xs text-slate-500"}>{item.is_active ? "활성" : "비활성"}</span>
+                        <span className={item.is_active ? "shrink-0 text-xs text-zinc-300" : "shrink-0 text-xs text-slate-500"}>{item.is_active ? "활성" : "비활성"}</span>
                       </div>
                       <div className="mt-1 text-xs text-slate-500">우선순위 {item.priority} · {item.media_type}</div>
                     </button>
@@ -345,7 +345,7 @@ export default function AdminAnnouncementsPage() {
                     <button type="button" className="rounded-md bg-white/[0.06] px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.1]" onClick={() => duplicateItem(item)}>
                       <Copy className="mx-auto h-3.5 w-3.5" />
                     </button>
-                    <button type="button" className="rounded-md bg-red-400/10 px-2 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-400/20" onClick={() => remove(item)}>
+                    <button type="button" className="rounded-md bg-zinc-400/10 px-2 py-1.5 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-400/20" onClick={() => remove(item)}>
                       <Trash2 className="mx-auto h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -376,7 +376,7 @@ export default function AdminAnnouncementsPage() {
               <label className="space-y-1.5 text-sm font-semibold text-slate-200 md:col-span-2">
                 본문
                 <textarea
-                  className="min-h-28 w-full rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400"
+                  className="min-h-28 w-full rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-zinc-400"
                   value={draft.body}
                   onChange={(event) => setDraft({ ...draft, body: event.target.value })}
                 />
@@ -400,8 +400,8 @@ export default function AdminAnnouncementsPage() {
               </label>
               <div className="space-y-2 text-sm font-semibold text-slate-200 md:col-span-2">
                 미디어 파일 업로드
-                <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-black/25 px-4 py-4 text-center transition hover:border-violet-300/50 hover:bg-violet-400/10">
-                  <UploadCloud className="h-5 w-5 text-violet-200" />
+                <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-black/25 px-4 py-4 text-center transition hover:border-zinc-300/50 hover:bg-zinc-400/10">
+                  <UploadCloud className="h-5 w-5 text-zinc-200" />
                   <span className="text-sm text-white">{uploadingMedia ? `업로드 중... ${uploadProgress}%` : "사진 또는 짧은 동영상 선택"}</span>
                   <span className="text-xs font-normal text-slate-500">PNG, JPG, WebP, GIF, MP4, WebM, MOV · 최대 50MB</span>
                   <input
@@ -418,7 +418,7 @@ export default function AdminAnnouncementsPage() {
                 </label>
                 {uploadingMedia && (
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full bg-violet-300 transition-all" style={{ width: `${uploadProgress}%` }} />
+                    <div className="h-full bg-zinc-300 transition-all" style={{ width: `${uploadProgress}%` }} />
                   </div>
                 )}
               </div>
@@ -448,8 +448,8 @@ export default function AdminAnnouncementsPage() {
               </label>
             </div>
 
-            {message && <p className="mt-4 rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">{message}</p>}
-            {error && <p className="mt-4 rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-100">{error}</p>}
+            {message && <p className="mt-4 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-100">{message}</p>}
+            {error && <p className="mt-4 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-100">{error}</p>}
 
             <div className="mt-5 flex flex-wrap justify-between gap-2">
               <Button type="submit" disabled={saving}>

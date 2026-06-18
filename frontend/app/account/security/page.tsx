@@ -93,7 +93,7 @@ export default function AccountSecurityPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      {notice && <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100">{notice}</div>}
+      {notice && <div className="rounded-lg border border-zinc-300/20 bg-zinc-400/10 px-4 py-3 text-sm font-semibold text-zinc-100">{notice}</div>}
 
       <Card>
         <CardHeader><CardTitle>비밀번호 변경</CardTitle></CardHeader>
@@ -111,9 +111,9 @@ export default function AccountSecurityPage() {
       <Card>
         <CardHeader><CardTitle>2단계 인증</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className={`rounded-lg border p-4 ${profile.totp_enabled ? "border-emerald-300/20 bg-emerald-400/10" : "border-white/10 bg-white/[0.04]"}`}>
+          <div className={`rounded-lg border p-4 ${profile.totp_enabled ? "border-zinc-300/20 bg-zinc-400/10" : "border-white/10 bg-white/[0.04]"}`}>
             <div className="flex items-center gap-2 text-lg font-bold">
-              {profile.totp_enabled ? <ShieldCheck className="h-5 w-5 text-emerald-300" /> : <ShieldOff className="h-5 w-5 text-slate-400" />}
+              {profile.totp_enabled ? <ShieldCheck className="h-5 w-5 text-zinc-300" /> : <ShieldOff className="h-5 w-5 text-slate-400" />}
               {profile.totp_enabled ? "활성화" : "비활성화"}
             </div>
             {profile.totp_enabled_at && <p className="mt-1 text-sm text-slate-400">활성화일: {new Date(profile.totp_enabled_at).toLocaleDateString("ko-KR")}</p>}
@@ -171,7 +171,7 @@ export default function AccountSecurityPage() {
               </tbody>
             </table>
           </div>
-          <Button variant="outline" className="border-red-400/30 text-red-200 hover:bg-red-400/10 hover:text-red-100" onClick={() => revokeOtherSessions().then(load)}>모든 다른 기기에서 로그아웃</Button>
+          <Button variant="outline" className="border-zinc-400/30 text-zinc-200 hover:bg-zinc-400/10 hover:text-zinc-100" onClick={() => revokeOtherSessions().then(load)}>모든 다른 기기에서 로그아웃</Button>
         </CardContent>
       </Card>
 
@@ -187,7 +187,7 @@ export default function AccountSecurityPage() {
                     <td className="p-2">{new Date(item.login_at).toLocaleString("ko-KR")}</td>
                     <td className="p-2">{item.browser} on {item.os}</td>
                     <td className="p-2">{item.ip_address}</td>
-                    <td className={`p-2 font-semibold ${item.success ? "text-emerald-300" : "text-red-300"}`}>{item.success ? "성공" : `실패 ${item.failure_reason || ""}`}</td>
+                    <td className={`p-2 font-semibold ${item.success ? "text-zinc-300" : "text-zinc-300"}`}>{item.success ? "성공" : `실패 ${item.failure_reason || ""}`}</td>
                   </tr>
                 ))}
               </tbody>
@@ -197,7 +197,7 @@ export default function AccountSecurityPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-red-300">계정 삭제</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-zinc-300">계정 삭제</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-slate-400">모든 데이터가 영구적으로 삭제됩니다.</p>
           <Input type="password" placeholder="비밀번호 확인" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} />

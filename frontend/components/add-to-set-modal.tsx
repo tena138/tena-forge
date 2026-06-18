@@ -120,7 +120,7 @@ export function AddToSetModal({
             <h2 className="text-xl font-semibold">세트에 추가</h2>
           </div>
           {(usageLoading || usedProblemCount > 0) && (
-            <div className="rounded-md border border-violet-400/25 bg-violet-400/10 p-3 text-sm text-violet-100">
+            <div className="rounded-md border border-zinc-400/25 bg-zinc-400/10 p-3 text-sm text-zinc-100">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={usedProblemCount ? "warning" : "secondary"}>{usageLoading ? "사용 이력 확인 중" : `사용 이력 ${usedProblemCount}문항`}</Badge>
                 {usedProblemCount > 0 && <span>이미 다른 세트나 시험지에 쓰인 문항이 포함되어 있습니다.</span>}
@@ -145,7 +145,7 @@ export function AddToSetModal({
                 <button key={set.id} className="flex w-full items-center justify-between gap-3 rounded-md border bg-card/70 p-3 text-left hover:bg-accent" disabled={saving} onClick={() => addToExisting(set.id)}>
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{set.name}</span>
-                    {overlapCount > 0 && <span className="mt-1 block text-xs text-violet-200">선택 문항 중 {overlapCount}개가 이 세트에 기록되어 있습니다.</span>}
+                    {overlapCount > 0 && <span className="mt-1 block text-xs text-zinc-200">선택 문항 중 {overlapCount}개가 이 세트에 기록되어 있습니다.</span>}
                   </span>
                   <span className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
                     {overlapCount > 0 && <Badge variant="warning">기록 {overlapCount}</Badge>}

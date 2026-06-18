@@ -148,13 +148,13 @@ export function TextSidebarPanel() {
   return (
     <div className="space-y-5">
       <section className="space-y-2">
-        <button type="button" onClick={() => insertText("제목 텍스트", "제목을 입력하세요", 28, "bold")} className="flex w-full items-center gap-2 rounded-md border bg-white p-3 text-left text-sm font-bold text-slate-900 shadow-sm transition hover:border-sky-300 hover:bg-sky-50">
+        <button type="button" onClick={() => insertText("제목 텍스트", "제목을 입력하세요", 28, "bold")} className="flex w-full items-center gap-2 rounded-md border bg-white p-3 text-left text-sm font-bold text-slate-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
           <Plus className="h-4 w-4" /> 제목 텍스트 추가
         </button>
-        <button type="button" onClick={() => insertText("소제목 텍스트", "소제목을 입력하세요", 18, "bold")} className="flex w-full items-center gap-2 rounded-md border bg-white p-3 text-left text-sm font-bold text-slate-900 shadow-sm transition hover:border-sky-300 hover:bg-sky-50">
+        <button type="button" onClick={() => insertText("소제목 텍스트", "소제목을 입력하세요", 18, "bold")} className="flex w-full items-center gap-2 rounded-md border bg-white p-3 text-left text-sm font-bold text-slate-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
           <Plus className="h-4 w-4" /> 소제목 텍스트 추가
         </button>
-        <button type="button" onClick={() => insertText("본문 텍스트", "본문을 입력하세요", 11, "normal")} className="flex w-full items-center gap-2 rounded-md border bg-white p-3 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-sky-300 hover:bg-sky-50">
+        <button type="button" onClick={() => insertText("본문 텍스트", "본문을 입력하세요", 11, "normal")} className="flex w-full items-center gap-2 rounded-md border bg-white p-3 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
           <Plus className="h-4 w-4" /> 본문 텍스트 추가
         </button>
       </section>
@@ -171,7 +171,7 @@ export function TextSidebarPanel() {
               key={font.family}
               type="button"
               onClick={() => applyOrDefault({ fontFamily: font.family }, { fontFamily: font.family })}
-              className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm transition hover:bg-slate-100 ${activeFont === font.family ? "bg-sky-50 text-sky-900" : "text-slate-700"}`}
+              className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm transition hover:bg-slate-100 ${activeFont === font.family ? "bg-zinc-50 text-zinc-900" : "text-slate-700"}`}
               style={{ fontFamily: font.family }}
             >
               <span>{font.label}</span>
@@ -201,7 +201,7 @@ export function TextSidebarPanel() {
         <h3 className="mb-2 text-xs font-bold text-slate-600">스타일 프리셋</h3>
         <div className="space-y-2">
           {textStylePresets.map((preset) => (
-            <button key={preset.id} type="button" onClick={() => insertStylePreset(preset)} className="w-full rounded-md border bg-white p-3 text-left shadow-sm transition hover:border-sky-300 hover:bg-sky-50">
+            <button key={preset.id} type="button" onClick={() => insertStylePreset(preset)} className="w-full rounded-md border bg-white p-3 text-left shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
               <div
                 className="truncate"
                 style={{

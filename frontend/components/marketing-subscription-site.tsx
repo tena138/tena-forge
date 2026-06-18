@@ -248,7 +248,7 @@ export function MarketingSubscriptionSite() {
             <Link href="/login?redirect=/academy" className="hidden h-9 items-center rounded-[7px] px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white sm:inline-flex">
               로그인
             </Link>
-            <Link href="/register" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[7px] bg-white px-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-100">
+            <Link href="/register" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[7px] bg-white px-3 text-sm font-bold text-slate-950 transition hover:bg-zinc-100">
               <span className="sm:hidden">시작</span>
               <span className="hidden sm:inline">무료로 시작</span>
               <ChevronRight className="h-4 w-4" />
@@ -260,14 +260,14 @@ export function MarketingSubscriptionSite() {
       <section className="relative min-h-[88vh] overflow-hidden pt-16">
         <div className="absolute inset-0">
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,8,13,0.15),#07080d_88%)]" />
-          <div className="absolute left-1/2 top-16 h-[42rem] w-[72rem] -translate-x-1/2 rounded-full bg-cyan-400/10 blur-3xl" />
-          <div className="absolute right-[-12rem] top-28 h-[30rem] w-[30rem] rounded-full bg-emerald-400/10 blur-3xl" />
-          <div className="absolute left-[-10rem] top-48 h-[26rem] w-[26rem] rounded-full bg-violet-500/14 blur-3xl" />
+          <div className="absolute left-1/2 top-16 h-[42rem] w-[72rem] -translate-x-1/2 rounded-full bg-zinc-400/10 blur-3xl" />
+          <div className="absolute right-[-12rem] top-28 h-[30rem] w-[30rem] rounded-full bg-zinc-400/10 blur-3xl" />
+          <div className="absolute left-[-10rem] top-48 h-[26rem] w-[26rem] rounded-full bg-zinc-500/14 blur-3xl" />
           <HeroWorkbench />
         </div>
         <div className="relative z-10 mx-auto flex min-h-[calc(88vh-4rem)] max-w-7xl flex-col justify-center px-4 py-20 sm:px-6">
           <div className="max-w-4xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100">
+            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-300/20 bg-zinc-300/10 px-3 py-1 text-xs font-bold text-zinc-100">
               <Sparkles className="h-3.5 w-3.5" />
               AI credits 기반 PDF 추출과 문제 DB 운영
             </div>
@@ -276,7 +276,7 @@ export function MarketingSubscriptionSite() {
                 <span className="block sm:inline">PDF를</span>
                 <span className="block sm:inline"> 문제 DB로,</span>
               </span>
-              <span className="block text-cyan-100">
+              <span className="block text-zinc-100">
                 <span className="block sm:inline">수업 자료를</span>
                 <span className="block sm:inline"> 완성본으로.</span>
               </span>
@@ -286,7 +286,7 @@ export function MarketingSubscriptionSite() {
               학생별 자료와 마켓플레이스 운영까지 이어가도록 설계된 교육 콘텐츠 제작 환경입니다.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-            <Link href="/plan" className="inline-flex h-12 items-center gap-2 rounded-[8px] bg-cyan-200 px-5 text-sm font-black text-slate-950 transition hover:bg-white">
+            <Link href="/plan" className="inline-flex h-12 items-center gap-2 rounded-[8px] bg-zinc-200 px-5 text-sm font-black text-slate-950 transition hover:bg-white">
                 구독 구성하기 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href="/login?redirect=/academy" className="inline-flex h-12 items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.06] px-5 text-sm font-bold text-white transition hover:bg-white/[0.10]">
@@ -297,7 +297,7 @@ export function MarketingSubscriptionSite() {
           <div className="mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {productSignals.map(([title, body, Icon]) => (
               <div key={title} className="min-h-28 rounded-[8px] border border-white/10 bg-black/32 p-4 backdrop-blur-md">
-                <div className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-[7px] border border-white/10 bg-white/[0.06] text-cyan-100">
+                <div className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-[7px] border border-white/10 bg-white/[0.06] text-zinc-100">
                   <Icon className="h-4 w-4" />
                 </div>
                 <h2 className="text-sm font-bold text-white">{title}</h2>
@@ -311,7 +311,7 @@ export function MarketingSubscriptionSite() {
       <section id="workflow" className="border-y border-white/10 bg-[#0b1117]">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-200">Workflow</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-200">Workflow</p>
             <h2 className="mt-3 text-3xl font-black tracking-normal text-white sm:text-4xl">
               PDF 추출 이후의 운영까지 한 흐름으로 묶습니다.
             </h2>
@@ -319,7 +319,7 @@ export function MarketingSubscriptionSite() {
           <div className="mt-10 grid gap-3 md:grid-cols-4">
             {workflow.map(([number, title, body]) => (
               <div key={number} className="min-h-48 rounded-[8px] border border-white/10 bg-white/[0.045] p-5">
-                <div className="text-sm font-black text-cyan-100">{number}</div>
+                <div className="text-sm font-black text-zinc-100">{number}</div>
                 <h3 className="mt-8 text-lg font-bold text-white">{title}</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
               </div>
@@ -333,7 +333,7 @@ export function MarketingSubscriptionSite() {
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
             <div>
               <div className="max-w-3xl">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Build Your Plan</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-200">Build Your Plan</p>
                 <h2 className="mt-3 text-3xl font-black tracking-normal text-white sm:text-5xl">
                   모델을 고르고, 큰 패키지만 선택하세요.
                 </h2>
@@ -354,7 +354,7 @@ export function MarketingSubscriptionSite() {
                       className={cn(
                         "min-h-64 rounded-[8px] border p-5 text-left transition",
                         selectedPlan === item.code
-                          ? "border-cyan-200 bg-cyan-200/10 shadow-[0_18px_48px_rgba(34,211,238,0.12)]"
+                          ? "border-zinc-200 bg-zinc-200/10 shadow-[0_18px_48px_rgba(34,211,238,0.12)]"
                           : "border-white/10 bg-white/[0.045] hover:border-white/20 hover:bg-white/[0.07]"
                       )}
                     >
@@ -364,14 +364,14 @@ export function MarketingSubscriptionSite() {
                           <h3 className="mt-2 text-3xl font-black text-white">{item.name}</h3>
                         </div>
                         {item.badge && (
-                          <span className="rounded-[6px] bg-emerald-300 px-2 py-1 text-xs font-black text-slate-950">
+                          <span className="rounded-[6px] bg-zinc-300 px-2 py-1 text-xs font-black text-slate-950">
                             {item.badge}
                           </span>
                         )}
                       </div>
-                      <p className="mt-4 text-lg font-bold text-cyan-100">{item.headline}</p>
+                      <p className="mt-4 text-lg font-bold text-zinc-100">{item.headline}</p>
                       <div className="mt-5 inline-flex items-center gap-2 rounded-[7px] border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-200">
-                        <Gauge className="h-4 w-4 text-cyan-100" />
+                        <Gauge className="h-4 w-4 text-zinc-100" />
                         {item.speed} 처리 속도
                       </div>
                       <div className="mt-5 flex flex-wrap gap-2">
@@ -425,16 +425,16 @@ export function MarketingSubscriptionSite() {
                               className={cn(
                                 "min-h-48 rounded-[8px] border p-4 text-left transition",
                                 active
-                                  ? "border-cyan-200 bg-cyan-200/10"
+                                  ? "border-zinc-200 bg-zinc-200/10"
                                   : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.065]"
                               )}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <h3 className="text-lg font-black text-white">{option.name}</h3>
-                                  <p className="mt-1 text-sm font-bold text-cyan-100">{option.label}</p>
+                                  <p className="mt-1 text-sm font-bold text-zinc-100">{option.label}</p>
                                 </div>
-                                <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border", active ? "border-cyan-100 bg-cyan-100 text-slate-950" : "border-white/15 text-transparent")}>
+                                <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border", active ? "border-zinc-100 bg-zinc-100 text-slate-950" : "border-white/15 text-transparent")}>
                                   <Check className="h-3.5 w-3.5" />
                                 </span>
                               </div>
@@ -452,7 +452,7 @@ export function MarketingSubscriptionSite() {
 
             <aside className="lg:sticky lg:top-24">
               <div className="rounded-[8px] border border-white/10 bg-[#111820]/96 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-200">선택한 구성</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">선택한 구성</p>
                 <h3 className="mt-3 text-3xl font-black text-white">{model.name}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">{model.audience}</p>
                 <div className="mt-5 space-y-3">
@@ -471,7 +471,7 @@ export function MarketingSubscriptionSite() {
                   <SummaryItem>{selectedPlan === "pro" ? "마켓플레이스 사용 가능" : "마켓플레이스 미포함"}</SummaryItem>
                   <SummaryItem>워터마크 없음</SummaryItem>
                 </div>
-                <Link href="/register" className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-cyan-200 px-4 text-sm font-black text-slate-950 transition hover:bg-white">
+                <Link href="/register" className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-zinc-200 px-4 text-sm font-black text-slate-950 transition hover:bg-white">
                   이 구성으로 시작하기 <ArrowRight className="h-4 w-4" />
                 </Link>
                 <a href="#enterprise" className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.045] px-4 text-sm font-bold text-slate-100 transition hover:bg-white/[0.08]">
@@ -486,7 +486,7 @@ export function MarketingSubscriptionSite() {
       <section id="enterprise" className="border-t border-white/10 bg-[#10130f]">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:py-20">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-200">Enterprise</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-200">Enterprise</p>
             <h2 className="mt-3 text-3xl font-black tracking-normal text-white sm:text-5xl">
               대형 학원, 출판사, 기관은 세부 커스텀으로 설계합니다.
             </h2>
@@ -498,7 +498,7 @@ export function MarketingSubscriptionSite() {
           <div className="grid gap-3 sm:grid-cols-2">
             {enterpriseFeatures.map(([title, body, Icon]) => (
               <div key={title} className="rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
-                <Icon className="h-5 w-5 text-amber-100" />
+                <Icon className="h-5 w-5 text-zinc-100" />
                 <h3 className="mt-4 text-base font-bold text-white">{title}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">{body}</p>
               </div>
@@ -547,15 +547,15 @@ function HeroWorkbench() {
             ))}
           </div>
           <div className="rounded-[7px] border border-white/10 bg-black/24 p-4">
-            <div className="mb-4 h-4 w-28 rounded-full bg-cyan-100/70" />
+            <div className="mb-4 h-4 w-28 rounded-full bg-zinc-100/70" />
             <div className="space-y-2">
               <div className="h-2 rounded-full bg-white/18" />
               <div className="h-2 w-11/12 rounded-full bg-white/14" />
               <div className="h-2 w-10/12 rounded-full bg-white/14" />
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="h-24 rounded-[7px] border border-cyan-200/20 bg-cyan-200/10" />
-              <div className="h-24 rounded-[7px] border border-emerald-200/20 bg-emerald-200/10" />
+              <div className="h-24 rounded-[7px] border border-zinc-200/20 bg-zinc-200/10" />
+              <div className="h-24 rounded-[7px] border border-zinc-200/20 bg-zinc-200/10" />
             </div>
           </div>
         </div>
@@ -568,7 +568,7 @@ function HeroWorkbench() {
 function SectionLabel({ icon: Icon, title }: { icon: IconComponent; title: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="inline-flex h-9 w-9 items-center justify-center rounded-[7px] border border-white/10 bg-white/[0.055] text-cyan-100">
+      <span className="inline-flex h-9 w-9 items-center justify-center rounded-[7px] border border-white/10 bg-white/[0.055] text-zinc-100">
         <Icon className="h-4 w-4" />
       </span>
       <h3 className="text-lg font-black text-white">{title}</h3>
@@ -579,7 +579,7 @@ function SectionLabel({ icon: Icon, title }: { icon: IconComponent; title: strin
 function SummaryItem({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-3 flex items-start gap-2 text-sm text-slate-300">
-      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+      <Check className="mt-0.5 h-4 w-4 shrink-0 text-zinc-200" />
       <span>{children}</span>
     </div>
   );

@@ -106,7 +106,7 @@ export default function ProblemSetsPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Clock className="h-4 w-4 text-violet-200" />
+            <Clock className="h-4 w-4 text-zinc-200" />
             최근 내보내기
           </CardTitle>
         </CardHeader>
@@ -117,7 +117,7 @@ export default function ProblemSetsPage() {
                 <button
                   key={item.id}
                   type="button"
-                  className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-violet-300/35 hover:bg-white/[0.06]"
+                  className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/35 hover:bg-white/[0.06]"
                   onClick={() => item.problemSetId && router.push(`/problem-sets/${item.problemSetId}`)}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -153,7 +153,7 @@ export default function ProblemSetsPage() {
               key={set.id}
               role="button"
               tabIndex={0}
-              className="cursor-pointer transition hover:border-violet-300/35 hover:bg-white/[0.06]"
+              className="cursor-pointer transition hover:border-zinc-300/35 hover:bg-white/[0.06]"
               onClick={() => router.push(`/problem-sets/${set.id}`)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -173,7 +173,7 @@ export default function ProblemSetsPage() {
                   <Badge variant={set.rights_confirmed ? "success" : "warning"}>{set.rights_confirmed ? "권리 확인됨" : "권리 확인 필요"}</Badge>
                   {canManageMarketplace && <Badge variant={eligible ? "success" : "secondary"}>{eligible ? "마켓 등록 가능" : "비공개 유지"}</Badge>}
                 </div>
-                {canManageMarketplace && restricted && <p className="text-xs leading-5 text-amber-200">이 자료는 공개 또는 마켓플레이스 등록이 제한된 출처 유형입니다.</p>}
+                {canManageMarketplace && restricted && <p className="text-xs leading-5 text-zinc-200">이 자료는 공개 또는 마켓플레이스 등록이 제한된 출처 유형입니다.</p>}
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={(event) => { event.stopPropagation(); setExportSet(set); }}><FileDown className="h-4 w-4" />내보내기</Button>
                   {canManageMarketplace && <Button size="sm" variant="outline" disabled={!eligible} onClick={(event) => { event.stopPropagation(); openMarketplaceModal(set); }}><Store className="h-4 w-4" />마켓 등록 준비</Button>}
@@ -205,7 +205,7 @@ export default function ProblemSetsPage() {
         <DialogContent className="max-w-lg">
           <div className="space-y-4">
             <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-violet-200"><ShieldCheck className="h-4 w-4" />마켓플레이스 등록 전 권리 확인</div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200"><ShieldCheck className="h-4 w-4" />마켓플레이스 등록 전 권리 확인</div>
               <h2 className="mt-2 text-xl font-bold text-white">{marketTarget?.name}</h2>
             </div>
             <p className="text-sm leading-6 text-slate-300">

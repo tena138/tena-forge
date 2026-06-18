@@ -22,11 +22,11 @@ export default function StoresPage() {
       {stores.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {stores.map((store) => (
-            <Link key={store.id} href={`/stores/${store.slug}`} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5 transition hover:border-violet-300/40 hover:bg-white/[0.065]">
+            <Link key={store.id} href={`/stores/${store.slug}`} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5 transition hover:border-zinc-300/40 hover:bg-white/[0.065]">
               <div className="mb-4 h-28 rounded-md border border-white/10 bg-black/35" />
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-bold text-white">{store.display_name}</h2>
-                {store.verified_status !== "unverified" && <span className="rounded-md border border-violet-300/20 bg-violet-300/10 px-2 py-1 text-xs text-violet-100">공식 파트너</span>}
+                {store.verified_status !== "unverified" && <span className="rounded-md border border-zinc-300/20 bg-zinc-300/10 px-2 py-1 text-xs text-zinc-100">공식 파트너</span>}
               </div>
               <p className="mt-2 line-clamp-2 text-sm text-slate-400">{store.bio || "스토어 소개가 준비 중입니다."}</p>
               <p className="mt-4 text-xs text-slate-500">등록 콘텐츠 {store.listing_count}개 · 팔로워 {store.follower_count}명</p>

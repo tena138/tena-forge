@@ -95,8 +95,8 @@ export function ColorPicker({
         <button
           className={cn(
             variant === "swatch"
-              ? "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/25 bg-black/30 p-0.5 shadow-sm transition hover:border-white/45 focus:outline-none focus:ring-2 focus:ring-violet-300/35"
-              : "flex h-9 w-full items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.045] px-2 text-left text-xs text-slate-200 shadow-sm transition hover:border-violet-300/35 hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-violet-300/30",
+              ? "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/25 bg-black/30 p-0.5 shadow-sm transition hover:border-white/45 focus:outline-none focus:ring-2 focus:ring-zinc-300/35"
+              : "flex h-9 w-full items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.045] px-2 text-left text-xs text-slate-200 shadow-sm transition hover:border-zinc-300/35 hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-zinc-300/30",
             triggerClassName
           )}
           aria-label={`${label} 색상 선택`}
@@ -111,7 +111,7 @@ export function ColorPicker({
         <Popover.Content
           sideOffset={8}
           align="start"
-          className="z-[100] w-[304px] rounded-lg border border-white/12 bg-[#11101a]/95 p-3 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,0.48),0_0_0_1px_rgba(167,139,250,0.08)] backdrop-blur-xl"
+          className="z-[100] w-[304px] rounded-lg border border-white/12 bg-[#11101a]/95 p-3 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,0.48),0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-xl"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -132,7 +132,7 @@ export function ColorPicker({
                 onChange(event.target.value);
               }}
               onBlur={(event) => commit(event.target.value.trim() || "transparent")}
-              className="h-9 border-white/10 bg-black/25 font-mono text-xs text-slate-100 focus-visible:ring-violet-300/35"
+              className="h-9 border-white/10 bg-black/25 font-mono text-xs text-slate-100 focus-visible:ring-zinc-300/35"
               aria-label="색상 값"
             />
             <Button size="icon" variant="outline" className="h-9 w-9 border-white/10 bg-white/[0.045] text-slate-300 hover:bg-white/10 hover:text-white" onClick={pickEyeDropper} aria-label="스포이드">

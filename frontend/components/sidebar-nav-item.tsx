@@ -42,12 +42,12 @@ export function SidebarNavItem({
         active &&
           (activeClassName ||
             (mobile
-              ? "border-violet-400/30 bg-violet-400/10 text-violet-100 hover:bg-violet-400/10 hover:text-violet-100"
+              ? "border-white/25 bg-white/[0.10] text-white hover:bg-white/[0.10] hover:text-white"
               : "border-white/10 bg-white/[0.08] text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]"))
       )}
     >
-      {!mobile && !collapsed && <span className={cn("absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent transition-colors", active && (activeIndicatorClassName || "bg-violet-400"))} />}
-      <Icon className={cn("h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200", active && (activeIconClassName || "text-violet-300 group-hover:text-violet-300"))} />
+      {!mobile && !collapsed && <span className={cn("absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent transition-colors", active && (activeIndicatorClassName || "bg-white"))} />}
+      <Icon className={cn("h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200", active && (activeIconClassName || "text-white group-hover:text-white"))} />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   );

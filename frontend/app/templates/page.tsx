@@ -163,7 +163,7 @@ export default function TemplateHubPage() {
       <section className="overflow-hidden rounded-[12px] border border-white/10 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.36)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-200">
+            <div className="inline-flex items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200">
               <Sparkles className="h-3.5 w-3.5" />
               Visual Hub
             </div>
@@ -220,7 +220,7 @@ export default function TemplateHubPage() {
           {visible.map((template) => {
             const visualSet = getVisualTemplateSet(template);
             return (
-              <article key={template.id} className="overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.065]">
+              <article key={template.id} className="overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:border-zinc-300/35 hover:bg-white/[0.065]">
                 <Link href={openHref(template)} className="block">
                   <TemplateCardPreview template={template} />
                 </Link>

@@ -41,11 +41,11 @@ export default function CreatorProductsPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Creator Products</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Creator Products</p>
         <h1 className="mt-2 text-3xl font-bold text-white">크리에이터 상품 관리</h1>
       </section>
       {error ? (
-        <div className="rounded-[10px] border border-red-400/20 bg-red-500/10 p-5 text-sm text-red-100">{error}</div>
+        <div className="rounded-[10px] border border-zinc-400/20 bg-zinc-500/10 p-5 text-sm text-zinc-100">{error}</div>
       ) : (
         <>
           <form onSubmit={create} className="grid gap-3 rounded-[10px] border border-white/10 bg-black/25 p-4 md:grid-cols-3">

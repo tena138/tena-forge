@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import {
@@ -41,11 +40,6 @@ import { PAGE_SIZES, SampleProblem, TemplateSet } from "@/lib/visualTemplateType
 type IconComponent = ComponentType<{ className?: string }>;
 type PlanCardTone = "free" | "basic" | "pro";
 
-const AuroraWebGLBackground = dynamic(
-  () => import("@/components/landing/aurora-webgl-background").then((mod) => mod.AuroraWebGLBackground),
-  { ssr: false }
-);
-
 const planCards = [
   {
     name: "Free",
@@ -81,8 +75,8 @@ const planCardToneClass: Record<PlanCardTone, string> = {
 
 const planCtaToneClass: Record<PlanCardTone, string> = {
   free: "border border-white/12 text-white hover:bg-white/[0.07]",
-  basic: "bg-[linear-gradient(135deg,#7c5cff_0%,#8b6bff_48%,#c4b5fd_100%)] text-white shadow-[0_18px_54px_rgba(124,92,255,0.24)] hover:shadow-[0_22px_70px_rgba(124,92,255,0.34)]",
-  pro: "bg-[linear-gradient(135deg,#2dd4bf_0%,#7c5cff_58%,#f472b6_100%)] text-white shadow-[0_18px_54px_rgba(20,184,166,0.18)] hover:shadow-[0_22px_64px_rgba(124,92,255,0.26)]",
+  basic: "bg-[linear-gradient(135deg,#f5f5f5_0%,#d4d4d4_48%,#e8e8e8_100%)] text-white shadow-[0_18px_54px_rgba(255,255,255,0.24)] hover:shadow-[0_22px_70px_rgba(255,255,255,0.34)]",
+  pro: "bg-[linear-gradient(135deg,#bdbdbd_0%,#f5f5f5_58%,#dcdcdc_100%)] text-white shadow-[0_18px_54px_rgba(255,255,255,0.18)] hover:shadow-[0_22px_64px_rgba(255,255,255,0.26)]",
 };
 
 const storyScenes = [
@@ -168,7 +162,7 @@ const demoTemplateSet: TemplateSet = {
       id: "landing-template-page",
       name: "시험지",
       role: "exam",
-      background: { color: "#f2f1f8" },
+      background: { color: "#f2f2f2" },
       elements: [
         {
           id: "header-date-box",
@@ -184,7 +178,7 @@ const demoTemplateSet: TemplateSet = {
           zIndex: 1,
           locked: true,
           hidden: false,
-          style: { fill: "#f8f7fc", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+          style: { fill: "#f8f8f8", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
         },
         {
           id: "header-title-box",
@@ -200,7 +194,7 @@ const demoTemplateSet: TemplateSet = {
           zIndex: 1,
           locked: true,
           hidden: false,
-          style: { fill: "#e7e5ef", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+          style: { fill: "#e7e7e7", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
         },
         {
           id: "header-logo-box",
@@ -216,7 +210,7 @@ const demoTemplateSet: TemplateSet = {
           zIndex: 1,
           locked: true,
           hidden: false,
-          style: { fill: "#f8f7fc", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
+          style: { fill: "#f8f8f8", stroke: "#111827", strokeWidth: 2, radius: 0, borderStyle: "solid" },
         },
         {
           id: "header-date",
@@ -308,10 +302,10 @@ const demoTemplateSet: TemplateSet = {
           locked: true,
           hidden: false,
           style: {},
-          cardStyle: { fill: "#f8f7fc", stroke: "transparent", strokeWidth: 0, radius: 0 },
+          cardStyle: { fill: "#f8f8f8", stroke: "transparent", strokeWidth: 0, radius: 0 },
           numberStyle: { color: "#111827", fontSize: 13, fontWeight: "bold" },
           bodyStyle: { color: "#111827", fontSize: 12, lineHeight: 1.5 },
-          answerSpaceStyle: { fill: "#f2f1f8", stroke: "#c7c3d7", strokeWidth: 1, borderStyle: "dashed", radius: 4 },
+          answerSpaceStyle: { fill: "#f2f2f2", stroke: "#c7c3d7", strokeWidth: 1, borderStyle: "dashed", radius: 4 },
           columnDividerStyle: { stroke: "#111827", strokeWidth: 1, borderStyle: "solid" },
         },
         {
@@ -384,35 +378,46 @@ function activeStoryIndex(progress: number) {
 export function PlanLandingPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-transparent text-[var(--landing-text-primary)]">
-      <AuroraWebGLBackground />
       <LandingNav />
 
-      <section className="relative min-h-[100svh] overflow-hidden pt-16 lg:min-h-screen">
-        <div className="relative z-10 mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-[104rem] flex-col items-center justify-start px-4 pb-10 pt-10 text-center sm:px-6 sm:pt-14 lg:min-h-[calc(100vh-4rem)] lg:justify-center lg:py-12 xl:px-8">
-          <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
-            <div className="flex w-full flex-col items-center">
-              <p className="landing-hero-eyebrow text-xs font-black uppercase tracking-[0.24em] text-violet-200/90 drop-shadow-[0_0_16px_rgba(124,92,255,0.35)]">TENA FORGE</p>
-              <h1 className="landing-hero-title landing-keep-words mt-4 whitespace-nowrap bg-[linear-gradient(180deg,#ffffff_0%,#dcd7ff_50%,#a99cff_100%)] bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(124,92,255,0.20)]">
-                혼자서도 빠르고, 강력하게
+      <section className="relative min-h-[92svh] overflow-hidden pt-16 lg:min-h-[92vh]">
+        <img
+          src="/tena-forge-metal-lockup.png"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover opacity-90 grayscale contrast-125"
+        />
+        <img
+          src="/tena-forge-metal-lockup.png"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute right-[-18vw] top-[7rem] hidden h-[52vh] w-[78vw] object-contain opacity-35 grayscale invert contrast-125 [mask-image:linear-gradient(90deg,transparent,black_16%,black_78%,transparent)] lg:block"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.92),rgba(0,0,0,0.48)_46%,rgba(0,0,0,0.36)),linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.78))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.05)_0_1px,transparent_1px_14px)] opacity-55" />
+        <div className="relative z-10 mx-auto flex min-h-[calc(92svh-4rem)] w-full max-w-[104rem] flex-col justify-between px-4 pb-8 pt-10 sm:px-6 sm:pt-14 lg:min-h-[calc(92vh-4rem)] lg:py-12 xl:px-8">
+          <div className="flex max-w-4xl flex-col items-start text-left">
+            <p className="landing-hero-eyebrow text-xs font-black uppercase tracking-[0.24em] text-zinc-300 drop-shadow-[0_0_16px_rgba(255,255,255,0.18)]">MONOTONE FORGE OS</p>
+            <h1 className="landing-hero-title landing-keep-words mt-4 text-white drop-shadow-[0_0_28px_rgba(255,255,255,0.14)]">
+                Tena Forge
               </h1>
-              <p className="landing-keep-words mt-4 max-w-4xl text-base leading-7 text-[var(--landing-text-secondary)] sm:mt-5 sm:text-lg sm:leading-8">
+              <p className="landing-keep-words mt-4 max-w-3xl text-base leading-7 text-zinc-300 sm:mt-5 sm:text-lg sm:leading-8">
                 자체 제작한 교재 PDF, 시험지 PDF 자료를 업로드하면 문항을 추출하고, 문제 DB로 정리한 뒤 시험지 제작과 학생 오답 기록까지 이어지는 제작 콘솔.
               </p>
-              <div className="mt-6 flex w-full flex-wrap items-center justify-center gap-3 sm:mt-8 sm:w-auto sm:gap-4">
+              <div className="mt-6 flex w-full flex-wrap items-center gap-3 sm:mt-8 sm:w-auto sm:gap-4">
                 <Link
                   href="/register?plan=free"
-                  className="landing-motion-safe inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[8px] bg-[var(--landing-accent)] px-5 text-sm font-black text-white shadow-[0_18px_42px_rgba(124,92,255,0.36)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] hover:shadow-[0_22px_54px_rgba(124,92,255,0.44)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98] sm:flex-none sm:px-6"
+                  className="landing-motion-safe inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[8px] border border-white/80 bg-white px-5 text-sm font-black text-black shadow-[0_18px_42px_rgba(255,255,255,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-[0_22px_54px_rgba(255,255,255,0.18)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/35 active:scale-[0.98] sm:flex-none sm:px-6"
                 >
                   무료로 시작하기 <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/login?redirect=/academy"
-                  className="landing-hero-login-link inline-flex h-12 items-center justify-center rounded-[8px] border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:border-0 sm:bg-transparent sm:px-0"
+                  className="landing-hero-login-link inline-flex h-12 items-center justify-center rounded-[8px] border border-white/14 bg-black/35 px-4 text-sm font-black text-zinc-200 transition hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/25 sm:px-5"
                 >
                   로그인
                 </Link>
               </div>
-            </div>
           </div>
 
           <div className="mt-10 w-full sm:mt-12 lg:mt-14">
@@ -437,16 +442,16 @@ function LandingNav() {
   return (
     <nav className="landing-nav fixed inset-x-0 top-0 z-40 border-b border-white/[0.08] bg-[rgba(10,10,15,0.78)] backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-[104rem] items-center justify-between px-4 sm:px-6 xl:px-8">
-        <Link href="/" className="inline-flex min-w-0 items-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25" aria-label="Tena Forge">
+        <Link href="/" className="inline-flex min-w-0 items-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25" aria-label="Tena Forge">
           <span className="relative inline-flex h-9 w-[8.75rem] items-center sm:w-[9.75rem]">
-            <img src="/tenaforgelogo-dark.png?v=1" alt="" aria-hidden="true" className="landing-logo-dark h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
-            <img src="/tenaforgelogo.png?v=1" alt="" aria-hidden="true" className="landing-logo-light absolute left-0 top-0 h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
+            <img src="/tenaforgelogo-dark.png?v=1" alt="" aria-hidden="true" className="landing-logo-dark h-9 w-auto max-w-[8.75rem] object-contain brightness-0 invert sm:max-w-none" />
+            <img src="/tenaforgelogo.png?v=1" alt="" aria-hidden="true" className="landing-logo-light absolute left-0 top-0 h-9 w-auto max-w-[8.75rem] object-contain brightness-0 sm:max-w-none" />
           </span>
         </Link>
         <div className="flex items-center gap-2 text-sm font-black">
-          <a href="#plans" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">플랜</a>
-          <Link href="/login?redirect=/academy" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25 sm:inline-flex">로그인</Link>
-          <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/35 active:scale-[0.98] sm:px-4">
+          <a href="#plans" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25 sm:inline-flex">플랜</a>
+          <Link href="/login?redirect=/academy" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25 sm:inline-flex">로그인</Link>
+          <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/35 active:scale-[0.98] sm:px-4">
             <span className="sm:hidden">시작</span>
             <span className="hidden sm:inline">무료로 시작하기</span>
           </Link>
@@ -463,8 +468,8 @@ function LandingFooter() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <span className="relative h-8 w-8 shrink-0">
-              <img src="/tenaforge-mark-dark.png?v=1" alt="" className="landing-logo-dark h-8 w-8 object-contain" />
-              <img src="/tenaforge-mark.png?v=1" alt="" className="landing-logo-light absolute left-0 top-0 h-8 w-8 object-contain" />
+              <img src="/tenaforge-mark-dark.png?v=1" alt="" className="landing-logo-dark h-8 w-8 object-contain brightness-0 invert" />
+              <img src="/tenaforge-mark.png?v=1" alt="" className="landing-logo-light absolute left-0 top-0 h-8 w-8 object-contain brightness-0" />
             </span>
             <span className="landing-footer-brand font-semibold text-slate-300">Tena Forge</span>
           </div>
@@ -500,9 +505,9 @@ function LandingFooter() {
 function ProductPreview() {
   return (
     <div className="landing-mock-perspective relative mx-auto w-full max-w-[72rem]">
-      <div className="absolute left-1/2 top-1/2 h-[22rem] w-[min(64rem,88vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.34),transparent_68%)] blur-3xl" />
-      <div className="landing-mock-frame relative mx-auto h-[32rem] w-full overflow-hidden rounded-2xl border border-white/[0.09] bg-[rgba(7,8,13,0.74)] shadow-[0_34px_110px_rgba(0,0,0,0.52),0_0_76px_rgba(124,92,255,0.18)] backdrop-blur-xl">
-        <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_18%_4%,rgba(124,92,255,0.18),transparent_20rem),radial-gradient(circle_at_92%_16%,rgba(139,107,255,0.12),transparent_22rem),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(7,8,13,0.94)_44%,rgba(8,10,16,0.98))]" />
+      <div className="absolute left-1/2 top-1/2 h-[22rem] w-[min(64rem,88vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.34),transparent_68%)] blur-3xl" />
+      <div className="landing-mock-frame relative mx-auto h-[32rem] w-full overflow-hidden rounded-2xl border border-white/[0.09] bg-[rgba(7,8,13,0.74)] shadow-[0_34px_110px_rgba(0,0,0,0.52),0_0_76px_rgba(255,255,255,0.18)] backdrop-blur-xl">
+        <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_18%_4%,rgba(255,255,255,0.18),transparent_20rem),radial-gradient(circle_at_92%_16%,rgba(255,255,255,0.12),transparent_22rem),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(7,8,13,0.94)_44%,rgba(8,10,16,0.98))]" />
         <div className="relative z-10 h-full overflow-hidden rounded-2xl">
           <div className="flex h-14 items-center justify-between border-b border-white/10 bg-black/55 px-4 backdrop-blur-xl">
             <div className="flex min-w-0 items-center gap-3">
@@ -527,8 +532,8 @@ function ProductPreview() {
             <aside className="border-r border-white/10 bg-black/45 px-1.5 py-3 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-2">
               <SidebarGroup
                 title="Private Studio"
-                accent="bg-violet-400"
-                panel="border-violet-400/20 bg-violet-400/[0.055]"
+                accent="bg-zinc-400"
+                panel="border-zinc-400/20 bg-zinc-400/[0.055]"
                 items={[
                   ["제작 콘솔", LayoutDashboard, true],
                   ["추출", FileUp, false],
@@ -539,8 +544,8 @@ function ProductPreview() {
               />
               <SidebarGroup
                 title="Academy OS"
-                accent="bg-violet-300"
-                panel="border-violet-300/20 bg-violet-300/[0.045]"
+                accent="bg-zinc-300"
+                panel="border-zinc-300/20 bg-zinc-300/[0.045]"
                 items={[
                   ["학생 관리", GraduationCap, false],
                   ["클래스", Users, false],
@@ -551,11 +556,11 @@ function ProductPreview() {
             <section className="min-h-0 min-w-0 overflow-hidden bg-[#090b10]/[0.92]">
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Private Studio</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">Private Studio</p>
                   <p className="mt-0.5 text-sm font-black text-slate-100">문항 보관함</p>
                 </div>
                 <div className="hidden items-center gap-2 sm:flex">
-                  <span className="h-2 w-2 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.7)]" />
+                  <span className="h-2 w-2 rounded-full bg-zinc-300 shadow-[0_0_18px_rgba(255,255,255,0.7)]" />
                   <span className="text-xs font-bold text-slate-400">Live preview</span>
                 </div>
               </div>
@@ -573,21 +578,21 @@ function ProductPreview() {
 
 function MobileProductPreview() {
   const previewSteps: Array<[string, string, IconComponent, string]> = [
-    ["PDF 업로드", "모의고사_수학.pdf", FileUp, "bg-violet-400/15 text-violet-100 border-violet-300/20"],
-    ["문항 검수", "58문항 · 태그 대기", ClipboardCheck, "bg-cyan-400/12 text-cyan-100 border-cyan-300/20"],
-    ["시험지 제작", "선택 12문항", Send, "bg-emerald-400/12 text-emerald-100 border-emerald-300/20"],
+    ["PDF 업로드", "모의고사_수학.pdf", FileUp, "bg-zinc-400/15 text-zinc-100 border-zinc-300/20"],
+    ["문항 검수", "58문항 · 태그 대기", ClipboardCheck, "bg-zinc-400/12 text-zinc-100 border-zinc-300/20"],
+    ["시험지 제작", "선택 12문항", Send, "bg-zinc-400/12 text-zinc-100 border-zinc-300/20"],
   ];
 
   return (
     <section className="relative overflow-hidden rounded-[10px] border border-white/10 bg-[#090b12]/90 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_0%,rgba(124,92,255,0.18),transparent_13rem),radial-gradient(circle_at_92%_18%,rgba(45,212,191,0.12),transparent_12rem)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_0%,rgba(255,255,255,0.18),transparent_13rem),radial-gradient(circle_at_92%_18%,rgba(255,255,255,0.12),transparent_12rem)]" />
       <div className="relative z-10 border-b border-white/10 px-3.5 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">Private Studio</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">Private Studio</p>
             <h2 className="mt-1 truncate text-sm font-black text-white">오늘 만들 자료</h2>
           </div>
-          <span className="rounded-[7px] border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-bold text-emerald-100">3단계</span>
+          <span className="rounded-[7px] border border-zinc-300/20 bg-zinc-400/10 px-2 py-1 text-[11px] font-bold text-zinc-100">3단계</span>
         </div>
       </div>
 
@@ -607,7 +612,7 @@ function MobileProductPreview() {
         <div className="rounded-[8px] border border-white/10 bg-black/24 p-3">
           <div className="mb-3 flex items-center justify-between gap-3">
             <p className="text-xs font-bold text-slate-400">문항 브라우저</p>
-            <span className="text-[11px] font-semibold text-violet-200">실시간 선택</span>
+            <span className="text-[11px] font-semibold text-zinc-200">실시간 선택</span>
           </div>
           <div className="grid grid-cols-4 gap-2">
             {Array.from({ length: 8 }, (_, index) => {
@@ -617,7 +622,7 @@ function MobileProductPreview() {
                   key={index}
                   className={cn(
                     "grid aspect-square place-items-center rounded-[7px] border text-xs font-black",
-                    active ? "border-violet-300/40 bg-violet-500/25 text-white" : "border-white/10 bg-white/[0.04] text-slate-500"
+                    active ? "border-zinc-300/40 bg-zinc-500/25 text-white" : "border-white/10 bg-white/[0.04] text-slate-500"
                   )}
                 >
                   {index + 1}
@@ -714,7 +719,7 @@ function ScrollStorySection() {
       <MobileWorkflowSection />
 
       <div ref={pinRef} className="relative hidden h-screen min-h-[46rem] overflow-hidden lg:block">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(45,212,191,0.07),transparent_30rem),radial-gradient(circle_at_80%_42%,rgba(124,92,255,0.13),transparent_38rem),linear-gradient(180deg,rgba(6,7,13,0.04),rgba(6,7,13,0.34))]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.07),transparent_30rem),radial-gradient(circle_at_80%_42%,rgba(255,255,255,0.13),transparent_38rem),linear-gradient(180deg,rgba(6,7,13,0.04),rgba(6,7,13,0.34))]" />
         <div className="absolute inset-0">
             <StoryStageScene active={activeIndex === 0}>
               <DigitizeScene progress={progressByScene[0]} />
@@ -735,7 +740,7 @@ function MobileWorkflowSection() {
   return (
     <div className="relative z-10 bg-[#07080d]/70 px-4 py-12 sm:px-6 lg:hidden">
       <div className="mx-auto max-w-md">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Workflow</p>
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-200">Workflow</p>
         <h2 className="landing-keep-words mt-3 text-[2rem] font-black leading-tight tracking-normal text-white">
           수업 준비는 세 단계면 충분합니다.
         </h2>
@@ -747,7 +752,7 @@ function MobileWorkflowSection() {
           {mobileWorkflow.map(({ eyebrow, title, body, icon: Icon }) => (
             <article key={title} className="rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
               <div className="flex items-start gap-3">
-                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[7px] border border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[7px] border border-zinc-300/20 bg-zinc-300/10 text-zinc-100">
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
@@ -799,8 +804,8 @@ function StoryCaption({
         transform: `translateY(${(1 - visible) * 24}px)`,
       }}
     >
-      <span className="block text-xs font-black uppercase tracking-[0.42em] text-cyan-200">{tag}</span>
-      <div className="mt-3 max-w-[42rem] text-[clamp(2rem,4.5vw,4rem)] font-black leading-[1.08] tracking-normal text-white drop-shadow-[0_0_42px_rgba(124,92,255,0.45)]">
+      <span className="block text-xs font-black uppercase tracking-[0.42em] text-zinc-200">{tag}</span>
+      <div className="mt-3 max-w-[42rem] text-[clamp(2rem,4.5vw,4rem)] font-black leading-[1.08] tracking-normal text-white drop-shadow-[0_0_42px_rgba(255,255,255,0.45)]">
         {children}
       </div>
     </div>
@@ -822,7 +827,7 @@ function DigitizeVisualScene({ active, scene, progress }: { active: boolean; sce
         pointerEvents: active ? "auto" : "none",
       }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_48%,rgba(45,212,191,0.10),transparent_20rem),radial-gradient(circle_at_64%_42%,rgba(124,92,255,0.18),transparent_28rem),#05070d]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_48%,rgba(255,255,255,0.10),transparent_20rem),radial-gradient(circle_at_64%_42%,rgba(255,255,255,0.18),transparent_28rem),#05070d]" />
       <DigitizePaperStack progress={progress} />
       <div
         className="absolute inset-0 overflow-hidden rounded-[8px] border border-white/10 bg-[#090b10]/95 shadow-[0_34px_120px_rgba(0,0,0,0.44)]"
@@ -864,7 +869,7 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
         </div>
         <div className="flex items-center gap-2">
           <span className="hidden rounded-[7px] border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[11px] font-bold text-slate-300 sm:inline-flex">{scene.route}</span>
-          <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.75)]" />
+          <span className="h-2 w-2 rounded-full bg-zinc-300 shadow-[0_0_18px_rgba(255,255,255,0.75)]" />
         </div>
       </div>
 
@@ -872,8 +877,8 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
         <aside className="border-r border-white/10 bg-black/45 px-1.5 py-3 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-2">
           <SidebarGroup
             title="Private Studio"
-            accent="bg-violet-400"
-            panel="border-violet-400/20 bg-violet-400/[0.055]"
+            accent="bg-zinc-400"
+            panel="border-zinc-400/20 bg-zinc-400/[0.055]"
             items={[
               ["제작 콘솔", LayoutDashboard, scene.eyebrow === "Private Studio" && scene.route === "/problems"],
               ["추출", FileUp, false],
@@ -884,8 +889,8 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
           />
           <SidebarGroup
             title="Academy OS"
-            accent="bg-sky-300"
-            panel="border-sky-300/20 bg-sky-300/[0.045]"
+            accent="bg-zinc-300"
+            panel="border-zinc-300/20 bg-zinc-300/[0.045]"
             items={[
               ["학생 관리", GraduationCap, scene.route === "/student-management"],
               ["클래스", Users, scene.route === "/student-management"],
@@ -896,11 +901,11 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
         <section className="flex min-h-0 min-w-0 flex-col bg-[#090b10]/[0.92]">
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-5">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-200">{scene.eyebrow}</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">{scene.eyebrow}</p>
               <p className="mt-0.5 text-sm font-black text-slate-100">{scene.pageTitle}</p>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
-              <span className="h-2 w-2 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.7)]" />
+              <span className="h-2 w-2 rounded-full bg-zinc-300 shadow-[0_0_18px_rgba(255,255,255,0.7)]" />
               <span className="text-xs font-bold text-slate-400">Live preview</span>
             </div>
           </div>
@@ -935,7 +940,7 @@ function DigitizePaperStack({ progress }: { progress: number }) {
             <span className="block h-2 w-9/12 rounded bg-slate-300" />
           </div>
           <span
-            className="absolute left-0 right-0 h-10 bg-[linear-gradient(180deg,transparent,rgba(45,212,191,0.34),transparent)]"
+            className="absolute left-0 right-0 h-10 bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.34),transparent)]"
             style={{
               top: `${scanProgress * 78 + 4}%`,
               opacity: scanProgress > 0 && scanProgress < 1 ? 0.75 : 0,
@@ -958,18 +963,18 @@ function DigitizeScene({ progress }: { progress: number }) {
   const pointOpacity = clampProgress((progress - 0.32) / 0.08) * (1 - clampProgress((progress - 0.66) / 0.08));
   const documents = [
     { x: -30, y: -17, rotate: -13, width: 9.4, height: 12.8, accent: "#6b6f8c" },
-    { x: -14, y: -22, rotate: 7, width: 8.8, height: 12, accent: "#7c5cff" },
-    { x: 5, y: -15, rotate: -5, width: 9.6, height: 13.2, accent: "#2dd4bf" },
-    { x: -24, y: 5, rotate: 11, width: 8.7, height: 11.8, accent: "#3b6ff5" },
+    { x: -14, y: -22, rotate: 7, width: 8.8, height: 12, accent: "#f5f5f5" },
+    { x: 5, y: -15, rotate: -5, width: 9.6, height: 13.2, accent: "#bdbdbd" },
+    { x: -24, y: 5, rotate: 11, width: 8.7, height: 11.8, accent: "#bdbdbd" },
     { x: -2, y: 6, rotate: -9, width: 9.2, height: 12.4, accent: "#a24bff" },
     { x: 18, y: 8, rotate: 12, width: 8.4, height: 11.5, accent: "#6b6f8c" },
-    { x: -12, y: 23, rotate: -6, width: 9, height: 12.2, accent: "#2dd4bf" },
+    { x: -12, y: 23, rotate: -6, width: 9, height: 12.2, accent: "#bdbdbd" },
   ];
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
       <div
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.42),rgba(45,212,191,0.12)_38%,transparent_70%)] blur-3xl"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.42),rgba(255,255,255,0.12)_38%,transparent_70%)] blur-3xl"
         style={{
           opacity: 0.2 + burstProgress * 0.58,
           transform: `translate(-50%, -50%) scale(${1 + burstProgress * 0.34})`,
@@ -1013,8 +1018,8 @@ function DigitizeScene({ progress }: { progress: number }) {
             }}
           >
             <div className="absolute left-4 top-4 h-3 w-20 rounded" style={{ backgroundColor: document.accent }} />
-            <div className="absolute left-4 right-4 top-12 h-1.5 rounded bg-[#aeb0c4]" />
-            <div className="absolute left-4 top-16 h-1.5 w-24 rounded bg-[#aeb0c4]" />
+            <div className="absolute left-4 right-4 top-12 h-1.5 rounded bg-[#a8a8a8]" />
+            <div className="absolute left-4 top-16 h-1.5 w-24 rounded bg-[#a8a8a8]" />
             <div className="absolute left-4 right-4 top-24 h-16 rounded border border-slate-300/60 bg-slate-50/70" />
             <div className="absolute bottom-4 left-4 right-4 grid grid-cols-3 gap-1.5">
               <span className="h-7 rounded border border-slate-300/60 bg-slate-50/70" />
@@ -1022,7 +1027,7 @@ function DigitizeScene({ progress }: { progress: number }) {
               <span className="h-7 rounded border border-slate-300/60 bg-slate-50/70" />
             </div>
             <div
-              className="absolute left-0 right-0 h-5 bg-[linear-gradient(90deg,transparent,#2dd4bf,transparent)] shadow-[0_0_20px_#2dd4bf]"
+              className="absolute left-0 right-0 h-5 bg-[linear-gradient(90deg,transparent,#bdbdbd,transparent)] shadow-[0_0_20px_#bdbdbd]"
               style={{
                 top: `${scanProgress * 88}%`,
                 opacity: scanProgress > 0 && scanProgress < 1 ? 1 : 0,
@@ -1040,12 +1045,12 @@ function DigitizeScene({ progress }: { progress: number }) {
         }}
       >
         <div
-          className="relative grid h-24 w-24 place-items-center rounded-full border border-violet-200/18 bg-[#121326]/82 shadow-[0_0_45px_rgba(124,92,255,0.38)] backdrop-blur-xl"
+          className="relative grid h-24 w-24 place-items-center rounded-full border border-zinc-200/18 bg-[#121326]/82 shadow-[0_0_45px_rgba(255,255,255,0.38)] backdrop-blur-xl"
           style={{ transform: `rotate(${loadingProgress * 540}deg)` }}
         >
-          <span className="absolute inset-2 rounded-full border border-transparent border-t-cyan-300 border-r-violet-300 shadow-[0_0_22px_rgba(45,212,191,0.25)]" />
+          <span className="absolute inset-2 rounded-full border border-transparent border-t-zinc-300 border-r-zinc-300 shadow-[0_0_22px_rgba(255,255,255,0.25)]" />
         </div>
-        <div className="mt-4 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black tracking-[0.12em] text-violet-100 shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur">
+        <div className="mt-4 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black tracking-[0.12em] text-zinc-100 shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur">
           문항 추출 중
         </div>
       </div>
@@ -1065,7 +1070,7 @@ function DigitizeScene({ progress }: { progress: number }) {
 
       <StoryCaption tag="Digitize" progress={progress} className="bottom-[14vh] left-[7vw]">
         오프라인 문항들을<br />한 곳에{" "}
-        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">전산화</span>
+        <span className="bg-[linear-gradient(100deg,#bdbdbd,#f5f5f5)] bg-clip-text text-transparent">전산화</span>
       </StoryCaption>
     </div>
   );
@@ -1101,7 +1106,7 @@ function ContentCreationScene({ progress }: { progress: number }) {
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
-      <div className="pointer-events-none absolute left-[55%] top-[28%] h-[35rem] w-[35rem] rounded-full bg-[radial-gradient(circle,rgba(59,111,245,0.26),rgba(124,92,255,0.12)_42%,transparent_70%)] blur-3xl" />
+      <div className="pointer-events-none absolute left-[55%] top-[28%] h-[35rem] w-[35rem] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.26),rgba(255,255,255,0.12)_42%,transparent_70%)] blur-3xl" />
 
       <DemoProblemBrowserSurface
         progress={1}
@@ -1119,10 +1124,10 @@ function ContentCreationScene({ progress }: { progress: number }) {
       />
 
       <div
-        className="absolute left-[calc(50%_-_8rem)] top-[calc(50%_+_9rem)] rounded-[14px] border border-white/10 bg-white/[0.055] px-5 py-4 shadow-[0_18px_54px_rgba(124,92,255,0.20)] backdrop-blur-xl"
+        className="absolute left-[calc(50%_-_8rem)] top-[calc(50%_+_9rem)] rounded-[14px] border border-white/10 bg-white/[0.055] px-5 py-4 shadow-[0_18px_54px_rgba(255,255,255,0.20)] backdrop-blur-xl"
         style={{ opacity: 1 - clampProgress((progress - 0.6) / 0.12) }}
       >
-        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-cyan-100">Set</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-zinc-100">Set</p>
         <p className="mt-1 text-4xl font-black text-white">
           {selectedCount}
           <span className="ml-1 text-sm font-bold text-slate-400">문항</span>
@@ -1139,8 +1144,8 @@ function ContentCreationScene({ progress }: { progress: number }) {
           transformOrigin: "60% 50%",
         }}
       >
-        <div className="absolute -inset-8 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.18),transparent_70%)] blur-2xl" />
-        <div className="relative overflow-hidden rounded-[18px] bg-[#f2f1f8] shadow-[0_40px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(124,92,255,0.20)] ring-1 ring-white/20">
+        <div className="absolute -inset-8 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.18),transparent_70%)] blur-2xl" />
+        <div className="relative overflow-hidden rounded-[18px] bg-[#f2f2f2] shadow-[0_40px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(255,255,255,0.20)] ring-1 ring-white/20">
           <DemoExamPreview reveal={templateProgress} scale={0.46} />
           <span
             className="pointer-events-none absolute inset-y-0 w-1/2 bg-[linear-gradient(100deg,transparent,rgba(255,255,255,0.68),transparent)]"
@@ -1154,7 +1159,7 @@ function ContentCreationScene({ progress }: { progress: number }) {
 
       <StoryCaption tag="Create" progress={clampProgress((progress - 0.11) / 0.89)} className="left-[7vw] top-[16vh]">
         선택한 문항이<br />템플릿에{" "}
-        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">그대로 출력</span>
+        <span className="bg-[linear-gradient(100deg,#bdbdbd,#f5f5f5)] bg-clip-text text-transparent">그대로 출력</span>
       </StoryCaption>
     </div>
   );
@@ -1203,7 +1208,7 @@ function WrongAnswerScene({ progress }: { progress: number }) {
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
-      <div className="pointer-events-none absolute left-[50%] top-[35%] h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.25),rgba(91,214,176,0.09)_42%,transparent_72%)] blur-3xl" />
+      <div className="pointer-events-none absolute left-[50%] top-[35%] h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.25),rgba(91,214,176,0.09)_42%,transparent_72%)] blur-3xl" />
       <DemoStudentManagementSurface
         progress={progress}
         gridProgress={gridProgress}
@@ -1220,24 +1225,24 @@ function WrongAnswerScene({ progress }: { progress: number }) {
       />
 
       <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ opacity: branchProgress }}>
-        <path d="M 50 63 C 38 73, 34 73, 27 78" fill="none" stroke="#3b6ff5" strokeWidth="0.35" strokeDasharray="1.4 1.4" opacity="0.6" />
-        <path d="M 50 63 C 61 73, 66 73, 73 78" fill="none" stroke="#2dd4bf" strokeWidth="0.35" strokeDasharray="1.4 1.4" opacity="0.6" />
+        <path d="M 50 63 C 38 73, 34 73, 27 78" fill="none" stroke="#bdbdbd" strokeWidth="0.35" strokeDasharray="1.4 1.4" opacity="0.6" />
+        <path d="M 50 63 C 61 73, 66 73, 73 78" fill="none" stroke="#bdbdbd" strokeWidth="0.35" strokeDasharray="1.4 1.4" opacity="0.6" />
       </svg>
 
       <div className="absolute bottom-[12%] left-[26%] right-[15%] z-10 grid grid-cols-2 gap-6" style={{ opacity: branchProgress, transform: `translateY(${(1 - branchProgress) * 30}px) scale(${0.9 + branchProgress * 0.1})` }}>
         {["오답 시험지", "퀴즈 뷰"].map((label, index) => (
-          <div key={label} className="rounded-[16px] border border-violet-200/20 bg-white/[0.055] p-5 shadow-[0_18px_54px_rgba(124,92,255,0.18)] backdrop-blur-xl">
+          <div key={label} className="rounded-[16px] border border-zinc-200/20 bg-white/[0.055] p-5 shadow-[0_18px_54px_rgba(255,255,255,0.18)] backdrop-blur-xl">
             <span className="text-sm font-black text-white">{label}</span>
             {index === 0 ? (
               <DemoReviewPaperPreview />
             ) : (
               <div className="mt-3 rounded-[10px] border border-white/10 bg-black/35 p-3">
-                <span className="block text-xs font-bold text-violet-100">#2</span>
+                <span className="block text-xs font-bold text-zinc-100">#2</span>
                 <span className="mt-3 block h-2 w-full rounded bg-white/25" />
                 <span className="mt-2 block h-2 w-7/12 rounded bg-white/16" />
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <span className="h-8 rounded-[6px] bg-white/10" />
-                  <span className="h-8 rounded-[6px] bg-violet-400/45" />
+                  <span className="h-8 rounded-[6px] bg-zinc-400/45" />
                 </div>
               </div>
             )}
@@ -1257,7 +1262,7 @@ function WrongAnswerScene({ progress }: { progress: number }) {
 
       <StoryCaption tag="Master" progress={progress} className="bottom-[13vh] left-[7vw]">
         오답 관리까지{" "}
-        <span className="bg-[linear-gradient(100deg,#2dd4bf,#7c5cff)] bg-clip-text text-transparent">꼼꼼하게</span>
+        <span className="bg-[linear-gradient(100deg,#bdbdbd,#f5f5f5)] bg-clip-text text-transparent">꼼꼼하게</span>
       </StoryCaption>
     </div>
   );
@@ -1276,7 +1281,7 @@ function DemoReviewPaperPreview() {
           {[3, 8, 12, 17].map((number) => (
             <div key={number} className="min-h-8 rounded-[5px] border border-[#c8c5d5] bg-white/72 p-1.5">
               <div className="flex items-center gap-2">
-                <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[#7c5cff] text-[6px] font-black text-white">{number}</span>
+                <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[#f5f5f5] text-[6px] font-black text-white">{number}</span>
                 <span className="h-1 flex-1 rounded-full bg-[#323546]/35" />
               </div>
               <span className="mt-1.5 block h-1 w-10/12 rounded-full bg-[#323546]/20" />
@@ -1317,7 +1322,7 @@ function DemoStudentManagementSurface({
     <section className={cn("space-y-4", className)} style={style}>
       <header className="flex items-center justify-between border-b border-white/10 pb-4">
         <div className="flex flex-wrap items-baseline gap-3">
-          <span className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-300">Student Management</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-300">Student Management</span>
           <span className="text-sm text-slate-500">Class Dashboard</span>
         </div>
         <div className="flex gap-2">
@@ -1343,10 +1348,10 @@ function DemoStudentManagementSurface({
               <p className="mt-3 truncate text-xs text-slate-500">수학 · N</p>
             </div>
             <div className="flex gap-2">
-              <span className="grid h-10 w-10 place-items-center rounded-md border border-violet-300/50 bg-violet-500/20 text-violet-100">
+              <span className="grid h-10 w-10 place-items-center rounded-md border border-zinc-300/50 bg-zinc-500/20 text-zinc-100">
                 <BarChart3 className="h-5 w-5" />
               </span>
-              <span className="grid h-10 w-10 place-items-center rounded-md border border-emerald-300/40 bg-emerald-500/15 text-emerald-100">
+              <span className="grid h-10 w-10 place-items-center rounded-md border border-zinc-300/40 bg-zinc-500/15 text-zinc-100">
                 <UserPlus className="h-5 w-5" />
               </span>
             </div>
@@ -1359,7 +1364,7 @@ function DemoStudentManagementSurface({
                   key={student.name}
                   className={cn(
                     "w-[210px] shrink-0 rounded-md border bg-white/[0.035] p-3 transition",
-                    index === 0 && progress > 0.1 ? "border-violet-300/45 bg-violet-500/10" : "border-white/[0.08]"
+                    index === 0 && progress > 0.1 ? "border-zinc-300/45 bg-zinc-500/10" : "border-white/[0.08]"
                   )}
                   style={{
                     opacity: clampProgress((progress - index * 0.035) / 0.22),
@@ -1371,7 +1376,7 @@ function DemoStudentManagementSurface({
                       <p className="truncate text-sm font-semibold text-white">{student.name}</p>
                       <p className="mt-1 truncate text-xs text-slate-400">N</p>
                     </div>
-                    <span className="shrink-0 rounded border border-emerald-300/25 bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-100">Active</span>
+                    <span className="shrink-0 rounded border border-zinc-300/25 bg-zinc-500/15 px-2 py-0.5 text-xs font-bold text-zinc-100">Active</span>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
                     <div className="rounded-md bg-white/[0.04] p-2">
@@ -1380,7 +1385,7 @@ function DemoStudentManagementSurface({
                     </div>
                     <div className="rounded-md bg-white/[0.04] p-2">
                       <p className="text-slate-500">오답</p>
-                      <p className="mt-1 font-semibold text-rose-100">{student.wrong}</p>
+                      <p className="mt-1 font-semibold text-zinc-100">{student.wrong}</p>
                     </div>
                   </div>
                 </div>
@@ -1393,10 +1398,10 @@ function DemoStudentManagementSurface({
             >
               <div className="rounded-lg border border-white/10 bg-black/20 p-4">
                 <p className="text-sm font-semibold text-white">채점할 세션</p>
-                <div className="mt-3 rounded-md border border-violet-300/30 bg-violet-500/15 p-3">
+                <div className="mt-3 rounded-md border border-zinc-300/30 bg-zinc-500/15 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate text-sm font-semibold text-white">TEST 01</span>
-                    <span className="rounded border border-violet-300/25 bg-violet-400/15 px-2 py-0.5 text-[11px] font-bold text-violet-100">grading</span>
+                    <span className="rounded border border-zinc-300/25 bg-zinc-400/15 px-2 py-0.5 text-[11px] font-bold text-zinc-100">grading</span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">학생 01 · 18문항</p>
                 </div>
@@ -1412,7 +1417,7 @@ function DemoStudentManagementSurface({
                     <p className="mt-1 text-xs text-slate-500">학생 01 · 18문항</p>
                   </div>
                   <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-bold text-slate-200">
-                    <ClipboardCheck className="h-3.5 w-3.5 text-violet-200" />
+                    <ClipboardCheck className="h-3.5 w-3.5 text-zinc-200" />
                     저장됨
                   </span>
                 </div>
@@ -1453,9 +1458,9 @@ function DemoStudentManagementSurface({
                   ))}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-                  <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
-                  <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답</span>
-                  <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
+                  <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">초록: 정답</span>
+                  <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">오렌지: 오답</span>
+                  <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">빨강: 못 풂</span>
                 </div>
               </div>
             </div>
@@ -1492,8 +1497,8 @@ function SidebarGroup({
               active ? "border-white/10 bg-white/[0.08] text-white" : "text-slate-400"
             )}
           >
-            <span className={cn("absolute left-0 top-1/2 hidden h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent sm:block", active && "bg-violet-400")} />
-            <Icon className={cn("h-4 w-4 shrink-0 text-slate-500", active && "text-violet-300")} />
+            <span className={cn("absolute left-0 top-1/2 hidden h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent sm:block", active && "bg-zinc-400")} />
+            <Icon className={cn("h-4 w-4 shrink-0 text-slate-500", active && "text-zinc-300")} />
             <span className="hidden truncate sm:inline">{label}</span>
           </div>
         ))}
@@ -1532,7 +1537,7 @@ function DemoProblemBrowserSurface({
               <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
             </label>
             <div className="flex h-9 rounded-md border border-white/10 bg-white/[0.04] p-1">
-              <span className="inline-flex items-center gap-1.5 rounded bg-[#7F77DD] px-2.5 text-xs font-semibold text-white">
+              <span className="inline-flex items-center gap-1.5 rounded bg-[#d4d4d8] px-2.5 text-xs font-semibold text-white">
                 <Grid3X3 className="h-3.5 w-3.5" />격자
               </span>
               <span className="inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold text-muted-foreground">
@@ -1542,11 +1547,11 @@ function DemoProblemBrowserSurface({
           </div>
         </div>
         <div className="mt-4 flex h-11 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3">
-          <Search className="h-4 w-4 text-[#7F77DD]" />
+          <Search className="h-4 w-4 text-[#d4d4d8]" />
           <span className="text-sm text-muted-foreground">본문, 번호, 정답, 태그, 출처 검색</span>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex h-7 items-center rounded-md border border-[#7F77DD]/25 bg-[#7F77DD]/10 px-2 text-xs font-semibold text-violet-100">확인 완료</span>
+          <span className="inline-flex h-7 items-center rounded-md border border-[#d4d4d8]/25 bg-[#d4d4d8]/10 px-2 text-xs font-semibold text-zinc-100">확인 완료</span>
           <span className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200">
             <SlidersHorizontal className="h-3.5 w-3.5" />
             필터 펼치기
@@ -1556,13 +1561,13 @@ function DemoProblemBrowserSurface({
       </section>
 
       {showSelectionBar ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur">
-          <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
-            <CheckSquare className="h-4 w-4 text-[#7F77DD]" />
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[#d4d4d8]/30 bg-[#101010]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur">
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <CheckSquare className="h-4 w-4 text-[#d4d4d8]" />
             {selectedNumbers.length}개 선택됨
           </div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#7F77DD] px-3 text-xs font-semibold text-white">
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#d4d4d8] px-3 text-xs font-semibold text-white">
               <FolderPlus className="h-4 w-4" />세트에 담기
             </span>
             <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200">
@@ -1598,18 +1603,18 @@ function DemoProblemBrowserSurface({
 
 function ProblemCard({ number, selected, style }: { number: number; selected: boolean; style?: CSSProperties }) {
   const problem = demoProblems[(number - 1) % demoProblems.length];
-  const toneColor = ["#7F77DD", "#5bd6b0", "#d99a5b", "#d96080"][number % 4];
+  const toneColor = ["#d4d4d8", "#d4d4d4", "#d99a5b", "#d96080"][number % 4];
   return (
     <article
       className={cn(
         "group relative min-h-[215px] overflow-hidden rounded-lg border bg-card/80 transition-all",
-        selected ? "border-[#7F77DD] bg-[#7F77DD]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
+        selected ? "border-[#d4d4d8] bg-[#d4d4d8]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
       )}
       style={style}
     >
       <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: toneColor }} />
       <span className="absolute left-3 top-3 z-10 inline-flex h-6 w-6 items-center justify-center rounded border border-white/15 bg-black/30 backdrop-blur">
-        <span className={cn("h-4 w-4 rounded-[3px] border border-white/25", selected && "border-[#7F77DD] bg-[#7F77DD] shadow-[0_0_14px_rgba(127,119,221,0.55)]")} />
+        <span className={cn("h-4 w-4 rounded-[3px] border border-white/25", selected && "border-[#d4d4d8] bg-[#d4d4d8] shadow-[0_0_14px_rgba(127,119,221,0.55)]")} />
       </span>
       <div className="flex h-full flex-col px-4 pb-4 pl-6 pt-3">
         <div className="flex items-start justify-between gap-3 pl-8">
@@ -1617,7 +1622,7 @@ function ProblemCard({ number, selected, style }: { number: number; selected: bo
             <div className="line-clamp-1 text-[11px] font-medium leading-4 text-muted-foreground">2026 수학 워크북 / p.{number + 1}</div>
             <div className="mt-1 text-[13px] font-medium leading-5 text-slate-200">#{number}</div>
           </div>
-          <span className="shrink-0 rounded border border-violet-300/25 bg-violet-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100">수학</span>
+          <span className="shrink-0 rounded border border-zinc-300/25 bg-zinc-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-100">수학</span>
         </div>
         <MathText className="mt-3 line-clamp-4 text-[14px] font-medium leading-[1.55] text-foreground" value={problem.text} />
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 text-[11px] font-medium text-muted-foreground">
@@ -1637,20 +1642,20 @@ function PlanSection() {
   return (
     <section id="plans" className="landing-plan-section relative overflow-hidden px-4 py-20 sm:px-6">
       <div className="landing-plan-top-haze pointer-events-none absolute inset-x-0 top-0 h-48 bg-[linear-gradient(180deg,rgba(8,8,15,0),rgba(8,8,15,0.30)_64%,rgba(8,8,15,0))]" />
-      <div className="landing-plan-orb-left pointer-events-none absolute left-[-12rem] top-16 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(45,212,191,0.14),transparent_68%)] blur-3xl" />
-      <div className="landing-plan-orb-right pointer-events-none absolute right-[-9rem] top-8 h-[38rem] w-[38rem] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.26),transparent_70%)] blur-3xl" />
-      <div className="landing-plan-rule pointer-events-none absolute inset-x-0 top-28 h-px bg-[linear-gradient(90deg,transparent,rgba(45,212,191,0.24),rgba(124,92,255,0.42),transparent)]" />
+      <div className="landing-plan-orb-left pointer-events-none absolute left-[-12rem] top-16 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.14),transparent_68%)] blur-3xl" />
+      <div className="landing-plan-orb-right pointer-events-none absolute right-[-9rem] top-8 h-[38rem] w-[38rem] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.26),transparent_70%)] blur-3xl" />
+      <div className="landing-plan-rule pointer-events-none absolute inset-x-0 top-28 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.24),rgba(255,255,255,0.42),transparent)]" />
 
       <div className="relative z-10 mx-auto w-full max-w-[104rem]">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
-            <p className="landing-plan-eyebrow text-xs font-black uppercase tracking-[0.22em] text-violet-200/90">Plans</p>
+            <p className="landing-plan-eyebrow text-xs font-black uppercase tracking-[0.22em] text-zinc-200/90">Plans</p>
             <h2 className="landing-plan-title landing-keep-words mt-3 text-4xl font-black tracking-normal text-white sm:text-5xl">필요한 만큼만 확장</h2>
             <p className="landing-plan-copy landing-keep-words mt-3 text-sm font-semibold leading-6 text-slate-400 sm:text-base">
               무료로 시작하고, 수업 규모와 처리량에 맞춰 Basic 또는 Pro로 이어갑니다.
             </p>
           </div>
-          <Link href="/pricing" className="landing-plan-pricing-link landing-motion-safe inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 bg-white/[0.035] px-4 text-sm font-black text-slate-100 shadow-[0_18px_42px_rgba(0,0,0,0.20)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25">
+          <Link href="/pricing" className="landing-plan-pricing-link landing-motion-safe inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 bg-white/[0.035] px-4 text-sm font-black text-slate-100 shadow-[0_18px_42px_rgba(0,0,0,0.20)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25">
             가격 보기 <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -1661,13 +1666,13 @@ function PlanSection() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="landing-plan-card-name text-2xl font-black text-white">{plan.name}</h3>
-                    <p className="landing-plan-card-price mt-2 text-xl font-black text-violet-50">{plan.price}</p>
+                    <p className="landing-plan-card-price mt-2 text-xl font-black text-zinc-50">{plan.price}</p>
                   </div>
                 </div>
                 <ul className="landing-plan-card-points mt-6 space-y-3 text-sm font-semibold text-slate-200/90">
                   {plan.points.map((point) => (
                     <li key={point} className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-violet-100" />
+                      <Check className="h-4 w-4 text-zinc-100" />
                       {point}
                     </li>
                   ))}
@@ -1675,7 +1680,7 @@ function PlanSection() {
                 <Link
                   href={plan.href}
                   className={cn(
-                    "mt-auto inline-flex h-11 w-full items-center justify-center rounded-[7px] text-sm font-black transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-300/25",
+                    "mt-auto inline-flex h-11 w-full items-center justify-center rounded-[7px] text-sm font-black transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25",
                     planCtaToneClass[plan.tone]
                   )}
                 >

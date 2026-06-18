@@ -30,11 +30,11 @@ const fallbackAnnouncement: Omit<DashboardAnnouncement, "id" | "created_at" | "u
 
 const fallbackVisuals: Record<DashboardAnnouncement["theme"], string> = {
   product:
-    "bg-[radial-gradient(circle_at_18%_20%,rgba(167,139,250,0.36),transparent_28%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,0.18),transparent_34%),linear-gradient(135deg,#080914,#151027_52%,#071018)]",
+    "bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.36),transparent_28%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,0.18),transparent_34%),linear-gradient(135deg,#080914,#151027_52%,#071018)]",
   update:
     "bg-[radial-gradient(circle_at_22%_24%,rgba(34,211,238,0.26),transparent_28%),radial-gradient(circle_at_78%_68%,rgba(124,58,237,0.24),transparent_34%),linear-gradient(135deg,#050816,#0b1724_50%,#120a26)]",
   event:
-    "bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.22),transparent_30%),radial-gradient(circle_at_78%_70%,rgba(167,139,250,0.22),transparent_34%),linear-gradient(135deg,#06110e,#101421_54%,#150d25)]",
+    "bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.22),transparent_30%),radial-gradient(circle_at_78%_70%,rgba(255,255,255,0.22),transparent_34%),linear-gradient(135deg,#06110e,#101421_54%,#150d25)]",
   system:
     "bg-[radial-gradient(circle_at_25%_22%,rgba(148,163,184,0.22),transparent_30%),radial-gradient(circle_at_74%_74%,rgba(124,58,237,0.18),transparent_34%),linear-gradient(135deg,#050505,#111827_52%,#09090b)]",
 };

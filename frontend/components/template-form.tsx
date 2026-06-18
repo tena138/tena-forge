@@ -115,7 +115,7 @@ export function TemplateForm({ templateId }: { templateId?: string }) {
         <CardHeader><CardTitle>미리보기</CardTitle></CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-white p-5 text-black shadow-sm">
-            <div className="flex gap-4 rounded-md border border-violet-200 p-3">
+            <div className="flex gap-4 rounded-md border border-zinc-200 p-3">
               <div className="flex h-14 w-24 items-center justify-center overflow-hidden rounded border bg-slate-50 text-xs text-slate-400">
                 {logoPreview ? <img src={logoPreview} alt="로고 미리보기" className="max-h-full max-w-full object-contain" /> : "LOGO"}
               </div>

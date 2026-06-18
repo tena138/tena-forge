@@ -15,7 +15,7 @@ export function NextActionPanel({
       <div className="rounded-[10px] border border-white/10 bg-black/45 p-4 text-white shadow-[0_20px_60px_rgba(0,0,0,0.34)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-200">
               <Clock3 className="h-3.5 w-3.5" />
               Next Action
             </div>
@@ -46,7 +46,7 @@ export function NextActionPanel({
 
       <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4 shadow-[0_18px_52px_rgba(0,0,0,0.28)]">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-          <Tags className="h-3.5 w-3.5 text-violet-300" />
+          <Tags className="h-3.5 w-3.5 text-zinc-300" />
           Refinement Queue
         </div>
         <div className="mt-3 flex items-end justify-between">

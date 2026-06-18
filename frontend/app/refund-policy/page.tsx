@@ -62,7 +62,7 @@ export default function RefundPolicyPage() {
     <main className="min-h-screen bg-[#07080d] px-4 py-12 text-slate-200 sm:px-6">
       <article className="mx-auto max-w-4xl rounded-[14px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-8">
         <header>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-200">Policy</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-200">Policy</p>
           <h1 className="mt-3 text-3xl font-black tracking-normal text-white sm:text-4xl">환불 및 취소 정책</h1>
           <p className="mt-5 text-sm leading-7 text-slate-300">
             본 서비스는 실물 상품이 아닌 온라인 기반 디지털 서비스 및 SaaS 상품입니다. 따라서 별도의 배송 절차는 없으며, 결제 완료 후 계정 활성화 또는 서비스 접근 권한 부여를 통해 서비스가 제공됩니다.

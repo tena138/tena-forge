@@ -9,11 +9,11 @@ import { MarketplaceListing, contentTypeLabels, licenseTypeLabels, listMarketpla
 
 function ListingCard({ listing }: { listing: MarketplaceListing }) {
   return (
-    <Link href={`/marketplace/listings/${listing.id}`} className="block rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-violet-300/40 hover:bg-white/[0.065]">
+    <Link href={`/marketplace/listings/${listing.id}`} className="block rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-zinc-300/40 hover:bg-white/[0.065]">
       <div className="mb-4 flex h-32 items-center justify-center rounded-md border border-white/10 bg-black/35 text-sm font-semibold text-slate-500">
         {contentTypeLabels[listing.content_type]}
       </div>
-      <div className="flex items-center gap-2 text-xs text-violet-200">
+      <div className="flex items-center gap-2 text-xs text-zinc-200">
         <span>{contentTypeLabels[listing.content_type]}</span>
         <span>·</span>
         <span>{pricingTypeLabels[listing.pricing_type]}</span>
@@ -39,7 +39,7 @@ export default function MarketplacePage() {
   return (
     <div className="space-y-6">
       <section className="rounded-[14px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.24),transparent_34%),rgba(0,0,0,0.46)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-200">Marketplace</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Marketplace</p>
         <h1 className="mt-3 text-3xl font-bold text-white">마켓플레이스</h1>
         <div className="mt-5 flex flex-wrap gap-2">
           <Link href="/marketplace/problem-sets"><Button>문항 세트 마켓</Button></Link>
@@ -54,9 +54,9 @@ export default function MarketplacePage() {
           { href: "/templates", label: "인기 템플릿", icon: LayoutTemplate },
           { href: "/marketplace/books", label: "교재 마켓", icon: BookOpen },
         ].map((item) => (
-          <Link key={item.href} href={item.href} className="group flex items-center justify-between rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-violet-300/40 hover:bg-white/[0.065]">
-            <span className="flex items-center gap-3 text-sm font-semibold text-white"><item.icon className="h-4 w-4 text-violet-200" />{item.label}</span>
-            <ArrowRight className="h-4 w-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-violet-200" />
+          <Link key={item.href} href={item.href} className="group flex items-center justify-between rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-zinc-300/40 hover:bg-white/[0.065]">
+            <span className="flex items-center gap-3 text-sm font-semibold text-white"><item.icon className="h-4 w-4 text-zinc-200" />{item.label}</span>
+            <ArrowRight className="h-4 w-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-zinc-200" />
           </Link>
         ))}
       </section>

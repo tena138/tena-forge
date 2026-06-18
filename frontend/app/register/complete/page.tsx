@@ -153,7 +153,7 @@ function RegisterCompleteContent() {
             <Input type="password" autoComplete="new-password" className="mt-1.5 h-11" {...form.register("confirmPassword")} />
             <FieldError message={form.formState.errors.confirmPassword?.message} />
           </label>
-          {serverError ? <p className="whitespace-pre-line rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">{serverError}</p> : null}
+          {serverError ? <p className="whitespace-pre-line rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm font-medium text-zinc-200">{serverError}</p> : null}
           <FullWidthButton loading={form.formState.isSubmitting} disabled={loginIdStatus === "checking" || loginIdStatus === "taken"}>
             회원가입 완료
           </FullWidthButton>
@@ -180,7 +180,7 @@ function RegisterCompleteContent() {
                 onClick={() => finishSetup("student")}
               />
             </div>
-            {setupError ? <p className="mt-4 rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-semibold text-red-200">{setupError}</p> : null}
+            {setupError ? <p className="mt-4 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm font-semibold text-zinc-200">{setupError}</p> : null}
           </div>
         </div>
       ) : null}
@@ -193,9 +193,9 @@ function LoginIdStatusMessage({ status }: { status: LoginIdStatus }) {
   const styles: Record<LoginIdStatus, string> = {
     idle: "",
     checking: "text-slate-400",
-    available: "text-emerald-300",
-    taken: "text-red-300",
-    error: "text-amber-300",
+    available: "text-zinc-300",
+    taken: "text-zinc-300",
+    error: "text-zinc-300",
   };
   const messages: Record<LoginIdStatus, string> = {
     idle: "",
@@ -211,11 +211,11 @@ function SetupButton({ icon, title, detail, disabled, onClick }: { icon: React.R
   return (
     <button
       type="button"
-      className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.045] p-3 text-left transition hover:border-violet-300/50 hover:bg-violet-500/12 disabled:cursor-wait disabled:opacity-60"
+      className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.045] p-3 text-left transition hover:border-zinc-300/50 hover:bg-zinc-500/12 disabled:cursor-wait disabled:opacity-60"
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-violet-400 text-white">{icon}</span>
+      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-400 text-white">{icon}</span>
       <span>
         <span className="block text-sm font-bold">{title}</span>
         <span className="mt-0.5 block text-xs text-slate-400">{detail}</span>

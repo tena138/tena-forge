@@ -237,10 +237,10 @@ function problemLoadErrorMessage(error: unknown) {
 
 function difficultyTone(value?: string | null) {
   const normalized = (value || "").trim();
-  if (normalized === "하") return { label: "하", color: "#34d399", badge: "border-emerald-300/25 bg-emerald-400/10 text-emerald-100" };
-  if (normalized === "중") return { label: "중", color: "#fbbf24", badge: "border-amber-300/25 bg-amber-400/10 text-amber-100" };
-  if (normalized === "상") return { label: "상", color: "#fb7185", badge: "border-rose-300/25 bg-rose-400/10 text-rose-100" };
-  if (normalized === "최상") return { label: "최상", color: "#ef4444", badge: "border-red-300/25 bg-red-500/12 text-red-100" };
+  if (normalized === "하") return { label: "하", color: "#34d399", badge: "border-zinc-300/25 bg-zinc-400/10 text-zinc-100" };
+  if (normalized === "중") return { label: "중", color: "#fbbf24", badge: "border-zinc-300/25 bg-zinc-400/10 text-zinc-100" };
+  if (normalized === "상") return { label: "상", color: "#fb7185", badge: "border-zinc-300/25 bg-zinc-400/10 text-zinc-100" };
+  if (normalized === "최상") return { label: "최상", color: "#ef4444", badge: "border-zinc-300/25 bg-zinc-500/12 text-zinc-100" };
   return { label: "미지정", color: "#64748b", badge: "border-slate-400/20 bg-slate-400/10 text-slate-300" };
 }
 
@@ -1119,15 +1119,15 @@ function ProblemsBrowser() {
 
   function renderKoreanPassageCard(passage: KoreanReviewPassageItem) {
     return (
-      <article key={passage.id} className="rounded-lg border border-sky-300/20 bg-sky-400/[0.045] p-4">
+      <article key={passage.id} className="rounded-lg border border-zinc-300/20 bg-zinc-400/[0.045] p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-200/70">Korean Passage</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-200/70">Korean Passage</div>
             <h3 className="mt-1 line-clamp-1 text-sm font-bold text-slate-100">
               {passage.passage_title || passage.passage_instruction || "국어 지문"}
             </h3>
           </div>
-          <span className={cn("shrink-0 rounded border px-2 py-1 text-[11px] font-semibold", passage.needs_review ? "border-amber-300/20 bg-amber-300/10 text-amber-100" : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100")}>
+          <span className={cn("shrink-0 rounded border px-2 py-1 text-[11px] font-semibold", passage.needs_review ? "border-zinc-300/20 bg-zinc-300/10 text-zinc-100" : "border-zinc-300/20 bg-zinc-300/10 text-zinc-100")}>
             {passage.needs_review ? "저장 필요" : "저장됨"}
           </span>
         </div>
@@ -1158,13 +1158,13 @@ function ProblemsBrowser() {
         onClick={() => handleProblemBlockClick(problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-all hover:-translate-y-0.5 hover:border-[#7F77DD]/70 hover:shadow-[0_18px_45px_rgba(76,29,149,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70",
-          selected ? "border-[#7F77DD] bg-[#7F77DD]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
+          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-all hover:-translate-y-0.5 hover:border-[#d4d4d8]/70 hover:shadow-[0_18px_45px_rgba(255,255,255,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70",
+          selected ? "border-[#d4d4d8] bg-[#d4d4d8]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
         <Link
-          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70"
+          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70"
           href={detailHref}
           draggable={false}
           onPointerDown={stopInteractiveEvent}
@@ -1178,7 +1178,7 @@ function ProblemsBrowser() {
         </Link>
         <button
           type="button"
-          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
           onPointerDown={stopInteractiveEvent}
           onClick={(event) => {
             stopInteractiveEvent(event);
@@ -1233,8 +1233,8 @@ function ProblemsBrowser() {
         onClick={() => handleProblemBlockClick(problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "relative cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-colors hover:border-[#7F77DD]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70",
-          selected ? "border-[#7F77DD] bg-[#7F77DD]/10" : "border-white/10"
+          "relative cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-colors hover:border-[#d4d4d8]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70",
+          selected ? "border-[#d4d4d8] bg-[#d4d4d8]/10" : "border-white/10"
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
@@ -1249,7 +1249,7 @@ function ProblemsBrowser() {
           <span className={cn("whitespace-nowrap rounded border px-2 py-1 text-[11px] font-semibold", tone.badge)}>{tone.label}</span>
           <Link
             href={detailHref}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70"
             draggable={false}
             onPointerDown={stopInteractiveEvent}
             onClick={(event) => {
@@ -1262,7 +1262,7 @@ function ProblemsBrowser() {
           </Link>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
             onPointerDown={stopInteractiveEvent}
             onClick={(event) => {
               stopInteractiveEvent(event);
@@ -1285,7 +1285,7 @@ function ProblemsBrowser() {
         <div className="grid gap-3 xl:grid-cols-[minmax(18rem,1fr)_auto] xl:items-center">
           <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_14rem] xl:max-w-5xl">
             <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3">
-              <Search className="h-4 w-4 shrink-0 text-[#7F77DD]" />
+              <Search className="h-4 w-4 shrink-0 text-[#d4d4d8]" />
               <Input
                 className="min-w-0 border-0 bg-transparent px-0 text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
                 placeholder="본문, 번호, 정답, 태그, 출처 검색"
@@ -1322,14 +1322,14 @@ function ProblemsBrowser() {
             <div className="flex h-9 rounded-md border border-white/10 bg-white/[0.04] p-1">
               <button
                 type="button"
-                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "grid" ? "bg-[#7F77DD] text-white" : "text-muted-foreground hover:bg-white/[0.06] hover:text-white")}
+                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "grid" ? "bg-[#d4d4d8] text-white" : "text-muted-foreground hover:bg-white/[0.06] hover:text-white")}
                 onClick={() => setViewMode("grid")}
               >
                 <Grid3X3 className="h-3.5 w-3.5" />격자
               </button>
               <button
                 type="button"
-                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "list" ? "bg-[#7F77DD] text-white" : "text-muted-foreground hover:bg-white/[0.06] hover:text-white")}
+                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "list" ? "bg-[#d4d4d8] text-white" : "text-muted-foreground hover:bg-white/[0.06] hover:text-white")}
                 onClick={() => setViewMode("list")}
               >
                 <List className="h-3.5 w-3.5" />목록
@@ -1340,7 +1340,7 @@ function ProblemsBrowser() {
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {duplicateNotice ? (
-            <span className="inline-flex h-7 items-center rounded-md border border-emerald-300/25 bg-emerald-400/10 px-2 text-xs font-semibold text-emerald-100">
+            <span className="inline-flex h-7 items-center rounded-md border border-zinc-300/25 bg-zinc-400/10 px-2 text-xs font-semibold text-zinc-100">
               {duplicateNotice}
             </span>
           ) : null}
@@ -1348,7 +1348,7 @@ function ProblemsBrowser() {
             <button
               key={chip.key}
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#7F77DD]/25 bg-[#7F77DD]/10 px-2 text-xs font-semibold text-violet-100 transition-colors hover:bg-[#7F77DD]/15"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#d4d4d8]/25 bg-[#d4d4d8]/10 px-2 text-xs font-semibold text-zinc-100 transition-colors hover:bg-[#d4d4d8]/15"
               onClick={() => resetPageAnd(chip.onRemove)}
             >
               {chip.label}
@@ -1381,9 +1381,9 @@ function ProblemsBrowser() {
           </div>
         </div>
         {loadError ? (
-          <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+          <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-300/25 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-100">
             <span>{loadError}</span>
-            <button type="button" className="text-xs font-bold text-amber-50 underline-offset-4 hover:underline" onClick={() => void loadProblems(query)}>
+            <button type="button" className="text-xs font-bold text-zinc-50 underline-offset-4 hover:underline" onClick={() => void loadProblems(query)}>
               다시 불러오기
             </button>
           </div>
@@ -1401,9 +1401,9 @@ function ProblemsBrowser() {
               width: batchFolderDrag.previewWidth,
             }}
           >
-            <div className="w-full rounded-xl border border-sky-300/55 bg-[#111022]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
+            <div className="w-full rounded-xl border border-zinc-300/55 bg-[#101010]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
               <div className="flex items-start gap-3">
-                <Folder className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
+                <Folder className="mt-0.5 h-5 w-5 shrink-0 text-zinc-300" />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold">{batchFolderDrag.name}</div>
                   <div className="mt-1 text-xs text-slate-400">
@@ -1412,7 +1412,7 @@ function ProblemsBrowser() {
                 </div>
               </div>
               {folderDropMode ? (
-                <div className="mt-2 rounded-md border border-sky-300/20 bg-sky-400/10 px-2 py-1 text-[11px] font-semibold text-sky-100">
+                <div className="mt-2 rounded-md border border-zinc-300/20 bg-zinc-400/10 px-2 py-1 text-[11px] font-semibold text-zinc-100">
                   {folderDropMode === "inside" ? "폴더 안에 넣기" : folderDropMode === "before" ? "이 위치로 이동" : "최상위로 이동"}
                 </div>
               ) : null}
@@ -1422,7 +1422,7 @@ function ProblemsBrowser() {
 
         {batchFolderContextMenu && contextMenuBatchFolder ? (
           <div
-            className="fixed z-50 w-44 overflow-hidden rounded-lg border border-white/10 bg-[#111022]/98 p-1 shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur"
+            className="fixed z-50 w-44 overflow-hidden rounded-lg border border-white/10 bg-[#101010]/98 p-1 shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur"
             style={{ left: batchFolderContextMenu.x, top: batchFolderContextMenu.y }}
             onClick={(event) => event.stopPropagation()}
           >
@@ -1447,7 +1447,7 @@ function ProblemsBrowser() {
             </button>
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-100 transition hover:bg-rose-500/10"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-100 transition hover:bg-zinc-500/10"
               onClick={() => deleteBatchFolder(contextMenuBatchFolder.id)}
             >
               <Trash2 className="h-4 w-4" />
@@ -1459,9 +1459,9 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
-          <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
-            <CheckSquare className="h-4 w-4 text-[#7F77DD]" />
+        <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4d4d8]/30 bg-[#101010]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <CheckSquare className="h-4 w-4 text-[#d4d4d8]" />
             {selectedIds.length}개 선택됨
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1485,7 +1485,7 @@ function ProblemsBrowser() {
         >
           {dragBox && (
             <div
-              className="pointer-events-none absolute z-20 rounded-md border border-[#7F77DD] bg-[#7F77DD]/15"
+              className="pointer-events-none absolute z-20 rounded-md border border-[#d4d4d8] bg-[#d4d4d8]/15"
               style={{ left: dragBox.left, top: dragBox.top, width: dragBox.width, height: dragBox.height }}
             />
           )}

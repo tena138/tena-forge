@@ -123,7 +123,7 @@ export default function MyTemplatesPage() {
     <div className="space-y-6 pb-24">
       <Link
         href={withReturnTo("/templates/studio?new=1")}
-        className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-violet-300/40 bg-violet-600 text-white shadow-[0_18px_44px_rgba(124,58,237,0.42)] transition hover:bg-violet-500"
+        className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-zinc-300/40 bg-zinc-600 text-white shadow-[0_18px_44px_rgba(124,58,237,0.42)] transition hover:bg-zinc-500"
         aria-label="템플릿 만들기"
         title="템플릿 만들기"
       >
@@ -141,7 +141,7 @@ export default function MyTemplatesPage() {
           {templates.map((template) => {
             const visualSet = getVisualTemplateSet(template);
             return (
-              <article key={template.id} className="overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.065]">
+              <article key={template.id} className="overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:border-zinc-300/35 hover:bg-white/[0.065]">
                 <Link href={editorHref(template)} className="block">
                   <TemplateCardPreview template={template} />
                 </Link>
@@ -185,7 +185,7 @@ export default function MyTemplatesPage() {
                               {duplicatingId === template.id ? "복제 중" : "복제"}
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
-                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-200 outline-none hover:bg-red-500/10 focus:bg-red-500/10"
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-zinc-200 outline-none hover:bg-zinc-500/10 focus:bg-zinc-500/10"
                               onSelect={() => remove(template)}
                             >
                               <Trash2 className="h-4 w-4" />

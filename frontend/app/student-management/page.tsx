@@ -155,7 +155,7 @@ const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel
   { key: "highest", label: "최고점", shortLabel: "최고", color: "#94a3b8" },
   { key: "lowest", label: "최저점", shortLabel: "최저", color: "#64748b" },
   { key: "q1", label: "Q1", shortLabel: "Q1", color: "#7dd3fc" },
-  { key: "q2", label: "중앙값", shortLabel: "중앙", color: "#c4b5fd" },
+  { key: "q2", label: "중앙값", shortLabel: "중앙", color: "#e8e8e8" },
   { key: "q3", label: "Q3", shortLabel: "Q3", color: "#cbd5e1" },
   { key: "stddev", label: "표준편차", shortLabel: "σ", color: "#475569" },
 ];
@@ -166,9 +166,9 @@ function todayInput() {
 
 function statusTone(status?: string) {
   if (!status) return "bg-slate-500/15 text-slate-200 border-slate-400/20";
-  if (["graded", "completed", "Active", "active"].includes(status)) return "bg-emerald-500/15 text-emerald-200 border-emerald-400/20";
-  if (["wrong", "Needs Review", "missing", "late", "unresolved"].includes(status)) return "bg-rose-500/15 text-rose-200 border-rose-400/20";
-  if (["scheduled", "grading", "pending_grading", "reviewing"].includes(status)) return "bg-violet-500/15 text-violet-100 border-violet-300/20";
+  if (["graded", "completed", "Active", "active"].includes(status)) return "bg-zinc-500/15 text-zinc-200 border-zinc-400/20";
+  if (["wrong", "Needs Review", "missing", "late", "unresolved"].includes(status)) return "bg-zinc-500/15 text-zinc-200 border-zinc-400/20";
+  if (["scheduled", "grading", "pending_grading", "reviewing"].includes(status)) return "bg-zinc-500/15 text-zinc-100 border-zinc-300/20";
   return "bg-slate-500/15 text-slate-200 border-slate-400/20";
 }
 
@@ -187,9 +187,9 @@ function routineStatusLabel(status: string) {
 }
 
 function routineStatusTone(status: string) {
-  if (status === "sent") return "border-emerald-400/20 bg-emerald-500/15 text-emerald-100";
-  if (status === "reviewing") return "border-violet-300/20 bg-violet-500/15 text-violet-100";
-  return "border-sky-300/20 bg-sky-500/15 text-sky-100";
+  if (status === "sent") return "border-zinc-400/20 bg-zinc-500/15 text-zinc-100";
+  if (status === "reviewing") return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
+  return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
 }
 
 function routineChannelLabel(channel: string) {
@@ -268,7 +268,7 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
         event.preventDefault();
         onMergeContext(event, student);
       }}
-      className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-violet-300/40 hover:bg-violet-500/10"
+      className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md border border-white/[0.08] bg-white/[0.035] p-3 transition hover:border-zinc-300/40 hover:bg-zinc-500/10"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -283,7 +283,7 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
         </div>
         <div className="rounded-md bg-white/[0.04] p-2">
           <p className="text-slate-500">오답</p>
-          <p className="mt-1 font-semibold text-rose-100">{student.unresolved_wrong_count}</p>
+          <p className="mt-1 font-semibold text-zinc-100">{student.unresolved_wrong_count}</p>
         </div>
       </div>
     </Link>
@@ -294,14 +294,14 @@ function StudentDirectoryCard({ student, copying, onCopyKey }: { student: Studen
   const meta = [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "학생 정보 미입력";
   const keyLabel = student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "키 없음");
   return (
-    <article className="group min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-violet-300/35 hover:bg-violet-500/[0.08]">
+    <article className="group min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-zinc-300/35 hover:bg-zinc-500/[0.08]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Link href={`/student-management/students/${student.id}`} className="truncate text-sm font-black text-white hover:text-violet-100">
+            <Link href={`/student-management/students/${student.id}`} className="truncate text-sm font-black text-white hover:text-zinc-100">
               {student.name}
             </Link>
-            <span className="inline-flex max-w-full items-center gap-1 rounded border border-violet-300/20 bg-violet-500/10 px-1.5 py-0.5 font-mono text-[11px] font-bold text-violet-100">
+            <span className="inline-flex max-w-full items-center gap-1 rounded border border-zinc-300/20 bg-zinc-500/10 px-1.5 py-0.5 font-mono text-[11px] font-bold text-zinc-100">
               <span className="text-slate-400">Key</span>
               <span className="truncate">{keyLabel}</span>
             </span>
@@ -312,7 +312,7 @@ function StudentDirectoryCard({ student, copying, onCopyKey }: { student: Studen
           type="button"
           size="icon"
           variant="ghost"
-          className="h-8 w-8 shrink-0 text-slate-400 hover:bg-violet-500/10 hover:text-violet-100"
+          className="h-8 w-8 shrink-0 text-slate-400 hover:bg-zinc-500/10 hover:text-zinc-100"
           onClick={() => onCopyKey(student)}
           disabled={copying}
           aria-label={`${student.name} 학생 키 복사`}
@@ -328,11 +328,11 @@ function StudentDirectoryCard({ student, copying, onCopyKey }: { student: Studen
         </div>
         <div className="rounded bg-white/[0.045] px-2 py-2">
           <p className="text-slate-500">오답</p>
-          <p className="mt-1 font-bold text-rose-100">{student.unresolved_wrong_count}</p>
+          <p className="mt-1 font-bold text-zinc-100">{student.unresolved_wrong_count}</p>
         </div>
         <div className="rounded bg-white/[0.045] px-2 py-2">
           <p className="text-slate-500">반</p>
-          <p className="mt-1 truncate font-bold text-cyan-100">{student.class_names.length || "-"}</p>
+          <p className="mt-1 truncate font-bold text-zinc-100">{student.class_names.length || "-"}</p>
         </div>
       </div>
     </article>
@@ -385,7 +385,7 @@ function ClassTrendChart({
             aria-label="선 그래프"
             title="선 그래프"
             onClick={() => setMode("line")}
-            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "line" && "bg-violet-100 text-violet-800 dark:bg-violet-500/25 dark:text-white")}
+            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "line" && "bg-zinc-100 text-zinc-800 dark:bg-zinc-500/25 dark:text-white")}
           >
             <LineChart className="h-4 w-4" />
           </button>
@@ -394,7 +394,7 @@ function ClassTrendChart({
             aria-label="막대 그래프"
             title="막대 그래프"
             onClick={() => setMode("bar")}
-            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "bar" && "bg-violet-100 text-violet-800 dark:bg-violet-500/25 dark:text-white")}
+            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "bar" && "bg-zinc-100 text-zinc-800 dark:bg-zinc-500/25 dark:text-white")}
           >
             <BarChart3 className="h-4 w-4" />
           </button>
@@ -495,7 +495,7 @@ function ClassTrendChart({
                   height={chartHeight - padding.top - 7}
                   rx="8"
                   fill={selectedPointId === point.id ? "rgba(139, 92, 246, 0.12)" : "transparent"}
-                  stroke={selectedPointId === point.id ? "rgba(167, 139, 250, 0.48)" : "transparent"}
+                  stroke={selectedPointId === point.id ? "rgba(255,255,255, 0.48)" : "transparent"}
                 />
                 <text x={xFor(index)} y={chartHeight - 32} textAnchor="middle" fontSize="11" fontWeight="700" fill={selectedPointId === point.id ? "rgb(255, 255, 255)" : "rgb(203, 213, 225)"}>
                   {point.title.length > 11 ? `${point.title.slice(0, 11)}…` : point.title}
@@ -518,7 +518,7 @@ function ClassTrendChart({
         </div>
         <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
           <p className="text-slate-500">{selectedPoint ? "선택 중앙값" : "최근 중앙값"}</p>
-          <p className="mt-1 text-base font-black text-amber-700 dark:text-amber-100">{scoreLabel(summaryPoint?.q2)}</p>
+          <p className="mt-1 text-base font-black text-zinc-700 dark:text-zinc-100">{scoreLabel(summaryPoint?.q2)}</p>
         </div>
         <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
           <p className="text-slate-500">{selectedPoint ? "선택 범위" : "최근 범위"}</p>
@@ -526,7 +526,7 @@ function ClassTrendChart({
         </div>
         <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
           <p className="text-slate-500">{selectedPoint ? "선택 응시" : "최근 응시"}</p>
-          <p className="mt-1 text-base font-black text-cyan-700 dark:text-cyan-100">{summaryPoint ? `${summaryPoint.respondents}/${summaryPoint.assigned}` : "-"}</p>
+          <p className="mt-1 text-base font-black text-zinc-700 dark:text-zinc-100">{summaryPoint ? `${summaryPoint.respondents}/${summaryPoint.assigned}` : "-"}</p>
         </div>
       </div>
     </div>
@@ -657,7 +657,7 @@ function ClassStatsPanel({
 
   return (
     <div className="border-t border-slate-200 px-4 pb-4 dark:border-white/10">
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-violet-300/15 dark:bg-violet-500/[0.06] dark:shadow-none">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-300/15 dark:bg-zinc-500/[0.06] dark:shadow-none">
         {loading ? (
           <div className="flex min-h-36 items-center justify-center text-sm text-slate-400">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -683,7 +683,7 @@ function ClassStatsPanel({
                     className={cn(
                       "shrink-0 rounded-md border px-3 py-2 text-xs font-bold transition",
                       selectedStudent?.id === student.id
-                        ? "border-violet-300 bg-violet-100 text-violet-900 dark:border-violet-300/50 dark:bg-violet-500/25 dark:text-white"
+                        ? "border-zinc-300 bg-zinc-100 text-zinc-900 dark:border-zinc-300/50 dark:bg-zinc-500/25 dark:text-white"
                         : "border-slate-200 bg-white text-slate-500 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:text-white"
                     )}
                   >
@@ -694,8 +694,8 @@ function ClassStatsPanel({
             </div>
 
             <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr_0.75fr_0.75fr]">
-              <div className="rounded-lg border border-violet-200 bg-violet-50 p-4 dark:border-white/10 dark:bg-white/[0.055]">
-                <p className="text-xs font-semibold text-violet-700 dark:text-slate-400">{selectedSessionStat ? "본인 선택 점수" : "본인 최근 점수"}</p>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-white/[0.055]">
+                <p className="text-xs font-semibold text-zinc-700 dark:text-slate-400">{selectedSessionStat ? "본인 선택 점수" : "본인 최근 점수"}</p>
                 <div className="mt-2 flex items-end justify-between gap-4">
                   <p className="text-4xl font-black tracking-normal text-slate-950 dark:text-white">{scoreLabel(focusedStat?.selectedScore)}</p>
                   <p className="max-w-[220px] truncate text-right text-xs text-slate-500 dark:text-slate-400" title={focusedStat?.detail.title}>
@@ -751,10 +751,10 @@ function ClassStatsPanel({
                 <div className="mb-2 grid grid-cols-[42px_minmax(0,1fr)] gap-3 text-xs text-slate-500">
                   <span>점수</span>
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-violet-400" />학생 점수</span>
-                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-cyan-300" />반 평균</span>
-                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-amber-300" />전체 평균</span>
-                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-amber-200/20 ring-1 ring-amber-100/20" />±표준편차</span>
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-zinc-400" />학생 점수</span>
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-zinc-300" />반 평균</span>
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-zinc-300" />전체 평균</span>
+                    <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-zinc-200/20 ring-1 ring-zinc-100/20" />±표준편차</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-3">
@@ -774,15 +774,15 @@ function ClassStatsPanel({
                         const low = bandAverage == null || bandStdDev == null ? null : Math.max(0, bandAverage - bandStdDev);
                         const high = bandAverage == null || bandStdDev == null ? null : Math.min(100, bandAverage + bandStdDev);
                         const bars = [
-                          { key: "student", value: item.selectedScore, color: "bg-violet-400", label: "학생" },
-                          { key: "class", value: item.classAverage, color: "bg-cyan-300", label: "반 평균" },
-                          { key: "overall", value: item.showOverallAverage ? item.overallAverage : null, color: "bg-amber-300", label: "전체 평균" },
+                          { key: "student", value: item.selectedScore, color: "bg-zinc-400", label: "학생" },
+                          { key: "class", value: item.classAverage, color: "bg-zinc-300", label: "반 평균" },
+                          { key: "overall", value: item.showOverallAverage ? item.overallAverage : null, color: "bg-zinc-300", label: "전체 평균" },
                         ];
                         return (
                           <div key={item.detail.id} className="relative flex h-full w-28 shrink-0 items-end justify-center gap-1">
                             {low != null && high != null ? (
                               <span
-                                className="absolute left-1 right-1 rounded bg-amber-200/10 ring-1 ring-amber-100/15"
+                                className="absolute left-1 right-1 rounded bg-zinc-200/10 ring-1 ring-zinc-100/15"
                                 style={{ bottom: `${low}%`, height: `${Math.max(2, high - low)}%` }}
                                 title={`표준편차 범위 ${scoreLabel(low)} - ${scoreLabel(high)}`}
                               />
@@ -833,10 +833,10 @@ function ClassStatsPanel({
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
                     {item.selectedMissed.length ? item.selectedMissed.map((number) => (
-                      <span key={number} className="rounded bg-orange-100 px-2 py-1 text-orange-800 dark:bg-orange-500/15 dark:text-orange-100">{number}번</span>
-                    )) : <span className="rounded bg-emerald-100 px-2 py-1 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-100">학생 오답 없음</span>}
+                      <span key={number} className="rounded bg-zinc-100 px-2 py-1 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-100">{number}번</span>
+                    )) : <span className="rounded bg-zinc-100 px-2 py-1 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-100">학생 오답 없음</span>}
                     {item.commonMissed.slice(0, 3).map(([number, count]) => (
-                      <span key={`common-${number}`} className="rounded bg-rose-100 px-2 py-1 text-rose-800 dark:bg-rose-500/15 dark:text-rose-100">반 다빈도 {number}번 {count}명</span>
+                      <span key={`common-${number}`} className="rounded bg-zinc-100 px-2 py-1 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-100">반 다빈도 {number}번 {count}명</span>
                     ))}
                   </div>
                 </div>
@@ -845,7 +845,7 @@ function ClassStatsPanel({
 
             {bestExam ? (
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
-                {selectedStudent?.name || "선택 학생"} 최고 기록은 <span className="font-black text-slate-950 dark:text-white">{bestExam.detail.title}</span>의 <span className="font-black text-violet-700 dark:text-violet-100">{scoreLabel(bestExam.selectedScore)}</span>입니다.
+                {selectedStudent?.name || "선택 학생"} 최고 기록은 <span className="font-black text-slate-950 dark:text-white">{bestExam.detail.title}</span>의 <span className="font-black text-zinc-700 dark:text-zinc-100">{scoreLabel(bestExam.selectedScore)}</span>입니다.
               </div>
             ) : null}
           </div>
@@ -940,10 +940,10 @@ function ProblemCell({
       onClick={onClick}
       className={cn(
         "flex h-8 min-w-8 items-center justify-center rounded-md border px-1 text-xs font-black leading-none transition",
-        status === "correct" && "border-emerald-300/50 bg-emerald-500/20 text-emerald-100",
-        status === "wrong" && "border-orange-300/60 bg-orange-500/25 text-orange-100",
-        status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-100",
-        status === "unmarked" && "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40"
+        status === "correct" && "border-zinc-300/50 bg-zinc-500/20 text-zinc-100",
+        status === "wrong" && "border-zinc-300/60 bg-zinc-500/25 text-zinc-100",
+        status === "unanswered" && "border-zinc-300/60 bg-zinc-500/25 text-zinc-100",
+        status === "unmarked" && "border-white/10 bg-white/[0.035] text-slate-300 hover:border-zinc-300/40"
       )}
       title={[`${label}번`, metadata || subtitle, status].filter(Boolean).join(" · ")}
     >
@@ -1646,7 +1646,7 @@ export default function StudentManagementPage() {
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         {message ? (
-          <div className="flex items-center justify-between rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+          <div className="flex items-center justify-between rounded-lg border border-zinc-300/20 bg-zinc-500/10 px-4 py-3 text-sm text-zinc-100">
             <span>{message}</span>
             <button type="button" onClick={() => setMessage("")} className="rounded p-1 hover:bg-white/10">
               <X className="h-4 w-4" />
@@ -1676,7 +1676,7 @@ export default function StudentManagementPage() {
                   }}
                   className={cn(
                     "flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
-                    selected ? "bg-violet-500 text-white shadow-lg shadow-violet-950/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                    selected ? "bg-zinc-500 text-white shadow-lg shadow-zinc-950/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -1717,7 +1717,7 @@ export default function StudentManagementPage() {
                   onClick={() => setSelectedRoutineId(routine.id)}
                   className={cn(
                     "w-full rounded-lg border p-4 text-left transition",
-                    selectedRoutine?.id === routine.id ? "border-violet-300/50 bg-violet-500/10" : "border-white/10 bg-white/[0.03] hover:border-white/25"
+                    selectedRoutine?.id === routine.id ? "border-zinc-300/50 bg-zinc-500/10" : "border-white/10 bg-white/[0.03] hover:border-white/25"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -1778,7 +1778,7 @@ export default function StudentManagementPage() {
                             </Button>
                           </div>
                           <textarea
-                            className="min-h-28 w-full rounded-md border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50 disabled:opacity-60"
+                            className="min-h-28 w-full rounded-md border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-zinc-300/50 disabled:opacity-60"
                             value={routineMessageDrafts[message.id] ?? message.message_body}
                             onChange={(event) => setRoutineMessageDrafts((current) => ({ ...current, [message.id]: event.target.value }))}
                             onBlur={() => persistRoutineMessage(selectedRoutine, message)}
@@ -1812,7 +1812,7 @@ export default function StudentManagementPage() {
                 }}
                 className={cn(
                   "overflow-visible rounded-none border-0 border-t border-white/10 bg-transparent shadow-none transition",
-                  draggingClassId === classRow.id && "bg-violet-500/[0.04]"
+                  draggingClassId === classRow.id && "bg-zinc-500/[0.04]"
                 )}
               >
                 <CardContent className="p-0">
@@ -1832,8 +1832,8 @@ export default function StudentManagementPage() {
                         void persistClassOrder();
                       }}
                       className={cn(
-                        "row-span-2 flex h-full min-h-[168px] cursor-grab items-center justify-center border-r border-white/10 text-slate-600 transition hover:bg-white/[0.035] hover:text-violet-100 active:cursor-grabbing lg:row-span-1",
-                        draggingClassId === classRow.id && "text-violet-200"
+                        "row-span-2 flex h-full min-h-[168px] cursor-grab items-center justify-center border-r border-white/10 text-slate-600 transition hover:bg-white/[0.035] hover:text-zinc-100 active:cursor-grabbing lg:row-span-1",
+                        draggingClassId === classRow.id && "text-zinc-200"
                       )}
                     >
                       <GripVertical className="h-5 w-5" />
@@ -1853,7 +1853,7 @@ export default function StudentManagementPage() {
                           onClick={() => toggleClassStats(classRow)}
                           className={cn(
                             "flex h-10 w-10 items-center justify-center rounded-md border transition",
-                            statsOpen[classRow.id] ? "border-violet-300/50 bg-violet-500/20 text-violet-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-violet-300/40 hover:text-white"
+                            statsOpen[classRow.id] ? "border-zinc-300/50 bg-zinc-500/20 text-zinc-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-zinc-300/40 hover:text-white"
                           )}
                         >
                           <BarChart3 className="h-5 w-5" />
@@ -1865,7 +1865,7 @@ export default function StudentManagementPage() {
                           onClick={() => startClassStudentAdd(classRow)}
                           className={cn(
                             "flex h-10 w-10 items-center justify-center rounded-md border transition",
-                            addingStudentClassId === classRow.id ? "border-emerald-300/50 bg-emerald-500/15 text-emerald-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-emerald-300/40 hover:text-white"
+                            addingStudentClassId === classRow.id ? "border-zinc-300/50 bg-zinc-500/15 text-zinc-100" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-zinc-300/40 hover:text-white"
                           )}
                         >
                           <UserPlus className="h-5 w-5" />
@@ -1877,7 +1877,7 @@ export default function StudentManagementPage() {
                         (() => {
                           const existingStudents = existingStudentsForClass(classRow);
                           return (
-                            <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3">
+                            <div className="rounded-lg border border-zinc-300/20 bg-zinc-500/10 p-3">
                               <div className="mb-3 inline-flex rounded-md border border-white/10 bg-black/20 p-1">
                                 {[
                                   ["existing", "기존 학생"] as const,
@@ -2001,7 +2001,7 @@ export default function StudentManagementPage() {
                           ))}
                         </div>
                       ) : (
-                        <button type="button" onClick={() => startClassStudentAdd(classRow)} className="flex h-full min-h-[116px] w-full items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-slate-500 hover:border-violet-300/30 hover:text-violet-100">
+                        <button type="button" onClick={() => startClassStudentAdd(classRow)} className="flex h-full min-h-[116px] w-full items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-slate-500 hover:border-zinc-300/30 hover:text-zinc-100">
                           학생 추가
                         </button>
                       )}
@@ -2170,7 +2170,7 @@ export default function StudentManagementPage() {
             </Card>
             <div className="space-y-3">
               {sessions.map((session) => (
-                <button key={session.id} type="button" onClick={() => { setSelectedSessionId(session.id); setActiveTab("grading"); }} className="w-full rounded-lg border border-white/10 bg-white/[0.035] p-4 text-left hover:border-violet-300/40">
+                <button key={session.id} type="button" onClick={() => { setSelectedSessionId(session.id); setActiveTab("grading"); }} className="w-full rounded-lg border border-white/10 bg-white/[0.035] p-4 text-left hover:border-zinc-300/40">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="font-semibold text-white">{session.title}</p>
@@ -2206,7 +2206,7 @@ export default function StudentManagementPage() {
                       onClick={() => setSelectedStudentId(student.id)}
                       className={cn(
                         "w-full rounded-lg border p-3 text-left transition",
-                        selectedStudentId === student.id ? "border-violet-300/50 bg-violet-500/15" : "border-white/10 bg-black/20 hover:border-violet-300/30"
+                        selectedStudentId === student.id ? "border-zinc-300/50 bg-zinc-500/15" : "border-white/10 bg-black/20 hover:border-zinc-300/30"
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -2307,9 +2307,9 @@ export default function StudentManagementPage() {
                   <div className="rounded-lg border border-dashed border-white/10 p-10 text-center text-sm text-slate-500">세션과 학생을 선택하세요.</div>
                 )}
                 <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-                  <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
-                  <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">오렌지: 오답</span>
-                  <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
+                  <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">초록: 정답</span>
+                  <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">오렌지: 오답</span>
+                  <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">빨강: 못 풂</span>
                   <span className="rounded bg-white/[0.06] px-2 py-1">회색: 미채점</span>
                 </div>
               </CardContent>
@@ -2388,7 +2388,7 @@ export default function StudentManagementPage() {
                         <span className="text-slate-500">{ratio}%</span>
                       </div>
                       <div className="mt-2 h-2 rounded-full bg-white/10">
-                        <div className="h-2 rounded-full bg-violet-400" style={{ width: `${ratio}%` }} />
+                        <div className="h-2 rounded-full bg-zinc-400" style={{ width: `${ratio}%` }} />
                       </div>
                     </div>
                   );
@@ -2404,7 +2404,7 @@ export default function StudentManagementPage() {
                   <div key={classRow.id} className="rounded-lg border border-white/10 bg-black/20 p-4">
                     <div className="flex items-center justify-between">
                       <p className="font-semibold text-white">{classRow.name}</p>
-                      <span className="text-rose-100">{classRow.unresolved_wrong_count}</span>
+                      <span className="text-zinc-100">{classRow.unresolved_wrong_count}</span>
                     </div>
                     <p className="mt-2 text-sm text-slate-500">{classRow.student_count}명 · 세션 {classSessionCount(classRow)}개</p>
                   </div>
@@ -2421,10 +2421,10 @@ export default function StudentManagementPage() {
           >
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-semibold text-slate-100 hover:bg-violet-500/15"
+              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-semibold text-slate-100 hover:bg-zinc-500/15"
               onClick={() => openStudentMerge(studentMergeMenu.student)}
             >
-              <UserPlus className="h-4 w-4 text-violet-200" />
+              <UserPlus className="h-4 w-4 text-zinc-200" />
               통합하기
             </button>
           </div>
@@ -2458,7 +2458,7 @@ export default function StudentManagementPage() {
                       onClick={() => setMergeTargetStudentId(student.id)}
                       className={cn(
                         "w-full rounded-md border px-3 py-2 text-left transition",
-                        mergeTargetStudentId === student.id ? "border-violet-300/50 bg-violet-500/15" : "border-white/10 bg-white/[0.035] hover:border-violet-300/35"
+                        mergeTargetStudentId === student.id ? "border-zinc-300/50 bg-zinc-500/15" : "border-white/10 bg-white/[0.035] hover:border-zinc-300/35"
                       )}
                     >
                       <span className="block truncate text-sm font-bold text-white">{student.name}</span>
@@ -2492,7 +2492,7 @@ export default function StudentManagementPage() {
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="flex items-center gap-2 font-semibold text-white">
-                      <KeyRound className="h-4 w-4 text-violet-200" />
+                      <KeyRound className="h-4 w-4 text-zinc-200" />
                       학생 키 관리
                     </p>
                     <p className="mt-1 text-xs text-slate-500">반별 학생 접속 키를 발급하고 좌석을 관리합니다.</p>
@@ -2504,7 +2504,7 @@ export default function StudentManagementPage() {
                 <div className="space-y-3">
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <select
-                      className="h-10 min-w-0 rounded-md border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none focus:border-violet-300/50"
+                      className="h-10 min-w-0 rounded-md border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none focus:border-zinc-300/50"
                       value={keyClassId}
                       onChange={(event) => setKeyClassId(event.target.value)}
                     >
@@ -2520,10 +2520,10 @@ export default function StudentManagementPage() {
                     </Button>
                   </div>
                   {newKeyCodes.length ? (
-                    <div className="space-y-2 rounded-md border border-violet-300/20 bg-violet-500/10 p-2">
+                    <div className="space-y-2 rounded-md border border-zinc-300/20 bg-zinc-500/10 p-2">
                       {newKeyCodes.map((code) => (
                         <div key={code} className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/25 px-2 py-1.5">
-                          <span className="min-w-0 truncate font-mono text-sm font-bold text-violet-100">{code}</span>
+                          <span className="min-w-0 truncate font-mono text-sm font-bold text-zinc-100">{code}</span>
                           <Button type="button" size="sm" variant="ghost" onClick={() => copySeatKey(code)}>
                             <Copy className="h-4 w-4" />
                             복사
@@ -2558,7 +2558,7 @@ export default function StudentManagementPage() {
                             <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => rotateSeatKey(seat)} disabled={keyBusySeatId === seat.id} aria-label="학생 키 회전">
                               {keyBusySeatId === seat.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                             </Button>
-                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-rose-100" onClick={() => releaseKeySeat(seat)} disabled={!seat.assigned || keyBusySeatId === seat.id} aria-label="좌석 해제">
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-zinc-100" onClick={() => releaseKeySeat(seat)} disabled={!seat.assigned || keyBusySeatId === seat.id} aria-label="좌석 해제">
                               <UserMinus className="h-4 w-4" />
                             </Button>
                           </div>
@@ -2595,7 +2595,7 @@ export default function StudentManagementPage() {
               type="button"
               onClick={toggleKeyManager}
               variant={showKeyManager ? "default" : "outline"}
-              className="fixed bottom-20 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-violet-950/30"
+              className="fixed bottom-20 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-zinc-950/30"
               aria-label="학생 키 관리"
               title="학생 키 관리"
             >
@@ -2607,7 +2607,7 @@ export default function StudentManagementPage() {
                 setShowKeyManager(false);
                 setShowClassCreator((current) => !current);
               }}
-              className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-violet-950/40"
+              className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-zinc-950/40"
               aria-label="클래스 만들기"
             >
               <Plus className="h-5 w-5" />

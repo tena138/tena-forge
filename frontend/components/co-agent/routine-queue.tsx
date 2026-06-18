@@ -47,9 +47,9 @@ function routineStatusLabel(status: string) {
 }
 
 function routineStatusTone(status: string) {
-  if (status === "sent") return "border-emerald-400/20 bg-emerald-500/15 text-emerald-100";
-  if (status === "reviewing") return "border-violet-300/20 bg-violet-500/15 text-violet-100";
-  return "border-sky-300/20 bg-sky-500/15 text-sky-100";
+  if (status === "sent") return "border-zinc-400/20 bg-zinc-500/15 text-zinc-100";
+  if (status === "reviewing") return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
+  return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
 }
 
 function routineChannelLabel(channel: string) {
@@ -81,12 +81,12 @@ function categoryLabel(category: string) {
 }
 
 function categoryTone(category: string) {
-  if (category === "extract") return "border-violet-300/20 bg-violet-500/15 text-violet-100";
-  if (category === "archive") return "border-sky-300/20 bg-sky-500/15 text-sky-100";
-  if (category === "sets") return "border-fuchsia-300/20 bg-fuchsia-500/15 text-fuchsia-100";
-  if (category === "classes") return "border-emerald-300/20 bg-emerald-500/15 text-emerald-100";
-  if (category === "sessions") return "border-cyan-300/20 bg-cyan-500/15 text-cyan-100";
-  if (category === "routine") return "border-amber-300/20 bg-amber-400/15 text-amber-100";
+  if (category === "extract") return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
+  if (category === "archive") return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
+  if (category === "sets") return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
+  if (category === "classes") return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
+  if (category === "sessions") return "border-zinc-300/20 bg-zinc-500/15 text-zinc-100";
+  if (category === "routine") return "border-zinc-300/20 bg-zinc-400/15 text-zinc-100";
   return "border-white/10 bg-white/[0.06] text-slate-200";
 }
 
@@ -122,7 +122,7 @@ const statLabels: Record<string, string> = {
 
 function RecommendationCard({ action }: { action: CoAgentAction }) {
   return (
-    <article className="rounded-lg border border-white/10 bg-black/15 p-4 transition hover:border-amber-300/35 hover:bg-amber-400/[0.06]">
+    <article className="rounded-lg border border-white/10 bg-black/15 p-4 transition hover:border-zinc-300/35 hover:bg-zinc-400/[0.06]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <div className={cn("mt-0.5 rounded-md border p-2", categoryTone(action.category))}>
@@ -151,7 +151,7 @@ function RecommendationCard({ action }: { action: CoAgentAction }) {
       ) : null}
       <Link
         href={action.href}
-        className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-[7px] border border-amber-300/35 bg-amber-300/12 px-3 text-sm font-bold text-amber-50 transition hover:bg-amber-300/18"
+        className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-[7px] border border-zinc-300/35 bg-zinc-300/12 px-3 text-sm font-bold text-zinc-50 transition hover:bg-zinc-300/18"
       >
         {action.cta}
         <ArrowRight className="h-4 w-4" />
@@ -297,7 +297,7 @@ export function RoutineQueue() {
   return (
     <div className="space-y-6">
       {message ? (
-        <div className="flex items-center justify-between rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+        <div className="flex items-center justify-between rounded-lg border border-zinc-300/20 bg-zinc-500/10 px-4 py-3 text-sm text-zinc-100">
           <span>{message}</span>
           <button type="button" onClick={() => setMessage("")} className="rounded p-1 hover:bg-white/10">
             <X className="h-4 w-4" />
@@ -307,7 +307,7 @@ export function RoutineQueue() {
 
       <header className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
+          <div className="flex items-center gap-2 text-sm font-bold text-zinc-200">
             <Bot className="h-4 w-4" />
             Co-Agent
           </div>
@@ -317,7 +317,7 @@ export function RoutineQueue() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className="border border-amber-300/20 bg-amber-400/10 text-amber-100">추천 {guidance?.actions.length ?? 0}건</Badge>
+          <Badge className="border border-zinc-300/20 bg-zinc-400/10 text-zinc-100">추천 {guidance?.actions.length ?? 0}건</Badge>
           <Badge className="border border-white/10 bg-white/[0.04] text-slate-200">루틴 대기 {pendingRoutineCount}건</Badge>
           <Button type="button" size="sm" variant="outline" onClick={refreshWorkspace} disabled={guidanceLoading || routineLoading}>
             {guidanceLoading || routineLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
@@ -331,7 +331,7 @@ export function RoutineQueue() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex items-center gap-2 text-sm font-black text-white">
-                <Sparkles className="h-4 w-4 text-amber-200" />
+                <Sparkles className="h-4 w-4 text-zinc-200" />
                 다음 추천 행동
               </div>
               <p className="mt-1 text-sm text-slate-500">사용자의 현재 데이터 상태를 기준으로 정렬됩니다.</p>
@@ -358,7 +358,7 @@ export function RoutineQueue() {
         <div className="space-y-3">
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <div className="flex items-center gap-2 text-sm font-black text-white">
-              <FileText className="h-4 w-4 text-sky-200" />
+              <FileText className="h-4 w-4 text-zinc-200" />
               Tena Forge 기능 지도
             </div>
             <div className="mt-3 space-y-2">
@@ -376,13 +376,13 @@ export function RoutineQueue() {
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <div className="flex items-center gap-2 text-sm font-black text-white">
-              <ShieldCheck className="h-4 w-4 text-emerald-200" />
+              <ShieldCheck className="h-4 w-4 text-zinc-200" />
               실행 원칙
             </div>
             <div className="mt-3 grid gap-2">
               {["추천은 내부 기능으로만 연결", "전송/수정은 사용자 승인 후 실행", "LLM은 제품 지도와 상태 설명에 사용"].map((item) => (
                 <div key={item} className="flex items-center gap-2 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-slate-300">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-200" />
+                  <CheckCircle2 className="h-4 w-4 text-zinc-200" />
                   {item}
                 </div>
               ))}
@@ -391,7 +391,7 @@ export function RoutineQueue() {
 
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <div className="flex items-center gap-2 text-sm font-black text-white">
-              <ClipboardCheck className="h-4 w-4 text-violet-200" />
+              <ClipboardCheck className="h-4 w-4 text-zinc-200" />
               상태 신호
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -410,7 +410,7 @@ export function RoutineQueue() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="flex items-center gap-2 text-sm font-black text-white">
-              <BellRing className="h-4 w-4 text-amber-200" />
+              <BellRing className="h-4 w-4 text-zinc-200" />
               루틴 큐
             </div>
             <p className="mt-1 text-sm text-slate-500">검토 가능한 작업만 표시됩니다.</p>
@@ -435,7 +435,7 @@ export function RoutineQueue() {
                 onClick={() => setSelectedRoutineId(routine.id)}
                 className={cn(
                   "w-full rounded-lg border p-4 text-left transition",
-                  selectedRoutine?.id === routine.id ? "border-amber-300/50 bg-amber-400/10" : "border-white/10 bg-white/[0.03] hover:border-white/25"
+                  selectedRoutine?.id === routine.id ? "border-zinc-300/50 bg-zinc-400/10" : "border-white/10 bg-white/[0.03] hover:border-white/25"
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -496,7 +496,7 @@ export function RoutineQueue() {
                           </Button>
                         </div>
                         <textarea
-                          className="min-h-28 w-full rounded-md border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-amber-300/50 disabled:opacity-60"
+                          className="min-h-28 w-full rounded-md border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-zinc-300/50 disabled:opacity-60"
                           value={routineMessageDrafts[routineMessage.id] ?? routineMessage.message_body}
                           onChange={(event) => setRoutineMessageDrafts((current) => ({ ...current, [routineMessage.id]: event.target.value }))}
                           onBlur={() => persistRoutineMessage(selectedRoutine, routineMessage)}

@@ -126,7 +126,7 @@ function PaletteTile({ preset, onInsert, large = false, primaryColor }: { preset
       {...listeners}
       type="button"
       onClick={() => onInsert(preset)}
-      className={`group flex min-w-0 flex-col items-center justify-center rounded-md border bg-white text-center shadow-sm transition hover:border-sky-300 hover:bg-sky-50 ${
+      className={`group flex min-w-0 flex-col items-center justify-center rounded-md border bg-white text-center shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 ${
         large ? "min-h-[74px] gap-2 p-3" : "h-20 w-20 gap-1.5 p-2"
       } ${isDragging ? "opacity-40" : ""}`}
     >
@@ -146,7 +146,7 @@ function LineTile({ preset, onInsert }: { preset: ElementPalettePreset; onInsert
       {...listeners}
       type="button"
       onClick={() => onInsert(preset)}
-      className={`flex h-[58px] min-w-[86px] flex-col items-center justify-center gap-1 rounded-md border bg-white px-2 text-[11px] font-medium text-slate-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50 ${isDragging ? "opacity-40" : ""}`}
+      className={`flex h-[58px] min-w-[86px] flex-col items-center justify-center gap-1 rounded-md border bg-white px-2 text-[11px] font-medium text-slate-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 ${isDragging ? "opacity-40" : ""}`}
     >
       <SvgIcon iconKey={preset.iconKey} className="h-7 w-14 text-slate-800" />
       {preset.label}
@@ -161,7 +161,7 @@ function RecentChip({ entry, onInsert }: { entry: RecentElementEntry; onInsert: 
     <button
       type="button"
       onClick={() => onInsert(entry)}
-      className="flex h-9 w-9 items-center justify-center rounded-md border bg-white text-slate-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
+      className="flex h-9 w-9 items-center justify-center rounded-md border bg-white text-slate-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
       title={entry.label}
       aria-label={`${entry.label} 다시 삽입`}
     >

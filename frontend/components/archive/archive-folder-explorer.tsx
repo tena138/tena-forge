@@ -196,7 +196,7 @@ export function ArchiveFolderExplorer({
       </div>
 
       {mode === "select" ? (
-        <div className="mt-2 rounded-md border border-violet-300/20 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100">
+        <div className="mt-2 rounded-md border border-zinc-300/20 bg-zinc-400/10 px-3 py-2 text-xs font-semibold text-zinc-100">
           선택 위치: {selectedFolderId ? selectedPathLabel : "아직 선택되지 않음"}
         </div>
       ) : null}
@@ -221,7 +221,7 @@ export function ArchiveFolderExplorer({
               }}
               className={cn(
                 "group relative flex min-h-[82px] cursor-grab items-start gap-3 rounded-lg border p-3 text-left transition-colors active:cursor-grabbing",
-                selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                selected ? "border-[#d4d4d8]/70 bg-[#d4d4d8]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
               )}
               role="button"
               tabIndex={0}
@@ -243,7 +243,7 @@ export function ArchiveFolderExplorer({
               <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
                 <span className="relative">
                   <Folder className="h-5 w-5" style={{ color }} />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#111022]" style={{ backgroundColor: color }} />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#101010]" style={{ backgroundColor: color }} />
                 </span>
                 <span className="max-w-full text-center text-[11px] font-semibold leading-none text-muted-foreground" title={`${formatCount(problemCount)}문항`}>
                   {formatCount(problemCount)}
@@ -283,7 +283,7 @@ export function ArchiveFolderExplorer({
                 <button type="button" className="grid h-7 w-7 place-items-center rounded-md border border-white/10 bg-black/20 text-slate-300 hover:text-white" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" className="grid h-7 w-7 place-items-center rounded-md border border-white/10 bg-black/20 text-rose-200 hover:text-rose-50" onClick={(event) => { event.stopPropagation(); deleteFolder(folder); }}>
+                <button type="button" className="grid h-7 w-7 place-items-center rounded-md border border-white/10 bg-black/20 text-zinc-200 hover:text-zinc-50" onClick={(event) => { event.stopPropagation(); deleteFolder(folder); }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </span>
@@ -301,7 +301,7 @@ export function ArchiveFolderExplorer({
               draggable={Boolean(onMoveBatch)}
               className={cn(
                 "group flex min-h-[82px] cursor-grab items-start gap-3 rounded-lg border p-3 text-left transition-colors active:cursor-grabbing",
-                selected ? "border-[#7F77DD]/70 bg-[#7F77DD]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                selected ? "border-[#d4d4d8]/70 bg-[#d4d4d8]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
               )}
               onClick={() => onSelectBatch?.(batch.id)}
               onDragStart={() => onDragStart("batch", batch.id)}
@@ -310,7 +310,7 @@ export function ArchiveFolderExplorer({
               <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
                 <span className="relative">
                   <Folder className="h-5 w-5" style={{ color }} />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#111022]" style={{ backgroundColor: color }} />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#101010]" style={{ backgroundColor: color }} />
                 </span>
                 <span className="max-w-full text-center text-[11px] font-semibold leading-none text-muted-foreground" title={`${formatCount(batch.problem_count || 0)}문항`}>
                   {formatCount(batch.problem_count || 0)}

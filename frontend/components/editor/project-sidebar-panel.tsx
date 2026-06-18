@@ -360,7 +360,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
                 <div className="p-3 text-center text-xs text-slate-500">저장 후 버전 기록이 생성됩니다.</div>
               ) : versions.length ? (
                 versions.map((version, index) => (
-                  <div key={version.id} className={`group flex items-center gap-2 rounded-md px-2 py-2 text-xs ${index === 0 ? "bg-sky-50 text-sky-900" : "hover:bg-slate-50"}`}>
+                  <div key={version.id} className={`group flex items-center gap-2 rounded-md px-2 py-2 text-xs ${index === 0 ? "bg-zinc-50 text-zinc-900" : "hover:bg-slate-50"}`}>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold">v{version.version_number}</div>
                       <div className="text-[11px] text-slate-500">{formatDateTime(version.saved_at)} · 요소 {version.element_count}개</div>
@@ -428,7 +428,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
               const active = template.id === templateId;
               const templateDocument = template.canvas_json || legacyTemplateDocument(template);
               return (
-                <div key={template.id} className={`group flex items-center gap-3 rounded-md border bg-white p-2 transition ${active ? "border-sky-500 ring-1 ring-sky-200" : "hover:border-sky-200"}`}>
+                <div key={template.id} className={`group flex items-center gap-3 rounded-md border bg-white p-2 transition ${active ? "border-zinc-500 ring-1 ring-zinc-200" : "hover:border-zinc-200"}`}>
                   <TemplateMiniature document={templateDocument} />
                   <button type="button" onClick={() => openTemplate(template)} className="min-w-0 flex-1 text-left">
                     <div className="truncate text-sm font-bold text-slate-900">{template.name}</div>
@@ -437,7 +437,7 @@ export function ProjectSidebarPanel({ onSave, onSaveCopy, onPreview, onOpenExpor
                   <div className="hidden shrink-0 gap-1 group-hover:flex">
                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openTemplate(template)} aria-label="열기"><ExternalLink className="h-4 w-4" /></Button>
                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateSaved(template)} aria-label="복제"><Copy className="h-4 w-4" /></Button>
-                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => setDeleteTarget(template)} aria-label="삭제"><Trash2 className="h-4 w-4" /></Button>
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-zinc-600" onClick={() => setDeleteTarget(template)} aria-label="삭제"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
               );

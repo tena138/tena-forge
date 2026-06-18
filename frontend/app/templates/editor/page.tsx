@@ -191,7 +191,7 @@ const tokens: Array<{ key: DynamicFieldKey; label: string; color: string }> = [
   { key: "page_number", label: "{{page}}", color: "#7c3aed" },
   { key: "total_pages", label: "{{total}}", color: "#0891b2" },
   { key: "academy_name", label: "{{academy}}", color: "#be123c" },
-  { key: "subject", label: "{{subject}}", color: "#4f46e5" },
+  { key: "subject", label: "{{subject}}", color: "#1f1f1f" },
   { key: "grade", label: "{{grade}}", color: "#059669" },
 ];
 
@@ -345,7 +345,7 @@ function DraggableTile({ preset, onAdd }: { preset: ElementPreset; onAdd?: (pres
       {...attributes}
       {...listeners}
       onClick={() => onAdd?.(preset)}
-      className={`flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-md border bg-white text-xs font-medium text-slate-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50 ${isDragging ? "opacity-40" : ""}`}
+      className={`flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-md border bg-white text-xs font-medium text-slate-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 ${isDragging ? "opacity-40" : ""}`}
     >
       {preset.icon}
       {preset.label}
@@ -356,7 +356,7 @@ function DraggableTile({ preset, onAdd }: { preset: ElementPreset; onAdd?: (pres
 function DraggableContentTile({ preset, onAdd }: { preset: ElementPreset; onAdd?: (preset: ElementPreset) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: preset.id, data: { preset } });
   return (
-    <button ref={setNodeRef} {...attributes} {...listeners} onClick={() => onAdd?.(preset)} className={`flex w-full items-center gap-3 rounded-md border bg-white p-3 text-left shadow-sm hover:border-sky-300 hover:bg-sky-50 ${isDragging ? "opacity-40" : ""}`}>
+    <button ref={setNodeRef} {...attributes} {...listeners} onClick={() => onAdd?.(preset)} className={`flex w-full items-center gap-3 rounded-md border bg-white p-3 text-left shadow-sm hover:border-zinc-300 hover:bg-zinc-50 ${isDragging ? "opacity-40" : ""}`}>
       <span className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-slate-700">{preset.icon}</span>
       <span>
         <span className="block text-sm font-semibold text-slate-800">{preset.label}</span>
@@ -381,7 +381,7 @@ function SortableLayerRow({ element, index }: { element: CanvasElement; index: n
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild>
-        <div ref={setNodeRef} style={style} className={`flex h-9 items-center gap-2 rounded-md px-2 text-xs ${isSelected ? "bg-sky-100 text-sky-900" : "hover:bg-slate-100"}`} onClick={() => setSelection([element.id])}>
+        <div ref={setNodeRef} style={style} className={`flex h-9 items-center gap-2 rounded-md px-2 text-xs ${isSelected ? "bg-zinc-100 text-zinc-900" : "hover:bg-slate-100"}`} onClick={() => setSelection([element.id])}>
           <button {...attributes} {...listeners} aria-label={`${element.name} 레이어 이동`} className="cursor-grab text-slate-400">⋮⋮</button>
           {icon}
           <span className="min-w-0 flex-1 truncate">{index + 1}. {layerName(element)}</span>
@@ -416,7 +416,7 @@ function EditorContextContent({ onDuplicate, onDelete, onLock }: { onDuplicate: 
         <ContextMenu.Item className="rounded px-2 py-1.5 outline-none hover:bg-accent">맨 뒤로</ContextMenu.Item>
         <ContextMenu.Separator className="my-1 h-px bg-border" />
         <ContextMenu.Item className="rounded px-2 py-1.5 outline-none hover:bg-accent" onSelect={onLock}>잠금 / 잠금 해제</ContextMenu.Item>
-        <ContextMenu.Item className="rounded px-2 py-1.5 text-red-600 outline-none hover:bg-red-50" onSelect={onDelete}>삭제</ContextMenu.Item>
+        <ContextMenu.Item className="rounded px-2 py-1.5 text-zinc-600 outline-none hover:bg-zinc-50" onSelect={onDelete}>삭제</ContextMenu.Item>
       </ContextMenu.Content>
     </ContextMenu.Portal>
   );
@@ -501,7 +501,7 @@ function CanvaLeftPanel({
                     active ? "bg-white/[0.10] text-white shadow-sm ring-1 ring-white/12" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
                   }`}
                 >
-                  {active ? <span className="absolute -left-1.5 h-6 w-0.5 rounded-full bg-violet-300" /> : null}
+                  {active ? <span className="absolute -left-1.5 h-6 w-0.5 rounded-full bg-zinc-300" /> : null}
                   {tab.icon}
                   <span className="sr-only">{tab.label}</span>
                 </button>
@@ -1210,7 +1210,7 @@ function CanvasWorkspace() {
                 <button
                   key={guide.id}
                   onDoubleClick={() => deleteGuide(guide.id)}
-                  className="absolute z-20 border-sky-400"
+                  className="absolute z-20 border-zinc-400"
                   style={guide.axis === "x" ? { left: guide.position, top: -999, height: 3000, borderLeftWidth: 1, borderStyle: "dashed" } : { top: guide.position, left: -999, width: 3000, borderTopWidth: 1, borderStyle: "dashed" }}
                   aria-label="안내선 삭제"
                 />
@@ -1221,13 +1221,13 @@ function CanvasWorkspace() {
                 {smartGuides.map((guide) => (
                   <div
                     key={guide.id}
-                    className="pointer-events-none absolute z-30 bg-sky-500/90"
+                    className="pointer-events-none absolute z-30 bg-zinc-500/90"
                     style={guide.axis === "x" ? { left: guide.position, top: 0, width: 1, height: document.page.height } : { top: guide.position, left: 0, width: document.page.width, height: 1 }}
                   />
                 ))}
                 {document.page.showMarginGuides && (
                   <div
-                    className="pointer-events-none absolute border border-dashed border-rose-400/80"
+                    className="pointer-events-none absolute border border-dashed border-zinc-400/80"
                     style={{
                       left: document.page.margins.left,
                       top: document.page.margins.top,
@@ -1316,7 +1316,7 @@ function Inspector() {
             <div className="text-xs font-medium text-slate-600">방향</div>
             <div className="grid grid-cols-2 gap-2">
               {(["portrait", "landscape"] as const).map((orientation) => (
-                <button key={orientation} className={`h-9 rounded-md border text-xs ${document.page.orientation === orientation ? "border-sky-400 bg-sky-50" : ""}`} onClick={() => setPage({ orientation, width: orientation === "portrait" ? A4_CANVAS.width : A4_CANVAS.height, height: orientation === "portrait" ? A4_CANVAS.height : A4_CANVAS.width })}>
+                <button key={orientation} className={`h-9 rounded-md border text-xs ${document.page.orientation === orientation ? "border-zinc-400 bg-zinc-50" : ""}`} onClick={() => setPage({ orientation, width: orientation === "portrait" ? A4_CANVAS.width : A4_CANVAS.height, height: orientation === "portrait" ? A4_CANVAS.height : A4_CANVAS.width })}>
                   {orientation === "portrait" ? "세로" : "가로"}
                 </button>
               ))}
@@ -1391,7 +1391,7 @@ function Inspector() {
     <aside className="h-full overflow-auto border-l bg-white p-4 text-slate-900">
       <div className="flex items-center justify-between">
         <h2 className="min-w-0 truncate text-sm font-semibold">{element.name}</h2>
-        <Button variant="ghost" size="icon" onClick={() => deleteElements([element.id])} aria-label="삭제"><Trash2 className="h-4 w-4 text-red-600" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => deleteElements([element.id])} aria-label="삭제"><Trash2 className="h-4 w-4 text-zinc-600" /></Button>
       </div>
       <InspectorSection title="Position & Size">
         <div className="grid grid-cols-2 gap-2">
@@ -1452,7 +1452,7 @@ function OpacityControl({ value, onChange }: { value: number; onChange: (value: 
     <label className="space-y-2 text-xs font-medium text-slate-600">
       Opacity {Math.round(value * 100)}%
       <Slider.Root value={[value * 100]} min={0} max={100} step={1} onValueChange={([next]) => onChange(next / 100)} className="relative flex h-5 touch-none items-center">
-        <Slider.Track className="relative h-2 flex-1 rounded bg-slate-200"><Slider.Range className="absolute h-full rounded bg-sky-500" /></Slider.Track>
+        <Slider.Track className="relative h-2 flex-1 rounded bg-slate-200"><Slider.Range className="absolute h-full rounded bg-zinc-500" /></Slider.Track>
         <Slider.Thumb className="block h-4 w-4 rounded-full border bg-white shadow" aria-label="투명도" />
       </Slider.Root>
     </label>
@@ -1665,7 +1665,7 @@ function SliderField({ label, min, max, step, value, onChange }: { label: string
     <label className="space-y-2 text-xs font-medium text-slate-600">
       {label}: {Number(value).toFixed(step < 1 ? 1 : 0)}
       <Slider.Root value={[value]} min={min} max={max} step={step} onValueChange={([next]) => onChange(next)} className="relative flex h-5 touch-none items-center">
-        <Slider.Track className="relative h-2 flex-1 rounded bg-slate-200"><Slider.Range className="absolute h-full rounded bg-sky-500" /></Slider.Track>
+        <Slider.Track className="relative h-2 flex-1 rounded bg-slate-200"><Slider.Range className="absolute h-full rounded bg-zinc-500" /></Slider.Track>
         <Slider.Thumb className="block h-4 w-4 rounded-full border bg-white shadow" aria-label={label} />
       </Slider.Root>
     </label>
@@ -1720,7 +1720,7 @@ function TopToolbar({ onPreview, onSave, returnHref }: { onPreview: () => void; 
         <button type="button" className="rounded-md px-3 py-2 text-lg font-semibold hover:bg-accent">크기 조정</button>
         <div className="hidden h-6 w-px bg-border sm:block" />
         <Input value={templateName} onChange={(event) => setTemplateName(event.target.value)} className="hidden h-9 w-56 border-transparent bg-accent px-3 text-sm font-semibold placeholder:text-muted-foreground focus-visible:border-ring md:block" aria-label="Template name" />
-        {isDirty && <span className="h-2.5 w-2.5 rounded-full bg-amber-300" aria-label="Unsaved changes" />}
+        {isDirty && <span className="h-2.5 w-2.5 rounded-full bg-zinc-300" aria-label="Unsaved changes" />}
       </div>
       <div className="flex items-center gap-2">
         <Button variant="secondary" size="sm" onClick={onPreview}>미리보기</Button>
@@ -1765,7 +1765,7 @@ function EditorStatusBar() {
         <span>{elements.length}개 요소</span>
         <span>{selectedIds.length ? `${selectedIds.length}개 선택됨` : "선택 없음"}</span>
         <span>{Math.round(zoom * 100)}%</span>
-        <span className={isDirty ? "text-orange-600" : "text-emerald-600"}>{isDirty ? "저장 필요" : "저장됨"}</span>
+        <span className={isDirty ? "text-zinc-600" : "text-zinc-600"}>{isDirty ? "저장 필요" : "저장됨"}</span>
       </div>
     </footer>
   );
@@ -2310,13 +2310,13 @@ function VisualTemplateEditorPageInner() {
   }
 
   if (!mounted) {
-    return <div className="fixed inset-0 z-[80] flex items-center justify-center text-sm text-slate-400" style={{ background: "radial-gradient(circle at 8% 0%, hsl(263 88% 58% / 0.20), transparent 28rem), linear-gradient(180deg, hsl(224 28% 7%), hsl(224 34% 3%))" }}>Opening editor...</div>;
+    return <div className="fixed inset-0 z-[80] flex items-center justify-center text-sm text-slate-400" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 13px), linear-gradient(180deg, hsl(0 0% 10%), hsl(0 0% 3%))" }}>Opening editor...</div>;
   }
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <Tooltip.Provider delayDuration={250}>
-        <div className="fixed inset-0 z-[80] flex min-h-0 w-full flex-col overflow-hidden text-slate-100" style={{ background: "radial-gradient(circle at 8% 0%, hsl(263 88% 58% / 0.20), transparent 28rem), radial-gradient(circle at 86% 12%, hsl(250 72% 42% / 0.12), transparent 26rem), linear-gradient(180deg, hsl(224 28% 7%), hsl(224 34% 3%))" }}>
+        <div className="fixed inset-0 z-[80] flex min-h-0 w-full flex-col overflow-hidden text-slate-100" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 13px), linear-gradient(180deg, hsl(0 0% 10%), hsl(0 0% 3%))" }}>
           <TopToolbar onPreview={preview} onSave={save} returnHref={editorReturnTo} />
           <main className="flex min-h-0 flex-1">
             <CanvaLeftPanel onNotice={setNotice} onSave={save} onSaveCopy={saveCopy} onPreview={preview} onOpenExport={openExport} />
@@ -2341,7 +2341,7 @@ function VisualTemplateEditorPageInner() {
 
 export default function VisualTemplateEditorPage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-slate-400" style={{ background: "radial-gradient(circle at 8% 0%, hsl(263 88% 58% / 0.20), transparent 28rem), linear-gradient(180deg, hsl(224 28% 7%), hsl(224 34% 3%))" }}>Opening editor...</div>}>
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-slate-400" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 13px), linear-gradient(180deg, hsl(0 0% 10%), hsl(0 0% 3%))" }}>Opening editor...</div>}>
       <VisualTemplateEditorPageInner />
     </Suspense>
   );

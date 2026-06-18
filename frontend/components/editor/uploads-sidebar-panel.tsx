@@ -101,7 +101,7 @@ function AssetCard({ asset, onInsert, onRename, onDelete }: { asset: AssetItem; 
           ref={setNodeRef}
           {...attributes}
           {...listeners}
-          className={`group overflow-hidden rounded-md border bg-white shadow-sm transition hover:border-sky-300 ${isDragging ? "opacity-45" : ""}`}
+          className={`group overflow-hidden rounded-md border bg-white shadow-sm transition hover:border-zinc-300 ${isDragging ? "opacity-45" : ""}`}
         >
           <button type="button" onClick={() => onInsert(asset)} className="block w-full text-left">
             <div className="relative aspect-[4/3] bg-slate-100">
@@ -131,7 +131,7 @@ function AssetCard({ asset, onInsert, onRename, onDelete }: { asset: AssetItem; 
           <ContextMenu.Item className="rounded px-2 py-1.5 outline-none hover:bg-slate-100" onSelect={() => onRename(asset)}>이름 변경</ContextMenu.Item>
           <ContextMenu.Item className="rounded px-2 py-1.5 outline-none hover:bg-slate-100" onSelect={download}>다운로드</ContextMenu.Item>
           <ContextMenu.Separator className="my-1 h-px bg-slate-200" />
-          <ContextMenu.Item className="rounded px-2 py-1.5 text-red-600 outline-none hover:bg-red-50" onSelect={() => onDelete(asset)}>삭제</ContextMenu.Item>
+          <ContextMenu.Item className="rounded px-2 py-1.5 text-zinc-600 outline-none hover:bg-zinc-50" onSelect={() => onDelete(asset)}>삭제</ContextMenu.Item>
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu.Root>
@@ -279,7 +279,7 @@ export function UploadsSidebarPanel({ onNotice }: { onNotice?: (message: string)
           onDragLeave={() => setDraggingFiles(false)}
           onDrop={onDrop}
           className={`flex h-[120px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-white text-center text-sm font-semibold transition ${
-            draggingFiles ? "border-sky-400 bg-sky-50 text-sky-800" : "border-slate-300 text-slate-600 hover:border-sky-300 hover:bg-sky-50"
+            draggingFiles ? "border-zinc-400 bg-zinc-50 text-zinc-800" : "border-slate-300 text-slate-600 hover:border-zinc-300 hover:bg-zinc-50"
           }`}
         >
           <UploadCloud className="h-7 w-7" />
@@ -293,12 +293,12 @@ export function UploadsSidebarPanel({ onNotice }: { onNotice?: (message: string)
               <div key={item.id} className="rounded-md border bg-white p-2">
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="min-w-0 truncate font-semibold text-slate-700">{item.filename}</span>
-                  <span className={item.error ? "text-red-600" : "text-slate-500"}>{item.error ? "오류" : `${item.progress}%`}</span>
+                  <span className={item.error ? "text-zinc-600" : "text-slate-500"}>{item.error ? "오류" : `${item.progress}%`}</span>
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded bg-slate-100">
-                  <div className={`h-full ${item.error ? "bg-red-500" : "bg-sky-500"}`} style={{ width: `${item.error ? 100 : item.progress}%` }} />
+                  <div className={`h-full ${item.error ? "bg-zinc-500" : "bg-zinc-500"}`} style={{ width: `${item.error ? 100 : item.progress}%` }} />
                 </div>
-                {item.error && <p className="mt-1 text-[11px] text-red-600">{item.error}</p>}
+                {item.error && <p className="mt-1 text-[11px] text-zinc-600">{item.error}</p>}
               </div>
             ))}
           </div>
@@ -327,7 +327,7 @@ export function UploadsSidebarPanel({ onNotice }: { onNotice?: (message: string)
             ["logo", "로고"],
             ["other", "기타"],
           ].map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setType(key as TypeFilter)} className={`h-8 rounded-md text-xs font-semibold ${type === key ? "bg-sky-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"}`}>{label}</button>
+            <button key={key} type="button" onClick={() => setType(key as TypeFilter)} className={`h-8 rounded-md text-xs font-semibold ${type === key ? "bg-zinc-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"}`}>{label}</button>
           ))}
         </div>
       </section>

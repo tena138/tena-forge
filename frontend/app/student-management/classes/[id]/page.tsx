@@ -27,8 +27,8 @@ import { cn } from "@/lib/utils";
 type ClassTab = "students" | "calendar";
 
 function tone(status?: string) {
-  if (status === "completed" || status === "graded" || status === "Active") return "bg-emerald-500/15 text-emerald-100 border-emerald-400/20";
-  if (status === "grading" || status === "scheduled" || status === "class") return "bg-violet-500/15 text-violet-100 border-violet-300/20";
+  if (status === "completed" || status === "graded" || status === "Active") return "bg-zinc-500/15 text-zinc-100 border-zinc-400/20";
+  if (status === "grading" || status === "scheduled" || status === "class") return "bg-zinc-500/15 text-zinc-100 border-zinc-300/20";
   return "bg-slate-500/15 text-slate-200 border-slate-400/20";
 }
 
@@ -209,7 +209,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
         <header className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-300">Class Profile</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-300">Class Profile</p>
               <h1 className="mt-2 text-3xl font-black text-white">{data.name}</h1>
               <p className="mt-2 text-sm text-slate-400">{data.description || [data.subject, data.grade_level].filter(Boolean).join(" · ") || "클래스 설명 없음"}</p>
               <div className="mt-4 flex flex-wrap gap-2 text-sm">
@@ -233,7 +233,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
             </div>
           </div>
           {editing ? (
-            <div className="mt-4 grid gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-2 rounded-lg border border-zinc-300/20 bg-zinc-500/10 p-3 md:grid-cols-2 xl:grid-cols-4">
               <Input placeholder="클래스 이름" value={editForm.name} onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))} />
               <Input placeholder="레벨/설명" value={editForm.description} onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))} />
               <Input placeholder="과목" value={editForm.subject} onChange={(event) => setEditForm((current) => ({ ...current, subject: event.target.value }))} />
@@ -249,7 +249,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
               </div>
             </div>
           ) : null}
-          {message ? <div className="mt-4 rounded-lg border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-sm text-violet-100">{message}</div> : null}
+          {message ? <div className="mt-4 rounded-lg border border-zinc-300/20 bg-zinc-500/10 px-3 py-2 text-sm text-zinc-100">{message}</div> : null}
         </header>
 
         <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
@@ -265,7 +265,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                 onClick={() => setActiveTab(tab.id as ClassTab)}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
-                  activeTab === tab.id ? "bg-violet-500 text-white shadow-lg shadow-violet-950/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                  activeTab === tab.id ? "bg-zinc-500 text-white shadow-lg shadow-zinc-950/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -300,7 +300,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                     <Link
                       key={student.id}
                       href={`/student-management/students/${student.id}`}
-                      className="min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-violet-300/35 hover:bg-violet-500/[0.08]"
+                      className="min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-zinc-300/35 hover:bg-zinc-500/[0.08]"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -315,7 +315,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                         </div>
                         <div className="rounded bg-white/[0.045] px-2 py-2">
                           <p className="text-slate-500">오답</p>
-                          <p className="mt-1 font-bold text-rose-100">{student.unresolved_wrong_count}</p>
+                          <p className="mt-1 font-bold text-zinc-100">{student.unresolved_wrong_count}</p>
                         </div>
                       </div>
                     </Link>
@@ -359,7 +359,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                     onClick={() => setSelectedEventId(event.id)}
                     className={cn(
                       "w-full rounded-lg border p-3 text-left transition",
-                      selectedEvent?.id === event.id ? "border-violet-300/50 bg-violet-500/15" : "border-white/10 bg-black/20 hover:border-violet-300/30"
+                      selectedEvent?.id === event.id ? "border-zinc-300/50 bg-zinc-500/15" : "border-white/10 bg-black/20 hover:border-zinc-300/30"
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -442,7 +442,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                                   onClick={() => toggleRecurrenceWeekday(day.value)}
                                   className={cn(
                                     "h-9 rounded-md border text-xs font-bold transition",
-                                    active ? "border-violet-300/50 bg-violet-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-500 hover:text-slate-200"
+                                    active ? "border-zinc-300/50 bg-zinc-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-500 hover:text-slate-200"
                                   )}
                                 >
                                   {day.label}
@@ -464,13 +464,13 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                     </div>
                   ) : null}
                   <textarea
-                    className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                    className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-zinc-300/50"
                     placeholder="수업 지도 내용"
                     value={scheduleForm.lesson_plan}
                     onChange={(event) => setScheduleForm((current) => ({ ...current, lesson_plan: event.target.value }))}
                   />
                   <textarea
-                    className="min-h-20 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                    className="min-h-20 w-full rounded-md border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-zinc-300/50"
                     placeholder="과제 / 준비물 / 전달사항"
                     value={scheduleForm.assignment_note}
                     onChange={(event) => setScheduleForm((current) => ({ ...current, assignment_note: event.target.value }))}

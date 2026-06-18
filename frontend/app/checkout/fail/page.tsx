@@ -6,7 +6,7 @@ export default async function CheckoutFailPage({ searchParams }: { searchParams:
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f7f5f1] px-4 text-slate-950">
       <section className="w-full max-w-xl rounded-[28px] border border-slate-950/10 bg-white p-8 text-center shadow-[0_24px_90px_rgba(15,23,42,0.10)]">
-        <AlertCircle className="mx-auto h-12 w-12 text-rose-600" />
+        <AlertCircle className="mx-auto h-12 w-12 text-zinc-600" />
         <h1 className="mt-6 text-3xl font-black">결제가 완료되지 않았습니다.</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">{params.message || "결제가 취소되었거나 처리 중 문제가 발생했습니다."}</p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">

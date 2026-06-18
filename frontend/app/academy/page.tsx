@@ -147,13 +147,13 @@ function StageCard({
     <Card className="min-h-[360px] border-white/10 bg-white/[0.035]">
       <CardHeader className="flex-row items-center justify-between gap-3 p-4 pb-3">
         <CardTitle className="flex items-center gap-2 text-base text-white">
-          <Icon className="h-4 w-4 text-violet-200" />
+          <Icon className="h-4 w-4 text-zinc-200" />
           {title}
         </CardTitle>
         <Link
           href={action.href}
           aria-label={action.label}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] text-slate-400 transition hover:bg-white/[0.06] hover:text-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] text-slate-400 transition hover:bg-white/[0.06] hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/50"
         >
           <ArrowUpRight className="h-4 w-4" />
         </Link>
@@ -172,12 +172,12 @@ function BatchLine({ batch, href }: { batch: Batch; href?: string }) {
           <div className="truncate text-sm font-semibold text-white">{batch.name}</div>
           <div className="mt-1 truncate text-xs text-slate-500">{fileName(batch.problem_pdf_filename)}</div>
         </div>
-        {progress !== null ? <span className="shrink-0 text-xs font-semibold text-violet-200">{progress}%</span> : null}
+        {progress !== null ? <span className="shrink-0 text-xs font-semibold text-zinc-200">{progress}%</span> : null}
       </div>
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">{statusText(batch)}</p>
       {progress !== null ? (
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-          <div className="h-full rounded-full bg-violet-400" style={{ width: `${progress}%` }} />
+          <div className="h-full rounded-full bg-zinc-400" style={{ width: `${progress}%` }} />
         </div>
       ) : null}
     </div>
@@ -254,7 +254,7 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
         <div className="h-full w-full rounded-full bg-card" />
         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-visible text-center">
           <span className="whitespace-nowrap text-lg font-black leading-none text-foreground">{Math.round(percent)}%</span>
-          <span className="mt-1 whitespace-nowrap text-[10px] font-bold leading-none text-sky-700 drop-shadow-[0_1px_5px_rgba(255,255,255,0.85)] dark:text-sky-200 dark:drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
+          <span className="mt-1 whitespace-nowrap text-[10px] font-bold leading-none text-zinc-700 drop-shadow-[0_1px_5px_rgba(255,255,255,0.85)] dark:text-zinc-200 dark:drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
             {ratio}
           </span>
         </div>
@@ -302,7 +302,7 @@ function UsageOverview({
         <Link
           href="/billing"
           aria-label="결제 및 플랜 관리로 이동"
-          className={`plan-aurora-surface plan-aurora-card ${planToneClass} group rounded-[10px] p-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60`}
+          className={`plan-aurora-surface plan-aurora-card ${planToneClass} group rounded-[10px] p-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60`}
         >
           <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
           <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
@@ -474,7 +474,7 @@ function AcademyConsoleHome() {
   return (
     <div className="space-y-5">
       <UsageOverview summary={usageSummary} profile={profile} billing={billingSummary} />
-      {dataError ? <p className="rounded-[8px] border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">{dataError}</p> : null}
+      {dataError ? <p className="rounded-[8px] border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-200">{dataError}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-4">
         <StageCard title="추출" icon={ScanText} action={{ href: "/archive/new", label: "새 추출" }}>
@@ -544,10 +544,10 @@ function AcademyConsoleHome() {
                   <div key={item.subject} className="rounded-[8px] border border-white/10 bg-black/20 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="truncate text-sm font-semibold text-white">{item.subject}</span>
-                      <span className="text-sm font-semibold text-violet-200">{count(item.count)}</span>
+                      <span className="text-sm font-semibold text-zinc-200">{count(item.count)}</span>
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-                      <div className="h-full rounded-full bg-violet-400" style={{ width: `${problemStats.total ? Math.max(4, (item.count / problemStats.total) * 100) : 0}%` }} />
+                      <div className="h-full rounded-full bg-zinc-400" style={{ width: `${problemStats.total ? Math.max(4, (item.count / problemStats.total) * 100) : 0}%` }} />
                     </div>
                   </div>
                 ))
@@ -577,7 +577,7 @@ function AcademyConsoleHome() {
                       <div className="truncate text-sm font-semibold text-white">{set.name}</div>
                       <div className="mt-1 text-xs text-slate-500">{compactDate(set.created_at)}</div>
                     </div>
-                    <span className="shrink-0 text-sm font-semibold text-violet-200">{count(set.item_count)}</span>
+                    <span className="shrink-0 text-sm font-semibold text-zinc-200">{count(set.item_count)}</span>
                   </Link>
                 ))
               ) : (
@@ -714,7 +714,7 @@ function AcademyOperationsPanel() {
   }, [learningStudents, selectedGroupIds, selectedStudentIds]);
   if (profile?.account_type === "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] border border-sky-300/20 bg-sky-300/[0.045] p-6 text-center">
+      <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
         <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다</h1>
         <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
           Student App으로 이동
@@ -852,9 +852,9 @@ function AcademyOperationsPanel() {
   return (
     <div className="space-y-6">
       {(notice || error) && (
-        <div className="rounded-[12px] border border-violet-300/20 bg-violet-400/[0.08] p-4 text-sm">
-          {notice && <div className="text-violet-100">{notice}</div>}
-          {error && <div className="text-red-300">{error}</div>}
+        <div className="rounded-[12px] border border-zinc-300/20 bg-zinc-400/[0.08] p-4 text-sm">
+          {notice && <div className="text-zinc-100">{notice}</div>}
+          {error && <div className="text-zinc-300">{error}</div>}
         </div>
       )}
 
@@ -877,7 +877,7 @@ function AcademyOperationsPanel() {
                         onClick={() => setLearningAssignmentSourceMode(option.value as LearningAssignmentSourceMode)}
                         className={`h-11 rounded-[8px] border px-3 text-sm font-bold transition ${
                           learningAssignmentSourceMode === option.value
-                            ? "border-violet-300/60 bg-violet-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.22)]"
+                            ? "border-zinc-300/60 bg-zinc-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.22)]"
                             : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
                         }`}
                       >
@@ -924,7 +924,7 @@ function AcademyOperationsPanel() {
                             type="button"
                             onClick={() => setSelectedGroupIds((current) => toggleId(current, group.id))}
                             className={`rounded-[7px] border px-3 py-2 text-sm font-semibold transition ${
-                              selected ? "border-violet-300/60 bg-violet-500/80 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
+                              selected ? "border-zinc-300/60 bg-zinc-500/80 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
                             }`}
                           >
                             {group.name}
@@ -947,7 +947,7 @@ function AcademyOperationsPanel() {
                             type="button"
                             onClick={() => setSelectedStudentIds((current) => toggleId(current, student.student_user_id))}
                             className={`min-w-[8rem] rounded-[7px] border px-3 py-2 text-left text-sm font-semibold transition ${
-                              selected ? "border-cyan-300/60 bg-cyan-500/75 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
+                              selected ? "border-zinc-300/60 bg-zinc-500/75 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
                             }`}
                           >
                             <span className="block truncate">{student.student_name}</span>
@@ -1004,7 +1004,7 @@ function AcademyOperationsPanel() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {learningAssignments.length ? learningAssignments.map((assignment) => (
-                  <button key={assignment.id} onClick={() => openLearningReport(assignment)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-violet-300/30">
+                  <button key={assignment.id} onClick={() => openLearningReport(assignment)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/30">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-white">{assignment.title}</div>
@@ -1012,7 +1012,7 @@ function AcademyOperationsPanel() {
                           {learningAssignmentWorkloadLabel(assignment)} · {assignment.status}{assignment.due_at ? ` · 마감 ${compactDate(assignment.due_at)}` : ""}
                         </div>
                       </div>
-                      <LineChart className="h-4 w-4 shrink-0 text-violet-200" />
+                      <LineChart className="h-4 w-4 shrink-0 text-zinc-200" />
                     </div>
                   </button>
                 )) : <p className="text-sm text-muted-foreground">아직 배포한 학습 과제가 없습니다.</p>}
@@ -1046,7 +1046,7 @@ function AcademyOperationsPanel() {
                       <div key={student.student_id} className="flex items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
                         <span className="min-w-0 truncate">{student.student_name}</span>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className={student.status === "pending_confirmation" ? "text-amber-200" : "text-slate-400"}>{learningSubmissionStatusLabel(student.status)}</span>
+                          <span className={student.status === "pending_confirmation" ? "text-zinc-200" : "text-slate-400"}>{learningSubmissionStatusLabel(student.status)}</span>
                           {student.status === "pending_confirmation" ? (
                             <Button
                               size="sm"
@@ -1215,7 +1215,7 @@ function AcademySchedulePanel() {
 
   if (profile?.account_type === "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] border border-sky-300/20 bg-sky-300/[0.045] p-6 text-center">
+      <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
         <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다.</h1>
         <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
           Student App
@@ -1286,9 +1286,9 @@ function AcademySchedulePanel() {
   return (
     <div className="relative space-y-4">
       {(notice || error) ? (
-        <div className="rounded-[10px] border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm">
-          {notice ? <span className="text-violet-100">{notice}</span> : null}
-          {error ? <span className="text-red-300">{error}</span> : null}
+        <div className="rounded-[10px] border border-zinc-300/20 bg-zinc-500/10 px-4 py-3 text-sm">
+          {notice ? <span className="text-zinc-100">{notice}</span> : null}
+          {error ? <span className="text-zinc-300">{error}</span> : null}
         </div>
       ) : null}
 
@@ -1297,7 +1297,7 @@ function AcademySchedulePanel() {
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2 text-white">
-                <CalendarDays className="h-5 w-5 text-violet-200" />
+                <CalendarDays className="h-5 w-5 text-zinc-200" />
                 클래스 시간표
               </CardTitle>
               <div className="flex items-center gap-2">
@@ -1330,22 +1330,22 @@ function AcademySchedulePanel() {
                     return (
                       <div key={key} className={`min-h-[118px] border-b border-r border-white/10 p-2 ${inMonth ? "bg-black/10" : "bg-black/25 text-slate-600"}`}>
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className={`grid h-6 min-w-6 place-items-center rounded-full text-xs font-black ${isToday ? "bg-violet-500 text-white" : inMonth ? "text-white" : "text-slate-600"}`}>
+                          <span className={`grid h-6 min-w-6 place-items-center rounded-full text-xs font-black ${isToday ? "bg-zinc-500 text-white" : inMonth ? "text-white" : "text-slate-600"}`}>
                             {day.getDate()}
                           </span>
-                          {dayEvents.length ? <span className="text-[10px] font-bold text-violet-200">{dayEvents.length}</span> : null}
+                          {dayEvents.length ? <span className="text-[10px] font-bold text-zinc-200">{dayEvents.length}</span> : null}
                         </div>
                         <div className="space-y-1.5">
                           {dayEvents.slice(0, 3).map((event) => {
                             const classRow = classById.get(event.class_id);
                             return (
-                              <div key={event.id} className="group rounded-[6px] border border-violet-300/15 bg-violet-500/15 px-2 py-1.5">
+                              <div key={event.id} className="group rounded-[6px] border border-zinc-300/15 bg-zinc-500/15 px-2 py-1.5">
                                 <div className="flex items-start justify-between gap-1.5">
                                   <div className="min-w-0">
                                     <p className="truncate text-[11px] font-black text-white">{event.title}</p>
-                                    <p className="truncate text-[10px] text-violet-100">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
+                                    <p className="truncate text-[10px] text-zinc-100">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
                                   </div>
-                                  <button type="button" onClick={() => removeEvent(event.id)} className="rounded p-0.5 text-slate-500 opacity-0 transition hover:bg-white/10 hover:text-red-200 group-hover:opacity-100" aria-label="삭제">
+                                  <button type="button" onClick={() => removeEvent(event.id)} className="rounded p-0.5 text-slate-500 opacity-0 transition hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100" aria-label="삭제">
                                     <Trash2 className="h-3 w-3" />
                                   </button>
                                 </div>
@@ -1376,7 +1376,7 @@ function AcademySchedulePanel() {
               </div>
               <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
                 <p className="text-[11px] text-slate-500">이번 달</p>
-                <p className="mt-1 text-xl font-black text-violet-100">{monthEvents.length}</p>
+                <p className="mt-1 text-xl font-black text-zinc-100">{monthEvents.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -1398,7 +1398,7 @@ function AcademySchedulePanel() {
       <button
         type="button"
         onClick={() => setFormOpen(true)}
-        className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full border border-violet-300/30 bg-violet-600 text-white shadow-2xl shadow-violet-950/40 transition hover:bg-violet-500"
+        className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full border border-zinc-300/30 bg-zinc-600 text-white shadow-2xl shadow-zinc-950/40 transition hover:bg-zinc-500"
         aria-label="일정 추가"
       >
         <Plus className="h-5 w-5" />
@@ -1471,7 +1471,7 @@ function AcademySchedulePanel() {
                               key={day.value}
                               type="button"
                               onClick={() => toggleAcademyRecurrenceWeekday(day.value)}
-                              className={`h-8 rounded-[7px] border text-xs font-bold transition ${active ? "border-violet-300/50 bg-violet-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-500 hover:text-slate-200"}`}
+                              className={`h-8 rounded-[7px] border text-xs font-bold transition ${active ? "border-zinc-300/50 bg-zinc-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-500 hover:text-slate-200"}`}
                             >
                               {day.label}
                             </button>
@@ -1495,7 +1495,7 @@ function AcademySchedulePanel() {
                 value={form.description}
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
                 placeholder="메모"
-                className="min-h-24 w-full resize-none rounded-[8px] border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-violet-300/50"
+                className="min-h-24 w-full resize-none rounded-[8px] border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-zinc-300/50"
               />
               <Button type="submit" className="w-full" disabled={saving || !form.class_id || !form.title.trim()}>
                 {saving ? "저장 중" : "저장"}

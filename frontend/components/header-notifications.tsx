@@ -58,22 +58,22 @@ function ActiveBatchPanel({ statusData }: { statusData: BatchStatusResponse }) {
   return (
     <Link
       href="/archive/new"
-      className="mb-2 block rounded-[9px] border border-cyan-200/20 bg-cyan-300/[0.08] p-3 text-left transition hover:border-cyan-200/35 hover:bg-cyan-300/[0.12]"
+      className="mb-2 block rounded-[9px] border border-zinc-200/20 bg-zinc-300/[0.08] p-3 text-left transition hover:border-zinc-200/35 hover:bg-zinc-300/[0.12]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-bold text-cyan-50">
-            <Loader2 className="h-4 w-4 animate-spin text-cyan-200" />
+          <div className="flex items-center gap-2 text-sm font-bold text-zinc-50">
+            <Loader2 className="h-4 w-4 animate-spin text-zinc-200" />
             <span className="truncate">{message}</span>
           </div>
-          <p className="mt-1 truncate text-xs text-cyan-100/70">{taskLabel} · {detail}</p>
+          <p className="mt-1 truncate text-xs text-zinc-100/70">{taskLabel} · {detail}</p>
         </div>
-        <span className="shrink-0 text-sm font-black text-cyan-100">{progress}%</span>
+        <span className="shrink-0 text-sm font-black text-zinc-100">{progress}%</span>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-cyan-200 transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="h-full rounded-full bg-zinc-200 transition-all duration-500" style={{ width: `${progress}%` }} />
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2 text-xs font-semibold text-cyan-100/70">
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs font-semibold text-zinc-100/70">
         <span>{formatRemaining(statusData.estimated_seconds_remaining)}</span>
         <span>상태 보기</span>
       </div>
@@ -269,12 +269,12 @@ export function HeaderNotifications() {
           {toast && !open ? (
             <Link
               href={toast.href}
-              className="fixed z-[4000] w-[min(84vw,340px)] rounded-[10px] border border-white/10 bg-[#090b12] p-3 text-sm text-white shadow-[0_24px_70px_rgba(0,0,0,0.46)] ring-1 ring-violet-300/10"
+              className="fixed z-[4000] w-[min(84vw,340px)] rounded-[10px] border border-white/10 bg-[#090b12] p-3 text-sm text-white shadow-[0_24px_70px_rgba(0,0,0,0.46)] ring-1 ring-zinc-300/10"
               style={layerStyle}
               onClick={() => openNotification(toast)}
             >
               <div className="flex gap-3">
-                <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", toast.status === "done" ? "bg-emerald-400/12 text-emerald-200" : "bg-red-400/12 text-red-200")}>
+                <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", toast.status === "done" ? "bg-zinc-400/12 text-zinc-200" : "bg-zinc-400/12 text-zinc-200")}>
                   {toast.status === "done" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                 </span>
                 <span className="min-w-0">
@@ -309,7 +309,7 @@ export function HeaderNotifications() {
                         className="group flex gap-3 rounded-[8px] px-2 py-2.5 text-left transition hover:bg-white/[0.06]"
                         onClick={() => openNotification(notification)}
                       >
-                        <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", notification.status === "done" ? "bg-emerald-400/12 text-emerald-200" : "bg-red-400/12 text-red-200")}>
+                        <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", notification.status === "done" ? "bg-zinc-400/12 text-zinc-200" : "bg-zinc-400/12 text-zinc-200")}>
                           {notification.status === "done" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                         </span>
                         <span className="min-w-0 flex-1">
@@ -343,8 +343,8 @@ export function HeaderNotifications() {
         type="button"
         className={cn(
           "relative inline-flex h-9 w-9 items-center justify-center overflow-visible rounded-[8px] border border-transparent bg-transparent text-slate-400 shadow-none transition hover:border-transparent hover:bg-transparent hover:text-white",
-          unreadCount && "text-violet-100",
-          activeStatusData && "text-cyan-100"
+          unreadCount && "text-zinc-100",
+          activeStatusData && "text-zinc-100"
         )}
         aria-label={buttonLabel}
         title={buttonLabel}
@@ -353,13 +353,13 @@ export function HeaderNotifications() {
         {activeStatusData ? (
           <>
             <span className="absolute inset-x-0 bottom-0 h-[2px] bg-white/10" />
-            <span className="absolute bottom-0 left-0 h-[2px] bg-cyan-200 transition-all duration-500" style={{ width: `${activeProgress}%` }} />
+            <span className="absolute bottom-0 left-0 h-[2px] bg-zinc-200 transition-all duration-500" style={{ width: `${activeProgress}%` }} />
           </>
         ) : null}
         <Bell className="h-4 w-4" />
-        {activeStatusData ? <Loader2 className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 animate-spin rounded-full bg-black/80 p-0.5 text-cyan-200" /> : null}
+        {activeStatusData ? <Loader2 className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 animate-spin rounded-full bg-black/80 p-0.5 text-zinc-200" /> : null}
         {unreadCount ? (
-          <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-violet-400 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(0,0,0,0.78)]">
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-zinc-400 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(0,0,0,0.78)]">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}

@@ -53,9 +53,9 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             overflow: hidden;
             pointer-events: none;
             background:
-              radial-gradient(circle at 50% 120%, rgba(62, 107, 255, 0.22), transparent 34%),
-              radial-gradient(circle at 8% 10%, rgba(192, 70, 221, 0.14), transparent 26%),
-              #080612;
+              radial-gradient(circle at 50% 120%, rgba(255,255,255, 0.22), transparent 34%),
+              radial-gradient(circle at 8% 10%, rgba(255,255,255, 0.14), transparent 26%),
+              #050505;
           }
 
           .aurora-bg-halo .aurora-nebula,
@@ -81,8 +81,8 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             left: -22vw;
             top: -18vh;
             background:
-              radial-gradient(circle at 40% 42%, rgba(107, 62, 255, 0.62), transparent 52%),
-              radial-gradient(circle at 72% 58%, rgba(192, 70, 221, 0.32), transparent 48%);
+              radial-gradient(circle at 40% 42%, rgba(255,255,255, 0.62), transparent 52%),
+              radial-gradient(circle at 72% 58%, rgba(255,255,255, 0.32), transparent 48%);
             animation: nebula-a 18s ease-in-out infinite;
           }
 
@@ -92,8 +92,8 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             right: -30vw;
             bottom: -24vh;
             background:
-              radial-gradient(circle at 50% 48%, rgba(62, 107, 255, 0.58), transparent 54%),
-              radial-gradient(circle at 28% 38%, rgba(192, 70, 221, 0.28), transparent 48%);
+              radial-gradient(circle at 50% 48%, rgba(255,255,255, 0.58), transparent 54%),
+              radial-gradient(circle at 28% 38%, rgba(255,255,255, 0.28), transparent 48%);
             animation: nebula-b 22s ease-in-out infinite;
             animation-delay: -8s;
           }
@@ -116,7 +116,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
           .aurora-ribbon.ribbon-a {
             left: -6vw;
             background:
-              linear-gradient(180deg, transparent 0%, rgba(107, 62, 255, 0.05) 9%, rgba(107, 62, 255, 0.7) 26%, rgba(192, 70, 221, 0.5) 48%, rgba(62, 107, 255, 0.32) 72%, transparent 100%),
+              linear-gradient(180deg, transparent 0%, rgba(255,255,255, 0.05) 9%, rgba(255,255,255, 0.7) 26%, rgba(255,255,255, 0.5) 48%, rgba(255,255,255, 0.32) 72%, transparent 100%),
               radial-gradient(ellipse at 50% 34%, rgba(255, 255, 255, 0.24), transparent 44%);
             animation: ribbon-a 8.5s ease-in-out infinite;
           }
@@ -126,7 +126,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             width: 31vw;
             opacity: 0.62;
             background:
-              linear-gradient(180deg, transparent 0%, rgba(62, 107, 255, 0.07) 10%, rgba(62, 107, 255, 0.62) 30%, rgba(107, 62, 255, 0.46) 55%, rgba(192, 70, 221, 0.28) 78%, transparent 100%),
+              linear-gradient(180deg, transparent 0%, rgba(255,255,255, 0.07) 10%, rgba(255,255,255, 0.62) 30%, rgba(255,255,255, 0.46) 55%, rgba(255,255,255, 0.28) 78%, transparent 100%),
               radial-gradient(ellipse at 54% 52%, rgba(255, 255, 255, 0.18), transparent 42%);
             animation: ribbon-b 10s ease-in-out infinite;
             animation-delay: -3s;
@@ -137,7 +137,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             width: 34vw;
             opacity: 0.68;
             background:
-              linear-gradient(180deg, transparent 0%, rgba(192, 70, 221, 0.06) 8%, rgba(192, 70, 221, 0.58) 25%, rgba(107, 62, 255, 0.4) 56%, rgba(62, 107, 255, 0.44) 80%, transparent 100%),
+              linear-gradient(180deg, transparent 0%, rgba(255,255,255, 0.06) 8%, rgba(255,255,255, 0.58) 25%, rgba(255,255,255, 0.4) 56%, rgba(255,255,255, 0.44) 80%, transparent 100%),
               radial-gradient(ellipse at 46% 40%, rgba(255, 255, 255, 0.2), transparent 44%);
             animation: ribbon-c 11.5s ease-in-out infinite;
             animation-delay: -5s;
@@ -149,7 +149,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             min-width: 280px;
             opacity: 0.42;
             background:
-              linear-gradient(180deg, transparent 0%, rgba(62, 107, 255, 0.06) 12%, rgba(107, 62, 255, 0.38) 36%, rgba(192, 70, 221, 0.34) 62%, transparent 100%),
+              linear-gradient(180deg, transparent 0%, rgba(255,255,255, 0.06) 12%, rgba(255,255,255, 0.38) 36%, rgba(255,255,255, 0.34) 62%, transparent 100%),
               radial-gradient(ellipse at 44% 45%, rgba(255, 255, 255, 0.16), transparent 48%);
             animation: ribbon-d 13s ease-in-out infinite;
             animation-delay: -7s;
@@ -160,7 +160,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             inset: -28%;
             background:
               repeating-linear-gradient(112deg, transparent 0 9%, rgba(255, 255, 255, 0.035) 10%, transparent 13%),
-              conic-gradient(from 160deg at 46% 48%, transparent 0deg, rgba(107, 62, 255, 0.12) 54deg, transparent 120deg, rgba(62, 107, 255, 0.13) 184deg, transparent 252deg, rgba(192, 70, 221, 0.1) 310deg, transparent 360deg);
+              conic-gradient(from 160deg at 46% 48%, transparent 0deg, rgba(255,255,255, 0.12) 54deg, transparent 120deg, rgba(255,255,255, 0.13) 184deg, transparent 252deg, rgba(255,255,255, 0.1) 310deg, transparent 360deg);
             filter: blur(22px);
             mix-blend-mode: screen;
             opacity: 0.5;
@@ -287,10 +287,10 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
 
           .aurora-bg-halo {
             background:
-              radial-gradient(circle at 50% 50%, rgba(107, 62, 255, 0.18), transparent 26%),
-              radial-gradient(circle at 50% 52%, rgba(62, 107, 255, 0.16), transparent 50%),
-              radial-gradient(circle at 48% 48%, rgba(192, 70, 221, 0.12), transparent 64%),
-              #080612;
+              radial-gradient(circle at 50% 50%, rgba(255,255,255, 0.18), transparent 26%),
+              radial-gradient(circle at 50% 52%, rgba(255,255,255, 0.16), transparent 50%),
+              radial-gradient(circle at 48% 48%, rgba(255,255,255, 0.12), transparent 64%),
+              #050505;
           }
 
           .aurora-halo-core {
@@ -302,9 +302,9 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             border-radius: 50%;
             background:
               radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.18), transparent 8%),
-              radial-gradient(circle at 46% 44%, rgba(192, 70, 221, 0.42), transparent 28%),
-              radial-gradient(circle at 56% 58%, rgba(62, 107, 255, 0.36), transparent 34%),
-              radial-gradient(circle at 50% 50%, rgba(107, 62, 255, 0.28), transparent 52%);
+              radial-gradient(circle at 46% 44%, rgba(255,255,255, 0.42), transparent 28%),
+              radial-gradient(circle at 56% 58%, rgba(255,255,255, 0.36), transparent 34%),
+              radial-gradient(circle at 50% 50%, rgba(255,255,255, 0.28), transparent 52%);
             filter: blur(48px) saturate(150%);
             mix-blend-mode: screen;
             opacity: 0.72;
@@ -329,7 +329,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             width: min(142vw, 1340px);
             height: min(142vw, 1340px);
             background:
-              conic-gradient(from 20deg, transparent 0deg, rgba(107, 62, 255, 0.82) 42deg, rgba(192, 70, 221, 0.56) 88deg, transparent 132deg, rgba(62, 107, 255, 0.64) 210deg, transparent 286deg, rgba(107, 62, 255, 0.52) 332deg, transparent 360deg);
+              conic-gradient(from 20deg, transparent 0deg, rgba(255,255,255, 0.82) 42deg, rgba(255,255,255, 0.56) 88deg, transparent 132deg, rgba(255,255,255, 0.64) 210deg, transparent 286deg, rgba(255,255,255, 0.52) 332deg, transparent 360deg);
             animation: halo-ring-a 18s linear infinite;
           }
 
@@ -339,7 +339,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             opacity: 0.58;
             filter: blur(22px) saturate(165%);
             background:
-              conic-gradient(from 180deg, rgba(62, 107, 255, 0.7), transparent 58deg, rgba(192, 70, 221, 0.54) 118deg, transparent 178deg, rgba(107, 62, 255, 0.7) 242deg, transparent 310deg, rgba(62, 107, 255, 0.36));
+              conic-gradient(from 180deg, rgba(255,255,255, 0.7), transparent 58deg, rgba(255,255,255, 0.54) 118deg, transparent 178deg, rgba(255,255,255, 0.7) 242deg, transparent 310deg, rgba(255,255,255, 0.36));
             animation: halo-ring-b 23s linear infinite;
             animation-delay: -4s;
           }
@@ -350,7 +350,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             opacity: 0.4;
             filter: blur(28px) saturate(160%);
             background:
-              conic-gradient(from 260deg, transparent 0deg, rgba(192, 70, 221, 0.45) 46deg, transparent 112deg, rgba(62, 107, 255, 0.48) 190deg, transparent 260deg, rgba(107, 62, 255, 0.42) 318deg, transparent 360deg);
+              conic-gradient(from 260deg, transparent 0deg, rgba(255,255,255, 0.45) 46deg, transparent 112deg, rgba(255,255,255, 0.48) 190deg, transparent 260deg, rgba(255,255,255, 0.42) 318deg, transparent 360deg);
             animation: halo-ring-c 29s linear infinite;
             animation-delay: -7s;
           }
@@ -361,8 +361,8 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
             background:
               radial-gradient(circle at 44% 35%, rgba(255, 255, 255, 0.13), transparent 2%),
               radial-gradient(circle at 61% 60%, rgba(255, 255, 255, 0.1), transparent 1.7%),
-              radial-gradient(circle at 32% 58%, rgba(192, 70, 221, 0.18), transparent 5%),
-              radial-gradient(circle at 68% 42%, rgba(62, 107, 255, 0.16), transparent 6%);
+              radial-gradient(circle at 32% 58%, rgba(255,255,255, 0.18), transparent 5%),
+              radial-gradient(circle at 68% 42%, rgba(255,255,255, 0.16), transparent 6%);
             filter: blur(16px);
             mix-blend-mode: screen;
             opacity: 0.72;
@@ -467,7 +467,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
 
 export function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="mt-1.5 text-xs font-medium text-red-300">{message}</p>;
+  return <p className="mt-1.5 text-xs font-medium text-zinc-300">{message}</p>;
 }
 
 export function SocialButtons({
@@ -516,9 +516,9 @@ function SocialButton({
   disabled?: boolean;
 }) {
   const styles = {
-    kakao: "bg-[#FEE500] text-black hover:bg-[#f5dc00]",
+    kakao: "border border-white/80 bg-white text-black hover:bg-zinc-200",
   }[provider];
-  const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
+  const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
   const logo = <SocialProviderLogo provider={provider} />;
   if (disabled) {
     return (
@@ -562,7 +562,7 @@ export function PasswordStrength({ password }: { password: string }) {
   const result = zxcvbn(password || "");
   const score = password ? result.score + 1 : 0;
   const labels = ["", "매우 약함", "약함", "보통", "강함", "매우 강함"];
-  const colors = ["bg-white/10", "bg-red-500", "bg-orange-500", "bg-yellow-500", "bg-emerald-500", "bg-emerald-600"];
+  const colors = ["bg-white/10", "bg-zinc-500", "bg-zinc-500", "bg-zinc-500", "bg-zinc-500", "bg-zinc-600"];
   const requirements = [
     { label: "8자 이상", ok: password.length >= 8 },
     { label: "대소문자", ok: /[A-Z]/.test(password) && /[a-z]/.test(password) },
@@ -582,7 +582,7 @@ export function PasswordStrength({ password }: { password: string }) {
       </div>
       <div className="flex flex-wrap gap-1.5">
         {requirements.map((item) => (
-          <span key={item.label} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${item.ok ? "bg-emerald-400/12 text-emerald-200 ring-1 ring-emerald-300/20" : "bg-white/[0.05] text-slate-400 ring-1 ring-white/10"}`}>
+          <span key={item.label} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${item.ok ? "bg-zinc-400/12 text-zinc-200 ring-1 ring-zinc-300/20" : "bg-white/[0.05] text-slate-400 ring-1 ring-white/10"}`}>
             {item.ok ? "✓" : "·"} {item.label}
           </span>
         ))}

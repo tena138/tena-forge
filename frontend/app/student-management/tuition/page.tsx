@@ -27,9 +27,9 @@ const statusLabel: Record<string, string> = {
 };
 
 const statusClass: Record<string, string> = {
-  pending: "border-amber-300/30 bg-amber-300/10 text-amber-100",
-  reminded: "border-sky-300/30 bg-sky-300/10 text-sky-100",
-  paid: "border-emerald-300/30 bg-emerald-300/10 text-emerald-100",
+  pending: "border-zinc-300/30 bg-zinc-300/10 text-zinc-100",
+  reminded: "border-zinc-300/30 bg-zinc-300/10 text-zinc-100",
+  paid: "border-zinc-300/30 bg-zinc-300/10 text-zinc-100",
   excluded: "border-slate-300/25 bg-white/[0.05] text-slate-300",
 };
 
@@ -60,9 +60,9 @@ function tuitionRange(payment: TuitionPayment) {
 
 function metricItems(summary: TuitionDashboard["summary"]) {
   return [
-    { label: "확인 대기", value: summary.pending_count, tone: "text-amber-100" },
-    { label: "연체", value: summary.overdue_count, tone: "text-red-100" },
-    { label: "문자 발송", value: summary.reminded_count, tone: "text-sky-100" },
+    { label: "확인 대기", value: summary.pending_count, tone: "text-zinc-100" },
+    { label: "연체", value: summary.overdue_count, tone: "text-zinc-100" },
+    { label: "문자 발송", value: summary.reminded_count, tone: "text-zinc-100" },
   ];
 }
 
@@ -177,7 +177,7 @@ export default function TuitionManagementPage() {
               학생 관리
             </Link>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[7px] border border-sky-300/25 bg-sky-300/10 text-sky-100">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[7px] border border-zinc-300/25 bg-zinc-300/10 text-zinc-100">
                 <WalletCards className="h-5 w-5" />
               </div>
               <div>
@@ -253,7 +253,7 @@ export default function TuitionManagementPage() {
                       <Badge variant="outline" className={cn("border", statusClass[payment.status] || statusClass.pending)}>
                         {statusLabel[payment.status] || payment.status}
                       </Badge>
-                      {payment.reminder_count ? <Badge variant="outline" className="border border-sky-300/25 bg-sky-300/10 text-sky-100">문자 {payment.reminder_count}회</Badge> : null}
+                      {payment.reminder_count ? <Badge variant="outline" className="border border-zinc-300/25 bg-zinc-300/10 text-zinc-100">문자 {payment.reminder_count}회</Badge> : null}
                     </div>
                     <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
                       <div>

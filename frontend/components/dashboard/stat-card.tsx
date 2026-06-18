@@ -25,9 +25,9 @@ export function StatCard({
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-[7px] border",
               tone === "neutral" && "border-white/10 bg-white/[0.08] text-slate-200",
-              tone === "violet" && "border-violet-400/30 bg-violet-400/18 text-violet-100",
-              tone === "warning" && "border-amber-400/25 bg-amber-400/10 text-amber-200",
-              tone === "success" && "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+              tone === "violet" && "border-zinc-400/30 bg-zinc-400/18 text-zinc-100",
+              tone === "warning" && "border-zinc-400/25 bg-zinc-400/10 text-zinc-200",
+              tone === "success" && "border-zinc-400/25 bg-zinc-400/10 text-zinc-200"
             )}
           >
             <Icon className="h-4 w-4" />

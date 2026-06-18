@@ -117,7 +117,7 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto border-white/10 bg-[#14111f] text-slate-100">
+      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto border-white/10 bg-[#141414] text-slate-100">
         <div className="space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -153,12 +153,12 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
                 <h3 className="mb-2 text-sm font-bold">상담 변수</h3>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {variableRows.map(([key, label]) => (
-                    <button key={key} type="button" onClick={() => copyToken(key)} className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-left text-xs hover:border-violet-300/50">
+                    <button key={key} type="button" onClick={() => copyToken(key)} className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-left text-xs hover:border-zinc-300/50">
                       <span className="min-w-0">
                         <strong className="block truncate text-slate-100">{`{{${key}}}`}</strong>
                         <span className="block truncate text-slate-500">{label || "-"}</span>
                       </span>
-                      {copied === key ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+                      {copied === key ? <Check className="h-3.5 w-3.5 text-zinc-300" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                     </button>
                   ))}
                 </div>
@@ -170,7 +170,7 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
                 <h3 className="mb-2 text-sm font-bold">상담일지 템플릿</h3>
                 <div className="space-y-2">
                   {templates.map((template) => (
-                    <button key={template.id} type="button" onClick={() => setSelectedTemplateId(template.id)} className={`w-full rounded-md border p-3 text-left text-sm ${selectedTemplateId === template.id ? "border-violet-300 bg-violet-500/15" : "border-white/10 bg-black/20 hover:border-white/30"}`}>
+                    <button key={template.id} type="button" onClick={() => setSelectedTemplateId(template.id)} className={`w-full rounded-md border p-3 text-left text-sm ${selectedTemplateId === template.id ? "border-zinc-300 bg-zinc-500/15" : "border-white/10 bg-black/20 hover:border-white/30"}`}>
                       <strong>{template.title}</strong>
                       {template.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-400">{template.description}</p> : null}
                     </button>

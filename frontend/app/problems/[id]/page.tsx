@@ -543,7 +543,7 @@ function ProblemDetailContent() {
   if (loadError) {
     return (
       <div className="mx-auto flex max-w-xl flex-col items-center justify-center gap-4 rounded-xl border border-white/10 bg-white/[0.045] px-6 py-16 text-center shadow-sm">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-red-400/30 bg-red-500/10 text-red-200">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-400/30 bg-zinc-500/10 text-zinc-200">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <div>
@@ -605,7 +605,7 @@ function ProblemDetailContent() {
       </div>
 
       {actionError ? (
-        <div className="flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+        <div className="flex items-center gap-2 rounded-lg border border-zinc-400/25 bg-zinc-500/10 px-4 py-3 text-sm text-zinc-100">
           <AlertTriangle className="h-4 w-4" />
           {actionError}
         </div>
@@ -646,7 +646,7 @@ function ProblemDetailContent() {
                 />
                 {selection ? (
                   <div
-                    className="absolute border-2 border-dashed border-violet-400 bg-violet-400/15"
+                    className="absolute border-2 border-dashed border-zinc-400 bg-zinc-400/15"
                     style={{ left: selection.x, top: selection.y, width: selection.width, height: selection.height }}
                   />
                 ) : null}
@@ -691,7 +691,7 @@ function ProblemDetailContent() {
               </div>
               <textarea
                 aria-label="문항 텍스트 수정"
-                className="min-h-36 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15"
+                className="min-h-36 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-zinc-300/60 focus:ring-2 focus:ring-zinc-400/15"
                 value={draftText}
                 onChange={(event) => setDraftText(event.target.value)}
                 placeholder="문항 내용이 비어 있습니다."
@@ -710,7 +710,7 @@ function ProblemDetailContent() {
               </div>
               <textarea
                 aria-label="정답 수정"
-                className="min-h-24 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-300/60 focus:ring-2 focus:ring-violet-400/15"
+                className="min-h-24 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-zinc-300/60 focus:ring-2 focus:ring-zinc-400/15"
                 value={draftAnswer}
                 onChange={(event) => setDraftAnswer(event.target.value)}
                 placeholder="정답 데이터 없음"
@@ -747,7 +747,7 @@ function ProblemDetailContent() {
             <div
               className={`rounded-lg border p-2 transition ${
                 visualDragActive
-                  ? "border-violet-300/50 bg-violet-500/10"
+                  ? "border-zinc-300/50 bg-zinc-500/10"
                   : problem.visual_url
                     ? "border-white/10 bg-black/35"
                     : "border-dashed border-white/12 bg-black/20"
@@ -800,7 +800,7 @@ function ProblemDetailContent() {
                       type="button"
                       className={`h-10 rounded-[7px] border text-sm font-bold transition ${
                         tags.difficulty === difficulty
-                          ? "border-violet-300/60 bg-violet-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.26)]"
+                          ? "border-zinc-300/60 bg-zinc-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.26)]"
                           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
                       }`}
                       onClick={() => setTags({ ...tags, difficulty })}

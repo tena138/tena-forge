@@ -9,6 +9,7 @@ export function SiteLogo({ className }: { className?: string }) {
   const [missing, setMissing] = useState(false);
   const { theme } = useTheme();
   const logoSrc = theme === "light" ? "/tenaforgelogo.png?v=1" : "/tenaforgelogo-dark.png?v=1";
+  const logoTone = theme === "light" ? "brightness-0" : "brightness-0 invert";
 
   if (missing) {
     return (
@@ -23,7 +24,7 @@ export function SiteLogo({ className }: { className?: string }) {
       <img
         src={logoSrc}
         alt="Tena Forge"
-        className="h-full w-auto object-contain"
+        className={cn("h-full w-auto object-contain", logoTone)}
         onError={() => setMissing(true)}
       />
     </span>
@@ -34,6 +35,7 @@ export function SiteLogoMark({ className }: { className?: string }) {
   const [missing, setMissing] = useState(false);
   const { theme } = useTheme();
   const markSrc = theme === "light" ? "/tenaforge-mark.png?v=1" : "/tenaforge-mark-dark.png?v=1";
+  const markTone = theme === "light" ? "brightness-0" : "brightness-0 invert";
 
   return (
     <span className={cn("forge-logo-plate inline-flex h-12 w-12 items-center justify-center p-1.5", className)}>
@@ -43,7 +45,7 @@ export function SiteLogoMark({ className }: { className?: string }) {
         <img
           src={markSrc}
           alt=""
-          className="h-full w-full object-contain"
+          className={cn("h-full w-full object-contain", markTone)}
           onError={() => setMissing(true)}
         />
       )}

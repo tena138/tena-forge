@@ -85,7 +85,7 @@ function RegisterPageContent() {
       <AuthCard title="Tena 회원가입" subtitle="카카오 인증 후 아이디와 비밀번호를 설정합니다.">
         <div className="space-y-5">
           {visibleOauthError ? (
-            <p className="rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">
+            <p className="rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm font-medium text-zinc-200">
               {oauthErrorMessages[visibleOauthError] || "소셜 회원가입에 실패했습니다."}
             </p>
           ) : null}
@@ -145,12 +145,12 @@ function AgreementRow({ item, active, onClick }: { item: AgreementItem; active: 
       className={[
         "flex w-full items-center justify-between gap-3 rounded-lg border p-4 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
         active
-          ? "border-emerald-300/35 bg-emerald-400/10 text-emerald-50"
+          ? "border-zinc-300/35 bg-zinc-400/10 text-zinc-50"
           : "border-white/10 bg-white/[0.035] text-slate-200 hover:border-white/20 hover:bg-white/[0.055]",
       ].join(" ")}
     >
       <span className="font-semibold">{item.label}</span>
-      <span className={active ? "shrink-0 text-xs font-bold text-emerald-200" : "shrink-0 text-xs font-bold text-slate-400"}>
+      <span className={active ? "shrink-0 text-xs font-bold text-zinc-200" : "shrink-0 text-xs font-bold text-slate-400"}>
         {active ? item.activeText : item.inactiveText}
       </span>
     </button>

@@ -286,9 +286,9 @@ function uniqueSectionLabels(logs: CounselingLog[]) {
 }
 
 function tone(status?: string) {
-  if (["graded", "completed", "resolved", "mastered", "Active", "class"].includes(status || "")) return "bg-emerald-500/15 text-emerald-100 border-emerald-400/20";
-  if (["unresolved", "Needs Review", "wrong"].includes(status || "")) return "bg-rose-500/15 text-rose-100 border-rose-400/20";
-  return "bg-violet-500/15 text-violet-100 border-violet-300/20";
+  if (["graded", "completed", "resolved", "mastered", "Active", "class"].includes(status || "")) return "bg-zinc-500/15 text-zinc-100 border-zinc-400/20";
+  if (["unresolved", "Needs Review", "wrong"].includes(status || "")) return "bg-zinc-500/15 text-zinc-100 border-zinc-400/20";
+  return "bg-zinc-500/15 text-zinc-100 border-zinc-300/20";
 }
 
 function isArchiveResolved(status?: string | null) {
@@ -482,11 +482,11 @@ function closestCalendarItem(items: StudentCalendarItem[]) {
 }
 
 function calendarBlockClass(item: StudentCalendarItem) {
-  if (item.kind === "시험") return "border-orange-300/50 bg-orange-100 text-orange-950 hover:bg-orange-200 dark:border-orange-300/30 dark:bg-orange-500/20 dark:text-orange-50 dark:hover:bg-orange-500/30";
-  if (item.kind === "상담") return "border-emerald-300/50 bg-emerald-100 text-emerald-950 hover:bg-emerald-200 dark:border-emerald-300/30 dark:bg-emerald-500/20 dark:text-emerald-50 dark:hover:bg-emerald-500/30";
-  if (item.meta === "homework") return "border-sky-300/50 bg-sky-100 text-sky-950 hover:bg-sky-200 dark:border-sky-300/30 dark:bg-sky-500/20 dark:text-sky-50 dark:hover:bg-sky-500/30";
-  if (item.meta === "review") return "border-emerald-300/50 bg-emerald-100 text-emerald-950 hover:bg-emerald-200 dark:border-emerald-300/30 dark:bg-emerald-500/20 dark:text-emerald-50 dark:hover:bg-emerald-500/30";
-  return "border-violet-300/50 bg-violet-100 text-violet-950 hover:bg-violet-200 dark:border-violet-300/30 dark:bg-violet-500/20 dark:text-violet-50 dark:hover:bg-violet-500/30";
+  if (item.kind === "시험") return "border-zinc-300/50 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:border-zinc-300/30 dark:bg-zinc-500/20 dark:text-zinc-50 dark:hover:bg-zinc-500/30";
+  if (item.kind === "상담") return "border-zinc-300/50 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:border-zinc-300/30 dark:bg-zinc-500/20 dark:text-zinc-50 dark:hover:bg-zinc-500/30";
+  if (item.meta === "homework") return "border-zinc-300/50 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:border-zinc-300/30 dark:bg-zinc-500/20 dark:text-zinc-50 dark:hover:bg-zinc-500/30";
+  if (item.meta === "review") return "border-zinc-300/50 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:border-zinc-300/30 dark:bg-zinc-500/20 dark:text-zinc-50 dark:hover:bg-zinc-500/30";
+  return "border-zinc-300/50 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:border-zinc-300/30 dark:bg-zinc-500/20 dark:text-zinc-50 dark:hover:bg-zinc-500/30";
 }
 
 function hasExplicitTime(value?: string | null) {
@@ -598,10 +598,10 @@ function ResultCell({ label, subtitle, metadata, status, onClick }: { label: str
       onClick={onClick}
       className={cn(
         "flex h-8 min-w-8 items-center justify-center rounded-md border px-1 text-xs font-black leading-none transition",
-        status === "correct" && "border-emerald-300/50 bg-emerald-500/25 text-emerald-50 hover:bg-emerald-500/35",
-        status === "wrong" && "border-orange-300/60 bg-orange-500/25 text-orange-50 hover:bg-orange-500/35",
-        status === "unanswered" && "border-rose-300/60 bg-rose-500/25 text-rose-50 hover:bg-rose-500/35",
-        status === "unmarked" && "border-white/10 bg-white/[0.04] text-slate-300 hover:border-violet-300/40"
+        status === "correct" && "border-zinc-300/50 bg-zinc-500/25 text-zinc-50 hover:bg-zinc-500/35",
+        status === "wrong" && "border-zinc-300/60 bg-zinc-500/25 text-zinc-50 hover:bg-zinc-500/35",
+        status === "unanswered" && "border-zinc-300/60 bg-zinc-500/25 text-zinc-50 hover:bg-zinc-500/35",
+        status === "unmarked" && "border-white/10 bg-white/[0.04] text-slate-300 hover:border-zinc-300/40"
       )}
       title={[`${label}번`, metadata || subtitle, status].filter(Boolean).join(" · ")}
     >
@@ -1612,9 +1612,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       {message ? (
-        <div className="fixed right-4 top-20 z-[2100] flex max-w-md items-center gap-3 rounded-lg border border-violet-200 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_60px_rgba(88,28,135,0.18)] backdrop-blur-xl dark:border-violet-300/25 dark:bg-[#211832]/95 dark:text-violet-50 dark:shadow-[0_18px_60px_rgba(88,28,135,0.35)]" role="status" aria-live="polite">
+        <div className="fixed right-4 top-20 z-[2100] flex max-w-md items-center gap-3 rounded-lg border border-zinc-200 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_60px_rgba(88,28,135,0.18)] backdrop-blur-xl dark:border-zinc-300/25 dark:bg-[#211832]/95 dark:text-zinc-50 dark:shadow-[0_18px_60px_rgba(88,28,135,0.35)]" role="status" aria-live="polite">
           <span className="min-w-0 flex-1">{message}</span>
-          <button type="button" onClick={() => setMessage("")} className="rounded p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-violet-100/80 dark:hover:bg-white/10 dark:hover:text-white" aria-label="알림 닫기">
+          <button type="button" onClick={() => setMessage("")} className="rounded p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-zinc-100/80 dark:hover:bg-white/10 dark:hover:text-white" aria-label="알림 닫기">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -1631,7 +1631,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
           <header className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-4">
-              <div className="rounded-lg border border-violet-300/20 bg-violet-500/15 p-3 text-violet-100">
+              <div className="rounded-lg border border-zinc-300/20 bg-zinc-500/15 p-3 text-zinc-100">
                 <UserRound className="h-7 w-7" />
               </div>
               <div>
@@ -1649,9 +1649,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
 
         <section className="grid gap-4 md:grid-cols-4">
           <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">최근 점수</p><p className="mt-1 text-2xl font-black text-white">{data.recent_score == null ? "-" : `${Math.round(data.recent_score)}점`}</p></CardContent></Card>
-          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">평균 점수</p><p className="mt-1 text-2xl font-black text-emerald-100">{data.analytics.average_score == null ? "-" : `${Math.round(data.analytics.average_score)}점`}</p></CardContent></Card>
-          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">채점 기록</p><p className="mt-1 text-2xl font-black text-violet-100">{data.analytics.graded_count || 0}</p></CardContent></Card>
-          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">미해결 오답</p><p className="mt-1 text-2xl font-black text-rose-100">{data.analytics.unresolved_wrong_count || 0}</p></CardContent></Card>
+          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">평균 점수</p><p className="mt-1 text-2xl font-black text-zinc-100">{data.analytics.average_score == null ? "-" : `${Math.round(data.analytics.average_score)}점`}</p></CardContent></Card>
+          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">채점 기록</p><p className="mt-1 text-2xl font-black text-zinc-100">{data.analytics.graded_count || 0}</p></CardContent></Card>
+          <Card className="border-white/[0.08] bg-white/[0.025]"><CardContent className="p-4"><p className="text-xs text-slate-500">미해결 오답</p><p className="mt-1 text-2xl font-black text-zinc-100">{data.analytics.unresolved_wrong_count || 0}</p></CardContent></Card>
         </section>
 
         <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] bg-white/[0.025] p-1">
@@ -1669,7 +1669,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                 onClick={() => setActiveTab(tab.id as StudentTab)}
                 className={cn(
                   "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
-                  activeTab === tab.id ? "bg-violet-500/85 text-white shadow-lg shadow-violet-950/25" : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
+                  activeTab === tab.id ? "bg-zinc-500/85 text-white shadow-lg shadow-zinc-950/25" : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -1729,7 +1729,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                             className={cn(
                               "min-h-[138px] border-b border-r border-white/[0.08] p-2 text-left outline-none transition",
                               isCurrentMonth ? "bg-white/[0.012]" : "bg-white/[0.006] text-slate-600",
-                              isSelected && "bg-violet-500/[0.08] ring-1 ring-inset ring-violet-300/45",
+                              isSelected && "bg-zinc-500/[0.08] ring-1 ring-inset ring-zinc-300/45",
                               "hover:bg-white/[0.04]"
                             )}
                           >
@@ -1738,7 +1738,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                                 className={cn(
                                   "flex h-6 w-6 items-center justify-center rounded-full text-xs font-black",
                                   isCurrentMonth ? "text-slate-200" : "text-slate-600",
-                                  isToday && "bg-violet-500 text-white"
+                                  isToday && "bg-zinc-500 text-white"
                                 )}
                               >
                                 {day.getDate()}
@@ -1796,10 +1796,10 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                       ))}
                       {currentTimelineMinutes != null ? (
                         <div className="pointer-events-none absolute left-0 right-0 z-20" style={{ top: (currentTimelineMinutes / 60) * TIMELINE_HOUR_HEIGHT }}>
-                          <span className="absolute -left-[3.25rem] -translate-y-1/2 rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-black text-white shadow-lg shadow-rose-950/35">
+                          <span className="absolute -left-[3.25rem] -translate-y-1/2 rounded-full bg-zinc-500 px-2 py-0.5 text-[11px] font-black text-white shadow-lg shadow-zinc-950/35">
                             {timelineTimeLabel(new Date().toISOString())}
                           </span>
-                          <span className="block border-t border-rose-400 shadow-[0_0_14px_rgba(251,113,133,0.45)]" />
+                          <span className="block border-t border-zinc-400 shadow-[0_0_14px_rgba(251,113,133,0.45)]" />
                         </div>
                       ) : null}
                       {selectedTimelineItems.map(({ item, top, height, lane, laneCount }) => (
@@ -1835,7 +1835,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                             {item.event_id ? (
                               <button
                                 type="button"
-                                className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-black/15 text-current opacity-75 transition hover:bg-rose-500/20 hover:opacity-100 disabled:opacity-50"
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-black/15 text-current opacity-75 transition hover:bg-zinc-500/20 hover:opacity-100 disabled:opacity-50"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   void removeCalendarEvent(item);
@@ -1862,13 +1862,13 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                   <div
                     key={item.id}
                     className={cn(
-                      "rounded-lg border bg-white/[0.03] p-3 transition hover:border-violet-300/40 hover:bg-white/[0.045]",
-                      selectedCalendarItem?.id === item.id ? "border-violet-300/50 ring-1 ring-violet-300/25" : "border-white/[0.08]"
+                      "rounded-lg border bg-white/[0.03] p-3 transition hover:border-zinc-300/40 hover:bg-white/[0.045]",
+                      selectedCalendarItem?.id === item.id ? "border-zinc-300/50 ring-1 ring-zinc-300/25" : "border-white/[0.08]"
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <button type="button" onClick={() => setSelectedCalendarItemId(item.id)} className="min-w-0 flex-1 text-left">
-                        <p className="text-xs font-semibold text-violet-200">{dateLabel(item.date)}</p>
+                        <p className="text-xs font-semibold text-zinc-200">{dateLabel(item.date)}</p>
                         <p className="mt-1 font-black text-white">{item.title}</p>
                       </button>
                       <div className="flex shrink-0 items-start gap-1">
@@ -1879,7 +1879,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                             type="button"
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
+                            className="h-7 w-7 text-slate-500 hover:bg-zinc-500/10 hover:text-zinc-100"
                             onClick={() => removeCalendarEvent(item)}
                             disabled={deletingScheduleEventId === item.event_id}
                             aria-label={`${item.title} 일정 삭제`}
@@ -1932,7 +1932,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                               type="button"
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
+                              className="h-8 w-8 text-slate-500 hover:bg-zinc-500/10 hover:text-zinc-100"
                               onClick={() => removeResult(result)}
                               disabled={deletingResultId === result.id || savingResultId === result.id}
                               aria-label={`${result.session?.title || "시험/과제"} 결과 입력 항목 삭제`}
@@ -1942,9 +1942,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
-                          <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-100">초록: 정답</span>
-                          <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">주황: 오답</span>
-                          <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-100">빨강: 못 풂</span>
+                          <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">초록: 정답</span>
+                          <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">주황: 오답</span>
+                          <span className="rounded bg-zinc-500/15 px-2 py-1 text-zinc-100">빨강: 못 풂</span>
                         </div>
                         {usesFlatProblemGrid(result.session?.session_type) ? (
                           <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(2rem,2.5rem))] gap-1.5">
@@ -2026,7 +2026,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
             <Card className="border-white/[0.08] bg-white/[0.025]">
               <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-violet-300/25 bg-violet-500/15 text-violet-100">
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300/25 bg-zinc-500/15 text-zinc-100">
                     <Archive className="h-5 w-5" />
                   </div>
                   <div>
@@ -2076,7 +2076,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                         className={cn(
                           "group flex min-h-[88px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
                           selected
-                            ? "border-violet-300/70 bg-violet-500/15 text-white"
+                            ? "border-zinc-300/70 bg-zinc-500/15 text-white"
                             : "border-white/[0.08] bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.055]"
                         )}
                         onClick={() => {
@@ -2085,13 +2085,13 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                         }}
                       >
                         <span className="flex w-11 shrink-0 flex-col items-center gap-1 pt-0.5">
-                          <Folder className={cn("h-5 w-5", selected ? "text-violet-200" : "text-slate-400 group-hover:text-violet-200")} />
+                          <Folder className={cn("h-5 w-5", selected ? "text-zinc-200" : "text-slate-400 group-hover:text-zinc-200")} />
                           <span className="text-[11px] font-bold leading-none text-slate-500">{folder.wrongCount.toLocaleString("ko-KR")}</span>
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block line-clamp-2 text-sm font-bold leading-5">{folder.label}</span>
                           <span className="mt-1 block truncate text-xs font-semibold text-slate-500">{folder.detail}</span>
-                          <span className="mt-2 inline-flex rounded border border-rose-300/20 bg-rose-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-rose-100">
+                          <span className="mt-2 inline-flex rounded border border-zinc-300/20 bg-zinc-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-100">
                             복습 필요 {folder.unresolvedCount.toLocaleString("ko-KR")}
                           </span>
                         </span>
@@ -2103,9 +2103,9 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
             ) : null}
 
             {selectedWrongProblemIds.length ? (
-              <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#7F77DD]/30 bg-[#111022]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
-                <div className="flex items-center gap-2 text-sm font-semibold text-violet-100">
-                  <CheckSquare className="h-4 w-4 text-[#7F77DD]" />
+              <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4d4d8]/30 bg-[#101010]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
+                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+                  <CheckSquare className="h-4 w-4 text-[#d4d4d8]" />
                   {selectedWrongProblemIds.length}개 선택됨
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -2141,15 +2141,15 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                       toggleWrongAnswerSelection(wrong);
                     }}
                     className={cn(
-                      "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg border bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-violet-300/40 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(76,29,149,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60",
-                      selected ? "border-violet-300/70 bg-violet-500/10 shadow-[0_0_0_1px_rgba(167,139,250,0.24)]" : "border-white/[0.08]"
+                      "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg border bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-zinc-300/40 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(255,255,255,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60",
+                      selected ? "border-zinc-300/70 bg-zinc-500/10 shadow-[0_0_0_1px_rgba(255,255,255,0.24)]" : "border-white/[0.08]"
                     )}
                   >
                     <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: archiveAccentColor(wrong) }} />
                     <span
                       className={cn(
                         "absolute left-3 top-3 grid h-5 w-5 place-items-center rounded border transition",
-                        selected ? "border-violet-200 bg-violet-500 text-white" : "border-white/15 bg-black/20 text-transparent group-hover:border-violet-300/50"
+                        selected ? "border-zinc-200 bg-zinc-500 text-white" : "border-white/15 bg-black/20 text-transparent group-hover:border-zinc-300/50"
                       )}
                     >
                       <Check className="h-3.5 w-3.5" />
@@ -2158,7 +2158,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-md border border-violet-300/20 bg-violet-500/10 px-2 py-1 text-xs font-black text-violet-100">
+                            <span className="rounded-md border border-zinc-300/20 bg-zinc-500/10 px-2 py-1 text-xs font-black text-zinc-100">
                               #{wrong.problem_number}
                             </span>
                             <Badge className={cn("border", tone(wrong.resolved_status))}>{archiveStatusLabel(wrong.resolved_status)}</Badge>
@@ -2171,7 +2171,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                           {wrong.problem_id ? (
                             <Link
                               href={`/problems/${wrong.problem_id}?returnTo=${encodeURIComponent(wrongArchiveReturnHref)}`}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-violet-300/50 hover:bg-violet-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-zinc-300/50 hover:bg-zinc-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60"
                               onClick={(event) => event.stopPropagation()}
                               aria-label={`${wrong.problem_number}번 상세 보기`}
                             >
@@ -2182,7 +2182,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                             type="button"
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8 text-slate-500 hover:bg-rose-500/10 hover:text-rose-100"
+                            className="h-8 w-8 text-slate-500 hover:bg-zinc-500/10 hover:text-zinc-100"
                             onClick={(event) => {
                               event.stopPropagation();
                               deleteWrongAnswer(wrong);
@@ -2214,7 +2214,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.025] p-10 text-center">
-                <Archive className="mx-auto h-8 w-8 text-violet-200" />
+                <Archive className="mx-auto h-8 w-8 text-zinc-200" />
                 <p className="mt-3 text-sm font-semibold text-slate-400">
                   {archivedWrongAnswers.length ? "선택한 폴더에 표시할 오답이 없습니다." : "아카이브에 담긴 문항이 없습니다."}
                 </p>
@@ -2277,7 +2277,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                           }}
                           className={cn(
                             "rounded-md border border-white/[0.08] bg-white/[0.025] p-2 transition",
-                            draggingCounselingFieldId === field.id && "border-violet-300/45 bg-violet-500/10 opacity-70"
+                            draggingCounselingFieldId === field.id && "border-zinc-300/45 bg-zinc-500/10 opacity-70"
                           )}
                         >
                           <div className="flex items-center gap-2">
@@ -2290,7 +2290,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                                 event.dataTransfer.setData("text/plain", field.id);
                               }}
                               onDragEnd={() => setDraggingCounselingFieldId("")}
-                              className="grid h-10 w-8 shrink-0 cursor-grab place-items-center rounded-md border border-white/[0.08] bg-black/20 text-slate-400 transition hover:border-violet-300/35 hover:text-white active:cursor-grabbing"
+                              className="grid h-10 w-8 shrink-0 cursor-grab place-items-center rounded-md border border-white/[0.08] bg-black/20 text-slate-400 transition hover:border-zinc-300/35 hover:text-white active:cursor-grabbing"
                               aria-label={`${field.label} 순서 변경`}
                               title="드래그해서 순서 변경"
                             >
@@ -2333,7 +2333,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                         지금 저장
                       </Button>
                     </div>
-                    <p className={cn("text-xs", formatAutosaveState === "error" ? "text-rose-300" : "text-slate-500")}>{formatAutosaveLabel}</p>
+                    <p className={cn("text-xs", formatAutosaveState === "error" ? "text-zinc-300" : "text-slate-500")}>{formatAutosaveLabel}</p>
 
                     <div className="grid grid-cols-2 gap-2">
                       {counselingPresets.map((preset) => (
@@ -2353,14 +2353,14 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                     </div>
                   </div>
                 ) : null}
-                <p className={cn("text-xs", counselingDraftStatus === "error" ? "text-rose-300" : "text-slate-500")}>{counselingDraftLabel}</p>
+                <p className={cn("text-xs", counselingDraftStatus === "error" ? "text-zinc-300" : "text-slate-500")}>{counselingDraftLabel}</p>
                 <Input type="date" value={counselingForm.counseling_date} onChange={(event) => setCounselingForm((current) => ({ ...current, counseling_date: event.target.value }))} />
                 <Input placeholder="상담 제목" value={counselingForm.title} onChange={(event) => setCounselingForm((current) => ({ ...current, title: event.target.value }))} />
                 {counselingFields.map((field) => (
                   <div key={field.id} className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-bold text-slate-400">{field.label}</p>
-                      {activeReportField?.id === field.id ? <span className="text-[11px] text-violet-200">변수 사용 가능</span> : null}
+                      {activeReportField?.id === field.id ? <span className="text-[11px] text-zinc-200">변수 사용 가능</span> : null}
                     </div>
                     {activeReportField?.id === field.id ? (
                       <div className="flex flex-wrap gap-1">
@@ -2371,7 +2371,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                               key={item.id}
                               type="button"
                               onClick={() => insertReportVariable(item)}
-                              className="rounded border border-violet-300/20 bg-violet-500/10 px-2 py-1 text-[11px] font-semibold text-violet-100 hover:bg-violet-500/20"
+                              className="rounded border border-zinc-300/20 bg-zinc-500/10 px-2 py-1 text-[11px] font-semibold text-zinc-100 hover:bg-zinc-500/20"
                             >
                               {`{{${item.label}}}`}
                             </button>
@@ -2379,7 +2379,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                       </div>
                     ) : null}
                     <textarea
-                      className="min-h-28 w-full rounded-md border border-white/[0.08] bg-white/[0.035] p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-300/50"
+                      className="min-h-28 w-full rounded-md border border-white/[0.08] bg-white/[0.035] p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-zinc-300/50"
                       placeholder={field.placeholder || field.label}
                       value={counselingFieldValues[field.id] || ""}
                       onChange={(event) => updateCounselingFieldValue(field.id, event.target.value)}
@@ -2421,7 +2421,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                   <div key={log.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-sm text-violet-200">{shortDate(log.counseling_date)}</p>
+                        <p className="text-sm text-zinc-200">{shortDate(log.counseling_date)}</p>
                         <p className="mt-1 text-lg font-black text-white">{log.title}</p>
                         {log.class_name ? <p className="mt-1 text-xs text-slate-500">{log.class_name}</p> : null}
                       </div>
@@ -2438,14 +2438,14 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="border-rose-400/20 text-rose-100 hover:bg-rose-500/10"
+                          className="border-zinc-400/20 text-zinc-100 hover:bg-zinc-500/10"
                           onClick={() => deleteCounselingRecord(log)}
                           disabled={deletingCounselingLogId === log.id}
                         >
                           {deletingCounselingLogId === log.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                           삭제
                         </Button>
-                        <Badge className="border border-violet-300/20 bg-violet-500/15 text-violet-100">상담</Badge>
+                        <Badge className="border border-zinc-300/20 bg-zinc-500/15 text-zinc-100">상담</Badge>
                       </div>
                     </div>
                     <div className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
@@ -2495,7 +2495,7 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
           if (!open) setCounselingCleanPreview(null);
         }}
       >
-        <DialogContent className="max-w-5xl border-white/10 bg-[#14111f] text-slate-100">
+        <DialogContent className="max-w-5xl border-white/10 bg-[#141414] text-slate-100">
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-bold text-white">AI 정리 미리보기</h2>
@@ -2503,14 +2503,14 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
             <div className="max-h-[58vh] space-y-3 overflow-y-auto pr-1">
               {counselingCleanPreview?.sections.map((section) => (
                 <div key={section.field_id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                  <p className="mb-3 text-sm font-bold text-violet-100">{section.label}</p>
+                  <p className="mb-3 text-sm font-bold text-zinc-100">{section.label}</p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-md border border-white/10 bg-black/20 p-3">
                       <p className="mb-2 text-xs font-bold text-slate-500">원문</p>
                       <p className="whitespace-pre-line text-sm leading-6 text-slate-300">{section.original || "-"}</p>
                     </div>
-                    <div className="rounded-md border border-violet-300/20 bg-violet-500/10 p-3">
-                      <p className="mb-2 text-xs font-bold text-violet-200">정리본</p>
+                    <div className="rounded-md border border-zinc-300/20 bg-zinc-500/10 p-3">
+                      <p className="mb-2 text-xs font-bold text-zinc-200">정리본</p>
                       <p className="whitespace-pre-line text-sm leading-6 text-slate-100">{section.cleaned || "-"}</p>
                     </div>
                   </div>

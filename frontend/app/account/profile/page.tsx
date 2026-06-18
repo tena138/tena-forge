@@ -104,8 +104,8 @@ export default function AccountProfilePage() {
             주소
             <Input className="mt-1.5" value={profile.address || ""} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
           </label>
-          {notice && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{notice}</p>}
-          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+          {notice && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{notice}</p>}
+          {error && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{error}</p>}
           <Button onClick={save} disabled={saving}>
             {saving ? "저장 중..." : "저장"}
           </Button>

@@ -31,7 +31,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
                 {store.specialties?.map((item) => <span key={item} className="rounded-md border border-white/10 px-2 py-1">{item}</span>)}
               </div>
             </div>
-            {store.verified_status !== "unverified" && <span className="rounded-md border border-violet-300/20 bg-violet-300/10 px-3 py-2 text-sm font-semibold text-violet-100">공식 파트너</span>}
+            {store.verified_status !== "unverified" && <span className="rounded-md border border-zinc-300/20 bg-zinc-300/10 px-3 py-2 text-sm font-semibold text-zinc-100">공식 파트너</span>}
           </div>
         </div>
       </section>
@@ -41,8 +41,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
         {listings.length ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {listings.map((listing) => (
-              <Link key={listing.id} href={`/marketplace/listings/${listing.id}`} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-violet-300/40 hover:bg-white/[0.065]">
-                <p className="text-xs text-violet-200">{contentTypeLabels[listing.content_type]}</p>
+              <Link key={listing.id} href={`/marketplace/listings/${listing.id}`} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-zinc-300/40 hover:bg-white/[0.065]">
+                <p className="text-xs text-zinc-200">{contentTypeLabels[listing.content_type]}</p>
                 <h3 className="mt-2 text-lg font-bold text-white">{listing.title}</h3>
                 <p className="mt-2 line-clamp-2 text-sm text-slate-400">{listing.description || "등록된 설명이 없습니다."}</p>
               </Link>

@@ -58,7 +58,7 @@ function SortableRow({ item, returnHref, onRemove }: { item: ProblemSetItem; ret
       </Button>
       <Link
         href={`/problems/${item.problem_id}?returnTo=${encodeURIComponent(returnHref)}`}
-        className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#7F77DD]/60 hover:bg-[#7F77DD]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7F77DD]/70"
+        className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70"
         draggable={false}
         aria-label={`${problemNumber}번 상세 보기`}
         title="문항 상세보기"
@@ -330,7 +330,7 @@ function ProblemPickerModal({
                           {alreadyAdded && <Badge variant="success">이미 추가됨</Badge>}
                           {histories.length > 0 && <Badge variant="warning">사용 이력 {histories.length}</Badge>}
                         </div>
-                        {latestHistory && <p className="mt-1 truncate text-xs text-violet-200">최근 {usageLabel(latestHistory)}</p>}
+                        {latestHistory && <p className="mt-1 truncate text-xs text-zinc-200">최근 {usageLabel(latestHistory)}</p>}
                         <MathText className="mt-1 text-sm text-muted-foreground" clamp value={problem.problem_text} />
                       </div>
                     </button>
@@ -475,7 +475,7 @@ export default function ProblemSetDetailPage() {
         <CardContent className="pt-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-violet-200" />
+              <Clock className="h-4 w-4 text-zinc-200" />
               <h2 className="text-base font-semibold text-white">최근 내보내기</h2>
             </div>
             <span className="text-xs text-muted-foreground">최근 {exportHistory.length}건</span>
@@ -524,7 +524,7 @@ export default function ProblemSetDetailPage() {
         <Button className="h-12 shadow-[0_18px_50px_rgba(0,0,0,0.34)]" variant="outline" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" />문항 추가
         </Button>
-        <Button className="h-12 shadow-[0_18px_50px_rgba(91,33,182,0.34)]" onClick={() => setExportOpen(true)}>
+        <Button className="h-12 shadow-[0_18px_50px_rgba(255,255,255,0.34)]" onClick={() => setExportOpen(true)}>
           <FileDown className="h-4 w-4" />내보내기
         </Button>
       </div>
