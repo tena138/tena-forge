@@ -26,7 +26,7 @@ import {
 
 import { SidebarNavItem } from "@/components/sidebar-nav-item";
 import { getDashboardAnnouncementAccess } from "@/lib/api";
-import { AUTH_CHANGED_EVENT, readStoredAuthProfile } from "@/lib/auth-client";
+import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 type AccountType = "academy" | "student";
@@ -197,14 +197,21 @@ export function FloatingNav({
 
   useEffect(() => {
     function syncAccountType() {
+      const activeWorkspaceId = getActiveWorkspaceId();
+      if (activeWorkspaceId) {
+        setAccountType(activeWorkspaceId === "student" ? "student" : "academy");
+        return;
+      }
       const stored = readStoredAuthProfile<StoredProfile>();
       setAccountType(stored?.account_type === "student" ? "student" : "academy");
     }
     syncAccountType();
     window.addEventListener(AUTH_CHANGED_EVENT, syncAccountType);
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, syncAccountType);
     window.addEventListener("focus", syncAccountType);
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, syncAccountType);
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, syncAccountType);
       window.removeEventListener("focus", syncAccountType);
     };
   }, []);

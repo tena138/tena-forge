@@ -35,7 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import type { AcademyProfile } from "@/lib/auth-api";
-import { readStoredAuthProfile } from "@/lib/auth-client";
+import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import {
   issueLearningStudentKeys,
   listAcademySeats,
@@ -72,6 +72,12 @@ import {
   updateRoutineMessage,
 } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
+
+function resolveActiveManagementAcademyId(profile?: AcademyProfile | null) {
+  const activeWorkspaceId = getActiveWorkspaceId();
+  if (activeWorkspaceId && activeWorkspaceId !== "student") return activeWorkspaceId;
+  return profile?.account_type === "academy" ? profile.id : "";
+}
 
 type TabKey = "routine" | "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ClassStudentAddMode = "existing" | "new";
@@ -1056,8 +1062,20 @@ export default function StudentManagementPage() {
   }, [studentMergeMenu]);
 
   useEffect(() => {
-    const stored = readStoredAuthProfile<AcademyProfile>();
-    setAcademyId(stored?.id || "");
+    const syncWorkspace = () => {
+      const stored = readStoredAuthProfile<AcademyProfile>();
+      setAcademyId(resolveActiveManagementAcademyId(stored));
+    };
+    const handleWorkspaceChange = () => {
+      syncWorkspace();
+      void refresh();
+      void loadRoutines({ force: true });
+    };
+    syncWorkspace();
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
+    return () => {
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
+    };
   }, []);
 
   useEffect(() => {

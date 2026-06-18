@@ -1,7 +1,7 @@
 export type PlanType = "free" | "basic" | "pro" | "enterprise";
 export type PaidPlanType = "basic" | "pro";
 export type BillingCycle = "monthly" | "annual";
-export type PackageGroup = "ai" | "storage" | "student" | "processing";
+export type PackageGroup = "ai" | "storage" | "student" | "staff" | "processing";
 export type SubjectEngineCode = "math" | "korean" | "english";
 
 export type PlanSpecs = {
@@ -9,6 +9,7 @@ export type PlanSpecs = {
   problemDb: number | "custom";
   fileStorageGb: number | "custom";
   studentKeys: number | "custom";
+  staffSeats: number | "custom";
   cloudProcessing: boolean | "custom";
   processingSpeed: "Standard" | "Fast" | "Custom";
   concurrentJobs: number | "custom";
@@ -44,6 +45,7 @@ export const BILLING = {
 } as const;
 
 export const STUDENT_KEY_MONTHLY_ADDON = 8_000;
+export const STAFF_SEAT_MONTHLY_ADDON = 10_000;
 
 export const SUBJECT_ENGINES: Array<{
   code: SubjectEngineCode;
@@ -84,6 +86,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: 0,
       fileStorageGb: 0,
       studentKeys: 0,
+      staffSeats: 0,
       cloudProcessing: false,
       processingSpeed: "Standard",
       concurrentJobs: 0,
@@ -110,6 +113,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: 5_000,
       fileStorageGb: 20,
       studentKeys: 5,
+      staffSeats: 0,
       cloudProcessing: true,
       processingSpeed: "Standard",
       concurrentJobs: 1,
@@ -135,6 +139,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: 30_000,
       fileStorageGb: 100,
       studentKeys: 10,
+      staffSeats: 0,
       cloudProcessing: true,
       processingSpeed: "Fast",
       concurrentJobs: 3,
@@ -163,6 +168,7 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       problemDb: "custom",
       fileStorageGb: "custom",
       studentKeys: "custom",
+      staffSeats: "custom",
       cloudProcessing: "custom",
       processingSpeed: "Custom",
       concurrentJobs: "custom",
@@ -189,6 +195,22 @@ function createStudentKeyOptions(plan: PaidPlanType, includedKeys: number, maxKe
   });
 }
 
+function createStaffSeatOptions(plan: PaidPlanType, maxSeats: number): PackageOption[] {
+  const planLabel = plan === "basic" ? "Basic" : "Pro";
+  return Array.from({ length: maxSeats + 1 }, (_, staffSeats) => {
+    const monthlyPriceDelta = staffSeats * STAFF_SEAT_MONTHLY_ADDON;
+    return {
+      id: staffSeats === 0 ? `${plan}-staff` : `${plan}-staff-${staffSeats}`,
+      group: "staff" as const,
+      name: `${planLabel} Staff ${staffSeats}`,
+      label: monthlyPriceDelta ? `+${formatKRW(monthlyPriceDelta)} / 월` : "포함 없음",
+      monthlyPriceDelta,
+      specs: { staffSeats },
+      description: `${staffSeats} instructor seats · 강사 1명당 ${formatKRW(STAFF_SEAT_MONTHLY_ADDON)} / 월`,
+    };
+  });
+}
+
 export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, PackageOption[]>>> = {
   basic: {
     ai: [
@@ -202,6 +224,7 @@ export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, P
       { id: "basic-storage-max", group: "storage", name: "Storage Max", label: "+₩24,000 / 월", monthlyPriceDelta: 24_000, specs: { problemDb: 20_000, fileStorageGb: 100 }, description: "20,000 questions, 100GB file storage" },
     ],
     student: createStudentKeyOptions("basic", 5, 10),
+    staff: createStaffSeatOptions("basic", 10),
   },
   pro: {
     ai: [
@@ -215,6 +238,7 @@ export const PACKAGE_GROUPS: Record<PaidPlanType, Partial<Record<PackageGroup, P
       { id: "pro-storage-max", group: "storage", name: "Storage Max", label: "+₩79,000 / 월", monthlyPriceDelta: 79_000, specs: { problemDb: 300_000, fileStorageGb: 1_024 }, description: "300,000 questions, 1TB file storage" },
     ],
     student: createStudentKeyOptions("pro", 10, 100),
+    staff: createStaffSeatOptions("pro", 50),
   },
 };
 
@@ -222,6 +246,7 @@ export const PACKAGE_LABELS: Record<PackageGroup, string> = {
   ai: "AI Pack",
   storage: "Storage Pack",
   student: "Student Pack",
+  staff: "Staff Seat Pack",
   processing: "Processing Pack",
 };
 
@@ -239,6 +264,7 @@ export function getDefaultSelections(plan: PaidPlanType): Record<PackageGroup, s
     ai: groups.ai?.[0]?.id || "",
     storage: groups.storage?.[0]?.id || "",
     student: groups.student?.[0]?.id || "",
+    staff: groups.staff?.[0]?.id || "",
     processing: groups.processing?.[0]?.id || "",
   };
 }
@@ -344,7 +370,7 @@ export function parseSelectedPackageIds(value: string | null): SelectedPackageId
   const selected: SelectedPackageIds = {};
   for (const part of value.split(",")) {
     const [group, id] = part.split(":");
-    if (group && id && ["ai", "storage", "student", "processing"].includes(group)) {
+    if (group && id && ["ai", "storage", "student", "staff", "processing"].includes(group)) {
       selected[group as PackageGroup] = id;
     }
   }

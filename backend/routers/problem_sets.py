@@ -22,7 +22,7 @@ from schemas import (
     ProblemUsageHistoryResponse,
 )
 from services.license_service import is_marketplace_publish_allowed
-from services.ownership import current_owner_id, ensure_legacy_archive_claimed_for_request
+from services.ownership import current_workspace_id, ensure_legacy_archive_claimed_for_request
 from services.problem_usage_history import backfill_problem_set_usage, load_problem_usage_history, record_problem_set_usage
 from services.private_files import sign_static_url
 from services.saas_security import require_admin
@@ -97,7 +97,7 @@ def _replace_items(db: Session, problem_set: ProblemSet, problem_ids: list[UUID]
 def create_problem_set(payload: ProblemSetCreate, request: Request, db: Session = Depends(get_db)):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="문항 세트 이름이 필요합니다.")
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = ProblemSet(
         name=payload.name.strip(),
         owner_id=owner_id,
@@ -122,7 +122,7 @@ def create_problem_set(payload: ProblemSetCreate, request: Request, db: Session 
 @router.get("/mine", response_model=list[ProblemSetListItem])
 def list_problem_sets(request: Request, db: Session = Depends(get_db)):
     ensure_legacy_archive_claimed_for_request(request, db)
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     rows = db.execute(
         select(ProblemSet, func.count(ProblemSetItem.id).label("item_count"))
         .outerjoin(ProblemSetItem, ProblemSetItem.problem_set_id == ProblemSet.id)
@@ -163,7 +163,7 @@ def list_problem_sets(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/usage-history", response_model=ProblemUsageHistoryResponse)
 def get_problem_usage_history(payload: ProblemUsageHistoryQuery, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     if backfill_problem_set_usage(db, owner_id=owner_id, problem_ids=payload.problem_ids):
         db.commit()
     return {
@@ -178,12 +178,12 @@ def get_problem_usage_history(payload: ProblemUsageHistoryQuery, request: Reques
 
 @router.get("/{set_id}", response_model=ProblemSetRead)
 def get_problem_set(set_id: UUID, request: Request, db: Session = Depends(get_db)):
-    return _serialize_problem_set(_get_set(db, set_id, current_owner_id(request)))
+    return _serialize_problem_set(_get_set(db, set_id, current_workspace_id(request, db, permission="can_manage_materials")))
 
 
 @router.patch("/{set_id}", response_model=ProblemSetRead)
 def update_problem_set(set_id: UUID, payload: ProblemSetUpdate, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = _get_set(db, set_id, owner_id)
     changes = payload.model_dump(exclude_unset=True)
     if "name" in changes:
@@ -206,7 +206,7 @@ def update_problem_set(set_id: UUID, payload: ProblemSetUpdate, request: Request
 @router.delete("/{set_id}", status_code=204)
 def delete_problem_set(set_id: UUID, request: Request, db: Session = Depends(get_db)):
     problem_set = db.scalars(
-        select(ProblemSet).where(ProblemSet.id == set_id, ProblemSet.owner_id == current_owner_id(request))
+        select(ProblemSet).where(ProblemSet.id == set_id, ProblemSet.owner_id == current_workspace_id(request, db, permission="can_manage_materials"))
     ).first()
     if not problem_set:
         raise HTTPException(status_code=404, detail="문항 세트를 찾을 수 없습니다.")
@@ -217,7 +217,7 @@ def delete_problem_set(set_id: UUID, request: Request, db: Session = Depends(get
 
 @router.post("/{set_id}/items", response_model=ProblemSetRead)
 def append_problem_set_item(set_id: UUID, payload: ProblemSetAppendItem, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = _get_set(db, set_id, owner_id)
     if not db.scalars(select(Problem).where(Problem.id == payload.problem_id, Problem.owner_id == owner_id)).first():
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
@@ -235,7 +235,7 @@ def append_problem_set_item(set_id: UUID, payload: ProblemSetAppendItem, request
 
 @router.post("/{set_id}/items/bulk", response_model=ProblemSetRead)
 def append_problem_set_items(set_id: UUID, payload: ProblemSetAppendItems, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = _get_set(db, set_id, owner_id)
     existing_ids = {item.problem_id for item in problem_set.items}
 
@@ -275,7 +275,7 @@ def append_problem_set_items(set_id: UUID, payload: ProblemSetAppendItems, reque
 
 @router.delete("/{set_id}/items/{problem_id}", status_code=204)
 def remove_problem_set_item(set_id: UUID, problem_id: UUID, request: Request, db: Session = Depends(get_db)):
-    problem_set = _get_set(db, set_id, current_owner_id(request))
+    problem_set = _get_set(db, set_id, current_workspace_id(request, db, permission="can_manage_materials"))
     item = db.scalars(select(ProblemSetItem).where(ProblemSetItem.problem_set_id == set_id, ProblemSetItem.problem_id == problem_id)).first()
     if not item:
         raise HTTPException(status_code=404, detail="세트에 해당 문항이 없습니다.")
@@ -288,7 +288,7 @@ def remove_problem_set_item(set_id: UUID, problem_id: UUID, request: Request, db
 
 @router.patch("/{set_id}/reorder", response_model=ProblemSetRead)
 def reorder_problem_set(set_id: UUID, payload: ProblemSetReorder, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = _get_set(db, set_id, owner_id)
     current_ids = {item.problem_id for item in problem_set.items}
     ordered_ids = set(payload.ordered_problem_ids)
@@ -304,7 +304,7 @@ def reorder_problem_set(set_id: UUID, payload: ProblemSetReorder, request: Reque
 
 @router.post("/{set_id}/publish", response_model=ProblemSetRead)
 def publish_problem_set(set_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = _get_set(db, set_id, owner_id)
     problem_set.visibility = "public"
     problem_set.updated_at = datetime.utcnow()
@@ -314,7 +314,7 @@ def publish_problem_set(set_id: UUID, request: Request, db: Session = Depends(ge
 
 @router.post("/{set_id}/unpublish", response_model=ProblemSetRead)
 def unpublish_problem_set(set_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = _get_set(db, set_id, owner_id)
     problem_set.visibility = "private"
     problem_set.updated_at = datetime.utcnow()
@@ -325,7 +325,7 @@ def unpublish_problem_set(set_id: UUID, request: Request, db: Session = Depends(
 @router.post("/{set_id}/submit-to-marketplace")
 def submit_problem_set_to_marketplace(set_id: UUID, payload: MarketplaceSubmissionRequest, request: Request, db: Session = Depends(get_db)):
     require_admin(request, db)
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem_set = _get_set(db, set_id, owner_id)
     if not payload.rights_confirmed or not payload.no_unauthorized_copy:
         raise HTTPException(status_code=400, detail="마켓플레이스 등록 전 권리 확인이 필요합니다.")

@@ -25,7 +25,7 @@ import {
   resolveSelectedPackages,
   subjectEngineLabel,
 } from "@/lib/plan-pricing";
-import { authHttp, ensureAccessToken, readStoredAuthProfile } from "@/lib/auth-client";
+import { authHttp, ensureAccessToken, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 
 export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: { plan: PaidPlanType; billingCycle: BillingCycle; packages: string; engines: string }) {
   const router = useRouter();
@@ -46,10 +46,15 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
   const phoneReady = isValidPhoneNumber(phoneNumber);
 
   useEffect(() => {
-    const profile = readStoredAuthProfile<{ phone?: string | null }>();
+    const profile = readStoredAuthProfile<{ id?: string; phone?: string | null }>();
+    const activeWorkspaceId = getActiveWorkspaceId();
+    if (activeWorkspaceId && activeWorkspaceId !== "student" && profile?.id && activeWorkspaceId !== profile.id) {
+      router.replace("/academy");
+      return;
+    }
     const storedPhone = normalizePhoneNumber(profile?.phone);
     if (storedPhone) setPhoneNumber(storedPhone);
-  }, []);
+  }, [router]);
 
   async function pay() {
     setError("");
@@ -208,6 +213,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                   <SpecLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항</SpecLine>
                   <SpecLine>저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SpecLine>
                   <SpecLine>학생 키 {Number(specs.studentKeys).toLocaleString()}개</SpecLine>
+                  <SpecLine>강사 좌석 {Number(specs.staffSeats).toLocaleString()}명</SpecLine>
                   <SpecLine>PDF 추출은 클라우드에서 처리</SpecLine>
                   <SpecLine>워터마크 없음</SpecLine>
                   <SpecLine>PDF 추출은 AI credits 차감</SpecLine>

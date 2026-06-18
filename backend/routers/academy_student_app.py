@@ -92,6 +92,10 @@ class StaffCreate(BaseModel):
     can_manage_seats: bool = False
     can_manage_materials: bool = True
     can_manage_assignments: bool = True
+    can_manage_students: bool = True
+    can_manage_schedule: bool = True
+    can_manage_coagent: bool = False
+    is_active: bool = True
 
 
 class ClassPayload(BaseModel):
@@ -387,12 +391,23 @@ def upsert_staff(academy_id: str, payload: StaffCreate, request: Request, db: Se
     if payload.role not in {"admin", "teacher", "assistant"}:
         raise HTTPException(status_code=400, detail="Invalid staff role.")
     staff = db.scalar(select(AcademyStaffMembership).where(AcademyStaffMembership.academy_id == academy_id, AcademyStaffMembership.user_id == payload.user_id))
+    if (not staff or not staff.is_active) and payload.is_active:
+        subscription = ensure_academy_subscription(db, academy_id)
+        active_staff = db.scalar(
+            select(func.count(AcademyStaffMembership.id)).where(
+                AcademyStaffMembership.academy_id == academy_id,
+                AcademyStaffMembership.is_active.is_(True),
+            )
+        ) or 0
+        if active_staff >= int(subscription.purchased_staff_seats or 0):
+            raise HTTPException(status_code=402, detail="Purchased staff seat limit reached. Add Staff Seat Pack before inviting instructors.")
     if not staff:
         staff = AcademyStaffMembership(academy_id=academy_id, user_id=payload.user_id)
         db.add(staff)
     for key, value in payload.model_dump().items():
         if key != "user_id":
             setattr(staff, key, value)
+    staff.can_manage_billing = False
     audit(db, request, actor, "academy.staff_upserted", "academy_staff", payload.user_id, {"academy_id": academy_id, "role": payload.role})
     db.commit()
     return serialize(staff)
@@ -400,7 +415,7 @@ def upsert_staff(academy_id: str, payload: StaffCreate, request: Request, db: Se
 
 @router.get("/academy/{academy_id}/classes")
 def list_classes(academy_id: str, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id)
+    actor = require_staff(db, request, academy_id, permission="can_manage_students")
     visible = visible_class_ids_for_staff(db, actor, academy_id)
     query = select(AcademyClass).where(AcademyClass.academy_id == academy_id)
     if visible is not None:
@@ -410,7 +425,7 @@ def list_classes(academy_id: str, request: Request, db: Session = Depends(get_db
 
 @router.post("/academy/{academy_id}/classes")
 def create_class(academy_id: str, payload: ClassPayload, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher"})
+    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher"}, permission="can_manage_students")
     academy_class = AcademyClass(academy_id=academy_id, **payload.model_dump())
     db.add(academy_class)
     db.flush()
@@ -423,7 +438,7 @@ def create_class(academy_id: str, payload: ClassPayload, request: Request, db: S
 
 @router.post("/academy/{academy_id}/classes/{class_id}/students")
 def add_class_student(academy_id: str, class_id: UUID, payload: ClassStudentPayload, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_students")
     if not teacher_can_access_class(db, actor, academy_id, class_id):
         raise HTTPException(status_code=403, detail="You can manage only assigned classes.")
     membership = db.scalar(select(StudentAcademyMembership).where(StudentAcademyMembership.id == payload.student_membership_id, StudentAcademyMembership.academy_id == academy_id, StudentAcademyMembership.status == "active"))
@@ -454,7 +469,7 @@ def add_class_teacher(academy_id: str, class_id: UUID, payload: ClassTeacherPayl
 
 @router.post("/academy/{academy_id}/assignments")
 def create_assignment(academy_id: str, payload: AssignmentPayload, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
     for target in payload.targets:
         if target.get("target_type") == "class" and not teacher_can_access_class(db, actor, academy_id, UUID(target["target_id"])):
             raise HTTPException(status_code=403, detail="Cannot assign to unrelated class.")
@@ -490,7 +505,7 @@ def create_assignment(academy_id: str, payload: AssignmentPayload, request: Requ
 
 @router.get("/academy/{academy_id}/assignments")
 def list_academy_assignments(academy_id: str, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id)
+    actor = require_staff(db, request, academy_id, permission="can_manage_assignments")
     visible_classes = visible_class_ids_for_staff(db, actor, academy_id)
     query = select(Assignment).where(Assignment.academy_id == academy_id, Assignment.archived_at.is_(None))
     if visible_classes is not None:
@@ -564,7 +579,7 @@ def submit_assignment(assignment_id: UUID, payload: AssignmentSubmitPayload, req
 
 @router.patch("/academy/{academy_id}/submissions/{submission_id}/review")
 def review_submission(academy_id: str, submission_id: UUID, payload: ReviewSubmissionPayload, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
     submission = db.get(AssignmentSubmission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found.")
@@ -636,7 +651,7 @@ def create_calendar_event(payload: CalendarEventPayload, request: Request, db: S
     else:
         if not payload.academy_id:
             raise HTTPException(status_code=400, detail="Academy event requires academy_id.")
-        require_staff(db, request, payload.academy_id)
+        require_staff(db, request, payload.academy_id, permission="can_manage_schedule")
         owner_type = payload.owner_type
         academy_id = payload.academy_id
     event = CalendarEvent(
@@ -689,7 +704,7 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/academy/{academy_id}/materials")
 def create_material(academy_id: str, payload: MaterialPayload, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_materials")
     material = AcademyMaterial(
         academy_id=academy_id,
         created_by_user_id=actor,
@@ -821,7 +836,7 @@ def export_wrong_answers(payload: WrongAnswerExportPayload, request: Request, db
 
 @router.get("/academy/{academy_id}/reports/usage")
 def academy_usage_report(academy_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_students")
     membership_ids = db.scalars(select(StudentAcademyMembership.id).where(StudentAcademyMembership.academy_id == academy_id, StudentAcademyMembership.status == "active")).all()
     student_ids = db.scalars(select(StudentAcademyMembership.student_user_id).where(StudentAcademyMembership.academy_id == academy_id, StudentAcademyMembership.status == "active")).all()
     today = datetime.utcnow().date().isoformat()

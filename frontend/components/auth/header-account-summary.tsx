@@ -5,6 +5,7 @@ import Link from "next/link";
 import { LogOut, Moon, Settings, ShieldCheck, Sun, UserRound } from "lucide-react";
 
 import { useTheme } from "@/components/theme-provider";
+import { WorkspaceMenuSection } from "@/components/auth/workspace-menu-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -240,7 +241,7 @@ export function HeaderAccountSummary() {
         </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-72 rounded-[10px] border border-white/10 bg-[#090b12] p-2 text-sm shadow-[0_24px_70px_rgba(0,0,0,0.42)]">
+        <div className="absolute right-0 mt-2 w-[min(92vw,28rem)] rounded-[10px] border border-white/10 bg-[#090b12] p-2 text-sm shadow-[0_24px_70px_rgba(0,0,0,0.42)]">
           <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -261,6 +262,8 @@ export function HeaderAccountSummary() {
               {currentProfile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}
             </div>
           </div>
+
+          <WorkspaceMenuSection onClose={() => setOpen(false)} />
 
           <div className="mt-2 rounded-[8px] border border-white/10 bg-white/[0.045] p-2">
             <div className="flex items-center justify-between gap-3">

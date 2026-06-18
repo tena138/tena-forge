@@ -6,7 +6,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from services.subscription_pricing import calculate_subscription_price  # noqa: E402
+from services.subscription_pricing import STAFF_SEAT_MONTHLY_ADDON_KRW, calculate_subscription_price  # noqa: E402
 
 
 class SubscriptionPricingTests(unittest.TestCase):
@@ -45,6 +45,14 @@ class SubscriptionPricingTests(unittest.TestCase):
 
         self.assertEqual(basic["monthly_price_krw"], 88_000)
         self.assertEqual(pro["monthly_price_krw"], 828_000)
+
+    def test_staff_seat_addons_are_monthly_per_active_staff_capacity(self):
+        basic = calculate_subscription_price("basic", "monthly", {"staff": "basic-staff-3"}, ["math"])
+        pro = calculate_subscription_price("pro", "monthly", {"staff": "pro-staff-50"}, ["math"])
+
+        self.assertEqual(STAFF_SEAT_MONTHLY_ADDON_KRW, 10_000)
+        self.assertEqual(basic["monthly_price_krw"], 78_000)
+        self.assertEqual(pro["monthly_price_krw"], 608_000)
 
 
 if __name__ == "__main__":

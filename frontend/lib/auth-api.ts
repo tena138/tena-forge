@@ -24,6 +24,79 @@ export type AcademyProfile = {
   totp_enabled_at?: string | null;
 };
 
+export type WorkspacePermissions = {
+  can_manage_billing?: boolean;
+  can_manage_seats?: boolean;
+  can_manage_materials?: boolean;
+  can_manage_assignments?: boolean;
+  can_manage_students?: boolean;
+  can_manage_schedule?: boolean;
+  can_manage_coagent?: boolean;
+};
+
+export type WorkspaceSummary = {
+  id: string;
+  type: "academy" | "student";
+  name: string;
+  role: "owner" | "admin" | "teacher" | "assistant" | "student" | string;
+  permissions: WorkspacePermissions;
+  account?: {
+    id: string;
+    name: string;
+    email: string;
+    account_type?: "academy" | "student";
+    plan?: string;
+  };
+  seat_status?: StaffSeatStatus;
+};
+
+export type StaffSeatStatus = {
+  purchased_staff_seats: number;
+  active_staff: number;
+  pending_invites: number;
+  available_staff_seats: number;
+  staff_seat_monthly_addon_krw: number;
+};
+
+export type StaffMember = {
+  id: string;
+  academy_id: string;
+  user_id: string;
+  role: string;
+  is_active: boolean;
+  permissions: WorkspacePermissions;
+  user?: WorkspaceSummary["account"] | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StaffInviteCode = {
+  id: string;
+  academy_id: string;
+  code_preview: string;
+  code?: string;
+  role: string;
+  permissions: WorkspacePermissions;
+  created_by: string;
+  claimed_by?: string | null;
+  expires_at: string;
+  claimed_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+  seat_status?: StaffSeatStatus;
+};
+
+export type StaffPermissionPayload = {
+  role?: string;
+  can_manage_seats?: boolean;
+  can_manage_materials?: boolean;
+  can_manage_assignments?: boolean;
+  can_manage_students?: boolean;
+  can_manage_schedule?: boolean;
+  can_manage_coagent?: boolean;
+  is_active?: boolean;
+};
+
 export type LoginResult = {
   access_token?: string;
   token_type?: "bearer";
@@ -126,6 +199,44 @@ export async function fetchMe() {
       fetchMePromise = null;
     });
   return fetchMePromise;
+}
+
+export async function listWorkspaces() {
+  const response = await authHttp.get("/api/workspaces");
+  return response.data as { active_workspace_id?: string | null; items: WorkspaceSummary[] };
+}
+
+export async function claimStaffInviteCode(code: string) {
+  const response = await authHttp.post("/api/workspaces/staff-invite-codes/claim", { code });
+  return response.data as { ok: boolean; workspace: WorkspaceSummary };
+}
+
+export async function listWorkspaceStaff(academyId: string) {
+  const response = await authHttp.get(`/api/workspaces/${academyId}/staff`);
+  return response.data as { seat_status: StaffSeatStatus; staff: StaffMember[] };
+}
+
+export async function updateWorkspaceStaff(academyId: string, userId: string, payload: StaffPermissionPayload) {
+  const response = await authHttp.patch(`/api/workspaces/${academyId}/staff/${userId}`, payload);
+  return response.data as StaffMember;
+}
+
+export async function removeWorkspaceStaff(academyId: string, userId: string) {
+  await authHttp.delete(`/api/workspaces/${academyId}/staff/${userId}`);
+}
+
+export async function listWorkspaceStaffInviteCodes(academyId: string) {
+  const response = await authHttp.get(`/api/workspaces/${academyId}/staff/invite-codes`);
+  return response.data as { seat_status: StaffSeatStatus; invite_codes: StaffInviteCode[] };
+}
+
+export async function createWorkspaceStaffInviteCode(academyId: string, payload: StaffPermissionPayload & { expires_in_days?: number }) {
+  const response = await authHttp.post(`/api/workspaces/${academyId}/staff/invite-codes`, payload);
+  return response.data as StaffInviteCode;
+}
+
+export async function revokeWorkspaceStaffInviteCode(academyId: string, codeId: string) {
+  await authHttp.delete(`/api/workspaces/${academyId}/staff/invite-codes/${codeId}`);
 }
 
 export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "account_type" | "phone" | "address" | "business_number">>) {

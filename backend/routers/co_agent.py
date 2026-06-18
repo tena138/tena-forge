@@ -15,7 +15,7 @@ from models import (
     RoutineAction,
     StudentAcademyMembership,
 )
-from services.ownership import LOCAL_OWNER_ID, current_owner_id, current_owner_ids
+from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id
 
 router = APIRouter(prefix="/api/co-agent", tags=["co-agent"])
 
@@ -30,7 +30,7 @@ PRODUCT_MAP = [
 
 
 def _academy_ids_for_co_agent(request: Request, db: Session) -> set[str]:
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_coagent")
     owner_ids = current_owner_ids(request, db)
     if owner_id != LOCAL_OWNER_ID:
         owner_ids.add(owner_id)
@@ -73,7 +73,7 @@ def _action(action_id: str, priority: int, category: str, title: str, summary: s
 
 @router.get("/next-actions")
 def next_actions(request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_coagent")
     owner_ids = _academy_ids_for_co_agent(request, db)
     owner_scope = _owner_scope(Batch, owner_ids)
     problem_scope = _owner_scope(Problem, owner_ids)

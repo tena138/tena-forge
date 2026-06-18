@@ -29,7 +29,7 @@ from schemas import (
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
 from services.korean_extraction import parse_passage_question_range
-from services.ownership import current_academy_id, current_owner_id, current_owner_ids
+from services.ownership import current_academy_id, current_owner_id, current_owner_ids, current_workspace_id
 from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progress_detail
 from services.private_files import sign_static_url
 from services.saas_security import ensure_subject_engine_access
@@ -262,7 +262,7 @@ def upload_batch(
     if not rights_confirmed:
         raise HTTPException(status_code=400, detail="자료 업로드 및 아카이빙 권리 확인이 필요합니다.")
 
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     parsed_subject_candidates = _parse_candidate_list(subject_candidates)
     if not parsed_subject_candidates:
         parsed_subject_candidates = infer_subject_candidates_from_text(problem_pdf.filename, batch_name)
@@ -313,7 +313,7 @@ def upload_batch(
         subject_engine=engine,
         processing_task="full",
         owner_id=owner_id,
-        academy_id=current_academy_id(request),
+        academy_id=current_academy_id(request, db),
         progress_message="처리 대기 중",
     )
     db.add(batch)
@@ -409,7 +409,7 @@ def get_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
 
 @router.patch("/{batch_id}/archive-folder", response_model=BatchRead)
 def update_batch_archive_folder(batch_id: UUID, payload: BatchArchiveFolderUpdate, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
@@ -690,7 +690,7 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
 def retry_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
     if not batch:
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
@@ -769,7 +769,7 @@ def cancel_batch(batch_id: UUID, request: Request, db: Session = Depends(get_db)
 
 @router.post("/{batch_id}/reprocess-solutions", response_model=BatchUploadResponse)
 def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     owner_ids = current_owner_ids(request, db)
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(owner_ids))).first()
     if not batch:
@@ -837,7 +837,7 @@ def attach_batch_solution_pdf(
     solution_pdf: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     owner_ids = current_owner_ids(request, db)
     batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(owner_ids))).first()
     if not batch:

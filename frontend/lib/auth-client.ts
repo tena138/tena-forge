@@ -3,8 +3,10 @@ import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export const AUTH_CHANGED_EVENT = "tena-auth-changed";
+export const WORKSPACE_CHANGED_EVENT = "tena-workspace-changed";
 const PROFILE_STORAGE_KEY = "tena-auth-profile";
 const ACCESS_TOKEN_STORAGE_KEY = "tena-access-token";
+const ACTIVE_WORKSPACE_STORAGE_KEY = "tena-active-workspace";
 
 function readStoredAccessToken() {
   if (typeof window === "undefined") return null;
@@ -90,6 +92,8 @@ export function clearAuthState() {
       // Ignore unavailable local storage.
     }
     localStorage.removeItem(PROFILE_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+    window.dispatchEvent(new Event(WORKSPACE_CHANGED_EVENT));
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   }
 }
@@ -112,6 +116,26 @@ export function readStoredAuthProfile<T>() {
   }
 }
 
+export function getActiveWorkspaceId() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveWorkspaceId(workspaceId: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (workspaceId) window.localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
+    else window.localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+  } catch {
+    // Ignore unavailable storage; the current request can still use default account scope.
+  }
+  window.dispatchEvent(new Event(WORKSPACE_CHANGED_EVENT));
+}
+
 export const authHttp = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -121,6 +145,10 @@ authHttp.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const workspaceId = getActiveWorkspaceId();
+  if (workspaceId && workspaceId !== "student") {
+    config.headers["X-Tena-Workspace-Id"] = workspaceId;
   }
   config.headers["X-Requested-With"] = "XMLHttpRequest";
   return config;

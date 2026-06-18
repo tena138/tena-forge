@@ -166,10 +166,21 @@ def staff_role(db: Session, user_id: str, academy_id: str) -> str | None:
     return staff.role if staff else None
 
 
-def require_staff(db: Session, request: Request, academy_id: str, allowed: set[str] | None = None) -> str:
+def require_staff(db: Session, request: Request, academy_id: str, allowed: set[str] | None = None, permission: str | None = None) -> str:
     user_id = current_owner_id(request)
-    role = staff_role(db, user_id, academy_id)
+    if user_id == academy_id:
+        return user_id
+    staff = db.scalar(
+        select(AcademyStaffMembership).where(
+            AcademyStaffMembership.user_id == user_id,
+            AcademyStaffMembership.academy_id == academy_id,
+            AcademyStaffMembership.is_active.is_(True),
+        )
+    )
+    role = staff.role if staff else None
     if role not in (allowed or STAFF_ROLES):
+        raise HTTPException(status_code=403, detail="This academy action is not allowed for your role.")
+    if permission and not bool(getattr(staff, permission, False)):
         raise HTTPException(status_code=403, detail="This academy action is not allowed for your role.")
     return user_id
 
@@ -194,16 +205,7 @@ def require_manage_billing(db: Session, request: Request, academy_id: str) -> st
     user_id = current_owner_id(request)
     if user_id == academy_id:
         return user_id
-    staff = db.scalar(
-        select(AcademyStaffMembership).where(
-            AcademyStaffMembership.user_id == user_id,
-            AcademyStaffMembership.academy_id == academy_id,
-            AcademyStaffMembership.is_active.is_(True),
-        )
-    )
-    if not staff or (staff.role != "owner" and not staff.can_manage_billing):
-        raise HTTPException(status_code=403, detail="Billing requires owner permission.")
-    return user_id
+    raise HTTPException(status_code=403, detail="Billing requires owner permission.")
 
 
 def teacher_can_access_class(db: Session, user_id: str, academy_id: str, class_id: UUID) -> bool:

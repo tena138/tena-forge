@@ -1,26 +1,101 @@
 import uuid
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_settings
-from models import Academy, ArchiveFolder, Batch, HubTemplate, Problem, ProblemSet, UserRole
+from models import Academy, AcademyStaffMembership, ArchiveFolder, Batch, HubTemplate, Problem, ProblemSet, UserRole
 
 LOCAL_OWNER_ID = "local_user"
+WORKSPACE_HEADER = "x-tena-workspace-id"
 ADMIN_ROLES = {"admin", "super_admin"}
 BUILTIN_ADMIN_EMAILS = {"admin@tenaforge.com", "admin@tena-forge.com", "admin@tena.local"}
 LEGACY_ARCHIVE_GUARD_MODELS = (ArchiveFolder, Batch, Problem, ProblemSet)
 LEGACY_ARCHIVE_CLAIM_MODELS = (ArchiveFolder, Batch, Problem, ProblemSet, HubTemplate)
+STAFF_PERMISSION_FIELDS = {
+    "can_manage_seats",
+    "can_manage_materials",
+    "can_manage_assignments",
+    "can_manage_students",
+    "can_manage_schedule",
+    "can_manage_coagent",
+}
 
 
-def current_owner_id(request: Request) -> str:
+def current_user_id(request: Request) -> str:
     return str(getattr(request.state, "academy_id", None) or LOCAL_OWNER_ID)
 
 
-def current_academy_id(request: Request) -> str | None:
-    owner_id = current_owner_id(request)
+def current_owner_id(request: Request) -> str:
+    return current_user_id(request)
+
+
+def current_academy_id(request: Request, db: Session | None = None) -> str | None:
+    owner_id = current_workspace_id(request, db) if db is not None else current_owner_id(request)
     return None if owner_id == LOCAL_OWNER_ID else owner_id
+
+
+def _admin_email_set() -> set[str]:
+    return BUILTIN_ADMIN_EMAILS | {email.strip().lower() for email in get_settings().admin_emails.split(",") if email.strip()}
+
+
+def _is_admin_user(db: Session, user_id: str) -> bool:
+    if user_id == LOCAL_OWNER_ID:
+        return False
+    roles = set(db.scalars(select(UserRole.role).where(UserRole.user_id == user_id)).all())
+    academy = _academy_for_owner(db, user_id)
+    return bool(roles & ADMIN_ROLES or (academy and academy.email.lower() in _admin_email_set()))
+
+
+def requested_workspace_id(request: Request) -> str | None:
+    value = request.headers.get(WORKSPACE_HEADER) or request.headers.get("X-Tena-Workspace-Id")
+    clean = str(value or "").strip()
+    if not clean or clean.lower() == "student":
+        return None
+    return clean[:64]
+
+
+def staff_membership_for_workspace(db: Session, user_id: str, workspace_id: str) -> AcademyStaffMembership | None:
+    return db.scalar(
+        select(AcademyStaffMembership).where(
+            AcademyStaffMembership.user_id == user_id,
+            AcademyStaffMembership.academy_id == workspace_id,
+            AcademyStaffMembership.is_active.is_(True),
+        )
+    )
+
+
+def current_workspace_id(request: Request, db: Session | None, *, permission: str | None = None) -> str:
+    user_id = current_user_id(request)
+    workspace_id = requested_workspace_id(request) or user_id
+    if workspace_id == LOCAL_OWNER_ID or not db:
+        return workspace_id
+
+    if permission and permission not in STAFF_PERMISSION_FIELDS:
+        raise HTTPException(status_code=500, detail="Unknown workspace permission.")
+
+    if workspace_id == user_id:
+        return workspace_id
+
+    staff = staff_membership_for_workspace(db, user_id, workspace_id)
+    if staff:
+        if permission and not bool(getattr(staff, permission, False)):
+            raise HTTPException(status_code=403, detail="This workspace action is not allowed for your role.")
+        return workspace_id
+
+    if _is_admin_user(db, user_id):
+        return workspace_id
+
+    raise HTTPException(status_code=403, detail="This workspace is not available to your account.")
+
+
+def require_workspace_owner(request: Request, db: Session, workspace_id: str | None = None) -> str:
+    user_id = current_user_id(request)
+    target = str(workspace_id or requested_workspace_id(request) or user_id)
+    if target == user_id or _is_admin_user(db, user_id):
+        return user_id
+    raise HTTPException(status_code=403, detail="Workspace owner permission is required.")
 
 
 def _academy_for_owner(db: Session, owner_id: str) -> Academy | None:
@@ -81,16 +156,15 @@ def ensure_legacy_archive_claimed_for_request(request: Request, db: Session) -> 
 
 
 def current_owner_ids(request: Request, db: Session, *, include_legacy_for_admin: bool = True) -> set[str]:
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db)
     ensure_legacy_archive_claimed_for_request(request, db)
     owner_ids = {owner_id}
     if not include_legacy_for_admin or owner_id == LOCAL_OWNER_ID:
         return owner_ids
 
-    roles = set(db.scalars(select(UserRole.role).where(UserRole.user_id == owner_id)).all())
-    academy = db.get(Academy, owner_id)
-    admin_emails = BUILTIN_ADMIN_EMAILS | {email.strip().lower() for email in get_settings().admin_emails.split(",") if email.strip()}
-    if roles & ADMIN_ROLES or (academy and academy.email.lower() in admin_emails):
+    user_id = current_user_id(request)
+    admin_emails = _admin_email_set()
+    if _is_admin_user(db, user_id):
         owner_ids.add(LOCAL_OWNER_ID)
         owner_ids.update(
             str(academy_id)

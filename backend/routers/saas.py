@@ -30,9 +30,19 @@ def _student_keys_by_package(prefix: str, included_keys: int, max_keys: int) -> 
     return keys
 
 
+def _staff_seats_by_package(prefix: str, max_seats: int) -> dict[str, int]:
+    seats = {f"{prefix}-staff": 0}
+    seats.update({f"{prefix}-staff-{staff_seats}": staff_seats for staff_seats in range(1, max_seats + 1)})
+    return seats
+
+
 STUDENT_KEYS_BY_PACKAGE = {
     "basic": _student_keys_by_package("basic", 5, 10),
     "pro": _student_keys_by_package("pro", 10, 100),
+}
+STAFF_SEATS_BY_PACKAGE = {
+    "basic": _staff_seats_by_package("basic", 10),
+    "pro": _staff_seats_by_package("pro", 50),
 }
 TRIAL_DAYS_AFTER_PAYMENT_METHOD = 7
 
@@ -98,11 +108,16 @@ def _apply_academy_entitlements(
     academy.plan_expires_at = trial_end
     selected_student_package = (selected_packages or {}).get("student")
     target_student_keys = STUDENT_KEYS_BY_PACKAGE.get(canonical, {}).get(str(selected_student_package or ""))
-    if target_student_keys is not None:
+    selected_staff_package = (selected_packages or {}).get("staff")
+    target_staff_seats = STAFF_SEATS_BY_PACKAGE.get(canonical, {}).get(str(selected_staff_package or ""))
+    if target_student_keys is not None or target_staff_seats is not None:
         student_subscription = ensure_academy_subscription(db, user_id)
-        student_plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == student_subscription.plan_code))
-        included_seats = int(student_plan.included_seats if student_plan else 0)
-        student_subscription.purchased_additional_seats = max(int(target_student_keys) - included_seats, 0)
+        if target_student_keys is not None:
+            student_plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == student_subscription.plan_code))
+            included_seats = int(student_plan.included_seats if student_plan else 0)
+            student_subscription.purchased_additional_seats = max(int(target_student_keys) - included_seats, 0)
+        if target_staff_seats is not None:
+            student_subscription.purchased_staff_seats = max(int(target_staff_seats), 0)
 
 
 def _activate_subscription(

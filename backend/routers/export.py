@@ -13,7 +13,7 @@ from database import get_db
 from models import ExamTemplate, HubTemplate, Problem, ProblemSet, ProblemSetItem
 from schemas import ExportPreviewRequest, ExportRequest
 from services.export_service import generate_canvas_preview_pdf, generate_exam_pdf, generate_hub_template_pdf
-from services.ownership import current_owner_id
+from services.ownership import current_workspace_id
 from services.problem_usage_history import record_export_usage
 from services.template_renderer import render_hub_template_for_export
 
@@ -116,7 +116,7 @@ def _load_requested_problems(payload: ExportRequest, db: Session, owner_id: str)
 
 @router.post("")
 def export_pdf(payload: ExportRequest, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problems = _load_requested_problems(payload, db, owner_id)
 
     # Template Hub export path: render archived problems through a shared HTML/CSS template.

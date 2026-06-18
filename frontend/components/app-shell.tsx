@@ -10,7 +10,7 @@ import { HeaderNotifications } from "@/components/header-notifications";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
-import { AUTH_CHANGED_EVENT, clearAuthState, ensureAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, clearAuthState, ensureAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
@@ -47,14 +47,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function syncHomeHref() {
+      const activeWorkspaceId = getActiveWorkspaceId();
+      if (activeWorkspaceId) {
+        setHomeHref(activeWorkspaceId === "student" ? "/student" : "/academy");
+        return;
+      }
       const profile = readStoredAuthProfile<{ account_type?: "academy" | "student" }>();
       setHomeHref(profile?.account_type === "student" ? "/student" : "/academy");
     }
     syncHomeHref();
     window.addEventListener(AUTH_CHANGED_EVENT, syncHomeHref);
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, syncHomeHref);
     window.addEventListener("focus", syncHomeHref);
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, syncHomeHref);
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, syncHomeHref);
       window.removeEventListener("focus", syncHomeHref);
     };
   }, []);
@@ -84,6 +91,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           const canVisitForBilling = billingAllowedRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
           if (profile.account_type !== "student" && profile.requires_payment && !canVisitForBilling) {
             router.replace("/billing?trial=expired");
+            return;
+          }
+          const activeWorkspaceId = getActiveWorkspaceId();
+          const staffWorkspaceActive = Boolean(activeWorkspaceId && activeWorkspaceId !== "student" && activeWorkspaceId !== profile.id);
+          if (staffWorkspaceActive && (pathname === "/billing" || pathname.startsWith("/billing/"))) {
+            router.replace("/academy");
             return;
           }
         } catch (error) {

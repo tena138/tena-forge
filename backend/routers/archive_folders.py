@@ -10,7 +10,7 @@ from database import get_db
 from models import ArchiveFolder, Batch
 from schemas import ArchiveFolderCreate, ArchiveFolderRead, ArchiveFolderUpdate
 from services.batch_colors import normalize_batch_color
-from services.ownership import current_academy_id, current_owner_id, ensure_legacy_archive_claimed_for_request
+from services.ownership import current_academy_id, current_workspace_id, ensure_legacy_archive_claimed_for_request
 from services.subject_engines import normalize_subject_engine
 
 router = APIRouter(prefix="/api/archive-folders", tags=["archive-folders"])
@@ -83,7 +83,7 @@ def _validate_parent(db: Session, owner_id: str, parent_id: UUID | None, subject
 @router.get("", response_model=list[ArchiveFolderRead])
 def list_archive_folders(request: Request, db: Session = Depends(get_db), subject_engine: str | None = None):
     ensure_legacy_archive_claimed_for_request(request, db)
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     filters = [ArchiveFolder.owner_id == owner_id]
     if subject_engine:
         filters.append(ArchiveFolder.subject_engine == normalize_subject_engine(subject_engine))
@@ -97,13 +97,13 @@ def list_archive_folders(request: Request, db: Session = Depends(get_db), subjec
 
 @router.post("", response_model=ArchiveFolderRead)
 def create_archive_folder(payload: ArchiveFolderCreate, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     subject_engine = normalize_subject_engine(payload.subject_engine)
     parent_id = _validate_parent(db, owner_id, payload.parent_id, subject_engine)
     order = payload.order if payload.order is not None else _sibling_count(db, owner_id, parent_id, subject_engine)
     folder = ArchiveFolder(
         owner_id=owner_id,
-        academy_id=current_academy_id(request),
+        academy_id=current_academy_id(request, db),
         subject_engine=subject_engine,
         name=_clean_name(payload.name),
         parent_id=parent_id,
@@ -120,7 +120,7 @@ def create_archive_folder(payload: ArchiveFolderCreate, request: Request, db: Se
 
 @router.patch("/{folder_id}", response_model=ArchiveFolderRead)
 def update_archive_folder(folder_id: UUID, payload: ArchiveFolderUpdate, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     folder = _owned_folder(db, owner_id, folder_id)
     previous_parent_id = folder.parent_id
     fields = payload.model_fields_set
@@ -148,7 +148,7 @@ def update_archive_folder(folder_id: UUID, payload: ArchiveFolderUpdate, request
 
 @router.delete("/{folder_id}", status_code=204)
 def delete_archive_folder(folder_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     folder = _owned_folder(db, owner_id, folder_id)
     parent_id = folder.parent_id
     subject_engine = normalize_subject_engine(folder.subject_engine)

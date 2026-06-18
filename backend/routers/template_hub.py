@@ -8,28 +8,16 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import HubTemplate, MarketplaceListing
 from schemas import MarketplaceSubmissionRequest, TemplateCreate, TemplateForkResponse, TemplateResponse, TemplateUpdate
-from services.auth_security import decode_access_token
 from services.license_service import is_marketplace_publish_allowed
+from services.ownership import LOCAL_OWNER_ID, current_workspace_id
 from services.pdf_template_importer import MAX_IMPORT_PAGES, build_visual_template_set_from_pdf
 from services.saas_security import ADMIN_ROLES, get_roles, require_admin
 from services.template_renderer import sanitize_template_css, sanitize_template_html
 
 router = APIRouter(prefix="/templates", tags=["template-hub"])
 
-LOCAL_OWNER_ID = "local_user"
-
-
-def _current_owner_id(request: Request) -> str:
-    authorization = request.headers.get("authorization", "")
-    if authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", 1)[1].strip()
-        try:
-            payload = decode_access_token(token)
-            if payload.get("type") == "access" and payload.get("sub"):
-                return str(payload["sub"])
-        except Exception:
-            pass
-    return LOCAL_OWNER_ID
+def _current_owner_id(request: Request, db: Session, permission: str | None = None) -> str:
+    return current_workspace_id(request, db, permission=permission)
 
 
 def _response(template: HubTemplate, owner_id: str) -> TemplateResponse:
@@ -56,7 +44,7 @@ def _is_marketplace_admin(db: Session, owner_id: str) -> bool:
 
 @router.post("", response_model=TemplateResponse)
 def create_template(payload: TemplateCreate, request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     template = HubTemplate(
         owner_id=owner_id,
         title=payload.title.strip(),
@@ -80,7 +68,7 @@ def create_template(payload: TemplateCreate, request: Request, db: Session = Dep
 
 @router.get("/mine", response_model=list[TemplateResponse])
 def list_my_templates(request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     templates = db.scalars(
         select(HubTemplate)
         .where(HubTemplate.owner_id == owner_id)
@@ -97,7 +85,7 @@ def list_public_templates(
     sort: str = "recent",
     db: Session = Depends(get_db),
 ):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db)
     visibilities = ["public", "marketplace"] if _is_marketplace_admin(db, owner_id) else ["public"]
     statement = select(HubTemplate).where(HubTemplate.visibility.in_(visibilities))
     if category:
@@ -132,7 +120,7 @@ async def import_pdf_template(file: UploadFile = File(...)):
 
 @router.get("/{template_id}", response_model=TemplateResponse)
 def get_template(template_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db)
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
@@ -142,7 +130,7 @@ def get_template(template_id: UUID, request: Request, db: Session = Depends(get_
 
 @router.patch("/{template_id}", response_model=TemplateResponse)
 def update_template(template_id: UUID, payload: TemplateUpdate, request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
@@ -177,7 +165,7 @@ def update_template(template_id: UUID, payload: TemplateUpdate, request: Request
 
 @router.delete("/{template_id}", status_code=204)
 def delete_template(template_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
@@ -189,7 +177,7 @@ def delete_template(template_id: UUID, request: Request, db: Session = Depends(g
 
 @router.post("/{template_id}/fork", response_model=TemplateForkResponse)
 def fork_template(template_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
@@ -219,7 +207,7 @@ def fork_template(template_id: UUID, request: Request, db: Session = Depends(get
 
 @router.post("/{template_id}/publish", response_model=TemplateResponse)
 def publish_template(template_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
@@ -233,7 +221,7 @@ def publish_template(template_id: UUID, request: Request, db: Session = Depends(
 
 @router.post("/{template_id}/unpublish", response_model=TemplateResponse)
 def unpublish_template(template_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
@@ -248,7 +236,7 @@ def unpublish_template(template_id: UUID, request: Request, db: Session = Depend
 @router.post("/{template_id}/submit-to-marketplace")
 def submit_template_to_marketplace(template_id: UUID, payload: MarketplaceSubmissionRequest, request: Request, db: Session = Depends(get_db)):
     require_admin(request, db)
-    owner_id = _current_owner_id(request)
+    owner_id = _current_owner_id(request, db, "can_manage_materials")
     template = db.get(HubTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")

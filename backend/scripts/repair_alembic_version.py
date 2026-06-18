@@ -10,7 +10,7 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0031_tuition_management"
+HEAD_REVISION = "0032_workspace_staff_invites"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -61,6 +61,14 @@ CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS = {
 }
 ACADEMY_SEAT_REQUIRED_COLUMNS = {
     "class_id",
+}
+ACADEMY_STUDENT_SUBSCRIPTION_REQUIRED_COLUMNS = {
+    "purchased_staff_seats",
+}
+ACADEMY_STAFF_MEMBERSHIP_REQUIRED_COLUMNS = {
+    "can_manage_students",
+    "can_manage_schedule",
+    "can_manage_coagent",
 }
 SUBJECT_ENGINE_COLUMNS = {
     "enabled_subject_engines",
@@ -365,6 +373,40 @@ def _ensure_academy_seat_columns(connection, inspector) -> bool:
     return changed
 
 
+def _ensure_academy_subscription_staff_columns(connection, inspector) -> bool:
+    if "academy_student_subscriptions" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    if _add_column_if_missing(connection, inspector, "academy_student_subscriptions", "purchased_staff_seats", "INTEGER NOT NULL DEFAULT 0"):
+        changed = True
+        inspector = inspect(connection)
+    connection.execute(text("UPDATE academy_student_subscriptions SET purchased_staff_seats = 0 WHERE purchased_staff_seats IS NULL"))
+    return changed
+
+
+def _ensure_academy_staff_membership_columns(connection, inspector) -> bool:
+    if "academy_staff_memberships" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    bool_false = "FALSE" if connection.dialect.name == "postgresql" else "0"
+    bool_true = "TRUE" if connection.dialect.name == "postgresql" else "1"
+    specs = [
+        ("can_manage_students", f"BOOLEAN NOT NULL DEFAULT {bool_true}"),
+        ("can_manage_schedule", f"BOOLEAN NOT NULL DEFAULT {bool_true}"),
+        ("can_manage_coagent", f"BOOLEAN NOT NULL DEFAULT {bool_false}"),
+    ]
+    for column_name, definition in specs:
+        if _add_column_if_missing(connection, inspector, "academy_staff_memberships", column_name, definition):
+            changed = True
+            inspector = inspect(connection)
+    connection.execute(text(f"UPDATE academy_staff_memberships SET can_manage_students = {bool_true} WHERE can_manage_students IS NULL"))
+    connection.execute(text(f"UPDATE academy_staff_memberships SET can_manage_schedule = {bool_true} WHERE can_manage_schedule IS NULL"))
+    connection.execute(text(f"UPDATE academy_staff_memberships SET can_manage_coagent = {bool_false} WHERE can_manage_coagent IS NULL"))
+    return changed
+
+
 def _ensure_korean_passage_review_columns(connection, inspector) -> bool:
     if "korean_passage_groups" not in inspector.get_table_names():
         return False
@@ -478,6 +520,9 @@ def _schema_is_at_head(inspector) -> bool:
         "problems",
         "problem_sets",
         "student_academy_memberships",
+        "academy_student_subscriptions",
+        "academy_staff_memberships",
+        "academy_staff_invite_codes",
         "academy_classes",
         "academy_seats",
         "content_versions",
@@ -514,6 +559,8 @@ def _schema_is_at_head(inspector) -> bool:
         and _has_columns(inspector, "subscriptions", SUBJECT_ENGINE_COLUMNS)
         and _has_columns(inspector, "academies", ACADEMY_REQUIRED_COLUMNS)
         and _has_columns(inspector, "student_academy_memberships", {"display_name_in_academy", "expires_at"})
+        and _has_columns(inspector, "academy_student_subscriptions", ACADEMY_STUDENT_SUBSCRIPTION_REQUIRED_COLUMNS)
+        and _has_columns(inspector, "academy_staff_memberships", ACADEMY_STAFF_MEMBERSHIP_REQUIRED_COLUMNS)
         and _has_columns(inspector, "academy_seats", ACADEMY_SEAT_REQUIRED_COLUMNS)
         and _has_columns(inspector, "korean_passage_groups", KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS)
         and _has_columns(inspector, "class_schedule_events", CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS)
@@ -556,6 +603,10 @@ def main() -> None:
             inspector = inspect(connection)
         if _ensure_academy_seat_columns(connection, inspector):
             inspector = inspect(connection)
+        if _ensure_academy_subscription_staff_columns(connection, inspector):
+            inspector = inspect(connection)
+        if _ensure_academy_staff_membership_columns(connection, inspector):
+            inspector = inspect(connection)
         if _ensure_korean_passage_review_columns(connection, inspector):
             inspector = inspect(connection)
         if _ensure_class_schedule_event_columns(connection, inspector):
@@ -586,6 +637,10 @@ def main() -> None:
             if _ensure_problem_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_academy_seat_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_academy_subscription_staff_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_academy_staff_membership_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_korean_passage_review_columns(connection, inspector):
                 inspector = inspect(connection)

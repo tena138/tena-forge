@@ -59,7 +59,7 @@ from models import (
 )
 from services.export_service import generate_hub_context_pdf
 from services.academy_student_access import create_seat, ensure_academy_subscription, hash_invite_code, rotate_seat_code
-from services.ownership import LOCAL_OWNER_ID, current_owner_id, current_owner_ids
+from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_user_id, current_workspace_id
 from services.problem_usage_history import record_problem_set_usage
 from services.template_renderer import render_hub_template_for_context
 
@@ -86,11 +86,11 @@ DEFAULT_COUNSELING_FIELDS = [
 
 
 def _academy_id(request: Request) -> str:
-    return current_owner_id(request)
+    return current_user_id(request)
 
 
 def _student_management_academy_id(request: Request, db: Session) -> str:
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_students")
     owner_ids = current_owner_ids(request, db)
     if owner_id == LOCAL_OWNER_ID or LOCAL_OWNER_ID not in owner_ids:
         return owner_id
@@ -1787,9 +1787,9 @@ def _counseling_log_row(
         "weekly_report": payload.weekly_report or "",
         "next_plan": payload.next_plan or "",
         "sections": _normalize_counseling_sections([section.model_dump() for section in payload.sections]),
-        "created_by": existing.get("created_by") or current_owner_id(request),
+        "created_by": existing.get("created_by") or current_user_id(request),
         "created_at": existing.get("created_at") or now.isoformat(),
-        "updated_by": current_owner_id(request),
+        "updated_by": current_user_id(request),
         "updated_at": now.isoformat(),
     }
 
@@ -2659,7 +2659,7 @@ def update_class_counseling_format(class_id: UUID, payload: CounselingFormatPayl
     row = {
         "class_id": str(class_id),
         "fields": _normalize_counseling_fields([field.model_dump() for field in payload.fields]),
-        "updated_by": current_owner_id(request),
+        "updated_by": current_user_id(request),
         "updated_at": _now().isoformat(),
     }
     formats[str(class_id)] = row
@@ -2683,7 +2683,7 @@ def save_counseling_preset(slot: int, payload: CounselingPresetPayload, request:
         "name": (payload.name or f"프리셋 {slot}").strip() or f"프리셋 {slot}",
         "subject": _clean_optional_text(payload.subject),
         "fields": _normalize_counseling_fields([field.model_dump() for field in payload.fields]),
-        "updated_by": current_owner_id(request),
+        "updated_by": current_user_id(request),
         "updated_at": _now().isoformat(),
     }
     next_rows = []
@@ -2792,7 +2792,7 @@ def confirm_tuition_paid(payment_id: UUID, request: Request, db: Session = Depen
     now = _now()
     payment.status = "paid"
     payment.paid_at = now
-    payment.confirmed_by = current_owner_id(request)
+    payment.confirmed_by = current_user_id(request)
     payment.updated_at = now
     db.commit()
     db.refresh(payment)
@@ -2878,7 +2878,7 @@ def update_tuition_session_adjustment(event_id: UUID, student_id: UUID, payload:
     adjustment.counts_for_tuition = payload.counts_for_tuition
     adjustment.reason = _clean_optional_text(payload.reason)
     adjustment.note = _clean_optional_text(payload.note)
-    adjustment.updated_by = current_owner_id(request)
+    adjustment.updated_by = current_user_id(request)
     adjustment.updated_at = _now()
     payment = db.scalar(
         select(StudentTuitionPayment).where(
@@ -2904,7 +2904,7 @@ def update_tuition_session_adjustment(event_id: UUID, student_id: UUID, payload:
 def list_routines(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
-    actor_id = current_owner_id(request)
+    actor_id = current_user_id(request)
     try:
         _ensure_routine_candidates(db, academy_id, visible_academy_ids, actor_id)
     except Exception:
@@ -2985,7 +2985,7 @@ def update_routine_message(routine_id: UUID, message_id: UUID, payload: RoutineM
 @router.post("/routines/{routine_id}/send")
 def send_routine_action(routine_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    actor_id = current_owner_id(request)
+    actor_id = current_user_id(request)
     action = _get_routine_action(db, academy_id, routine_id)
     messages = [message for message in action.messages if message.status != "excluded"]
     if not messages:
@@ -3048,7 +3048,7 @@ def list_students(request: Request, db: Session = Depends(get_db)):
 @router.post("/students")
 def create_student(payload: StudentPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    actor_id = current_owner_id(request)
+    actor_id = current_user_id(request)
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Student name is required.")
@@ -3528,7 +3528,7 @@ def export_counseling_logs(student_id: UUID, payload: CounselingExportPayload, r
         raise HTTPException(status_code=400, detail="No counseling logs selected.")
 
     template = db.get(HubTemplate, payload.hub_template_id)
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     if not template or (template.visibility == "private" and template.owner_id != owner_id):
         raise HTTPException(status_code=404, detail="Counseling template not found.")
     if template.category != "counseling_log":
@@ -3630,7 +3630,7 @@ def list_paper_sessions(request: Request, db: Session = Depends(get_db)):
 @router.post("/paper-sessions")
 def create_paper_session(payload: PaperSessionPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     if payload.source_problem_set_id:
         version = _problem_set_snapshot(db, owner_id, academy_id, payload.source_problem_set_id, owner_id)
     elif payload.source_batch_id:
@@ -3839,7 +3839,7 @@ def delete_paper_session_result(result_id: UUID, request: Request, db: Session =
 def save_grade(session_id: UUID, payload: GradePayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
-    actor_id = current_owner_id(request)
+    actor_id = current_user_id(request)
     session = _get_visible_session(db, visible_academy_ids, session_id)
     membership = _get_membership(db, academy_id, payload.student_membership_id, visible_academy_ids)
     result = db.scalar(
@@ -4059,7 +4059,7 @@ def delete_wrong_answer(wrong_answer_id: UUID, request: Request, db: Session = D
 def create_review_set(payload: ReviewSetPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     stmt = select(WrongAnswerRecord).where(WrongAnswerRecord.academy_id.in_(list(visible_academy_ids)))
     if payload.wrong_answer_ids:
         stmt = stmt.where(WrongAnswerRecord.id.in_(payload.wrong_answer_ids))

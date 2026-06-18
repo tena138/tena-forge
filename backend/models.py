@@ -1090,6 +1090,7 @@ class AcademyStudentSubscription(Base):
     plan_code: Mapped[str] = mapped_column(String(40), default="tutor", nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False, index=True)
     purchased_additional_seats: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    purchased_staff_seats: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     overage_policy: Mapped[str] = mapped_column(String(32), default="BLOCK_AT_LIMIT", nullable=False)
     billing_metadata: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
     current_period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -1110,7 +1111,33 @@ class AcademyStaffMembership(Base):
     can_manage_seats: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     can_manage_materials: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     can_manage_assignments: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_students: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_schedule: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_coagent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AcademyStaffInviteCode(Base):
+    __tablename__ = "academy_staff_invite_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    code_preview: Mapped[str] = mapped_column(String(12), nullable=False)
+    role: Mapped[str] = mapped_column(String(24), default="teacher", nullable=False, index=True)
+    can_manage_seats: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_manage_materials: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_assignments: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_students: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_schedule: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_manage_coagent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

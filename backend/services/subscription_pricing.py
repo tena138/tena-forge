@@ -6,6 +6,7 @@ from services.subject_engines import normalize_subject_engines, subject_engine_p
 
 
 STUDENT_KEY_MONTHLY_ADDON_KRW = 8_000
+STAFF_SEAT_MONTHLY_ADDON_KRW = 10_000
 
 
 def _student_key_package_prices(prefix: str, included_keys: int, max_keys: int) -> dict[str, int]:
@@ -16,16 +17,24 @@ def _student_key_package_prices(prefix: str, included_keys: int, max_keys: int) 
     return prices
 
 
+def _staff_seat_package_prices(prefix: str, max_seats: int) -> dict[str, int]:
+    prices = {f"{prefix}-staff": 0}
+    prices.update({f"{prefix}-staff-{staff_seats}": staff_seats * STAFF_SEAT_MONTHLY_ADDON_KRW for staff_seats in range(1, max_seats + 1)})
+    return prices
+
+
 PACKAGE_GROUPS: dict[str, dict[str, dict[str, int]]] = {
     "basic": {
         "ai": {"basic-ai": 0, "basic-ai-plus": 28_000, "basic-ai-max": 48_000},
         "storage": {"basic-storage": 0, "basic-storage-plus": 10_000, "basic-storage-max": 24_000},
         "student": _student_key_package_prices("basic", 5, 10),
+        "staff": _staff_seat_package_prices("basic", 10),
     },
     "pro": {
         "ai": {"pro-ai": 0, "pro-ai-plus": 39_000, "pro-ai-max": 89_000},
         "storage": {"pro-storage": 0, "pro-storage-plus": 29_000, "pro-storage-max": 79_000},
         "student": _student_key_package_prices("pro", 10, 100),
+        "staff": _staff_seat_package_prices("pro", 50),
     },
 }
 

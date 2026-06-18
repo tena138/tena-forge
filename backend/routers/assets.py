@@ -6,12 +6,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from database import get_settings
-from services.ownership import current_owner_id
+from database import get_db, get_settings
+from services.ownership import current_workspace_id
 from services.private_files import sign_static_url
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
@@ -120,8 +121,8 @@ def _public(owner_id: str, item: dict) -> AssetRead:
 
 
 @router.get("", response_model=list[AssetRead])
-def list_assets(request: Request):
-    owner_id = current_owner_id(request)
+def list_assets(request: Request, db: Session = Depends(get_db)):
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     items = [_normalize_item(owner_id, item) for item in _read_index(owner_id)]
     valid = [item for item in items if item]
     if len(valid) != len(items):
@@ -130,8 +131,8 @@ def list_assets(request: Request):
 
 
 @router.post("", response_model=AssetRead)
-async def upload_asset(request: Request, file: UploadFile):
-    owner_id = current_owner_id(request)
+async def upload_asset(request: Request, file: UploadFile, db: Session = Depends(get_db)):
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
         raise HTTPException(status_code=400, detail="PNG, JPG, JPEG, WebP, SVG 파일만 업로드할 수 있습니다.")
@@ -162,8 +163,8 @@ async def upload_asset(request: Request, file: UploadFile):
 
 
 @router.patch("/{asset_id}", response_model=AssetRead)
-def rename_asset(asset_id: str, payload: AssetRename, request: Request):
-    owner_id = current_owner_id(request)
+def rename_asset(asset_id: str, payload: AssetRename, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     next_name = _safe_original_name(payload.filename)
     if not next_name:
         raise HTTPException(status_code=400, detail="파일명을 입력해 주세요.")
@@ -178,8 +179,8 @@ def rename_asset(asset_id: str, payload: AssetRename, request: Request):
 
 
 @router.delete("/{asset_id}", status_code=204)
-def delete_asset(asset_id: str, request: Request):
-    owner_id = current_owner_id(request)
+def delete_asset(asset_id: str, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     items = _read_index(owner_id)
     root = _asset_root(owner_id).resolve()
     next_items = []
@@ -198,8 +199,8 @@ def delete_asset(asset_id: str, request: Request):
 
 
 @router.get("/{asset_id}/download")
-def download_asset(asset_id: str, request: Request):
-    owner_id = current_owner_id(request)
+def download_asset(asset_id: str, request: Request, db: Session = Depends(get_db)):
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     for item in _read_index(owner_id):
         if item.get("id") == asset_id:
             normalized = _normalize_item(owner_id, item)

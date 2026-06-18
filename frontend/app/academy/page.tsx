@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AcademyProfile, fetchMe } from "@/lib/auth-api";
-import { readStoredAuthProfile } from "@/lib/auth-client";
+import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
 import { formatKstDateTime } from "@/lib/datetime";
 import {
@@ -65,6 +65,12 @@ import {
   getStudentManagementDashboard,
   listScheduleEvents,
 } from "@/lib/studentManagement";
+
+function resolveActiveAcademyId(profile?: AcademyProfile | null) {
+  const activeWorkspaceId = getActiveWorkspaceId();
+  if (activeWorkspaceId && activeWorkspaceId !== "student") return activeWorkspaceId;
+  return profile?.account_type === "academy" ? profile.id : "";
+}
 
 type ProblemPage = { items: unknown[]; total: number; page: number; limit: number; pages: number };
 type ProblemStats = { total: number; needs_review: number; tagged: number; untagged: number };
@@ -369,10 +375,10 @@ function AcademyConsoleHome() {
       try {
         const freshProfile = await fetchMe();
         if (!cancelled) setProfile(freshProfile);
-        await loadBilling(freshProfile.id);
+        await loadBilling(resolveActiveAcademyId(freshProfile));
       } catch {
         if (!cancelled && !storedProfile) setProfile(null);
-        await loadBilling(storedProfile?.id);
+        await loadBilling(resolveActiveAcademyId(storedProfile));
       }
     }
 
@@ -451,6 +457,14 @@ function AcademyConsoleHome() {
     }
 
     void loadConsole();
+    const handleWorkspaceChange = () => {
+      const currentProfile = readStoredAuthProfile<AcademyProfile>();
+      void loadBilling(resolveActiveAcademyId(currentProfile));
+      void loadBatches();
+      void loadArchiveAndSets();
+      void loadUsage();
+    };
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
     const batchTimer = window.setInterval(() => void loadBatches(), 4000);
     const archiveTimer = window.setInterval(() => {
       void loadArchiveAndSets();
@@ -459,6 +473,7 @@ function AcademyConsoleHome() {
 
     return () => {
       cancelled = true;
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
       window.clearInterval(batchTimer);
       window.clearInterval(archiveTimer);
     };
@@ -595,6 +610,7 @@ function AcademyConsoleHome() {
 function AcademyOperationsPanel() {
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(null);
   const [classes, setClasses] = useState<AcademyClass[]>([]);
   const [problemSets, setProblemSets] = useState<ProblemSetListItem[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -621,7 +637,7 @@ function AcademyOperationsPanel() {
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
-  const academyId = profile?.id || "";
+  const academyId = activeWorkspaceId && activeWorkspaceId !== "student" ? activeWorkspaceId : resolveActiveAcademyId(profile);
 
   async function load(id = academyId) {
     if (!id) return;
@@ -660,7 +676,18 @@ function AcademyOperationsPanel() {
   useEffect(() => {
     const stored = readStoredAuthProfile<AcademyProfile>();
     setProfile(stored);
-    if (stored?.id) void load(stored.id);
+    const syncWorkspace = () => {
+      const currentProfile = readStoredAuthProfile<AcademyProfile>();
+      setProfile(currentProfile);
+      setActiveWorkspaceIdState(getActiveWorkspaceId());
+      const id = resolveActiveAcademyId(currentProfile);
+      if (id) void load(id);
+    };
+    syncWorkspace();
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, syncWorkspace);
+    return () => {
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, syncWorkspace);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Initial academy load runs once; mutations call load explicitly.
   }, []);
 
@@ -713,7 +740,7 @@ function AcademyOperationsPanel() {
     );
     return [...selectedGroupStudents, ...selectedOtherStudents];
   }, [learningStudents, selectedGroupIds, selectedStudentIds]);
-  if (profile?.account_type === "student") {
+  if (!academyId && profile?.account_type === "student") {
     return (
       <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
         <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다</h1>
@@ -1136,6 +1163,7 @@ function academyEventTypeLabel(value: string) {
 
 function AcademySchedulePanel() {
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(null);
   const [classes, setClasses] = useState<ClassCard[]>([]);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [monthCursor, setMonthCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -1182,12 +1210,20 @@ function AcademySchedulePanel() {
   }, [monthCursor]);
 
   useEffect(() => {
-    setProfile(readStoredAuthProfile<AcademyProfile>());
+    const syncWorkspace = () => {
+      setProfile(readStoredAuthProfile<AcademyProfile>());
+      setActiveWorkspaceIdState(getActiveWorkspaceId());
+    };
+    syncWorkspace();
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, syncWorkspace);
+    return () => {
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, syncWorkspace);
+    };
   }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [activeWorkspaceId, load]);
 
   const classById = useMemo(() => new Map(classes.map((classRow) => [classRow.id, classRow])), [classes]);
   const monthDays = useMemo(() => academyMonthDays(monthCursor), [monthCursor]);
@@ -1214,7 +1250,9 @@ function AcademySchedulePanel() {
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
 
-  if (profile?.account_type === "student") {
+  const academyModeActive = Boolean(activeWorkspaceId && activeWorkspaceId !== "student") || profile?.account_type === "academy";
+
+  if (!academyModeActive && profile?.account_type === "student") {
     return (
       <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
         <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다.</h1>

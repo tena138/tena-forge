@@ -1060,7 +1060,7 @@ def _personal_set_payload(db: Session, personal_set: StudentPersonalSet) -> dict
 
 @router.get("/academy/{academy_id}/students")
 def academy_students(academy_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id)
+    require_staff(db, request, academy_id, permission="can_manage_students")
     memberships = db.scalars(select(StudentAcademyMembership).where(StudentAcademyMembership.academy_id == academy_id).order_by(StudentAcademyMembership.joined_at.desc())).all()
     rows = []
     for membership in memberships:
@@ -1130,14 +1130,14 @@ def revoke_student_key(academy_id: str, seat_id: UUID, request: Request, db: Ses
 
 @router.get("/academy/{academy_id}/groups")
 def academy_groups(academy_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id)
+    require_staff(db, request, academy_id, permission="can_manage_students")
     rows = db.scalars(select(AcademyClass).where(AcademyClass.academy_id == academy_id, AcademyClass.is_active.is_(True)).order_by(AcademyClass.created_at.desc())).all()
     return [_serialize(row) for row in rows]
 
 
 @router.post("/academy/{academy_id}/groups")
 def create_group(academy_id: str, payload: GroupPayload, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_students")
     group = AcademyClass(academy_id=academy_id, name=payload.name, description=payload.description, subject=payload.subject, grade_level=payload.grade_level)
     db.add(group)
     db.commit()
@@ -1146,7 +1146,7 @@ def create_group(academy_id: str, payload: GroupPayload, request: Request, db: S
 
 @router.patch("/academy/{academy_id}/groups/{group_id}")
 def update_group(academy_id: str, group_id: UUID, payload: GroupPayload, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_students")
     group = db.scalar(select(AcademyClass).where(AcademyClass.id == group_id, AcademyClass.academy_id == academy_id))
     if not group:
         raise HTTPException(status_code=404, detail="Group not found.")
@@ -1161,7 +1161,7 @@ def update_group(academy_id: str, group_id: UUID, payload: GroupPayload, request
 
 @router.delete("/academy/{academy_id}/groups/{group_id}")
 def delete_group(academy_id: str, group_id: UUID, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_students")
     group = db.scalar(select(AcademyClass).where(AcademyClass.id == group_id, AcademyClass.academy_id == academy_id))
     if not group:
         raise HTTPException(status_code=404, detail="Group not found.")
@@ -1178,7 +1178,7 @@ def delete_group(academy_id: str, group_id: UUID, request: Request, db: Session 
 
 @router.post("/academy/{academy_id}/groups/{group_id}/students")
 def add_group_student(academy_id: str, group_id: UUID, payload: GroupMemberPayload, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_students")
     group = db.scalar(select(AcademyClass).where(AcademyClass.id == group_id, AcademyClass.academy_id == academy_id))
     membership = db.scalar(
         select(StudentAcademyMembership).where(
@@ -1200,7 +1200,7 @@ def add_group_student(academy_id: str, group_id: UUID, payload: GroupMemberPaylo
 
 @router.delete("/academy/{academy_id}/groups/{group_id}/students/{student_id}")
 def remove_group_student(academy_id: str, group_id: UUID, student_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_students")
     membership = db.scalar(select(StudentAcademyMembership).where(StudentAcademyMembership.academy_id == academy_id, StudentAcademyMembership.student_user_id == student_id))
     if not membership:
         raise HTTPException(status_code=404, detail="Student membership not found.")
@@ -1213,7 +1213,7 @@ def remove_group_student(academy_id: str, group_id: UUID, student_id: str, reque
 
 @router.post("/academy/{academy_id}/assignments")
 def create_learning_assignment(academy_id: str, payload: LearningAssignmentCreate, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
     version = _create_content_version(
         db,
         academy_id,
@@ -1267,7 +1267,7 @@ def create_learning_assignment(academy_id: str, payload: LearningAssignmentCreat
 
 @router.get("/academy/{academy_id}/assignments")
 def list_learning_assignments(academy_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id)
+    require_staff(db, request, academy_id, permission="can_manage_assignments")
     rows = db.scalars(
         select(LearningAssignment)
         .where(LearningAssignment.academy_id == academy_id)
@@ -1279,7 +1279,7 @@ def list_learning_assignments(academy_id: str, request: Request, db: Session = D
 
 @router.patch("/academy/{academy_id}/assignments/{assignment_id}")
 def update_learning_assignment(academy_id: str, assignment_id: UUID, payload: LearningAssignmentUpdate, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
     assignment = db.scalar(select(LearningAssignment).where(LearningAssignment.id == assignment_id, LearningAssignment.academy_id == academy_id).options(joinedload(LearningAssignment.content_version)))
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found.")
@@ -1295,7 +1295,7 @@ def update_learning_assignment(academy_id: str, assignment_id: UUID, payload: Le
 
 @router.post("/academy/{academy_id}/assignments/{assignment_id}/publish")
 def publish_learning_assignment(academy_id: str, assignment_id: UUID, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
     assignment = db.scalar(select(LearningAssignment).where(LearningAssignment.id == assignment_id, LearningAssignment.academy_id == academy_id).options(joinedload(LearningAssignment.content_version)))
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found.")
@@ -1307,7 +1307,7 @@ def publish_learning_assignment(academy_id: str, assignment_id: UUID, request: R
 
 @router.delete("/academy/{academy_id}/assignments/{assignment_id}")
 def archive_learning_assignment(academy_id: str, assignment_id: UUID, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
     assignment = db.scalar(select(LearningAssignment).where(LearningAssignment.id == assignment_id, LearningAssignment.academy_id == academy_id).options(joinedload(LearningAssignment.content_version)))
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found.")
@@ -1319,7 +1319,7 @@ def archive_learning_assignment(academy_id: str, assignment_id: UUID, request: R
 
 @router.get("/academy/{academy_id}/assignments/{assignment_id}/report")
 def learning_assignment_report(academy_id: str, assignment_id: UUID, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id)
+    require_staff(db, request, academy_id, permission="can_manage_assignments")
     assignment = db.scalar(select(LearningAssignment).where(LearningAssignment.id == assignment_id, LearningAssignment.academy_id == academy_id).options(joinedload(LearningAssignment.content_version)))
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found.")
@@ -1363,7 +1363,7 @@ def learning_assignment_report(academy_id: str, assignment_id: UUID, request: Re
 
 @router.post("/academy/{academy_id}/assignments/{assignment_id}/students/{student_id}/confirm")
 def confirm_learning_assignment_completion(academy_id: str, assignment_id: UUID, student_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
     assignment = db.scalar(select(LearningAssignment).where(LearningAssignment.id == assignment_id, LearningAssignment.academy_id == academy_id).options(joinedload(LearningAssignment.content_version)))
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found.")
@@ -1424,7 +1424,7 @@ def _assignment_student_ids(db: Session, assignment: LearningAssignment) -> set[
 
 @router.post("/academy/{academy_id}/access-grants")
 def create_access_grant(academy_id: str, payload: AccessGrantPayload, request: Request, db: Session = Depends(get_db)):
-    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_materials")
     if not payload.student_id and not payload.group_id:
         raise HTTPException(status_code=400, detail="Grant must target a student or group.")
     _source_title_and_problems(db, academy_id, payload.source_type, payload.source_id)
@@ -1440,14 +1440,14 @@ def create_access_grant(academy_id: str, payload: AccessGrantPayload, request: R
 
 @router.get("/academy/{academy_id}/access-grants")
 def list_access_grants(academy_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id)
+    require_staff(db, request, academy_id, permission="can_manage_materials")
     rows = db.scalars(select(ArchiveAccessGrant).where(ArchiveAccessGrant.academy_id == academy_id).order_by(ArchiveAccessGrant.created_at.desc())).all()
     return [_serialize(row) for row in rows]
 
 
 @router.delete("/academy/{academy_id}/access-grants/{grant_id}")
 def revoke_access_grant(academy_id: str, grant_id: UUID, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"})
+    require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_materials")
     grant = db.scalar(select(ArchiveAccessGrant).where(ArchiveAccessGrant.id == grant_id, ArchiveAccessGrant.academy_id == academy_id))
     if not grant:
         raise HTTPException(status_code=404, detail="Access grant not found.")
@@ -1458,7 +1458,7 @@ def revoke_access_grant(academy_id: str, grant_id: UUID, request: Request, db: S
 
 @router.get("/academy/{academy_id}/wrong-answers")
 def academy_wrong_answers(academy_id: str, request: Request, student_id: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id)
+    require_staff(db, request, academy_id, permission="can_manage_students")
     query = select(WrongAnswerRecord).where(WrongAnswerRecord.academy_id == academy_id)
     if student_id:
         query = query.where(WrongAnswerRecord.student_id == student_id)
@@ -1470,7 +1470,7 @@ def academy_wrong_answers(academy_id: str, request: Request, student_id: str | N
 
 @router.get("/academy/{academy_id}/analytics/{source_type}/{source_id}")
 def academy_source_analytics(academy_id: str, source_type: str, source_id: str, request: Request, db: Session = Depends(get_db)):
-    require_staff(db, request, academy_id)
+    require_staff(db, request, academy_id, permission="can_manage_assignments")
     title, problems = _source_title_and_problems(db, academy_id, source_type, source_id)
     problem_ids = [problem.id for problem in problems]
     attempts = db.scalars(select(ProblemAttempt).where(ProblemAttempt.academy_id == academy_id, ProblemAttempt.problem_id.in_(problem_ids))).all() if problem_ids else []

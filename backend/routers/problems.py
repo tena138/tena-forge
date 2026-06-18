@@ -21,7 +21,7 @@ from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag
 from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigation, ProblemRead, ProblemStats, ProblemUpdate, ReviewUpdate, TagBase, TagRead, VisualCropUpdate
 from services.math_normalization import normalize_geometry_notation
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
-from services.ownership import current_owner_id, current_owner_ids
+from services.ownership import current_owner_ids, current_workspace_id
 from services.pipeline import strip_answer_choices, vision_json
 from services.private_files import sign_static_url
 from services.storage import save_visual_bytes
@@ -553,7 +553,7 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
 
 @router.post("/{problem_id}/duplicate", response_model=ProblemRead)
 def duplicate_problem(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))
@@ -611,7 +611,7 @@ def duplicate_problem(problem_id: UUID, request: Request, db: Session = Depends(
 
 @router.post("/{problem_id}/reextract", response_model=ProblemRead)
 def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(get_db)):
-    owner_id = current_owner_id(request)
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     problem = db.scalars(
         select(Problem)
         .where(Problem.id == problem_id, Problem.owner_id.in_(current_owner_ids(request, db)), Problem.deleted_at.is_(None))

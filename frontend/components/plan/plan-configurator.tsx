@@ -74,6 +74,7 @@ const sectionScenes: Partial<Record<string, SceneKey>> = {
   ai: "ai",
   storage: "storage",
   student: "student",
+  staff: "student",
 };
 
 export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
@@ -94,9 +95,9 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
 
   useEffect(() => {
     const previous = previousPackageIdsRef.current;
-    const changedGroup = (["ai", "storage", "student"] as const).find((group) => previous[group] !== selectedPackageIds[group]);
+    const changedGroup = (["ai", "storage", "student", "staff"] as const).find((group) => previous[group] !== selectedPackageIds[group]);
     previousPackageIdsRef.current = selectedPackageIds;
-    if (changedGroup) setActiveScene(changedGroup);
+    if (changedGroup) setActiveScene(changedGroup === "staff" ? "student" : changedGroup);
   }, [selectedPackageIds]);
 
   useEffect(() => {
@@ -165,6 +166,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
                   {plan === "basic" ? "Basic은 학생 키 5개 포함, 최대 10개까지 1명당 월 8,000원으로 확장합니다." : "Pro는 학생 키 10개 포함, 최대 100개까지 1명당 월 8,000원으로 확장합니다."}
                 </p>
               </StudentKeyPackageSection>
+              <StaffSeatPackageSection plan={plan} selectedPackageIds={selectedPackageIds} onSelect={selectPackage} register={sectionRefs} />
 
               {plan === "basic" ? <LockedProFeatures register={sectionRefs} /> : null}
 
@@ -283,11 +285,12 @@ function PlanIntroStage({
           <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-slate-400 sm:text-lg">{planConfig.positioning}</p>
         </div>
 
-        <div className="mx-auto mt-10 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto mt-10 grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <PlanIntroMetric icon={Sparkles} label="AI credits" value={`${specs.monthlyAiCredits.toLocaleString()} / 월`} />
           <PlanIntroMetric icon={Database} label="문제 DB" value={`${specs.problemDb.toLocaleString()}문항`} />
           <PlanIntroMetric icon={HardDrive} label="Storage" value={Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb.toLocaleString()}GB`} />
           <PlanIntroMetric icon={School} label="Student keys" value={`${specs.studentKeys.toLocaleString()}개`} />
+          <PlanIntroMetric icon={Users} label="Staff seats" value={`${Number(specs.staffSeats).toLocaleString()}명`} />
         </div>
 
         <div data-plan-intro-callout className="mx-auto mt-8 max-w-2xl rounded-[12px] border border-zinc-200/20 bg-zinc-200/10 p-5 text-center shadow-[0_24px_80px_rgba(8,145,178,0.10)]">
@@ -434,6 +437,65 @@ function StudentKeyPackageSection({ plan, selectedPackageIds, onSelect, register
   );
 }
 
+function StaffSeatPackageSection({ plan, selectedPackageIds, onSelect, register }: { plan: PaidPlanType; selectedPackageIds: Record<PackageGroup, string>; onSelect: (group: PackageGroup, id: string) => void; register: React.MutableRefObject<Record<string, HTMLElement | null>> }) {
+  const options = PACKAGE_GROUPS[plan].staff || [];
+  const matchedIndex = options.findIndex((option) => option.id === selectedPackageIds.staff);
+  const selectedIndex = Math.max(matchedIndex, 0);
+  const selectedOption = options[selectedIndex] || options[0];
+  const maxSeats = Number(options[options.length - 1]?.specs.staffSeats || 0);
+  const staffSeats = Number(selectedOption?.specs.staffSeats || 0);
+  const canDecrease = selectedIndex > 0;
+  const canIncrease = selectedIndex < options.length - 1;
+
+  function selectIndex(nextIndex: number) {
+    const option = options[Math.max(0, Math.min(options.length - 1, nextIndex))];
+    if (option) onSelect("staff", option.id);
+  }
+
+  return (
+    <ConfigSection id="staff" register={register} eyebrow={PACKAGE_LABELS.staff} title="Staff Seat 선택">
+      <div className="rounded-[10px] border border-white/10 bg-white/[0.04] p-5">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-slate-500">초대 강사 좌석</p>
+            <p className="mt-2 text-4xl font-black text-white">{staffSeats.toLocaleString("ko-KR")}명</p>
+            <p className="mt-2 text-sm font-semibold text-slate-400">소유자 제외 · 초대 강사 {staffSeats}명 · 최대 {maxSeats}명</p>
+          </div>
+          <div className="rounded-[8px] border border-zinc-200/20 bg-zinc-200/10 px-4 py-3 text-right">
+            <p className="text-xs font-bold text-zinc-100">Staff seat addon</p>
+            <p className="mt-1 text-lg font-black text-white">{selectedOption?.label || "포함 없음"}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center gap-3">
+          <button type="button" disabled={!canDecrease} onClick={() => selectIndex(selectedIndex - 1)} className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-white/10 bg-white/[0.05] text-white transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-35" aria-label="강사 좌석 1명 줄이기">
+            <Minus className="h-4 w-4" />
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(options.length - 1, 0)}
+            step={1}
+            value={selectedIndex}
+            onChange={(event) => selectIndex(Number(event.target.value))}
+            className="h-2 w-full accent-zinc-200"
+            aria-label="강사 좌석 수 선택"
+          />
+          <button type="button" disabled={!canIncrease} onClick={() => selectIndex(selectedIndex + 1)} className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-white/10 bg-white/[0.05] text-white transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-35" aria-label="강사 좌석 1명 늘리기">
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold text-slate-500">
+          <span>0명</span>
+          <span>1명당 ₩10,000 / 월</span>
+          <span>{maxSeats}명</span>
+        </div>
+      </div>
+    </ConfigSection>
+  );
+}
+
 function SubjectEngineSection({
   selectedSubjectEngines,
   engineDelta,
@@ -542,7 +604,7 @@ function ProductStage({
   const consoleSectionRefs = useRef<Partial<Record<SceneKey, HTMLElement | null>>>({});
   const [cameraY, setCameraY] = useState(0);
   const [focusSettled, setFocusSettled] = useState(true);
-  const focusSignature = `${scene}:${specs.monthlyAiCredits}:${specs.fileStorageGb}:${specs.studentKeys}:${specs.processingSpeed}:${specs.concurrentJobs}`;
+  const focusSignature = `${scene}:${specs.monthlyAiCredits}:${specs.fileStorageGb}:${specs.studentKeys}:${specs.staffSeats}:${specs.processingSpeed}:${specs.concurrentJobs}`;
 
   useEffect(() => {
     setFocusSettled(false);
@@ -1195,6 +1257,7 @@ function SummaryConsoleSection({
   const animatedAi = useAnimatedNumber(numericSpec(specs.monthlyAiCredits), 700);
   const animatedStorage = useAnimatedNumber(numericSpec(specs.fileStorageGb), 700);
   const animatedKeys = useAnimatedNumber(numericSpec(specs.studentKeys), 700);
+  const animatedStaffSeats = useAnimatedNumber(numericSpec(specs.staffSeats), 700);
   const animatedPrice = useAnimatedNumber(monthlyPrice, 700);
 
   return (
@@ -1221,6 +1284,7 @@ function SummaryConsoleSection({
           <SummaryConsoleItem label="AI Pack" value={selectedOptionName(plan, selectedPackageIds, "ai")} detail={`${formatNumber(animatedAi)} credits`} />
           <SummaryConsoleItem label="Storage Pack" value={selectedOptionName(plan, selectedPackageIds, "storage")} detail={`${formatStorageLabel(animatedStorage)} storage`} />
           <SummaryConsoleItem label="Student Pack" value={selectedOptionName(plan, selectedPackageIds, "student")} detail={`${formatNumber(animatedKeys)} keys`} />
+          <SummaryConsoleItem label="Staff Pack" value={selectedOptionName(plan, selectedPackageIds, "staff")} detail={`${formatNumber(animatedStaffSeats)} seats`} />
           <SummaryConsoleItem label="Billing" value="Monthly billing" detail="monthly renewal" />
         </div>
       </div>
@@ -1286,6 +1350,7 @@ function FullPlanSummarySection({
               <SummaryLine>월 AI {specs.monthlyAiCredits.toLocaleString()} credits</SummaryLine>
               <SummaryLine>문제 DB {Number(specs.problemDb).toLocaleString()}문항 · 저장공간 {Number(specs.fileStorageGb) >= 1024 ? "1TB" : `${specs.fileStorageGb}GB`}</SummaryLine>
               <SummaryLine>학생 키 {specs.studentKeys.toLocaleString()}개</SummaryLine>
+              <SummaryLine>강사 좌석 {Number(specs.staffSeats).toLocaleString()}명</SummaryLine>
               <SummaryLine>PDF 추출은 클라우드에서 처리되며 AI credits를 사용합니다.</SummaryLine>
               {plan === "basic" ? (
                 <>
