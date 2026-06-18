@@ -9,8 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Academy, AcademyClass, AcademyStaffInviteCode, AcademyStaffMembership, ClassTeacher
-from services.academy_student_access import ensure_academy_subscription
+from models import Academy, AcademyClass, AcademyStaffInviteCode, AcademyStaffMembership, AcademyStudentSubscription, ClassTeacher
 from services.ownership import current_user_id, current_workspace_id, require_workspace_owner, requested_workspace_id
 from services.subscription_pricing import STAFF_SEAT_MONTHLY_ADDON_KRW
 
@@ -86,7 +85,7 @@ def _permission_payload(row: AcademyStaffMembership | AcademyStaffInviteCode | N
 
 
 def _seat_status(db: Session, academy_id: str) -> dict:
-    subscription = ensure_academy_subscription(db, academy_id)
+    subscription = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == academy_id))
     now = datetime.utcnow()
     active_staff = db.scalar(
         select(func.count(AcademyStaffMembership.id)).where(
@@ -102,7 +101,7 @@ def _seat_status(db: Session, academy_id: str) -> dict:
             AcademyStaffInviteCode.expires_at > now,
         )
     ) or 0
-    purchased = int(subscription.purchased_staff_seats or 0)
+    purchased = int(subscription.purchased_staff_seats or 0) if subscription else 0
     return {
         "purchased_staff_seats": purchased,
         "active_staff": int(active_staff),

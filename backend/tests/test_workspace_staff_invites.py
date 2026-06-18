@@ -118,6 +118,19 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_workspace_listing_does_not_create_free_subscription(self):
+        db = self.Session()
+        try:
+            db.add(Academy(id=uuid.UUID(self.owner_id), email="owner@example.com", academy_name="Owner Academy", account_type="academy"))
+            db.commit()
+
+            visible = list_workspaces(request_for(self.owner_id), db)
+            workspace = next(item for item in visible["items"] if item["id"] == self.owner_id)
+            self.assertEqual(workspace["seat_status"]["purchased_staff_seats"], 0)
+            self.assertIsNone(db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == self.owner_id)))
+        finally:
+            db.close()
+
     def test_teacher_invite_requires_assigned_class(self):
         db = self.Session()
         try:
