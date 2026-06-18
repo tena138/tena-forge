@@ -1250,6 +1250,14 @@ function AcademySchedulePanel() {
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
 
+  useEffect(() => {
+    if (!classes.length) return;
+    setForm((current) => {
+      if (current.class_id && classes.some((classRow) => classRow.id === current.class_id)) return current;
+      return { ...current, class_id: classes[0].id };
+    });
+  }, [classes]);
+
   const academyModeActive = Boolean(activeWorkspaceId && activeWorkspaceId !== "student") || profile?.account_type === "academy";
 
   if (!academyModeActive && profile?.account_type === "student") {
@@ -1265,7 +1273,22 @@ function AcademySchedulePanel() {
 
   async function submitSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.class_id || !form.title.trim() || !form.date || !form.starts_at) return;
+    if (!classes.length) {
+      setError("먼저 클래스를 만들어야 일정을 추가할 수 있습니다.");
+      return;
+    }
+    if (!form.class_id) {
+      setError("일정을 연결할 클래스를 선택해주세요.");
+      return;
+    }
+    if (!form.title.trim()) {
+      setError("일정명을 입력해주세요.");
+      return;
+    }
+    if (!form.date || !form.starts_at) {
+      setError("일정 날짜와 시작 시간을 입력해주세요.");
+      return;
+    }
     setSaving(true);
     setNotice("");
     setError("");
@@ -1436,7 +1459,13 @@ function AcademySchedulePanel() {
 
       <button
         type="button"
-        onClick={() => setFormOpen(true)}
+        onClick={() => {
+          setForm((current) => {
+            if (current.class_id || !classes[0]?.id) return current;
+            return { ...current, class_id: classes[0].id };
+          });
+          setFormOpen(true);
+        }}
         className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full border border-zinc-300/30 bg-zinc-600 text-white shadow-2xl shadow-zinc-950/40 transition hover:bg-zinc-500"
         aria-label="일정 추가"
       >
@@ -1457,6 +1486,7 @@ function AcademySchedulePanel() {
                 <option value="">클래스</option>
                 {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
               </select>
+              {!classes.length ? <p className="text-xs font-semibold text-zinc-300">먼저 학생 관리에서 클래스를 만들어주세요.</p> : null}
               <Input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="일정명" />
               <select className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.event_type} onChange={(event) => setForm((current) => ({ ...current, event_type: event.target.value }))}>
                 <option value="class">수업</option>
@@ -1536,7 +1566,7 @@ function AcademySchedulePanel() {
                 placeholder="메모"
                 className="min-h-24 w-full resize-none rounded-[8px] border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-zinc-300/50"
               />
-              <Button type="submit" className="w-full" disabled={saving || !form.class_id || !form.title.trim()}>
+              <Button type="submit" className="w-full" disabled={saving}>
                 {saving ? "저장 중" : "저장"}
               </Button>
             </form>
