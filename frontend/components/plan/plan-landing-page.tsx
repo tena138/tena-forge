@@ -46,8 +46,8 @@ const planCards = [
     tone: "free" as PlanCardTone,
     price: "무료",
     href: "/register?plan=free",
-    cta: "무료로 시작하기",
-    points: ["기본 체험", "문항 추출 테스트", "시험지 제작"],
+    cta: "콘솔 둘러보기",
+    points: ["AI credits 0", "추출 기능 잠금", "플랜 선택 후 7일 체험"],
   },
   {
     name: "Basic",
@@ -409,7 +409,7 @@ export function PlanLandingPage() {
                   href="/register?plan=free"
                   className="landing-motion-safe inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[8px] border border-white/80 bg-white px-5 text-sm font-black text-black shadow-[0_18px_42px_rgba(255,255,255,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-[0_22px_54px_rgba(255,255,255,0.18)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/35 active:scale-[0.98] sm:flex-none sm:px-6"
                 >
-                  무료로 시작하기 <ArrowRight className="h-4 w-4" />
+                  콘솔 둘러보기 <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/login?redirect=/academy"
@@ -453,7 +453,7 @@ function LandingNav() {
           <Link href="/login?redirect=/academy" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25 sm:inline-flex">로그인</Link>
           <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/35 active:scale-[0.98] sm:px-4">
             <span className="sm:hidden">시작</span>
-            <span className="hidden sm:inline">무료로 시작하기</span>
+            <span className="hidden sm:inline">콘솔 둘러보기</span>
           </Link>
         </div>
       </div>
@@ -1652,7 +1652,7 @@ function PlanSection() {
             <p className="landing-plan-eyebrow text-xs font-black uppercase tracking-[0.22em] text-zinc-200/90">Plans</p>
             <h2 className="landing-plan-title landing-keep-words mt-3 text-4xl font-black tracking-normal text-white sm:text-5xl">필요한 만큼만 확장</h2>
             <p className="landing-plan-copy landing-keep-words mt-3 text-sm font-semibold leading-6 text-slate-400 sm:text-base">
-              무료로 시작하고, 수업 규모와 처리량에 맞춰 Basic 또는 Pro로 이어갑니다.
+              가입 후 콘솔을 둘러보고, 수업 규모와 처리량에 맞춰 Basic 또는 Pro 결제수단 등록 후 7일 체험으로 이어갑니다.
             </p>
           </div>
           <Link href="/pricing" className="landing-plan-pricing-link landing-motion-safe inline-flex h-10 items-center gap-2 rounded-[7px] border border-white/12 bg-white/[0.035] px-4 text-sm font-black text-slate-100 shadow-[0_18px_42px_rgba(0,0,0,0.20)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25">

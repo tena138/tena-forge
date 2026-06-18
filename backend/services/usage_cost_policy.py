@@ -41,6 +41,8 @@ class PlanCostPolicy:
 
     @property
     def monthly_credit_limit(self) -> int:
+        if self.monthly_cost_cap_krw <= 0:
+            return 0
         safe_budget = self.monthly_cost_cap_krw * SAFETY_BUDGET_RATE
         return max(1, int(math.floor(safe_budget / KRW_PER_BASE_CREDIT)))
 
@@ -69,13 +71,13 @@ class ExtractionEstimate:
 DEFAULT_PLAN_POLICIES: dict[str, PlanCostPolicy] = {
     "free": PlanCostPolicy(
         plan_id="free",
-        monthly_cost_cap_krw=1_000,
-        storage_gb_limit=0.1,
-        monthly_upload_mb_limit=50,
-        max_file_size_mb=10,
-        max_pages_per_job=5,
-        max_jobs_per_day=2,
-        max_concurrent_jobs=1,
+        monthly_cost_cap_krw=0,
+        storage_gb_limit=0,
+        monthly_upload_mb_limit=0,
+        max_file_size_mb=0,
+        max_pages_per_job=0,
+        max_jobs_per_day=0,
+        max_concurrent_jobs=0,
         original_file_retention_days=1,
         extracted_result_retention_days=7,
         allowed_models=("mini",),

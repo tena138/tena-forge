@@ -502,7 +502,7 @@ def _seed_saas_foundation():
     db = SessionLocal()
     try:
         default_plans = [
-            ("free", "Free", 0, 3, 30, 100, 100000),
+            ("free", "Free", 0, 0, 0, 0, 0),
             ("basic_local", "Basic Local", 48000, 100, 1000, 20480, 5000000),
             ("basic_cloud", "Basic Cloud", 79000, 100, 1000, 20480, 5000000),
             ("pro", "Pro", 108000, 100, 1000, 5120, 5000000),
@@ -517,6 +517,11 @@ def _seed_saas_foundation():
             else:
                 plan.name = name
                 plan.monthly_price = price
+                if code == "free":
+                    plan.monthly_upload_count = uploads
+                    plan.monthly_processed_pages = pages
+                    plan.storage_quota_mb = storage
+                    plan.monthly_ai_tokens = tokens
         if not db.get(PlatformSetting, "marketplace"):
             db.add(PlatformSetting(key="marketplace", value={"default_commission_rate": 0.10, "payout_period": "monthly", "minimum_product_price": 0}))
         admin = db.scalar(select(Academy).where(Academy.email == "admin@tenaforge.com"))

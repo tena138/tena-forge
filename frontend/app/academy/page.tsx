@@ -210,7 +210,7 @@ function formatUsageNumber(value: number, suffix = "") {
 
 function planNameFallback(plan?: string | null) {
   const labels: Record<string, string> = {
-    free: "Trial",
+    free: "Free",
     basic: "Basic",
     pro: "Pro",
     enterprise: "Enterprise",
@@ -223,6 +223,7 @@ function planAuroraToneClass(plan?: string | null, name?: string | null) {
   if (key.includes("enterprise") || key.includes("business")) return "plan-aurora-tone-enterprise";
   if (key.includes("pro")) return "plan-aurora-tone-pro";
   if (key.includes("basic") || key.includes("plus")) return "plan-aurora-tone-basic";
+  if (key.includes("free")) return "plan-aurora-tone-free";
   return "plan-aurora-tone-trial";
 }
 
@@ -240,7 +241,7 @@ function daysUntil(value?: string | null) {
 }
 
 function UsageRing({ label, used, total, ratio }: { label: string; used: number; total: number; ratio: string }) {
-  const percent = total > 0 ? remainingPercent(used, total) : 100;
+  const percent = remainingPercent(used, total);
   const tone = remainingTone(percent);
   return (
     <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] border border-border bg-card/65 p-3 text-center shadow-sm">
@@ -279,7 +280,7 @@ function UsageOverview({
   const normalizedPlan = String(summary?.plan?.code || profile?.plan || "").toLowerCase();
   const hasAssignedPlan = !["", "free", "plan"].includes(normalizedPlan) || !["", "Free", "Trial", "Plan"].includes(planName);
   const remainingDays = daysUntil(profile?.trial_ends_at || profile?.plan_expires_at || null);
-  const isTrial = subscription?.status === "trialing" || Boolean(profile?.plan_expires_at && profile?.plan === "basic");
+  const isTrial = subscription?.status === "trialing" || Boolean(profile?.plan_expires_at && profile?.plan && profile.plan !== "free");
   const planStatus = isTrial && remainingDays !== null ? `무료 체험 ${Math.max(remainingDays, 0)}일 남음` : subscription?.status === "active" || hasAssignedPlan ? "사용 중" : "플랜 미등록";
   const creditsUsed = summary?.extraction_credits_used ?? 0;
   const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;

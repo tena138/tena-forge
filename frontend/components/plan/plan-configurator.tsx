@@ -192,9 +192,9 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
                 </ConfigSection>
               )}
 
-              <ConfigSection id="billing" register={sectionRefs} eyebrow="Billing" title="월 자동결제">
+              <ConfigSection id="billing" register={sectionRefs} eyebrow="Billing" title="결제수단 등록">
                 <div className="grid gap-3">
-                  <BillingCard active title="월간 결제" price={`${formatKRW(monthlyPrice)} / 월`} detail="매월 자동결제" onClick={() => {}} />
+                  <BillingCard active title="7일 무료 체험" price={`${formatKRW(monthlyPrice)} / 월`} detail="오늘 0원, 체험 종료 후 자동결제" onClick={() => {}} />
                 </div>
               </ConfigSection>
 
@@ -1144,8 +1144,8 @@ function BillingConsoleSection({ monthlyPrice }: { billingCycle: BillingCycle; m
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <ConsoleStat label="오늘 결제" value={formatKRW(Math.round(animatedMonthly))} icon={CreditCard} tone="violet" />
-        <ConsoleStat label="월 환산" value={formatKRW(Math.round(animatedMonthly))} icon={Gauge} />
+        <ConsoleStat label="오늘 결제" value="0원" icon={CreditCard} tone="violet" />
+        <ConsoleStat label="첫 결제" value={formatKRW(Math.round(animatedMonthly))} icon={Gauge} />
         <ConsoleStat label="결제 방식" value="자동결제" icon={PackageCheck} />
         <ConsoleStat label="주기" value="Monthly" icon={ClipboardCheck} />
       </div>

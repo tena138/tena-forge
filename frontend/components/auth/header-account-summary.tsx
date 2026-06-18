@@ -26,7 +26,7 @@ const planStyles: Record<PlanTone, string> = {
 
 const planNames: Record<string, { label: string; tone: PlanTone }> = {
   admin: { label: "Admin", tone: "admin" },
-  free: { label: "Trial", tone: "trial" },
+  free: { label: "Free", tone: "free" },
   basic: { label: "Basic", tone: "basic" },
   plus: { label: "Basic", tone: "basic" },
   pro: { label: "Pro", tone: "pro" },
@@ -90,6 +90,9 @@ function displayPlan(profile: AcademyProfile) {
   }
   const normalizedPlan = String(profile.plan || "free").toLowerCase();
   const plan = planNames[normalizedPlan] || { label: normalizedPlan || "Free", tone: "free" as PlanTone };
+  if (normalizedPlan === "free") {
+    return { ...plan, status: "콘솔 보기", statusClass: "text-zinc-600" };
+  }
   return { ...plan, status: profile.is_active ? "활성" : "비활성", statusClass: profile.is_active ? "text-zinc-600" : "text-zinc-600" };
 }
 

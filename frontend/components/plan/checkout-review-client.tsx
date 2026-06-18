@@ -144,7 +144,14 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
       billing_key: billingKey,
       billing_issue_token: issue.billingIssueToken || issue.billing_issue_token || null,
     });
-    router.push(`/checkout/success?paymentId=${encodeURIComponent(confirmResponse.data.payment_id || checkout.payment_id)}&type=monthly`);
+    const successParams = new URLSearchParams({
+      type: "monthly",
+      trial: "started",
+      paymentId: String(confirmResponse.data.payment_id || checkout.payment_id || ""),
+    });
+    if (confirmResponse.data.trial_ends_at) successParams.set("trialEndsAt", String(confirmResponse.data.trial_ends_at));
+    if (confirmResponse.data.first_payment_at) successParams.set("firstPaymentAt", String(confirmResponse.data.first_payment_at));
+    router.push(`/checkout/success?${successParams.toString()}`);
   }
 
   return (
@@ -156,16 +163,16 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_24rem]">
           <section className="rounded-[28px] border border-slate-950/10 bg-white p-6 shadow-[0_24px_90px_rgba(15,23,42,0.10)] sm:p-8">
             <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Checkout Review</p>
-            <h1 className="mt-3 text-4xl font-black tracking-normal">결제 구성을 확인하세요</h1>
+            <h1 className="mt-3 text-4xl font-black tracking-normal">무료 체험 구성을 확인하세요</h1>
             <p className="mt-3 text-base leading-7 text-slate-600">
-              월 상품은 billing key 기반 자동결제로 처리됩니다.
+              오늘은 결제수단만 등록하고, 7일 무료 체험 후 첫 월 자동결제가 진행됩니다.
             </p>
 
             <div className="mt-8 grid gap-4">
               <ReviewBlock title="플랜">
                 <div className="flex items-center justify-between">
                   <span>{PLANS[plan].name}</span>
-                  <span>월 자동결제</span>
+                  <span>7일 체험 후 월 자동결제</span>
                 </div>
               </ReviewBlock>
               <ReviewBlock title="선택 엔진">
@@ -210,7 +217,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
               <label className="flex gap-3 rounded-[16px] border border-slate-950/10 bg-slate-50 p-4 text-sm font-semibold text-slate-700">
                 <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-0.5 h-4 w-4 accent-slate-950" />
                 <span>
-                  <Link href="/terms" className="font-black underline">이용약관</Link>, <Link href="/privacy" className="font-black underline">개인정보처리방침</Link>, <Link href="/refund-policy" className="font-black underline">환불 및 취소 정책</Link>을 확인했으며 결제 조건에 동의합니다.
+                  <Link href="/terms" className="font-black underline">이용약관</Link>, <Link href="/privacy" className="font-black underline">개인정보처리방침</Link>, <Link href="/refund-policy" className="font-black underline">환불 및 취소 정책</Link>을 확인했으며 결제수단 등록, 7일 무료 체험, 체험 종료 후 자동결제 조건에 동의합니다.
                 </span>
               </label>
             </div>
@@ -218,7 +225,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
 
           <aside className="h-fit rounded-[28px] border border-slate-950/10 bg-slate-950 p-6 text-white shadow-[0_24px_90px_rgba(15,23,42,0.22)]">
             <CreditCard className="h-6 w-6" />
-            <h2 className="mt-5 text-2xl font-black">결제 금액</h2>
+            <h2 className="mt-5 text-2xl font-black">체험 후 결제 금액</h2>
             <div className="mt-4 rounded-[14px] border border-zinc-100/20 bg-white/[0.06] px-4 py-3">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-100">Primary PG</p>
               <p className="mt-1 text-sm font-black">KG Inicis via PortOne</p>
@@ -229,7 +236,9 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
               {subjectEngineDelta > 0 ? <PriceLine label="엔진 추가" value={`+${formatKRW(subjectEngineDelta)} / 월`} /> : null}
               {Object.values(selectedPackages).map((option) => option && option.monthlyPriceDelta > 0 ? <PriceLine key={option.id} label={option.name} value={`+${formatKRW(option.monthlyPriceDelta)} / 월`} /> : null)}
             </div>
-            <p className="mt-5 text-sm font-bold text-slate-400">오늘 결제할 월 자동결제 금액</p>
+            <p className="mt-5 text-sm font-bold text-slate-400">오늘 결제 금액</p>
+            <p className="mt-2 text-4xl font-black">0원</p>
+            <p className="mt-4 text-sm font-bold text-slate-400">7일 후 첫 자동결제 금액</p>
             <p className="mt-2 text-4xl font-black">{formatKRW(chargeAmount)}</p>
             <label className="mt-6 block text-sm font-bold text-slate-200">
               휴대폰 번호
@@ -244,12 +253,12 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
               />
             </label>
             <button disabled={!agreed || loading || !phoneReady} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-white text-sm font-black text-slate-950 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50">
-              {loading ? "결제 준비 중..." : "월 자동결제 시작하기"}
+              {loading ? "등록 준비 중..." : "결제수단 등록 후 7일 체험 시작"}
             </button>
             {error && <p className="mt-4 rounded-[12px] bg-zinc-500/14 px-4 py-3 text-sm font-bold text-zinc-100">{error}</p>}
             <p className="mt-5 flex gap-2 text-xs leading-5 text-slate-400">
               <ShieldCheck className="h-4 w-4 shrink-0" />
-              서버가 금액과 패키지를 검증한 뒤 PortOne V2 billing key로 월 자동결제를 처리합니다.
+              서버가 금액과 패키지를 검증한 뒤 PortOne V2 billing key로 첫 결제를 7일 뒤 예약합니다.
             </p>
           </aside>
         </div>

@@ -26,7 +26,6 @@ from models import (
     OAuthAccount,
     OAuthProvider,
     PasswordResetToken,
-    Plan,
     RefreshToken,
     Subscription,
     TotpSecret,
@@ -94,7 +93,6 @@ from services.auth_security import (
     verify_refresh_record,
     verify_totp,
 )
-from services.subject_engines import subject_engine_pricing
 
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -137,13 +135,6 @@ def _active_subscription_for_profile(db: Session, academy: Academy) -> Subscript
         )
         .order_by(case((Subscription.status == "active", 0), else_=1), Subscription.created_at.desc())
     )
-
-
-def _should_start_basic_trial(academy: Academy) -> bool:
-    admin_emails = {email.strip().lower() for email in settings.admin_emails.split(",") if email.strip()}
-    if academy.email.strip().lower() in admin_emails:
-        return False
-    return bool(academy.account_type == "academy" and academy.plan == AcademyPlan.free and not academy.plan_expires_at)
 
 
 def _account_roles(db: Session | None, academy: Academy) -> set[str]:
@@ -387,38 +378,6 @@ async def _fetch_kakao_profile(token: dict) -> tuple[dict | None, str | None]:
     return response.json(), None
 
 
-def _start_basic_trial(db: Session, academy: Academy) -> None:
-    if academy.account_type != "academy":
-        academy.plan = AcademyPlan.free
-        academy.plan_expires_at = None
-        return
-    if _is_admin_account(db, academy):
-        academy.plan = AcademyPlan.pro
-        academy.plan_expires_at = None
-        return
-    now = now_utc()
-    trial_end = now + timedelta(days=7)
-    academy.plan = AcademyPlan.basic
-    academy.plan_expires_at = trial_end
-    plan_price = db.scalar(select(Plan.monthly_price).where(Plan.code == "basic")) or 48_000
-    pricing = subject_engine_pricing(int(plan_price), ["math"])
-    db.add(
-        Subscription(
-            user_id=str(academy.id),
-            plan_code="basic",
-            status="trialing",
-            provider="trial",
-            current_period_start=now,
-            current_period_end=trial_end,
-            enabled_subject_engines=pricing["enabled_subject_engines"],
-            subject_engine_count=int(pricing["subject_engine_count"]),
-            subject_multiplier=float(pricing["subject_multiplier"]),
-            final_monthly_price=int(pricing["final_monthly_price"]),
-            final_annual_price=int(pricing["final_annual_price"]),
-        )
-    )
-
-
 def _registration_code_proof(email: str, code: str, nonce: str, expires_at: int) -> str:
     message = f"{email}:{code}:{nonce}:{expires_at}".encode("utf-8")
     return hmac.new(settings.secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
@@ -512,7 +471,6 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.add(academy)
     db.flush()
-    _start_basic_trial(db, academy)
     db.commit()
     return {"message": "회원가입이 완료되었습니다.", "email": academy.email}
 
@@ -564,8 +522,6 @@ def complete_social_signup(payload: SocialSignupCompleteRequest, request: Reques
         is_active=True,
     )
     db.add(academy)
-    db.flush()
-    _start_basic_trial(db, academy)
     db.flush()
     db.add(
         OAuthAccount(
@@ -894,18 +850,6 @@ def revoke_other_sessions(request: Request, academy: Academy = Depends(get_curre
 
 @router.get("/me", response_model=AcademyProfile)
 def me(academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
-    if _should_start_basic_trial(academy):
-        active_sub = db.scalar(
-            select(Subscription).where(
-                Subscription.user_id == str(academy.id),
-                Subscription.status.in_(["trialing", "active"]),
-                ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > now_utc())),
-            )
-        )
-        if not active_sub:
-            _start_basic_trial(db, academy)
-            db.commit()
-            db.refresh(academy)
     return _profile(academy, db)
 
 
@@ -925,16 +869,6 @@ def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_curr
         academy.plan_expires_at = None
         for subscription in db.scalars(select(Subscription).where(Subscription.user_id == str(academy.id), Subscription.status == "trialing")).all():
             subscription.status = "canceled"
-    elif changes.get("account_type") == "academy" and _should_start_basic_trial(academy):
-        active_sub = db.scalar(
-            select(Subscription).where(
-                Subscription.user_id == str(academy.id),
-                Subscription.status.in_(["trialing", "active"]),
-                ((Subscription.current_period_end.is_(None)) | (Subscription.current_period_end > now_utc())),
-            )
-        )
-        if not active_sub:
-            _start_basic_trial(db, academy)
     db.commit()
     db.refresh(academy)
     return _profile(academy, db)
@@ -1067,8 +1001,6 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
                 password_hash=None,
             )
             db.add(academy)
-            db.flush()
-            _start_basic_trial(db, academy)
             db.flush()
         oauth_account = OAuthAccount(
             academy_id=academy.id,

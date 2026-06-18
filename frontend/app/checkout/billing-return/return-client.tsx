@@ -42,7 +42,14 @@ export function CheckoutBillingReturnClient() {
           billing_key: billingKey,
           billing_issue_token: billingIssueToken || null,
         });
-        router.replace(`/checkout/success?paymentId=${encodeURIComponent(response.data.payment_id || "")}`);
+        const successParams = new URLSearchParams({
+          type: "monthly",
+          trial: "started",
+          paymentId: String(response.data.payment_id || ""),
+        });
+        if (response.data.trial_ends_at) successParams.set("trialEndsAt", String(response.data.trial_ends_at));
+        if (response.data.first_payment_at) successParams.set("firstPaymentAt", String(response.data.first_payment_at));
+        router.replace(`/checkout/success?${successParams.toString()}`);
       } catch (error: any) {
         setMessage(paymentErrorMessage(error));
       }

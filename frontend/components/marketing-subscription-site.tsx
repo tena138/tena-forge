@@ -250,7 +250,7 @@ export function MarketingSubscriptionSite() {
             </Link>
             <Link href="/register" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[7px] bg-white px-3 text-sm font-bold text-slate-950 transition hover:bg-zinc-100">
               <span className="sm:hidden">시작</span>
-              <span className="hidden sm:inline">무료로 시작</span>
+              <span className="hidden sm:inline">콘솔 둘러보기</span>
               <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
@@ -338,7 +338,7 @@ export function MarketingSubscriptionSite() {
                   모델을 고르고, 큰 패키지만 선택하세요.
                 </h2>
                 <p className="mt-4 text-base leading-7 text-slate-400">
-                  Free는 무료 가입 후 기본 체험 상태로 두고, 유료 화면에서는 Basic과 Pro만 구성합니다.
+                  Free는 가입 후 콘솔을 둘러보는 상태입니다. Basic 또는 Pro에서 결제수단을 등록하면 7일 무료 체험이 시작됩니다.
                   세부 항목 직접 커스텀은 Enterprise 전용입니다.
                 </p>
               </div>

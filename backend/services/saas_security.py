@@ -68,7 +68,7 @@ def require_creator(request: Request, db: Session) -> str:
 
 def ensure_default_plans(db: Session) -> None:
     defaults = [
-        ("free", "Free", 0, 3, 30, 100, 100_000),
+        ("free", "Free", 0, 0, 0, 0, 0),
         ("basic", "Basic", 48000, 100, 1000, 20480, 5_000_000),
         ("basic_local", "Basic Local", 48000, 100, 1000, 20480, 5_000_000),
         ("basic_cloud", "Basic Cloud", 79000, 100, 1000, 20480, 5_000_000),

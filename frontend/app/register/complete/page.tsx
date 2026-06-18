@@ -168,7 +168,7 @@ function RegisterCompleteContent() {
               <SetupButton
                 icon={<Building2 className="h-4 w-4" />}
                 title="학원 / 연구실 / 과외 교습자"
-                detail={setupSaving === "academy" ? "저장 중..." : "Basic 7일 무료 체험 시작"}
+                detail={setupSaving === "academy" ? "저장 중..." : "무료 콘솔로 시작"}
                 disabled={Boolean(setupSaving)}
                 onClick={() => finishSetup("academy")}
               />

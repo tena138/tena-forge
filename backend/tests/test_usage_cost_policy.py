@@ -11,6 +11,14 @@ from services.usage_cost_policy import estimate_extraction, estimate_single_reex
 
 
 class UsageCostPolicyTests(unittest.TestCase):
+    def test_free_plan_has_no_extraction_budget(self):
+        policy = plan_cost_policy(None, "free")
+
+        self.assertEqual(policy.monthly_cost_cap_krw, 0)
+        self.assertEqual(policy.monthly_credit_limit, 0)
+        self.assertEqual(policy.monthly_upload_mb_limit, 0)
+        self.assertEqual(policy.max_jobs_per_day, 0)
+
     def test_basic_limit_uses_13000_krw_cap_formula(self):
         policy = plan_cost_policy(None, "basic")
 
