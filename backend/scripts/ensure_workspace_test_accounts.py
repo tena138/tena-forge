@@ -47,7 +47,17 @@ def _upsert_academy(db, *, email: str, name: str, plan: AcademyPlan, now: dateti
     validate_password_policy(TEST_PASSWORD, email, name)
     account = db.scalar(select(Academy).where(Academy.email == email))
     if not account:
-        account = Academy(email=email)
+        account = Academy(
+            email=email,
+            password_hash=hash_password(TEST_PASSWORD),
+            academy_name=name,
+            account_type="academy",
+            email_verified=True,
+            email_verified_at=now,
+            is_active=True,
+            is_suspended=False,
+            plan=plan,
+        )
         db.add(account)
         db.flush()
         print(f"Created test academy account: {email}")
