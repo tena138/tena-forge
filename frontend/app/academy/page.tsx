@@ -60,6 +60,7 @@ import {
 import {
   ClassCard,
   ScheduleEvent,
+  createClass,
   createScheduleEvent,
   deleteScheduleEvent,
   getStudentManagementDashboard,
@@ -1273,15 +1274,8 @@ function AcademySchedulePanel() {
 
   async function submitSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!classes.length) {
-      setError("먼저 클래스를 만들어야 일정을 추가할 수 있습니다.");
-      return;
-    }
-    if (!form.class_id) {
-      setError("일정을 연결할 클래스를 선택해주세요.");
-      return;
-    }
-    if (!form.title.trim()) {
+    const scheduleTitle = form.title.trim();
+    if (!scheduleTitle) {
       setError("일정명을 입력해주세요.");
       return;
     }
@@ -1293,6 +1287,14 @@ function AcademySchedulePanel() {
     setNotice("");
     setError("");
     try {
+      let targetClassId = classes.some((classRow) => classRow.id === form.class_id) ? form.class_id : "";
+      let autoCreatedClass = false;
+      if (!targetClassId) {
+        const createdClass = await createClass({ name: scheduleTitle });
+        targetClassId = createdClass.id;
+        autoCreatedClass = true;
+        setClasses((current) => [createdClass, ...current.filter((classRow) => classRow.id !== createdClass.id)]);
+      }
       const startDateTime = `${form.date}T${form.starts_at}:00`;
       const endOffset = form.ends_at ? new Date(`${form.date}T${form.ends_at}:00`).getTime() - new Date(startDateTime).getTime() : null;
       const starts = buildRecurringDateTimes(startDateTime, {
@@ -1306,16 +1308,20 @@ function AcademySchedulePanel() {
       for (const start of starts) {
         const end = endOffset && endOffset > 0 ? localDateTimeInputValue(new Date(new Date(start).getTime() + endOffset)) : null;
         await createScheduleEvent({
-          class_id: form.class_id,
-          title: form.title.trim(),
+          class_id: targetClassId,
+          title: scheduleTitle,
           description: form.description.trim() || null,
           event_type: form.event_type,
           starts_at: start,
           ends_at: end,
         });
       }
-      setNotice(starts.length > 1 ? `${starts.length}개 일정 저장됨` : "저장됨");
-      setForm((current) => ({ ...current, title: "", description: "" }));
+      if (autoCreatedClass) {
+        setNotice(starts.length > 1 ? `클래스 "${scheduleTitle}" 생성, ${starts.length}개 일정 저장됨` : `클래스 "${scheduleTitle}" 생성 및 일정 저장됨`);
+      } else {
+        setNotice(starts.length > 1 ? `${starts.length}개 일정 저장됨` : "저장됨");
+      }
+      setForm((current) => ({ ...current, class_id: targetClassId, title: "", description: "" }));
       setFormOpen(false);
       await load();
     } catch {
@@ -1486,7 +1492,7 @@ function AcademySchedulePanel() {
                 <option value="">클래스</option>
                 {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
               </select>
-              {!classes.length ? <p className="text-xs font-semibold text-zinc-300">먼저 학생 관리에서 클래스를 만들어주세요.</p> : null}
+              {!classes.length ? <p className="text-xs font-semibold text-zinc-300">클래스가 없으면 일정명과 같은 이름의 클래스가 자동 생성됩니다.</p> : null}
               <Input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="일정명" />
               <select className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.event_type} onChange={(event) => setForm((current) => ({ ...current, event_type: event.target.value }))}>
                 <option value="class">수업</option>
