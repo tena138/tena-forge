@@ -16,7 +16,7 @@ export default function SecuritySettingsPage() {
           </Card>
           <Card>
             <h2 className="font-bold text-white">활성 세션</h2>
-            <p className="mt-3 text-sm text-slate-400">Supabase Auth 세션과 감사 로그를 기반으로 기기 접근을 추적합니다.</p>
+            <p className="mt-3 text-sm text-neutral-400">Supabase Auth 세션과 감사 로그를 기반으로 기기 접근을 추적합니다.</p>
             <Button className="mt-5" variant="danger">다른 기기 로그아웃</Button>
           </Card>
         </div>

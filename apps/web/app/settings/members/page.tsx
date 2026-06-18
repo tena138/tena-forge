@@ -14,7 +14,7 @@ export default function MembersSettingsPage() {
           <div className="rounded-[10px] border border-white/10">
             {["owner@tenaforge.com", "member@tenaforge.com"].map((email, index) => (
               <div key={email} className="flex items-center justify-between border-b border-white/10 p-4 text-sm last:border-b-0">
-                <span className="text-slate-200">{email}</span>
+                <span className="text-neutral-200">{email}</span>
                 <Badge tone={index === 0 ? "violet" : "neutral"}>{index === 0 ? "owner" : "member"}</Badge>
               </div>
             ))}

@@ -7,7 +7,7 @@ export default function OutputDetailPage({ params }: { params: { id: string } })
     <AppFrame>
       <PageScaffold eyebrow="Output preview" title={`출력물 ${params.id}`} description="생성된 파일을 확인하고 다운로드합니다.">
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <Card className="min-h-[640px] bg-slate-200 text-slate-900">
+          <Card className="min-h-[640px] bg-neutral-200 text-neutral-900">
             <div className="mx-auto min-h-[560px] max-w-[420px] rounded bg-white p-10 shadow-xl">
               <h2 className="border-b pb-4 text-xl font-bold">고1 수학 중간고사 대비</h2>
               <p className="mt-8 text-sm leading-7">다음 이차함수의 최댓값을 구하시오.</p>

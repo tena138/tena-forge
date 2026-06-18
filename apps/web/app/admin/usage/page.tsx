@@ -13,7 +13,7 @@ export default function AdminUsagePage() {
           <Stat icon={Sparkles} label="AI tokens" value="-" detail="추정" />
           <Stat icon={Database} label="Storage" value="-" detail="전체" />
         </div>
-        <Card className="mt-4"><p className="text-sm text-slate-400">CSV 내보내기와 비용 상세 분석은 billing provider 연결 후 활성화됩니다.</p></Card>
+        <Card className="mt-4"><p className="text-sm text-neutral-400">CSV 내보내기와 비용 상세 분석은 billing provider 연결 후 활성화됩니다.</p></Card>
       </PageScaffold>
     </AppFrame>
   );

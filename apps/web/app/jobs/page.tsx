@@ -18,7 +18,7 @@ export default function JobsPage() {
               <div key={name} className="grid gap-3 border-b border-white/10 p-4 text-sm last:border-b-0 md:grid-cols-[1fr_120px_100px_100px]">
                 <span className="font-semibold text-white">{name}</span>
                 <Badge tone={index === 0 ? "violet" : index === 1 ? "green" : "amber"}>{index === 0 ? "processing" : index === 1 ? "completed" : "queued"}</Badge>
-                <span className="text-slate-400">{index === 0 ? "43%" : index === 1 ? "100%" : "0%"}</span>
+                <span className="text-neutral-400">{index === 0 ? "43%" : index === 1 ? "100%" : "0%"}</span>
                 <Button href={`/jobs/${index + 1}`} variant="ghost">열기</Button>
               </div>
             ))}

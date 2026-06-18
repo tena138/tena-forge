@@ -18,15 +18,20 @@ export default function TemplateDetailPage({ params }: { params: { id: string } 
         <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
           <Card>
             <Badge tone="violet">{template.category}</Badge>
-            <p className="mt-4 text-sm leading-6 text-slate-400">템플릿은 HTML/CSS와 반복 문항 블록, A4 출력 규칙을 포함합니다. 공개 템플릿은 서버에서 스크립트가 제거된 뒤 렌더링됩니다.</p>
+            <p className="mt-4 text-sm leading-6 text-neutral-400">템플릿은 HTML/CSS와 반복 문항 블록, A4 출력 규칙을 포함합니다. 공개 템플릿은 서버에서 스크립트가 제거된 뒤 렌더링됩니다.</p>
             <div className="mt-5 flex gap-2">
               <Button>이 템플릿 사용</Button>
               <Button variant="secondary">복제</Button>
             </div>
           </Card>
           <Card className="overflow-hidden p-0">
-            <div className="max-h-[720px] overflow-auto bg-slate-200 p-6">
-              <div className="mx-auto w-[794px] shadow-2xl" dangerouslySetInnerHTML={{ __html: `<style>${template.css}</style>${preview}` }} />
+            <div className="max-h-[720px] overflow-auto bg-neutral-200 p-6">
+              <iframe
+                title={`${template.name} 렌더링 미리보기`}
+                sandbox=""
+                srcDoc={`<style>${template.css}</style>${preview}`}
+                className="mx-auto h-[1123px] w-[794px] border-0 bg-white shadow-2xl"
+              />
             </div>
           </Card>
         </div>

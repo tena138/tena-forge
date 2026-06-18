@@ -8,8 +8,8 @@ export default function DashboardPage() {
       <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
           <Badge tone="violet">Private Studio</Badge>
-          <h1 className="mt-4 text-4xl font-bold tracking-[-0.03em] text-white">권리 있는 교육 자료를 문항 아카이브로, 완성된 교재로.</h1>
-          <p className="mt-3 max-w-3xl text-slate-400">직접 제작했거나 이용 권한을 보유한 자료를 정리하고, 시험지·워크북·교재로 재구성하세요.</p>
+          <h1 className="mt-4 text-4xl font-bold text-white">권리 있는 교육 자료를 문항 아카이브로, 완성된 교재로.</h1>
+          <p className="mt-3 max-w-3xl text-neutral-400">직접 제작했거나 이용 권한을 보유한 자료를 정리하고, 시험지·워크북·교재로 재구성하세요.</p>
         </div>
         <div className="flex gap-3">
           <Button href="/upload">내 자료 아카이빙 시작</Button>
@@ -25,7 +25,7 @@ export default function DashboardPage() {
       <div className="mt-6 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
           <h2 className="text-lg font-bold text-white">다음 작업</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">새 자료를 업로드해 처리 작업을 만들거나, 추출된 문항을 검토해 출력 가능한 세트로 다듬으세요.</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-400">새 자료를 업로드해 처리 작업을 만들거나, 추출된 문항을 검토해 출력 가능한 세트로 다듬으세요.</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button href="/upload"><FileUp className="h-4 w-4" />새 PDF 업로드</Button>
             <Button href="/jobs" variant="secondary">최근 배치 보기</Button>
@@ -39,9 +39,9 @@ export default function DashboardPage() {
           <div className="overflow-hidden rounded-[10px] border border-white/10">
             {["source upload", "extract pending", "review archive"].map((item, index) => (
               <div key={item} className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-white/10 bg-white/[0.025] p-4 text-sm last:border-b-0">
-                <span className="font-medium text-slate-200">{item}</span>
+                <span className="font-medium text-neutral-200">{item}</span>
                 <Badge tone={index === 0 ? "green" : "violet"}>{index === 0 ? "완료" : "대기"}</Badge>
-                <span className="text-slate-500">sample</span>
+                <span className="text-neutral-500">sample</span>
               </div>
             ))}
           </div>

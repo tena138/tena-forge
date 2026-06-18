@@ -19,7 +19,7 @@ export default function AdminPage() {
             <Card key={title}>
               <Badge tone="violet">admin</Badge>
               <h2 className="mt-4 text-xl font-bold text-white">{title}</h2>
-              <p className="mt-2 text-sm text-slate-400">{body}</p>
+              <p className="mt-2 text-sm text-neutral-400">{body}</p>
               <Button href={href} className="mt-5" variant="secondary">열기</Button>
             </Card>
           ))}

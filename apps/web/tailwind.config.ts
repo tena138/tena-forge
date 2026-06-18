@@ -6,15 +6,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        graphite: "#080A0F",
-        ink: "#0D1117",
-        violetForge: "#7C3AED"
+        graphite: "#070707",
+        ink: "#101010",
+        bone: "#F6F6F3"
       },
       borderRadius: {
-        forge: "10px"
+        forge: "8px"
       },
       boxShadow: {
-        forge: "0 24px 80px rgba(0,0,0,0.35)"
+        forge: "0 24px 90px rgba(0,0,0,0.48)"
       }
     }
   },

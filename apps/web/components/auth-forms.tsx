@@ -16,8 +16,8 @@ function persistSession(accessToken?: string, refreshToken?: string) {
   if (refreshToken) document.cookie = `sb-refresh-token=${refreshToken}; path=/; max-age=2592000; samesite=lax${secure}`;
 }
 
-const inputClass = "mt-2 h-11 w-full rounded-[8px] border border-white/10 bg-white/[0.06] px-3 text-white outline-none transition focus:border-violet-300/50";
-const primaryButtonClass = "h-11 w-full rounded-[8px] bg-violet-500 text-sm font-bold text-white transition hover:bg-violet-400 disabled:opacity-60";
+const inputClass = "forge-input mt-2 h-11 w-full rounded-[8px] px-3";
+const primaryButtonClass = "h-11 w-full rounded-[8px] border border-white/80 bg-white text-sm font-bold text-black transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-60";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -52,23 +52,23 @@ export function LoginForm() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-neutral-300">
         이메일
         <input className={inputClass} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
       </label>
 
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-neutral-300">
         비밀번호
         <input className={inputClass} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
       </label>
 
-      {message && <p className="rounded-[8px] border border-rose-300/20 bg-rose-400/10 p-3 text-sm text-rose-100">{message}</p>}
+      {message && <p className="forge-notice rounded-[8px] p-3 text-sm">{message}</p>}
 
       <button disabled={loading} className={primaryButtonClass}>
         {loading ? "로그인 중..." : "로그인"}
       </button>
 
-      <div className="flex justify-between text-sm text-slate-400">
+      <div className="flex justify-between text-sm text-neutral-400">
         <a href="/forgot-password" className="hover:text-white">비밀번호 찾기</a>
         <a href="/signup" className="hover:text-white">회원가입</a>
       </div>
@@ -108,29 +108,29 @@ export function SignupForm() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-neutral-300">
         이름
         <input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} required />
       </label>
 
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-neutral-300">
         이메일
         <input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
       </label>
 
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-neutral-300">
         비밀번호
         <input className={inputClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
       </label>
 
-      {message && <p className="rounded-[8px] border border-violet-300/20 bg-violet-400/10 p-3 text-sm text-violet-100">{message}</p>}
+      {message && <p className="forge-notice rounded-[8px] p-3 text-sm">{message}</p>}
 
       <button disabled={loading} className={primaryButtonClass}>
         {loading ? "가입 처리 중..." : "계정 만들기"}
       </button>
 
-      <p className="text-center text-sm text-slate-400">
-        이미 계정이 있으신가요? <a href="/login" className="text-violet-200 hover:text-white">로그인</a>
+      <p className="text-center text-sm text-neutral-400">
+        이미 계정이 있으신가요? <a href="/login" className="font-semibold text-white hover:text-neutral-200">로그인</a>
       </p>
     </form>
   );
@@ -151,16 +151,16 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-neutral-300">
         가입 이메일
         <input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
       </label>
 
-      {message && <p className="rounded-[8px] border border-emerald-300/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">{message}</p>}
+      {message && <p className="forge-notice rounded-[8px] p-3 text-sm">{message}</p>}
 
       <button className={primaryButtonClass}>재설정 링크 보내기</button>
 
-      <a href="/login" className="block text-center text-sm text-slate-400 hover:text-white">로그인으로 돌아가기</a>
+      <a href="/login" className="block text-center text-sm text-neutral-400 hover:text-white">로그인으로 돌아가기</a>
     </form>
   );
 }

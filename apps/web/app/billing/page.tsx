@@ -17,15 +17,15 @@ export default function BillingPage() {
           <Card>
             <Badge tone="violet">현재 플랜</Badge>
             <h2 className="mt-4 text-3xl font-bold text-white">Pro trial</h2>
-            <p className="mt-2 text-sm text-slate-400">이번 달 작업 0 / 100, 페이지 0 / 1,000</p>
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[8%] rounded-full bg-violet-400" /></div>
+            <p className="mt-2 text-sm text-neutral-400">이번 달 작업 0 / 100, 페이지 0 / 1,000</p>
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[8%] rounded-full bg-white" /></div>
           </Card>
           <div className="grid gap-4 md:grid-cols-2">
             {plans.map(([name, jobs, pages, storage, feature]) => (
               <Card key={name}>
                 <h3 className="text-xl font-bold text-white">{name}</h3>
-                <p className="mt-3 text-sm text-slate-400">{jobs} / {pages} / {storage}</p>
-                <p className="mt-2 text-sm text-slate-500">{feature}</p>
+                <p className="mt-3 text-sm text-neutral-400">{jobs} / {pages} / {storage}</p>
+                <p className="mt-2 text-sm text-neutral-500">{feature}</p>
                 <Button className="mt-5 w-full" variant={name === "Pro" ? "primary" : "secondary"}>{name === "Pro" ? "현재 플랜" : "변경"}</Button>
               </Card>
             ))}
