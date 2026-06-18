@@ -20,6 +20,15 @@ export type StudentCard = {
   recent_weakness_label?: string | null;
   invite_code?: string;
   joined_at?: string | null;
+  tuition?: TuitionSettings;
+};
+
+export type TuitionSettings = {
+  enabled: boolean;
+  cycle_sessions?: number | null;
+  amount?: number | null;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
 };
 
 export type ClassCard = {
@@ -135,6 +144,42 @@ export type ScheduleEvent = {
   starts_at: string;
   ends_at?: string | null;
   linked_paper_session_id?: string | null;
+  counts_for_tuition?: boolean;
+};
+
+export type TuitionPayment = {
+  id: string;
+  academy_id: string;
+  student_membership_id: string;
+  student_user_id: string;
+  student_name: string;
+  class_id?: string | null;
+  class_name?: string | null;
+  due_event_id?: string | null;
+  event_title?: string | null;
+  due_at: string;
+  cycle_number: number;
+  cycle_start_session: number;
+  cycle_end_session: number;
+  cycle_sessions: number;
+  amount?: number | null;
+  status: "pending" | "reminded" | "paid" | "excluded" | string;
+  paid_at?: string | null;
+  reminder_count: number;
+  reminder_sent_at?: string | null;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
+  message_body: string;
+  counts_for_tuition?: boolean;
+};
+
+export type TuitionDashboard = {
+  summary: {
+    pending_count: number;
+    overdue_count: number;
+    reminded_count: number;
+  };
+  payments: TuitionPayment[];
 };
 
 export type CounselingFormatField = {
@@ -325,7 +370,14 @@ export function createStudent(payload: {
   memo?: string;
   status?: string;
   class_ids?: string[];
+  guardian_name?: string;
+  guardian_phone?: string;
+  tuition_enabled?: boolean;
+  tuition_cycle_sessions?: number | string | null;
+  tuition_amount?: number | string | null;
 }) {
+  const cycleSessions = Number(payload.tuition_cycle_sessions);
+  const tuitionAmount = Number(payload.tuition_amount);
   const normalized = {
     name: payload.name.trim(),
     grade_level: payload.grade_level?.trim() || null,
@@ -333,6 +385,11 @@ export function createStudent(payload: {
     memo: payload.memo?.trim() || null,
     status: payload.status || "active",
     class_ids: payload.class_ids || [],
+    guardian_name: payload.guardian_name?.trim() || null,
+    guardian_phone: payload.guardian_phone?.trim() || null,
+    tuition_enabled: Boolean(payload.tuition_enabled),
+    tuition_cycle_sessions: Number.isFinite(cycleSessions) && cycleSessions > 0 ? cycleSessions : null,
+    tuition_amount: Number.isFinite(tuitionAmount) && tuitionAmount >= 0 ? tuitionAmount : null,
   };
   return api<StudentCard>("/api/student-management/students", {
     method: "POST",
@@ -427,6 +484,7 @@ export function createScheduleEvent(payload: {
   starts_at: string;
   ends_at?: string | null;
   linked_paper_session_id?: string | null;
+  counts_for_tuition?: boolean;
 }) {
   return api<ScheduleEvent>("/api/student-management/schedule-events", {
     method: "POST",
@@ -499,6 +557,39 @@ export function sendRoutineAction(routineId: string) {
   return api<RoutineAction>(`/api/student-management/routines/${routineId}/send`, {
     method: "POST",
   });
+}
+
+export function listTuitionPayments(daysAhead = 14) {
+  return api<TuitionDashboard>(`/api/student-management/tuition?days_ahead=${daysAhead}`);
+}
+
+export function confirmTuitionPaid(paymentId: string) {
+  return api<TuitionPayment>(`/api/student-management/tuition/${paymentId}/paid`, {
+    method: "POST",
+  });
+}
+
+export function sendTuitionReminder(paymentId: string) {
+  return api<{ payment: TuitionPayment; guardian_phone: string; message_body: string; sms_url: string }>(`/api/student-management/tuition/${paymentId}/remind`, {
+    method: "POST",
+  });
+}
+
+export function updateTuitionEventCount(eventId: string, countsForTuition: boolean) {
+  return api<ScheduleEvent>(`/api/student-management/tuition/events/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ counts_for_tuition: countsForTuition }),
+  });
+}
+
+export function updateTuitionSessionAdjustment(eventId: string, studentId: string, payload: { counts_for_tuition: boolean; reason?: string | null; note?: string | null }) {
+  return api<{ event: ScheduleEvent; student_membership_id: string; counts_for_tuition: boolean; reason?: string | null; note?: string | null }>(
+    `/api/student-management/tuition/events/${eventId}/students/${studentId}/adjustment`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export function deleteCounselingLog(studentId: string, logId: string) {

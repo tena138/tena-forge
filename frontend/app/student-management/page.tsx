@@ -100,7 +100,18 @@ type ProblemPageGroup = {
 };
 type StudentMergeMenuState = { student: StudentCard; classId: string; x: number; y: number };
 
-const emptyStudentForm = { name: "", school: "", grade_level: "", memo: "", class_id: "" };
+const emptyStudentForm = {
+  name: "",
+  school: "",
+  grade_level: "",
+  memo: "",
+  class_id: "",
+  guardian_name: "",
+  guardian_phone: "",
+  tuition_enabled: false,
+  tuition_cycle_sessions: "4",
+  tuition_amount: "",
+};
 
 function mergeStudentCard(existing: StudentCard, next: StudentCard): StudentCard {
   const classIds = [...existing.class_ids];
@@ -1233,6 +1244,11 @@ export default function StudentManagementPage() {
       grade_level: studentForm.grade_level,
       memo: studentForm.memo,
       class_ids: studentForm.class_id ? [studentForm.class_id] : [],
+      guardian_name: studentForm.guardian_name,
+      guardian_phone: studentForm.guardian_phone,
+      tuition_enabled: studentForm.tuition_enabled,
+      tuition_cycle_sessions: studentForm.tuition_cycle_sessions,
+      tuition_amount: studentForm.tuition_amount,
     });
     setStudentForm(emptyStudentForm);
     setMessage(created.invite_code ? `학생을 추가했습니다. 연결 키: ${created.invite_code}` : "학생을 추가했습니다.");
@@ -1381,6 +1397,11 @@ export default function StudentManagementPage() {
       grade_level: classRow.grade_level || "",
       memo: "",
       class_id: classRow.id,
+      guardian_name: "",
+      guardian_phone: "",
+      tuition_enabled: false,
+      tuition_cycle_sessions: "4",
+      tuition_amount: "",
     });
   }
 
@@ -1428,6 +1449,11 @@ export default function StudentManagementPage() {
         grade_level: (classStudentForm.grade_level || classRow.grade_level || "").trim(),
         memo: classStudentForm.memo.trim(),
         class_ids: [classRow.id],
+        guardian_name: classStudentForm.guardian_name.trim(),
+        guardian_phone: classStudentForm.guardian_phone.trim(),
+        tuition_enabled: classStudentForm.tuition_enabled,
+        tuition_cycle_sessions: classStudentForm.tuition_cycle_sessions,
+        tuition_amount: classStudentForm.tuition_amount,
       });
       cancelClassStudentAdd();
       setMessage(created.invite_code ? `${classRow.name}에 학생을 추가했습니다. 연결 키: ${created.invite_code}` : `${classRow.name}에 학생을 추가했습니다.`);
@@ -1918,8 +1944,32 @@ export default function StudentManagementPage() {
                                     <Input placeholder="학생 이름" value={classStudentForm.name} onChange={(event) => setClassStudentForm((current) => ({ ...current, name: event.target.value }))} />
                                     <Input placeholder="학교" value={classStudentForm.school} onChange={(event) => setClassStudentForm((current) => ({ ...current, school: event.target.value }))} />
                                     <Input placeholder="학년" value={classStudentForm.grade_level} onChange={(event) => setClassStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                                    <Input placeholder="보호자 연락처" value={classStudentForm.guardian_phone} onChange={(event) => setClassStudentForm((current) => ({ ...current, guardian_phone: event.target.value }))} />
+                                    <Input placeholder="보호자 이름" value={classStudentForm.guardian_name} onChange={(event) => setClassStudentForm((current) => ({ ...current, guardian_name: event.target.value }))} />
+                                    <Input
+                                      placeholder="수강료 금액"
+                                      inputMode="numeric"
+                                      value={classStudentForm.tuition_amount}
+                                      disabled={!classStudentForm.tuition_enabled}
+                                      onChange={(event) => setClassStudentForm((current) => ({ ...current, tuition_amount: event.target.value }))}
+                                    />
+                                    <Input
+                                      placeholder="결제 회차 기준"
+                                      inputMode="numeric"
+                                      value={classStudentForm.tuition_cycle_sessions}
+                                      disabled={!classStudentForm.tuition_enabled}
+                                      onChange={(event) => setClassStudentForm((current) => ({ ...current, tuition_cycle_sessions: event.target.value }))}
+                                    />
                                     <Input placeholder="메모" value={classStudentForm.memo} onChange={(event) => setClassStudentForm((current) => ({ ...current, memo: event.target.value }))} />
                                   </div>
+                                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={classStudentForm.tuition_enabled}
+                                      onChange={(event) => setClassStudentForm((current) => ({ ...current, tuition_enabled: event.target.checked }))}
+                                    />
+                                    수강료 알림 사용
+                                  </label>
                                   <div className="mt-3 flex flex-wrap gap-2">
                                     <Button type="submit" size="sm" disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
                                       {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -2027,10 +2077,36 @@ export default function StudentManagementPage() {
                   <Input placeholder="학생 이름" value={studentForm.name} onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))} />
                   <Input placeholder="학교" value={studentForm.school} onChange={(event) => setStudentForm((current) => ({ ...current, school: event.target.value }))} />
                   <Input placeholder="학년" value={studentForm.grade_level} onChange={(event) => setStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                  <Input placeholder="보호자 연락처" value={studentForm.guardian_phone} onChange={(event) => setStudentForm((current) => ({ ...current, guardian_phone: event.target.value }))} />
+                  <Input placeholder="보호자 이름" value={studentForm.guardian_name} onChange={(event) => setStudentForm((current) => ({ ...current, guardian_name: event.target.value }))} />
                   <Select value={studentForm.class_id} onChange={(event) => setStudentForm((current) => ({ ...current, class_id: event.target.value }))}>
                     <option value="">클래스 선택 안 함</option>
                     {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
                   </Select>
+                  <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={studentForm.tuition_enabled}
+                      onChange={(event) => setStudentForm((current) => ({ ...current, tuition_enabled: event.target.checked }))}
+                    />
+                    수강료 알림 사용
+                  </label>
+                  {studentForm.tuition_enabled ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        placeholder="결제 회차 기준"
+                        inputMode="numeric"
+                        value={studentForm.tuition_cycle_sessions}
+                        onChange={(event) => setStudentForm((current) => ({ ...current, tuition_cycle_sessions: event.target.value }))}
+                      />
+                      <Input
+                        placeholder="수강료 금액"
+                        inputMode="numeric"
+                        value={studentForm.tuition_amount}
+                        onChange={(event) => setStudentForm((current) => ({ ...current, tuition_amount: event.target.value }))}
+                      />
+                    </div>
+                  ) : null}
                   <Input placeholder="메모" value={studentForm.memo} onChange={(event) => setStudentForm((current) => ({ ...current, memo: event.target.value }))} />
                   <Button type="submit" className="w-full" disabled={!studentForm.name.trim()}>학생 추가</Button>
                 </form>

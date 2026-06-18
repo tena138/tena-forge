@@ -231,6 +231,7 @@ def health_db():
             ACADEMY_REQUIRED_COLUMNS,
             ACADEMY_SEAT_REQUIRED_COLUMNS,
             BATCH_REQUIRED_COLUMNS,
+            CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS,
             KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS,
             PROBLEM_REQUIRED_COLUMNS,
             SUBJECT_ENGINE_COLUMNS,
@@ -272,12 +273,15 @@ def health_db():
             "routine_actions",
             "routine_messages",
             "problem_usage_history",
+            "student_tuition_payments",
+            "student_tuition_session_adjustments",
         }
         academy_columns = {column["name"] for column in inspector.get_columns("academies")} if "academies" in tables else set()
         batch_columns = {column["name"] for column in inspector.get_columns("batches")} if "batches" in tables else set()
         problem_columns = {column["name"] for column in inspector.get_columns("problems")} if "problems" in tables else set()
         academy_seat_columns = {column["name"] for column in inspector.get_columns("academy_seats")} if "academy_seats" in tables else set()
         korean_passage_group_columns = {column["name"] for column in inspector.get_columns("korean_passage_groups")} if "korean_passage_groups" in tables else set()
+        class_schedule_event_columns = {column["name"] for column in inspector.get_columns("class_schedule_events")} if "class_schedule_events" in tables else set()
         plan_columns = {column["name"] for column in inspector.get_columns("plans")} if "plans" in tables else set()
         subscription_columns = {column["name"] for column in inspector.get_columns("subscriptions")} if "subscriptions" in tables else set()
         missing_tables = sorted(required_tables - tables)
@@ -286,6 +290,7 @@ def health_db():
         missing_problem_columns = sorted(PROBLEM_REQUIRED_COLUMNS - problem_columns)
         missing_academy_seat_columns = sorted(ACADEMY_SEAT_REQUIRED_COLUMNS - academy_seat_columns)
         missing_korean_passage_group_columns = sorted(KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS - korean_passage_group_columns)
+        missing_class_schedule_event_columns = sorted(CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS - class_schedule_event_columns)
         missing_plan_columns = sorted(SUBJECT_ENGINE_COLUMNS - plan_columns)
         missing_subscription_columns = sorted(SUBJECT_ENGINE_COLUMNS - subscription_columns)
         alembic_versions = []
@@ -310,6 +315,7 @@ def health_db():
                     missing_problem_columns,
                     missing_academy_seat_columns,
                     missing_korean_passage_group_columns,
+                    missing_class_schedule_event_columns,
                     missing_plan_columns,
                     missing_subscription_columns,
                 ]
@@ -325,6 +331,7 @@ def health_db():
             "missing_problem_columns": missing_problem_columns,
             "missing_academy_seat_columns": missing_academy_seat_columns,
             "missing_korean_passage_group_columns": missing_korean_passage_group_columns,
+            "missing_class_schedule_event_columns": missing_class_schedule_event_columns,
             "missing_plan_columns": missing_plan_columns,
             "missing_subscription_columns": missing_subscription_columns,
         }
@@ -391,6 +398,10 @@ def _ensure_sqlite_columns():
         },
         "academies": {
             "account_type": "VARCHAR(20) DEFAULT 'academy' NOT NULL",
+        },
+        "class_schedule_events": {
+            "counts_for_tuition": "BOOLEAN DEFAULT 1 NOT NULL",
+            "metadata": "JSON DEFAULT '{}' NOT NULL",
         },
         "problem_sets": {
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",

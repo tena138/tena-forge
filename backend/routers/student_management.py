@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, delete, func, select
+from sqlalchemy import String, cast, delete, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
@@ -48,6 +48,8 @@ from models import (
     StudentNotification,
     StudentPersonalSet,
     StudentPersonalSetItem,
+    StudentTuitionPayment,
+    StudentTuitionSessionAdjustment,
     TestSession,
     WatermarkedExport,
     WrongAnswerAttempt,
@@ -70,6 +72,8 @@ ROUTINE_CHANNEL = "student_notification"
 ROUTINE_ACTIVE_STATUSES = {"suggested", "reviewing"}
 ROUTINE_RECENT_DAYS = 14
 ROUTINE_MAX_NEW_PER_REFRESH = 8
+TUITION_LOOKAHEAD_DAYS = 14
+TUITION_OVERDUE_DAYS = 30
 EXPORTED_REVIEW_SOURCE_STUDENT = "\uc774\uc6b0\ub178"
 EXPORTED_REVIEW_TARGET_STUDENTS = {"\uc774\uc6b0\ub178", "\uc774\ub098\uc740", "\uc774\uc218\ud604", "\ud669\uc9c0\uc724"}
 EXPORTED_REVIEW_TITLE_KEYWORDS = ("\ubbf8\uce5c\uac1c\ub150", "\uc2182", "\ubcf5\uc2b5", "(2)")
@@ -365,7 +369,47 @@ def _schedule_event_payload(row: ClassScheduleEvent) -> dict:
         "starts_at": row.starts_at.isoformat(),
         "ends_at": row.ends_at.isoformat() if row.ends_at else None,
         "linked_paper_session_id": str(row.linked_paper_session_id) if row.linked_paper_session_id else None,
+        "counts_for_tuition": bool(row.counts_for_tuition),
     }
+
+
+def _tuition_settings_from_metadata(metadata: dict | None) -> dict:
+    metadata = metadata or {}
+    tuition = metadata.get("tuition") if isinstance(metadata.get("tuition"), dict) else {}
+    cycle_sessions = tuition.get("cycle_sessions")
+    amount = tuition.get("amount")
+    try:
+        cycle_sessions = int(cycle_sessions) if cycle_sessions else None
+    except (TypeError, ValueError):
+        cycle_sessions = None
+    try:
+        amount = int(amount) if amount not in {None, ""} else None
+    except (TypeError, ValueError):
+        amount = None
+    return {
+        "enabled": bool(tuition.get("enabled") and cycle_sessions and cycle_sessions > 0),
+        "cycle_sessions": cycle_sessions,
+        "amount": amount,
+        "guardian_name": _clean_optional_text(str(tuition.get("guardian_name") or "")),
+        "guardian_phone": _clean_optional_text(str(tuition.get("guardian_phone") or "")),
+    }
+
+
+def _set_tuition_metadata(metadata: dict, *, guardian_name=None, guardian_phone=None, enabled=None, cycle_sessions=None, amount=None) -> dict:
+    next_metadata = dict(metadata or {})
+    tuition = dict(next_metadata.get("tuition") or {})
+    if guardian_name is not None:
+        tuition["guardian_name"] = _clean_optional_text(guardian_name)
+    if guardian_phone is not None:
+        tuition["guardian_phone"] = _clean_optional_text(guardian_phone)
+    if enabled is not None:
+        tuition["enabled"] = bool(enabled)
+    if cycle_sessions is not None:
+        tuition["cycle_sessions"] = max(1, int(cycle_sessions))
+    if amount is not None:
+        tuition["amount"] = max(0, int(amount))
+    next_metadata["tuition"] = tuition
+    return next_metadata
 
 
 def _counseling_logs(membership: StudentAcademyMembership) -> list[dict]:
@@ -464,6 +508,7 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
         "status": status,
         "status_chip": status_chip,
         "memo": metadata.get("memo"),
+        "tuition": _tuition_settings_from_metadata(metadata),
         "class_ids": [str(row.id) for row in classes],
         "class_names": [row.name for row in classes],
         "class_subjects": [row.subject for row in classes],
@@ -498,6 +543,7 @@ def _safe_student_payload(
             "status": membership.status or "active",
             "status_chip": "Active" if (membership.status or "active") == "active" else "Inactive",
             "memo": metadata.get("memo"),
+            "tuition": _tuition_settings_from_metadata(metadata),
             "class_ids": [str(row.id) for row in class_rows or []],
             "class_names": [row.name for row in class_rows or []],
             "class_subjects": [row.subject for row in class_rows or []],
@@ -1565,6 +1611,11 @@ class StudentPayload(BaseModel):
     memo: str | None = None
     status: str = "active"
     class_ids: list[UUID] = []
+    guardian_name: str | None = None
+    guardian_phone: str | None = None
+    tuition_enabled: bool = False
+    tuition_cycle_sessions: int | None = Field(default=None, ge=1, le=120)
+    tuition_amount: int | None = Field(default=None, ge=0)
 
 
 class StudentUpdatePayload(BaseModel):
@@ -1574,6 +1625,11 @@ class StudentUpdatePayload(BaseModel):
     memo: str | None = None
     status: str | None = None
     class_ids: list[UUID] | None = None
+    guardian_name: str | None = None
+    guardian_phone: str | None = None
+    tuition_enabled: bool | None = None
+    tuition_cycle_sessions: int | None = Field(default=None, ge=1, le=120)
+    tuition_amount: int | None = Field(default=None, ge=0)
 
 
 class ClassStudentPayload(BaseModel):
@@ -1621,6 +1677,17 @@ class ScheduleEventPayload(BaseModel):
     starts_at: datetime
     ends_at: datetime | None = None
     linked_paper_session_id: UUID | None = None
+    counts_for_tuition: bool = True
+
+
+class TuitionEventCountPayload(BaseModel):
+    counts_for_tuition: bool
+
+
+class TuitionSessionAdjustmentPayload(BaseModel):
+    counts_for_tuition: bool
+    reason: str | None = Field(default=None, max_length=80)
+    note: str | None = None
 
 
 class CounselingFormatFieldPayload(BaseModel):
@@ -2241,6 +2308,193 @@ def _ensure_routine_candidates(db: Session, academy_id: str, visible_academy_ids
     return created
 
 
+def _tuition_amount_text(amount: int | None) -> str:
+    return f"{amount:,}원" if isinstance(amount, int) and amount > 0 else "수강료"
+
+
+def _tuition_reminder_body(payment: StudentTuitionPayment, membership: StudentAcademyMembership, class_row: AcademyClass | None, event: ClassScheduleEvent | None) -> str:
+    settings = _tuition_settings_from_metadata(membership.metadata_json)
+    guardian_name = settings.get("guardian_name")
+    student_name = _student_name(membership)
+    class_name = class_row.name if class_row else str((payment.metadata_json or {}).get("class_name") or "")
+    amount = payment.amount if payment.amount is not None else settings.get("amount")
+    due_label = event.starts_at.strftime("%Y.%m.%d") if event and event.starts_at else payment.due_at.strftime("%Y.%m.%d")
+    greeting = f"{guardian_name} 보호자님" if guardian_name else "보호자님"
+    class_part = f" {class_name}" if class_name else ""
+    return f"{greeting}, {student_name} 학생{class_part} 수강료({_tuition_amount_text(amount)}) 납부 확인 부탁드립니다. 기준일: {due_label}"
+
+
+def _tuition_payment_payload(db: Session, payment: StudentTuitionPayment) -> dict:
+    membership = db.get(StudentAcademyMembership, payment.student_membership_id)
+    class_row = db.get(AcademyClass, payment.class_id) if payment.class_id else None
+    event = db.get(ClassScheduleEvent, payment.due_event_id) if payment.due_event_id else None
+    metadata = payment.metadata_json or {}
+    settings = _tuition_settings_from_metadata(membership.metadata_json if membership else metadata)
+    student_name = _student_name(membership) if membership else str(metadata.get("student_name") or "")
+    message_body = _tuition_reminder_body(payment, membership, class_row, event) if membership else str(payment.reminder_message or "")
+    return {
+        "id": str(payment.id),
+        "academy_id": payment.academy_id,
+        "student_membership_id": str(payment.student_membership_id),
+        "student_user_id": payment.student_user_id,
+        "student_name": student_name,
+        "class_id": str(payment.class_id) if payment.class_id else None,
+        "class_name": class_row.name if class_row else metadata.get("class_name"),
+        "due_event_id": str(payment.due_event_id) if payment.due_event_id else None,
+        "event_title": event.title if event else metadata.get("event_title"),
+        "due_at": payment.due_at.isoformat(),
+        "cycle_number": payment.cycle_number,
+        "cycle_start_session": payment.cycle_start_session,
+        "cycle_end_session": payment.cycle_end_session,
+        "cycle_sessions": payment.cycle_sessions,
+        "amount": payment.amount,
+        "status": payment.status,
+        "paid_at": payment.paid_at.isoformat() if payment.paid_at else None,
+        "reminder_count": payment.reminder_count,
+        "reminder_sent_at": payment.reminder_sent_at.isoformat() if payment.reminder_sent_at else None,
+        "guardian_name": settings.get("guardian_name"),
+        "guardian_phone": settings.get("guardian_phone"),
+        "message_body": message_body,
+        "counts_for_tuition": bool(event.counts_for_tuition) if event else True,
+    }
+
+
+def _ensure_tuition_payment_candidates(db: Session, academy_id: str, visible_academy_ids: set[str], days_ahead: int = TUITION_LOOKAHEAD_DAYS) -> int:
+    now = _now()
+    horizon = now + timedelta(days=max(1, min(days_ahead, 90)))
+    due_window_start = now - timedelta(days=TUITION_OVERDUE_DAYS)
+    memberships = [
+        membership
+        for membership in _visible_student_memberships(db, visible_academy_ids)
+        if (membership.status or "active") == "active"
+    ]
+    created = 0
+    changed = False
+
+    def stale_payment_stmt(membership_id: UUID, expected_due_event_ids: set[UUID]):
+        stmt = select(StudentTuitionPayment).where(
+            StudentTuitionPayment.academy_id == academy_id,
+            StudentTuitionPayment.student_membership_id == membership_id,
+            StudentTuitionPayment.due_at <= horizon,
+            StudentTuitionPayment.status.in_(["pending", "reminded"]),
+        )
+        if expected_due_event_ids:
+            stmt = stmt.where(
+                or_(
+                    StudentTuitionPayment.due_event_id.is_(None),
+                    StudentTuitionPayment.due_event_id.not_in(list(expected_due_event_ids)),
+                )
+            )
+        return stmt
+
+    for membership in memberships:
+        settings = _tuition_settings_from_metadata(membership.metadata_json)
+        cycle_sessions = int(settings.get("cycle_sessions") or 0)
+        expected_due_event_ids: set[UUID] = set()
+        if not settings.get("enabled") or cycle_sessions <= 0:
+            stale_payments = db.scalars(stale_payment_stmt(membership.id, expected_due_event_ids)).all()
+            for payment in stale_payments:
+                payment.status = "excluded"
+                payment.updated_at = now
+                changed = True
+            continue
+        class_ids = db.scalars(
+            select(ClassStudent.class_id).where(
+                ClassStudent.student_membership_id == membership.id,
+                ClassStudent.left_at.is_(None),
+            )
+        ).all()
+        events = []
+        if class_ids:
+            events = db.scalars(
+                select(ClassScheduleEvent)
+                .where(
+                    ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)),
+                    ClassScheduleEvent.class_id.in_(class_ids),
+                    ClassScheduleEvent.starts_at <= horizon,
+                )
+                .order_by(ClassScheduleEvent.starts_at.asc(), ClassScheduleEvent.created_at.asc())
+            ).all()
+            adjustments = {
+                adjustment.event_id: adjustment
+                for adjustment in db.scalars(
+                    select(StudentTuitionSessionAdjustment).where(
+                        StudentTuitionSessionAdjustment.academy_id.in_(list(visible_academy_ids)),
+                        StudentTuitionSessionAdjustment.student_membership_id == membership.id,
+                    )
+                ).all()
+            }
+        else:
+            adjustments = {}
+        billable_count = 0
+        for event in events:
+            if event.starts_at < membership.joined_at or event.event_type != "class" or not event.counts_for_tuition:
+                continue
+            adjustment = adjustments.get(event.id)
+            if adjustment and not adjustment.counts_for_tuition:
+                continue
+            billable_count += 1
+            if (billable_count - 1) % cycle_sessions != 0 or event.starts_at < due_window_start:
+                continue
+            expected_due_event_ids.add(event.id)
+            existing = db.scalar(
+                select(StudentTuitionPayment).where(
+                    StudentTuitionPayment.academy_id == academy_id,
+                    StudentTuitionPayment.student_membership_id == membership.id,
+                    StudentTuitionPayment.due_event_id == event.id,
+                )
+            )
+            class_row = db.get(AcademyClass, event.class_id)
+            cycle_number = ((billable_count - 1) // cycle_sessions) + 1
+            metadata = {
+                "student_name": _student_name(membership),
+                "class_name": class_row.name if class_row else "",
+                "event_title": event.title,
+            }
+            if existing:
+                if existing.status != "paid":
+                    existing.class_id = event.class_id
+                    existing.cycle_number = cycle_number
+                    existing.cycle_start_session = billable_count
+                    existing.cycle_end_session = billable_count + cycle_sessions - 1
+                    existing.cycle_sessions = cycle_sessions
+                    existing.amount = settings.get("amount")
+                    if existing.status == "excluded":
+                        existing.status = "pending"
+                    existing.due_at = event.starts_at
+                    existing.metadata_json = {**(existing.metadata_json or {}), **metadata}
+                    existing.updated_at = now
+                    changed = True
+                continue
+            db.add(
+                StudentTuitionPayment(
+                    academy_id=academy_id,
+                    student_membership_id=membership.id,
+                    student_user_id=membership.student_user_id,
+                    class_id=event.class_id,
+                    due_event_id=event.id,
+                    cycle_number=cycle_number,
+                    cycle_start_session=billable_count,
+                    cycle_end_session=billable_count + cycle_sessions - 1,
+                    cycle_sessions=cycle_sessions,
+                    amount=settings.get("amount"),
+                    status="pending",
+                    due_at=event.starts_at,
+                    metadata_json=metadata,
+                )
+            )
+            created += 1
+            changed = True
+        stale_payments = db.scalars(stale_payment_stmt(membership.id, expected_due_event_ids)).all()
+        for payment in stale_payments:
+            payment.status = "excluded"
+            payment.updated_at = now
+            changed = True
+    if changed:
+        db.commit()
+    return created
+
+
 class ReviewSetPayload(BaseModel):
     title: str = "오답 복습 세트"
     wrong_answer_ids: list[UUID] = []
@@ -2490,6 +2744,162 @@ def remove_student_from_class(class_id: UUID, student_id: UUID, request: Request
     return Response(status_code=204)
 
 
+@router.get("/tuition")
+def list_tuition_payments(request: Request, days_ahead: int = 14, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    _ensure_tuition_payment_candidates(db, academy_id, visible_academy_ids, days_ahead)
+    now = _now()
+    horizon = now + timedelta(days=max(1, min(days_ahead, 90)))
+    recent_paid_start = now - timedelta(days=14)
+    rows = db.scalars(
+        select(StudentTuitionPayment)
+        .where(
+            StudentTuitionPayment.academy_id == academy_id,
+            StudentTuitionPayment.due_at <= horizon,
+        )
+        .order_by(StudentTuitionPayment.due_at.asc(), StudentTuitionPayment.created_at.asc())
+        .limit(200)
+    ).all()
+    visible = [
+        row
+        for row in rows
+        if row.status in {"pending", "reminded"}
+        or (row.status == "paid" and (row.paid_at or row.updated_at or row.created_at) >= recent_paid_start)
+    ]
+    pending = [row for row in visible if row.status in {"pending", "reminded"}]
+    return {
+        "summary": {
+            "pending_count": len(pending),
+            "overdue_count": len([row for row in pending if row.due_at < now]),
+            "reminded_count": len([row for row in pending if row.reminder_count > 0]),
+        },
+        "payments": [_tuition_payment_payload(db, row) for row in visible],
+    }
+
+
+def _get_tuition_payment(db: Session, academy_id: str, payment_id: UUID) -> StudentTuitionPayment:
+    payment = db.get(StudentTuitionPayment, payment_id)
+    if not payment or payment.academy_id != academy_id:
+        raise HTTPException(status_code=404, detail="수강료 알림을 찾을 수 없습니다.")
+    return payment
+
+
+@router.post("/tuition/{payment_id}/paid")
+def confirm_tuition_paid(payment_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    payment = _get_tuition_payment(db, academy_id, payment_id)
+    now = _now()
+    payment.status = "paid"
+    payment.paid_at = now
+    payment.confirmed_by = current_owner_id(request)
+    payment.updated_at = now
+    db.commit()
+    db.refresh(payment)
+    return _tuition_payment_payload(db, payment)
+
+
+@router.post("/tuition/{payment_id}/remind")
+def send_tuition_reminder(payment_id: UUID, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    payment = _get_tuition_payment(db, academy_id, payment_id)
+    membership = db.get(StudentAcademyMembership, payment.student_membership_id)
+    if not membership:
+        raise HTTPException(status_code=404, detail="학생 정보를 찾을 수 없습니다.")
+    settings = _tuition_settings_from_metadata(membership.metadata_json)
+    guardian_phone = settings.get("guardian_phone")
+    if not guardian_phone:
+        raise HTTPException(status_code=400, detail="보호자 연락처가 없습니다.")
+    class_row = db.get(AcademyClass, payment.class_id) if payment.class_id else None
+    event = db.get(ClassScheduleEvent, payment.due_event_id) if payment.due_event_id else None
+    body = _tuition_reminder_body(payment, membership, class_row, event)
+    now = _now()
+    payment.reminder_count += 1
+    payment.reminder_sent_at = now
+    payment.reminder_message = body
+    if payment.status == "pending":
+        payment.status = "reminded"
+    payment.updated_at = now
+    db.commit()
+    db.refresh(payment)
+    return {
+        "payment": _tuition_payment_payload(db, payment),
+        "guardian_phone": guardian_phone,
+        "message_body": body,
+        "sms_url": f"sms:{guardian_phone}?body={quote(body, safe='')}",
+    }
+
+
+@router.patch("/tuition/events/{event_id}")
+def update_tuition_event_count(event_id: UUID, payload: TuitionEventCountPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    event = db.get(ClassScheduleEvent, event_id)
+    if not event or event.academy_id not in visible_academy_ids:
+        raise HTTPException(status_code=404, detail="수업 일정을 찾을 수 없습니다.")
+    event.counts_for_tuition = payload.counts_for_tuition
+    event.updated_at = _now()
+    if not payload.counts_for_tuition:
+        rows = db.scalars(
+            select(StudentTuitionPayment).where(
+                StudentTuitionPayment.academy_id == academy_id,
+                StudentTuitionPayment.due_event_id == event.id,
+                StudentTuitionPayment.status.in_(["pending", "reminded"]),
+            )
+        ).all()
+        for row in rows:
+            row.status = "excluded"
+            row.updated_at = _now()
+    db.commit()
+    return _schedule_event_payload(event)
+
+
+@router.put("/tuition/events/{event_id}/students/{student_id}/adjustment")
+def update_tuition_session_adjustment(event_id: UUID, student_id: UUID, payload: TuitionSessionAdjustmentPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    event = db.get(ClassScheduleEvent, event_id)
+    if not event or event.academy_id not in visible_academy_ids:
+        raise HTTPException(status_code=404, detail="수업 일정을 찾을 수 없습니다.")
+    membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
+    adjustment = db.scalar(
+        select(StudentTuitionSessionAdjustment).where(
+            StudentTuitionSessionAdjustment.event_id == event.id,
+            StudentTuitionSessionAdjustment.student_membership_id == membership.id,
+        )
+    )
+    if not adjustment:
+        adjustment = StudentTuitionSessionAdjustment(
+            academy_id=academy_id,
+            event_id=event.id,
+            student_membership_id=membership.id,
+        )
+        db.add(adjustment)
+    adjustment.counts_for_tuition = payload.counts_for_tuition
+    adjustment.reason = _clean_optional_text(payload.reason)
+    adjustment.note = _clean_optional_text(payload.note)
+    adjustment.updated_by = current_owner_id(request)
+    adjustment.updated_at = _now()
+    payment = db.scalar(
+        select(StudentTuitionPayment).where(
+            StudentTuitionPayment.academy_id == academy_id,
+            StudentTuitionPayment.student_membership_id == membership.id,
+            StudentTuitionPayment.due_event_id == event.id,
+        )
+    )
+    if payment and payment.status in {"pending", "reminded", "excluded"}:
+        payment.status = "pending" if payload.counts_for_tuition else "excluded"
+        payment.updated_at = _now()
+    db.commit()
+    return {
+        "event": _schedule_event_payload(event),
+        "student_membership_id": str(membership.id),
+        "counts_for_tuition": adjustment.counts_for_tuition,
+        "reason": adjustment.reason,
+        "note": adjustment.note,
+    }
+
+
 @router.get("/routines")
 def list_routines(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
@@ -2650,6 +3060,14 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
         "memo": _clean_optional_text(payload.memo),
         "invite_code": invite_code,
     }
+    metadata = _set_tuition_metadata(
+        metadata,
+        guardian_name=payload.guardian_name,
+        guardian_phone=payload.guardian_phone,
+        enabled=payload.tuition_enabled,
+        cycle_sessions=payload.tuition_cycle_sessions,
+        amount=payload.tuition_amount,
+    )
     membership = StudentAcademyMembership(
         student_user_id=student_user_id,
         academy_id=academy_id,
@@ -2726,6 +3144,7 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
             "status": membership.status or "active",
             "status_chip": "Active",
             "memo": metadata.get("memo"),
+            "tuition": _tuition_settings_from_metadata(metadata),
             "class_ids": [],
             "class_names": [],
             "class_subjects": [],
@@ -3156,6 +3575,18 @@ def update_student(student_id: UUID, payload: StudentUpdatePayload, request: Req
         if membership.status != "active":
             membership.ended_at = _now()
     class_ids = changes.pop("class_ids", None)
+    tuition_kwargs = {}
+    for source_key, target_key in (
+        ("guardian_name", "guardian_name"),
+        ("guardian_phone", "guardian_phone"),
+        ("tuition_enabled", "enabled"),
+        ("tuition_cycle_sessions", "cycle_sessions"),
+        ("tuition_amount", "amount"),
+    ):
+        if source_key in changes:
+            tuition_kwargs[target_key] = changes.pop(source_key)
+    if tuition_kwargs:
+        metadata = _set_tuition_metadata(metadata, **tuition_kwargs)
     for key, value in changes.items():
         metadata[key] = value
     membership.metadata_json = metadata
@@ -3715,6 +4146,7 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
         starts_at=payload.starts_at,
         ends_at=payload.ends_at,
         linked_paper_session_id=payload.linked_paper_session_id,
+        counts_for_tuition=payload.counts_for_tuition,
     )
     db.add(row)
     db.commit()

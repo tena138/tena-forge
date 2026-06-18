@@ -10,7 +10,7 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0030_problem_usage_history"
+HEAD_REVISION = "0031_tuition_management"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -54,6 +54,10 @@ PROBLEM_REQUIRED_COLUMNS = {
 }
 KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS = {
     "needs_review",
+}
+CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS = {
+    "counts_for_tuition",
+    "metadata",
 }
 ACADEMY_SEAT_REQUIRED_COLUMNS = {
     "class_id",
@@ -399,6 +403,28 @@ def _ensure_korean_passage_review_columns(connection, inspector) -> bool:
     return changed
 
 
+def _ensure_class_schedule_event_columns(connection, inspector) -> bool:
+    if "class_schedule_events" not in inspector.get_table_names():
+        return False
+
+    changed = False
+    bool_true = "TRUE" if connection.dialect.name == "postgresql" else "1"
+    json_definition = "JSONB NOT NULL DEFAULT '{}'::jsonb" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '{}'"
+    if _add_column_if_missing(connection, inspector, "class_schedule_events", "counts_for_tuition", f"BOOLEAN NOT NULL DEFAULT {bool_true}"):
+        changed = True
+        inspector = inspect(connection)
+    if _add_column_if_missing(connection, inspector, "class_schedule_events", "metadata", json_definition):
+        changed = True
+        inspector = inspect(connection)
+    connection.execute(text(f"UPDATE class_schedule_events SET counts_for_tuition = {bool_true} WHERE counts_for_tuition IS NULL"))
+    json_default = "'{}'::jsonb" if connection.dialect.name == "postgresql" else "'{}'"
+    connection.execute(text(f"UPDATE class_schedule_events SET metadata = {json_default} WHERE metadata IS NULL"))
+    if "ix_class_schedule_events_counts_for_tuition" not in _index_names(inspector, "class_schedule_events"):
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_class_schedule_events_counts_for_tuition ON class_schedule_events (counts_for_tuition)"))
+        changed = True
+    return changed
+
+
 def _ensure_subject_engine_columns(connection, inspector) -> bool:
     changed = False
     json_definition = "JSONB NOT NULL DEFAULT '[\"math\"]'::jsonb" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '[\"math\"]'"
@@ -476,6 +502,8 @@ def _schema_is_at_head(inspector) -> bool:
         "routine_actions",
         "routine_messages",
         "problem_usage_history",
+        "student_tuition_payments",
+        "student_tuition_session_adjustments",
     }
     tables = set(inspector.get_table_names())
     return (
@@ -488,6 +516,7 @@ def _schema_is_at_head(inspector) -> bool:
         and _has_columns(inspector, "student_academy_memberships", {"display_name_in_academy", "expires_at"})
         and _has_columns(inspector, "academy_seats", ACADEMY_SEAT_REQUIRED_COLUMNS)
         and _has_columns(inspector, "korean_passage_groups", KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS)
+        and _has_columns(inspector, "class_schedule_events", CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS)
         and _has_columns(inspector, "problems", PROBLEM_REQUIRED_COLUMNS)
     )
 
@@ -529,6 +558,8 @@ def main() -> None:
             inspector = inspect(connection)
         if _ensure_korean_passage_review_columns(connection, inspector):
             inspector = inspect(connection)
+        if _ensure_class_schedule_event_columns(connection, inspector):
+            inspector = inspect(connection)
         if _ensure_subject_engine_columns(connection, inspector):
             inspector = inspect(connection)
         if "alembic_version" not in inspector.get_table_names():
@@ -557,6 +588,8 @@ def main() -> None:
             if _ensure_academy_seat_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_korean_passage_review_columns(connection, inspector):
+                inspector = inspect(connection)
+            if _ensure_class_schedule_event_columns(connection, inspector):
                 inspector = inspect(connection)
             if _ensure_subject_engine_columns(connection, inspector):
                 inspector = inspect(connection)

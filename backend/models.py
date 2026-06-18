@@ -1567,6 +1567,51 @@ class ClassScheduleEvent(Base):
     starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     linked_paper_session_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("paper_sessions.id"), nullable=True, index=True)
+    counts_for_tuition: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class StudentTuitionSessionAdjustment(Base):
+    __tablename__ = "student_tuition_session_adjustments"
+    __table_args__ = (UniqueConstraint("event_id", "student_membership_id", name="uq_tuition_session_adjustment_event_student"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    event_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("class_schedule_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id", ondelete="CASCADE"), nullable=False, index=True)
+    counts_for_tuition: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class StudentTuitionPayment(Base):
+    __tablename__ = "student_tuition_payments"
+    __table_args__ = (UniqueConstraint("academy_id", "student_membership_id", "due_event_id", name="uq_tuition_payment_due_event_student"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    class_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("academy_classes.id", ondelete="SET NULL"), nullable=True, index=True)
+    due_event_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("class_schedule_events.id", ondelete="SET NULL"), nullable=True, index=True)
+    cycle_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False, index=True)
+    cycle_start_session: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    cycle_end_session: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    cycle_sessions: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
+    due_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    confirmed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reminder_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reminder_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
