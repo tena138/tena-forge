@@ -402,7 +402,7 @@ export function PlanLandingPage() {
                 Tena Forge
               </h1>
               <p className="landing-keep-words mt-4 max-w-3xl text-base leading-7 text-zinc-300 sm:mt-5 sm:text-lg sm:leading-8">
-                자체 제작한 교재 PDF, 시험지 PDF 자료를 업로드하면 문항을 추출하고, 문제 DB로 정리한 뒤 시험지 제작과 학생 오답 기록까지 이어지는 제작 콘솔.
+                학원 운영의 새로운 표준.
               </p>
               <div className="mt-6 flex w-full flex-wrap items-center gap-3 sm:mt-8 sm:w-auto sm:gap-4">
                 <Link
