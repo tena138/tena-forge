@@ -127,19 +127,13 @@ def _apply_account_a_trial(db, account: Academy, now: datetime) -> None:
 
 def _apply_account_b_free(db, account: Academy, now: datetime) -> None:
     user_id = str(account.id)
-    _cancel_live_subscriptions(db, user_id, now)
+    for subscription in db.scalars(select(Subscription).where(Subscription.user_id == user_id)).all():
+        db.delete(subscription)
     account.plan = AcademyPlan.free
     account.plan_expires_at = None
-    sub = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == user_id))
-    if sub:
-        sub.plan_code = "free"
-        sub.status = "active"
-        sub.purchased_additional_seats = 0
-        sub.purchased_staff_seats = 0
-        sub.current_period_start = now
-        sub.current_period_end = now + timedelta(days=31)
-        sub.updated_at = now
-    print(f"Applied Free plan to {ACCOUNT_B_EMAIL}.")
+    for sub in db.scalars(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == user_id)).all():
+        db.delete(sub)
+    print(f"Reset {ACCOUNT_B_EMAIL} to signup-only Free state.")
 
 
 def main() -> None:

@@ -2604,7 +2604,7 @@ export default function StudentManagementPage() {
                   </div>
                   <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
                     {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    클래스 추가
+                    {classForm.name.trim() ? "클래스 추가" : "클래스 이름 입력"}
                   </Button>
                 </div>
               </div>
