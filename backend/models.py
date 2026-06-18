@@ -1133,11 +1133,21 @@ class AcademyStaffInviteCode(Base):
     can_manage_students: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     can_manage_schedule: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     can_manage_coagent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    assigned_class_ids: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     created_by: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AcademyWorkspaceSettings(Base):
+    __tablename__ = "academy_workspace_settings"
+
+    academy_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    live_start_lead_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

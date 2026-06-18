@@ -16,7 +16,7 @@ from sqlalchemy import inspect, select, text
 from database import Base, SessionLocal, engine, get_settings
 from limiter import limiter
 from models import Problem, ProblemSetItem
-from routers import academy_student_app, admin_saas, archive_folders, assets, auth, batches, co_agent, creator_products, creators, dashboard_announcements, export, learning_workspace, legal_marketplace, licensed_library, marketplace, marketplace_products, problem_sets, problems, saas, stores, student_management, template_hub, templates, workspaces
+from routers import academy_student_app, admin_saas, archive_folders, assets, auth, batches, co_agent, creator_products, creators, dashboard_announcements, export, learning_workspace, legal_marketplace, licensed_library, live_interactions, marketplace, marketplace_products, problem_sets, problems, saas, stores, student_management, template_hub, templates, workspaces
 from services.auth_security import decode_access_token, is_jti_blacklisted
 from services.batch_jobs import mark_stale_processing_batches
 from services.private_files import guess_media_type, static_file_path, verify_static_file_token
@@ -153,6 +153,7 @@ def private_static_file(relative_path: str, token: str | None = Query(default=No
 
 app.include_router(auth.router)
 app.include_router(workspaces.router)
+app.include_router(live_interactions.router)
 app.include_router(academy_student_app.router)
 app.include_router(learning_workspace.router)
 app.include_router(co_agent.router)
@@ -233,8 +234,10 @@ def health_db():
         from scripts.repair_alembic_version import (
             ACADEMY_REQUIRED_COLUMNS,
             ACADEMY_SEAT_REQUIRED_COLUMNS,
+            ACADEMY_STAFF_INVITE_CODE_REQUIRED_COLUMNS,
             ACADEMY_STAFF_MEMBERSHIP_REQUIRED_COLUMNS,
             ACADEMY_STUDENT_SUBSCRIPTION_REQUIRED_COLUMNS,
+            ACADEMY_WORKSPACE_SETTINGS_REQUIRED_COLUMNS,
             BATCH_REQUIRED_COLUMNS,
             CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS,
             KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS,
@@ -259,6 +262,7 @@ def health_db():
             "academy_student_subscriptions",
             "academy_staff_memberships",
             "academy_staff_invite_codes",
+            "academy_workspace_settings",
             "content_versions",
             "archive_access_grants",
             "learning_assignments",
@@ -290,6 +294,8 @@ def health_db():
         academy_seat_columns = {column["name"] for column in inspector.get_columns("academy_seats")} if "academy_seats" in tables else set()
         academy_student_subscription_columns = {column["name"] for column in inspector.get_columns("academy_student_subscriptions")} if "academy_student_subscriptions" in tables else set()
         academy_staff_membership_columns = {column["name"] for column in inspector.get_columns("academy_staff_memberships")} if "academy_staff_memberships" in tables else set()
+        academy_staff_invite_code_columns = {column["name"] for column in inspector.get_columns("academy_staff_invite_codes")} if "academy_staff_invite_codes" in tables else set()
+        academy_workspace_settings_columns = {column["name"] for column in inspector.get_columns("academy_workspace_settings")} if "academy_workspace_settings" in tables else set()
         korean_passage_group_columns = {column["name"] for column in inspector.get_columns("korean_passage_groups")} if "korean_passage_groups" in tables else set()
         class_schedule_event_columns = {column["name"] for column in inspector.get_columns("class_schedule_events")} if "class_schedule_events" in tables else set()
         plan_columns = {column["name"] for column in inspector.get_columns("plans")} if "plans" in tables else set()
@@ -301,6 +307,8 @@ def health_db():
         missing_academy_seat_columns = sorted(ACADEMY_SEAT_REQUIRED_COLUMNS - academy_seat_columns)
         missing_academy_student_subscription_columns = sorted(ACADEMY_STUDENT_SUBSCRIPTION_REQUIRED_COLUMNS - academy_student_subscription_columns)
         missing_academy_staff_membership_columns = sorted(ACADEMY_STAFF_MEMBERSHIP_REQUIRED_COLUMNS - academy_staff_membership_columns)
+        missing_academy_staff_invite_code_columns = sorted(ACADEMY_STAFF_INVITE_CODE_REQUIRED_COLUMNS - academy_staff_invite_code_columns)
+        missing_academy_workspace_settings_columns = sorted(ACADEMY_WORKSPACE_SETTINGS_REQUIRED_COLUMNS - academy_workspace_settings_columns)
         missing_korean_passage_group_columns = sorted(KOREAN_PASSAGE_GROUP_REQUIRED_COLUMNS - korean_passage_group_columns)
         missing_class_schedule_event_columns = sorted(CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS - class_schedule_event_columns)
         missing_plan_columns = sorted(SUBJECT_ENGINE_COLUMNS - plan_columns)
@@ -328,6 +336,8 @@ def health_db():
                     missing_academy_seat_columns,
                     missing_academy_student_subscription_columns,
                     missing_academy_staff_membership_columns,
+                    missing_academy_staff_invite_code_columns,
+                    missing_academy_workspace_settings_columns,
                     missing_korean_passage_group_columns,
                     missing_class_schedule_event_columns,
                     missing_plan_columns,
@@ -346,6 +356,8 @@ def health_db():
             "missing_academy_seat_columns": missing_academy_seat_columns,
             "missing_academy_student_subscription_columns": missing_academy_student_subscription_columns,
             "missing_academy_staff_membership_columns": missing_academy_staff_membership_columns,
+            "missing_academy_staff_invite_code_columns": missing_academy_staff_invite_code_columns,
+            "missing_academy_workspace_settings_columns": missing_academy_workspace_settings_columns,
             "missing_korean_passage_group_columns": missing_korean_passage_group_columns,
             "missing_class_schedule_event_columns": missing_class_schedule_event_columns,
             "missing_plan_columns": missing_plan_columns,
@@ -426,6 +438,12 @@ def _ensure_sqlite_columns():
             "can_manage_students": "BOOLEAN DEFAULT 1 NOT NULL",
             "can_manage_schedule": "BOOLEAN DEFAULT 1 NOT NULL",
             "can_manage_coagent": "BOOLEAN DEFAULT 0 NOT NULL",
+        },
+        "academy_staff_invite_codes": {
+            "assigned_class_ids": "JSON DEFAULT '[]' NOT NULL",
+        },
+        "academy_workspace_settings": {
+            "live_start_lead_minutes": "INTEGER DEFAULT 10 NOT NULL",
         },
         "problem_sets": {
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",

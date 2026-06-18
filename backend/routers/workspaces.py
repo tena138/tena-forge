@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Academy, AcademyStaffInviteCode, AcademyStaffMembership
+from models import Academy, AcademyClass, AcademyStaffInviteCode, AcademyStaffMembership, ClassTeacher
 from services.academy_student_access import ensure_academy_subscription
 from services.ownership import current_user_id, current_workspace_id, require_workspace_owner, requested_workspace_id
 from services.subscription_pricing import STAFF_SEAT_MONTHLY_ADDON_KRW
@@ -29,12 +29,14 @@ class StaffPermissions(BaseModel):
 
 
 class StaffInviteCreate(StaffPermissions):
-    role: str = "teacher"
+    role: str = Field(min_length=1, max_length=24)
+    assigned_class_ids: list[UUID] = Field(default_factory=list)
     expires_in_days: int = Field(default=7, ge=1, le=30)
 
 
 class StaffUpdate(BaseModel):
     role: str | None = None
+    assigned_class_ids: list[UUID] | None = None
     can_manage_seats: bool | None = None
     can_manage_materials: bool | None = None
     can_manage_assignments: bool | None = None
@@ -127,8 +129,87 @@ def _academy_payload(academy: Academy) -> dict:
     }
 
 
+def _class_payload(row: AcademyClass) -> dict:
+    return {
+        "id": str(row.id),
+        "academy_id": row.academy_id,
+        "name": row.name,
+        "subject": row.subject,
+        "grade_level": row.grade_level,
+        "is_active": row.is_active,
+    }
+
+
+def _assigned_classes(db: Session, academy_id: str, user_id: str) -> list[dict]:
+    rows = db.scalars(
+        select(AcademyClass)
+        .join(ClassTeacher, ClassTeacher.class_id == AcademyClass.id)
+        .where(
+            AcademyClass.academy_id == academy_id,
+            ClassTeacher.academy_staff_user_id == user_id,
+        )
+        .order_by(AcademyClass.name.asc())
+    ).all()
+    return [_class_payload(row) for row in rows]
+
+
+def _classes_for_ids(db: Session, academy_id: str, class_ids: list[str]) -> list[dict]:
+    if not class_ids:
+        return []
+    rows = db.scalars(
+        select(AcademyClass)
+        .where(AcademyClass.academy_id == academy_id, AcademyClass.id.in_([UUID(str(class_id)) for class_id in class_ids]))
+        .order_by(AcademyClass.name.asc())
+    ).all()
+    return [_class_payload(row) for row in rows]
+
+
+def _validate_assigned_class_ids(db: Session, academy_id: str, role: str, class_ids: list[UUID] | None) -> list[str]:
+    unique_ids: list[UUID] = []
+    seen: set[str] = set()
+    for class_id in class_ids or []:
+        key = str(class_id)
+        if key not in seen:
+            unique_ids.append(class_id)
+            seen.add(key)
+    if role == "teacher" and not unique_ids:
+        raise HTTPException(status_code=400, detail="Instructor invites require at least one assigned class.")
+    if not unique_ids:
+        return []
+    rows = db.scalars(
+        select(AcademyClass.id).where(
+            AcademyClass.academy_id == academy_id,
+            AcademyClass.id.in_(unique_ids),
+            AcademyClass.is_active.is_(True),
+        )
+    ).all()
+    found = {str(row) for row in rows}
+    if found != {str(class_id) for class_id in unique_ids}:
+        raise HTTPException(status_code=400, detail="Assigned classes must belong to this workspace.")
+    return [str(class_id) for class_id in unique_ids]
+
+
+def _sync_class_teacher_assignments(db: Session, academy_id: str, user_id: str, class_ids: list[str]) -> None:
+    target_ids = {UUID(str(class_id)) for class_id in class_ids}
+    rows = db.scalars(
+        select(ClassTeacher)
+        .join(AcademyClass, AcademyClass.id == ClassTeacher.class_id)
+        .where(
+            AcademyClass.academy_id == academy_id,
+            ClassTeacher.academy_staff_user_id == user_id,
+        )
+    ).all()
+    existing_ids = {row.class_id for row in rows}
+    for row in rows:
+        if row.class_id not in target_ids:
+            db.delete(row)
+    for class_id in target_ids - existing_ids:
+        db.add(ClassTeacher(class_id=class_id, academy_staff_user_id=user_id, role_in_class="teacher"))
+
+
 def _staff_payload(db: Session, row: AcademyStaffMembership) -> dict:
     account = db.get(Academy, UUID(row.user_id)) if row.user_id else None
+    assigned_classes = _assigned_classes(db, row.academy_id, row.user_id)
     return {
         "id": str(row.id),
         "academy_id": row.academy_id,
@@ -136,19 +217,24 @@ def _staff_payload(db: Session, row: AcademyStaffMembership) -> dict:
         "role": row.role,
         "is_active": row.is_active,
         "permissions": _permission_payload(row),
+        "assigned_class_ids": [row["id"] for row in assigned_classes],
+        "assigned_classes": assigned_classes,
         "user": _academy_payload(account) if account else None,
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
 
 
-def _invite_payload(row: AcademyStaffInviteCode) -> dict:
+def _invite_payload(db: Session, row: AcademyStaffInviteCode) -> dict:
+    assigned_class_ids = [str(class_id) for class_id in (row.assigned_class_ids or [])]
     return {
         "id": str(row.id),
         "academy_id": row.academy_id,
         "code_preview": row.code_preview,
         "role": row.role,
         "permissions": _permission_payload(row),
+        "assigned_class_ids": assigned_class_ids,
+        "assigned_classes": _classes_for_ids(db, row.academy_id, assigned_class_ids),
         "created_by": row.created_by,
         "claimed_by": row.claimed_by,
         "expires_at": row.expires_at,
@@ -241,6 +327,7 @@ def update_staff(academy_id: str, user_id: str, payload: StaffUpdate, request: R
     )
     if not row:
         raise HTTPException(status_code=404, detail="Staff membership not found.")
+    next_role = payload.role or row.role
     if payload.role is not None:
         if payload.role not in STAFF_ROLES:
             raise HTTPException(status_code=400, detail="Invalid staff role.")
@@ -254,6 +341,11 @@ def update_staff(academy_id: str, user_id: str, payload: StaffUpdate, request: R
         if payload.is_active and not row.is_active:
             _ensure_staff_capacity(db, academy_id)
         row.is_active = payload.is_active
+    if payload.assigned_class_ids is not None:
+        assigned_class_ids = _validate_assigned_class_ids(db, academy_id, next_role, payload.assigned_class_ids)
+        _sync_class_teacher_assignments(db, academy_id, user_id, assigned_class_ids)
+    elif payload.role == "teacher" and not _assigned_classes(db, academy_id, user_id):
+        raise HTTPException(status_code=400, detail="Instructor members require at least one assigned class.")
     row.updated_at = datetime.utcnow()
     db.commit()
     return _staff_payload(db, row)
@@ -282,7 +374,7 @@ def list_staff_invite_codes(academy_id: str, request: Request, db: Session = Dep
     rows = db.scalars(
         select(AcademyStaffInviteCode).where(AcademyStaffInviteCode.academy_id == academy_id).order_by(AcademyStaffInviteCode.created_at.desc())
     ).all()
-    return {"seat_status": _seat_status(db, academy_id), "invite_codes": [_invite_payload(row) for row in rows]}
+    return {"seat_status": _seat_status(db, academy_id), "invite_codes": [_invite_payload(db, row) for row in rows]}
 
 
 @router.post("/{academy_id}/staff/invite-codes")
@@ -290,6 +382,7 @@ def create_staff_invite_code(academy_id: str, payload: StaffInviteCreate, reques
     actor = require_workspace_owner(request, db, academy_id)
     if payload.role not in STAFF_ROLES:
         raise HTTPException(status_code=400, detail="Invalid staff role.")
+    assigned_class_ids = _validate_assigned_class_ids(db, academy_id, payload.role, payload.assigned_class_ids)
     _ensure_staff_capacity(db, academy_id)
     code = _generate_code()
     code_hash = _hash_code(code)
@@ -307,13 +400,14 @@ def create_staff_invite_code(academy_id: str, payload: StaffInviteCreate, reques
         can_manage_students=payload.can_manage_students,
         can_manage_schedule=payload.can_manage_schedule,
         can_manage_coagent=payload.can_manage_coagent,
+        assigned_class_ids=assigned_class_ids,
         created_by=actor,
         expires_at=datetime.utcnow() + timedelta(days=payload.expires_in_days),
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {**_invite_payload(row), "code": code, "seat_status": _seat_status(db, academy_id)}
+    return {**_invite_payload(db, row), "code": code, "seat_status": _seat_status(db, academy_id)}
 
 
 @router.delete("/{academy_id}/staff/invite-codes/{code_id}", status_code=204)
@@ -349,6 +443,7 @@ def claim_staff_invite_code(payload: StaffInviteClaim, request: Request, db: Ses
     if not membership:
         membership = AcademyStaffMembership(academy_id=row.academy_id, user_id=user_id)
         db.add(membership)
+    assigned_class_ids = _validate_assigned_class_ids(db, row.academy_id, row.role, [UUID(str(class_id)) for class_id in (row.assigned_class_ids or [])])
     membership.role = row.role
     membership.can_manage_billing = False
     membership.can_manage_seats = row.can_manage_seats
@@ -359,6 +454,7 @@ def claim_staff_invite_code(payload: StaffInviteClaim, request: Request, db: Ses
     membership.can_manage_coagent = row.can_manage_coagent
     membership.is_active = True
     membership.updated_at = now
+    _sync_class_teacher_assignments(db, row.academy_id, user_id, assigned_class_ids)
     row.claimed_by = user_id
     row.claimed_at = now
     row.updated_at = now

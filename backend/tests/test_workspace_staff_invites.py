@@ -13,7 +13,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from database import Base  # noqa: E402
-from models import Academy, AcademyStaffInviteCode, AcademyStaffMembership, AcademyStudentSubscription  # noqa: E402
+from models import Academy, AcademyClass, AcademyStaffInviteCode, AcademyStaffMembership, AcademyStudentSubscription, ClassTeacher  # noqa: E402
 from routers.workspaces import StaffInviteClaim, StaffInviteCreate, create_staff_invite_code, claim_staff_invite_code, list_staff, list_workspaces  # noqa: E402
 
 
@@ -30,6 +30,7 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
         self.owner_id = str(uuid.uuid4())
         self.staff_id = str(uuid.uuid4())
         self.other_id = str(uuid.uuid4())
+        self.class_id = uuid.uuid4()
 
     def seed_accounts(self, db, purchased_staff_seats: int = 1):
         db.add_all(
@@ -38,6 +39,7 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
                 Academy(id=uuid.UUID(self.staff_id), email="staff@example.com", academy_name="Staff User", account_type="student"),
                 Academy(id=uuid.UUID(self.other_id), email="other@example.com", academy_name="Other User", account_type="student"),
                 AcademyStudentSubscription(academy_id=self.owner_id, plan_code="basic", purchased_staff_seats=purchased_staff_seats),
+                AcademyClass(id=self.class_id, academy_id=self.owner_id, name="Algebra A", subject="Math", grade_level="G3"),
             ]
         )
         db.commit()
@@ -48,7 +50,12 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
             self.seed_accounts(db, purchased_staff_seats=1)
             owner_request = request_for(self.owner_id)
 
-            invite = create_staff_invite_code(self.owner_id, StaffInviteCreate(can_manage_seats=True, can_manage_coagent=True), owner_request, db)
+            invite = create_staff_invite_code(
+                self.owner_id,
+                StaffInviteCreate(role="teacher", assigned_class_ids=[self.class_id], can_manage_seats=True, can_manage_coagent=True),
+                owner_request,
+                db,
+            )
             self.assertTrue(invite["code"].startswith("TF-"))
             self.assertEqual(invite["seat_status"]["pending_invites"], 1)
             self.assertEqual(invite["seat_status"]["available_staff_seats"], 0)
@@ -58,7 +65,7 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
             self.assertNotEqual(stored_code.code_hash, invite["code"])
 
             with self.assertRaises(HTTPException) as blocked:
-                create_staff_invite_code(self.owner_id, StaffInviteCreate(), owner_request, db)
+                create_staff_invite_code(self.owner_id, StaffInviteCreate(role="teacher", assigned_class_ids=[self.class_id]), owner_request, db)
             self.assertEqual(blocked.exception.status_code, 402)
 
             claimed = claim_staff_invite_code(StaffInviteClaim(code=invite["code"]), request_for(self.staff_id), db)
@@ -71,6 +78,8 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
             self.assertIsNotNone(membership)
             self.assertTrue(membership.can_manage_seats)
             self.assertFalse(membership.can_manage_billing)
+            class_teacher = db.scalar(select(ClassTeacher).where(ClassTeacher.class_id == self.class_id, ClassTeacher.academy_staff_user_id == self.staff_id))
+            self.assertIsNotNone(class_teacher)
 
             with self.assertRaises(HTTPException) as reused:
                 claim_staff_invite_code(StaffInviteClaim(code=invite["code"]), request_for(self.other_id), db)
@@ -92,7 +101,12 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
                 list_workspaces(request_for(self.other_id, self.owner_id), db)
             self.assertEqual(spoofed.exception.status_code, 403)
 
-            invite = create_staff_invite_code(self.owner_id, StaffInviteCreate(can_manage_materials=False), request_for(self.owner_id), db)
+            invite = create_staff_invite_code(
+                self.owner_id,
+                StaffInviteCreate(role="teacher", assigned_class_ids=[self.class_id], can_manage_materials=False),
+                request_for(self.owner_id),
+                db,
+            )
             claim_staff_invite_code(StaffInviteClaim(code=invite["code"]), request_for(self.staff_id), db)
 
             visible = list_workspaces(request_for(self.staff_id, self.owner_id), db)
@@ -101,6 +115,16 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
             self.assertEqual(workspace["role"], "teacher")
             self.assertFalse(workspace["permissions"]["can_manage_materials"])
             self.assertFalse(workspace["permissions"]["can_manage_billing"])
+        finally:
+            db.close()
+
+    def test_teacher_invite_requires_assigned_class(self):
+        db = self.Session()
+        try:
+            self.seed_accounts(db, purchased_staff_seats=1)
+            with self.assertRaises(HTTPException) as blocked:
+                create_staff_invite_code(self.owner_id, StaffInviteCreate(role="teacher"), request_for(self.owner_id), db)
+            self.assertEqual(blocked.exception.status_code, 400)
         finally:
             db.close()
 

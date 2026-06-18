@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { HeaderAccountSummary } from "@/components/auth/header-account-summary";
 import { FloatingNav } from "@/components/floating-nav";
 import { HeaderNotifications } from "@/components/header-notifications";
+import { LiveInteractionBar } from "@/components/live/live-interaction-bar";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
@@ -157,6 +158,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href={homeHref} className="inline-flex shrink-0 items-center" aria-label="Tena Forge">
               <SiteLogo />
             </Link>
+          </div>
+          <div className="hidden min-w-0 flex-1 items-center justify-center px-4 md:flex">
+            <LiveInteractionBar />
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <HeaderNotifications />

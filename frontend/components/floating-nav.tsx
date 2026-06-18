@@ -17,6 +17,7 @@ import {
   Library,
   Megaphone,
   NotebookPen,
+  Radio,
   ReceiptText,
   Settings,
   ShieldCheck,
@@ -64,6 +65,7 @@ const sections = [
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
+      { href: "/live-lecture", label: "실시간 강의", icon: Radio },
       { href: "/academy?panel=assignments", label: "과제", icon: BookOpenCheck },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
       { href: "/student-management/tuition", label: "수강료", icon: ReceiptText },

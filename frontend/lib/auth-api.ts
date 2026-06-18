@@ -58,6 +58,15 @@ export type StaffSeatStatus = {
   staff_seat_monthly_addon_krw: number;
 };
 
+export type WorkspaceClassSummary = {
+  id: string;
+  academy_id: string;
+  name: string;
+  subject?: string | null;
+  grade_level?: string | null;
+  is_active?: boolean;
+};
+
 export type StaffMember = {
   id: string;
   academy_id: string;
@@ -65,6 +74,8 @@ export type StaffMember = {
   role: string;
   is_active: boolean;
   permissions: WorkspacePermissions;
+  assigned_class_ids?: string[];
+  assigned_classes?: WorkspaceClassSummary[];
   user?: WorkspaceSummary["account"] | null;
   created_at: string;
   updated_at: string;
@@ -77,6 +88,8 @@ export type StaffInviteCode = {
   code?: string;
   role: string;
   permissions: WorkspacePermissions;
+  assigned_class_ids?: string[];
+  assigned_classes?: WorkspaceClassSummary[];
   created_by: string;
   claimed_by?: string | null;
   expires_at: string;
@@ -94,7 +107,27 @@ export type StaffPermissionPayload = {
   can_manage_students?: boolean;
   can_manage_schedule?: boolean;
   can_manage_coagent?: boolean;
+  assigned_class_ids?: string[];
   is_active?: boolean;
+};
+
+export type LiveInteractionSettings = {
+  academy_id: string;
+  live_start_lead_minutes: number;
+  updated_at?: string | null;
+};
+
+export type LiveInteractionEvent = {
+  id: string;
+  academy_id: string;
+  class_id: string;
+  class_name: string;
+  title: string;
+  starts_at: string;
+  ends_at?: string | null;
+  minutes_until_start: number;
+  status: "ready" | "opening" | string;
+  live_href: string;
 };
 
 export type LoginResult = {
@@ -237,6 +270,21 @@ export async function createWorkspaceStaffInviteCode(academyId: string, payload:
 
 export async function revokeWorkspaceStaffInviteCode(academyId: string, codeId: string) {
   await authHttp.delete(`/api/workspaces/${academyId}/staff/invite-codes/${codeId}`);
+}
+
+export async function getLiveInteractionSettings() {
+  const response = await authHttp.get("/api/live-interactions/settings");
+  return response.data as LiveInteractionSettings;
+}
+
+export async function updateLiveInteractionSettings(payload: Pick<LiveInteractionSettings, "live_start_lead_minutes">) {
+  const response = await authHttp.patch("/api/live-interactions/settings", payload);
+  return response.data as LiveInteractionSettings;
+}
+
+export async function listUpcomingLiveInteractions() {
+  const response = await authHttp.get("/api/live-interactions/upcoming");
+  return response.data as { settings: LiveInteractionSettings; events: LiveInteractionEvent[] };
 }
 
 export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "account_type" | "phone" | "address" | "business_number">>) {

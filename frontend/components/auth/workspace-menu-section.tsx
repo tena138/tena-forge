@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Clipboard, KeyRound, Loader2, ShieldCheck, UserPlus, Users, X } from "lucide-react";
+import { BookOpen, Check, Clipboard, KeyRound, Loader2, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 
 import {
   StaffInviteCode,
@@ -21,6 +21,7 @@ import {
   updateWorkspaceStaff,
 } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, setActiveWorkspaceId } from "@/lib/auth-client";
+import { AcademyClass, listAcademyClasses } from "@/lib/academyStudent";
 import { cn } from "@/lib/utils";
 
 type PermissionKey = Exclude<keyof WorkspacePermissions, "can_manage_billing">;
@@ -42,7 +43,7 @@ function roleLabel(role: string) {
   if (role === "owner") return "소유자";
   if (role === "student") return "학생 앱";
   if (role === "teacher") return "강사";
-  if (role === "assistant") return "보조 강사";
+  if (role === "assistant") return "직원";
   if (role === "admin") return "관리자";
   return role;
 }
@@ -179,7 +180,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
       <div className="mt-2 grid gap-2 rounded-[7px] border border-white/10 bg-black/20 p-2">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
           <KeyRound className="h-3.5 w-3.5" />
-          강사 초대 코드
+          직원/강사 초대 코드
         </div>
         <div className="flex gap-2">
           <input
@@ -230,12 +231,14 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
 function StaffManager({ academyId }: { academyId: string }) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [inviteCodes, setInviteCodes] = useState<StaffInviteCode[]>([]);
+  const [classes, setClasses] = useState<AcademyClass[]>([]);
   const [seatStatus, setSeatStatus] = useState<StaffSeatStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");
   const [error, setError] = useState("");
   const [newCode, setNewCode] = useState("");
   const [inviteRole, setInviteRole] = useState("teacher");
+  const [inviteClassIds, setInviteClassIds] = useState<string[]>([]);
   const [inviteDays, setInviteDays] = useState(7);
   const [invitePermissions, setInvitePermissions] = useState<Record<PermissionKey, boolean>>(defaultInvitePermissions);
 
@@ -243,9 +246,10 @@ function StaffManager({ academyId }: { academyId: string }) {
     setLoading(true);
     setError("");
     try {
-      const [staffData, inviteData] = await Promise.all([listWorkspaceStaff(academyId), listWorkspaceStaffInviteCodes(academyId)]);
+      const [staffData, inviteData, classRows] = await Promise.all([listWorkspaceStaff(academyId), listWorkspaceStaffInviteCodes(academyId), listAcademyClasses(academyId)]);
       setStaff(staffData.staff);
       setInviteCodes(inviteData.invite_codes);
+      setClasses(classRows.filter((row) => row.is_active));
       setSeatStatus(inviteData.seat_status || staffData.seat_status);
     } catch (err: any) {
       setError(err?.response?.data?.detail || "강사 정보를 불러오지 못했습니다.");
@@ -258,7 +262,15 @@ function StaffManager({ academyId }: { academyId: string }) {
     loadStaff();
   }, [academyId]);
 
+  function toggleInviteClass(classId: string) {
+    setInviteClassIds((current) => (current.includes(classId) ? current.filter((id) => id !== classId) : [...current, classId]));
+  }
+
   async function createInvite() {
+    if (inviteRole === "teacher" && inviteClassIds.length === 0) {
+      setError("강사 초대는 담당 클래스를 먼저 선택해야 합니다.");
+      return;
+    }
     setSavingKey("invite");
     setError("");
     setNewCode("");
@@ -266,10 +278,12 @@ function StaffManager({ academyId }: { academyId: string }) {
       const payload: StaffPermissionPayload & { expires_in_days: number } = {
         role: inviteRole,
         expires_in_days: inviteDays,
+        assigned_class_ids: inviteRole === "teacher" ? inviteClassIds : [],
         ...invitePermissions,
       };
       const created = await createWorkspaceStaffInviteCode(academyId, payload);
       setNewCode(created.code || "");
+      setInviteClassIds([]);
       await loadStaff();
     } catch (err: any) {
       setError(err?.response?.data?.detail || "초대 코드를 만들지 못했습니다.");
@@ -317,6 +331,8 @@ function StaffManager({ academyId }: { academyId: string }) {
     }
   }
 
+  const inviteDisabled = savingKey === "invite" || (inviteRole === "teacher" && inviteClassIds.length === 0);
+
   return (
     <div className="mt-3 max-h-[70vh] overflow-y-auto rounded-[7px] border border-white/10 bg-[#06070b] p-2">
       <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
@@ -336,12 +352,49 @@ function StaffManager({ academyId }: { academyId: string }) {
           <div className="grid grid-cols-[1fr_5rem] gap-2">
             <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="h-9 rounded-[7px] border border-white/10 bg-black/30 px-2 text-xs font-semibold text-white outline-none focus:border-white/40">
               <option value="teacher">강사</option>
-              <option value="assistant">보조 강사</option>
+              <option value="assistant">직원</option>
+              <option value="admin">관리자</option>
             </select>
             <input value={inviteDays} min={1} max={30} type="number" onChange={(event) => setInviteDays(Number(event.target.value) || 7)} className="h-9 rounded-[7px] border border-white/10 bg-black/30 px-2 text-xs font-semibold text-white outline-none focus:border-white/40" aria-label="초대 만료일" />
           </div>
+          {inviteRole === "teacher" ? (
+            <div className="rounded-[7px] border border-white/10 bg-black/20 p-2">
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-200">
+                <BookOpen className="h-3.5 w-3.5" />
+                담당 클래스
+              </div>
+              {classes.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {classes.map((row) => {
+                    const selected = inviteClassIds.includes(row.id);
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => toggleInviteClass(row.id)}
+                        className={cn(
+                          "max-w-full rounded-[6px] border px-2 py-1 text-[11px] font-bold transition",
+                          selected ? "border-white/30 bg-white text-slate-950" : "border-white/10 text-slate-400 hover:bg-white/[0.07] hover:text-white"
+                        )}
+                      >
+                        <span className="block max-w-[12rem] truncate">{row.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-[6px] border border-white/10 bg-white/[0.035] px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
+                  먼저 학생관리에서 클래스를 등록해야 강사를 초대할 수 있습니다.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-[7px] border border-white/10 bg-black/20 px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
+              직원/관리자는 클래스 배정 없이 초대할 수 있습니다.
+            </div>
+          )}
           <PermissionChecks value={invitePermissions} onChange={setInvitePermissions} />
-          <button type="button" onClick={createInvite} disabled={savingKey === "invite"} className="inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-xs font-black text-slate-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-45">
+          <button type="button" onClick={createInvite} disabled={inviteDisabled} className="inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-xs font-black text-slate-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-45">
             {savingKey === "invite" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
             코드 발급
           </button>
@@ -368,6 +421,9 @@ function StaffManager({ academyId }: { academyId: string }) {
                 <div className="min-w-0">
                   <div className="truncate text-xs font-black text-white">{member.user?.name || member.user?.email || member.user_id}</div>
                   <div className="truncate text-[11px] text-muted-foreground">{roleLabel(member.role)} · {member.is_active ? "활성" : "비활성"}</div>
+                  {member.assigned_classes?.length ? (
+                    <div className="mt-1 truncate text-[11px] text-slate-400">담당 {member.assigned_classes.map((row) => row.name).join(", ")}</div>
+                  ) : null}
                 </div>
                 <button type="button" onClick={() => removeMember(member)} disabled={savingKey === member.user_id} className="grid h-7 w-7 shrink-0 place-items-center rounded-[6px] border border-white/10 text-slate-300 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-45" aria-label="강사 비활성화">
                   {savingKey === member.user_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
@@ -409,6 +465,9 @@ function StaffManager({ academyId }: { academyId: string }) {
               <div className="min-w-0">
                 <div className="truncate font-mono text-xs font-black text-white">****{code.code_preview}</div>
                 <div className="truncate text-[11px] text-muted-foreground">{roleLabel(code.role)} · {new Date(code.expires_at).toLocaleDateString("ko-KR")} 만료</div>
+                {code.assigned_classes?.length ? (
+                  <div className="truncate text-[11px] text-slate-400">담당 {code.assigned_classes.map((row) => row.name).join(", ")}</div>
+                ) : null}
               </div>
               <button type="button" onClick={() => revokeInvite(code)} disabled={savingKey === code.id} className="rounded-[6px] border border-white/10 px-2 py-1 text-[11px] font-bold text-slate-300 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-45">
                 회수
