@@ -2433,34 +2433,35 @@ export default function StudentManagementPage() {
         ) : null}
         {studentMergeMenu ? (
           <div
-            className="fixed z-50 w-44 rounded-md border border-white/10 bg-[#11121a] p-1 shadow-2xl shadow-black/50"
+            className="fixed z-50 w-44 rounded-md bg-white p-1 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5"
             style={{ left: studentMergeMenu.x, top: studentMergeMenu.y }}
             onClick={(event) => event.stopPropagation()}
           >
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-semibold text-slate-100 hover:bg-zinc-500/15"
+              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-semibold text-zinc-900 hover:bg-zinc-100"
               onClick={() => openStudentMerge(studentMergeMenu.student)}
             >
-              <UserPlus className="h-4 w-4 text-zinc-200" />
+              <UserPlus className="h-4 w-4 text-zinc-600" />
               통합하기
             </button>
           </div>
         ) : null}
         {mergeSourceStudent ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
-            <section className="w-full max-w-xl rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/60">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/85 px-4 py-8 backdrop-blur-sm">
+            <section className="w-full max-w-xl rounded-lg bg-zinc-50 p-4 text-zinc-950 shadow-[0_24px_90px_rgba(0,0,0,0.16)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-black text-white">학생 통합</h2>
-                  <p className="mt-1 text-sm text-slate-400">{mergeSourceStudent.name}</p>
+                  <h2 className="text-base font-black text-zinc-950">학생 통합</h2>
+                  <p className="mt-1 text-sm text-zinc-500">{mergeSourceStudent.name}</p>
                 </div>
-                <button type="button" onClick={closeStudentMerge} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="닫기">
+                <button type="button" onClick={closeStudentMerge} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950" aria-label="닫기">
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <div className="mt-4 space-y-3">
                 <Input
+                  className="border-0 bg-white text-zinc-950 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-500 focus-visible:ring-black/10"
                   placeholder="합칠 학생 검색"
                   value={mergeSearch}
                   onChange={(event) => {
@@ -2476,20 +2477,20 @@ export default function StudentManagementPage() {
                       onClick={() => setMergeTargetStudentId(student.id)}
                       className={cn(
                         "w-full rounded-md border px-3 py-2 text-left transition",
-                        mergeTargetStudentId === student.id ? "border-zinc-300/50 bg-zinc-500/15" : "border-white/10 bg-white/[0.035] hover:border-zinc-300/35"
+                        mergeTargetStudentId === student.id ? "border-zinc-300 bg-zinc-200" : "border-zinc-100 bg-white hover:border-zinc-200"
                       )}
                     >
-                      <span className="block truncate text-sm font-bold text-white">{student.name}</span>
-                      <span className="mt-1 block truncate text-xs text-slate-500">{studentMetaText(student)}</span>
+                      <span className="block truncate text-sm font-bold text-zinc-950">{student.name}</span>
+                      <span className="mt-1 block truncate text-xs text-zinc-500">{studentMetaText(student)}</span>
                     </button>
                   ))}
                   {!mergeCandidates.length ? (
-                    <div className="rounded-md border border-dashed border-white/10 px-3 py-6 text-center text-sm text-slate-500">검색 결과 없음</div>
+                    <div className="rounded-md bg-white px-3 py-6 text-center text-sm text-zinc-500">검색 결과 없음</div>
                   ) : null}
                 </div>
                 {mergeTargetStudent ? (
-                  <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
-                    기준 학생: <span className="font-bold text-white">{mergePrimaryStudent?.name || "-"}</span>
+                  <div className="rounded-md bg-white px-3 py-2 text-sm text-zinc-600 shadow-sm shadow-zinc-950/5">
+                    기준 학생: <span className="font-bold text-zinc-950">{mergePrimaryStudent?.name || "-"}</span>
                   </div>
                 ) : null}
                 <div className="flex justify-end gap-2">
@@ -2506,23 +2507,23 @@ export default function StudentManagementPage() {
         {activeTab === "classes" ? (
           <>
             {showKeyManager ? (
-              <div className="fixed bottom-36 right-6 z-40 w-[min(440px,calc(100vw-48px))] rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/50">
+              <div className="fixed bottom-36 right-6 z-40 w-[min(440px,calc(100vw-48px))] rounded-lg bg-white p-4 text-zinc-950 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="flex items-center gap-2 font-semibold text-white">
-                      <KeyRound className="h-4 w-4 text-zinc-200" />
+                    <p className="flex items-center gap-2 font-semibold text-zinc-950">
+                      <KeyRound className="h-4 w-4 text-zinc-700" />
                       학생 키 관리
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">반별 학생 접속 키를 발급하고 좌석을 관리합니다.</p>
+                    <p className="mt-1 text-xs text-zinc-500">반별 학생 접속 키를 발급하고 좌석을 관리합니다.</p>
                   </div>
-                  <button type="button" onClick={() => setShowKeyManager(false)} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="학생 키 관리 닫기">
+                  <button type="button" onClick={() => setShowKeyManager(false)} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950" aria-label="학생 키 관리 닫기">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
                 <div className="space-y-3">
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <select
-                      className="h-10 min-w-0 rounded-md border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none focus:border-zinc-300/50"
+                      className="h-10 min-w-0 rounded-md border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
                       value={keyClassId}
                       onChange={(event) => setKeyClassId(event.target.value)}
                     >
@@ -2538,10 +2539,10 @@ export default function StudentManagementPage() {
                     </Button>
                   </div>
                   {newKeyCodes.length ? (
-                    <div className="space-y-2 rounded-md border border-zinc-300/20 bg-zinc-500/10 p-2">
+                    <div className="space-y-2 rounded-md bg-zinc-100 p-2">
                       {newKeyCodes.map((code) => (
-                        <div key={code} className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/25 px-2 py-1.5">
-                          <span className="min-w-0 truncate font-mono text-sm font-bold text-zinc-100">{code}</span>
+                        <div key={code} className="flex items-center justify-between gap-2 rounded-md bg-white px-2 py-1.5 shadow-sm shadow-zinc-950/5">
+                          <span className="min-w-0 truncate font-mono text-sm font-bold text-zinc-950">{code}</span>
                           <Button type="button" size="sm" variant="ghost" onClick={() => copySeatKey(code)}>
                             <Copy className="h-4 w-4" />
                             복사
@@ -2552,23 +2553,23 @@ export default function StudentManagementPage() {
                   ) : null}
                   <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                     {keyManagerLoading && !keySeats.length ? (
-                      <div className="flex items-center justify-center rounded-md border border-dashed border-white/10 p-4 text-sm text-slate-500">
+                      <div className="flex items-center justify-center rounded-md bg-zinc-50 p-4 text-sm text-zinc-500">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         불러오는 중
                       </div>
                     ) : null}
                     {!keyManagerLoading && !keySeats.length ? (
-                      <div className="rounded-md border border-dashed border-white/10 p-4 text-sm text-slate-500">발급된 학생 키가 없습니다.</div>
+                      <div className="rounded-md bg-zinc-50 p-4 text-sm text-zinc-500">발급된 학생 키가 없습니다.</div>
                     ) : null}
                     {keySeats.map((seat) => (
-                      <div key={seat.id} className="rounded-md border border-white/10 bg-white/[0.035] p-3">
+                      <div key={seat.id} className="rounded-md bg-zinc-100 p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
-                              <span className="truncate text-sm font-semibold text-white">{seat.display_name || seat.seat_number}</span>
+                              <span className="truncate text-sm font-semibold text-zinc-950">{seat.display_name || seat.seat_number}</span>
                               <Badge variant={seat.assigned ? "success" : "secondary"}>{seat.assigned ? "연결됨" : "대기"}</Badge>
                             </div>
-                            <p className="mt-1 truncate text-xs text-slate-500">
+                            <p className="mt-1 truncate text-xs text-zinc-500">
                               {seat.class_name || "반 없음"} · Key ****{seat.invite_code_preview || "-"}
                             </p>
                           </div>
@@ -2576,7 +2577,7 @@ export default function StudentManagementPage() {
                             <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => rotateSeatKey(seat)} disabled={keyBusySeatId === seat.id} aria-label="학생 키 회전">
                               {keyBusySeatId === seat.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                             </Button>
-                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-zinc-100" onClick={() => releaseKeySeat(seat)} disabled={!seat.assigned || keyBusySeatId === seat.id} aria-label="좌석 해제">
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-zinc-500 hover:text-zinc-950" onClick={() => releaseKeySeat(seat)} disabled={!seat.assigned || keyBusySeatId === seat.id} aria-label="좌석 해제">
                               <UserMinus className="h-4 w-4" />
                             </Button>
                           </div>
@@ -2588,19 +2589,19 @@ export default function StudentManagementPage() {
               </div>
             ) : null}
             {showClassCreator ? (
-              <div className="fixed bottom-24 right-6 z-40 w-[min(360px,calc(100vw-48px))] rounded-lg border border-white/10 bg-[#11121a] p-4 shadow-2xl shadow-black/50">
+              <div className="fixed bottom-24 right-6 z-40 w-[min(360px,calc(100vw-48px))] rounded-lg bg-white p-4 text-zinc-950 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-white">클래스 만들기</p>
-                  <button type="button" onClick={() => setShowClassCreator(false)} className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white">
+                  <p className="font-semibold text-zinc-950">클래스 만들기</p>
+                  <button type="button" onClick={() => setShowClassCreator(false)} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <Input placeholder="클래스 이름" value={classForm.name} onChange={(event) => setClassForm((current) => ({ ...current, name: event.target.value }))} />
-                  <Input placeholder="레벨/설명" value={classForm.description} onChange={(event) => setClassForm((current) => ({ ...current, description: event.target.value }))} />
+                  <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="클래스 이름" value={classForm.name} onChange={(event) => setClassForm((current) => ({ ...current, name: event.target.value }))} />
+                  <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="레벨/설명" value={classForm.description} onChange={(event) => setClassForm((current) => ({ ...current, description: event.target.value }))} />
                   <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
-                    <Input placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                    <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
+                    <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
                   </div>
                   <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
                     {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
