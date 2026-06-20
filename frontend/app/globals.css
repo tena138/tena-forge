@@ -228,9 +228,9 @@
   }
 
   .landing-hero-title {
-    font-size: clamp(2.5rem, 5vw, 4.5rem);
-    line-height: 1.15;
-    font-weight: 800;
+    font-size: clamp(3.4rem, 7.4vw, 7rem);
+    line-height: 0.98;
+    font-weight: 650;
     letter-spacing: 0;
   }
 
@@ -292,9 +292,9 @@
   }
 
   html[data-theme="light"] .landing-nav {
-    border-color: rgba(99, 102, 241, 0.16);
-    background: rgba(255, 255, 255, 0.86);
-    box-shadow: 0 14px 42px rgba(67, 56, 202, 0.10);
+    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(250, 250, 250, 0.9);
+    box-shadow: none;
   }
 
   .landing-logo-light {
@@ -315,29 +315,41 @@
 
   html[data-theme="light"] .landing-nav-link:hover {
     color: #111827;
-    background: rgba(99, 102, 241, 0.08);
+    background: rgba(0, 0, 0, 0.05);
   }
 
   html[data-theme="light"] .landing-hero-eyebrow {
-    color: #6d28d9;
+    color: #525252;
     text-shadow: none;
   }
 
   html[data-theme="light"] .landing-hero-title {
-    background-image: linear-gradient(180deg, #141827 0%, #403083 54%, #7557f5 100%);
-    filter: drop-shadow(0 12px 34px rgba(109, 40, 217, 0.14));
+    color: #111111;
+    background-image: none;
+    filter: none;
   }
 
   html[data-theme="light"] .landing-hero-login-link {
-    border-color: rgba(99, 102, 241, 0.16);
-    background: rgba(255, 255, 255, 0.72);
-    color: #334155;
-    box-shadow: 0 12px 28px rgba(79, 70, 229, 0.08);
+    border-color: rgba(0, 0, 0, 0.10);
+    background: #ffffff;
+    color: #111111;
+    box-shadow: none;
   }
 
   html[data-theme="light"] .landing-hero-login-link:hover {
-    background: rgba(255, 255, 255, 0.95);
-    color: #111827;
+    background: #f1f1f1;
+    color: #111111;
+  }
+
+  html[data-theme="light"] .landing-primary-cta {
+    border-color: #000000;
+    background: #000000;
+    color: #ffffff !important;
+  }
+
+  html[data-theme="light"] .landing-primary-cta:hover {
+    background: #1f1f1f;
+    color: #ffffff !important;
   }
 
   .landing-plan-section {
@@ -692,8 +704,8 @@
 
   @media (max-width: 767px) {
     .landing-hero-title {
-      font-size: 2rem;
-      line-height: 1.08;
+      font-size: clamp(3rem, 14vw, 4.1rem);
+      line-height: 1;
     }
 
     .landing-plan-section {
@@ -1657,6 +1669,11 @@
   html[data-theme="light"] [data-app-shell] [class*="text-slate-200"],
   html[data-theme="light"] [data-app-shell] [class*="text-white"] {
     color: rgb(15 23 42) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] .landing-primary-cta,
+  html[data-theme="light"] [data-app-shell] .landing-primary-cta * {
+    color: #ffffff !important;
   }
 
   html[data-theme="light"] [data-app-shell] [class*="text-slate-300"] {

@@ -79,6 +79,8 @@ const planCtaToneClass: Record<PlanCardTone, string> = {
   pro: "bg-[linear-gradient(135deg,#bdbdbd_0%,#f5f5f5_58%,#dcdcdc_100%)] text-white shadow-[0_18px_54px_rgba(255,255,255,0.18)] hover:shadow-[0_22px_64px_rgba(255,255,255,0.26)]",
 };
 
+const landingProofMarks = ["자료 제작", "학생 관리", "수업 일정", "오답 기록", "실시간 강의"];
+
 const storyScenes = [
   { title: "오프라인 문항들을 한 곳에 전산화", eyebrow: "Private Studio", pageTitle: "문항 보관함", route: "/problems" },
   { title: "가장 빠르게 컨텐츠 제작", eyebrow: "Private Studio", pageTitle: "세트 제작", route: "/problem-sets/export" },
@@ -380,53 +382,37 @@ export function PlanLandingPage() {
     <main className="relative isolate min-h-screen overflow-hidden bg-transparent text-[var(--landing-text-primary)]">
       <LandingNav />
 
-      <section className="relative min-h-[92svh] overflow-hidden pt-16 lg:min-h-[92vh]">
-        <img
-          src="/tena-forge-metal-lockup.png"
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover opacity-90 grayscale contrast-125"
-        />
-        <img
-          src="/tena-forge-metal-lockup.png"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute right-[-18vw] top-[7rem] hidden h-[52vh] w-[78vw] object-contain opacity-35 grayscale invert contrast-125 [mask-image:linear-gradient(90deg,transparent,black_16%,black_78%,transparent)] lg:block"
-        />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.92),rgba(0,0,0,0.48)_46%,rgba(0,0,0,0.36)),linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.78))]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.05)_0_1px,transparent_1px_14px)] opacity-55" />
-        <div className="relative z-10 mx-auto flex min-h-[calc(92svh-4rem)] w-full max-w-[104rem] flex-col justify-between px-4 pb-8 pt-10 sm:px-6 sm:pt-14 lg:min-h-[calc(92vh-4rem)] lg:py-12 xl:px-8">
-          <div className="flex max-w-4xl flex-col items-start text-left">
-            <p className="landing-hero-eyebrow text-xs font-black uppercase tracking-[0.24em] text-zinc-300 drop-shadow-[0_0_16px_rgba(255,255,255,0.18)]">MONOTONE FORGE OS</p>
-            <h1 className="landing-hero-title landing-keep-words mt-4 text-white drop-shadow-[0_0_28px_rgba(255,255,255,0.14)]">
-                Tena Forge
-              </h1>
-              <p className="landing-keep-words mt-4 max-w-3xl text-base leading-7 text-zinc-300 sm:mt-5 sm:text-lg sm:leading-8">
-                학원 운영의 새로운 표준.
-              </p>
-              <div className="mt-6 flex w-full flex-wrap items-center gap-3 sm:mt-8 sm:w-auto sm:gap-4">
-                <Link
-                  href="/register?plan=free"
-                  className="landing-motion-safe inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[8px] border border-white/80 bg-white px-5 text-sm font-black text-black shadow-[0_18px_42px_rgba(255,255,255,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-[0_22px_54px_rgba(255,255,255,0.18)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/35 active:scale-[0.98] sm:flex-none sm:px-6"
-                >
-                  콘솔 둘러보기 <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  href="/login?redirect=/academy"
-                  className="landing-hero-login-link inline-flex h-12 items-center justify-center rounded-[8px] border border-white/14 bg-black/35 px-4 text-sm font-black text-zinc-200 transition hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/25 sm:px-5"
-                >
-                  로그인
-                </Link>
-              </div>
+      <section className="relative overflow-hidden border-b border-black/10 bg-[#fbfbfa] pt-16 text-zinc-950">
+        <div className="relative z-10 mx-auto flex min-h-[calc(92svh-4rem)] w-full max-w-[90rem] flex-col px-4 sm:px-6 xl:px-8">
+          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center py-24 text-center sm:py-32 lg:py-40">
+            <h1 className="landing-hero-title landing-keep-words max-w-5xl text-zinc-950">
+              학원 운영의 새로운 표준.
+            </h1>
+            <p className="landing-keep-words mt-7 max-w-3xl text-lg leading-8 text-zinc-600 sm:text-xl sm:leading-9">
+              수업 일정, 자료 제작, 학생 기록, 실시간 강의를 하나의 콘솔에서 운영하세요.
+            </p>
+            <div className="mt-9 flex w-full flex-wrap items-center justify-center gap-3 sm:w-auto sm:gap-4">
+              <Link
+                href="/register?plan=free"
+                className="landing-primary-cta landing-motion-safe inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-black px-6 text-sm font-semibold text-white transition duration-200 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/15 active:scale-[0.98] sm:flex-none sm:px-7"
+              >
+                콘솔 둘러보기 <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/login?redirect=/academy"
+                className="landing-hero-login-link inline-flex h-12 flex-1 items-center justify-center rounded-full border border-black/10 bg-[#f3f3f3] px-6 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/10 sm:flex-none sm:px-7"
+              >
+                로그인
+              </Link>
+            </div>
           </div>
 
-          <div className="mt-10 w-full sm:mt-12 lg:mt-14">
-            <div className="mx-auto max-w-2xl lg:hidden">
-              <MobileProductPreview />
-            </div>
-            <div className="hidden lg:block">
-              <ProductPreview />
-            </div>
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-8 gap-y-7 border-t border-black/10 py-10 text-center sm:grid-cols-5 sm:py-12">
+            {landingProofMarks.map((label) => (
+              <div key={label} className="text-lg font-black tracking-normal text-black sm:text-xl">
+                {label}
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -451,7 +437,7 @@ function LandingNav() {
         <div className="flex items-center gap-2 text-sm font-black">
           <a href="#plans" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25 sm:inline-flex">플랜</a>
           <Link href="/login?redirect=/academy" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25 sm:inline-flex">로그인</Link>
-          <Link href="/register?plan=free" className="landing-motion-safe inline-flex h-9 items-center rounded-[7px] bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/35 active:scale-[0.98] sm:px-4">
+          <Link href="/register?plan=free" className="landing-primary-cta landing-motion-safe inline-flex h-9 items-center rounded-full bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/35 active:scale-[0.98] sm:px-4">
             <span className="sm:hidden">시작</span>
             <span className="hidden sm:inline">콘솔 둘러보기</span>
           </Link>
