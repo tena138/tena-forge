@@ -17,6 +17,7 @@ import {
   ScanText,
   ShieldCheck,
   Trash2,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -1472,29 +1473,29 @@ function AcademySchedulePanel() {
           });
           setFormOpen(true);
         }}
-        className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full border border-zinc-300/30 bg-zinc-600 text-white shadow-2xl shadow-zinc-950/40 transition hover:bg-zinc-500"
+        className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition hover:bg-zinc-800"
         aria-label="일정 추가"
       >
         <Plus className="h-5 w-5" />
       </button>
 
       {formOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-end justify-end bg-black/45 p-4 backdrop-blur-sm sm:items-center sm:p-6">
-          <div className="w-full max-w-sm rounded-[12px] border border-white/10 bg-[#12111a] p-4 shadow-2xl shadow-black/50">
+        <div className="fixed inset-0 z-[120] flex items-end justify-end bg-black/35 p-4 backdrop-blur-sm sm:items-center sm:p-6">
+          <div className="w-full max-w-sm rounded-[12px] bg-white p-4 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-black text-white">일정 추가</h2>
-              <button type="button" onClick={() => setFormOpen(false)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-white/10 text-slate-300 hover:bg-white/[0.06]" aria-label="닫기">
-                ×
+              <h2 className="text-base font-black text-zinc-950">일정 추가</h2>
+              <button type="button" onClick={() => setFormOpen(false)} className="grid h-8 w-8 place-items-center rounded-[7px] bg-zinc-100 text-zinc-700 transition hover:bg-zinc-200 hover:text-zinc-950" aria-label="닫기">
+                <X className="h-4 w-4" />
               </button>
             </div>
             <form className="space-y-3" onSubmit={submitSchedule}>
-              <select className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.class_id} onChange={(event) => setForm((current) => ({ ...current, class_id: event.target.value }))}>
+              <select className="h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10" value={form.class_id} onChange={(event) => setForm((current) => ({ ...current, class_id: event.target.value }))}>
                 <option value="">클래스</option>
                 {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
               </select>
-              {!classes.length ? <p className="text-xs font-semibold text-zinc-300">클래스가 없으면 일정명과 같은 이름의 클래스가 자동 생성됩니다.</p> : null}
+              {!classes.length ? <p className="text-xs font-semibold text-zinc-500">클래스가 없으면 일정명과 같은 이름의 클래스가 자동 생성됩니다.</p> : null}
               <Input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="일정명" />
-              <select className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.event_type} onChange={(event) => setForm((current) => ({ ...current, event_type: event.target.value }))}>
+              <select className="h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10" value={form.event_type} onChange={(event) => setForm((current) => ({ ...current, event_type: event.target.value }))}>
                 <option value="class">수업</option>
                 <option value="homework">과제</option>
                 <option value="test">시험</option>
@@ -1508,7 +1509,7 @@ function AcademySchedulePanel() {
                 <Input type="time" value={form.ends_at} onChange={(event) => setForm((current) => ({ ...current, ends_at: event.target.value }))} />
               </div>
               <select
-                className="h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                className="h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
                 value={form.recurrence_unit}
                 onChange={(event) => setForm((current) => ({ ...current, recurrence_unit: event.target.value as ScheduleRecurrenceUnit, recurrence_interval: "1" }))}
               >
@@ -1518,11 +1519,11 @@ function AcademySchedulePanel() {
                 <option value="month">월 단위 반복</option>
               </select>
               {form.recurrence_unit !== "none" ? (
-                <div className="space-y-3 rounded-[10px] border border-white/10 bg-black/20 p-3">
+                <div className="space-y-3 rounded-[10px] bg-zinc-50 p-3">
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="block text-xs font-semibold text-slate-400">
+                    <label className="block text-xs font-semibold text-zinc-600">
                       반복 간격
-                      <select className="mt-1 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={form.recurrence_interval} onChange={(event) => setForm((current) => ({ ...current, recurrence_interval: event.target.value }))}>
+                      <select className="mt-1 h-10 w-full rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10" value={form.recurrence_interval} onChange={(event) => setForm((current) => ({ ...current, recurrence_interval: event.target.value }))}>
                         {(form.recurrence_unit === "day" ? dayIntervalOptions : form.recurrence_unit === "week" ? weekIntervalOptions : monthIntervalOptions).map((value) => (
                           <option key={value} value={value}>
                             {form.recurrence_unit === "day" ? `${value}일마다` : form.recurrence_unit === "week" ? `${value}주마다` : `${value}개월마다`}
@@ -1530,14 +1531,14 @@ function AcademySchedulePanel() {
                         ))}
                       </select>
                     </label>
-                    <label className="block text-xs font-semibold text-slate-400">
+                    <label className="block text-xs font-semibold text-zinc-600">
                       반복 종료일
                       <Input className="mt-1" type="date" value={form.repeat_until} onChange={(event) => setForm((current) => ({ ...current, repeat_until: event.target.value }))} />
                     </label>
                   </div>
                   {form.recurrence_unit === "week" ? (
                     <div>
-                      <p className="mb-2 text-xs font-semibold text-slate-400">요일</p>
+                      <p className="mb-2 text-xs font-semibold text-zinc-600">요일</p>
                       <div className="grid grid-cols-7 gap-1.5">
                         {scheduleWeekdays.map((day) => {
                           const active = academySelectedWeekdays.includes(day.value);
@@ -1546,7 +1547,7 @@ function AcademySchedulePanel() {
                               key={day.value}
                               type="button"
                               onClick={() => toggleAcademyRecurrenceWeekday(day.value)}
-                              className={`h-8 rounded-[7px] border text-xs font-bold transition ${active ? "border-zinc-300/50 bg-zinc-500/25 text-white" : "border-white/10 bg-white/[0.035] text-slate-500 hover:text-slate-200"}`}
+                              className={`h-8 rounded-[7px] text-xs font-bold transition ${active ? "bg-black text-white" : "bg-white text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"}`}
                             >
                               {day.label}
                             </button>
@@ -1556,21 +1557,21 @@ function AcademySchedulePanel() {
                     </div>
                   ) : null}
                   {form.recurrence_unit === "month" ? (
-                    <label className="block text-xs font-semibold text-slate-400">
+                    <label className="block text-xs font-semibold text-zinc-600">
                       반복 날짜
-                      <select className="mt-1 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white" value={academySelectedMonthDay} onChange={(event) => setForm((current) => ({ ...current, recurrence_month_day: event.target.value }))}>
+                      <select className="mt-1 h-10 w-full rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10" value={academySelectedMonthDay} onChange={(event) => setForm((current) => ({ ...current, recurrence_month_day: event.target.value }))}>
                         {monthDayOptions.map((value) => <option key={value} value={value}>{value}일</option>)}
                       </select>
                     </label>
                   ) : null}
-                  <p className="text-xs text-slate-500">종료일을 비워두면 최대 160개까지 반복 일정을 자동 저장합니다.</p>
+                  <p className="text-xs text-zinc-500">종료일을 비워두면 최대 160개까지 반복 일정을 자동 저장합니다.</p>
                 </div>
               ) : null}
               <textarea
                 value={form.description}
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
                 placeholder="메모"
-                className="min-h-24 w-full resize-none rounded-[8px] border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-zinc-300/50"
+                className="min-h-24 w-full resize-none rounded-[8px] border-0 bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:bg-white focus:ring-2 focus:ring-black/10"
               />
               <Button type="submit" className="w-full" disabled={saving}>
                 {saving ? "저장 중" : "저장"}
