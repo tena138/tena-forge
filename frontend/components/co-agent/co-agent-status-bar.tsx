@@ -293,7 +293,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           title={report.message}
         >
           <span className="min-w-0">
-            <span className="block truncate text-[15px] font-black leading-6 text-zinc-900">{report.message}</span>
+            <span className="block truncate text-[16px] font-medium leading-[1.55] tracking-normal text-zinc-800">{report.message}</span>
           </span>
         </button>
 
