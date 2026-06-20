@@ -6,6 +6,8 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any
 
+from services.point_difficulty import apply_point_difficulty_to_payload
+
 
 KOREAN_EXTRACTION_PROMPT = r"""You are the Korean Language extraction engine for Tena Forge.
 
@@ -39,6 +41,7 @@ Return raw JSON array only. The array must contain exactly one object:
         "linked_passage_id": "<passage_id or null>",
         "question_stem": "<exact question stem text>",
         "additional_material": "<보기/additional material text or null>",
+        "difficulty": "<2점 or 3점 if a visible point value is printed for this question, else null>",
         "choices": [
           {"choice_label": "①", "choice_text": "<exact choice text>"}
         ],
@@ -63,6 +66,7 @@ Rules:
 - For the first question linked to a passage, question_stem must contain only the question asked about the passage, not the passage itself.
 - Extract 보기 blocks such as <보기>, 〈보기〉, [보기], or 보기 into additional_material.
 - Extract choices ① ② ③ ④ ⑤ exactly. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
+- If a visible point value such as (2점), [3점], 3점, or 배점 3점 is printed as the question's point/difficulty label, store it in difficulty as 2점 or 3점 and do not include that label in question_stem or additional_material.
 - Link questions to a passage when the page shows a shared passage range such as [1~3], [1-3], 1~3, or an instruction such as 다음 글을 읽고 물음에 답하시오.
 - Before returning, audit every visible passage range. If the source says [1~3], questions 1, 2, and 3 must all be present and linked to that passage. Never skip a middle question in a range.
 - If uncertain, add warnings instead of guessing.
@@ -544,6 +548,11 @@ def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_
     for index, question in enumerate(_as_list(payload.get("questions"))):
         if not isinstance(question, dict):
             continue
+        question = apply_point_difficulty_to_payload(
+            dict(question),
+            subject_engine=subject,
+            text_fields=("question_stem", "additional_material"),
+        )
         confidence = _confidence(question.get("extraction_confidence"))
         question_number = _text(question.get("question_number"))
         question_id = _text(question.get("question_id")) or f"q{question_number or fallback_page}_{index + 1}"
@@ -565,6 +574,7 @@ def normalize_korean_page_payload(raw: dict[str, Any], document_id: str, source_
                 "linked_passage_id": _text(question.get("linked_passage_id")) or None,
                 "question_stem": question_stem,
                 "additional_material": str(question.get("additional_material") or "").strip() or None,
+                "difficulty": question.get("difficulty"),
                 "choices": choices,
                 "answer": _text(question.get("answer")) or None,
                 "solution": str(question.get("solution") or "").strip() or None,

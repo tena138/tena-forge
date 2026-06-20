@@ -41,6 +41,7 @@ from services.korean_extraction import (
 )
 from services.matcher import match_with_summary
 from services.math_normalization import normalize_geometry_notation
+from services.point_difficulty import apply_point_difficulty_to_payload
 from services.storage import save_visual_bytes
 from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, is_language_passage_engine, language_engine_label, normalize_subject_engine
 
@@ -72,6 +73,7 @@ For each problem return a JSON object with:
   "skip_reason": null,
   "subject": <subject label or null>,
   "unit": <unit label or null>,
+  "difficulty": "<2점, 3점, 4점 if a visible point value is printed for this problem, else null>",
   "section_label": <visible section/day/chapter/unit marker such as "DAY 01", "Chapter 1", "Unit 03", "유형 01", or null>
 }
 Return a JSON array of all problems found on this page.
@@ -80,6 +82,7 @@ Include all condition text that belongs to the problem, even when it is inside a
 problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
 visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
+If a visible point value such as (2점), [3점], 4점, or 배점 3점 is printed as a difficulty/score label for the problem, store it in difficulty as 2점, 3점, or 4점 and do not include that label in problem_text.
 Convert every mathematical expression, function, interval, limit, summation, fraction, root, exponent, coordinate, and equation into LaTeX.
 When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\overline{BC}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 Use inline LaTeX delimiters like $f(x)=x^2$ inside Korean sentences.
@@ -113,6 +116,7 @@ For each problem return a JSON object with:
   "skip_reason": null,
   "subject": <subject label or null>,
   "unit": <unit label or null>,
+  "difficulty": "<2점, 3점, 4점 if a visible point value is printed for this problem, else null>",
   "section_label": <visible section/day/chapter/unit marker such as "DAY 01", "Chapter 1", "Unit 03", "유형 01", or null>
 }
 
@@ -120,6 +124,7 @@ Include all condition text that belongs to the problem, even when it is inside a
 problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
 visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
+If a visible point value such as (2점), [3점], 4점, or 배점 3점 is printed as a difficulty/score label for the problem, store it in difficulty as 2점, 3점, or 4점 and do not include that label in problem_text.
 Convert mathematical expressions into LaTeX.
 Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑; never write those expressions as inline $...$ math.
 Use the standard Korean math terms 최댓값 and 최솟값; do not rewrite them as 최대값 or 최소값.
@@ -2230,6 +2235,11 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
     for index, question in enumerate(questions, start=1):
         if not isinstance(question, dict):
             continue
+        question = apply_point_difficulty_to_payload(
+            dict(question),
+            subject_engine=subject_engine,
+            text_fields=("question_stem", "additional_material"),
+        )
         passage = passage_by_id.get(str(question.get("linked_passage_id") or ""))
         db.add(
             KoreanQuestion(
@@ -2279,6 +2289,7 @@ def _save_korean_document_results(db: Session, batch: Batch, document: dict[str,
         problem.tags = Tag(
             subject=subject_label,
             unit=(passage.get("passage_type") if passage else None) or None,
+            difficulty=question.get("difficulty"),
             problem_type="객관식" if question.get("choices") else None,
             source=f"{batch_name} / p.{first_page} / {question.get('question_number') or index}번",
         )
@@ -4635,6 +4646,11 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
     for index, item in enumerate(problems):
         if index and index % 20 == 0:
             ensure_batch_active(batch.id)
+        item = apply_point_difficulty_to_payload(
+            dict(item),
+            subject_engine=subject_engine,
+            text_fields=("problem_text",),
+        )
         solution = item.get("solution") or {
             "answer": item.get("answer"),
             "solution_steps": item.get("solution_steps"),
@@ -4667,6 +4683,7 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
         problem.tags = Tag(
             subject=str(item.get("subject") or "").strip() or None,
             unit=_tag_unit_label(item.get("section_label"), item.get("unit")),
+            difficulty=item.get("difficulty"),
             source=f"{batch_name} / p.{page_number} / {item['problem_number']}번",
         )
         db.add(problem)

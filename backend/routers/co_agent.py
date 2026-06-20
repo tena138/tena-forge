@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from openai import OpenAI
@@ -19,6 +20,7 @@ from models import (
     RoutineAction,
     StudentAcademyMembership,
 )
+from services.exam_paper_planner import build_exam_paper_draft, format_exam_paper_draft_answer, looks_like_exam_paper_request
 from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id
 
 router = APIRouter(prefix="/api/co-agent", tags=["co-agent"])
@@ -47,6 +49,13 @@ class CoAgentChatResponse(BaseModel):
     answer: str
     scope: str = "tena_forge_operations"
     model: str | None = None
+    drafts: list[dict[str, Any]] = Field(default_factory=list)
+    quick_actions: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CoAgentExamPaperDraftRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    current_path: str | None = Field(default=None, max_length=300)
 
 PRODUCT_MAP = [
     {"id": "extract", "label": "추출", "href": "/archive/new", "summary": "PDF를 업로드해 문항과 답안을 구조화합니다."},
@@ -402,11 +411,43 @@ def _co_agent_chat_completion(messages: list[dict[str, str]]) -> tuple[str, str]
     raise HTTPException(status_code=502, detail=f"Co-Agent AI request failed: {last_error}")
 
 
+@router.post("/exam-paper/draft")
+def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Request, db: Session = Depends(get_db)):
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required.")
+    owner_ids = _academy_ids_for_co_agent(request, db)
+    draft = build_exam_paper_draft(db, message=message, owner_ids=owner_ids)
+    return {
+        "answer": format_exam_paper_draft_answer(draft),
+        "draft": draft,
+        "quick_actions": [
+            {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
+            {"id": "reroll_exam_draft", "label": "다시 고르기", "kind": "reroll"},
+            {"id": "approve_exam_draft", "label": "승인 준비", "kind": "approve"},
+        ],
+    }
+
+
 @router.post("/chat", response_model=CoAgentChatResponse)
 def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = Depends(get_db)):
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
+
+    if looks_like_exam_paper_request(message):
+        owner_ids = _academy_ids_for_co_agent(request, db)
+        draft = build_exam_paper_draft(db, message=message, owner_ids=owner_ids)
+        return CoAgentChatResponse(
+            answer=format_exam_paper_draft_answer(draft),
+            model=None,
+            drafts=[draft],
+            quick_actions=[
+                {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
+                {"id": "reroll_exam_draft", "label": "다시 고르기", "kind": "reroll"},
+                {"id": "approve_exam_draft", "label": "승인 준비", "kind": "approve"},
+            ],
+        )
 
     snapshot = next_actions(request, db)
     system_prompt = _co_agent_chat_system_prompt(snapshot, payload.current_path)

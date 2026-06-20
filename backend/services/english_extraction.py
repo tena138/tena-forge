@@ -39,6 +39,7 @@ Return raw JSON array only. The array must contain exactly one object:
         "linked_passage_id": "<passage_id or null>",
         "question_stem": "<exact question text>",
         "additional_material": "<보기/additional material text or null>",
+        "difficulty": "<2점 or 3점 if a visible point value is printed for this question, else null>",
         "choices": [
           {"choice_label": "①", "choice_text": "<exact choice text>"}
         ],
@@ -64,6 +65,7 @@ Rules:
 - Before returning, audit every visible shared range. If the source says [41~42], questions 41 and 42 must both be present and linked to that passage.
 - Extract 보기 blocks, underlined phrases, blank options, and grammar/vocabulary tables into additional_material when they are part of a question.
 - Extract choices ①②③④⑤ exactly, including choices printed below a long passage box. If the source uses 1) 2) 3) 4) 5), preserve those labels and add a warning.
+- If a visible point value such as (2점), [3점], 3점, or 배점 3점 is printed as the question's point/difficulty label, store it in difficulty as 2점 or 3점 and do not include that label in question_stem or additional_material.
 - If uncertain, add warnings instead of guessing.
 - Do not extract answers from the problem file. Only answer files may fill answer later. Keep solution null."""
 
