@@ -38,11 +38,11 @@ const sections = [
     title: "Private Studio",
     shortTitle: "PS",
     description: "내 자료 제작",
-    accent: "bg-white",
-    panel: "border-white/12 bg-white/[0.035]",
-    header: "text-zinc-100",
-    activeItem: "border-white/24 bg-white/[0.10] text-white hover:bg-white/[0.10] hover:text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
-    activeIndicator: "bg-white",
+    accent: "bg-black",
+    panel: "border-black/10 bg-[#f3f3f3]",
+    header: "text-zinc-950",
+    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/academy", label: "제작 콘솔", icon: LayoutDashboard },
@@ -57,11 +57,11 @@ const sections = [
     shortTitle: "AO",
     description: "Seats, classes, assignments",
     accountTypes: ["academy"],
-    accent: "bg-zinc-300",
-    panel: "border-white/12 bg-white/[0.035]",
-    header: "text-zinc-200",
-    activeItem: "border-white/24 bg-white/[0.10] text-white hover:bg-white/[0.10] hover:text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
-    activeIndicator: "bg-white",
+    accent: "bg-zinc-950",
+    panel: "border-black/10 bg-[#f3f3f3]",
+    header: "text-zinc-950",
+    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
@@ -77,11 +77,11 @@ const sections = [
     shortTitle: "CA",
     description: "AI 운영 보조",
     accountTypes: ["academy"],
-    accent: "bg-zinc-400",
-    panel: "border-white/12 bg-white/[0.035]",
-    header: "text-zinc-200",
-    activeItem: "border-white/24 bg-white/[0.10] text-white hover:bg-white/[0.10] hover:text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
-    activeIndicator: "bg-white",
+    accent: "bg-zinc-700",
+    panel: "border-black/10 bg-[#f3f3f3]",
+    header: "text-zinc-950",
+    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/co-agent/routines", label: "루틴", icon: BellRing },
@@ -92,11 +92,11 @@ const sections = [
     shortTitle: "MP",
     description: "공개 허브",
     adminOnly: true,
-    accent: "bg-zinc-500",
-    panel: "border-white/12 bg-white/[0.035]",
-    header: "text-zinc-200",
-    activeItem: "border-white/24 bg-white/[0.10] text-white hover:bg-white/[0.10] hover:text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
-    activeIndicator: "bg-white",
+    accent: "bg-zinc-700",
+    panel: "border-black/10 bg-[#f3f3f3]",
+    header: "text-zinc-950",
+    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/templates", label: "템플릿 허브", icon: LayoutTemplate },
@@ -109,11 +109,11 @@ const sections = [
     shortTitle: "ST",
     description: "Student learning access",
     accountTypes: ["student"],
-    accent: "bg-zinc-300",
-    panel: "border-white/12 bg-white/[0.035]",
-    header: "text-zinc-200",
-    activeItem: "border-white/24 bg-white/[0.10] text-white hover:bg-white/[0.10] hover:text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
-    activeIndicator: "bg-white",
+    accent: "bg-zinc-950",
+    panel: "border-black/10 bg-[#f3f3f3]",
+    header: "text-zinc-950",
+    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/student", label: "학생 홈", icon: GraduationCap },
@@ -126,12 +126,12 @@ const sections = [
     title: "Admin",
     shortTitle: "AD",
     description: "계정 및 정책",
-    accent: "bg-slate-300",
-    panel: "border-white/12 bg-white/[0.035]",
-    header: "text-slate-200",
-    activeItem: "border-slate-300/20 bg-white/[0.08] text-white hover:bg-white/[0.08] hover:text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]",
-    activeIndicator: "bg-slate-300",
-    activeIcon: "text-slate-200 group-hover:text-slate-200",
+    accent: "bg-zinc-700",
+    panel: "border-black/10 bg-[#f3f3f3]",
+    header: "text-zinc-950",
+    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeIndicator: "bg-black",
+    activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/account/profile", label: "프로필", icon: UserCircle },
       { href: "/admin/announcements", label: "소식 관리", icon: Megaphone, adminOnly: true },
@@ -220,7 +220,7 @@ export function FloatingNav({
 
   if (mobile) {
     return (
-      <nav className="flex gap-1 overflow-x-auto border-t border-white/10 bg-black/50 px-4 py-2 lg:hidden" aria-label="주요 메뉴">
+      <nav className="flex gap-1 overflow-x-auto border-t border-black/10 bg-[#fbfbfa]/95 px-4 py-2 lg:hidden" aria-label="주요 메뉴">
         {mobileItems.map((item, index) => {
           const active = isActive(pathname, item.href, searchParams);
           return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} mobile />;
@@ -233,7 +233,7 @@ export function FloatingNav({
     <nav
       ref={navRef}
       className={cn(
-        "scrollbar-thin-dark fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto border-r border-white/10 bg-black/45 py-4 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-[width,padding] duration-200 lg:flex",
+        "scrollbar-thin-dark fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto border-r border-black/10 bg-[#fbfbfa] py-4 shadow-none transition-[width,padding] duration-200 lg:flex",
         isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
       )}
       onMouseEnter={() => hoverExpand && setAutoExpanded(true)}
@@ -251,7 +251,7 @@ export function FloatingNav({
       <div className="space-y-3">
         {visibleSections.map((section) => (
           <section key={section.title} className={cn("overflow-hidden rounded-[12px] border shadow-[0_12px_30px_rgba(0,0,0,0.14)]", section.panel)}>
-            <div className={cn("flex items-center border-b border-white/10", isCollapsed ? "justify-center px-1 py-2" : "gap-2 px-2.5 py-2.5")}>
+            <div className={cn("flex items-center border-b border-black/10", isCollapsed ? "justify-center px-1 py-2" : "gap-2 px-2.5 py-2.5")}>
               <span className={cn("rounded-full", section.accent, isCollapsed ? "h-1.5 w-8" : "h-8 w-1")} />
               {!isCollapsed && (
                 <div className="min-w-0">

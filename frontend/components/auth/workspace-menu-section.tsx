@@ -144,13 +144,13 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
   }
 
   return (
-    <section className="mt-2 rounded-[8px] border border-white/10 bg-white/[0.045] p-2">
+    <section className="mt-2 rounded-[8px] border border-black/10 bg-[#f7f7f7] p-2">
       <div className="flex items-center justify-between gap-2 px-1 pb-2">
         <div>
-          <div className="text-sm font-semibold text-slate-100">내 워크스페이스</div>
+          <div className="text-sm font-semibold text-zinc-950">내 워크스페이스</div>
           <div className="text-xs text-muted-foreground">학생 앱과 학원 콘솔 전환</div>
         </div>
-        {loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin text-zinc-500" /> : null}
       </div>
 
       <div className="grid gap-1">
@@ -164,12 +164,12 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
               onClick={() => switchWorkspace(item)}
               className={cn(
                 "flex min-w-0 items-center justify-between gap-3 rounded-[7px] px-3 py-2 text-left transition",
-                selected ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/[0.07] hover:text-white"
+                selected ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
               )}
             >
               <span className="min-w-0">
                 <span className="block truncate text-sm font-bold">{item.name}</span>
-                <span className={cn("block truncate text-xs", selected ? "text-slate-600" : "text-muted-foreground")}>{roleLabel(item.role)}</span>
+                <span className={cn("block truncate text-xs", selected ? "text-zinc-200" : "text-muted-foreground")}>{roleLabel(item.role)}</span>
               </span>
               {selected ? <Check className="h-4 w-4 shrink-0" /> : null}
             </button>
@@ -177,8 +177,8 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
         })}
       </div>
 
-      <div className="mt-2 grid gap-2 rounded-[7px] border border-white/10 bg-black/20 p-2">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+      <div className="mt-2 grid gap-2 rounded-[7px] border border-black/10 bg-white p-2">
+        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700">
           <KeyRound className="h-3.5 w-3.5" />
           직원/강사 초대 코드
         </div>
@@ -190,32 +190,32 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
               if (event.key === "Enter") submitClaim();
             }}
             placeholder="TF-XXXX-XXXX-XXXX"
-            className="h-9 min-w-0 flex-1 rounded-[7px] border border-white/10 bg-black/30 px-3 text-xs font-semibold text-white outline-none placeholder:text-slate-600 focus:border-white/40"
+            className="h-9 min-w-0 flex-1 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 focus:border-black/40"
           />
           <button
             type="button"
             onClick={submitClaim}
             disabled={claiming || !claimCode.trim()}
-            className="inline-flex h-9 items-center justify-center rounded-[7px] bg-white px-3 text-xs font-black text-slate-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-9 items-center justify-center rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {claiming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "입력"}
           </button>
         </div>
-        {claimNotice ? <p className="text-xs font-semibold text-slate-200">{claimNotice}</p> : null}
-        {error ? <p className="text-xs font-semibold text-zinc-300">{error}</p> : null}
+        {claimNotice ? <p className="text-xs font-semibold text-zinc-700">{claimNotice}</p> : null}
+        {error ? <p className="text-xs font-semibold text-zinc-700">{error}</p> : null}
       </div>
 
       {ownerWorkspace ? (
-        <div className="mt-2 rounded-[7px] border border-white/10 bg-black/20 p-2">
+        <div className="mt-2 rounded-[7px] border border-black/10 bg-white p-2">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-xs font-bold text-slate-300">강사 좌석</div>
+              <div className="text-xs font-bold text-zinc-800">강사 좌석</div>
               <div className="mt-1 text-xs text-muted-foreground">{seatText(ownerWorkspace.seat_status)}</div>
             </div>
             <button
               type="button"
               onClick={() => setStaffOpen((value) => !value)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-[7px] border border-white/10 px-2.5 text-xs font-black text-slate-200 transition hover:bg-white/[0.07] hover:text-white"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[7px] border border-black/10 px-2.5 text-xs font-black text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
             >
               <Users className="h-3.5 w-3.5" />
               관리
@@ -334,32 +334,32 @@ function StaffManager({ academyId }: { academyId: string }) {
   const inviteDisabled = savingKey === "invite" || (inviteRole === "teacher" && inviteClassIds.length === 0);
 
   return (
-    <div className="mt-3 max-h-[70vh] overflow-y-auto rounded-[7px] border border-white/10 bg-[#06070b] p-2">
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+    <div className="mt-3 max-h-[70vh] overflow-y-auto rounded-[7px] border border-black/10 bg-white p-2">
+      <div className="flex items-center justify-between gap-2 border-b border-black/10 pb-2">
         <div>
-          <div className="text-xs font-black text-white">강사 관리</div>
+          <div className="text-xs font-black text-zinc-950">강사 관리</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">{seatText(seatStatus)}</div>
         </div>
-        {loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin text-zinc-500" /> : null}
       </div>
 
       <div className="mt-3 grid gap-2">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+        <div className="flex items-center gap-2 text-xs font-bold text-zinc-800">
           <UserPlus className="h-3.5 w-3.5" />
           새 초대 코드
         </div>
         <div className="grid gap-2">
           <div className="grid grid-cols-[1fr_5rem] gap-2">
-            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="h-9 rounded-[7px] border border-white/10 bg-black/30 px-2 text-xs font-semibold text-white outline-none focus:border-white/40">
+            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="h-9 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-2 text-xs font-semibold text-zinc-950 outline-none focus:border-black/40">
               <option value="teacher">강사</option>
               <option value="assistant">직원</option>
               <option value="admin">관리자</option>
             </select>
-            <input value={inviteDays} min={1} max={30} type="number" onChange={(event) => setInviteDays(Number(event.target.value) || 7)} className="h-9 rounded-[7px] border border-white/10 bg-black/30 px-2 text-xs font-semibold text-white outline-none focus:border-white/40" aria-label="초대 만료일" />
+            <input value={inviteDays} min={1} max={30} type="number" onChange={(event) => setInviteDays(Number(event.target.value) || 7)} className="h-9 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-2 text-xs font-semibold text-zinc-950 outline-none focus:border-black/40" aria-label="초대 만료일" />
           </div>
           {inviteRole === "teacher" ? (
-            <div className="rounded-[7px] border border-white/10 bg-black/20 p-2">
-              <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-200">
+            <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] p-2">
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold text-zinc-800">
                 <BookOpen className="h-3.5 w-3.5" />
                 담당 클래스
               </div>
@@ -374,7 +374,7 @@ function StaffManager({ academyId }: { academyId: string }) {
                         onClick={() => toggleInviteClass(row.id)}
                         className={cn(
                           "max-w-full rounded-[6px] border px-2 py-1 text-[11px] font-bold transition",
-                          selected ? "border-white/30 bg-white text-slate-950" : "border-white/10 text-slate-400 hover:bg-white/[0.07] hover:text-white"
+                          selected ? "border-black bg-black text-white" : "border-black/10 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
                         )}
                       >
                         <span className="block max-w-[12rem] truncate">{row.name}</span>
@@ -383,18 +383,18 @@ function StaffManager({ academyId }: { academyId: string }) {
                   })}
                 </div>
               ) : (
-                <div className="rounded-[6px] border border-white/10 bg-white/[0.035] px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
+                <div className="rounded-[6px] border border-black/10 bg-white px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
                   먼저 학생관리에서 클래스를 등록해야 강사를 초대할 수 있습니다.
                 </div>
               )}
             </div>
           ) : (
-            <div className="rounded-[7px] border border-white/10 bg-black/20 px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
+            <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
               직원/관리자는 클래스 배정 없이 초대할 수 있습니다.
             </div>
           )}
           <PermissionChecks value={invitePermissions} onChange={setInvitePermissions} />
-          <button type="button" onClick={createInvite} disabled={inviteDisabled} className="inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-xs font-black text-slate-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-45">
+          <button type="button" onClick={createInvite} disabled={inviteDisabled} className="inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-45">
             {savingKey === "invite" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
             코드 발급
           </button>
@@ -402,7 +402,7 @@ function StaffManager({ academyId }: { academyId: string }) {
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(newCode)}
-              className="flex items-center justify-between gap-2 rounded-[7px] border border-white/10 bg-white/[0.05] px-3 py-2 text-left font-mono text-xs text-white"
+              className="flex items-center justify-between gap-2 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2 text-left font-mono text-xs text-zinc-950"
               title="복사"
             >
               <span className="truncate">{newCode}</span>
@@ -413,19 +413,19 @@ function StaffManager({ academyId }: { academyId: string }) {
       </div>
 
       <div className="mt-4 grid gap-2">
-        <div className="text-xs font-bold text-slate-200">활성 강사</div>
+        <div className="text-xs font-bold text-zinc-800">활성 강사</div>
         {staff.length ? (
           staff.map((member) => (
-            <div key={member.id} className="rounded-[7px] border border-white/10 bg-white/[0.035] p-2">
+            <div key={member.id} className="rounded-[7px] border border-black/10 bg-[#f7f7f7] p-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="truncate text-xs font-black text-white">{member.user?.name || member.user?.email || member.user_id}</div>
+                  <div className="truncate text-xs font-black text-zinc-950">{member.user?.name || member.user?.email || member.user_id}</div>
                   <div className="truncate text-[11px] text-muted-foreground">{roleLabel(member.role)} · {member.is_active ? "활성" : "비활성"}</div>
                   {member.assigned_classes?.length ? (
-                    <div className="mt-1 truncate text-[11px] text-slate-400">담당 {member.assigned_classes.map((row) => row.name).join(", ")}</div>
+                    <div className="mt-1 truncate text-[11px] text-zinc-500">담당 {member.assigned_classes.map((row) => row.name).join(", ")}</div>
                   ) : null}
                 </div>
-                <button type="button" onClick={() => removeMember(member)} disabled={savingKey === member.user_id} className="grid h-7 w-7 shrink-0 place-items-center rounded-[6px] border border-white/10 text-slate-300 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-45" aria-label="강사 비활성화">
+                <button type="button" onClick={() => removeMember(member)} disabled={savingKey === member.user_id} className="grid h-7 w-7 shrink-0 place-items-center rounded-[6px] border border-black/10 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:opacity-45" aria-label="강사 비활성화">
                   {savingKey === member.user_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
                 </button>
               </div>
@@ -439,7 +439,7 @@ function StaffManager({ academyId }: { academyId: string }) {
                       onClick={() => updateMember(member, { [option.key]: !enabled } as StaffPermissionPayload)}
                       className={cn(
                         "rounded-[6px] border px-2 py-1 text-[11px] font-bold transition",
-                        enabled ? "border-white/30 bg-white text-slate-950" : "border-white/10 text-slate-400 hover:bg-white/[0.07] hover:text-white"
+                        enabled ? "border-black bg-black text-white" : "border-black/10 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
                       )}
                     >
                       {option.label}
@@ -450,36 +450,36 @@ function StaffManager({ academyId }: { academyId: string }) {
             </div>
           ))
         ) : (
-          <div className="rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-muted-foreground">아직 초대된 강사가 없습니다.</div>
+          <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2 text-xs text-muted-foreground">아직 초대된 강사가 없습니다.</div>
         )}
       </div>
 
       <div className="mt-4 grid gap-2">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+        <div className="flex items-center gap-2 text-xs font-bold text-zinc-800">
           <ShieldCheck className="h-3.5 w-3.5" />
           미사용 초대 코드
         </div>
         {inviteCodes.length ? (
           inviteCodes.map((code) => (
-            <div key={code.id} className="flex items-center justify-between gap-2 rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2">
+            <div key={code.id} className="flex items-center justify-between gap-2 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2">
               <div className="min-w-0">
-                <div className="truncate font-mono text-xs font-black text-white">****{code.code_preview}</div>
+                <div className="truncate font-mono text-xs font-black text-zinc-950">****{code.code_preview}</div>
                 <div className="truncate text-[11px] text-muted-foreground">{roleLabel(code.role)} · {new Date(code.expires_at).toLocaleDateString("ko-KR")} 만료</div>
                 {code.assigned_classes?.length ? (
-                  <div className="truncate text-[11px] text-slate-400">담당 {code.assigned_classes.map((row) => row.name).join(", ")}</div>
+                  <div className="truncate text-[11px] text-zinc-500">담당 {code.assigned_classes.map((row) => row.name).join(", ")}</div>
                 ) : null}
               </div>
-              <button type="button" onClick={() => revokeInvite(code)} disabled={savingKey === code.id} className="rounded-[6px] border border-white/10 px-2 py-1 text-[11px] font-bold text-slate-300 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-45">
+              <button type="button" onClick={() => revokeInvite(code)} disabled={savingKey === code.id} className="rounded-[6px] border border-black/10 px-2 py-1 text-[11px] font-bold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:opacity-45">
                 회수
               </button>
             </div>
           ))
         ) : (
-          <div className="rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-muted-foreground">대기 중인 초대 코드가 없습니다.</div>
+          <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2 text-xs text-muted-foreground">대기 중인 초대 코드가 없습니다.</div>
         )}
       </div>
 
-      {error ? <p className="mt-3 text-xs font-semibold text-zinc-300">{error}</p> : null}
+      {error ? <p className="mt-3 text-xs font-semibold text-zinc-700">{error}</p> : null}
     </div>
   );
 }
@@ -496,7 +496,7 @@ function PermissionChecks({ value, onChange }: { value: Record<PermissionKey, bo
             onClick={() => onChange({ ...value, [option.key]: !enabled })}
             className={cn(
               "rounded-[6px] border px-2 py-1 text-[11px] font-bold transition",
-              enabled ? "border-white/30 bg-white text-slate-950" : "border-white/10 text-slate-400 hover:bg-white/[0.07] hover:text-white"
+              enabled ? "border-black bg-black text-white" : "border-black/10 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
             )}
           >
             {option.label}

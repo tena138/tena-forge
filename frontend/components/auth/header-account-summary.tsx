@@ -16,12 +16,12 @@ import { cn } from "@/lib/utils";
 type PlanTone = "admin" | "trial" | "free" | "basic" | "pro" | "enterprise";
 
 const planStyles: Record<PlanTone, string> = {
-  admin: "plan-aurora-tone-admin",
-  trial: "plan-aurora-tone-trial",
-  free: "plan-aurora-tone-free",
-  basic: "plan-aurora-tone-basic",
-  pro: "plan-aurora-tone-pro",
-  enterprise: "plan-aurora-tone-enterprise",
+  admin: "border-black bg-black text-white",
+  trial: "border-black bg-black text-white",
+  free: "border-black/10 bg-zinc-100 text-zinc-700",
+  basic: "border-black bg-black text-white",
+  pro: "border-black bg-black text-white",
+  enterprise: "border-black bg-black text-white",
 };
 
 const planNames: Record<string, { label: string; tone: PlanTone }> = {
@@ -98,10 +98,8 @@ function displayPlan(profile: AcademyProfile) {
 
 function PlanBadge({ label, tone }: { label: string; tone: PlanTone }) {
   return (
-    <Badge className={cn("plan-aurora-surface plan-aurora-badge rounded-full border px-2.5 font-black", planStyles[tone])}>
-      <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
-      <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
-      <span className="relative z-10">{label}</span>
+    <Badge className={cn("rounded-full border px-2.5 font-black shadow-none", planStyles[tone])}>
+      <span>{label}</span>
     </Badge>
   );
 }
@@ -154,7 +152,7 @@ export function HeaderAccountSummary() {
 
   if (!profile) {
     if (loading) {
-      return <div className="h-9 w-44 animate-pulse rounded-[8px] border border-white/10 bg-white/[0.06]" aria-label="계정 정보 로딩" />;
+      return <div className="h-9 w-44 animate-pulse rounded-[8px] border border-black/10 bg-zinc-100" aria-label="계정 정보 로딩" />;
     }
     return (
       <Link href="/login">
@@ -227,7 +225,7 @@ export function HeaderAccountSummary() {
           onClick={() => setOpen((value) => !value)}
           aria-label="계정 메뉴"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-zinc-500 text-sm font-bold text-white">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-black text-sm font-bold text-white">
             {initials}
           </span>
           <span className="hidden min-w-0 sm:block">
@@ -238,8 +236,8 @@ export function HeaderAccountSummary() {
         </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[min(92vw,28rem)] rounded-[10px] border border-white/10 bg-[#090b12] p-2 text-sm shadow-[0_24px_70px_rgba(0,0,0,0.42)]">
-          <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-3">
+        <div className="absolute right-0 mt-2 w-[min(92vw,28rem)] rounded-[10px] border border-black/10 bg-white p-2 text-sm text-zinc-950 shadow-none">
+          <div className="rounded-[8px] border border-black/10 bg-[#f7f7f7] p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate font-semibold">{currentProfile.academy_name}</div>
@@ -247,7 +245,7 @@ export function HeaderAccountSummary() {
               </div>
               <PlanBadge label={plan.label} tone={plan.tone} />
             </div>
-            <div className="mt-3 rounded-[7px] border border-white/10 bg-black/20 px-3 py-2">
+            <div className="mt-3 rounded-[7px] border border-black/10 bg-white px-3 py-2">
               <div className="text-[11px] font-semibold uppercase text-muted-foreground">구독 플랜</div>
               <div className="mt-1 flex items-center justify-between">
                 <span className="text-sm font-bold">{plan.label}</span>
@@ -263,11 +261,11 @@ export function HeaderAccountSummary() {
           <WorkspaceMenuSection onClose={() => setOpen(false)} />
 
           <div className="mt-2 grid gap-1">
-            <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-slate-300 hover:bg-white/[0.07] hover:text-white" onClick={openProfileEditor}>
+            <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950" onClick={openProfileEditor}>
               <UserRound className="h-4 w-4" />
               프로필
             </button>
-            <Link href="/account/security" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-slate-300 hover:bg-white/[0.07] hover:text-white" onClick={() => setOpen(false)}>
+            <Link href="/account/security" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950" onClick={() => setOpen(false)}>
               <Settings className="h-4 w-4" />
               보안 설정
             </Link>

@@ -67,7 +67,7 @@ function LoginPageContent() {
     <AuthCard variant="aurora" auroraStyle={auroraStyle}>
       <div className="space-y-5">
         {visibleOauthError ? (
-          <p className="rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm font-medium text-zinc-200">
+          <p className="rounded-md border border-black/10 bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700">
             {oauthErrorMessages[visibleOauthError] || "소셜 로그인에 실패했습니다."}
           </p>
         ) : null}
@@ -75,32 +75,32 @@ function LoginPageContent() {
         <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
           <label className="block">
             <span className="sr-only">아이디</span>
-            <Input autoComplete="username" className="h-11 border-white/15 bg-white/[0.08] text-white placeholder:text-slate-400 focus-visible:border-zinc-300/70" placeholder="ID" {...form.register("email")} />
+            <Input autoComplete="username" className="h-11 rounded-full border-black/10 bg-[#f7f7f7] px-4 text-zinc-950 placeholder:text-zinc-400 focus-visible:border-black/40" placeholder="ID" {...form.register("email")} />
             <FieldError message={form.formState.errors.email?.message} />
           </label>
           <label className="block">
             <span className="sr-only">비밀번호</span>
             <div className="relative">
-              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" className="h-11 border-white/15 bg-white/[0.08] pr-11 text-white placeholder:text-slate-400 focus-visible:border-zinc-300/70" placeholder="PASSWORD" {...form.register("password")} />
-              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-white" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
+              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" className="h-11 rounded-full border-black/10 bg-[#f7f7f7] px-4 pr-11 text-zinc-950 placeholder:text-zinc-400 focus-visible:border-black/40" placeholder="PASSWORD" {...form.register("password")} />
+              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 transition-colors hover:text-zinc-950" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             <FieldError message={form.formState.errors.password?.message} />
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-400">
-            <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-white/[0.04] accent-primary" {...form.register("remember")} />
+          <label className="flex items-center gap-2 text-sm text-zinc-600">
+            <input type="checkbox" className="h-4 w-4 rounded border-black/20 bg-white accent-black" {...form.register("remember")} />
             로그인 상태 유지
           </label>
-          {serverError ? <p className="rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm font-medium text-zinc-200">{serverError}</p> : null}
+          {serverError ? <p className="rounded-md border border-black/10 bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700">{serverError}</p> : null}
           <FullWidthButton loading={form.formState.isSubmitting}>로그인</FullWidthButton>
         </form>
 
         <DividerText />
         <SocialButtons mode="login" redirect={redirect} />
-        <p className="pt-1 text-center text-sm text-slate-400">
+        <p className="pt-1 text-center text-sm text-zinc-600">
           계정이 없으신가요?{" "}
-          <Link href="/register" className="font-semibold text-primary hover:underline">
+          <Link href="/register" className="font-semibold text-zinc-950 hover:underline">
             회원가입
           </Link>
         </p>

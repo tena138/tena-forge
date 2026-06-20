@@ -13,9 +13,9 @@ type AuthCardVariant = "default" | "aurora";
 type AuroraStyle = "ribbons" | "halo";
 
 export function AuthCard({ title, subtitle, children, variant = "default", auroraStyle = "ribbons" }: { title?: string; subtitle?: string; children?: React.ReactNode; variant?: AuthCardVariant; auroraStyle?: AuroraStyle }) {
-  const isAurora = variant === "aurora";
+  const isAurora = variant === "aurora" && false;
   return (
-    <main className={isAurora ? "relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10 text-white" : "flex min-h-screen items-center justify-center bg-background px-4 py-10"}>
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#fbfbfa] px-4 py-10 text-zinc-950">
       {isAurora ? (
         <div className={`aurora-bg aurora-bg-${auroraStyle}`} aria-hidden="true">
           <div className="aurora-nebula nebula-a" />
@@ -32,14 +32,14 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
           <div className="aurora-halo-dust" />
         </div>
       ) : null}
-      <section className={isAurora ? "login-card w-full max-w-[430px] p-8" : "w-full max-w-[430px] rounded-[12px] border border-white/10 bg-card/90 p-8 shadow-[0_28px_80px_rgba(0,0,0,0.40)] backdrop-blur"}>
+      <section className="w-full max-w-[430px] rounded-[24px] border border-black/10 bg-white p-8 shadow-none">
         <Link href="/" className="mb-8 flex flex-col items-center gap-3">
           <SiteLogoMark className="h-16 w-16 p-2" />
         </Link>
         {title || subtitle ? (
           <div className="mb-6 text-center">
-            {title ? <h1 className="text-2xl font-bold tracking-normal text-white">{title}</h1> : null}
-            {subtitle ? <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p> : null}
+            {title ? <h1 className="text-2xl font-semibold tracking-normal text-zinc-950">{title}</h1> : null}
+            {subtitle ? <p className="mt-2 text-sm leading-6 text-zinc-600">{subtitle}</p> : null}
           </div>
         ) : null}
         {children}
@@ -467,7 +467,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
 
 export function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="mt-1.5 text-xs font-medium text-zinc-300">{message}</p>;
+  return <p className="mt-1.5 text-xs font-medium text-zinc-600">{message}</p>;
 }
 
 export function SocialButtons({
@@ -516,9 +516,9 @@ function SocialButton({
   disabled?: boolean;
 }) {
   const styles = {
-    kakao: "border border-white/80 bg-white text-black hover:bg-zinc-200",
+    kakao: "border border-black/10 bg-[#f3f3f3] text-black hover:bg-zinc-200",
   }[provider];
-  const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
+  const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-none transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
   const logo = <SocialProviderLogo provider={provider} />;
   if (disabled) {
     return (
@@ -550,10 +550,10 @@ function SocialProviderLogo({ provider }: { provider: OAuthProvider }) {
 
 export function DividerText({ children = "또는" }: { children?: React.ReactNode }) {
   return (
-    <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
-      <span className="h-px flex-1 bg-white/10" />
+    <div className="my-5 flex items-center gap-3 text-xs text-zinc-500">
+      <span className="h-px flex-1 bg-black/10" />
       <span>{children}</span>
-      <span className="h-px flex-1 bg-white/10" />
+      <span className="h-px flex-1 bg-black/10" />
     </div>
   );
 }
@@ -562,7 +562,7 @@ export function PasswordStrength({ password }: { password: string }) {
   const result = zxcvbn(password || "");
   const score = password ? result.score + 1 : 0;
   const labels = ["", "매우 약함", "약함", "보통", "강함", "매우 강함"];
-  const colors = ["bg-white/10", "bg-zinc-500", "bg-zinc-500", "bg-zinc-500", "bg-zinc-500", "bg-zinc-600"];
+  const colors = ["bg-zinc-200", "bg-zinc-500", "bg-zinc-500", "bg-zinc-600", "bg-zinc-700", "bg-black"];
   const requirements = [
     { label: "8자 이상", ok: password.length >= 8 },
     { label: "대소문자", ok: /[A-Z]/.test(password) && /[a-z]/.test(password) },
@@ -573,16 +573,16 @@ export function PasswordStrength({ password }: { password: string }) {
     <div className="mt-2 space-y-2">
       <div className="grid grid-cols-4 gap-1">
         {[1, 2, 3, 4].map((item) => (
-          <span key={item} className={`h-1.5 rounded-full ${score >= item ? colors[score] : "bg-white/10"}`} />
+          <span key={item} className={`h-1.5 rounded-full ${score >= item ? colors[score] : "bg-zinc-200"}`} />
         ))}
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="font-semibold text-slate-300">{labels[score]}</span>
-        {result.feedback.warning && <span className="max-w-[220px] truncate text-slate-400">{result.feedback.warning}</span>}
+        <span className="font-semibold text-zinc-700">{labels[score]}</span>
+        {result.feedback.warning && <span className="max-w-[220px] truncate text-zinc-500">{result.feedback.warning}</span>}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {requirements.map((item) => (
-          <span key={item.label} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${item.ok ? "bg-zinc-400/12 text-zinc-200 ring-1 ring-zinc-300/20" : "bg-white/[0.05] text-slate-400 ring-1 ring-white/10"}`}>
+          <span key={item.label} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${item.ok ? "bg-black text-white ring-1 ring-black" : "bg-zinc-100 text-zinc-500 ring-1 ring-black/10"}`}>
             {item.ok ? "✓" : "·"} {item.label}
           </span>
         ))}
@@ -593,7 +593,7 @@ export function PasswordStrength({ password }: { password: string }) {
 
 export function FullWidthButton({ loading, disabled, children }: { loading?: boolean; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <Button type="submit" className="h-11 w-full" disabled={loading || disabled}>
+    <Button type="submit" className="h-11 w-full rounded-full border-black bg-black text-white shadow-none hover:bg-zinc-800" disabled={loading || disabled}>
       {loading ? "처리 중..." : children}
     </Button>
   );

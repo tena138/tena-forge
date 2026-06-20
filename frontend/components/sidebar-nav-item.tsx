@@ -35,19 +35,19 @@ export function SidebarNavItem({
       className={cn(
         "group relative inline-flex items-center border text-sm font-medium transition-all duration-150",
         mobile
-          ? "h-9 shrink-0 gap-2.5 rounded-[7px] border-white/10 bg-white/[0.04] px-3 text-slate-300 hover:border-white/18 hover:bg-white/[0.08] hover:text-white"
+          ? "h-9 shrink-0 gap-2.5 rounded-full border-black/10 bg-[#f3f3f3] px-3 text-zinc-700 hover:border-black/20 hover:bg-zinc-200 hover:text-zinc-950"
           : collapsed
-            ? "mx-auto flex h-10 w-10 justify-center rounded-[8px] border-transparent px-0 text-slate-400 hover:border-white/10 hover:bg-white/[0.06] hover:text-white"
-            : "flex h-10 w-full gap-2 rounded-[7px] border-transparent px-2.5 text-slate-400 hover:border-white/10 hover:bg-white/[0.06] hover:text-white hover:shadow-sm",
+            ? "mx-auto flex h-10 w-10 justify-center rounded-[8px] border-transparent px-0 text-zinc-500 hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
+            : "flex h-10 w-full gap-2 rounded-[7px] border-transparent px-2.5 text-zinc-600 hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950",
         active &&
           (activeClassName ||
             (mobile
-              ? "border-white/25 bg-white/[0.10] text-white hover:bg-white/[0.10] hover:text-white"
-              : "border-white/10 bg-white/[0.08] text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]"))
+              ? "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white"
+              : "console-nav-active border-black bg-black text-white"))
       )}
     >
-      {!mobile && !collapsed && <span className={cn("absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent transition-colors", active && (activeIndicatorClassName || "bg-white"))} />}
-      <Icon className={cn("h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200", active && (activeIconClassName || "text-white group-hover:text-white"))} />
+      {!mobile && !collapsed && <span className={cn("absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent transition-colors", active && (activeIndicatorClassName || "bg-black"))} />}
+      <Icon className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-colors group-hover:text-zinc-950", active && (activeIconClassName || "text-white group-hover:text-white"))} />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   );
