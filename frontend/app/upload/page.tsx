@@ -37,7 +37,7 @@ const CUSTOM_SUBJECTS_KEY = "tena-forge-upload-custom-subjects-v2";
 const MB = 1024 * 1024;
 const PDF_SAMPLE_BYTES = 16 * MB;
 const PDF_FULL_SCAN_LIMIT_BYTES = 80 * MB;
-const tagPalette = ["#8b5cf6", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ec4899", "#6366f1", "#06b6d4", "#84cc16"];
+const tagPalette = ["#111111", "#2f2f2f", "#525252", "#737373", "#a3a3a3", "#d4d4d4"];
 
 type PdfPageEstimate = {
   pages: number | null;
