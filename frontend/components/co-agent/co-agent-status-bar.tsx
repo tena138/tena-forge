@@ -2,7 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Bot, CheckCircle2, Loader2, MessageSquareText, Radio, Send, X } from "lucide-react";
+import { Loader2, Radio, Send, X } from "lucide-react";
 
 import { LiveInteractionEvent, listUpcomingLiveInteractions } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId } from "@/lib/auth-client";
@@ -55,15 +55,14 @@ function chatErrorMessage(error: unknown) {
   const candidate = error as { response?: { data?: { detail?: unknown } }; message?: string };
   const detail = candidate.response?.data?.detail;
   if (typeof detail === "string") return detail;
-  if (candidate.message === "Network Error") return "Co-Agent AI 서버에 연결하지 못했습니다.";
-  return candidate.message || "Co-Agent AI 응답을 만들지 못했습니다.";
+  if (candidate.message === "Network Error") return "AI 서버에 연결하지 못했습니다.";
+  return candidate.message || "AI 응답을 만들지 못했습니다.";
 }
 
 export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const [greeting, setGreeting] = useState(() => greetingLabel());
   const [events, setEvents] = useState<LiveInteractionEvent[]>([]);
-  const [liveLoading, setLiveLoading] = useState(false);
   const [notifications, setNotifications] = useState<BatchNotification[]>([]);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [activeStatus, setActiveStatus] = useState<BatchStatusResponse | null>(null);
@@ -84,32 +83,27 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     if (activeStatusData) {
       return {
         tone: "working" as const,
-        icon: Loader2,
         message: `안녕하세요. ${greeting} ${taskLabel(activeStatusData)}을 처리 중입니다. ${progress}% 완료했습니다.`,
       };
     }
     if (latestNotification?.status === "done") {
       return {
         tone: "done" as const,
-        icon: CheckCircle2,
         message: `안녕하세요. ${greeting} 이전 지시 사항을 완료했습니다. 추출 결과가 준비되었습니다.`,
       };
     }
     if (latestNotification?.status === "error") {
       return {
         tone: "error" as const,
-        icon: AlertTriangle,
         message: `안녕하세요. ${greeting} 이전 작업에서 오류가 발생했습니다. 확인이 필요합니다.`,
       };
     }
     return {
       tone: "idle" as const,
-      icon: Bot,
-      message: `안녕하세요. ${greeting} 이전 지시 사항을 확인했고, 현재 실시간 대기 중입니다.`,
+      message: `안녕하세요. ${greeting} 이전 지시 사항을 확인했습니다.`,
     };
   }, [activeStatusData, greeting, latestNotification?.status, progress]);
 
-  const ReportIcon = report.icon;
   const visibleChatMessages = chatMessages.slice(-8);
 
   const loadLiveInteractions = useCallback(async () => {
@@ -118,14 +112,11 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       setEvents([]);
       return;
     }
-    setLiveLoading(true);
     try {
       const data = await listUpcomingLiveInteractions();
       setEvents(data.events || []);
     } catch {
       setEvents([]);
-    } finally {
-      setLiveLoading(false);
     }
   }, []);
 
@@ -150,7 +141,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     } catch (error) {
       const message = chatErrorMessage(error);
       setChatError(message);
-      setChatMessages((current) => [...current, { role: "assistant", content: `지금은 Co-Agent AI 연결에 실패했습니다. ${message}` }]);
+      setChatMessages((current) => [...current, { role: "assistant", content: `지금은 AI 연결에 실패했습니다. ${message}` }]);
     } finally {
       setChatLoading(false);
     }
@@ -294,24 +285,15 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className={cn("relative min-w-0", compact ? "w-full" : "w-full max-w-[760px]")}>
-      <div className="relative flex min-w-0 items-center gap-2 overflow-hidden rounded-[14px] bg-white/78 px-2.5 py-2 text-zinc-950">
+      <div className="relative flex min-w-0 items-center gap-2 overflow-hidden rounded-[14px] bg-white/78 px-3 py-2.5 text-zinc-950">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-[10px] px-1 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10"
+          className="flex min-w-0 flex-1 items-center rounded-[10px] px-1.5 py-1 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10"
           onClick={() => setChatOpen(true)}
           title={report.message}
         >
-          <span
-            className={cn(
-              "grid h-8 w-8 shrink-0 place-items-center rounded-[10px]",
-              report.tone === "error" ? "bg-zinc-900 text-white" : report.tone === "done" ? "bg-black text-white" : "bg-zinc-100 text-zinc-950"
-            )}
-          >
-            <ReportIcon className={cn("h-4 w-4", report.tone === "working" && "animate-spin")} />
-          </span>
           <span className="min-w-0">
-            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Co-Agent</span>
-            <span className="block truncate text-xs font-semibold text-zinc-800">{report.message}</span>
+            <span className="block truncate text-[15px] font-black leading-6 text-zinc-900">{report.message}</span>
           </span>
         </button>
 
@@ -333,12 +315,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span className="hidden max-w-[7rem] truncate lg:inline">{primaryLiveEvent.class_name}</span>
             <span className="rounded-[6px] bg-zinc-800 px-1.5 py-0.5 text-[10px] text-white">{liveTimeLabel(primaryLiveEvent)}</span>
           </button>
-        ) : (
-          <span className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] bg-zinc-100 px-3 text-xs font-black text-zinc-600">
-            {liveLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
-            실시간 대기
-          </span>
-        )}
+        ) : null}
       </div>
 
       {chatOpen ? (
@@ -350,17 +327,14 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-zinc-500">
-                <MessageSquareText className="h-3.5 w-3.5" />
-                Co-Agent Chat
-              </div>
+              <div className="text-xs font-black uppercase tracking-[0.14em] text-zinc-500">업무 채팅</div>
               <p className="mt-1 truncate text-xs font-semibold text-zinc-600">Tena Forge 업무만 답변합니다.</p>
             </div>
             <button
               type="button"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 hover:text-black"
               onClick={() => setChatOpen(false)}
-              aria-label="Co-Agent 닫기"
+              aria-label="업무 채팅 닫기"
             >
               <X className="h-4 w-4" />
             </button>
@@ -403,7 +377,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
               type="submit"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
               disabled={chatLoading || !chatInput.trim()}
-              aria-label="Co-Agent에게 보내기"
+              aria-label="AI에게 보내기"
             >
               {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
