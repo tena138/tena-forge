@@ -46,7 +46,7 @@ const planCards = [
     tone: "free" as PlanCardTone,
     price: "무료",
     href: "/register?plan=free",
-    cta: "콘솔 둘러보기",
+    cta: "회원가입",
     points: ["AI credits 0", "추출 기능 잠금", "플랜 선택 후 7일 체험"],
   },
   {
@@ -385,7 +385,7 @@ export function PlanLandingPage() {
       <section className="relative overflow-hidden border-b border-black/10 bg-[#fbfbfa] pt-16 text-zinc-950">
         <div className="relative z-10 mx-auto flex min-h-[calc(92svh-4rem)] w-full max-w-[90rem] flex-col px-4 sm:px-6 xl:px-8">
           <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center py-24 text-center sm:py-32 lg:py-40">
-            <h1 className="landing-hero-title landing-keep-words max-w-5xl text-zinc-950">
+            <h1 className="landing-hero-title landing-keep-words max-w-none whitespace-nowrap text-zinc-950">
               학원 운영의 새로운 표준.
             </h1>
             <p className="landing-keep-words mt-7 max-w-3xl text-lg leading-8 text-zinc-600 sm:text-xl sm:leading-9">
@@ -393,14 +393,8 @@ export function PlanLandingPage() {
             </p>
             <div className="mt-9 flex w-full flex-wrap items-center justify-center gap-3 sm:w-auto sm:gap-4">
               <Link
-                href="/register?plan=free"
-                className="landing-primary-cta landing-motion-safe inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-black px-6 text-sm font-semibold text-white transition duration-200 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/15 active:scale-[0.98] sm:flex-none sm:px-7"
-              >
-                콘솔 둘러보기 <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
                 href="/login?redirect=/academy"
-                className="landing-hero-login-link inline-flex h-12 flex-1 items-center justify-center rounded-full border border-black/10 bg-[#f3f3f3] px-6 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/10 sm:flex-none sm:px-7"
+                className="landing-primary-cta landing-motion-safe inline-flex h-12 flex-1 items-center justify-center rounded-full bg-black px-7 text-sm font-semibold text-white transition duration-200 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/15 active:scale-[0.98] sm:flex-none"
               >
                 로그인
               </Link>
@@ -436,10 +430,11 @@ function LandingNav() {
         </Link>
         <div className="flex items-center gap-2 text-sm font-black">
           <a href="#plans" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25 sm:inline-flex">플랜</a>
-          <Link href="/login?redirect=/academy" className="landing-nav-link hidden rounded-[7px] px-3 py-2 text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/25 sm:inline-flex">로그인</Link>
-          <Link href="/register?plan=free" className="landing-primary-cta landing-motion-safe inline-flex h-9 items-center rounded-full bg-[var(--landing-accent)] px-3 text-white transition hover:-translate-y-0.5 hover:bg-[var(--landing-accent-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/35 active:scale-[0.98] sm:px-4">
-            <span className="sm:hidden">시작</span>
-            <span className="hidden sm:inline">콘솔 둘러보기</span>
+          <Link href="/login?redirect=/academy" className="landing-primary-cta landing-motion-safe inline-flex h-9 items-center rounded-full bg-black px-4 text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300/35 active:scale-[0.98]">
+            로그인
+          </Link>
+          <Link href="/register?plan=free" className="landing-hero-login-link inline-flex h-9 items-center rounded-full border border-black/10 bg-[#f3f3f3] px-4 text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/10">
+            회원가입
           </Link>
         </div>
       </div>
