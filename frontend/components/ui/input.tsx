@@ -10,9 +10,9 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
     <input
       ref={ref}
       className={cn(
-        "flex h-10 w-full rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary/70 focus-visible:ring-2 focus-visible:ring-ring/30",
+        "flex h-10 w-full rounded-[7px] border-0 bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-950 outline-none transition-colors placeholder:text-zinc-500 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-black/10 disabled:cursor-not-allowed disabled:opacity-55",
         className,
-        usesLegacyLightSurface && "border-slate-200 text-slate-900 placeholder:text-slate-400"
+        usesLegacyLightSurface && "text-slate-900 placeholder:text-slate-400"
       )}
       {...props}
     />

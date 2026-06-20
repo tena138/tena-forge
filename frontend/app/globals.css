@@ -1814,7 +1814,7 @@
   html[data-theme="light"] [data-app-shell] textarea,
   html[data-theme="light"] [data-app-shell] select {
     border-color: transparent;
-    background-color: rgb(255 255 255 / 0.96);
+    background-color: rgb(244 244 245 / 0.96);
     color: rgb(15 23 42);
   }
 
