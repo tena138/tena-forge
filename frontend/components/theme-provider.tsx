@@ -14,8 +14,8 @@ const THEME_STORAGE_KEY = "tena-forge-theme";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function normalizeTheme(value: string | null | undefined): ThemeMode {
-  return value === "light" ? "light" : "dark";
+function normalizeTheme(_value: string | null | undefined): ThemeMode {
+  return "light";
 }
 
 function applyTheme(theme: ThemeMode) {
@@ -26,18 +26,24 @@ function applyTheme(theme: ThemeMode) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const [theme, setThemeState] = useState<ThemeMode>("light");
 
   useEffect(() => {
     const initialTheme = normalizeTheme(document.documentElement.dataset.theme || window.localStorage.getItem(THEME_STORAGE_KEY));
     setThemeState(initialTheme);
     applyTheme(initialTheme);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, initialTheme);
+    } catch {
+      // Theme still applies for the current tab when storage is unavailable.
+    }
   }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
-      setTheme: (nextTheme) => {
+      setTheme: () => {
+        const nextTheme: ThemeMode = "light";
         setThemeState(nextTheme);
         applyTheme(nextTheme);
         try {
@@ -47,7 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       },
       toggleTheme: () => {
-        const nextTheme = theme === "dark" ? "light" : "dark";
+        const nextTheme: ThemeMode = "light";
         setThemeState(nextTheme);
         applyTheme(nextTheme);
         try {
@@ -67,11 +73,10 @@ export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) {
     return {
-      theme: "dark" as ThemeMode,
+      theme: "light" as ThemeMode,
       setTheme: () => undefined,
       toggleTheme: () => undefined,
     };
   }
   return context;
 }
-

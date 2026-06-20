@@ -2,9 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { LogOut, Moon, Settings, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
 
-import { useTheme } from "@/components/theme-provider";
 import { WorkspaceMenuSection } from "@/components/auth/workspace-menu-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,7 +115,6 @@ export function HeaderAccountSummary() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -168,7 +166,6 @@ export function HeaderAccountSummary() {
   const currentProfile = profile;
   const plan = displayPlan(currentProfile);
   const initials = (currentProfile.academy_name || currentProfile.email).slice(0, 1).toUpperCase();
-  const isDarkMode = theme === "dark";
 
   function openProfileEditor() {
     setDraft(toProfileDraft(currentProfile));
@@ -264,44 +261,6 @@ export function HeaderAccountSummary() {
           </div>
 
           <WorkspaceMenuSection onClose={() => setOpen(false)} />
-
-          <div className="mt-2 rounded-[8px] border border-white/10 bg-white/[0.045] p-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2 px-1 text-slate-200">
-                {isDarkMode ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">화면 모드</div>
-                  <div className="truncate text-xs text-muted-foreground">{isDarkMode ? "다크 모드로 시작" : "라이트 모드로 시작"}</div>
-                </div>
-              </div>
-              <div className="grid shrink-0 grid-cols-2 rounded-[7px] border border-white/10 bg-black/20 p-0.5">
-                <button
-                  type="button"
-                  className={`flex h-8 w-8 items-center justify-center rounded-[6px] transition ${
-                    isDarkMode ? "bg-white text-slate-950 shadow-sm" : "text-slate-400 hover:bg-white/[0.07] hover:text-white"
-                  }`}
-                  onClick={() => setTheme("dark")}
-                  aria-label="다크 모드"
-                  aria-pressed={isDarkMode}
-                  title="다크 모드"
-                >
-                  <Moon className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className={`flex h-8 w-8 items-center justify-center rounded-[6px] transition ${
-                    !isDarkMode ? "bg-white text-slate-950 shadow-sm" : "text-slate-400 hover:bg-white/[0.07] hover:text-white"
-                  }`}
-                  onClick={() => setTheme("light")}
-                  aria-label="라이트 모드"
-                  aria-pressed={!isDarkMode}
-                  title="라이트 모드"
-                >
-                  <Sun className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
 
           <div className="mt-2 grid gap-1">
             <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-slate-300 hover:bg-white/[0.07] hover:text-white" onClick={openProfileEditor}>

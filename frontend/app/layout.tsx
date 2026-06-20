@@ -37,14 +37,16 @@ export const metadata: Metadata = {
 
 const themeInitScript = `
 (() => {
+  const theme = "light";
   try {
-    const theme = localStorage.getItem("tena-forge-theme") === "light" ? "light" : "dark";
+    localStorage.setItem("tena-forge-theme", theme);
     document.documentElement.dataset.theme = theme;
-    document.documentElement.classList.toggle("light", theme === "light");
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.classList.add("light");
+    document.documentElement.classList.remove("dark");
   } catch {
-    document.documentElement.dataset.theme = "dark";
-    document.documentElement.classList.add("dark");
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.add("light");
+    document.documentElement.classList.remove("dark");
   }
 })();
 `;
