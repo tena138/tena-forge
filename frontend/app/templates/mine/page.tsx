@@ -57,7 +57,7 @@ function TemplateCardPreview({ template }: { template: HubTemplate }) {
     const scale = Math.min(0.36, 330 / Math.max(size.width, 1), 460 / Math.max(size.height, 1));
 
     return (
-      <div className="relative h-[380px] overflow-hidden border-b border-white/10 bg-[#111318]">
+      <div className="relative h-[380px] overflow-hidden bg-zinc-100">
         <div className="absolute left-1/2 top-6 -translate-x-1/2">
           <TemplatePageView templateSet={visualSet} page={firstPage} scale={scale} selectedIds={[]} />
         </div>
@@ -66,7 +66,7 @@ function TemplateCardPreview({ template }: { template: HubTemplate }) {
   }
 
   return (
-    <div className="h-[380px] overflow-hidden border-b border-white/10 bg-[#111318]">
+    <div className="h-[380px] overflow-hidden bg-zinc-100">
       <TemplatePreviewFrame html={template.html} css={template.css} compact />
     </div>
   );
@@ -123,7 +123,7 @@ export default function MyTemplatesPage() {
     <div className="space-y-6 pb-24">
       <Link
         href={withReturnTo("/templates/studio?new=1")}
-        className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-zinc-300/40 bg-zinc-600 text-white shadow-[0_18px_44px_rgba(124,58,237,0.42)] transition hover:bg-zinc-500"
+        className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-2xl shadow-zinc-950/20 transition hover:bg-zinc-800"
         aria-label="템플릿 만들기"
         title="템플릿 만들기"
       >
@@ -133,7 +133,7 @@ export default function MyTemplatesPage() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-[500px] animate-pulse rounded-[10px] border border-white/10 bg-white/[0.045]" />
+            <div key={index} className="h-[500px] animate-pulse rounded-[10px] bg-white/80" />
           ))}
         </div>
       ) : templates.length ? (
@@ -141,14 +141,14 @@ export default function MyTemplatesPage() {
           {templates.map((template) => {
             const visualSet = getVisualTemplateSet(template);
             return (
-              <article key={template.id} className="overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:border-zinc-300/35 hover:bg-white/[0.065]">
+              <article key={template.id} className="overflow-hidden rounded-[10px] bg-white/85 shadow-[0_18px_52px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:bg-white">
                 <Link href={editorHref(template)} className="block">
                   <TemplateCardPreview template={template} />
                 </Link>
                 <div className="space-y-4 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="truncate text-lg font-bold text-white">{template.title}</h2>
+                      <h2 className="truncate text-lg font-bold text-zinc-950">{template.title}</h2>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <Badge variant="outline">{categoryLabel(template.category)}</Badge>
                         <Badge variant="outline">{visualSet ? `Visual Set · ${visualSet.pages.length}p` : "HTML"}</Badge>
@@ -168,9 +168,9 @@ export default function MyTemplatesPage() {
                           </Button>
                         </DropdownMenu.Trigger>
                         <DropdownMenu.Portal>
-                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] border border-white/10 bg-[#151722] p-1 shadow-2xl shadow-black/60">
+                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] bg-white p-1 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
                             <DropdownMenu.Item
-                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07]"
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-100 focus:bg-zinc-100"
                               onSelect={() => togglePublish(template)}
                             >
                               <Globe2 className="h-4 w-4" />
@@ -178,14 +178,14 @@ export default function MyTemplatesPage() {
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
                               disabled={duplicatingId === template.id}
-                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-100 focus:bg-zinc-100 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                               onSelect={() => duplicate(template)}
                             >
                               <Copy className="h-4 w-4" />
                               {duplicatingId === template.id ? "복제 중" : "복제"}
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
-                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-zinc-200 outline-none hover:bg-zinc-500/10 focus:bg-zinc-500/10"
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-100 focus:bg-zinc-100"
                               onSelect={() => remove(template)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -203,8 +203,8 @@ export default function MyTemplatesPage() {
           })}
         </div>
       ) : (
-        <section className="rounded-[10px] border border-dashed border-white/15 bg-white/[0.035] p-10 text-center">
-          <h2 className="text-lg font-bold text-white">저장된 템플릿이 없습니다</h2>
+        <section className="rounded-[10px] bg-white/85 p-10 text-center">
+          <h2 className="text-lg font-bold text-zinc-950">저장된 템플릿이 없습니다</h2>
           <Link href={withReturnTo("/templates/studio?new=1")} className="mt-5 inline-flex">
             <Button>
               <Plus className="h-4 w-4" />

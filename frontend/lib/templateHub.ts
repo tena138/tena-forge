@@ -214,7 +214,7 @@ export function renderTemplatePreview(html: string, css?: string | null, data = 
 <head>
   <meta charset="utf-8" />
   <style>
-    html, body { margin: 0; background: #111318; }
+    html, body { margin: 0; background: #f4f4f5; }
     body { display: flex; justify-content: center; padding: 24px; }
     ${css || ""}
   </style>

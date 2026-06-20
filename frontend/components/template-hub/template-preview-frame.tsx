@@ -12,7 +12,7 @@ export function TemplatePreviewFrame({
   compact?: boolean;
 }) {
   return (
-    <div className={compact ? "h-full w-full overflow-hidden bg-[#111318]" : "overflow-hidden rounded-[10px] border border-white/10 bg-[#111318]"}>
+    <div className={compact ? "h-full w-full overflow-hidden bg-zinc-100" : "overflow-hidden rounded-[10px] bg-zinc-100 shadow-[0_18px_52px_rgba(0,0,0,0.05)]"}>
       <iframe
         title="템플릿 미리보기"
         sandbox=""

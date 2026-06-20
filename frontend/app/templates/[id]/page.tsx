@@ -54,18 +54,18 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
     setTemplate(next);
   }
 
-  if (loading) return <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-8 text-sm text-slate-400">템플릿을 불러오는 중...</div>;
-  if (!template) return <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-8 text-sm text-slate-400">템플릿을 찾을 수 없습니다.</div>;
+  if (loading) return <div className="rounded-[10px] bg-white/85 p-8 text-sm text-zinc-500">템플릿을 불러오는 중...</div>;
+  if (!template) return <div className="rounded-[10px] bg-white/85 p-8 text-sm text-zinc-500">템플릿을 찾을 수 없습니다.</div>;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
       <section className="space-y-4">
-        <div className="rounded-[12px] border border-white/10 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
+        <div className="rounded-[12px] bg-white/90 p-6 shadow-[0_18px_70px_rgba(0,0,0,0.06)]">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-200">{categoryLabel(template.category)} · {visibilityLabels[template.visibility]}</p>
-              <h1 className="mt-2 text-3xl font-bold text-white">{template.title}</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">{template.description || "설명이 없는 템플릿입니다."}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">{categoryLabel(template.category)} · {visibilityLabels[template.visibility]}</p>
+              <h1 className="mt-2 text-3xl font-bold text-zinc-950">{template.title}</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">{template.description || "설명이 없는 템플릿입니다."}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {template.is_owner ? (
@@ -82,33 +82,33 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
           {duplicateMessage ? (
-            <div className="mt-4 rounded-[8px] border border-zinc-300/20 bg-zinc-400/10 px-3 py-2 text-sm font-semibold text-zinc-100">
+            <div className="mt-4 rounded-[8px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-900">
               {duplicateMessage}
             </div>
           ) : null}
           <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
-            <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-3">
-              <div className="text-slate-500">사용 수</div>
-              <div className="mt-1 text-xl font-bold text-white">{template.use_count}</div>
+            <div className="rounded-[8px] bg-zinc-100 p-3">
+              <div className="text-zinc-500">사용 수</div>
+              <div className="mt-1 text-xl font-bold text-zinc-950">{template.use_count}</div>
             </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-3">
-              <div className="text-slate-500">좋아요</div>
-              <div className="mt-1 text-xl font-bold text-white">{template.like_count}</div>
+            <div className="rounded-[8px] bg-zinc-100 p-3">
+              <div className="text-zinc-500">좋아요</div>
+              <div className="mt-1 text-xl font-bold text-zinc-950">{template.like_count}</div>
             </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/[0.045] p-3">
-              <div className="text-slate-500">업데이트</div>
-              <div className="mt-1 text-sm font-bold text-white">{new Date(template.updated_at).toLocaleDateString("ko-KR")}</div>
+            <div className="rounded-[8px] bg-zinc-100 p-3">
+              <div className="text-zinc-500">업데이트</div>
+              <div className="mt-1 text-sm font-bold text-zinc-950">{new Date(template.updated_at).toLocaleDateString("ko-KR")}</div>
             </div>
           </div>
         </div>
         <TemplatePreviewFrame html={template.html} css={template.css} />
       </section>
 
-      <aside className="space-y-3 rounded-[10px] border border-white/10 bg-white/[0.045] p-4">
-        <h2 className="text-lg font-bold text-white">지원 변수</h2>
+      <aside className="space-y-3 rounded-[10px] bg-white/85 p-4 shadow-[0_18px_52px_rgba(0,0,0,0.05)]">
+        <h2 className="text-lg font-bold text-zinc-950">지원 변수</h2>
         <div className="flex flex-wrap gap-2 text-xs">
           {["test_title", "student_name", "problem_text", "solution", "answer", "page_number", "total_pages", "subject", "unit", "difficulty", "tags"].map((key) => (
-            <code key={key} className="rounded border border-white/10 bg-black/30 px-2 py-1 text-zinc-100">{`{{ ${key} }}`}</code>
+            <code key={key} className="rounded bg-zinc-100 px-2 py-1 text-zinc-800">{`{{ ${key} }}`}</code>
           ))}
         </div>
       </aside>

@@ -60,7 +60,7 @@ function TemplateCardPreview({ template }: { template: HubTemplate }) {
     const scale = Math.min(0.36, 330 / Math.max(size.width, 1), 460 / Math.max(size.height, 1));
 
     return (
-      <div className="relative h-[380px] overflow-hidden border-b border-white/10 bg-[#111318]">
+      <div className="relative h-[380px] overflow-hidden bg-zinc-100">
         <div className="absolute left-1/2 top-6 -translate-x-1/2">
           <TemplatePageView templateSet={visualSet} page={firstPage} scale={scale} selectedIds={[]} />
         </div>
@@ -69,7 +69,7 @@ function TemplateCardPreview({ template }: { template: HubTemplate }) {
   }
 
   return (
-    <div className="h-[380px] overflow-hidden border-b border-white/10 bg-[#111318]">
+    <div className="h-[380px] overflow-hidden bg-zinc-100">
       <TemplatePreviewFrame html={template.html} css={template.css} compact />
     </div>
   );
@@ -160,14 +160,14 @@ export default function TemplateHubPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[12px] border border-white/10 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.36)]">
+      <section className="overflow-hidden rounded-[12px] bg-white/90 p-6 shadow-[0_18px_70px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-[7px] border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200">
+            <div className="inline-flex items-center gap-2 rounded-[7px] bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-950">
               <Sparkles className="h-3.5 w-3.5" />
               Visual Hub
             </div>
-            <h1 className="mt-4 text-3xl font-bold text-white">템플릿 허브</h1>
+            <h1 className="mt-4 text-3xl font-bold text-zinc-950">템플릿 허브</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/templates/mine">
@@ -189,12 +189,12 @@ export default function TemplateHubPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 rounded-[10px] border border-white/10 bg-white/[0.045] p-4 md:grid-cols-[1fr_220px_180px]">
+      <section className="grid gap-3 rounded-[10px] bg-white/85 p-4 md:grid-cols-[1fr_220px_180px]">
         <label className="relative block">
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-500" />
           <Input className="pl-9" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="템플릿 검색" />
         </label>
-        <select className="h-10 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" value={category} onChange={(event) => setCategory(event.target.value)}>
+        <select className="h-10 rounded-md border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10" value={category} onChange={(event) => setCategory(event.target.value)}>
           <option value="all">전체 카테고리</option>
           {templateCategories.map((item) => (
             <option key={item.value} value={item.value}>
@@ -202,7 +202,7 @@ export default function TemplateHubPage() {
             </option>
           ))}
         </select>
-        <select className="h-10 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" value={sort} onChange={(event) => setSort(event.target.value)}>
+        <select className="h-10 rounded-md border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10" value={sort} onChange={(event) => setSort(event.target.value)}>
           <option value="recent">최신순</option>
           <option value="popular">인기순</option>
           <option value="most_used">사용순</option>
@@ -212,7 +212,7 @@ export default function TemplateHubPage() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-[500px] animate-pulse rounded-[10px] border border-white/10 bg-white/[0.045]" />
+            <div key={index} className="h-[500px] animate-pulse rounded-[10px] bg-white/80" />
           ))}
         </div>
       ) : (
@@ -220,14 +220,14 @@ export default function TemplateHubPage() {
           {visible.map((template) => {
             const visualSet = getVisualTemplateSet(template);
             return (
-              <article key={template.id} className="overflow-hidden rounded-[10px] border border-white/10 bg-white/[0.045] shadow-[0_18px_52px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:border-zinc-300/35 hover:bg-white/[0.065]">
+              <article key={template.id} className="overflow-hidden rounded-[10px] bg-white/85 shadow-[0_18px_52px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:bg-white">
                 <Link href={openHref(template)} className="block">
                   <TemplateCardPreview template={template} />
                 </Link>
                 <div className="space-y-4 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="truncate text-lg font-bold text-white">{template.title}</h2>
+                      <h2 className="truncate text-lg font-bold text-zinc-950">{template.title}</h2>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <Badge variant="outline">{categoryLabel(template.category)}</Badge>
                         <Badge variant="outline">{visualSet ? `Visual Set · ${visualSet.pages.length}p` : "HTML"}</Badge>
@@ -247,16 +247,16 @@ export default function TemplateHubPage() {
                           </Button>
                         </DropdownMenu.Trigger>
                         <DropdownMenu.Portal>
-                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] border border-white/10 bg-[#151722] p-1 shadow-2xl shadow-black/60">
+                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] bg-white p-1 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
                             <DropdownMenu.Item asChild>
-                              <Link href={openHref(template)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07]">
+                              <Link href={openHref(template)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-100 focus:bg-zinc-100">
                                 <Eye className="h-4 w-4" />
                                 자세히
                               </Link>
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
                               disabled={duplicatingId === template.id}
-                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-100 outline-none hover:bg-white/[0.07] focus:bg-white/[0.07] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-100 focus:bg-zinc-100 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                               onSelect={() => duplicate(template)}
                             >
                               <Copy className="h-4 w-4" />
