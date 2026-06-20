@@ -1562,13 +1562,13 @@
 
   html[data-theme="light"] .forge-panel,
   html[data-theme="light"] .forge-surface {
-    border-color: rgb(15 23 42 / 0.13);
+    border-color: transparent;
     background: rgb(255 255 255 / 0.94);
-    box-shadow: 0 18px 46px rgb(15 23 42 / 0.10);
+    box-shadow: none;
   }
 
   html[data-theme="light"] .forge-hairline {
-    border-color: rgb(15 23 42 / 0.10);
+    border-color: transparent;
   }
 
   html[data-theme="light"] .scrollbar-thin-dark {
@@ -1594,13 +1594,13 @@
   }
 
   html[data-theme="light"] [data-app-shell] header {
-    border-color: rgb(15 23 42 / 0.10);
+    border-color: transparent;
     background: rgb(251 251 250 / 0.92) !important;
     box-shadow: none;
   }
 
   html[data-theme="light"] [data-app-shell] nav {
-    border-color: rgb(15 23 42 / 0.10);
+    border-color: transparent;
   }
 
   html[data-theme="light"] [data-app-shell] .theme-toggle-button {
@@ -1791,7 +1791,7 @@
   html[data-theme="light"] [data-app-shell] input,
   html[data-theme="light"] [data-app-shell] textarea,
   html[data-theme="light"] [data-app-shell] select {
-    border-color: rgb(15 23 42 / 0.15);
+    border-color: transparent;
     background-color: rgb(255 255 255 / 0.96);
     color: rgb(15 23 42);
   }
@@ -1799,5 +1799,22 @@
   html[data-theme="light"] [data-app-shell] input::placeholder,
   html[data-theme="light"] [data-app-shell] textarea::placeholder {
     color: rgb(71 85 105 / 0.82);
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="border"],
+  html[data-theme="light"] [data-app-shell] [class*="divide-"] > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="light"] [data-app-shell] .plan-aurora-card,
+  html[data-theme="light"] [data-app-shell] .plan-aurora-badge,
+  html[data-theme="light"] [data-app-shell] .forge-panel,
+  html[data-theme="light"] [data-app-shell] .forge-surface {
+    border-color: transparent !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] [class*="shadow-"],
+  html[data-theme="light"] [data-app-shell] .plan-aurora-card,
+  html[data-theme="light"] [data-app-shell] .plan-aurora-badge,
+  html[data-theme="light"] [data-app-shell] .forge-panel,
+  html[data-theme="light"] [data-app-shell] .forge-surface {
+    box-shadow: none !important;
   }
 }

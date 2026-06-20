@@ -32,7 +32,7 @@ export function AuthCard({ title, subtitle, children, variant = "default", auror
           <div className="aurora-halo-dust" />
         </div>
       ) : null}
-      <section className="w-full max-w-[430px] rounded-[24px] border border-black/10 bg-white p-8 shadow-none">
+      <section className="w-full max-w-[430px] rounded-[24px] bg-white p-8 shadow-none">
         <Link href="/" className="mb-8 flex flex-col items-center gap-3">
           <SiteLogoMark className="h-16 w-16 p-2" />
         </Link>
@@ -516,7 +516,7 @@ function SocialButton({
   disabled?: boolean;
 }) {
   const styles = {
-    kakao: "border border-black/10 bg-[#f3f3f3] text-black hover:bg-zinc-200",
+    kakao: "border-0 bg-[#f3f3f3] text-black hover:bg-zinc-200",
   }[provider];
   const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-none transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
   const logo = <SocialProviderLogo provider={provider} />;
@@ -582,7 +582,7 @@ export function PasswordStrength({ password }: { password: string }) {
       </div>
       <div className="flex flex-wrap gap-1.5">
         {requirements.map((item) => (
-          <span key={item.label} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${item.ok ? "bg-black text-white ring-1 ring-black" : "bg-zinc-100 text-zinc-500 ring-1 ring-black/10"}`}>
+          <span key={item.label} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${item.ok ? "bg-black text-white ring-0" : "bg-zinc-100 text-zinc-500 ring-0"}`}>
             {item.ok ? "✓" : "·"} {item.label}
           </span>
         ))}
@@ -593,7 +593,7 @@ export function PasswordStrength({ password }: { password: string }) {
 
 export function FullWidthButton({ loading, disabled, children }: { loading?: boolean; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <Button type="submit" className="h-11 w-full rounded-full border-black bg-black text-white shadow-none hover:bg-zinc-800" disabled={loading || disabled}>
+    <Button type="submit" className="h-11 w-full rounded-full border-0 bg-black text-white shadow-none hover:bg-zinc-800" disabled={loading || disabled}>
       {loading ? "처리 중..." : children}
     </Button>
   );

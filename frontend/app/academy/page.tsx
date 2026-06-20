@@ -251,7 +251,7 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
   const percent = remainingPercent(used, total);
   const tone = remainingTone(percent);
   return (
-    <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] border border-border bg-card/65 p-3 text-center shadow-sm">
+    <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] bg-card/65 p-3 text-center shadow-none">
       <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div
         className="relative mt-2 grid aspect-square w-full max-w-[6.75rem] place-items-center overflow-visible rounded-full p-[7px]"
@@ -305,7 +305,7 @@ function UsageOverview({
   const storageRemaining = Math.max(storageLimit - storageUsed, 0);
 
   return (
-    <section className="rounded-[12px] border border-border bg-card/70 p-4 shadow-sm">
+    <section className="rounded-[12px] bg-card/70 p-4 shadow-none">
       <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
         <Link
           href="/billing"
@@ -315,14 +315,14 @@ function UsageOverview({
           <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
           <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
           <div className="relative z-10 text-2xl font-black text-foreground">{planName}</div>
-          <div className={`plan-aurora-surface plan-aurora-badge ${planToneClass} relative z-10 mt-2 inline-flex rounded-full border px-2 py-1 text-[11px] font-black backdrop-blur`}>
+          <div className={`plan-aurora-surface plan-aurora-badge ${planToneClass} relative z-10 mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-black backdrop-blur`}>
             <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
             <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
             <span className="relative z-10">{planStatus}</span>
           </div>
           <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
             {engines.map((engine) => (
-              <span key={engine} className="rounded-full border border-border/80 bg-background/70 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur">
+              <span key={engine} className="rounded-full bg-background/70 px-2 py-1 text-[11px] font-semibold text-foreground shadow-none backdrop-blur">
                 {subjectEngineLabel(engine)}
               </span>
             ))}
