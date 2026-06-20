@@ -516,7 +516,7 @@ function SocialButton({
   disabled?: boolean;
 }) {
   const styles = {
-    kakao: "border-0 bg-[#f3f3f3] text-black hover:bg-zinc-200",
+    kakao: "border-0 bg-[#FEE500] text-[#191919] hover:bg-[#f7d900]",
   }[provider];
   const className = `inline-flex ${compact ? "h-11 w-11" : "h-14 w-14"} items-center justify-center rounded-full shadow-none transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${styles} ${disabled ? "pointer-events-none opacity-45" : ""}`;
   const logo = <SocialProviderLogo provider={provider} />;
