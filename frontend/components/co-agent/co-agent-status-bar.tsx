@@ -28,6 +28,46 @@ import type { CoAgentChatMessage } from "@/lib/coAgent";
 import { sendCoAgentChat } from "@/lib/coAgent";
 import { cn } from "@/lib/utils";
 
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(media.matches);
+    const handleChange = () => setReduced(media.matches);
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  return reduced;
+}
+
+function useTypewriterText(text: string, enabled = true) {
+  const [visibleText, setVisibleText] = useState(text);
+
+  useEffect(() => {
+    if (!enabled) {
+      setVisibleText(text);
+      return;
+    }
+
+    setVisibleText("");
+    if (!text) return;
+
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      setVisibleText(text.slice(0, index));
+      if (index >= text.length) window.clearInterval(timer);
+    }, 18);
+
+    return () => window.clearInterval(timer);
+  }, [enabled, text]);
+
+  return visibleText;
+}
+
 function greetingLabel() {
   const hour = new Date().getHours();
   if (hour < 6) return "좋은 밤입니다.";
@@ -68,6 +108,7 @@ function chatErrorMessage(error: unknown) {
 
 export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const [greeting, setGreeting] = useState(() => greetingLabel());
   const [events, setEvents] = useState<LiveInteractionEvent[]>([]);
   const [notifications, setNotifications] = useState<BatchNotification[]>([]);
@@ -118,6 +159,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     };
   }, [activeStatusData, greeting, primaryLiveEvent, progress, statusNotification?.status]);
 
+  const typedReportMessage = useTypewriterText(report.message, !prefersReducedMotion);
   const visibleChatMessages = chatMessages.slice(-8);
 
   const loadLiveInteractions = useCallback(async () => {
@@ -210,7 +252,10 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   }, [loadLiveInteractions]);
 
   useEffect(() => {
-    const updateGreeting = () => setGreeting(greetingLabel());
+    const updateGreeting = () => {
+      const nextGreeting = greetingLabel();
+      setGreeting((current) => (current === nextGreeting ? current : nextGreeting));
+    };
     const interval = window.setInterval(updateGreeting, 60000);
     window.addEventListener("focus", updateGreeting);
     return () => {
@@ -307,7 +352,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           title={report.message}
         >
           <span className="min-w-0">
-            <span className="block truncate text-[16px] font-medium leading-[1.55] tracking-normal text-zinc-800">{report.message}</span>
+            <span className="block truncate text-[16px] font-medium leading-[1.55] tracking-normal text-zinc-800">{typedReportMessage || "\u00A0"}</span>
           </span>
         </button>
 
@@ -356,7 +401,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
 
           <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
             <div className="rounded-[12px] bg-zinc-100 px-3 py-2 text-xs leading-5 text-zinc-800">
-              {report.message}
+              {typedReportMessage || "\u00A0"}
             </div>
             {visibleChatMessages.map((message, index) => (
               <div
