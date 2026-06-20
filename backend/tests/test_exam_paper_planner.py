@@ -65,7 +65,7 @@ class ExamPaperPlannerTests(unittest.TestCase):
 
             draft = build_exam_paper_draft(
                 db,
-                message="고3 문제 중에서 1-10 쉬운 문제, 11-20 중간 문제, 21-25 어려운 문제로 시험지 제작",
+                message="수학 고3 문제 중에서 1-10 쉬운 문제, 11-20 중간 문제, 21-25 어려운 문제로 세움 양식 시험지 제작",
                 owner_ids={self.owner_id},
             )
 
@@ -95,7 +95,7 @@ class ExamPaperPlannerTests(unittest.TestCase):
 
             draft = build_exam_paper_draft(
                 db,
-                message="고3 문제 중에서 1-10 쉬움 11-20 중간 21-25 어려움 시험지 제작",
+                message="수학 고3 문제 중에서 1-10 쉬움 11-20 중간 21-25 어려움 세움 양식 시험지 제작",
                 owner_ids={self.owner_id},
             )
 
@@ -104,6 +104,47 @@ class ExamPaperPlannerTests(unittest.TestCase):
             self.assertEqual(draft["used_exclusion"]["excluded_count"], 1)
             self.assertEqual(len(draft["missing_difficulty_slots"]), 1)
             self.assertEqual(draft["missing_difficulty_slots"][0]["difficulty"], "4점")
+        finally:
+            db.close()
+
+    def test_missing_required_information_returns_questions_without_selection(self):
+        db = self.Session()
+        try:
+            self._seed_math_pool(db)
+
+            draft = build_exam_paper_draft(
+                db,
+                message="시험지 만들어줘",
+                owner_ids={self.owner_id},
+            )
+
+            self.assertEqual(draft["status"], "needs_input")
+            fields = {item["field"] for item in draft["missing_required_fields"]}
+            self.assertIn("subject", fields)
+            self.assertIn("grade", fields)
+            self.assertIn("problem_count", fields)
+            self.assertIn("difficulty_plan", fields)
+            self.assertIn("template", fields)
+            self.assertEqual(draft["problems"], [])
+            self.assertTrue(draft["clarification_questions"])
+        finally:
+            db.close()
+
+    def test_delivery_intent_requires_recipient_and_due_at(self):
+        db = self.Session()
+        try:
+            self._seed_math_pool(db)
+
+            draft = build_exam_paper_draft(
+                db,
+                message="수학 고3 25문항 1-10 2점 11-20 3점 21-25 4점 세움 양식으로 내야 해",
+                owner_ids={self.owner_id},
+            )
+
+            self.assertEqual(draft["status"], "needs_input")
+            fields = {item["field"] for item in draft["missing_required_fields"]}
+            self.assertIn("recipient", fields)
+            self.assertIn("due_at", fields)
         finally:
             db.close()
 

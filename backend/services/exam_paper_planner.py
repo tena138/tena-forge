@@ -33,6 +33,11 @@ def _subject_engine_from_message(message: str) -> str:
     return MATH_ENGINE
 
 
+def _has_subject(message: str) -> bool:
+    compact = str(message or "").replace(" ", "").lower()
+    return any(token in compact for token in ("수학", "math", "국어", "korean", "영어", "english"))
+
+
 def _subject_terms(engine: str) -> list[str]:
     if engine == ENGLISH_ENGINE:
         return ["영어", "english"]
@@ -57,6 +62,13 @@ def _requested_count(message: str) -> int:
     if explicit:
         return max(1, min(int(explicit.group(1)), 100))
     return 25
+
+
+def _has_requested_count(message: str) -> bool:
+    text = str(message or "")
+    if re.search(r"\d{1,3}\s*[-~]\s*\d{1,3}", text):
+        return True
+    return bool(re.search(r"(?<!고)(\d{1,3})\s*(?:문항|문제|개)", text))
 
 
 def _difficulty_from_phrase(phrase: str, engine: str) -> str | None:
@@ -90,6 +102,96 @@ def _difficulty_slots(message: str, count: int, engine: str) -> list[str]:
         for position in range(start, end + 1):
             slots[position - 1] = difficulty
     return slots[:count]
+
+
+def _has_difficulty_plan(message: str) -> bool:
+    text = str(message or "")
+    compact = text.replace(" ", "").lower()
+    if any(token in compact for token in ("2점", "3점", "4점", "쉬움", "쉬운", "중간", "어려움", "어려운", "난이도", "배점")):
+        return True
+    for match in re.finditer(r"(\d{1,3})\s*[-~]\s*(\d{1,3})([^.,;\n]*)", text):
+        if _difficulty_from_phrase(match.group(3), MATH_ENGINE):
+            return True
+    return False
+
+
+def _has_template(message: str) -> bool:
+    compact = str(message or "").replace(" ", "")
+    return any(token in compact for token in ("템플릿", "양식", "서식", "폼"))
+
+
+def _has_delivery_intent(message: str) -> bool:
+    compact = str(message or "").replace(" ", "")
+    return any(token in compact for token in ("낼", "내야", "배정", "과제", "숙제", "수업전", "학생에게", "반에"))
+
+
+def _has_target_recipient(message: str) -> bool:
+    text = str(message or "")
+    compact = text.replace(" ", "")
+    return bool(re.search(r"[A-Za-z가-힣0-9]+\s*학생", text)) or any(token in compact for token in ("반에", "클래스", "수업반"))
+
+
+def _has_due_or_schedule(message: str) -> bool:
+    compact = str(message or "").replace(" ", "")
+    return any(
+        token in compact
+        for token in (
+            "오늘",
+            "내일",
+            "이번주",
+            "다음주",
+            "월요일",
+            "화요일",
+            "수요일",
+            "목요일",
+            "금요일",
+            "토요일",
+            "일요일",
+            "수업전",
+            "까지",
+        )
+    ) or bool(re.search(r"\d{1,2}[/:시]\d{0,2}", compact))
+
+
+def _missing_required_fields(message: str) -> list[dict[str, str]]:
+    missing: list[dict[str, str]] = []
+    if not _has_subject(message):
+        missing.append({"field": "subject", "question": "어느 과목 시험지인가요? 수학, 국어, 영어 중에서 알려주세요."})
+    if not _grade_keyword(message):
+        missing.append({"field": "grade", "question": "어느 학년 또는 범위의 문항을 쓸까요? 예: 고3, 고2, 중3."})
+    if not _has_requested_count(message):
+        missing.append({"field": "problem_count", "question": "총 몇 문항으로 만들까요?"})
+    if not _has_difficulty_plan(message):
+        missing.append({"field": "difficulty_plan", "question": "배점/난이도 배치는 어떻게 할까요? 예: 1-10 2점, 11-20 3점, 21-25 4점."})
+    if not _has_template(message):
+        missing.append({"field": "template", "question": "어떤 시험지 템플릿 또는 양식을 사용할까요?"})
+    if _has_delivery_intent(message):
+        if not _has_target_recipient(message):
+            missing.append({"field": "recipient", "question": "누구에게 낼까요? 학생 이름이나 클래스명을 알려주세요."})
+        if not _has_due_or_schedule(message):
+            missing.append({"field": "due_at", "question": "언제까지 내면 될까요? 수업 전이면 요일/수업 시간을 알려주세요."})
+    return missing
+
+
+def _needs_input_draft(message: str, missing: list[dict[str, str]], engine: str, count: int | None, grade: str | None) -> dict[str, Any]:
+    return {
+        "type": "exam_paper_creation",
+        "status": "needs_input",
+        "title": "시험지 제작 정보 확인",
+        "subject_engine": engine if _has_subject(message) else None,
+        "grade": grade,
+        "requested_count": count if _has_requested_count(message) else None,
+        "selected_count": 0,
+        "missing_required_fields": missing,
+        "clarification_questions": [item["question"] for item in missing],
+        "difficulty_distribution": {},
+        "unit_distribution": {},
+        "missing_difficulty_slots": [],
+        "relaxed_difficulty_candidates": [],
+        "used_exclusion": {"scope": "workspace_usage_history", "excluded_count": 0},
+        "problems": [],
+        "warnings": ["필수 정보가 부족해서 문항을 아직 선택하지 않았습니다."],
+    }
 
 
 def _problem_unit(problem: Problem) -> str:
@@ -228,6 +330,10 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
     engine = _subject_engine_from_message(message)
     count = _requested_count(message)
     grade = _grade_keyword(message)
+    missing_required = _missing_required_fields(message)
+    if missing_required:
+        return _needs_input_draft(message, missing_required, engine, count, grade)
+
     slots = _difficulty_slots(message, count, engine)
 
     candidates = db.scalars(_candidate_query(owner_ids, engine, grade)).unique().all()
@@ -258,6 +364,8 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         "grade": grade,
         "requested_count": count,
         "selected_count": len(selected),
+        "missing_required_fields": [],
+        "clarification_questions": [],
         "target_student_label": target_student,
         "difficulty_slots": [{"position": index + 1, "difficulty": value} for index, value in enumerate(slots)],
         "difficulty_distribution": dict(difficulty_distribution),
@@ -274,6 +382,13 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
 
 
 def format_exam_paper_draft_answer(draft: dict[str, Any]) -> str:
+    if draft.get("status") == "needs_input":
+        questions = draft.get("clarification_questions") or []
+        if not questions:
+            return "시험지 제작에 필요한 정보가 부족합니다. 과목, 학년, 문항 수, 난이도 배치, 템플릿을 알려주세요."
+        question_text = " ".join(f"{index + 1}. {question}" for index, question in enumerate(questions[:5]))
+        return f"시험지 제작 전에 확인이 필요합니다. {question_text}"
+
     selected = int(draft.get("selected_count") or 0)
     requested = int(draft.get("requested_count") or 0)
     distribution = draft.get("difficulty_distribution") or {}

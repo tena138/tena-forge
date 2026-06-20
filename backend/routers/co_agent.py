@@ -411,6 +411,19 @@ def _co_agent_chat_completion(messages: list[dict[str, str]]) -> tuple[str, str]
     raise HTTPException(status_code=502, detail=f"Co-Agent AI request failed: {last_error}")
 
 
+def _exam_draft_quick_actions(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    if draft.get("status") == "needs_input":
+        return [
+            {"id": "answer_exam_missing_info", "label": "정보 입력", "kind": "revise"},
+            {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
+        ]
+    return [
+        {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
+        {"id": "reroll_exam_draft", "label": "다시 고르기", "kind": "reroll"},
+        {"id": "approve_exam_draft", "label": "승인 준비", "kind": "approve"},
+    ]
+
+
 @router.post("/exam-paper/draft")
 def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Request, db: Session = Depends(get_db)):
     message = payload.message.strip()
@@ -421,11 +434,7 @@ def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Re
     return {
         "answer": format_exam_paper_draft_answer(draft),
         "draft": draft,
-        "quick_actions": [
-            {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
-            {"id": "reroll_exam_draft", "label": "다시 고르기", "kind": "reroll"},
-            {"id": "approve_exam_draft", "label": "승인 준비", "kind": "approve"},
-        ],
+        "quick_actions": _exam_draft_quick_actions(draft),
     }
 
 
@@ -442,11 +451,7 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
             answer=format_exam_paper_draft_answer(draft),
             model=None,
             drafts=[draft],
-            quick_actions=[
-                {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
-                {"id": "reroll_exam_draft", "label": "다시 고르기", "kind": "reroll"},
-                {"id": "approve_exam_draft", "label": "승인 준비", "kind": "approve"},
-            ],
+            quick_actions=_exam_draft_quick_actions(draft),
         )
 
     snapshot = next_actions(request, db)
