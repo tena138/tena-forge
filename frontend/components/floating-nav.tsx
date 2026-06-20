@@ -4,7 +4,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
-  BellRing,
   BookOpenCheck,
   BookOpen,
   CalendarDays,
@@ -70,21 +69,6 @@ const sections = [
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
       { href: "/student-management/tuition", label: "수강료", icon: ReceiptText },
       { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
-    ],
-  },
-  {
-    title: "Co-Agent",
-    shortTitle: "CA",
-    description: "AI 운영 보조",
-    accountTypes: ["academy"],
-    accent: "bg-zinc-700",
-    panel: "border-black/10 bg-[#f3f3f3]",
-    header: "text-zinc-950",
-    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
-    activeIndicator: "bg-black",
-    activeIcon: "text-white group-hover:text-white",
-    items: [
-      { href: "/co-agent/routines", label: "루틴", icon: BellRing },
     ],
   },
   {

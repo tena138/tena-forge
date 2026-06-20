@@ -5,9 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { HeaderAccountSummary } from "@/components/auth/header-account-summary";
+import { CoAgentStatusBar } from "@/components/co-agent/co-agent-status-bar";
 import { FloatingNav } from "@/components/floating-nav";
-import { HeaderNotifications } from "@/components/header-notifications";
-import { LiveInteractionBar } from "@/components/live/live-interaction-bar";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
@@ -160,12 +159,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
           <div className="hidden min-w-0 flex-1 items-center justify-center px-4 md:flex">
-            <LiveInteractionBar />
+            <CoAgentStatusBar />
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <HeaderNotifications />
             <HeaderAccountSummary />
           </div>
+        </div>
+        <div className="px-4 pb-2 md:hidden">
+          <CoAgentStatusBar compact />
         </div>
         <Suspense fallback={null}>
           <FloatingNav mobile />
