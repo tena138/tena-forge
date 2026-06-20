@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Radio, Send, X } from "lucide-react";
 
@@ -85,12 +85,6 @@ function taskLabel(statusData: BatchStatusResponse) {
   return statusData.processing_task === "solution_only" ? "답안 재처리" : "PDF 추출";
 }
 
-function statusHref(statusData: BatchStatusResponse | null, notification: BatchNotification | null) {
-  if (statusData) return "/archive/new";
-  if (notification) return notification.href;
-  return "/co-agent/routines";
-}
-
 function isFreshNotification(notification: BatchNotification | null) {
   if (!notification?.createdAt) return false;
   const createdAt = new Date(notification.createdAt).getTime();
@@ -109,6 +103,7 @@ function chatErrorMessage(error: unknown) {
 export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const prefersReducedMotion = usePrefersReducedMotion();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [greeting, setGreeting] = useState(() => greetingLabel());
   const [events, setEvents] = useState<LiveInteractionEvent[]>([]);
   const [notifications, setNotifications] = useState<BatchNotification[]>([]);
@@ -126,7 +121,6 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const statusNotification = isFreshNotification(latestNotification) ? latestNotification : null;
   const progress = activeStatusData?.progress_percent ?? 0;
   const primaryLiveEvent = events[0] || null;
-  const reportHref = statusHref(activeStatusData, statusNotification);
 
   const report = useMemo(() => {
     if (activeStatusData) {
@@ -159,8 +153,21 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     };
   }, [activeStatusData, greeting, primaryLiveEvent, progress, statusNotification?.status]);
 
-  const typedReportMessage = useTypewriterText(report.message, !prefersReducedMotion);
-  const visibleChatMessages = chatMessages.slice(-8);
+  const latestAssistantMessage = useMemo(() => {
+    for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
+      const message = chatMessages[index];
+      if (message?.role === "assistant") return message.content;
+    }
+    return "";
+  }, [chatMessages]);
+
+  const statusMessage =
+    chatOpen && (chatLoading || chatError || latestAssistantMessage)
+      ? chatLoading
+        ? "Tena Forge 업무 범위 안에서 확인 중입니다."
+        : chatError || latestAssistantMessage
+      : report.message;
+  const typedReportMessage = useTypewriterText(statusMessage, !prefersReducedMotion);
 
   const loadLiveInteractions = useCallback(async () => {
     const activeWorkspaceId = getActiveWorkspaceId();
@@ -342,14 +349,21 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     };
   }, [activeBatchId]);
 
+  useEffect(() => {
+    if (chatOpen) inputRef.current?.focus();
+  }, [chatOpen]);
+
   return (
     <div className={cn("relative min-w-0", compact ? "w-full" : "w-full max-w-[760px]")}>
-      <div className="relative flex min-w-0 items-center gap-2 overflow-hidden rounded-[14px] bg-white/78 px-3 py-2.5 text-zinc-950">
+      <div className="relative flex min-h-[52px] min-w-0 items-center gap-2 overflow-hidden rounded-[14px] bg-white/78 px-3 py-2.5 text-zinc-950">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center rounded-[10px] px-1.5 py-1 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10"
+          className={cn(
+            "flex min-w-0 items-center rounded-[10px] px-1.5 py-1 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
+            chatOpen ? "flex-[1_1_42%]" : "flex-1"
+          )}
           onClick={() => setChatOpen(true)}
-          title={report.message}
+          title={statusMessage}
         >
           <span className="min-w-0">
             <span className="block truncate text-[16px] font-medium leading-[1.55] tracking-normal text-zinc-800">{typedReportMessage || "\u00A0"}</span>
@@ -362,7 +376,40 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           </span>
         ) : null}
 
-        {primaryLiveEvent ? (
+        {chatOpen ? (
+          <form
+            className={cn(
+              "flex h-10 min-w-[220px] shrink-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2",
+              compact ? "w-[min(58vw,20rem)]" : "w-[min(42vw,24rem)]"
+            )}
+            onSubmit={submitChat}
+          >
+            <input
+              ref={inputRef}
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500"
+              placeholder="Tena Forge 업무 입력"
+              disabled={chatLoading}
+            />
+            <button
+              type="submit"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+              disabled={chatLoading || !chatInput.trim()}
+              aria-label="AI에게 보내기"
+            >
+              {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-zinc-500 transition hover:bg-zinc-200 hover:text-black"
+              onClick={() => setChatOpen(false)}
+              aria-label="입력 닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </form>
+        ) : primaryLiveEvent ? (
           <button
             type="button"
             onClick={() => router.push(primaryLiveEvent.live_href)}
@@ -376,81 +423,6 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           </button>
         ) : null}
       </div>
-
-      {chatOpen ? (
-        <div
-          className={cn(
-            "absolute left-0 right-0 top-[calc(100%+8px)] z-[3500] rounded-[14px] bg-white p-3 text-zinc-950",
-            compact && "fixed left-4 right-4 top-[112px]"
-          )}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs font-black uppercase tracking-[0.14em] text-zinc-500">업무 채팅</div>
-              <p className="mt-1 truncate text-xs font-semibold text-zinc-600">Tena Forge 업무만 답변합니다.</p>
-            </div>
-            <button
-              type="button"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 hover:text-black"
-              onClick={() => setChatOpen(false)}
-              aria-label="업무 채팅 닫기"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
-            <div className="rounded-[12px] bg-zinc-100 px-3 py-2 text-xs leading-5 text-zinc-800">
-              {typedReportMessage || "\u00A0"}
-            </div>
-            {visibleChatMessages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}-${message.content.slice(0, 12)}`}
-                className={cn(
-                  "rounded-[12px] px-3 py-2 text-xs leading-5",
-                  message.role === "user" ? "ml-8 bg-black text-white" : "mr-8 bg-zinc-100 text-zinc-800"
-                )}
-              >
-                {message.content}
-              </div>
-            ))}
-            {chatLoading ? (
-              <div className="mr-8 flex items-center gap-2 rounded-[12px] bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-600">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                AI가 Tena Forge 업무 범위 안에서 확인 중입니다.
-              </div>
-            ) : null}
-          </div>
-
-          {chatError ? <p className="mt-2 text-xs font-semibold text-zinc-600">{chatError}</p> : null}
-
-          <form className="mt-3 flex items-center gap-2" onSubmit={submitChat}>
-            <input
-              value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
-              className="h-10 min-w-0 flex-1 rounded-[10px] bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/10"
-              placeholder="Tena Forge 업무를 입력하세요"
-              disabled={chatLoading}
-            />
-            <button
-              type="submit"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
-              disabled={chatLoading || !chatInput.trim()}
-              aria-label="AI에게 보내기"
-            >
-              {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
-          </form>
-
-          <button
-            type="button"
-            className="mt-2 inline-flex h-8 items-center rounded-[9px] bg-zinc-100 px-3 text-xs font-black text-zinc-700 transition hover:bg-zinc-200 hover:text-black"
-            onClick={() => router.push(reportHref)}
-          >
-            관련 화면 열기
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
