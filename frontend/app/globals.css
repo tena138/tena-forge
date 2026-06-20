@@ -1817,4 +1817,8 @@
   html[data-theme="light"] [data-app-shell] .forge-surface {
     box-shadow: none !important;
   }
+
+  html[data-theme="light"] [data-app-shell] .app-header-divider {
+    box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.12) !important;
+  }
 }
