@@ -37,3 +37,26 @@ export type CoAgentNextActions = {
 export function getCoAgentNextActions() {
   return api<CoAgentNextActions>("/api/co-agent/next-actions");
 }
+
+export type CoAgentChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type CoAgentChatResponse = {
+  answer: string;
+  scope: "tena_forge_operations" | string;
+  model?: string | null;
+};
+
+export function sendCoAgentChat(payload: {
+  message: string;
+  messages?: CoAgentChatMessage[];
+  current_path?: string | null;
+}) {
+  return api<CoAgentChatResponse>("/api/co-agent/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
