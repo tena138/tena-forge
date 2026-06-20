@@ -2507,23 +2507,23 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
           if (!open) setCounselingCleanPreview(null);
         }}
       >
-        <DialogContent className="max-w-5xl border-white/10 bg-[#141414] text-slate-100">
+        <DialogContent className="max-w-5xl border-0 bg-white text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
           <div className="space-y-4">
             <div>
-              <h2 className="text-xl font-bold text-white">AI 정리 미리보기</h2>
+              <h2 className="text-xl font-bold text-zinc-950">AI 정리 미리보기</h2>
             </div>
             <div className="max-h-[58vh] space-y-3 overflow-y-auto pr-1">
               {counselingCleanPreview?.sections.map((section) => (
-                <div key={section.field_id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                  <p className="mb-3 text-sm font-bold text-zinc-100">{section.label}</p>
+                <div key={section.field_id} className="rounded-lg bg-zinc-50 p-3">
+                  <p className="mb-3 text-sm font-bold text-zinc-950">{section.label}</p>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-md border border-white/10 bg-black/20 p-3">
-                      <p className="mb-2 text-xs font-bold text-slate-500">원문</p>
-                      <p className="whitespace-pre-line text-sm leading-6 text-slate-300">{section.original || "-"}</p>
+                    <div className="rounded-md bg-white p-3">
+                      <p className="mb-2 text-xs font-bold text-zinc-500">원문</p>
+                      <p className="whitespace-pre-line text-sm leading-6 text-zinc-700">{section.original || "-"}</p>
                     </div>
-                    <div className="rounded-md border border-zinc-300/20 bg-zinc-500/10 p-3">
-                      <p className="mb-2 text-xs font-bold text-zinc-200">정리본</p>
-                      <p className="whitespace-pre-line text-sm leading-6 text-slate-100">{section.cleaned || "-"}</p>
+                    <div className="rounded-md bg-zinc-100 p-3">
+                      <p className="mb-2 text-xs font-bold text-zinc-500">정리본</p>
+                      <p className="whitespace-pre-line text-sm leading-6 text-zinc-950">{section.cleaned || "-"}</p>
                     </div>
                   </div>
                 </div>

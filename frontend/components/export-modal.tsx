@@ -125,11 +125,11 @@ function VisualTemplatePreview({ templateSet }: { templateSet: TemplateSet }) {
   if (!page) return <div className="flex h-full items-center justify-center text-xs text-muted-foreground">미리보기 없음</div>;
 
   return (
-    <div className="relative flex h-full w-full items-start justify-center overflow-hidden bg-[#111318] px-4 py-3">
+    <div className="relative flex h-full w-full items-start justify-center overflow-hidden bg-zinc-100 px-4 py-3">
       <div className="relative shrink-0" style={{ width: scaledWidth, height: scaledHeight }}>
         <TemplatePageView templateSet={templateSet} page={page} scale={scale} scaleOrigin="top-left" selectedIds={[]} />
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#111318] to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-zinc-100 to-transparent" />
     </div>
   );
 }
@@ -646,7 +646,7 @@ export function ExportModal({
                       }`}
                       onClick={() => selectOption(option)}
                     >
-                      <div className="h-80 bg-zinc-900">
+                      <div className="h-80 bg-zinc-100">
                         {option.templateSet ? <VisualTemplatePreview templateSet={option.templateSet} /> : null}
                       </div>
                       <div className="p-3">

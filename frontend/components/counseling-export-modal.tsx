@@ -33,7 +33,7 @@ function VisualTemplatePreview({ templateSet }: { templateSet: TemplateSet }) {
   const scale = Math.min(0.34, 300 / Math.max(size.width, 1));
   if (!page) return <div className="flex h-full items-center justify-center text-xs text-slate-500">미리보기 없음</div>;
   return (
-    <div className="flex h-full items-start justify-center overflow-hidden rounded-lg bg-slate-950/70 p-3">
+    <div className="flex h-full items-start justify-center overflow-hidden rounded-lg bg-zinc-100 p-3">
       <div style={{ width: size.width * scale, height: size.height * scale }}>
         <TemplatePageView templateSet={templateSet} page={page} scale={scale} />
       </div>
@@ -117,12 +117,12 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto border-white/10 bg-[#141414] text-slate-100">
+      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto border-0 bg-white text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
         <div className="space-y-5">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 pr-10">
             <div>
               <h2 className="text-xl font-bold">상담일지 템플릿 내보내기</h2>
-              <p className="mt-1 text-sm text-slate-400">상담일지 카테고리 템플릿에 상담 항목을 자동 삽입합니다.</p>
+              <p className="mt-1 text-sm text-zinc-500">상담일지 카테고리 템플릿에 상담 항목을 자동 삽입합니다.</p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => window.open("/templates/studio?new=1", "_blank", "noopener,noreferrer")}>
               템플릿 만들기
@@ -133,14 +133,14 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
             <div className="space-y-4">
               <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="내보내기 제목" />
 
-              <section className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <section className="rounded-lg bg-zinc-50 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-bold">상담 기록</h3>
                   <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedLogIds(logs.map((log) => log.id))}>전체 선택</Button>
                 </div>
                 <div className="max-h-48 space-y-2 overflow-y-auto">
                   {logs.map((log) => (
-                    <label key={log.id} className="flex cursor-pointer items-center gap-3 rounded-md border border-white/10 bg-black/20 p-2 text-sm">
+                    <label key={log.id} className="flex cursor-pointer items-center gap-3 rounded-md bg-white p-2 text-sm transition hover:bg-zinc-100">
                       <input type="checkbox" checked={selectedLogIds.includes(log.id)} onChange={() => toggleLog(log.id)} />
                       <span className="min-w-0 flex-1 truncate">{shortDate(log.counseling_date)} · {log.title}</span>
                       {log.class_name ? <Badge variant="outline">{log.class_name}</Badge> : null}
@@ -149,16 +149,16 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
                 </div>
               </section>
 
-              <section className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <section className="rounded-lg bg-zinc-50 p-3">
                 <h3 className="mb-2 text-sm font-bold">상담 변수</h3>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {variableRows.map(([key, label]) => (
-                    <button key={key} type="button" onClick={() => copyToken(key)} className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-left text-xs hover:border-zinc-300/50">
+                    <button key={key} type="button" onClick={() => copyToken(key)} className="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-left text-xs transition hover:bg-zinc-100">
                       <span className="min-w-0">
-                        <strong className="block truncate text-slate-100">{`{{${key}}}`}</strong>
-                        <span className="block truncate text-slate-500">{label || "-"}</span>
+                        <strong className="block truncate text-zinc-950">{`{{${key}}}`}</strong>
+                        <span className="block truncate text-zinc-500">{label || "-"}</span>
                       </span>
-                      {copied === key ? <Check className="h-3.5 w-3.5 text-zinc-300" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+                      {copied === key ? <Check className="h-3.5 w-3.5 text-zinc-950" /> : <Copy className="h-3.5 w-3.5 text-zinc-400" />}
                     </button>
                   ))}
                 </div>
@@ -166,16 +166,16 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
             </div>
 
             <div className="space-y-4">
-              <section className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <section className="rounded-lg bg-zinc-50 p-3">
                 <h3 className="mb-2 text-sm font-bold">상담일지 템플릿</h3>
                 <div className="space-y-2">
                   {templates.map((template) => (
-                    <button key={template.id} type="button" onClick={() => setSelectedTemplateId(template.id)} className={`w-full rounded-md border p-3 text-left text-sm ${selectedTemplateId === template.id ? "border-zinc-300 bg-zinc-500/15" : "border-white/10 bg-black/20 hover:border-white/30"}`}>
+                    <button key={template.id} type="button" onClick={() => setSelectedTemplateId(template.id)} className={`w-full rounded-md p-3 text-left text-sm transition ${selectedTemplateId === template.id ? "bg-zinc-200 shadow-[0_0_0_2px_rgba(0,0,0,.10)]" : "bg-white hover:bg-zinc-100"}`}>
                       <strong>{template.title}</strong>
-                      {template.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-400">{template.description}</p> : null}
+                      {template.description ? <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{template.description}</p> : null}
                     </button>
                   ))}
-                  {!templates.length ? <p className="rounded-md border border-dashed border-white/10 p-3 text-sm text-slate-400">상담일지 템플릿이 없습니다.</p> : null}
+                  {!templates.length ? <p className="rounded-md bg-zinc-100 p-3 text-sm text-zinc-500">상담일지 템플릿이 없습니다.</p> : null}
                 </div>
               </section>
               <div className="h-[360px]">{selectedTemplateSet ? <VisualTemplatePreview templateSet={selectedTemplateSet} /> : null}</div>
