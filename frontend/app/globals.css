@@ -1794,6 +1794,11 @@
     color: rgb(9 9 11) !important;
   }
 
+  html[data-theme="light"] [data-app-shell] .workspace-primary-cta:disabled,
+  html[data-theme="light"] [data-app-shell] .workspace-primary-cta:disabled * {
+    color: rgb(113 113 122) !important;
+  }
+
   html[data-theme="light"] [data-app-shell] .console-nav-active {
     border-color: rgb(0 0 0) !important;
     background: rgb(0 0 0) !important;

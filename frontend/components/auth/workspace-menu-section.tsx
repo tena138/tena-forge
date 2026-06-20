@@ -196,7 +196,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
             type="button"
             onClick={submitClaim}
             disabled={claiming || !claimCode.trim()}
-            className="inline-flex h-9 items-center justify-center rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-45"
+            className="workspace-primary-cta inline-flex h-9 items-center justify-center rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
           >
             {claiming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "입력"}
           </button>
@@ -394,7 +394,7 @@ function StaffManager({ academyId }: { academyId: string }) {
             </div>
           )}
           <PermissionChecks value={invitePermissions} onChange={setInvitePermissions} />
-          <button type="button" onClick={createInvite} disabled={inviteDisabled} className="inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-45">
+          <button type="button" onClick={createInvite} disabled={inviteDisabled} className="workspace-primary-cta inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500">
             {savingKey === "invite" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
             코드 발급
           </button>
