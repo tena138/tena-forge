@@ -237,11 +237,10 @@ function problemLoadErrorMessage(error: unknown) {
 
 function difficultyTone(value?: string | null) {
   const normalized = (value || "").trim();
-  if (normalized === "하") return { label: "하", color: "#34d399", badge: "border-zinc-300/25 bg-zinc-400/10 text-zinc-100" };
-  if (normalized === "중") return { label: "중", color: "#fbbf24", badge: "border-zinc-300/25 bg-zinc-400/10 text-zinc-100" };
-  if (normalized === "상") return { label: "상", color: "#fb7185", badge: "border-zinc-300/25 bg-zinc-400/10 text-zinc-100" };
-  if (normalized === "최상") return { label: "최상", color: "#ef4444", badge: "border-zinc-300/25 bg-zinc-500/12 text-zinc-100" };
-  return { label: "미지정", color: "#64748b", badge: "border-slate-400/20 bg-slate-400/10 text-slate-300" };
+  if (normalized === "하" || normalized === "2점") return { label: normalized === "하" ? "하" : "2점", color: "#71717a", badge: "border-zinc-300 bg-zinc-100 text-zinc-900" };
+  if (normalized === "중" || normalized === "3점") return { label: normalized === "중" ? "중" : "3점", color: "#3f3f46", badge: "border-zinc-300 bg-zinc-100 text-zinc-900" };
+  if (normalized === "상" || normalized === "최상" || normalized === "4점") return { label: normalized || "상", color: "#111111", badge: "border-zinc-300 bg-zinc-100 text-zinc-950" };
+  return { label: "미지정", color: "#71717a", badge: "border-zinc-300 bg-zinc-100 text-zinc-700" };
 }
 
 function normalizeHexColor(value?: string | null) {
@@ -1459,17 +1458,17 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4d4d8]/30 bg-[#101010]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            <CheckSquare className="h-4 w-4 text-[#d4d4d8]" />
+        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-black px-4 py-3 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)] lg:top-[65px]">
+          <div className="flex items-center gap-2 text-sm font-black text-white">
+            <CheckSquare className="h-4 w-4 text-white" />
             {selectedIds.length}개 선택됨
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</Button>
-            <Button size="sm" variant="outline" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</Button>
-            <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</Button>
-            <Button size="sm" variant="destructive" disabled={deleting} onClick={deleteSelectedProblems}><Trash2 className="h-4 w-4" />삭제</Button>
-            <button type="button" className="px-2 text-sm font-semibold text-slate-400 hover:text-white" onClick={() => setSelectedIds([])}>선택 해제</button>
+            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</button>
+            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</button>
+            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</button>
+            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-zinc-200 px-3 text-sm font-black text-zinc-950 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:cursor-wait disabled:opacity-60" disabled={deleting} onClick={deleteSelectedProblems}><Trash2 className="h-4 w-4" />삭제</button>
+            <button type="button" className="selection-action-clear inline-flex h-8 items-center rounded-[7px] bg-white/12 px-3 text-sm font-black text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setSelectedIds([])}>선택 해제</button>
           </div>
         </div>
       ) : null}
@@ -1526,23 +1525,23 @@ function ProblemsBrowser() {
         count={selectedIds.length}
       />
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-4xl bg-[#0b0d12] text-slate-100">
+        <DialogContent className="max-w-4xl bg-white text-zinc-950">
           <div>
-            <h2 className="text-lg font-semibold">선택 문항 미리보기</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{selectedIds.length}개 문항</p>
+            <h2 className="text-lg font-semibold text-zinc-950">선택 문항 미리보기</h2>
+            <p className="mt-1 text-sm font-medium text-zinc-500">{selectedIds.length}개 문항</p>
           </div>
           <div className="mt-4 max-h-[68vh] space-y-3 overflow-auto pr-1">
             {selectedProblems.map((problem) => {
               const tone = difficultyTone(problem.tags?.difficulty);
               const accentColor = problemAccentColor(problem, tone.color);
               return (
-                <article key={problem.id} className="relative overflow-hidden rounded-lg border border-white/10 bg-white/[0.035] p-4 pl-5">
+                <article key={problem.id} className="relative overflow-hidden rounded-lg bg-zinc-50 p-4 pl-5">
                   <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
                   <div className="mb-2 flex items-center justify-end gap-3">
                     <span className={cn("rounded border px-2 py-1 text-[11px] font-semibold", tone.badge)}>{tone.label}</span>
                   </div>
-                  <MathText className="text-[14px] leading-[1.55] text-foreground" value={problem.problem_text} />
-                  <div className="mt-3 text-[11px] font-medium text-muted-foreground">{sourceLabel(problem)} · {pageLabel(problem)} · {problemTypeLabel(problem)}</div>
+                  <MathText className="text-[14px] leading-[1.55] text-zinc-950" value={problem.problem_text} />
+                  <div className="mt-3 text-[11px] font-semibold text-zinc-500">{sourceLabel(problem)} · {pageLabel(problem)} · {problemTypeLabel(problem)}</div>
                 </article>
               );
             })}

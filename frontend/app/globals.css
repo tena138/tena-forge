@@ -1783,6 +1783,17 @@
     color: rgb(255 255 255) !important;
   }
 
+  html[data-theme="light"] [data-app-shell] .selection-action-bar,
+  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-clear,
+  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-clear * {
+    color: rgb(255 255 255) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-button,
+  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-button * {
+    color: rgb(9 9 11) !important;
+  }
+
   html[data-theme="light"] [data-app-shell] .console-nav-active {
     border-color: rgb(0 0 0) !important;
     background: rgb(0 0 0) !important;

@@ -2103,21 +2103,33 @@ export default function StudentManagementStudentPage({ params }: { params: Promi
             ) : null}
 
             {selectedWrongProblemIds.length ? (
-              <div className="sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4d4d8]/30 bg-[#101010]/95 px-4 py-3 shadow-[0_18px_45px_rgba(30,22,64,0.32)] backdrop-blur lg:top-[65px]">
-                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-                  <CheckSquare className="h-4 w-4 text-[#d4d4d8]" />
+              <div className="selection-action-bar sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-black px-4 py-3 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)] lg:top-[65px]">
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  <CheckSquare className="h-4 w-4 text-white" />
                   {selectedWrongProblemIds.length}개 선택됨
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" onClick={() => setWrongArchiveAddModalOpen(true)}>
+                  <button
+                    type="button"
+                    className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    onClick={() => setWrongArchiveAddModalOpen(true)}
+                  >
                     <FolderPlus className="h-4 w-4" />
                     세트에 담기
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setWrongArchiveExportOpen(true)}>
+                  </button>
+                  <button
+                    type="button"
+                    className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    onClick={() => setWrongArchiveExportOpen(true)}
+                  >
                     <Send className="h-4 w-4" />
                     바로 내보내기
-                  </Button>
-                  <button type="button" className="px-2 text-sm font-semibold text-slate-400 hover:text-white" onClick={() => setSelectedWrongAnswerIds([])}>
+                  </button>
+                  <button
+                    type="button"
+                    className="selection-action-clear inline-flex h-8 items-center rounded-[7px] bg-white/12 px-3 text-sm font-black text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    onClick={() => setSelectedWrongAnswerIds([])}
+                  >
                     선택 해제
                   </button>
                 </div>
