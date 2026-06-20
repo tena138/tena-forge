@@ -51,6 +51,13 @@ function statusHref(statusData: BatchStatusResponse | null, notification: BatchN
   return "/co-agent/routines";
 }
 
+function isFreshNotification(notification: BatchNotification | null) {
+  if (!notification?.createdAt) return false;
+  const createdAt = new Date(notification.createdAt).getTime();
+  if (!Number.isFinite(createdAt)) return false;
+  return Date.now() - createdAt < 1000 * 60 * 30;
+}
+
 function chatErrorMessage(error: unknown) {
   const candidate = error as { response?: { data?: { detail?: unknown } }; message?: string };
   const detail = candidate.response?.data?.detail;
@@ -75,9 +82,10 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
 
   const activeStatusData = activeStatus && (activeStatus.status === "pending" || activeStatus.status === "processing") ? activeStatus : null;
   const latestNotification = notifications[0] || null;
+  const statusNotification = isFreshNotification(latestNotification) ? latestNotification : null;
   const progress = activeStatusData?.progress_percent ?? 0;
   const primaryLiveEvent = events[0] || null;
-  const reportHref = statusHref(activeStatusData, latestNotification);
+  const reportHref = statusHref(activeStatusData, statusNotification);
 
   const report = useMemo(() => {
     if (activeStatusData) {
@@ -86,23 +94,29 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         message: `안녕하세요. ${greeting} ${taskLabel(activeStatusData)}을 처리 중입니다. ${progress}% 완료했습니다.`,
       };
     }
-    if (latestNotification?.status === "done") {
+    if (statusNotification?.status === "done") {
       return {
         tone: "done" as const,
-        message: `안녕하세요. ${greeting} 이전 지시 사항을 완료했습니다. 추출 결과가 준비되었습니다.`,
+        message: `안녕하세요. ${greeting} 방금 PDF 추출이 완료되어 결과를 확인할 수 있습니다.`,
       };
     }
-    if (latestNotification?.status === "error") {
+    if (statusNotification?.status === "error") {
       return {
         tone: "error" as const,
-        message: `안녕하세요. ${greeting} 이전 작업에서 오류가 발생했습니다. 확인이 필요합니다.`,
+        message: `안녕하세요. ${greeting} 최근 PDF 추출에서 오류가 발생했습니다. 확인이 필요합니다.`,
+      };
+    }
+    if (primaryLiveEvent) {
+      return {
+        tone: "idle" as const,
+        message: `안녕하세요. ${greeting} 곧 시작할 수업이 있어 대기 중입니다.`,
       };
     }
     return {
       tone: "idle" as const,
-      message: `안녕하세요. ${greeting} 이전 지시 사항을 확인했습니다.`,
+      message: `안녕하세요. ${greeting} 현재 대기 중입니다. 필요한 Tena Forge 업무를 입력해 주세요.`,
     };
-  }, [activeStatusData, greeting, latestNotification?.status, progress]);
+  }, [activeStatusData, greeting, primaryLiveEvent, progress, statusNotification?.status]);
 
   const visibleChatMessages = chatMessages.slice(-8);
 
