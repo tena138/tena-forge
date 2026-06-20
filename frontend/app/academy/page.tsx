@@ -204,9 +204,9 @@ function remainingPercent(used: number, total: number) {
 }
 
 function remainingTone(percent: number) {
-  if (percent <= 10) return "#f87171";
-  if (percent <= 25) return "#fbbf24";
-  return "#8b5cf6";
+  if (percent <= 10) return "#737373";
+  if (percent <= 25) return "#525252";
+  return "#111111";
 }
 
 function formatUsageNumber(value: number, suffix = "") {
@@ -256,7 +256,7 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
       <div
         className="relative mt-2 grid aspect-square w-full max-w-[6.75rem] place-items-center overflow-visible rounded-full p-[7px]"
         style={{
-          background: `conic-gradient(${tone} ${percent * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+          background: `conic-gradient(${tone} ${percent * 3.6}deg, rgb(229 229 229) 0deg)`,
         }}
       >
         <div className="h-full w-full rounded-full bg-card" />
