@@ -146,10 +146,10 @@ function PageSelect({
   templateSet: TemplateSet;
 }) {
   return (
-    <label className="grid gap-1.5 text-xs font-semibold text-slate-400">
+    <label className="grid gap-1.5 text-xs font-semibold text-zinc-600">
       {label}
       <select
-        className="h-9 rounded-md border border-white/10 bg-[#10131b] px-2 text-sm text-slate-100 outline-none"
+        className="h-9 rounded-md bg-white px-2 text-sm font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 transition focus:ring-2 focus:ring-black/20"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -467,41 +467,42 @@ export function ExportModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl bg-[#0b0d12] text-slate-100">
+      <DialogContent className="max-w-6xl bg-white text-zinc-950">
         <div className="grid gap-5 lg:grid-cols-[330px_minmax(0,1fr)]">
-          <section className="space-y-4 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+          <section className="space-y-4 rounded-xl bg-zinc-50 p-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">내보내기 설정</h2>
+              <h2 className="text-lg font-semibold text-zinc-950">내보내기 설정</h2>
             </div>
-            <Input placeholder="시험지명" value={examTitle} onChange={(event) => setExamTitle(event.target.value)} />
+            <Input className="bg-white" placeholder="시험지명" value={examTitle} onChange={(event) => setExamTitle(event.target.value)} />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Input placeholder="반" value={className} onChange={(event) => setClassName(event.target.value)} />
-              <Input placeholder="이름" value={studentName} onChange={(event) => setStudentName(event.target.value)} />
+              <Input className="bg-white" placeholder="반" value={className} onChange={(event) => setClassName(event.target.value)} />
+              <Input className="bg-white" placeholder="이름" value={studentName} onChange={(event) => setStudentName(event.target.value)} />
             </div>
-            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">시험 일시</div>
+            <div className="rounded-lg bg-white p-3">
+              <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">시험 일시</div>
               <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="시험 일자" />
-                <Input type="time" value={examStartTime} onChange={(event) => setExamStartTime(event.target.value)} aria-label="시험 시작 시간" />
-                <Input type="time" value={examEndTime} onChange={(event) => setExamEndTime(event.target.value)} aria-label="시험 종료 시간" />
+                <Input className="bg-white" type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="시험 일자" />
+                <Input className="bg-white" type="time" value={examStartTime} onChange={(event) => setExamStartTime(event.target.value)} aria-label="시험 시작 시간" />
+                <Input className="bg-white" type="time" value={examEndTime} onChange={(event) => setExamEndTime(event.target.value)} aria-label="시험 종료 시간" />
               </div>
-              <div className="mt-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-slate-300">
+              <div className="mt-2 rounded-md bg-zinc-100 px-2.5 py-2 text-xs font-semibold text-zinc-700">
                 {examDateTime || "시험 일시 미입력"}
               </div>
             </div>
             {statsBindings.length ? (
-              <div className="rounded-lg border border-zinc-300/20 bg-zinc-500/10 px-3 py-2 text-xs leading-5 text-zinc-100">
+              <div className="rounded-lg bg-zinc-100 px-3 py-2 text-xs font-semibold leading-5 text-zinc-700">
                 이 템플릿은 학생 시험 이력 통계를 사용합니다. 학생 1명을 선택하면 설정한 X축 날짜 범위 안의 채점 완료 시험만 자동 연결됩니다.
               </div>
             ) : null}
             {manualVariables.length ? (
-              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">템플릿 입력값</div>
+              <div className="rounded-lg bg-white p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">템플릿 입력값</div>
                 <div className="mt-3 grid gap-2">
                   {manualVariables.map((name) => (
-                    <label key={name} className="grid gap-1.5 text-xs font-semibold text-slate-400">
+                    <label key={name} className="grid gap-1.5 text-xs font-semibold text-zinc-600">
                       {name}:
                       <Input
+                        className="bg-white"
                         value={customVariables[name] || ""}
                         onChange={(event) => setCustomVariables((current) => ({ ...current, [name]: event.target.value }))}
                       />
@@ -511,14 +512,14 @@ export function ExportModal({
               </div>
             ) : null}
             {selected?.kind === "visual" && selected.templateSet ? (
-              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <div className="rounded-lg bg-white p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-slate-100">페이지 구성</div>
-                    <div className="mt-1 text-xs text-slate-500">내보내기에 사용할 페이지를 직접 선택합니다.</div>
+                    <div className="text-sm font-semibold text-zinc-950">페이지 구성</div>
+                    <div className="mt-1 text-xs font-medium text-zinc-500">내보내기에 사용할 페이지를 직접 선택합니다.</div>
                   </div>
                   <select
-                    className="h-9 rounded-md border border-white/10 bg-[#10131b] px-2 text-xs font-semibold text-slate-100 outline-none"
+                    className="h-9 rounded-md bg-zinc-100 px-2 text-xs font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 transition focus:ring-2 focus:ring-black/20"
                     value={documentKind}
                     onChange={(event) => setDocumentKind(event.target.value as "exam" | "textbook")}
                   >
@@ -527,7 +528,7 @@ export function ExportModal({
                   </select>
                 </div>
                 <div className="mt-3 grid gap-2">
-                  <label className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.035] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                  <label className="flex items-center justify-between rounded-md bg-zinc-100 px-2.5 py-2 text-xs font-semibold text-zinc-800">
                     표지 사용
                     <input type="checkbox" checked={includeCoverPage} onChange={(event) => setIncludeCoverPage(event.target.checked)} />
                   </label>
@@ -544,13 +545,13 @@ export function ExportModal({
                       <PageSelect label="오른쪽 내지" value={rightInnerPageId} onChange={setRightInnerPageId} templateSet={selected.templateSet} />
                     </>
                   )}
-                  <label className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.035] px-2.5 py-2 text-xs font-semibold text-slate-300">
+                  <label className="flex items-center justify-between rounded-md bg-zinc-100 px-2.5 py-2 text-xs font-semibold text-zinc-800">
                     답안 페이지 사용
                     <input type="checkbox" checked={includeAnswerPage} onChange={(event) => setIncludeAnswerPage(event.target.checked)} />
                   </label>
                   {includeAnswerPage ? <PageSelect label="답안 페이지" value={answerPageId} onChange={setAnswerPageId} templateSet={selected.templateSet} /> : null}
                   {visualPagePlanMissing ? (
-                    <div className="rounded-md border border-zinc-300/25 bg-zinc-500/10 px-2.5 py-2 text-xs text-zinc-100">
+                    <div className="rounded-md bg-zinc-100 px-2.5 py-2 text-xs font-semibold text-zinc-700">
                       필요한 페이지 구성을 모두 선택해야 PDF를 생성할 수 있습니다.
                     </div>
                   ) : null}
@@ -558,15 +559,15 @@ export function ExportModal({
               </div>
             ) : null}
             {(source === "selection" || problemSetId) ? (
-              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
+              <div className="rounded-lg bg-white p-3">
+                <label className="flex items-center justify-between text-sm font-semibold text-zinc-950">
                   학생/클래스에 배정
                   <input type="checkbox" checked={assignEnabled} onChange={(event) => setAssignEnabled(event.target.checked)} />
                 </label>
                 {assignEnabled ? (
                   <div className="mt-3 grid gap-2">
                     <select
-                      className="h-10 rounded-md border border-white/10 bg-[#10131b] px-3 text-sm text-slate-100 outline-none"
+                      className="h-10 rounded-md bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 transition focus:ring-2 focus:ring-black/20"
                       value={assignClassId}
                       onChange={(event) => changeAssignClass(event.target.value)}
                     >
@@ -578,9 +579,9 @@ export function ExportModal({
                       ))}
                     </select>
                     {assignableStudents.length ? (
-                      <div className="max-h-36 space-y-1 overflow-auto rounded-md border border-white/10 bg-white/[0.035] p-2">
+                      <div className="max-h-36 space-y-1 overflow-auto rounded-md bg-zinc-100 p-2">
                         {assignableStudents.map((student) => (
-                          <label key={student.id} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs text-slate-300 hover:bg-white/[0.06]">
+                          <label key={student.id} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-white">
                             <span className="min-w-0 truncate">{student.name}</span>
                             <input
                               type="checkbox"
@@ -591,10 +592,10 @@ export function ExportModal({
                         ))}
                       </div>
                     ) : (
-                      <p className="rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-slate-500">학생이 없습니다.</p>
+                      <p className="rounded-md bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-500">학생이 없습니다.</p>
                     )}
                     <select
-                      className="h-10 rounded-md border border-white/10 bg-[#10131b] px-3 text-sm text-slate-100 outline-none"
+                      className="h-10 rounded-md bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 transition focus:ring-2 focus:ring-black/20"
                       value={assignType}
                       onChange={(event) => setAssignType(event.target.value)}
                     >
@@ -608,13 +609,13 @@ export function ExportModal({
                 ) : null}
               </div>
             ) : null}
-            <div className="rounded-lg border border-zinc-300/20 bg-zinc-500/10 p-3 text-sm">
-              <p className="font-medium text-zinc-100">출력 요약</p>
-              <p className="mt-2 text-slate-300">
+            <div className="rounded-lg bg-white p-3 text-sm">
+              <p className="font-semibold text-zinc-950">출력 요약</p>
+              <p className="mt-2 font-medium text-zinc-600">
                 {count}문항 · {selected?.title || "템플릿 미선택"} · {outputLabel(selected?.kind)}
               </p>
             </div>
-            <Button className="w-full" disabled={!selected || loading || !count || visualPagePlanMissing || (assignEnabled && assignTargetCount === 0)} onClick={submit}>
+            <Button className="w-full bg-black text-white hover:bg-zinc-800" disabled={!selected || loading || !count || visualPagePlanMissing || (assignEnabled && assignTargetCount === 0)} onClick={submit}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
               {selected?.kind === "html" ? "템플릿 HTML 생성" : "PDF 생성"}
             </Button>
@@ -623,10 +624,10 @@ export function ExportModal({
           <section className="min-w-0 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-white">템플릿 선택</h2>
+                <h2 className="text-lg font-semibold text-zinc-950">템플릿 선택</h2>
               </div>
               {!hideTemplateSelection ? (
-                <Link className="rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/[0.06]" href="/templates/studio?new=1">
+                <Link className="rounded-lg bg-black px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800" href="/templates/studio?new=1">
                   새 템플릿 만들기
                 </Link>
               ) : null}
@@ -638,19 +639,19 @@ export function ExportModal({
                   {visualOptions.map((option) => (
                     <button
                       key={`visual-${option.id}`}
-                      className={`overflow-hidden rounded-xl border text-left transition hover:-translate-y-0.5 ${
+                      className={`overflow-hidden rounded-xl text-left transition hover:-translate-y-0.5 ${
                         selectedKind === option.kind && selectedId === option.id
-                          ? "border-zinc-300 bg-zinc-500/15 shadow-[0_0_0_1px_rgba(255,255,255,.2)]"
-                          : "border-white/10 bg-white/[0.04] hover:border-zinc-300/45"
+                          ? "bg-zinc-100 shadow-[0_0_0_2px_rgba(0,0,0,.16)]"
+                          : "bg-zinc-50 hover:bg-zinc-100"
                       }`}
                       onClick={() => selectOption(option)}
                     >
-                      <div className="h-80 border-b border-white/10 bg-[#111318]">
+                      <div className="h-80 bg-zinc-900">
                         {option.templateSet ? <VisualTemplatePreview templateSet={option.templateSet} /> : null}
                       </div>
                       <div className="p-3">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="line-clamp-1 font-semibold text-white">{option.title}</span>
+                          <span className="line-clamp-1 font-semibold text-zinc-950">{option.title}</span>
                           <Badge variant="secondary">{option.badge}</Badge>
                         </div>
                       </div>
@@ -660,28 +661,28 @@ export function ExportModal({
               </div>
             ) : (
               !hideTemplateSelection && (
-                <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] p-5 text-sm text-slate-400">
+                <div className="rounded-xl bg-zinc-50 p-5 text-sm font-semibold text-zinc-500">
                   템플릿 없음
                 </div>
               )
             )}
 
             {legacyOptions.length ? (
-              <details className="rounded-xl border border-white/10 bg-white/[0.035] p-3" open={!visualOptions.length}>
-                <summary className="cursor-pointer text-sm font-semibold text-slate-200">이전 시험지 템플릿</summary>
+              <details className="rounded-xl bg-zinc-50 p-3" open={!visualOptions.length}>
+                <summary className="cursor-pointer text-sm font-semibold text-zinc-800">이전 시험지 템플릿</summary>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {legacyOptions.map((option) => (
                     <button
                       key={`legacy-${option.id}`}
-                      className={`overflow-hidden rounded-xl border text-left transition ${
-                        selectedKind === option.kind && selectedId === option.id ? "border-zinc-300 bg-zinc-500/15" : "border-white/10 bg-black/20 hover:border-zinc-300/45"
+                      className={`overflow-hidden rounded-xl text-left transition ${
+                        selectedKind === option.kind && selectedId === option.id ? "bg-zinc-100 shadow-[0_0_0_2px_rgba(0,0,0,.16)]" : "bg-white hover:bg-zinc-100"
                       }`}
                       onClick={() => selectOption(option)}
                     >
-                      <div className="h-28 border-b border-white/10">{option.legacy ? <LegacyTemplatePreview template={option.legacy} /> : null}</div>
+                      <div className="h-28">{option.legacy ? <LegacyTemplatePreview template={option.legacy} /> : null}</div>
                       <div className="p-3">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="line-clamp-1 font-semibold text-white">{option.title}</span>
+                          <span className="line-clamp-1 font-semibold text-zinc-950">{option.title}</span>
                           <Badge variant="secondary">{option.badge}</Badge>
                         </div>
                       </div>
@@ -692,19 +693,19 @@ export function ExportModal({
             ) : null}
 
             {htmlOptions.length ? (
-              <details className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-slate-200">고급 HTML 템플릿</summary>
+              <details className="rounded-xl bg-zinc-50 p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-zinc-800">고급 HTML 템플릿</summary>
                 <div className="mt-3 space-y-2">
                   {htmlOptions.map((option) => (
                     <button
                       key={`html-${option.id}`}
-                      className={`w-full rounded-lg border p-3 text-left ${
-                        selectedKind === option.kind && selectedId === option.id ? "border-zinc-300 bg-zinc-500/15" : "border-white/10 bg-black/20 hover:border-zinc-300/45"
+                      className={`w-full rounded-lg p-3 text-left ${
+                        selectedKind === option.kind && selectedId === option.id ? "bg-zinc-100 shadow-[0_0_0_2px_rgba(0,0,0,.16)]" : "bg-white hover:bg-zinc-100"
                       }`}
                       onClick={() => selectOption(option)}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-white">{option.title}</span>
+                        <span className="font-medium text-zinc-950">{option.title}</span>
                         <Badge variant="secondary">HTML</Badge>
                       </div>
                     </button>
