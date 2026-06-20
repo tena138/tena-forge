@@ -144,7 +144,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
   }
 
   return (
-    <section className="mt-2 rounded-[8px] border border-black/10 bg-[#f7f7f7] p-2">
+    <section className="mt-2 rounded-[8px] bg-zinc-100 p-2">
       <div className="flex items-center justify-between gap-2 px-1 pb-2">
         <div>
           <div className="text-sm font-semibold text-zinc-950">내 워크스페이스</div>
@@ -177,7 +177,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
         })}
       </div>
 
-      <div className="mt-2 grid gap-2 rounded-[7px] border border-black/10 bg-white p-2">
+      <div className="mt-2 grid gap-2 rounded-[7px] bg-white p-2">
         <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700">
           <KeyRound className="h-3.5 w-3.5" />
           직원/강사 초대 코드
@@ -190,7 +190,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
               if (event.key === "Enter") submitClaim();
             }}
             placeholder="TF-XXXX-XXXX-XXXX"
-            className="h-9 min-w-0 flex-1 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 focus:border-black/40"
+            className="h-9 min-w-0 flex-1 rounded-[7px] border-0 bg-zinc-100 px-3 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 focus:ring-2 focus:ring-black/10"
           />
           <button
             type="button"
@@ -206,7 +206,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
       </div>
 
       {ownerWorkspace ? (
-        <div className="mt-2 rounded-[7px] border border-black/10 bg-white p-2">
+        <div className="mt-2 rounded-[7px] bg-white p-2">
           <div className="flex items-start justify-between gap-2">
             <div>
               <div className="text-xs font-bold text-zinc-800">강사 좌석</div>
@@ -215,7 +215,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
             <button
               type="button"
               onClick={() => setStaffOpen((value) => !value)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-[7px] border border-black/10 px-2.5 text-xs font-black text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[7px] bg-zinc-100 px-2.5 text-xs font-black text-zinc-700 transition hover:bg-zinc-200 hover:text-zinc-950"
             >
               <Users className="h-3.5 w-3.5" />
               관리
@@ -334,8 +334,8 @@ function StaffManager({ academyId }: { academyId: string }) {
   const inviteDisabled = savingKey === "invite" || (inviteRole === "teacher" && inviteClassIds.length === 0);
 
   return (
-    <div className="mt-3 max-h-[70vh] overflow-y-auto rounded-[7px] border border-black/10 bg-white p-2">
-      <div className="flex items-center justify-between gap-2 border-b border-black/10 pb-2">
+    <div className="mt-3 max-h-[48vh] overflow-y-auto rounded-[7px] bg-white p-2 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
+      <div className="flex items-center justify-between gap-2 rounded-[7px] bg-zinc-100 px-2 py-2">
         <div>
           <div className="text-xs font-black text-zinc-950">강사 관리</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">{seatText(seatStatus)}</div>
@@ -350,15 +350,15 @@ function StaffManager({ academyId }: { academyId: string }) {
         </div>
         <div className="grid gap-2">
           <div className="grid grid-cols-[1fr_5rem] gap-2">
-            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="h-9 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-2 text-xs font-semibold text-zinc-950 outline-none focus:border-black/40">
+            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="h-9 rounded-[7px] border-0 bg-zinc-100 px-2 text-xs font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10">
               <option value="teacher">강사</option>
               <option value="assistant">직원</option>
               <option value="admin">관리자</option>
             </select>
-            <input value={inviteDays} min={1} max={30} type="number" onChange={(event) => setInviteDays(Number(event.target.value) || 7)} className="h-9 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-2 text-xs font-semibold text-zinc-950 outline-none focus:border-black/40" aria-label="초대 만료일" />
+            <input value={inviteDays} min={1} max={30} type="number" onChange={(event) => setInviteDays(Number(event.target.value) || 7)} className="h-9 rounded-[7px] border-0 bg-zinc-100 px-2 text-xs font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10" aria-label="초대 만료일" />
           </div>
           {inviteRole === "teacher" ? (
-            <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] p-2">
+            <div className="rounded-[7px] bg-zinc-100 p-2">
               <div className="mb-2 flex items-center gap-2 text-xs font-bold text-zinc-800">
                 <BookOpen className="h-3.5 w-3.5" />
                 담당 클래스
@@ -373,8 +373,8 @@ function StaffManager({ academyId }: { academyId: string }) {
                         type="button"
                         onClick={() => toggleInviteClass(row.id)}
                         className={cn(
-                          "max-w-full rounded-[6px] border px-2 py-1 text-[11px] font-bold transition",
-                          selected ? "border-black bg-black text-white" : "border-black/10 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+                          "max-w-full rounded-[6px] px-2 py-1 text-[11px] font-bold transition",
+                          selected ? "bg-black text-white" : "bg-white text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950"
                         )}
                       >
                         <span className="block max-w-[12rem] truncate">{row.name}</span>
@@ -383,13 +383,13 @@ function StaffManager({ academyId }: { academyId: string }) {
                   })}
                 </div>
               ) : (
-                <div className="rounded-[6px] border border-black/10 bg-white px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
+                <div className="rounded-[6px] bg-white px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
                   먼저 학생관리에서 클래스를 등록해야 강사를 초대할 수 있습니다.
                 </div>
               )}
             </div>
           ) : (
-            <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
+            <div className="rounded-[7px] bg-zinc-100 px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
               직원/관리자는 클래스 배정 없이 초대할 수 있습니다.
             </div>
           )}
@@ -402,7 +402,7 @@ function StaffManager({ academyId }: { academyId: string }) {
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(newCode)}
-              className="flex items-center justify-between gap-2 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2 text-left font-mono text-xs text-zinc-950"
+              className="flex items-center justify-between gap-2 rounded-[7px] bg-zinc-100 px-3 py-2 text-left font-mono text-xs text-zinc-950"
               title="복사"
             >
               <span className="truncate">{newCode}</span>
@@ -416,7 +416,7 @@ function StaffManager({ academyId }: { academyId: string }) {
         <div className="text-xs font-bold text-zinc-800">활성 강사</div>
         {staff.length ? (
           staff.map((member) => (
-            <div key={member.id} className="rounded-[7px] border border-black/10 bg-[#f7f7f7] p-2">
+            <div key={member.id} className="rounded-[7px] bg-zinc-100 p-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="truncate text-xs font-black text-zinc-950">{member.user?.name || member.user?.email || member.user_id}</div>
@@ -425,7 +425,7 @@ function StaffManager({ academyId }: { academyId: string }) {
                     <div className="mt-1 truncate text-[11px] text-zinc-500">담당 {member.assigned_classes.map((row) => row.name).join(", ")}</div>
                   ) : null}
                 </div>
-                <button type="button" onClick={() => removeMember(member)} disabled={savingKey === member.user_id} className="grid h-7 w-7 shrink-0 place-items-center rounded-[6px] border border-black/10 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:opacity-45" aria-label="강사 비활성화">
+                <button type="button" onClick={() => removeMember(member)} disabled={savingKey === member.user_id} className="grid h-7 w-7 shrink-0 place-items-center rounded-[6px] bg-white text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:opacity-45" aria-label="강사 비활성화">
                   {savingKey === member.user_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
                 </button>
               </div>
@@ -438,8 +438,8 @@ function StaffManager({ academyId }: { academyId: string }) {
                       type="button"
                       onClick={() => updateMember(member, { [option.key]: !enabled } as StaffPermissionPayload)}
                       className={cn(
-                        "rounded-[6px] border px-2 py-1 text-[11px] font-bold transition",
-                        enabled ? "border-black bg-black text-white" : "border-black/10 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+                        "rounded-[6px] px-2 py-1 text-[11px] font-bold transition",
+                        enabled ? "bg-black text-white" : "bg-white text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950"
                       )}
                     >
                       {option.label}
@@ -450,7 +450,7 @@ function StaffManager({ academyId }: { academyId: string }) {
             </div>
           ))
         ) : (
-          <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2 text-xs text-muted-foreground">아직 초대된 강사가 없습니다.</div>
+          <div className="rounded-[7px] bg-zinc-100 px-3 py-2 text-xs text-muted-foreground">아직 초대된 강사가 없습니다.</div>
         )}
       </div>
 
@@ -461,7 +461,7 @@ function StaffManager({ academyId }: { academyId: string }) {
         </div>
         {inviteCodes.length ? (
           inviteCodes.map((code) => (
-            <div key={code.id} className="flex items-center justify-between gap-2 rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2">
+            <div key={code.id} className="flex items-center justify-between gap-2 rounded-[7px] bg-zinc-100 px-3 py-2">
               <div className="min-w-0">
                 <div className="truncate font-mono text-xs font-black text-zinc-950">****{code.code_preview}</div>
                 <div className="truncate text-[11px] text-muted-foreground">{roleLabel(code.role)} · {new Date(code.expires_at).toLocaleDateString("ko-KR")} 만료</div>
@@ -469,13 +469,13 @@ function StaffManager({ academyId }: { academyId: string }) {
                   <div className="truncate text-[11px] text-zinc-500">담당 {code.assigned_classes.map((row) => row.name).join(", ")}</div>
                 ) : null}
               </div>
-              <button type="button" onClick={() => revokeInvite(code)} disabled={savingKey === code.id} className="rounded-[6px] border border-black/10 px-2 py-1 text-[11px] font-bold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:opacity-45">
+              <button type="button" onClick={() => revokeInvite(code)} disabled={savingKey === code.id} className="rounded-[6px] bg-white px-2 py-1 text-[11px] font-bold text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:opacity-45">
                 회수
               </button>
             </div>
           ))
         ) : (
-          <div className="rounded-[7px] border border-black/10 bg-[#f7f7f7] px-3 py-2 text-xs text-muted-foreground">대기 중인 초대 코드가 없습니다.</div>
+          <div className="rounded-[7px] bg-zinc-100 px-3 py-2 text-xs text-muted-foreground">대기 중인 초대 코드가 없습니다.</div>
         )}
       </div>
 
@@ -495,8 +495,8 @@ function PermissionChecks({ value, onChange }: { value: Record<PermissionKey, bo
             type="button"
             onClick={() => onChange({ ...value, [option.key]: !enabled })}
             className={cn(
-              "rounded-[6px] border px-2 py-1 text-[11px] font-bold transition",
-              enabled ? "border-black bg-black text-white" : "border-black/10 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+              "rounded-[6px] px-2 py-1 text-[11px] font-bold transition",
+              enabled ? "bg-black text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950"
             )}
           >
             {option.label}

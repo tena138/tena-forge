@@ -152,7 +152,7 @@ export function HeaderAccountSummary() {
 
   if (!profile) {
     if (loading) {
-      return <div className="h-9 w-44 animate-pulse rounded-[8px] border border-black/10 bg-zinc-100" aria-label="계정 정보 로딩" />;
+      return <div className="h-9 w-44 animate-pulse rounded-[8px] bg-zinc-100" aria-label="계정 정보 로딩" />;
     }
     return (
       <Link href="/login">
@@ -221,7 +221,7 @@ export function HeaderAccountSummary() {
       <div className="relative">
         <button
           type="button"
-          className="flex min-w-0 items-center gap-2.5 rounded-[8px] border border-transparent bg-transparent px-2.5 py-1.5 text-left shadow-none transition-all hover:border-transparent hover:bg-transparent hover:shadow-none"
+          className="flex min-w-0 items-center gap-2.5 rounded-[8px] border border-transparent bg-transparent px-2.5 py-1.5 text-left shadow-none transition-all hover:border-transparent hover:bg-zinc-100 hover:shadow-none"
           onClick={() => setOpen((value) => !value)}
           aria-label="계정 메뉴"
         >
@@ -236,8 +236,8 @@ export function HeaderAccountSummary() {
         </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[min(92vw,28rem)] rounded-[10px] border border-black/10 bg-white p-2 text-sm text-zinc-950 shadow-none">
-          <div className="rounded-[8px] border border-black/10 bg-[#f7f7f7] p-3">
+        <div className="absolute right-0 mt-2 max-h-[calc(100vh-5.5rem)] w-[min(92vw,28rem)] overflow-y-auto rounded-[10px] bg-white p-2 text-sm text-zinc-950 shadow-[0_24px_70px_rgba(0,0,0,0.14)] ring-1 ring-black/5 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
+          <div className="rounded-[8px] bg-zinc-100 p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate font-semibold">{currentProfile.academy_name}</div>
@@ -245,7 +245,7 @@ export function HeaderAccountSummary() {
               </div>
               <PlanBadge label={plan.label} tone={plan.tone} />
             </div>
-            <div className="mt-3 rounded-[7px] border border-black/10 bg-white px-3 py-2">
+            <div className="mt-3 rounded-[7px] bg-white px-3 py-2">
               <div className="text-[11px] font-semibold uppercase text-muted-foreground">구독 플랜</div>
               <div className="mt-1 flex items-center justify-between">
                 <span className="text-sm font-bold">{plan.label}</span>
@@ -269,7 +269,7 @@ export function HeaderAccountSummary() {
               <Settings className="h-4 w-4" />
               보안 설정
             </Link>
-            <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-zinc-600 hover:bg-zinc-50" onClick={signOut}>
+            <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950" onClick={signOut}>
               <LogOut className="h-4 w-4" />
               로그아웃
             </button>
@@ -277,14 +277,14 @@ export function HeaderAccountSummary() {
         </div>
       )}
 
-      <DialogContent className="max-w-lg p-0">
+      <DialogContent className="max-w-lg border-0 bg-white p-0 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
         <form onSubmit={saveProfile}>
-          <div className="border-b px-5 py-4">
+          <div className="bg-zinc-100 px-5 py-4">
             <h2 className="text-lg font-bold">프로필</h2>
           </div>
 
           <div className="space-y-4 px-5 py-4">
-            <div className="rounded-lg border bg-accent/50 p-3">
+            <div className="rounded-lg bg-zinc-100 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{currentProfile.email}</div>
@@ -293,11 +293,11 @@ export function HeaderAccountSummary() {
                 <PlanBadge label={plan.label} tone={plan.tone} />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md border bg-card/80 px-3 py-2">
+                <div className="rounded-md bg-white px-3 py-2">
                   <div className="font-semibold text-muted-foreground">가입 플랜</div>
                   <div className="mt-1 font-bold">{plan.label}</div>
                 </div>
-                <div className="rounded-md border bg-card/80 px-3 py-2">
+                <div className="rounded-md bg-white px-3 py-2">
                   <div className="font-semibold text-muted-foreground">계정 상태</div>
                   <div className={`mt-1 font-bold ${plan.statusClass}`}>{plan.status}</div>
                 </div>
@@ -341,7 +341,7 @@ export function HeaderAccountSummary() {
               />
             </label>
 
-            <div className="grid grid-cols-2 gap-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-zinc-100 p-3 text-xs text-muted-foreground">
               <div>
                 <div className="font-semibold">가입일</div>
                 <div className="mt-1">{formatDateTime(currentProfile.created_at)}</div>
@@ -356,7 +356,7 @@ export function HeaderAccountSummary() {
             {error && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{error}</p>}
           </div>
 
-          <div className="flex justify-end gap-2 border-t px-5 py-4">
+          <div className="flex justify-end gap-2 bg-zinc-50 px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>
               취소
             </Button>
