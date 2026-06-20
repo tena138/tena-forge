@@ -359,23 +359,23 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         className={cn(
           "relative flex min-w-0 gap-2 overflow-hidden rounded-[14px] bg-white/78 px-3 text-zinc-950 transition-all",
           chatOpen ? "min-h-[68px] py-2" : "min-h-[52px] py-2.5",
-          compact && chatOpen ? "flex-col items-stretch" : "items-center"
+          compact && chatOpen ? "flex-col items-stretch" : chatOpen ? "items-center gap-3" : "items-center"
         )}
       >
         <button
           type="button"
           className={cn(
-            "flex min-w-0 rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            chatOpen ? "flex-1 items-start self-stretch py-1.5" : "flex-1 items-center py-1",
+            "flex min-w-0 overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
+            chatOpen ? "w-0 flex-[1_1_0%] items-center self-stretch py-1.5 pr-2" : "flex-1 items-center py-1",
             compact && chatOpen && "w-full flex-none"
           )}
           onClick={() => setChatOpen(true)}
           title={statusMessage}
         >
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1 overflow-hidden">
             <span
               className={cn(
-                "block text-[16px] font-medium leading-[1.45] tracking-normal text-zinc-800",
+                "block max-w-full overflow-hidden text-[16px] font-medium leading-[1.45] tracking-normal text-zinc-800",
                 chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
               )}
             >
@@ -393,8 +393,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         {chatOpen ? (
           <form
             className={cn(
-              "flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2",
-              compact ? "w-full" : "w-[clamp(18rem,34vw,30rem)] max-w-[48%] flex-[0_1_30rem] shrink"
+              "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2",
+              compact ? "w-full" : "w-[min(42vw,34rem)] max-w-[34rem] flex-none"
             )}
             onSubmit={submitChat}
           >
