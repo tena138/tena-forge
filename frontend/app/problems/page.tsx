@@ -1157,13 +1157,13 @@ function ProblemsBrowser() {
         onClick={() => handleProblemBlockClick(problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-all hover:-translate-y-0.5 hover:border-[#d4d4d8]/70 hover:shadow-[0_18px_45px_rgba(255,255,255,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70",
-          selected ? "border-[#d4d4d8] bg-[#d4d4d8]/10 shadow-[0_0_0_1px_rgba(127,119,221,0.24)]" : "border-white/10"
+          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg bg-white transition-all hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-[0_18px_45px_rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
+          selected ? "bg-zinc-100 shadow-[inset_0_0_0_2px_rgba(24,24,27,0.92)]" : ""
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
         <Link
-          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70"
+          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20"
           href={detailHref}
           draggable={false}
           onPointerDown={stopInteractiveEvent}
@@ -1177,7 +1177,7 @@ function ProblemsBrowser() {
         </Link>
         <button
           type="button"
-          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/30 text-slate-300 backdrop-blur transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:cursor-wait disabled:opacity-60"
           onPointerDown={stopInteractiveEvent}
           onClick={(event) => {
             stopInteractiveEvent(event);
@@ -1200,7 +1200,7 @@ function ProblemsBrowser() {
           <MathText className="mt-3 line-clamp-4 text-[14px] font-medium leading-[1.55] text-foreground" value={problem.problem_text} />
 
           <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 text-[11px] font-medium text-muted-foreground">
-            {showSubject ? <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-slate-300">{problem.tags?.subject}</span> : null}
+            {showSubject ? <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-700">{problem.tags?.subject}</span> : null}
             <span>{pageLabel(problem)}</span>
             <span className="text-slate-600">·</span>
             <span>{problemTypeLabel(problem)}</span>
@@ -1232,8 +1232,8 @@ function ProblemsBrowser() {
         onClick={() => handleProblemBlockClick(problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "relative cursor-pointer overflow-hidden rounded-lg border bg-card/80 transition-colors hover:border-[#d4d4d8]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70",
-          selected ? "border-[#d4d4d8] bg-[#d4d4d8]/10" : "border-white/10"
+          "relative cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
+          selected ? "bg-zinc-100 shadow-[inset_0_0_0_2px_rgba(24,24,27,0.92)]" : ""
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
@@ -1248,7 +1248,7 @@ function ProblemsBrowser() {
           <span className={cn("whitespace-nowrap rounded border px-2 py-1 text-[11px] font-semibold", tone.badge)}>{tone.label}</span>
           <Link
             href={detailHref}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20"
             draggable={false}
             onPointerDown={stopInteractiveEvent}
             onClick={(event) => {
@@ -1261,7 +1261,7 @@ function ProblemsBrowser() {
           </Link>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:cursor-wait disabled:opacity-60"
             onPointerDown={stopInteractiveEvent}
             onClick={(event) => {
               stopInteractiveEvent(event);
@@ -1283,8 +1283,8 @@ function ProblemsBrowser() {
       <section className="forge-panel rounded-lg p-4">
         <div className="grid gap-3 xl:grid-cols-[minmax(18rem,1fr)_auto] xl:items-center">
           <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_14rem] xl:max-w-5xl">
-            <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3">
-              <Search className="h-4 w-4 shrink-0 text-[#d4d4d8]" />
+            <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg bg-zinc-100 px-3">
+              <Search className="h-4 w-4 shrink-0 text-zinc-600" />
               <Input
                 className="min-w-0 border-0 bg-transparent px-0 text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
                 placeholder="본문, 번호, 정답, 태그, 출처 검색"
@@ -1292,7 +1292,7 @@ function ProblemsBrowser() {
                 onChange={(event) => resetPageAnd(() => setSearch(event.target.value))}
               />
             </div>
-            <label className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-white/10 bg-card/80 px-3 text-sm text-slate-300">
+            <label className="flex h-10 min-w-0 items-center gap-2 rounded-lg bg-zinc-100 px-3 text-sm text-zinc-700">
               <span className="shrink-0 text-xs font-bold text-muted-foreground">원본 페이지</span>
               <Input
                 className="min-w-0 border-0 bg-transparent px-0 text-sm font-semibold text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
@@ -1304,11 +1304,11 @@ function ProblemsBrowser() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <div className="flex h-9 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm">
+            <div className="flex h-9 items-center gap-2 rounded-md bg-zinc-100 px-3 text-sm">
               <span className="text-muted-foreground">문항</span>
               <span className="font-semibold text-foreground">{data.total.toLocaleString("ko-KR")}개</span>
             </div>
-            <label className="flex h-9 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-slate-300">
+            <label className="flex h-9 items-center gap-2 rounded-md bg-zinc-100 px-3 text-sm font-semibold text-zinc-700">
               정렬
               <select
                 className="bg-transparent text-sm font-semibold text-foreground outline-none"
@@ -1318,17 +1318,17 @@ function ProblemsBrowser() {
                 {sortOptions.map((option) => <option key={option.value} value={option.value} className="bg-background text-foreground">{option.label}</option>)}
               </select>
             </label>
-            <div className="flex h-9 rounded-md border border-white/10 bg-white/[0.04] p-1">
+            <div className="flex h-9 rounded-md bg-zinc-100 p-1">
               <button
                 type="button"
-                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "grid" ? "bg-[#d4d4d8] text-white" : "text-muted-foreground hover:bg-white/[0.06] hover:text-white")}
+                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "grid" ? "bg-black text-white" : "text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950")}
                 onClick={() => setViewMode("grid")}
               >
                 <Grid3X3 className="h-3.5 w-3.5" />격자
               </button>
               <button
                 type="button"
-                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "list" ? "bg-[#d4d4d8] text-white" : "text-muted-foreground hover:bg-white/[0.06] hover:text-white")}
+                className={cn("inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors", viewMode === "list" ? "bg-black text-white" : "text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950")}
                 onClick={() => setViewMode("list")}
               >
                 <List className="h-3.5 w-3.5" />목록
@@ -1339,7 +1339,7 @@ function ProblemsBrowser() {
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {duplicateNotice ? (
-            <span className="inline-flex h-7 items-center rounded-md border border-zinc-300/25 bg-zinc-400/10 px-2 text-xs font-semibold text-zinc-100">
+            <span className="inline-flex h-7 items-center rounded-md bg-zinc-100 px-2 text-xs font-semibold text-zinc-700">
               {duplicateNotice}
             </span>
           ) : null}
@@ -1347,15 +1347,15 @@ function ProblemsBrowser() {
             <button
               key={chip.key}
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#d4d4d8]/25 bg-[#d4d4d8]/10 px-2 text-xs font-semibold text-zinc-100 transition-colors hover:bg-[#d4d4d8]/15"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md bg-zinc-100 px-2 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-200 hover:text-zinc-950"
               onClick={() => resetPageAnd(chip.onRemove)}
             >
               {chip.label}
               <X className="h-3 w-3" />
             </button>
           )) : <span className="text-xs text-muted-foreground">적용된 필터 없음</span>}
-          <div className="ml-auto flex h-8 items-center overflow-hidden rounded-md border border-white/10 bg-white/[0.04]">
-            <label className="flex h-full items-center gap-1.5 border-r border-white/10 px-2 text-xs font-semibold text-slate-300">
+          <div className="ml-auto flex h-8 items-center overflow-hidden rounded-md bg-zinc-100">
+            <label className="flex h-full items-center gap-1.5 px-2 text-xs font-semibold text-zinc-700">
               랜덤
               <Input
                 type="number"
@@ -1363,14 +1363,14 @@ function ProblemsBrowser() {
                 max={500}
                 value={randomCount}
                 onChange={(event) => setRandomCount(event.target.value)}
-                className="h-6 w-14 border-white/10 bg-black/20 px-1.5 text-center text-xs font-bold"
+                className="h-6 w-14 bg-white px-1.5 text-center text-xs font-bold text-zinc-950"
                 aria-label="랜덤 추출 문항 개수"
               />
               개
             </label>
             <button
               type="button"
-              className="inline-flex h-full items-center gap-1.5 px-2.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-full items-center gap-1.5 px-2.5 text-xs font-semibold text-zinc-800 transition-colors hover:bg-zinc-200 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={selectRandomProblems}
               disabled={randomSelecting || !data.total}
             >
@@ -1380,14 +1380,14 @@ function ProblemsBrowser() {
           </div>
         </div>
         {loadError ? (
-          <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-300/25 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-100">
+          <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700">
             <span>{loadError}</span>
-            <button type="button" className="text-xs font-bold text-zinc-50 underline-offset-4 hover:underline" onClick={() => void loadProblems(query)}>
+            <button type="button" className="text-xs font-bold text-zinc-950 underline-offset-4 hover:underline" onClick={() => void loadProblems(query)}>
               다시 불러오기
             </button>
           </div>
         ) : loadingProblems ? (
-          <div className="mt-3 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-semibold text-muted-foreground">
+          <div className="mt-3 rounded-md bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-500">
             문항 목록을 새로고침하는 중입니다.
           </div>
         ) : null}
