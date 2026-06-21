@@ -81,15 +81,17 @@ function usePrefersReducedMotion() {
   return reduced;
 }
 
-function useTypewriterText(text: string, enabled = true) {
+function useTypewriterText(text: string, animationKey: number, enabled = true) {
   const [visibleText, setVisibleText] = useState(text);
+  const lastAnimationKeyRef = useRef(animationKey);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || lastAnimationKeyRef.current === animationKey) {
       setVisibleText(text);
       return;
     }
 
+    lastAnimationKeyRef.current = animationKey;
     setVisibleText("");
     if (!text) return;
 
@@ -101,7 +103,7 @@ function useTypewriterText(text: string, enabled = true) {
     }, 18);
 
     return () => window.clearInterval(timer);
-  }, [enabled, text]);
+  }, [animationKey, enabled, text]);
 
   return visibleText;
 }
@@ -144,6 +146,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const [chatMessages, setChatMessages] = useState<CoAgentChatMessage[]>(() => readStoredCoAgentChatMessages());
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState("");
+  const [assistantTypingKey, setAssistantTypingKey] = useState(0);
 
   const activeStatusData = activeStatus && (activeStatus.status === "pending" || activeStatus.status === "processing") ? activeStatus : null;
   const latestNotification = notifications[0] || null;
@@ -194,9 +197,11 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     chatOpen && (chatLoading || chatError || latestAssistantMessage)
       ? chatLoading
         ? "Tena Forge 업무 범위 안에서 확인 중입니다."
-        : chatError || latestAssistantMessage
+        : latestAssistantMessage || chatError
       : report.message;
-  const typedReportMessage = useTypewriterText(statusMessage, !prefersReducedMotion);
+  const shouldAnimateAssistantMessage =
+    chatOpen && !chatLoading && Boolean(latestAssistantMessage) && statusMessage === latestAssistantMessage;
+  const typedReportMessage = useTypewriterText(statusMessage, assistantTypingKey, !prefersReducedMotion && shouldAnimateAssistantMessage);
 
   const loadLiveInteractions = useCallback(async () => {
     const activeWorkspaceId = getActiveWorkspaceId();
@@ -230,10 +235,12 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         current_path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
       });
       setChatMessages((current) => [...current, { role: "assistant", content: response.answer }]);
+      setAssistantTypingKey((current) => current + 1);
     } catch (error) {
       const message = chatErrorMessage(error);
       setChatError(message);
       setChatMessages((current) => [...current, { role: "assistant", content: `지금은 AI 연결에 실패했습니다. ${message}` }]);
+      setAssistantTypingKey((current) => current + 1);
     } finally {
       setChatLoading(false);
     }
@@ -415,7 +422,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           <form
             className={cn(
               "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              compact ? "w-full" : "w-[min(32rem,44vw)] shrink-0"
+              compact ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
             )}
             onSubmit={submitChat}
           >
