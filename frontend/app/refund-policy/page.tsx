@@ -60,35 +60,35 @@ const sections = [
 
 export default function RefundPolicyPage() {
   return (
-    <main className="min-h-screen bg-[#07080d] px-4 py-12 text-slate-200 sm:px-6">
-      <article className="mx-auto max-w-4xl rounded-[14px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-8">
+    <main className="px-4 py-12 text-zinc-700 sm:px-6">
+      <article className="mx-auto max-w-4xl rounded-[14px] bg-white p-6 sm:p-8">
         <header>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-200">Policy</p>
-          <h1 className="mt-3 text-3xl font-black tracking-normal text-white sm:text-4xl">환불 및 취소 정책</h1>
-          <p className="mt-5 text-sm leading-7 text-slate-300">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">Policy</p>
+          <h1 className="mt-3 text-3xl font-black tracking-normal text-zinc-950 sm:text-4xl">환불 및 취소 정책</h1>
+          <p className="mt-5 text-sm leading-7 text-zinc-700">
             본 서비스는 실물 상품이 아닌 온라인 기반 디지털 서비스 및 SaaS 상품입니다. 따라서 별도의 배송 절차는 없으며, 결제 완료 후 계정 활성화 또는 서비스 접근 권한 부여를 통해 서비스가 제공됩니다.
           </p>
-          <dl className="mt-6 grid gap-3 rounded-[10px] border border-white/10 bg-black/20 p-4 text-sm sm:grid-cols-3">
+          <dl className="mt-6 grid gap-3 rounded-[10px] bg-zinc-100 p-4 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-xs font-bold text-slate-500">서비스명</dt>
-              <dd className="mt-1 font-semibold text-slate-200">{SERVICE_INFO.serviceName}</dd>
+              <dt className="text-xs font-bold text-zinc-500">서비스명</dt>
+              <dd className="mt-1 font-semibold text-zinc-950">{SERVICE_INFO.serviceName}</dd>
             </div>
             <div>
-              <dt className="text-xs font-bold text-slate-500">운영자</dt>
-              <dd className="mt-1 font-semibold text-slate-200">{SERVICE_INFO.companyName}</dd>
+              <dt className="text-xs font-bold text-zinc-500">운영자</dt>
+              <dd className="mt-1 font-semibold text-zinc-950">{SERVICE_INFO.companyName}</dd>
             </div>
             <div>
-              <dt className="text-xs font-bold text-slate-500">시행일</dt>
-              <dd className="mt-1 font-semibold text-slate-200">2026년 5월 25일</dd>
+              <dt className="text-xs font-bold text-zinc-500">시행일</dt>
+              <dd className="mt-1 font-semibold text-zinc-950">2026년 5월 25일</dd>
             </div>
           </dl>
         </header>
 
         <div className="mt-8 space-y-5">
           {sections.map((section) => (
-            <section key={section.title} className="rounded-[10px] border border-white/10 bg-black/[0.16] p-5">
-              <h2 className="text-lg font-black text-white">{section.title}</h2>
-              <div className="mt-3 space-y-3 text-sm leading-7 text-slate-300">
+            <section key={section.title} className="rounded-[10px] bg-zinc-50 p-5">
+              <h2 className="text-lg font-black text-zinc-950">{section.title}</h2>
+              <div className="mt-3 space-y-3 text-sm leading-7 text-zinc-700">
                 {section.body.map((paragraph) => (
                   <p key={paragraph}>{paragraph}</p>
                 ))}
