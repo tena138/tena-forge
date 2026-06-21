@@ -155,7 +155,6 @@ function tagToneStyle(color: string, selected = true): CSSProperties {
   return {
     backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`,
     borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${borderAlpha})`,
-    boxShadow: selected ? `inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.06)` : undefined,
   };
 }
 
@@ -300,7 +299,7 @@ function TagColorPicker({
           type="button"
           className={cn(
             "h-5 w-5 rounded-full border transition hover:scale-105",
-            value.toLowerCase() === color ? "border-black shadow-[0_0_0_2px_rgba(0,0,0,0.14)]" : "border-zinc-300"
+            value.toLowerCase() === color ? "border-black" : "border-zinc-300"
           )}
           style={{ backgroundColor: color }}
           onClick={() => onChange(color)}
@@ -440,7 +439,7 @@ function SubjectTreeSelector({
           type="button"
           className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-[8px] transition",
-            editing ? "bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]" : "bg-white text-zinc-700 shadow-sm hover:bg-zinc-200 hover:text-zinc-950"
+            editing ? "bg-black text-white" : "bg-white text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
           )}
           onClick={() => {
             setEditing((current) => !current);
@@ -462,7 +461,7 @@ function SubjectTreeSelector({
           const nodeKey = nodeValue(node);
           const groupColor = tagColor(nodeKey, subjectTagColors, "subject");
           return (
-            <div key={nodeKey} className="min-w-0 rounded-[10px] bg-white p-3 shadow-sm">
+            <div key={nodeKey} className="min-w-0 rounded-[10px] bg-white p-3">
               {editing && editTarget === nodeKey ? (
                 <SubjectEditRow
                   value={editLabel}
@@ -576,7 +575,7 @@ function SubjectTreeSelector({
         })}
         {editing ? (
           addTarget === "root" ? (
-            <div className="min-w-0 rounded-[8px] border border-dashed border-zinc-300/40 bg-zinc-400/[0.06] p-3">
+            <div className="min-w-0 rounded-[8px] bg-zinc-100 p-3">
               <SubjectDraftRow
                 value={draftLabel}
                 color={draftColor}
@@ -588,7 +587,7 @@ function SubjectTreeSelector({
               />
             </div>
           ) : (
-            <div className="min-w-0 rounded-[10px] bg-white p-3 shadow-sm">
+            <div className="min-w-0 rounded-[10px] bg-white p-3">
               <button
                 type="button"
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-[8px] bg-zinc-100 text-sm font-black text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950"
@@ -799,7 +798,7 @@ function SubjectDraftRow({
   onSubmit: () => void;
 }) {
   return (
-    <div className="rounded-[10px] bg-white p-2 shadow-sm">
+    <div className="rounded-[10px] bg-white p-2">
       <Input
         autoFocus
         aria-label={label}
@@ -846,7 +845,7 @@ function SubjectEditRow({
   onCancel: () => void;
 }) {
   return (
-    <div className="rounded-[10px] bg-white p-2 shadow-sm">
+    <div className="rounded-[10px] bg-white p-2">
       <Input
         autoFocus
         aria-label={label}
@@ -1351,7 +1350,7 @@ export default function UploadPage() {
               ? "업로드 권리 확인에 동의해야 아카이빙을 시작할 수 있습니다."
               : "아카이빙을 시작할 준비가 완료되었습니다.";
   const creditEstimatePanel = problemPdf ? (
-    <div className="rounded-[12px] bg-zinc-50 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+    <div className="rounded-[12px] bg-zinc-50 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-zinc-500">
@@ -1362,7 +1361,7 @@ export default function UploadPage() {
             {creditEstimate ? `${formatCompactNumber(creditEstimate.credits)} credits` : "계산 중"}
           </div>
         </div>
-        <div className="rounded-[8px] bg-white px-3 py-2 text-right shadow-sm">
+        <div className="rounded-[8px] bg-white px-3 py-2 text-right">
           <div className="text-xs font-semibold text-zinc-500">남은 credits</div>
           <div className="mt-1 text-sm font-black text-zinc-950">
             {creditsRemaining === null ? "불러오는 중" : `${formatCompactNumber(creditsRemaining)} → ${formatCompactNumber(creditsAfterUpload ?? creditsRemaining)}`}
@@ -1370,10 +1369,10 @@ export default function UploadPage() {
         </div>
       </div>
       <div className="mt-4 grid gap-2 text-xs font-semibold text-zinc-700 sm:grid-cols-2">
-        <div className="rounded-[7px] bg-white px-3 py-2 shadow-sm">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
-        <div className="rounded-[7px] bg-white px-3 py-2 shadow-sm">답안 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
-        <div className="rounded-[7px] bg-white px-3 py-2 shadow-sm">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
-        <div className="rounded-[7px] bg-white px-3 py-2 shadow-sm">{creditEstimate?.hardScan ? "스캔 가중치 적용" : isLanguagePassageEngine(subjectEngine) ? `${subjectEngineLabel(subjectEngine)} 가중치` : "기본 가중치"}</div>
+        <div className="rounded-[7px] bg-white px-3 py-2">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
+        <div className="rounded-[7px] bg-white px-3 py-2">답안 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
+        <div className="rounded-[7px] bg-white px-3 py-2">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
+        <div className="rounded-[7px] bg-white px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : isLanguagePassageEngine(subjectEngine) ? `${subjectEngineLabel(subjectEngine)} 가중치` : "기본 가중치"}</div>
       </div>
       {creditEstimate?.approximate || problemPdfEstimate.error || solutionPdfEstimate.error ? (
         <p className="mt-3 text-xs font-semibold text-zinc-600">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>
@@ -1416,7 +1415,7 @@ export default function UploadPage() {
                         disabled={locked}
                         className={cn(
                           "rounded-[8px] px-3 py-2 text-sm font-semibold transition",
-                          selected ? "bg-black text-white shadow-[0_10px_26px_rgba(0,0,0,0.14)]" : "bg-white text-zinc-700 shadow-sm hover:bg-zinc-100 hover:text-zinc-950",
+                          selected ? "bg-black text-white" : "bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950",
                           locked && "cursor-not-allowed opacity-45"
                         )}
                         onClick={() => {
@@ -1461,7 +1460,7 @@ export default function UploadPage() {
                   <label className="block">
                     <span className="mb-2 block text-xs font-semibold text-zinc-600">배치 메모</span>
                     <textarea
-                      className="min-h-20 w-full rounded-[8px] border-0 bg-white px-3 py-2 text-sm font-medium text-zinc-950 outline-none transition placeholder:text-zinc-500 shadow-inner focus:ring-2 focus:ring-black/10"
+                      className="min-h-20 w-full rounded-[8px] border-0 bg-white px-3 py-2 text-sm font-medium text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
                       placeholder="선택 사항: 배치에 남겨둘 메모를 입력하세요."
                       value={rightsNote}
                       onChange={(event) => setRightsNote(event.target.value)}
@@ -1489,7 +1488,7 @@ export default function UploadPage() {
               <p>시중 교재, 인강 교재, 타 학원 자료, 유료 문제집, 해설, 이미지, 도표 등을 권한 없이 업로드하거나 문항화하여 사용하는 것은 제한됩니다.</p>
               <p className="text-xs text-zinc-500">권리 없는 자료를 업로드하여 발생하는 법적 책임은 업로드한 사용자에게 있으며, Tena Forge는 신고 또는 확인 절차에 따라 해당 자료의 이용을 제한할 수 있습니다.</p>
             </div>
-            <label className="mt-4 flex items-start gap-3 rounded-[10px] bg-white p-3 text-sm font-medium text-zinc-800 shadow-sm">
+            <label className="mt-4 flex items-start gap-3 rounded-[10px] bg-white p-3 text-sm font-medium text-zinc-800">
               <input className="mt-1 accent-black" type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} />
               <span>본인은 이 자료를 직접 제작했거나, Tena Forge에서 업로드·추출·저장·재구성·출력할 권리를 보유하고 있음을 확인합니다.</span>
             </label>
