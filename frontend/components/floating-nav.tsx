@@ -38,9 +38,9 @@ const sections = [
     shortTitle: "PS",
     description: "내 자료 제작",
     accent: "bg-black",
-    panel: "border-black/10 bg-[#f3f3f3]",
+    panel: "bg-[#f3f3f3]",
     header: "text-zinc-950",
-    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
@@ -57,9 +57,9 @@ const sections = [
     description: "Seats, classes, assignments",
     accountTypes: ["academy"],
     accent: "bg-zinc-950",
-    panel: "border-black/10 bg-[#f3f3f3]",
+    panel: "bg-[#f3f3f3]",
     header: "text-zinc-950",
-    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
@@ -77,9 +77,9 @@ const sections = [
     description: "공개 허브",
     adminOnly: true,
     accent: "bg-zinc-700",
-    panel: "border-black/10 bg-[#f3f3f3]",
+    panel: "bg-[#f3f3f3]",
     header: "text-zinc-950",
-    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
@@ -94,9 +94,9 @@ const sections = [
     description: "Student learning access",
     accountTypes: ["student"],
     accent: "bg-zinc-950",
-    panel: "border-black/10 bg-[#f3f3f3]",
+    panel: "bg-[#f3f3f3]",
     header: "text-zinc-950",
-    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
@@ -111,9 +111,9 @@ const sections = [
     shortTitle: "AD",
     description: "계정 및 정책",
     accent: "bg-zinc-700",
-    panel: "border-black/10 bg-[#f3f3f3]",
+    panel: "bg-[#f3f3f3]",
     header: "text-zinc-950",
-    activeItem: "console-nav-active border-black bg-black text-white hover:bg-black hover:text-white shadow-none",
+    activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
@@ -204,7 +204,7 @@ export function FloatingNav({
 
   if (mobile) {
     return (
-      <nav className="flex gap-1 overflow-x-auto border-t border-black/10 bg-[#fbfbfa]/95 px-4 py-2 lg:hidden" aria-label="주요 메뉴">
+      <nav className="flex gap-1 overflow-x-auto bg-[#fbfbfa]/95 px-4 py-2 lg:hidden" aria-label="주요 메뉴">
         {mobileItems.map((item, index) => {
           const active = isActive(pathname, item.href, searchParams);
           return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} mobile />;
@@ -217,7 +217,7 @@ export function FloatingNav({
     <nav
       ref={navRef}
       className={cn(
-        "fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto border-r border-black/10 bg-[#fbfbfa] py-4 shadow-none transition-[width,padding] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex",
+        "fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto bg-[#fbfbfa] py-4 shadow-none transition-[width,padding] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex",
         isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
       )}
       onMouseEnter={() => hoverExpand && setAutoExpanded(true)}
@@ -234,8 +234,8 @@ export function FloatingNav({
     >
       <div className="space-y-3">
         {visibleSections.map((section) => (
-          <section key={section.title} className={cn("overflow-hidden rounded-[12px] border shadow-[0_12px_30px_rgba(0,0,0,0.14)]", section.panel)}>
-            <div className={cn("flex items-center border-b border-black/10", isCollapsed ? "justify-center px-1 py-2" : "gap-2 px-2.5 py-2.5")}>
+          <section key={section.title} className={cn("overflow-hidden rounded-[12px]", section.panel)}>
+            <div className={cn("flex items-center", isCollapsed ? "justify-center px-1 py-2" : "gap-2 px-2.5 py-2.5")}>
               <span className={cn("rounded-full", section.accent, isCollapsed ? "h-1.5 w-8" : "h-8 w-1")} />
               {!isCollapsed && (
                 <div className="min-w-0">
