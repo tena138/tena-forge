@@ -40,9 +40,9 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[14px] border border-white/10 bg-white/[0.045] p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Billing</p>
-        <h1 className="mt-2 text-3xl font-bold text-white">구독 및 사용량</h1>
+      <section className="rounded-[14px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Billing</p>
+        <h1 className="mt-2 text-3xl font-bold text-zinc-950">구독 및 사용량</h1>
       </section>
 
       {summary && (
@@ -54,25 +54,25 @@ export default function BillingPage() {
             ["처리 예산", `${won(summary.estimated_cost_used_krw)}/${won(summary.monthly_cost_cap_krw)}`],
             ["업로드", `${(summary.uploaded_mb_this_month || 0).toFixed(1)}MB/${summary.monthly_upload_mb_limit || summary.plan.storage_quota_mb}MB`],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-[10px] border border-white/10 bg-black/30 p-4">
-              <p className="text-xs text-slate-500">{label}</p>
-              <p className="mt-2 text-xl font-bold text-white">{value}</p>
+            <div key={label} className="rounded-[10px] bg-white p-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
+              <p className="text-xs font-semibold text-zinc-500">{label}</p>
+              <p className="mt-2 text-xl font-bold text-zinc-950">{value}</p>
             </div>
           ))}
         </section>
       )}
 
-      <section className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5">
-        <h2 className="text-lg font-bold text-white">Subject Engines</h2>
+      <section className="rounded-[12px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+        <h2 className="text-lg font-bold text-zinc-950">Subject Engines</h2>
         <div className="mt-4 flex flex-wrap gap-2">
           {subjectEngineOptions.map((engine) => (
             <button
               key={engine.code}
               type="button"
-              className={`rounded-[8px] border px-3 py-2 text-sm font-semibold transition ${
+              className={`rounded-[8px] px-3 py-2 text-sm font-semibold transition ${
                 selectedEngines.includes(engine.code)
-                  ? "border-zinc-300/70 bg-zinc-500/20 text-zinc-50"
-                  : "border-white/10 bg-black/20 text-slate-300 hover:border-white/25"
+                  ? "bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
+                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
               }`}
               onClick={() => toggleEngine(engine.code)}
             >
@@ -88,14 +88,14 @@ export default function BillingPage() {
           const engineDelta = Math.max(engineCount - 1, 0) * plan.monthly_price;
           const monthlyPrice = plan.monthly_price * engineCount;
           return (
-            <div key={plan.code} className="rounded-[10px] border border-white/10 bg-white/[0.045] p-5">
-              <h2 className="text-lg font-bold text-white">{plan.name}</h2>
-              <p className="mt-2 text-2xl font-bold text-zinc-200">{won(monthlyPrice)}</p>
-              <p className="mt-1 text-xs text-slate-500">
+            <div key={plan.code} className="rounded-[12px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+              <h2 className="text-lg font-bold text-zinc-950">{plan.name}</h2>
+              <p className="mt-2 text-2xl font-bold text-zinc-950">{won(monthlyPrice)}</p>
+              <p className="mt-1 text-xs font-semibold text-zinc-500">
                 Base {won(plan.monthly_price)}{engineDelta ? ` + engine ${won(engineDelta)}` : ""}
               </p>
               {plan.code === "basic" || plan.code === "pro" ? (
-                <Link className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90" href={`/plan/${plan.code}`}>
+                <Link className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15" href={`/plan/${plan.code}`}>
                   결제 / 업그레이드
                 </Link>
               ) : null}
