@@ -86,7 +86,7 @@ export function LicensedLibraryPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[12px] bg-white p-6 shadow-[0_18px_48px_rgba(0,0,0,0.04)]">
+      <section className="rounded-[12px] bg-white p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-normal text-zinc-950">라이선스 보관함</h1>
@@ -122,7 +122,7 @@ export function LicensedLibraryPage() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3].map((item) => (
-            <div key={item} className="h-72 animate-pulse rounded-[10px] bg-white shadow-[0_14px_36px_rgba(0,0,0,0.04)]" />
+            <div key={item} className="h-72 animate-pulse rounded-[10px] bg-zinc-100" />
           ))}
         </div>
       ) : visibleItems.length ? (
@@ -133,7 +133,7 @@ export function LicensedLibraryPage() {
             return (
               <article
                 key={item.id}
-                className={cn("flex min-h-72 flex-col rounded-[10px] bg-white p-4 shadow-[0_14px_36px_rgba(0,0,0,0.045)]", locked && "opacity-75")}
+                className={cn("flex min-h-72 flex-col rounded-[10px] bg-white p-4", locked && "opacity-75")}
               >
                 <div className="mb-4 flex h-32 items-center justify-center rounded-[8px] bg-zinc-100 text-sm font-bold text-zinc-600">
                   {locked ? <LockKeyhole className="h-5 w-5 text-zinc-500" /> : contentTypeLabels[item.content_type]}
@@ -170,7 +170,7 @@ export function LicensedLibraryPage() {
           })}
         </div>
       ) : (
-        <div className="rounded-[10px] bg-white p-12 text-center text-sm font-semibold text-zinc-500 shadow-[0_14px_36px_rgba(0,0,0,0.04)]">
+        <div className="rounded-[10px] bg-white p-12 text-center text-sm font-semibold text-zinc-500">
           표시할 라이선스 자료가 없습니다.
           {canManageMarketplace && <div className="mt-4">
             <Link href="/marketplace" className={cn(actionLinkClassName, "mx-auto max-w-xs")}>

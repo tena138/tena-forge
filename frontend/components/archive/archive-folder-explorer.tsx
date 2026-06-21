@@ -134,7 +134,7 @@ export function ArchiveFolderExplorer({
   }
 
   return (
-    <section className="rounded-[12px] bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+    <section className="rounded-[12px] bg-white p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{kicker}</div>
@@ -181,7 +181,7 @@ export function ArchiveFolderExplorer({
         </div>
         <div className="flex items-center gap-2">
           {currentFolderId ? (
-            <Button type="button" size="sm" variant="outline" className="h-8 border-0 bg-white text-zinc-900 shadow-sm hover:bg-zinc-200" onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}>
+            <Button type="button" size="sm" variant="outline" className="h-8 border-0 bg-white text-zinc-900 hover:bg-zinc-200" onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}>
               <ChevronLeft className="h-4 w-4" />
               상위
             </Button>
@@ -221,7 +221,7 @@ export function ArchiveFolderExplorer({
               }}
               className={cn(
                 "group relative flex min-h-[82px] cursor-grab items-start gap-3 rounded-[10px] p-3 text-left transition-colors active:cursor-grabbing",
-                selected ? "bg-black text-white shadow-[0_16px_35px_rgba(0,0,0,0.16)]" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
+                selected ? "bg-black text-white" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
               )}
               role="button"
               tabIndex={0}
@@ -253,7 +253,7 @@ export function ArchiveFolderExplorer({
                 {editingId === folder.id ? (
                   <span className="flex gap-1">
                     <Input
-                      className="h-7 min-w-0 border-0 bg-white text-xs text-zinc-950 shadow-inner focus-visible:ring-2 focus-visible:ring-black/15"
+                      className="h-7 min-w-0 border-0 bg-white text-xs text-zinc-950 focus-visible:ring-2 focus-visible:ring-black/15"
                       value={editingName}
                       onChange={(event) => setEditingName(event.target.value)}
                       onClick={(event) => event.stopPropagation()}
@@ -280,10 +280,10 @@ export function ArchiveFolderExplorer({
                 )}
               </span>
               <span className={cn("absolute right-2 top-2 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100", editingId === folder.id && "hidden")}>
-                <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
+                <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); deleteFolder(folder); }}>
+                <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); deleteFolder(folder); }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </span>
@@ -301,7 +301,7 @@ export function ArchiveFolderExplorer({
               draggable={Boolean(onMoveBatch)}
               className={cn(
                 "group flex min-h-[82px] cursor-grab items-start gap-3 rounded-[10px] p-3 text-left transition-colors active:cursor-grabbing",
-                selected ? "bg-black text-white shadow-[0_16px_35px_rgba(0,0,0,0.16)]" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
+                selected ? "bg-black text-white" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
               )}
               onClick={() => onSelectBatch?.(batch.id)}
               onDragStart={() => onDragStart("batch", batch.id)}
@@ -323,7 +323,7 @@ export function ArchiveFolderExplorer({
                 <span
                   role="button"
                   tabIndex={0}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-white text-zinc-600 opacity-0 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-950 group-hover:opacity-100"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-white text-zinc-600 opacity-0 transition hover:bg-zinc-200 hover:text-zinc-950 group-hover:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
                     onMoveBatch(batch.id, null);
