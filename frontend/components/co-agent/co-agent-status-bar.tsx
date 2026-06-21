@@ -28,6 +28,44 @@ import type { CoAgentChatMessage } from "@/lib/coAgent";
 import { sendCoAgentChat } from "@/lib/coAgent";
 import { cn } from "@/lib/utils";
 
+const CO_AGENT_CHAT_STORAGE_KEY = "tena-forge-co-agent-chat-v1";
+const MAX_STORED_CHAT_MESSAGES = 12;
+
+function readStoredCoAgentChatMessages(): CoAgentChatMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.sessionStorage.getItem(CO_AGENT_CHAT_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (message): message is CoAgentChatMessage =>
+          (message?.role === "user" || message?.role === "assistant") &&
+          typeof message.content === "string" &&
+          Boolean(message.content.trim())
+      )
+      .map((message) => ({ role: message.role, content: message.content.slice(0, 2000) }))
+      .slice(-MAX_STORED_CHAT_MESSAGES);
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredCoAgentChatMessages(messages: CoAgentChatMessage[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const safeMessages = messages.slice(-MAX_STORED_CHAT_MESSAGES);
+    if (!safeMessages.length) {
+      window.sessionStorage.removeItem(CO_AGENT_CHAT_STORAGE_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(CO_AGENT_CHAT_STORAGE_KEY, JSON.stringify(safeMessages));
+  } catch {
+    // Losing transient chat history should not break the status bar.
+  }
+}
+
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
 
@@ -68,14 +106,6 @@ function useTypewriterText(text: string, enabled = true) {
   return visibleText;
 }
 
-function greetingLabel() {
-  const hour = new Date().getHours();
-  if (hour < 6) return "좋은 밤입니다.";
-  if (hour < 12) return "좋은 오전입니다.";
-  if (hour < 18) return "좋은 오후입니다.";
-  return "좋은 저녁입니다.";
-}
-
 function liveTimeLabel(event: LiveInteractionEvent) {
   if (event.minutes_until_start <= 0) return "지금";
   return `${event.minutes_until_start}분 후`;
@@ -104,7 +134,6 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const prefersReducedMotion = usePrefersReducedMotion();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [greeting, setGreeting] = useState(() => greetingLabel());
   const [events, setEvents] = useState<LiveInteractionEvent[]>([]);
   const [notifications, setNotifications] = useState<BatchNotification[]>([]);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
@@ -112,7 +141,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const [pollVersion, setPollVersion] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<CoAgentChatMessage[]>([]);
+  const [chatMessages, setChatMessages] = useState<CoAgentChatMessage[]>(() => readStoredCoAgentChatMessages());
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState("");
 
@@ -126,32 +155,32 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     if (activeStatusData) {
       return {
         tone: "working" as const,
-        message: `안녕하세요. ${greeting} ${taskLabel(activeStatusData)}을 처리 중입니다. ${progress}% 완료했습니다.`,
+        message: `${taskLabel(activeStatusData)}을 처리 중입니다. ${progress}% 완료했습니다.`,
       };
     }
     if (statusNotification?.status === "done") {
       return {
         tone: "done" as const,
-        message: `안녕하세요. ${greeting} 방금 PDF 추출이 완료되어 결과를 확인할 수 있습니다.`,
+        message: "PDF 추출이 완료되었습니다. 결과를 확인할 수 있습니다.",
       };
     }
     if (statusNotification?.status === "error") {
       return {
         tone: "error" as const,
-        message: `안녕하세요. ${greeting} 최근 PDF 추출에서 오류가 발생했습니다. 확인이 필요합니다.`,
+        message: "최근 PDF 추출에서 오류가 발생했습니다. 확인이 필요합니다.",
       };
     }
     if (primaryLiveEvent) {
       return {
         tone: "idle" as const,
-        message: `안녕하세요. ${greeting} 곧 시작할 수업이 있어 대기 중입니다.`,
+        message: "곧 시작할 수업이 있어 대기 중입니다.",
       };
     }
     return {
       tone: "idle" as const,
-      message: `안녕하세요. ${greeting} 현재 대기 중입니다. 필요한 Tena Forge 업무를 입력해 주세요.`,
+      message: "필요한 Tena Forge 업무를 입력해 주세요.",
     };
-  }, [activeStatusData, greeting, primaryLiveEvent, progress, statusNotification?.status]);
+  }, [activeStatusData, primaryLiveEvent, progress, statusNotification?.status]);
 
   const latestAssistantMessage = useMemo(() => {
     for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
@@ -259,17 +288,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   }, [loadLiveInteractions]);
 
   useEffect(() => {
-    const updateGreeting = () => {
-      const nextGreeting = greetingLabel();
-      setGreeting((current) => (current === nextGreeting ? current : nextGreeting));
-    };
-    const interval = window.setInterval(updateGreeting, 60000);
-    window.addEventListener("focus", updateGreeting);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", updateGreeting);
-    };
-  }, []);
+    writeStoredCoAgentChatMessages(chatMessages);
+  }, [chatMessages]);
 
   useEffect(() => {
     if (!activeBatchId) {
@@ -358,19 +378,15 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/78 px-3 text-zinc-950 transition-all",
-          compact && chatOpen ? "min-h-[76px] py-2" : chatOpen ? "min-h-[58px] py-1.5" : "min-h-[52px] py-2.5",
-          compact && chatOpen
-            ? "grid grid-cols-1 content-center gap-2"
-            : chatOpen
-              ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3"
-              : "flex items-center gap-2"
+          compact && chatOpen ? "min-h-[86px] py-2" : chatOpen ? "min-h-[60px] py-1.5" : "min-h-[52px] py-2.5",
+          compact && chatOpen ? "flex flex-col justify-center gap-2" : "flex items-center gap-3"
         )}
       >
         <button
           type="button"
           className={cn(
-            "flex min-w-0 overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            chatOpen ? "items-center py-1 pr-2" : "flex-1 items-center py-1",
+            "flex min-w-0 max-w-full overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
+            chatOpen ? "min-h-10 flex-1 items-center py-1 pr-2" : "flex-1 items-center py-1",
             compact && chatOpen && "w-full"
           )}
           onClick={() => setChatOpen(true)}
@@ -381,7 +397,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span
               className={cn(
                 "block max-w-full overflow-hidden text-[16px] font-medium leading-[1.45] tracking-normal text-zinc-800",
-                chatOpen && compact ? "line-clamp-2 whitespace-normal break-words" : "truncate"
+                chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
               )}
             >
               {typedReportMessage || "\u00A0"}
@@ -399,7 +415,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           <form
             className={cn(
               "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              compact ? "w-full" : "w-[clamp(16rem,30vw,34rem)]"
+              compact ? "w-full" : "w-[min(32rem,44vw)] shrink-0"
             )}
             onSubmit={submitChat}
           >
