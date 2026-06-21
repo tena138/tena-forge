@@ -152,16 +152,16 @@ function StageCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="min-h-[360px] border-white/10 bg-white/[0.035]">
+    <Card className="min-h-[360px] bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
       <CardHeader className="flex-row items-center justify-between gap-3 p-4 pb-3">
-        <CardTitle className="flex items-center gap-2 text-base text-white">
-          <Icon className="h-4 w-4 text-zinc-200" />
+        <CardTitle className="flex items-center gap-2 text-base text-zinc-950">
+          <Icon className="h-4 w-4 text-zinc-700" />
           {title}
         </CardTitle>
         <Link
           href={action.href}
           aria-label={action.label}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] text-slate-400 transition hover:bg-white/[0.06] hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] bg-zinc-100 text-zinc-700 transition hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15"
         >
           <ArrowUpRight className="h-4 w-4" />
         </Link>
@@ -174,18 +174,18 @@ function StageCard({
 function BatchLine({ batch, href }: { batch: Batch; href?: string }) {
   const progress = progressPercent(batch);
   const content = (
-    <div className="rounded-[8px] border border-white/10 bg-black/20 p-3 transition hover:border-white/18 hover:bg-white/[0.055]">
+    <div className="rounded-[8px] bg-zinc-100 p-3 transition hover:bg-zinc-200">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-white">{batch.name}</div>
-          <div className="mt-1 truncate text-xs text-slate-500">{fileName(batch.problem_pdf_filename)}</div>
+          <div className="truncate text-sm font-semibold text-zinc-950">{batch.name}</div>
+          <div className="mt-1 truncate text-xs text-zinc-500">{fileName(batch.problem_pdf_filename)}</div>
         </div>
-        {progress !== null ? <span className="shrink-0 text-xs font-semibold text-zinc-200">{progress}%</span> : null}
+        {progress !== null ? <span className="shrink-0 text-xs font-semibold text-zinc-700">{progress}%</span> : null}
       </div>
-      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">{statusText(batch)}</p>
+      <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600">{statusText(batch)}</p>
       {progress !== null ? (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-          <div className="h-full rounded-full bg-zinc-400" style={{ width: `${progress}%` }} />
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
+          <div className="h-full rounded-full bg-black" style={{ width: `${progress}%` }} />
         </div>
       ) : null}
     </div>
@@ -196,7 +196,7 @@ function BatchLine({ batch, href }: { batch: Batch; href?: string }) {
 }
 
 function EmptyState({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-[8px] border border-dashed border-white/10 px-3 py-4 text-sm text-slate-500">{children}</div>;
+  return <div className="rounded-[8px] bg-zinc-100 px-3 py-4 text-sm font-semibold text-zinc-500">{children}</div>;
 }
 
 function remainingPercent(used: number, total: number) {
@@ -212,8 +212,22 @@ function remainingTone(percent: number) {
 
 function formatUsageNumber(value: number, suffix = "") {
   const safe = Number.isFinite(value) ? value : 0;
+  if (Math.abs(safe) >= 10_000) {
+    const compact = new Intl.NumberFormat("ko-KR", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(safe);
+    return `${compact}${suffix}`;
+  }
   const rounded = safe >= 100 ? Math.round(safe) : Math.round(safe * 10) / 10;
   return `${rounded.toLocaleString("ko-KR")}${suffix}`;
+}
+
+function formatCapacityMb(value: number) {
+  const safe = Number.isFinite(value) ? value : 0;
+  if (safe >= 1024 * 1024) return formatUsageNumber(safe / (1024 * 1024), "TB");
+  if (safe >= 1024) return formatUsageNumber(safe / 1024, "GB");
+  return formatUsageNumber(safe, "MB");
 }
 
 function planNameFallback(plan?: string | null) {
@@ -263,7 +277,7 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
         <div className="h-full w-full rounded-full bg-card" />
         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-visible text-center">
           <span className="whitespace-nowrap text-lg font-black leading-none text-foreground">{Math.round(percent)}%</span>
-          <span className="mt-1 whitespace-nowrap text-[10px] font-bold leading-none text-zinc-700 drop-shadow-[0_1px_5px_rgba(255,255,255,0.85)] dark:text-zinc-200 dark:drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
+          <span className="mt-1 max-w-[5.6rem] truncate whitespace-nowrap text-[10px] font-bold leading-none text-zinc-700 drop-shadow-[0_1px_5px_rgba(255,255,255,0.85)] dark:text-zinc-200 dark:drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
             {ratio}
           </span>
         </div>
@@ -337,8 +351,8 @@ function UsageOverview({
             total={billing?.unlimited_seats ? 0 : seatLimit}
             ratio={billing?.unlimited_seats ? `${formatUsageNumber(activeSeats)}/무제한` : `${formatUsageNumber(Math.max(seatLimit - activeSeats, 0))}/${formatUsageNumber(seatLimit)}`}
           />
-          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} ratio={`${formatUsageNumber(uploadMbRemaining, "MB")}/${formatUsageNumber(uploadMbLimit, "MB")}`} />
-          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} ratio={`${formatUsageNumber(storageRemaining, "MB")}/${formatUsageNumber(storageLimit, "MB")}`} />
+          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} ratio={`${formatCapacityMb(uploadMbRemaining)}/${formatCapacityMb(uploadMbLimit)}`} />
+          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} ratio={`${formatCapacityMb(storageRemaining)}/${formatCapacityMb(storageLimit)}`} />
         </div>
       </div>
     </section>
@@ -492,18 +506,18 @@ function AcademyConsoleHome() {
   return (
     <div className="space-y-5">
       <UsageOverview summary={usageSummary} profile={profile} billing={billingSummary} />
-      {dataError ? <p className="rounded-[8px] border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-200">{dataError}</p> : null}
+      {dataError ? <p className="rounded-[8px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">{dataError}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-4">
         <StageCard title="추출" icon={ScanText} action={{ href: "/archive/new", label: "새 추출" }}>
           <div>
-            <div className="mb-2 text-xs font-semibold text-slate-400">현재 추출 중</div>
+            <div className="mb-2 text-xs font-semibold text-zinc-600">현재 추출 중</div>
             <div className="space-y-2">
               {processingBatches.length ? processingBatches.map((batch) => <BatchLine key={batch.id} batch={batch} />) : <EmptyState>진행 중인 배치가 없습니다.</EmptyState>}
             </div>
           </div>
           <div>
-            <div className="mb-2 text-xs font-semibold text-slate-400">추출 대기</div>
+            <div className="mb-2 text-xs font-semibold text-zinc-600">추출 대기</div>
             <div className="space-y-2">
               {pendingBatches.length ? pendingBatches.map((batch) => <BatchLine key={batch.id} batch={batch} />) : <EmptyState>대기 중인 배치가 없습니다.</EmptyState>}
             </div>
@@ -511,23 +525,23 @@ function AcademyConsoleHome() {
         </StageCard>
 
         <StageCard title="문항 확인" icon={Archive} action={{ href: "/problems?needs_review=true", label: "문항 보기" }}>
-          <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-            <div className="text-xs text-slate-500">검토 대기 문항</div>
-            <div className="mt-1 text-2xl font-semibold text-white">{count(problemStats.needs_review)}</div>
+          <div className="rounded-[8px] bg-zinc-100 p-3">
+            <div className="text-xs font-semibold text-zinc-500">검토 대기 문항</div>
+            <div className="mt-1 text-2xl font-black text-zinc-950">{count(problemStats.needs_review)}</div>
           </div>
           <div>
-            <div className="mb-2 text-xs font-semibold text-slate-400">검토 대기 배치</div>
+            <div className="mb-2 text-xs font-semibold text-zinc-600">검토 대기 배치</div>
             <div className="space-y-2">
               {reviewBatches.length ? (
                 reviewBatches.map((batch) => (
                   <Link
                     key={batch.id}
                     href={`/problems?batch_id=${batch.id}&needs_review=true`}
-                    className="flex items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 transition hover:border-white/18 hover:bg-white/[0.055]"
+                    className="flex items-center justify-between gap-3 rounded-[8px] bg-zinc-100 p-3 transition hover:bg-zinc-200"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-white">{batch.name}</div>
-                      <div className="mt-1 text-xs text-slate-500">{compactDate(batch.created_at)}</div>
+                      <div className="truncate text-sm font-semibold text-zinc-950">{batch.name}</div>
+                      <div className="mt-1 text-xs text-zinc-500">{compactDate(batch.created_at)}</div>
                     </div>
                     <Badge variant="warning" className="shrink-0">검토 {count(batch.review_count)}</Badge>
                   </Link>
@@ -541,31 +555,31 @@ function AcademyConsoleHome() {
 
         <StageCard title="보관" icon={Archive} action={{ href: "/problems", label: "문항 보기" }}>
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-              <div className="text-xs text-slate-500">전체</div>
-              <div className="mt-1 text-lg font-semibold text-white">{count(problemStats.total)}</div>
+            <div className="rounded-[8px] bg-zinc-100 p-3">
+              <div className="text-xs font-semibold text-zinc-500">전체</div>
+              <div className="mt-1 text-lg font-black text-zinc-950">{count(problemStats.total)}</div>
             </div>
-            <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-              <div className="text-xs text-slate-500">태그</div>
-              <div className="mt-1 text-lg font-semibold text-white">{count(problemStats.tagged)}</div>
+            <div className="rounded-[8px] bg-zinc-100 p-3">
+              <div className="text-xs font-semibold text-zinc-500">태그</div>
+              <div className="mt-1 text-lg font-black text-zinc-950">{count(problemStats.tagged)}</div>
             </div>
-            <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-              <div className="text-xs text-slate-500">미분류</div>
-              <div className="mt-1 text-lg font-semibold text-white">{count(problemStats.untagged)}</div>
+            <div className="rounded-[8px] bg-zinc-100 p-3">
+              <div className="text-xs font-semibold text-zinc-500">미분류</div>
+              <div className="mt-1 text-lg font-black text-zinc-950">{count(problemStats.untagged)}</div>
             </div>
           </div>
           <div>
-            <div className="mb-2 text-xs font-semibold text-slate-400">과목별 문항 수</div>
+            <div className="mb-2 text-xs font-semibold text-zinc-600">과목별 문항 수</div>
             <div className="space-y-2">
               {subjectCounts.length ? (
                 subjectCounts.map((item) => (
-                  <div key={item.subject} className="rounded-[8px] border border-white/10 bg-black/20 p-3">
+                  <div key={item.subject} className="rounded-[8px] bg-zinc-100 p-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="truncate text-sm font-semibold text-white">{item.subject}</span>
-                      <span className="text-sm font-semibold text-zinc-200">{count(item.count)}</span>
+                      <span className="truncate text-sm font-semibold text-zinc-950">{item.subject}</span>
+                      <span className="text-sm font-semibold text-zinc-700">{count(item.count)}</span>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-                      <div className="h-full rounded-full bg-zinc-400" style={{ width: `${problemStats.total ? Math.max(4, (item.count / problemStats.total) * 100) : 0}%` }} />
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                      <div className="h-full rounded-full bg-black" style={{ width: `${problemStats.total ? Math.max(4, (item.count / problemStats.total) * 100) : 0}%` }} />
                     </div>
                   </div>
                 ))
@@ -577,25 +591,25 @@ function AcademyConsoleHome() {
         </StageCard>
 
         <StageCard title="세트 제작" icon={PackageCheck} action={{ href: "/problem-sets", label: "세트 열기" }}>
-          <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-            <div className="text-xs text-slate-500">제작된 세트</div>
-            <div className="mt-1 text-2xl font-semibold text-white">{count(sets.length)}</div>
+          <div className="rounded-[8px] bg-zinc-100 p-3">
+            <div className="text-xs font-semibold text-zinc-500">제작된 세트</div>
+            <div className="mt-1 text-2xl font-black text-zinc-950">{count(sets.length)}</div>
           </div>
           <div>
-            <div className="mb-2 text-xs font-semibold text-slate-400">최근 세트</div>
+            <div className="mb-2 text-xs font-semibold text-zinc-600">최근 세트</div>
             <div className="space-y-2">
               {recentSets.length ? (
                 recentSets.map((set) => (
                   <Link
                     key={set.id}
                     href={`/problem-sets/${set.id}`}
-                    className="flex items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 transition hover:border-white/18 hover:bg-white/[0.055]"
+                    className="flex items-center justify-between gap-3 rounded-[8px] bg-zinc-100 p-3 transition hover:bg-zinc-200"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-white">{set.name}</div>
-                      <div className="mt-1 text-xs text-slate-500">{compactDate(set.created_at)}</div>
+                      <div className="truncate text-sm font-semibold text-zinc-950">{set.name}</div>
+                      <div className="mt-1 text-xs text-zinc-500">{compactDate(set.created_at)}</div>
                     </div>
-                    <span className="shrink-0 text-sm font-semibold text-zinc-200">{count(set.item_count)}</span>
+                    <span className="shrink-0 text-sm font-semibold text-zinc-700">{count(set.item_count)}</span>
                   </Link>
                 ))
               ) : (
