@@ -127,33 +127,33 @@ function RegisterCompleteContent() {
     <>
       <AuthCard title="계정 만들기" subtitle="다음 로그인부터는 아이디/비밀번호 또는 소셜 로그인 중 편한 방식을 사용할 수 있습니다.">
         <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
-          <label className="block text-sm font-semibold text-slate-200">
+          <label className="block text-sm font-semibold text-zinc-800">
             아이디
             <Input autoComplete="username" className="mt-1.5 h-11" {...form.register("login_id")} />
             <FieldError message={form.formState.errors.login_id?.message} />
             <LoginIdStatusMessage status={loginIdStatus} />
           </label>
-          <label className="block text-sm font-semibold text-slate-200">
+          <label className="block text-sm font-semibold text-zinc-800">
             닉네임
             <Input autoComplete="nickname" className="mt-1.5 h-11" {...form.register("nickname")} />
             <FieldError message={form.formState.errors.nickname?.message} />
           </label>
-          <label className="block text-sm font-semibold text-slate-200">
+          <label className="block text-sm font-semibold text-zinc-800">
             비밀번호
             <div className="relative mt-1.5">
               <Input type={showPassword ? "text" : "password"} autoComplete="new-password" className="h-11 pr-11" {...form.register("password")} />
-              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-white" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
+              <button type="button" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             <FieldError message={form.formState.errors.password?.message} />
           </label>
-          <label className="block text-sm font-semibold text-slate-200">
+          <label className="block text-sm font-semibold text-zinc-800">
             비밀번호 확인
             <Input type="password" autoComplete="new-password" className="mt-1.5 h-11" {...form.register("confirmPassword")} />
             <FieldError message={form.formState.errors.confirmPassword?.message} />
           </label>
-          {serverError ? <p className="whitespace-pre-line rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm font-medium text-zinc-200">{serverError}</p> : null}
+          {serverError ? <p className="whitespace-pre-line rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-800">{serverError}</p> : null}
           <FullWidthButton loading={form.formState.isSubmitting} disabled={loginIdStatus === "checking" || loginIdStatus === "taken"}>
             회원가입 완료
           </FullWidthButton>
@@ -161,8 +161,8 @@ function RegisterCompleteContent() {
       </AuthCard>
 
       {readyForSetup ? (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#090b12] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
             <h2 className="text-xl font-bold">시작할 공간을 선택하세요</h2>
             <div className="mt-5 grid gap-2">
               <SetupButton
@@ -180,7 +180,7 @@ function RegisterCompleteContent() {
                 onClick={() => finishSetup("student")}
               />
             </div>
-            {setupError ? <p className="mt-4 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm font-semibold text-zinc-200">{setupError}</p> : null}
+            {setupError ? <p className="mt-4 rounded-md bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-800">{setupError}</p> : null}
           </div>
         </div>
       ) : null}
@@ -192,10 +192,10 @@ function LoginIdStatusMessage({ status }: { status: LoginIdStatus }) {
   if (status === "idle") return null;
   const styles: Record<LoginIdStatus, string> = {
     idle: "",
-    checking: "text-slate-400",
-    available: "text-zinc-300",
-    taken: "text-zinc-300",
-    error: "text-zinc-300",
+    checking: "text-zinc-500",
+    available: "text-zinc-800",
+    taken: "text-zinc-800",
+    error: "text-zinc-800",
   };
   const messages: Record<LoginIdStatus, string> = {
     idle: "",
@@ -211,14 +211,14 @@ function SetupButton({ icon, title, detail, disabled, onClick }: { icon: React.R
   return (
     <button
       type="button"
-      className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.045] p-3 text-left transition hover:border-zinc-300/50 hover:bg-zinc-500/12 disabled:cursor-wait disabled:opacity-60"
+      className="flex items-center gap-3 rounded-lg bg-zinc-100 p-3 text-left text-zinc-950 transition hover:bg-zinc-200 disabled:cursor-wait disabled:opacity-60"
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-400 text-white">{icon}</span>
+      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-black text-white">{icon}</span>
       <span>
         <span className="block text-sm font-bold">{title}</span>
-        <span className="mt-0.5 block text-xs text-slate-400">{detail}</span>
+        <span className="mt-0.5 block text-xs text-zinc-500">{detail}</span>
       </span>
     </button>
   );
