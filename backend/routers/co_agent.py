@@ -462,27 +462,64 @@ def _exam_clarification_line(message: str, fields: set[str]) -> str:
     return message
 
 
+def _is_exam_followup_prompt(content: str) -> bool:
+    return "시험지 제작 전에 확인" in content or "시험지 제작" in content
+
+
+def _looks_like_exam_context_fragment(content: str) -> bool:
+    compact = content.replace(" ", "").lower()
+    return any(
+        token in compact
+        for token in (
+            "시험지",
+            "문항",
+            "문제",
+            "수학",
+            "math",
+            "국어",
+            "korean",
+            "영어",
+            "english",
+            "고1",
+            "고2",
+            "고3",
+            "템플릿",
+            "양식",
+            "서식",
+        )
+    )
+
+
 def _co_agent_exam_context_message(message: str, history: list[CoAgentChatMessage]) -> str | None:
     if looks_like_exam_paper_request(message):
         return message
 
-    saw_exam_request = False
+    saw_exam_thread = False
     pending_fields: set[str] = set()
     parts: list[str] = []
-    for item in history[-8:]:
+    for item in history[-12:]:
         content = item.content.strip()
         if not content:
             continue
-        if item.role == "user" and looks_like_exam_paper_request(content):
-            saw_exam_request = True
-            parts.append(content)
-            continue
-        if item.role == "assistant" and ("시험지 제작 전에 확인" in content or "시험지 제작" in content):
+        if item.role == "assistant" and _is_exam_followup_prompt(content):
             pending_fields = _exam_followup_fields(content) or pending_fields
+            saw_exam_thread = True
+            continue
+        if item.role != "user":
+            continue
 
-    if not saw_exam_request or not pending_fields:
+        if pending_fields:
+            parts.append(_exam_clarification_line(content, pending_fields))
+            pending_fields = set()
+            saw_exam_thread = True
+            continue
+        if looks_like_exam_paper_request(content) or _looks_like_exam_context_fragment(content):
+            parts.append(content)
+            saw_exam_thread = True
+
+    if not saw_exam_thread or not pending_fields:
         return None
-    return "\n".join([*parts[-2:], _exam_clarification_line(message, pending_fields)])
+    return "\n".join([*parts[-5:], _exam_clarification_line(message, pending_fields)])
 
 
 def _exam_subject_label(engine: str | None) -> str:

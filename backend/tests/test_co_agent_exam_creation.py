@@ -135,6 +135,31 @@ class CoAgentExamCreationTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_chat_keeps_subject_answer_across_later_template_reply(self):
+        db = self.Session()
+        try:
+            self._seed_pool(db)
+
+            response = co_agent_chat(
+                CoAgentChatRequest(
+                    message="세움 A4 2단으로 된거",
+                    messages=[
+                        CoAgentChatMessage(role="user", content="시험지 만들어줘"),
+                        CoAgentChatMessage(role="assistant", content="시험지 제작 전에 확인이 필요합니다. 어떤 과목 시험지인가요? 수학, 국어, 영어 중에서 알려주세요."),
+                        CoAgentChatMessage(role="user", content="고3 수학 시험지 1-10까지는 3점, 11-20번까지는 4점"),
+                        CoAgentChatMessage(role="assistant", content="시험지 제작 전에 확인이 필요합니다. 어떤 시험지 템플릿 또는 양식을 사용할까요?"),
+                    ],
+                ),
+                self.request,
+                db,
+            )
+
+            self.assertEqual(response.drafts[0]["status"], "created")
+            self.assertEqual(response.drafts[0]["subject_engine"], "math")
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
+        finally:
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()
