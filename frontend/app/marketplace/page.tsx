@@ -2,28 +2,33 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpen, LayoutTemplate, Store } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BookOpen, LayoutTemplate, PackageOpen, Store } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { MarketplaceListing, contentTypeLabels, licenseTypeLabels, listMarketplaceListings, pricingTypeLabels } from "@/lib/marketplace";
 
 function ListingCard({ listing }: { listing: MarketplaceListing }) {
   return (
-    <Link href={`/marketplace/listings/${listing.id}`} className="block rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-zinc-300/40 hover:bg-white/[0.065]">
-      <div className="mb-4 flex h-32 items-center justify-center rounded-md border border-white/10 bg-black/35 text-sm font-semibold text-slate-500">
-        {contentTypeLabels[listing.content_type]}
+    <Link
+      href={`/marketplace/listings/${listing.id}`}
+      className="group block rounded-[10px] bg-white p-4 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15"
+    >
+      <div className="mb-4 flex h-32 items-center justify-center rounded-[8px] bg-zinc-100 text-zinc-500">
+        <PackageOpen className="h-6 w-6" />
       </div>
-      <div className="flex items-center gap-2 text-xs text-zinc-200">
+      <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
         <span>{contentTypeLabels[listing.content_type]}</span>
         <span>·</span>
         <span>{pricingTypeLabels[listing.pricing_type]}</span>
       </div>
-      <h2 className="mt-2 line-clamp-1 text-lg font-bold text-white">{listing.title}</h2>
-      <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-slate-400">{listing.description || listing.subtitle || "등록된 설명이 없습니다."}</p>
-      <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
-        {listing.subject && <span className="rounded-md border border-white/10 px-2 py-1">{listing.subject}</span>}
-        {listing.grade && <span className="rounded-md border border-white/10 px-2 py-1">{listing.grade}</span>}
-        <span className="rounded-md border border-white/10 px-2 py-1">{licenseTypeLabels[listing.license_type]}</span>
+      <div className="mt-2 flex items-start justify-between gap-3">
+        <h2 className="min-w-0 line-clamp-1 text-lg font-bold text-zinc-950">{listing.title}</h2>
+        <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-zinc-500 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-zinc-950" />
+      </div>
+      <p className="mt-2 line-clamp-2 min-h-10 text-sm font-medium leading-5 text-zinc-600">{listing.description || listing.subtitle || "등록된 설명이 없습니다."}</p>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-zinc-700">
+        {listing.subject && <span className="rounded-full bg-zinc-100 px-2.5 py-1">{listing.subject}</span>}
+        {listing.grade && <span className="rounded-full bg-zinc-100 px-2.5 py-1">{listing.grade}</span>}
+        <span className="rounded-full bg-zinc-100 px-2.5 py-1">{licenseTypeLabels[listing.license_type]}</span>
       </div>
     </Link>
   );
@@ -38,13 +43,23 @@ export default function MarketplacePage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[14px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.24),transparent_34%),rgba(0,0,0,0.46)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Marketplace</p>
-        <h1 className="mt-3 text-3xl font-bold text-white">마켓플레이스</h1>
+      <section className="rounded-[14px] bg-white p-6">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Marketplace</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-normal text-zinc-950">마켓플레이스</h1>
+        <p className="mt-2 text-sm font-medium text-zinc-500">권리 확인을 거친 자료와 템플릿을 둘러봅니다.</p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Link href="/marketplace/problem-sets"><Button>문항 세트 마켓</Button></Link>
-          <Link href="/templates"><Button variant="outline">인기 템플릿</Button></Link>
-          <Link href="/stores"><Button variant="outline">스토어 둘러보기</Button></Link>
+          <Link href="/marketplace/problem-sets" className="inline-flex h-10 items-center justify-center gap-2 rounded-[9px] bg-black px-4 text-sm font-bold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15">
+            문항 세트 마켓
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+          <Link href="/templates" className="inline-flex h-10 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-4 text-sm font-bold text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15">
+            인기 템플릿
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+          <Link href="/stores" className="inline-flex h-10 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-4 text-sm font-bold text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15">
+            스토어 둘러보기
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
@@ -54,9 +69,9 @@ export default function MarketplacePage() {
           { href: "/templates", label: "인기 템플릿", icon: LayoutTemplate },
           { href: "/marketplace/books", label: "교재 마켓", icon: BookOpen },
         ].map((item) => (
-          <Link key={item.href} href={item.href} className="group flex items-center justify-between rounded-[10px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-zinc-300/40 hover:bg-white/[0.065]">
-            <span className="flex items-center gap-3 text-sm font-semibold text-white"><item.icon className="h-4 w-4 text-zinc-200" />{item.label}</span>
-            <ArrowRight className="h-4 w-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-zinc-200" />
+          <Link key={item.href} href={item.href} className="group flex items-center justify-between rounded-[10px] bg-white p-4 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15">
+            <span className="flex items-center gap-3 text-sm font-bold text-zinc-950"><item.icon className="h-4 w-4 text-zinc-500" />{item.label}</span>
+            <ArrowRight className="h-4 w-4 text-zinc-500 transition group-hover:translate-x-0.5 group-hover:text-zinc-950" />
           </Link>
         ))}
       </section>
@@ -64,14 +79,14 @@ export default function MarketplacePage() {
       <section className="space-y-3">
         <div className="flex items-end justify-between">
           <div>
-            <h2 className="text-xl font-bold text-white">신규 등록 콘텐츠</h2>
-            <p className="text-sm text-slate-400">권리 확인을 거쳐 공개된 마켓 콘텐츠입니다.</p>
+            <h2 className="text-xl font-bold text-zinc-950">신규 등록 콘텐츠</h2>
+            <p className="text-sm font-medium text-zinc-500">권리 확인을 거쳐 공개된 마켓 콘텐츠입니다.</p>
           </div>
         </div>
         {listings.length ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{listings.slice(0, 6).map((listing) => <ListingCard key={listing.id} listing={listing} />)}</div>
         ) : (
-          <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-10 text-center text-sm text-slate-400">
+          <div className="rounded-[10px] bg-white p-10 text-center text-sm font-semibold text-zinc-500">
             콘텐츠 없음
           </div>
         )}
