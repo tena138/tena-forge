@@ -392,6 +392,12 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     if (chatOpen) inputRef.current?.focus();
   }, [chatOpen]);
 
+  useEffect(() => {
+    if (!chatOpen || chatLoading) return;
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [chatError, chatLoading, chatMessages.length, chatOpen]);
+
   const expandedDesktop = chatOpen && !compact;
 
   return (
