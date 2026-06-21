@@ -22,7 +22,7 @@ type ProblemPage = { items: Problem[]; total: number; page: number; limit: numbe
 type Facets = { subjects: string[]; units: string[]; problem_types: string[]; sources: string[] };
 const PICKER_PAGE_LIMIT = 96;
 
-const difficulties = ["하", "중", "상", "최상"];
+const difficulties = ["2점", "3점", "4점"];
 
 function exportHistoryTime(value: string) {
   const date = new Date(value);
@@ -41,7 +41,7 @@ function SortableRow({ item, returnHref, onRemove }: { item: ProblemSetItem; ret
   const problemNumber = item.problem.problem_number;
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="relative flex items-start gap-3 rounded-[10px] bg-card/90 p-3 pr-24 shadow-sm">
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="relative flex items-start gap-3 rounded-[10px] bg-zinc-50 p-3 pr-24 transition-colors hover:bg-zinc-100">
       <button className="text-muted-foreground" {...attributes} {...listeners} aria-label="순서 이동">
         <GripVertical className="h-5 w-5" />
       </button>
@@ -233,7 +233,7 @@ function ProblemPickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!h-[88vh] !max-h-[88vh] !w-[96vw] !max-w-[1500px] !overflow-hidden !p-0">
+      <DialogContent className="!h-[88vh] !max-h-[88vh] !w-[96vw] !max-w-[1500px] !overflow-hidden !bg-white !p-0 text-zinc-950">
         <div className="flex h-full min-h-0 flex-col gap-3 p-5">
           <div className="flex shrink-0 flex-col gap-3 pr-10 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -256,8 +256,8 @@ function ProblemPickerModal({
           </div>
 
           <div className="grid shrink-0 gap-3 xl:grid-cols-[1.2fr_0.8fr_auto]">
-            <div className="flex items-center gap-2 rounded-[8px] bg-card/80 px-2">
-              <Search className="h-4 w-4 text-primary" />
+            <div className="flex items-center gap-2 rounded-[8px] bg-zinc-100 px-2">
+              <Search className="h-4 w-4 text-zinc-600" />
               <Input
                 className="border-0 bg-transparent focus-visible:ring-0"
                 placeholder="문항 내용, 답, 출처 검색"
@@ -285,7 +285,7 @@ function ProblemPickerModal({
             <FilterChips title="문항 유형" options={facets.problem_types} values={types} onToggle={(value) => { setPage(1); toggleValue(value, types, setTypes); }} />
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-[8px] bg-card/60 px-3 py-2 text-sm">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-[8px] bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700">
             <span>
               조건 결과 {data.total.toLocaleString("ko-KR")}개 / 현재 화면 {data.items.length}개 / 선택 {selectedIds.length}개
               {usageLoading ? " / 사용 이력 확인 중" : usedOnPage > 0 ? ` / 사용 이력 ${usedOnPage}개` : ""}
@@ -303,7 +303,7 @@ function ProblemPickerModal({
             </label>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-[8px] bg-zinc-100/80">
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-[8px] bg-zinc-100">
             {loading ? (
               <div className="py-16 text-center text-sm text-muted-foreground">문항을 불러오는 중입니다.</div>
             ) : data.items.length ? (
@@ -316,7 +316,7 @@ function ProblemPickerModal({
                   return (
                     <button
                       key={problem.id}
-                      className={`flex min-h-[96px] w-full items-start gap-3 rounded-[8px] p-3 text-left transition-colors ${selected ? "bg-black text-white" : "bg-card/70 hover:bg-zinc-100"} ${alreadyAdded ? "opacity-55" : ""}`}
+                      className={`flex min-h-[96px] w-full items-start gap-3 rounded-[8px] p-3 text-left transition-colors ${selected ? "bg-black text-white" : "bg-white text-zinc-950 hover:bg-zinc-50"} ${alreadyAdded ? "opacity-55" : ""}`}
                       disabled={saving || alreadyAdded}
                       onClick={() => toggle(problem.id)}
                     >
@@ -342,7 +342,7 @@ function ProblemPickerModal({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center justify-between border-t pt-3">
+          <div className="flex shrink-0 items-center justify-between bg-white pt-3">
             <Button variant="outline" size="sm" disabled={page <= 1 || saving} onClick={() => setPage((value) => Math.max(1, value - 1))}>
               <ChevronLeft className="h-4 w-4" />이전
             </Button>
@@ -361,11 +361,11 @@ function FilterChips({ title, options, values, onToggle }: { title: string; opti
   return (
     <div className="space-y-2">
       <div className="text-sm font-medium">{title}</div>
-      <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-[8px] bg-card/50 p-2">
+      <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-[8px] bg-zinc-100 p-2">
         {options.length ? options.map((option) => (
           <button
             key={option}
-            className={`rounded-[7px] px-2 py-1 text-xs font-semibold transition-colors ${values.includes(option) ? "bg-black text-white" : "bg-card/70 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"}`}
+            className={`rounded-[7px] px-2 py-1 text-xs font-semibold transition-colors ${values.includes(option) ? "bg-black text-white" : "bg-white text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"}`}
             onClick={() => onToggle(option)}
           >
             {option}
@@ -520,11 +520,11 @@ export default function ProblemSetDetailPage() {
           setExportHistory(readProblemSetExportHistory(problemSet.id));
         }}
       />
-      <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-2 sm:flex-row">
-        <Button className="h-12 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.10)]" variant="outline" onClick={() => setAddOpen(true)}>
+      <div className="flex flex-col gap-2 sm:fixed sm:bottom-6 sm:right-6 sm:z-40 sm:flex-row">
+        <Button className="h-12 w-full bg-white sm:w-auto" variant="outline" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" />문항 추가
         </Button>
-        <Button className="h-12 shadow-[0_12px_32px_rgba(0,0,0,0.14)]" onClick={() => setExportOpen(true)}>
+        <Button className="h-12 w-full sm:w-auto" onClick={() => setExportOpen(true)}>
           <FileDown className="h-4 w-4" />내보내기
         </Button>
       </div>
