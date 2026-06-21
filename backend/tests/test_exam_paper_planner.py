@@ -22,7 +22,7 @@ class ExamPaperPlannerTests(unittest.TestCase):
         self.Session = sessionmaker(bind=engine)
         self.owner_id = str(uuid.uuid4())
 
-    def _add_problem(self, db, number: int, difficulty: str, unit: str):
+    def _add_problem(self, db, number: int, difficulty: str | None, unit: str):
         batch = db.query(Batch).first()
         if not batch:
             batch = Batch(
@@ -55,6 +55,13 @@ class ExamPaperPlannerTests(unittest.TestCase):
             for index in range(count):
                 problems.append(self._add_problem(db, number, difficulty, f"단원{index % 3 + 1}"))
                 number += 1
+        db.commit()
+        return problems
+
+    def _seed_math_pool_without_difficulty(self, db, count: int = 20):
+        problems = []
+        for number in range(1, count + 1):
+            problems.append(self._add_problem(db, number, None, f"단원{number % 3 + 1}"))
         db.commit()
         return problems
 
@@ -104,6 +111,45 @@ class ExamPaperPlannerTests(unittest.TestCase):
             self.assertEqual(draft["used_exclusion"]["excluded_count"], 1)
             self.assertEqual(len(draft["missing_difficulty_slots"]), 1)
             self.assertEqual(draft["missing_difficulty_slots"][0]["difficulty"], "4점")
+        finally:
+            db.close()
+
+    def test_missing_point_metadata_uses_random_selection_without_difficulty_slots(self):
+        db = self.Session()
+        try:
+            self._seed_math_pool_without_difficulty(db, 20)
+
+            draft = build_exam_paper_draft(
+                db,
+                message="수학 고3 20문항 1-10 3점 11-20 4점 세움 양식 시험지 제작",
+                owner_ids={self.owner_id},
+            )
+
+            self.assertEqual(draft["status"], "draft")
+            self.assertEqual(draft["selected_count"], 20)
+            self.assertEqual(draft["missing_difficulty_slots"], [])
+            self.assertEqual(draft["selection_strategy"], "random_without_difficulty")
+            self.assertTrue(draft["ignored_difficulty_plan"])
+            self.assertEqual(draft["difficulty_distribution"], {"미지정": 20})
+            self.assertTrue(any("배점 메타데이터" in warning for warning in draft["warnings"]))
+        finally:
+            db.close()
+
+    def test_missing_difficulty_plan_is_not_required_when_pool_has_no_point_metadata(self):
+        db = self.Session()
+        try:
+            self._seed_math_pool_without_difficulty(db, 20)
+
+            draft = build_exam_paper_draft(
+                db,
+                message="수학 고3 20문항 세움 양식 시험지 제작",
+                owner_ids={self.owner_id},
+            )
+
+            self.assertEqual(draft["status"], "draft")
+            self.assertEqual(draft["selected_count"], 20)
+            self.assertEqual(draft["selection_strategy"], "random_without_difficulty")
+            self.assertEqual(draft["missing_required_fields"], [])
         finally:
             db.close()
 

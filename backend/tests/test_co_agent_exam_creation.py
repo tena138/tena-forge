@@ -28,7 +28,7 @@ class CoAgentExamCreationTests(unittest.TestCase):
         self.owner_id = str(uuid.uuid4())
         self.request = make_request(self.owner_id)
 
-    def _add_problem(self, db, number: int, difficulty: str):
+    def _add_problem(self, db, number: int, difficulty: str | None):
         batch = db.query(Batch).first()
         if not batch:
             batch = Batch(
@@ -59,6 +59,11 @@ class CoAgentExamCreationTests(unittest.TestCase):
             self._add_problem(db, number, "3점")
         for number in range(11, 21):
             self._add_problem(db, number, "4점")
+        db.commit()
+
+    def _seed_pool_without_difficulty(self, db):
+        for number in range(1, 21):
+            self._add_problem(db, number, None)
         db.commit()
 
     def test_chat_creates_problem_set_when_exam_request_is_complete(self):
@@ -108,6 +113,26 @@ class CoAgentExamCreationTests(unittest.TestCase):
             )
 
             self.assertEqual(response.drafts[0]["status"], "created")
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
+        finally:
+            db.close()
+
+    def test_chat_creates_problem_set_randomly_when_point_metadata_is_missing(self):
+        db = self.Session()
+        try:
+            self._seed_pool_without_difficulty(db)
+
+            response = co_agent_chat(
+                CoAgentChatRequest(message="고3 수학 시험지 1-10까지는 3점, 11-20번까지는 4점으로 세움 양식으로 만들어줘"),
+                self.request,
+                db,
+            )
+
+            problem_sets = db.scalars(select(ProblemSet).where(ProblemSet.owner_id == self.owner_id)).all()
+            self.assertEqual(len(problem_sets), 1)
+            self.assertEqual(response.drafts[0]["status"], "created")
+            self.assertEqual(response.drafts[0]["selection_strategy"], "random_without_difficulty")
+            self.assertTrue(response.drafts[0]["ignored_difficulty_plan"])
             self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
         finally:
             db.close()

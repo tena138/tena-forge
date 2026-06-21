@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from hashlib import sha256
 from typing import Any
 
 from sqlalchemy import and_, or_, select
@@ -312,6 +313,21 @@ def _select_balanced(candidates: list[Problem], slots: list[str]) -> tuple[list[
     return selected, missing
 
 
+def _has_point_difficulty_metadata(candidates: list[Problem]) -> bool:
+    return any(_problem_difficulty(problem) for problem in candidates)
+
+
+def _select_without_difficulty(candidates: list[Problem], count: int, seed: str) -> list[Problem]:
+    ordered = sorted(
+        candidates,
+        key=lambda problem: (
+            sha256(f"{seed}:{problem.id}".encode("utf-8")).hexdigest(),
+            str(problem.id),
+        ),
+    )
+    return ordered[:count]
+
+
 def _relaxed_candidates(candidates: list[Problem], selected: list[Problem], limit: int = 10) -> list[dict[str, Any]]:
     selected_ids = {str(problem.id) for problem in selected}
     relaxed = [problem for problem in candidates if str(problem.id) not in selected_ids]
@@ -331,7 +347,8 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
     count = _requested_count(message)
     grade = _grade_keyword(message)
     missing_required = _missing_required_fields(message)
-    if missing_required:
+    blocking_missing = [item for item in missing_required if item.get("field") != "difficulty_plan"]
+    if blocking_missing:
         return _needs_input_draft(message, missing_required, engine, count, grade)
 
     slots = _difficulty_slots(message, count, engine)
@@ -339,7 +356,19 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
     candidates = db.scalars(_candidate_query(owner_ids, engine, grade)).unique().all()
     usage_counts = _usage_history_counts(db, owner_ids, [problem.id for problem in candidates])
     unused_candidates = [problem for problem in candidates if usage_counts.get(str(problem.id), 0) == 0]
-    selected, missing = _select_balanced(unused_candidates, slots)
+    has_point_metadata = _has_point_difficulty_metadata(unused_candidates)
+    if missing_required and has_point_metadata:
+        return _needs_input_draft(message, missing_required, engine, count, grade)
+
+    selection_strategy = "point_difficulty"
+    ignored_difficulty_plan = False
+    if has_point_metadata:
+        selected, missing = _select_balanced(unused_candidates, slots)
+    else:
+        selected = _select_without_difficulty(unused_candidates, count, message)
+        missing = []
+        selection_strategy = "random_without_difficulty"
+        ignored_difficulty_plan = True
 
     difficulty_distribution = Counter(_problem_difficulty(problem) or "미지정" for problem in selected)
     unit_distribution = Counter(_problem_unit(problem) for problem in selected)
@@ -353,6 +382,8 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         warnings.append(f"{grade} 조건에 맞는 문항 후보가 없습니다.")
     if missing:
         warnings.append("요청한 배점 구간을 채울 문항이 부족합니다.")
+    if ignored_difficulty_plan:
+        warnings.append("배점 메타데이터가 없어 배점 조건을 제외하고 랜덤 추출했습니다.")
     if len(selected) < count:
         warnings.append(f"{count}문항 중 {len(selected)}문항만 초안에 배치했습니다.")
 
@@ -371,6 +402,8 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         "difficulty_distribution": dict(difficulty_distribution),
         "unit_distribution": dict(unit_distribution),
         "missing_difficulty_slots": missing,
+        "selection_strategy": selection_strategy,
+        "ignored_difficulty_plan": ignored_difficulty_plan,
         "relaxed_difficulty_candidates": _relaxed_candidates(unused_candidates, selected),
         "used_exclusion": {
             "scope": "workspace_usage_history",
