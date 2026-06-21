@@ -1166,8 +1166,8 @@ function ProblemsBrowser() {
         onClick={() => handleProblemBlockClick(problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg bg-white transition-all hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-[0_18px_45px_rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
-          selected ? "bg-zinc-100 shadow-[inset_0_0_0_2px_rgba(24,24,27,0.92)]" : ""
+          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
+          selected ? "bg-zinc-100" : ""
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
@@ -1242,7 +1242,7 @@ function ProblemsBrowser() {
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
           "relative cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
-          selected ? "bg-zinc-100 shadow-[inset_0_0_0_2px_rgba(24,24,27,0.92)]" : ""
+          selected ? "bg-zinc-100" : ""
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
@@ -1409,7 +1409,7 @@ function ProblemsBrowser() {
               width: batchFolderDrag.previewWidth,
             }}
           >
-            <div className="w-full rounded-xl bg-white p-3 text-left text-zinc-950 shadow-[0_18px_45px_rgba(15,23,42,0.10)] backdrop-blur">
+            <div className="w-full rounded-xl bg-white p-3 text-left text-zinc-950 backdrop-blur">
               <div className="flex items-start gap-3">
                 <Folder className="mt-0.5 h-5 w-5 shrink-0 text-zinc-800" />
                 <div className="min-w-0">
@@ -1430,7 +1430,7 @@ function ProblemsBrowser() {
 
         {batchFolderContextMenu && contextMenuBatchFolder ? (
           <div
-            className="fixed z-50 w-44 overflow-hidden rounded-lg bg-white p-1 shadow-[0_18px_45px_rgba(15,23,42,0.10)] backdrop-blur"
+            className="fixed z-50 w-44 overflow-hidden rounded-lg bg-white p-1 backdrop-blur"
             style={{ left: batchFolderContextMenu.x, top: batchFolderContextMenu.y }}
             onClick={(event) => event.stopPropagation()}
           >
