@@ -1369,25 +1369,25 @@ function AcademySchedulePanel() {
   return (
     <div className="relative space-y-4">
       {(notice || error) ? (
-        <div className="rounded-[10px] border border-zinc-300/20 bg-zinc-500/10 px-4 py-3 text-sm">
-          {notice ? <span className="text-zinc-100">{notice}</span> : null}
-          {error ? <span className="text-zinc-300">{error}</span> : null}
+        <div className="rounded-[10px] bg-zinc-100 px-4 py-3 text-sm font-semibold">
+          {notice ? <span className="text-zinc-800">{notice}</span> : null}
+          {error ? <span className="text-zinc-700">{error}</span> : null}
         </div>
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-        <Card className="border-white/10 bg-white/[0.035]">
+        <Card className="bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="flex items-center gap-2 text-white">
-                <CalendarDays className="h-5 w-5 text-zinc-200" />
+              <CardTitle className="flex items-center gap-2 text-zinc-950">
+                <CalendarDays className="h-5 w-5 text-zinc-700" />
                 클래스 시간표
               </CardTitle>
               <div className="flex items-center gap-2">
                 <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="이전 달">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="min-w-36 text-center text-sm font-black text-white">{academyMonthTitle(monthCursor)}</div>
+                <div className="min-w-36 text-center text-sm font-black text-zinc-950">{academyMonthTitle(monthCursor)}</div>
                 <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="다음 달">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -1396,83 +1396,100 @@ function AcademySchedulePanel() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex min-h-[560px] items-center justify-center text-slate-500">불러오는 중</div>
+              <div className="flex min-h-[560px] items-center justify-center text-zinc-500">불러오는 중</div>
             ) : (
-              <div className="overflow-hidden rounded-[10px] border border-white/10">
-                <div className="grid grid-cols-7 border-b border-white/10 bg-black/20">
+              <>
+              <div className="overflow-hidden rounded-[10px] bg-zinc-100">
+              <div>
+                <div className="grid grid-cols-7 bg-zinc-100">
                   {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-                    <div key={day} className="px-2 py-2 text-xs font-bold text-slate-500">{day}</div>
+                    <div key={day} className="px-2 py-2 text-xs font-bold text-zinc-500">{day}</div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7">
+                <div className="grid grid-cols-7 gap-px bg-zinc-200">
                   {monthDays.map((day) => {
                     const key = academyDateKey(day);
                     const dayEvents = eventsByDate[key] || [];
                     const inMonth = day.getMonth() === monthCursor.getMonth();
                     const isToday = key === academyDateKey(new Date());
                     return (
-                      <div key={key} className={`min-h-[118px] border-b border-r border-white/10 p-2 ${inMonth ? "bg-black/10" : "bg-black/25 text-slate-600"}`}>
+                      <div key={key} className={`min-h-[118px] p-2 ${inMonth ? "bg-white" : "bg-zinc-50 text-zinc-400"}`}>
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className={`grid h-6 min-w-6 place-items-center rounded-full text-xs font-black ${isToday ? "bg-zinc-500 text-white" : inMonth ? "text-white" : "text-slate-600"}`}>
+                          <span className={`grid h-6 min-w-6 place-items-center rounded-full text-xs font-black ${isToday ? "bg-black text-white" : inMonth ? "text-zinc-950" : "text-zinc-400"}`}>
                             {day.getDate()}
                           </span>
-                          {dayEvents.length ? <span className="text-[10px] font-bold text-zinc-200">{dayEvents.length}</span> : null}
+                          {dayEvents.length ? <span className="hidden text-[10px] font-bold text-zinc-500 sm:inline">{dayEvents.length}</span> : null}
                         </div>
                         <div className="space-y-1.5">
                           {dayEvents.slice(0, 3).map((event) => {
                             const classRow = classById.get(event.class_id);
                             return (
-                              <div key={event.id} className="group rounded-[6px] border border-zinc-300/15 bg-zinc-500/15 px-2 py-1.5">
+                              <div key={event.id} className="group relative rounded-[6px] bg-zinc-100 px-1.5 py-1.5 sm:px-2">
                                 <div className="flex items-start justify-between gap-1.5">
                                   <div className="min-w-0">
-                                    <p className="truncate text-[11px] font-black text-white">{event.title}</p>
-                                    <p className="truncate text-[10px] text-zinc-100">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
+                                    <p className="truncate text-[10px] font-black text-zinc-950 sm:text-[11px]">{event.title}</p>
+                                    <p className="hidden truncate text-[10px] text-zinc-600 sm:block">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
                                   </div>
-                                  <button type="button" onClick={() => removeEvent(event.id)} className="rounded p-0.5 text-slate-500 opacity-0 transition hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100" aria-label="삭제">
+                                  <button type="button" onClick={() => removeEvent(event.id)} className="absolute right-1 top-1 hidden rounded p-0.5 text-zinc-400 opacity-0 transition hover:bg-white hover:text-zinc-950 group-hover:opacity-100 sm:block" aria-label="삭제">
                                     <Trash2 className="h-3 w-3" />
                                   </button>
                                 </div>
                               </div>
                             );
                           })}
-                          {dayEvents.length > 3 ? <div className="rounded-[6px] bg-white/[0.04] px-2 py-1 text-[10px] font-bold text-slate-400">+{dayEvents.length - 3}</div> : null}
+                          {dayEvents.length > 3 ? <div className="rounded-[6px] bg-zinc-100 px-2 py-1 text-[10px] font-bold text-zinc-500">+{dayEvents.length - 3}</div> : null}
                         </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
+              </div>
+              {monthEvents.length ? (
+                <div className="mt-3 space-y-2 sm:hidden">
+                  {monthEvents.slice(0, 6).map((event) => {
+                    const classRow = classById.get(event.class_id);
+                    return (
+                      <div key={event.id} className="rounded-[8px] bg-zinc-100 px-3 py-2 text-sm">
+                        <p className="truncate font-black text-zinc-950">{event.title}</p>
+                        <p className="mt-1 truncate text-xs font-semibold text-zinc-600">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              </>
             )}
           </CardContent>
         </Card>
 
         <aside className="space-y-3">
-          <Card className="border-white/10 bg-white/[0.035]">
+          <Card className="bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
             <CardContent className="grid grid-cols-3 gap-2 p-3 xl:grid-cols-1">
-              <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-                <p className="text-[11px] text-slate-500">클래스</p>
-                <p className="mt-1 text-xl font-black text-white">{classes.length}</p>
+              <div className="rounded-[8px] bg-zinc-100 p-3">
+                <p className="text-[11px] font-semibold text-zinc-500">클래스</p>
+                <p className="mt-1 text-xl font-black text-zinc-950">{classes.length}</p>
               </div>
-              <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-                <p className="text-[11px] text-slate-500">학생</p>
-                <p className="mt-1 text-xl font-black text-white">{studentCount}</p>
+              <div className="rounded-[8px] bg-zinc-100 p-3">
+                <p className="text-[11px] font-semibold text-zinc-500">학생</p>
+                <p className="mt-1 text-xl font-black text-zinc-950">{studentCount}</p>
               </div>
-              <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-                <p className="text-[11px] text-slate-500">이번 달</p>
-                <p className="mt-1 text-xl font-black text-zinc-100">{monthEvents.length}</p>
+              <div className="rounded-[8px] bg-zinc-100 p-3">
+                <p className="text-[11px] font-semibold text-zinc-500">이번 달</p>
+                <p className="mt-1 text-xl font-black text-zinc-950">{monthEvents.length}</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-white/10 bg-white/[0.035]">
+          <Card className="bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
             <CardContent className="space-y-2 p-3">
               {classes.map((classRow) => (
-                <div key={classRow.id} className="flex items-center justify-between rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                  <span className="truncate font-semibold text-white">{classRow.name}</span>
-                  <span className="text-slate-500">{classRow.student_count}명</span>
+                <div key={classRow.id} className="flex items-center justify-between rounded-[8px] bg-zinc-100 px-3 py-2 text-sm">
+                  <span className="truncate font-semibold text-zinc-950">{classRow.name}</span>
+                  <span className="text-zinc-500">{classRow.student_count}명</span>
                 </div>
               ))}
-              {!classes.length ? <div className="rounded-[8px] border border-dashed border-white/10 p-3 text-sm text-slate-500">클래스 없음</div> : null}
+              {!classes.length ? <div className="rounded-[8px] bg-zinc-100 p-3 text-sm font-semibold text-zinc-500">클래스 없음</div> : null}
             </CardContent>
           </Card>
         </aside>
