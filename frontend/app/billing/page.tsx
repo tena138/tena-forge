@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AlertCircle } from "lucide-react";
 
 import { getUsageSummary, listPlans, Plan, UsageSummary } from "@/lib/saas";
 import { SUBJECT_ENGINES, subjectEngineLabel } from "@/lib/plan-pricing";
@@ -20,15 +21,33 @@ export default function BillingPage() {
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedEngines, setSelectedEngines] = useState<string[]>(["math"]);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState("");
+  const [plansError, setPlansError] = useState("");
 
   useEffect(() => {
     getUsageSummary()
       .then((data) => {
         setSummary(data);
         setSelectedEngines(data.subscription?.enabled_subject_engines?.length ? data.subscription.enabled_subject_engines : data.plan.enabled_subject_engines || ["math"]);
+        setSummaryError("");
       })
-      .catch(() => setSummary(null));
-    listPlans().then(setPlans).catch(() => setPlans([]));
+      .catch(() => {
+        setSummary(null);
+        setSummaryError("구독 정보를 불러오지 못했습니다.");
+      })
+      .finally(() => setSummaryLoading(false));
+    listPlans()
+      .then((items) => {
+        setPlans(items);
+        setPlansError("");
+      })
+      .catch(() => {
+        setPlans([]);
+        setPlansError("플랜 목록을 불러오지 못했습니다.");
+      })
+      .finally(() => setPlansLoading(false));
   }, []);
 
   function toggleEngine(engine: string) {
@@ -43,9 +62,25 @@ export default function BillingPage() {
       <section className="rounded-[14px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Billing</p>
         <h1 className="mt-2 text-3xl font-bold text-zinc-950">구독 및 사용량</h1>
+        <p className="mt-3 text-sm font-medium leading-6 text-zinc-600">현재 사용량을 확인하고, 결제수단 등록 전 필요한 플랜 구성을 선택합니다.</p>
       </section>
 
-      {summary && (
+      {summaryLoading && (
+        <section className="grid gap-3 md:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="h-24 animate-pulse rounded-[10px] bg-white shadow-[0_14px_34px_rgba(15,23,42,0.06)]" />
+          ))}
+        </section>
+      )}
+
+      {!summaryLoading && summaryError && (
+        <section className="flex items-center gap-2 rounded-[12px] bg-white p-5 text-sm font-semibold text-zinc-700 shadow-sm">
+          <AlertCircle className="h-4 w-4 text-zinc-950" />
+          {summaryError}
+        </section>
+      )}
+
+      {!summaryLoading && summary && (
         <section className="grid gap-3 md:grid-cols-5">
           {[
             ["현재 플랜", summary.plan.name],
@@ -63,26 +98,51 @@ export default function BillingPage() {
       )}
 
       <section className="rounded-[12px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-        <h2 className="text-lg font-bold text-zinc-950">Subject Engines</h2>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-950">Subject Engines</h2>
+            <p className="mt-1 text-sm font-medium text-zinc-500">최소 1개 엔진을 유지합니다.</p>
+          </div>
+          <p className="text-sm font-semibold text-zinc-700">선택: {selectedEngines.map(engineLabel).join(" + ")}</p>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          {subjectEngineOptions.map((engine) => (
-            <button
-              key={engine.code}
-              type="button"
-              className={`rounded-[8px] px-3 py-2 text-sm font-semibold transition ${
-                selectedEngines.includes(engine.code)
-                  ? "bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
-                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
-              }`}
-              onClick={() => toggleEngine(engine.code)}
-            >
-              {subjectEngineLabel(engine.code)}
-            </button>
-          ))}
+          {subjectEngineOptions.map((engine) => {
+            const selected = selectedEngines.includes(engine.code);
+            const locked = selected && selectedEngines.length === 1;
+            return (
+              <button
+                key={engine.code}
+                type="button"
+                aria-pressed={selected}
+                disabled={locked}
+                className={`rounded-[8px] px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed ${
+                  selected
+                    ? "bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)] disabled:opacity-80"
+                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
+                }`}
+                onClick={() => toggleEngine(engine.code)}
+              >
+                {subjectEngineLabel(engine.code)}
+              </button>
+            );
+          })}
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {plansLoading && Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="h-40 animate-pulse rounded-[12px] bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]" />
+        ))}
+        {!plansLoading && plansError && (
+          <div className="rounded-[12px] bg-white p-5 text-sm font-semibold text-zinc-700 shadow-sm md:col-span-2 xl:col-span-4">
+            <div className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-zinc-950" />{plansError}</div>
+          </div>
+        )}
+        {!plansLoading && !plansError && !plans.length && (
+          <div className="rounded-[12px] bg-white p-5 text-sm font-semibold text-zinc-700 shadow-sm md:col-span-2 xl:col-span-4">
+            표시할 플랜이 없습니다.
+          </div>
+        )}
         {plans.map((plan) => {
           const engineCount = Math.max(selectedEngines.length, 1);
           const engineDelta = Math.max(engineCount - 1, 0) * plan.monthly_price;
@@ -96,7 +156,7 @@ export default function BillingPage() {
               </p>
               {plan.code === "basic" || plan.code === "pro" ? (
                 <Link className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15" href={`/plan/${plan.code}`}>
-                  결제 / 업그레이드
+                  구성하기
                 </Link>
               ) : null}
             </div>

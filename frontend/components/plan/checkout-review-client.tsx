@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, CreditCard, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 
 import {
   BillingCycle,
@@ -44,6 +44,14 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
 
   const backHref = `/plan/${plan}`;
   const phoneReady = isValidPhoneNumber(phoneNumber);
+  const canSubmit = agreed && phoneReady && !loading;
+  const submitHint = !phoneReady && !agreed
+    ? "휴대폰 번호 입력과 약관 동의가 필요합니다."
+    : !phoneReady
+      ? "휴대폰 번호를 입력하면 결제수단 등록을 진행할 수 있습니다."
+      : !agreed
+        ? "약관 동의 후 결제수단 등록을 진행할 수 있습니다."
+        : "결제수단 등록 준비가 완료되었습니다.";
 
   useEffect(() => {
     const profile = readStoredAuthProfile<{ id?: string; phone?: string | null }>();
@@ -160,7 +168,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f5f1] px-4 py-10 text-slate-950 sm:px-6">
+    <main className="min-h-screen bg-[#fbfbfa] px-4 py-10 text-slate-950 sm:px-6">
       <div className="mx-auto max-w-5xl">
         <Link href={backHref} className="inline-flex items-center gap-2 text-sm font-black text-slate-600 transition hover:text-slate-950">
           <ArrowLeft className="h-4 w-4" /> 구성으로 돌아가기
@@ -220,16 +228,21 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                   {plan === "pro" ? <SpecLine>Marketplace included</SpecLine> : <SpecLine>Marketplace unavailable</SpecLine>}
                 </div>
               </ReviewBlock>
-              <label className="flex gap-3 rounded-[12px] bg-slate-50 p-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-950/10">
+              <label className="flex gap-3 rounded-[12px] bg-zinc-100 p-4 text-sm font-semibold text-slate-700">
                 <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-0.5 h-4 w-4 accent-slate-950" />
-                <span>
-                  <Link href="/terms" className="font-black underline">이용약관</Link>, <Link href="/privacy" className="font-black underline">개인정보처리방침</Link>, <Link href="/refund-policy" className="font-black underline">환불 및 취소 정책</Link>을 확인했으며 결제수단 등록, 7일 무료 체험, 체험 종료 후 자동결제 조건에 동의합니다.
+                <span className="grid gap-2">
+                  <span className="flex flex-wrap gap-1.5">
+                    <Link href="/terms" className="rounded-[6px] bg-white px-2 py-1 font-black text-slate-950 underline-offset-2 hover:underline">이용약관</Link>
+                    <Link href="/privacy" className="rounded-[6px] bg-white px-2 py-1 font-black text-slate-950 underline-offset-2 hover:underline">개인정보처리방침</Link>
+                    <Link href="/refund-policy" className="rounded-[6px] bg-white px-2 py-1 font-black text-slate-950 underline-offset-2 hover:underline">환불 및 취소 정책</Link>
+                  </span>
+                  <span>을 확인했으며 결제수단 등록, 7일 무료 체험, 체험 종료 후 자동결제 조건에 동의합니다.</span>
                 </span>
               </label>
             </div>
           </section>
 
-          <aside className="h-fit rounded-[16px] bg-white p-6 text-slate-950 shadow-[0_24px_90px_rgba(15,23,42,0.10)] ring-1 ring-slate-950/10">
+          <aside className="h-fit rounded-[16px] bg-white p-6 text-slate-950 shadow-[0_24px_90px_rgba(15,23,42,0.10)]">
             <CreditCard className="h-6 w-6" />
             <h2 className="mt-5 text-2xl font-black">체험 후 결제 금액</h2>
             <div className="mt-4 rounded-[12px] bg-zinc-100 px-4 py-3">
@@ -253,15 +266,17 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                 inputMode="numeric"
                 autoComplete="tel"
                 value={phoneNumber}
-                onChange={(event) => setPhoneNumber(event.target.value)}
+                onChange={(event) => setPhoneNumber(normalizePhoneNumber(event.target.value).slice(0, 11))}
                 placeholder="01012345678"
                 className="mt-2 h-11 w-full rounded-[10px] border-0 bg-zinc-100 px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-black/10"
               />
             </label>
-            <button disabled={!agreed || loading || !phoneReady} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-black text-sm font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500">
-              {loading ? "등록 준비 중..." : "결제수단 등록 후 7일 체험 시작"}
+            <p className={`mt-2 text-xs font-bold ${canSubmit ? "text-zinc-700" : "text-zinc-500"}`}>{submitHint}</p>
+            <button disabled={!canSubmit} onClick={pay} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-black text-sm font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {loading ? "등록 준비 중" : "결제수단 등록 후 7일 체험 시작"}
             </button>
-            {error && <p className="mt-4 rounded-[12px] bg-zinc-100 px-4 py-3 text-sm font-bold text-slate-800">{error}</p>}
+            {error && <p className="mt-4 flex gap-2 rounded-[12px] bg-zinc-100 px-4 py-3 text-sm font-bold text-slate-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-zinc-950" />{error}</p>}
             <p className="mt-5 flex gap-2 text-xs leading-5 text-slate-500">
               <ShieldCheck className="h-4 w-4 shrink-0" />
               서버가 금액과 패키지를 검증한 뒤 PortOne V2 billing key로 첫 결제를 7일 뒤 예약합니다.
@@ -275,7 +290,7 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
 
 function ReviewBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-[12px] p-5 ring-1 ring-slate-950/10">
+    <div className="rounded-[12px] bg-zinc-50 p-5">
       <h2 className="mb-4 text-sm font-black text-slate-500">{title}</h2>
       {children}
     </div>
