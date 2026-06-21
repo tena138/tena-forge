@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldOff } from "lucide-react";
+import { ShieldCheck, ShieldOff, X } from "lucide-react";
 
 import { PasswordStrength } from "@/components/auth/auth-ui";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ export default function AccountSecurityPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      {notice && <div className="rounded-lg border border-zinc-300/20 bg-zinc-400/10 px-4 py-3 text-sm font-semibold text-zinc-100">{notice}</div>}
+      {notice && <div className="rounded-lg bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-800">{notice}</div>}
 
       <Card>
         <CardHeader><CardTitle>비밀번호 변경</CardTitle></CardHeader>
@@ -111,12 +111,12 @@ export default function AccountSecurityPage() {
       <Card>
         <CardHeader><CardTitle>2단계 인증</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className={`rounded-lg border p-4 ${profile.totp_enabled ? "border-zinc-300/20 bg-zinc-400/10" : "border-white/10 bg-white/[0.04]"}`}>
+          <div className={`rounded-lg p-4 ${profile.totp_enabled ? "bg-zinc-100" : "bg-zinc-50"}`}>
             <div className="flex items-center gap-2 text-lg font-bold">
-              {profile.totp_enabled ? <ShieldCheck className="h-5 w-5 text-zinc-300" /> : <ShieldOff className="h-5 w-5 text-slate-400" />}
+              {profile.totp_enabled ? <ShieldCheck className="h-5 w-5 text-zinc-800" /> : <ShieldOff className="h-5 w-5 text-zinc-500" />}
               {profile.totp_enabled ? "활성화" : "비활성화"}
             </div>
-            {profile.totp_enabled_at && <p className="mt-1 text-sm text-slate-400">활성화일: {new Date(profile.totp_enabled_at).toLocaleDateString("ko-KR")}</p>}
+            {profile.totp_enabled_at && <p className="mt-1 text-sm text-zinc-500">활성화일: {new Date(profile.totp_enabled_at).toLocaleDateString("ko-KR")}</p>}
           </div>
           {profile.totp_enabled ? (
             <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
@@ -139,12 +139,12 @@ export default function AccountSecurityPage() {
               <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <div>
                 <div className="font-semibold">{provider}</div>
-                <div className="text-xs text-slate-400">{connected ? "연결됨" : "연결되지 않음"}</div>
+                <div className="text-xs text-zinc-500">{connected ? "연결됨" : "연결되지 않음"}</div>
               </div>
               {connected ? (
                 <Button variant="outline" size="sm" onClick={() => unlinkOAuthAccount(providerKey(provider)).then(load)}>해제</Button>
               ) : (
-                <a className="inline-flex h-8 items-center rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]" href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/auth/${providerKey(provider)}`}>연결</a>
+                <a className="inline-flex h-8 items-center rounded-md bg-black px-3 text-xs font-semibold text-white transition-colors hover:bg-zinc-800" href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/auth/${providerKey(provider)}`}>연결</a>
               )}
               </div>
             );
@@ -157,10 +157,10 @@ export default function AccountSecurityPage() {
         <CardContent className="space-y-3">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="border-y border-white/10 bg-white/[0.04] text-left text-slate-400"><tr><th className="p-2">기기</th><th className="p-2">브라우저</th><th className="p-2">IP</th><th className="p-2">마지막 활동</th><th className="p-2">액션</th></tr></thead>
+              <thead className="border-y border-zinc-100 bg-zinc-50 text-left text-zinc-500"><tr><th className="p-2">기기</th><th className="p-2">브라우저</th><th className="p-2">IP</th><th className="p-2">마지막 활동</th><th className="p-2">액션</th></tr></thead>
               <tbody>
                 {sessions.map((session) => (
-                  <tr key={session.id} className="border-t border-white/8">
+                  <tr key={session.id} className="border-t border-zinc-100">
                     <td className="p-2">{session.device_info || "Unknown"} {session.is_current ? "(현재)" : ""}</td>
                     <td className="p-2">{session.browser} / {session.os}</td>
                     <td className="p-2">{session.ip_address}</td>
@@ -171,7 +171,7 @@ export default function AccountSecurityPage() {
               </tbody>
             </table>
           </div>
-          <Button variant="outline" className="border-zinc-400/30 text-zinc-200 hover:bg-zinc-400/10 hover:text-zinc-100" onClick={() => revokeOtherSessions().then(load)}>모든 다른 기기에서 로그아웃</Button>
+          <Button variant="secondary" onClick={() => revokeOtherSessions().then(load)}>모든 다른 기기에서 로그아웃</Button>
         </CardContent>
       </Card>
 
@@ -180,14 +180,14 @@ export default function AccountSecurityPage() {
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="border-y border-white/10 bg-white/[0.04] text-left text-slate-400"><tr><th className="p-2">날짜/시간</th><th className="p-2">기기</th><th className="p-2">IP</th><th className="p-2">결과</th></tr></thead>
+              <thead className="border-y border-zinc-100 bg-zinc-50 text-left text-zinc-500"><tr><th className="p-2">날짜/시간</th><th className="p-2">기기</th><th className="p-2">IP</th><th className="p-2">결과</th></tr></thead>
               <tbody>
                 {history.slice(0, 30).map((item) => (
-                  <tr key={item.id} className="border-t border-white/8">
+                  <tr key={item.id} className="border-t border-zinc-100">
                     <td className="p-2">{new Date(item.login_at).toLocaleString("ko-KR")}</td>
                     <td className="p-2">{item.browser} on {item.os}</td>
                     <td className="p-2">{item.ip_address}</td>
-                    <td className={`p-2 font-semibold ${item.success ? "text-zinc-300" : "text-zinc-300"}`}>{item.success ? "성공" : `실패 ${item.failure_reason || ""}`}</td>
+                    <td className="p-2 font-semibold text-zinc-700">{item.success ? "성공" : `실패 ${item.failure_reason || ""}`}</td>
                   </tr>
                 ))}
               </tbody>
@@ -197,29 +197,37 @@ export default function AccountSecurityPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-zinc-300">계정 삭제</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-zinc-950">계정 삭제</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-slate-400">모든 데이터가 영구적으로 삭제됩니다.</p>
+          <p className="text-sm text-zinc-500">모든 데이터가 영구적으로 삭제됩니다.</p>
           <Input type="password" placeholder="비밀번호 확인" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} />
           <Button variant="destructive" disabled={!deletePassword} onClick={submitDeleteAccount}>계정 삭제</Button>
         </CardContent>
       </Card>
 
       {setup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#090b12] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-xl bg-white p-6 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+            <button
+              type="button"
+              className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-lg bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10"
+              onClick={() => setSetup(null)}
+              aria-label="닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
             {setupStep === 1 && (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">인증 앱 설치</h2>
-                <p className="text-sm text-slate-400">Google Authenticator, Authy 같은 인증 앱을 준비해주세요.</p>
+                <p className="pr-10 text-sm text-zinc-500">Google Authenticator, Authy 같은 인증 앱을 준비해주세요.</p>
                 <Button onClick={() => setSetupStep(2)}>다음</Button>
               </div>
             )}
             {setupStep === 2 && (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">QR 코드 스캔</h2>
-                <img src={setup.qr_code_url} alt="" className="mx-auto h-56 w-56" />
-                <p className="rounded-md border border-white/10 bg-white/[0.06] p-3 text-center text-sm font-semibold text-slate-100">수동 입력 코드: {setup.secret}</p>
+                <img src={setup.qr_code_url} alt="" className="mx-auto h-56 w-56 rounded-lg bg-white p-3 shadow-inner" />
+                <p className="rounded-md bg-zinc-100 p-3 text-center text-sm font-semibold text-zinc-950">수동 입력 코드: {setup.secret}</p>
                 <Button onClick={() => setSetupStep(3)}>다음</Button>
               </div>
             )}
@@ -234,11 +242,11 @@ export default function AccountSecurityPage() {
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">백업 코드 저장</h2>
                 <div className="grid grid-cols-2 gap-2">
-                  {setup.backup_codes.map((code) => <code key={code} className="rounded border border-white/10 bg-white/[0.06] p-2 text-center font-bold text-slate-100">{code}</code>)}
+                  {setup.backup_codes.map((code) => <code key={code} className="rounded bg-zinc-100 p-2 text-center font-bold text-zinc-950">{code}</code>)}
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => navigator.clipboard.writeText(setup.backup_codes.join("\n"))}>복사</Button>
-                  <Button variant="outline" onClick={() => downloadBackupCodes(setup.backup_codes)}>다운로드 TXT</Button>
+                  <Button variant="secondary" onClick={() => navigator.clipboard.writeText(setup.backup_codes.join("\n"))}>복사</Button>
+                  <Button variant="secondary" onClick={() => downloadBackupCodes(setup.backup_codes)}>다운로드 TXT</Button>
                 </div>
                 <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={backupSaved} onChange={(event) => setBackupSaved(event.target.checked)} /> 백업 코드를 안전한 곳에 저장했습니다</label>
                 <Button disabled={!backupSaved} onClick={() => setSetup(null)}>완료</Button>
