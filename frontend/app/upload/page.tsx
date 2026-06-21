@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { Check, FileText, Loader2, LockKeyhole, Pencil, Plus, ShieldCheck, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertCircle, Check, FileText, Loader2, LockKeyhole, Pencil, Plus, ShieldCheck, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1337,6 +1337,19 @@ export default function UploadPage() {
   const creditsAfterUpload = creditEstimate && creditsRemaining !== null ? Math.max(creditsRemaining - creditEstimate.credits, 0) : null;
   const creditEstimateExceedsRemaining = Boolean(creditEstimate && creditsRemaining !== null && creditEstimate.credits > creditsRemaining);
   const canSubmit = Boolean(batchName && problemPdf && selectedArchiveFolderId && rightsConfirmed && !submitting && !selectedEngineLocked);
+  const submitRequirementMessage = submitting
+    ? "PDF를 업로드하고 아카이빙 배치를 생성하는 중입니다."
+    : selectedEngineLocked
+      ? "현재 플랜에서 사용할 수 있는 Subject Engine을 선택해주세요."
+      : !problemPdf
+        ? "문제 PDF를 선택하면 다음 단계로 진행할 수 있습니다."
+        : !batchName.trim()
+          ? "배치 이름을 입력해주세요."
+          : !selectedArchiveFolderId
+            ? "저장 폴더를 선택하거나 새 폴더를 만들어주세요."
+            : !rightsConfirmed
+              ? "업로드 권리 확인에 동의해야 아카이빙을 시작할 수 있습니다."
+              : "아카이빙을 시작할 준비가 완료되었습니다.";
   const creditEstimatePanel = problemPdf ? (
     <div className="rounded-[12px] bg-zinc-50 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1482,10 +1495,13 @@ export default function UploadPage() {
             </label>
           </div>
 
-          <Button className="w-full" onClick={submit} disabled={!canSubmit}>
+          <div className="space-y-2">
+            <Button className="w-full" onClick={submit} disabled={!canSubmit}>
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-            아카이빙 시작
-          </Button>
+              {submitting ? "아카이빙 준비 중" : "아카이빙 시작"}
+            </Button>
+            <p className="rounded-[9px] bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700">{submitRequirementMessage}</p>
+          </div>
           {uploadPercent !== null ? (
             <div className="space-y-1">
               <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
@@ -1494,7 +1510,12 @@ export default function UploadPage() {
               <p className="text-xs text-zinc-500">{uploadPercent >= 100 ? "서버에서 배치 생성 중" : `업로드 ${uploadPercent}%`}</p>
             </div>
           ) : null}
-          {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+          {message ? (
+            <p className="flex gap-2 rounded-[9px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-zinc-950" />
+              {message}
+            </p>
+          ) : null}
             </div>
           </div>
         </CardContent>
