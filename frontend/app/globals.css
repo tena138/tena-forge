@@ -1783,17 +1783,6 @@
     color: rgb(255 255 255) !important;
   }
 
-  html[data-theme="light"] [data-app-shell] .selection-action-bar,
-  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-clear,
-  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-clear * {
-    color: rgb(255 255 255) !important;
-  }
-
-  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-button,
-  html[data-theme="light"] [data-app-shell] .selection-action-bar .selection-action-button * {
-    color: rgb(9 9 11) !important;
-  }
-
   html[data-theme="light"] [data-app-shell] .workspace-primary-cta:disabled,
   html[data-theme="light"] [data-app-shell] .workspace-primary-cta:disabled * {
     color: rgb(113 113 122) !important;

@@ -303,6 +303,8 @@ function ProblemsBrowser() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [quickExportOpen, setQuickExportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [duplicatingId, setDuplicatingId] = useState("");
   const [duplicateNotice, setDuplicateNotice] = useState("");
@@ -390,6 +392,12 @@ function ProblemsBrowser() {
   useEffect(() => {
     writeSelectedProblemIds(selectedIds);
   }, [selectedIds]);
+
+  useEffect(() => {
+    if (selectedIds.length) return;
+    setDeleteConfirmOpen(false);
+    setDeleteError("");
+  }, [selectedIds.length]);
 
   useEffect(() => {
     if (!selectedIds.length && duplicateNotice.includes("랜덤 추출")) {
@@ -964,18 +972,18 @@ function ProblemsBrowser() {
     handleProblemBlockClick(problem);
   }
 
-  async function deleteSelectedProblems() {
+  async function confirmDeleteSelectedProblems() {
     if (!selectedIds.length || deleting) return;
-    const ok = window.confirm(`선택한 문항 ${selectedIds.length}개를 삭제할까요? 문항 세트에서도 함께 빠집니다.`);
-    if (!ok) return;
+    const idsToDelete = [...selectedIds];
+    setDeleteError("");
     setDeleting(true);
     try {
       const response = await api<{ deleted_count: number }>("/api/problems/bulk", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem_ids: selectedIds }),
+        body: JSON.stringify({ problem_ids: idsToDelete }),
       });
-      const deletedIds = new Set(selectedIds);
+      const deletedIds = new Set(idsToDelete);
       setData((current) => ({
         ...current,
         items: current.items.filter((problem) => !deletedIds.has(problem.id)),
@@ -987,9 +995,10 @@ function ProblemsBrowser() {
         deletedIds.forEach((id) => delete next[id]);
         return next;
       });
+      setDeleteConfirmOpen(false);
       await loadProblems();
     } catch {
-      window.alert("선택한 문항을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setDeleteError("선택한 문항을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setDeleting(false);
     }
@@ -1458,17 +1467,20 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-black px-4 py-3 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)] lg:top-[65px]">
-          <div className="flex items-center gap-2 text-sm font-black text-white">
-            <CheckSquare className="h-4 w-4 text-white" />
-            {selectedIds.length}개 선택됨
+        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white/96 px-4 py-3 text-zinc-950 shadow-[0_18px_45px_rgba(15,23,42,0.10)] ring-1 ring-black/5 backdrop-blur lg:top-[65px]">
+          <div className="flex min-w-0 items-center gap-3 text-sm font-black text-zinc-950">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white">
+              <CheckSquare className="h-4 w-4" />
+            </span>
+            <span className="truncate">{selectedIds.length}개 선택됨</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</button>
-            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</button>
-            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-white px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</button>
-            <button type="button" className="selection-action-button inline-flex h-8 items-center justify-center gap-2 rounded-[7px] bg-zinc-200 px-3 text-sm font-black text-zinc-950 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:cursor-wait disabled:opacity-60" disabled={deleting} onClick={deleteSelectedProblems}><Trash2 className="h-4 w-4" />삭제</button>
-            <button type="button" className="selection-action-clear inline-flex h-8 items-center rounded-[7px] bg-white/12 px-3 text-sm font-black text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" onClick={() => setSelectedIds([])}>선택 해제</button>
+            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</button>
+            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</button>
+            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</button>
+            <span className="hidden h-6 w-px bg-zinc-200 sm:block" />
+            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-black px-3 text-sm font-black text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 disabled:cursor-wait disabled:bg-zinc-300 disabled:text-zinc-500" disabled={deleting} onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-4 w-4" />삭제</button>
+            <button type="button" className="selection-action-clear inline-flex h-9 items-center rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setSelectedIds([])}>선택 해제</button>
           </div>
         </div>
       ) : null}
@@ -1545,6 +1557,42 @@ function ProblemsBrowser() {
                 </article>
               );
             })}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={deleteConfirmOpen}
+        onOpenChange={(open) => {
+          setDeleteConfirmOpen(open);
+          if (!open) setDeleteError("");
+        }}
+      >
+        <DialogContent className="max-w-md bg-white text-zinc-950">
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-xl font-bold text-zinc-950">선택 문항 삭제</h2>
+              <p className="mt-2 text-sm font-medium leading-6 text-zinc-600">
+                선택한 {selectedIds.length.toLocaleString("ko-KR")}개 문항을 삭제합니다. 문항 세트에 들어간 항목에서도 함께 빠집니다.
+              </p>
+            </div>
+            {selectedProblems.length ? (
+              <div className="space-y-2 rounded-[12px] bg-zinc-100 p-3">
+                {selectedProblems.slice(0, 3).map((problem) => (
+                  <div key={problem.id} className="flex items-center justify-between gap-3 text-sm font-semibold text-zinc-800">
+                    <span className="min-w-0 truncate">{problem.problem_number}번 · {sourceLabel(problem)}</span>
+                    <span className="shrink-0 text-xs text-zinc-500">{pageLabel(problem)}</span>
+                  </div>
+                ))}
+                {selectedIds.length > 3 ? <p className="text-xs font-semibold text-zinc-500">외 {selectedIds.length - 3}개</p> : null}
+              </div>
+            ) : null}
+            {deleteError ? <p className="rounded-[10px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-800">{deleteError}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setDeleteConfirmOpen(false)} disabled={deleting}>취소</Button>
+              <Button type="button" onClick={confirmDeleteSelectedProblems} disabled={deleting || !selectedIds.length}>
+                {deleting ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -480,7 +480,7 @@ export function ExportModal({
             </div>
             <div className="rounded-lg bg-white p-3">
               <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">시험 일시</div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <div className="mt-2 grid gap-2">
                 <Input className="bg-white" type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="시험 일자" />
                 <Input className="bg-white" type="time" value={examStartTime} onChange={(event) => setExamStartTime(event.target.value)} aria-label="시험 시작 시간" />
                 <Input className="bg-white" type="time" value={examEndTime} onChange={(event) => setExamEndTime(event.target.value)} aria-label="시험 종료 시간" />
