@@ -392,20 +392,30 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     if (chatOpen) inputRef.current?.focus();
   }, [chatOpen]);
 
+  const expandedDesktop = chatOpen && !compact;
+
   return (
     <div className={cn("relative min-w-0", compact ? "w-full" : chatOpen ? "w-full max-w-none" : "w-full max-w-[760px]")}>
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/78 px-3 text-zinc-950 transition-all",
           compact && chatOpen ? "min-h-[86px] py-2" : chatOpen ? "min-h-[60px] py-1.5" : "min-h-[52px] py-2.5",
-          compact && chatOpen ? "flex flex-col justify-center gap-2" : "flex items-center gap-3"
+          compact && chatOpen
+            ? "flex flex-col justify-center gap-2"
+            : expandedDesktop
+              ? cn(
+                  "grid items-center gap-3",
+                  primaryChatAction?.href ? "grid-cols-[minmax(18rem,1fr)_minmax(8rem,12rem)_minmax(18rem,28rem)]" : "grid-cols-[minmax(18rem,1fr)_minmax(18rem,28rem)]"
+                )
+              : "flex items-center gap-3"
         )}
       >
         <button
           type="button"
+          data-coagent-status-message
           className={cn(
             "flex min-w-0 max-w-full overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            chatOpen ? "min-h-10 flex-1 items-center py-1 pr-2" : "flex-1 items-center py-1",
+            expandedDesktop ? "min-h-10 w-full items-center py-0.5 pr-1" : chatOpen ? "min-h-10 flex-1 items-center py-1 pr-2" : "flex-1 items-center py-1",
             compact && chatOpen && "w-full"
           )}
           onClick={() => setChatOpen(true)}
@@ -415,7 +425,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           <span className="min-w-0 flex-1 overflow-hidden">
             <span
               className={cn(
-                "block max-w-full overflow-hidden text-[16px] font-medium leading-[1.45] tracking-normal text-zinc-800",
+                "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
+                expandedDesktop ? "text-[15px] leading-[1.32]" : "text-[16px] leading-[1.45]",
                 chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
               )}
             >
@@ -434,7 +445,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           <button
             type="button"
             className={cn(
-              "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800",
+              "inline-flex h-10 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800",
               compact ? "w-full" : "max-w-[12rem]"
             )}
             onClick={() => router.push(primaryChatAction.href || "/problem-sets")}
@@ -446,9 +457,10 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
 
         {chatOpen ? (
           <form
+            data-coagent-chat-form
             className={cn(
               "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              compact ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
+              compact || expandedDesktop ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
             )}
             onSubmit={submitChat}
           >
