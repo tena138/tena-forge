@@ -1127,20 +1127,20 @@ function ProblemsBrowser() {
 
   function renderKoreanPassageCard(passage: KoreanReviewPassageItem) {
     return (
-      <article key={passage.id} className="rounded-lg border border-zinc-300/20 bg-zinc-400/[0.045] p-4">
+      <article key={passage.id} className="rounded-lg bg-white p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-200/70">Korean Passage</div>
-            <h3 className="mt-1 line-clamp-1 text-sm font-bold text-slate-100">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Korean Passage</div>
+            <h3 className="mt-1 line-clamp-1 text-sm font-bold text-zinc-950">
               {passage.passage_title || passage.passage_instruction || "국어 지문"}
             </h3>
           </div>
-          <span className={cn("shrink-0 rounded border px-2 py-1 text-[11px] font-semibold", passage.needs_review ? "border-zinc-300/20 bg-zinc-300/10 text-zinc-100" : "border-zinc-300/20 bg-zinc-300/10 text-zinc-100")}>
+          <span className={cn("shrink-0 rounded bg-zinc-100 px-2 py-1 text-[11px] font-semibold", passage.needs_review ? "text-zinc-950" : "text-zinc-600")}>
             {passage.needs_review ? "저장 필요" : "저장됨"}
           </span>
         </div>
-        <MathText className="mt-3 line-clamp-3 text-sm leading-6 text-slate-300" value={passage.passage_text || "지문 본문이 비어 있습니다."} />
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-500">
+        <MathText className="mt-3 line-clamp-3 text-sm leading-6 text-zinc-700" value={passage.passage_text || "지문 본문이 비어 있습니다."} />
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium text-zinc-500">
           {passage.review_page_number ? <span>{passage.review_page_number}p</span> : null}
           <span>{passage.linked_questions.length.toLocaleString("ko-KR")}문항 연결</span>
           {passage.passage_type ? <span>{passage.passage_type}</span> : null}
@@ -1211,11 +1211,11 @@ function ProblemsBrowser() {
           <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 text-[11px] font-medium text-muted-foreground">
             {showSubject ? <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-700">{problem.tags?.subject}</span> : null}
             <span>{pageLabel(problem)}</span>
-            <span className="text-slate-600">·</span>
+            <span className="text-zinc-400">·</span>
             <span>{problemTypeLabel(problem)}</span>
             {problem.has_visual ? (
               <>
-                <span className="text-slate-600">·</span>
+                <span className="text-zinc-400">·</span>
                 <span>이미지 포함</span>
               </>
             ) : null}
@@ -1409,18 +1409,18 @@ function ProblemsBrowser() {
               width: batchFolderDrag.previewWidth,
             }}
           >
-            <div className="w-full rounded-xl border border-zinc-300/55 bg-[#101010]/95 p-3 text-left text-slate-100 shadow-[0_22px_65px_rgba(0,0,0,0.52)] backdrop-blur">
+            <div className="w-full rounded-xl bg-white p-3 text-left text-zinc-950 shadow-[0_18px_45px_rgba(15,23,42,0.10)] backdrop-blur">
               <div className="flex items-start gap-3">
-                <Folder className="mt-0.5 h-5 w-5 shrink-0 text-zinc-300" />
+                <Folder className="mt-0.5 h-5 w-5 shrink-0 text-zinc-800" />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold">{batchFolderDrag.name}</div>
-                  <div className="mt-1 text-xs text-slate-400">
+                  <div className="mt-1 text-xs font-semibold text-zinc-500">
                     {batchFolderDrag.batchCount.toLocaleString("ko-KR")}개 배치 · {batchFolderDrag.problemCount.toLocaleString("ko-KR")}문항
                   </div>
                 </div>
               </div>
               {folderDropMode ? (
-                <div className="mt-2 rounded-md border border-zinc-300/20 bg-zinc-400/10 px-2 py-1 text-[11px] font-semibold text-zinc-100">
+                <div className="mt-2 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-700">
                   {folderDropMode === "inside" ? "폴더 안에 넣기" : folderDropMode === "before" ? "이 위치로 이동" : "최상위로 이동"}
                 </div>
               ) : null}
@@ -1430,32 +1430,32 @@ function ProblemsBrowser() {
 
         {batchFolderContextMenu && contextMenuBatchFolder ? (
           <div
-            className="fixed z-50 w-44 overflow-hidden rounded-lg border border-white/10 bg-[#101010]/98 p-1 shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur"
+            className="fixed z-50 w-44 overflow-hidden rounded-lg bg-white p-1 shadow-[0_18px_45px_rgba(15,23,42,0.10)] backdrop-blur"
             style={{ left: batchFolderContextMenu.x, top: batchFolderContextMenu.y }}
             onClick={(event) => event.stopPropagation()}
           >
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06] hover:text-white"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 hover:text-zinc-950"
               onClick={() => {
                 selectBatchFolder(contextMenuBatchFolder.id);
                 setBatchFolderContextMenu(null);
               }}
             >
-              <FolderOpen className="h-4 w-4 text-[#9b8cff]" />
+              <FolderOpen className="h-4 w-4 text-zinc-700" />
               열기
             </button>
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06] hover:text-white"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 hover:text-zinc-950"
               onClick={() => clearBatchFolder(contextMenuBatchFolder.id)}
             >
-              <Minus className="h-4 w-4 text-slate-400" />
+              <Minus className="h-4 w-4 text-zinc-500" />
               폴더 비우기
             </button>
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-100 transition hover:bg-zinc-500/10"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100"
               onClick={() => deleteBatchFolder(contextMenuBatchFolder.id)}
             >
               <Trash2 className="h-4 w-4" />
@@ -1467,7 +1467,7 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white/96 px-4 py-3 text-zinc-950 shadow-[0_18px_45px_rgba(15,23,42,0.10)] ring-1 ring-black/5 backdrop-blur lg:top-[65px]">
+        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white/96 px-4 py-3 text-zinc-950 backdrop-blur lg:top-[65px]">
           <div className="flex min-w-0 items-center gap-3 text-sm font-black text-zinc-950">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white">
               <CheckSquare className="h-4 w-4" />
