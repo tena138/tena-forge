@@ -217,7 +217,7 @@ export function FloatingNav({
     <nav
       ref={navRef}
       className={cn(
-        "scrollbar-thin-dark fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto border-r border-black/10 bg-[#fbfbfa] py-4 shadow-none transition-[width,padding] duration-200 lg:flex",
+        "fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto border-r border-black/10 bg-[#fbfbfa] py-4 shadow-none transition-[width,padding] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex",
         isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
       )}
       onMouseEnter={() => hoverExpand && setAutoExpanded(true)}
