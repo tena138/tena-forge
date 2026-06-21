@@ -158,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <SiteLogo />
             </Link>
           </div>
-          <div className="hidden min-w-0 items-center justify-center px-2 xl:flex xl:px-4">
+          <div className="hidden min-w-0 overflow-hidden items-center justify-center px-2 xl:flex xl:px-4">
             <CoAgentStatusBar />
           </div>
           <div className="flex min-w-0 shrink-0 items-center gap-2">

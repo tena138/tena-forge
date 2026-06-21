@@ -405,7 +405,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             : expandedDesktop
               ? cn(
                   "grid items-center gap-3",
-                  primaryChatAction?.href ? "grid-cols-[minmax(18rem,1fr)_minmax(8rem,12rem)_minmax(18rem,28rem)]" : "grid-cols-[minmax(18rem,1fr)_minmax(18rem,28rem)]"
+                  primaryChatAction?.href ? "grid-cols-[minmax(0,1fr)_minmax(7rem,11rem)_minmax(18rem,28rem)]" : "grid-cols-[minmax(0,1fr)_minmax(18rem,28rem)]"
                 )
               : "flex items-center gap-3"
         )}
@@ -415,7 +415,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           data-coagent-status-message
           className={cn(
             "flex min-w-0 max-w-full overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            expandedDesktop ? "min-h-10 w-full items-center py-0.5 pr-1" : chatOpen ? "min-h-10 flex-1 items-center py-1 pr-2" : "flex-1 items-center py-1",
+            expandedDesktop ? "min-h-10 w-full items-center py-0.5 pr-4" : chatOpen ? "min-h-10 flex-1 items-center py-1 pr-2" : "flex-1 items-center py-1",
             compact && chatOpen && "w-full"
           )}
           onClick={() => setChatOpen(true)}
@@ -427,7 +427,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
               className={cn(
                 "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
                 expandedDesktop ? "text-[15px] leading-[1.32]" : "text-[16px] leading-[1.45]",
-                chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
+                expandedDesktop ? "truncate whitespace-nowrap" : chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
               )}
             >
               {typedReportMessage || "\u00A0"}
