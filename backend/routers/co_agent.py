@@ -623,8 +623,8 @@ def _created_exam_answer(draft: dict[str, Any], problem_set: ProblemSet) -> str:
     distribution = draft.get("difficulty_distribution") or {}
     href = f"/problem-sets/{problem_set.id}"
     return (
-        f"시험지를 만들어 두었습니다. `{problem_set.name}`에 {selected}문항을 배치했고, 배점 분포는 {distribution or '기록 없음'}입니다. "
-        f"이제 생성 결과만 확인하면 됩니다: {href}"
+        f"문항 세트에 새 시험지를 생성했습니다. `{problem_set.name}`에 {selected}문항을 배치했고, 배점 분포는 {distribution or '기록 없음'}입니다. "
+        f"이제 생성된 문항 세트만 확인하면 됩니다: {href}"
     )
 
 
@@ -633,7 +633,7 @@ def _exam_draft_quick_actions(draft: dict[str, Any]) -> list[dict[str, Any]]:
         return [
             {
                 "id": "open_created_exam",
-                "label": "생성된 시험지 확인",
+                "label": "새 문항 세트 확인",
                 "kind": "open",
                 "href": draft["problem_set"]["href"],
                 "problem_set_id": draft["problem_set"].get("id"),

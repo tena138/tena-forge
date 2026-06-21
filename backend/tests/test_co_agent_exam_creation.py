@@ -14,6 +14,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 from database import Base  # noqa: E402
 from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag, UsageLog  # noqa: E402
 from routers.co_agent import CoAgentChatMessage, CoAgentChatRequest, co_agent_chat  # noqa: E402
+from routers.problem_sets import list_problem_sets  # noqa: E402
 
 
 def make_request(owner_id: str):
@@ -91,8 +92,15 @@ class CoAgentExamCreationTests(unittest.TestCase):
             ).all()
             self.assertEqual(len(items), 20)
             self.assertIn("/problem-sets/", response.answer)
+            self.assertIn("문항 세트", response.answer)
             self.assertEqual(response.drafts[0]["status"], "created")
             self.assertEqual(response.quick_actions[0]["href"], f"/problem-sets/{problem_sets[0].id}")
+            self.assertEqual(response.quick_actions[0]["label"], "새 문항 세트 확인")
+
+            listed_sets = list_problem_sets(self.request, db)
+            self.assertEqual(len(listed_sets), 1)
+            self.assertEqual(str(listed_sets[0]["id"]), str(problem_sets[0].id))
+            self.assertEqual(listed_sets[0]["item_count"], 20)
 
             usage = db.scalars(select(UsageLog).where(UsageLog.user_id == self.owner_id, UsageLog.usage_type == "co_agent_exam_build")).all()
             self.assertEqual(len(usage), 1)
