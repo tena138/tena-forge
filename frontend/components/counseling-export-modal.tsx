@@ -117,7 +117,7 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto border-0 bg-white text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto border-0 bg-white text-zinc-950">
         <div className="space-y-5">
           <div className="flex items-start justify-between gap-4 pr-10">
             <div>
@@ -170,7 +170,7 @@ export function CounselingExportModal({ open, onOpenChange, studentId, studentNa
                 <h3 className="mb-2 text-sm font-bold">상담일지 템플릿</h3>
                 <div className="space-y-2">
                   {templates.map((template) => (
-                    <button key={template.id} type="button" onClick={() => setSelectedTemplateId(template.id)} className={`w-full rounded-md p-3 text-left text-sm transition ${selectedTemplateId === template.id ? "bg-zinc-200 shadow-[0_0_0_2px_rgba(0,0,0,.10)]" : "bg-white hover:bg-zinc-100"}`}>
+                    <button key={template.id} type="button" onClick={() => setSelectedTemplateId(template.id)} className={`w-full rounded-md p-3 text-left text-sm transition ${selectedTemplateId === template.id ? "bg-zinc-200" : "bg-white hover:bg-zinc-100"}`}>
                       <strong>{template.title}</strong>
                       {template.description ? <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{template.description}</p> : null}
                     </button>
