@@ -46,7 +46,7 @@ function ResetPasswordPageContent() {
   if (!valid) {
     return (
       <AuthCard title="재설정 링크가 만료되었습니다" subtitle="새 비밀번호 재설정 링크를 받아주세요.">
-        <Link href="/forgot-password" className="block rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-white">새 링크 받기</Link>
+        <Link href="/forgot-password" className="block rounded-md bg-black px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-zinc-800">새 링크 받기</Link>
       </AuthCard>
     );
   }
@@ -54,18 +54,18 @@ function ResetPasswordPageContent() {
   return (
     <AuthCard title="새 비밀번호 설정">
       <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
-        <label className="block text-sm font-semibold text-slate-200">
+        <label className="block text-sm font-semibold text-zinc-950">
           새 비밀번호 *
           <div className="relative mt-1.5">
             <Input type={showPassword ? "text" : "password"} className="h-11 pr-11" {...form.register("password")} />
-            <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-white" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
+            <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 transition-colors hover:text-zinc-950" onClick={() => setShowPassword((value) => !value)} aria-label="비밀번호 표시 전환">
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           <PasswordStrength password={password} />
           <FieldError message={form.formState.errors.password?.message} />
         </label>
-        <label className="block text-sm font-semibold text-slate-200">
+        <label className="block text-sm font-semibold text-zinc-950">
           새 비밀번호 확인 *
           <Input type="password" className="mt-1.5 h-11" {...form.register("confirmPassword")} />
           <FieldError message={form.formState.errors.confirmPassword?.message} />
