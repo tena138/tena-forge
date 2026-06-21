@@ -379,13 +379,13 @@ function ClassTrendChart({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-black/20 dark:shadow-none">
+    <div className="rounded-lg bg-white p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <p className="text-sm font-black text-slate-950 dark:text-white">시험 통계 추이</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">평균, 최고/최저, 분위수를 선택해서 시간 흐름으로 비교합니다.</p>
         </div>
-        <div className="flex w-fit rounded-md border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.035]">
+        <div className="flex w-fit rounded-md bg-slate-50 p-1">
           <button
             type="button"
             aria-label="선 그래프"
@@ -423,7 +423,7 @@ function ClassTrendChart({
               )}
             >
               <span
-                className={cn("h-2.5 w-2.5 rounded-full", metric.key === "selected" && "border border-slate-300 shadow-sm dark:border-white/45")}
+                className={cn("h-2.5 w-2.5 rounded-full", metric.key === "selected" && "border border-slate-300")}
                 style={{ backgroundColor: active ? metric.color : "rgba(148, 163, 184, 0.35)" }}
               />
               {metric.label}
@@ -433,7 +433,7 @@ function ClassTrendChart({
       </div>
 
       {points.length ? (
-        <div className="mt-4 overflow-x-auto rounded-md bg-white p-3 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200 [scrollbar-width:thin]">
+        <div className="mt-4 overflow-x-auto rounded-md bg-white p-3 [scrollbar-width:thin]">
           <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="시험 통계 추이 그래프">
             {[100, 75, 50, 25, 0].map((tick) => {
               const y = yFor(tick);
@@ -518,19 +518,19 @@ function ClassTrendChart({
       )}
 
       <div className="mt-3 grid gap-2 text-xs md:grid-cols-4">
-        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
+        <div className="rounded-md bg-slate-50 p-3">
           <p className="text-slate-500">{selectedPoint ? "선택 평균" : "최근 평균"}</p>
           <p className="mt-1 text-base font-black text-slate-950 dark:text-white">{scoreLabel(summaryPoint?.average)}</p>
         </div>
-        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
+        <div className="rounded-md bg-slate-50 p-3">
           <p className="text-slate-500">{selectedPoint ? "선택 중앙값" : "최근 중앙값"}</p>
           <p className="mt-1 text-base font-black text-zinc-700 dark:text-zinc-100">{scoreLabel(summaryPoint?.q2)}</p>
         </div>
-        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
+        <div className="rounded-md bg-slate-50 p-3">
           <p className="text-slate-500">{selectedPoint ? "선택 범위" : "최근 범위"}</p>
           <p className="mt-1 text-base font-black text-slate-950 dark:text-slate-100">{summaryPoint ? `${scoreLabel(summaryPoint.lowest)} - ${scoreLabel(summaryPoint.highest)}` : "-"}</p>
         </div>
-        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:ring-0">
+        <div className="rounded-md bg-slate-50 p-3">
           <p className="text-slate-500">{selectedPoint ? "선택 응시" : "최근 응시"}</p>
           <p className="mt-1 text-base font-black text-zinc-700 dark:text-zinc-100">{summaryPoint ? `${summaryPoint.respondents}/${summaryPoint.assigned}` : "-"}</p>
         </div>
@@ -662,8 +662,8 @@ function ClassStatsPanel({
   const focusedPointId = focusedStat?.detail.id || classMetricPoints[classMetricPoints.length - 1]?.id || null;
 
   return (
-    <div className="border-t border-slate-200 px-4 pb-4 dark:border-white/10">
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-300/15 dark:bg-zinc-500/[0.06] dark:shadow-none">
+    <div className="px-4 pb-4">
+      <div className="rounded-lg bg-white p-4">
         {loading ? (
           <div className="flex min-h-36 items-center justify-center text-sm text-slate-400">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -700,7 +700,7 @@ function ClassStatsPanel({
             </div>
 
             <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr_0.75fr_0.75fr]">
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-white/[0.055]">
+              <div className="rounded-lg bg-zinc-50 p-4">
                 <p className="text-xs font-semibold text-zinc-700 dark:text-slate-400">{selectedSessionStat ? "본인 선택 점수" : "본인 최근 점수"}</p>
                 <div className="mt-2 flex items-end justify-between gap-4">
                   <p className="text-4xl font-black tracking-normal text-slate-950 dark:text-white">{scoreLabel(focusedStat?.selectedScore)}</p>
@@ -709,15 +709,15 @@ function ClassStatsPanel({
                   </p>
                 </div>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-semibold text-slate-500">반 평균 대비</p>
                 <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{focusedClassDelta == null ? "-" : `${focusedClassDelta >= 0 ? "+" : ""}${focusedClassDelta.toFixed(1)}`}</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-semibold text-slate-500">{selectedSessionStat ? "선택 반 평균" : "최근 반 평균"}</p>
                 <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{scoreLabel(focusedStat?.classAverage)}</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-semibold text-slate-500">석차</p>
                 <p className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{focusedStat?.rank == null ? "-" : `${focusedStat.rank}/${focusedStat.classGradedCount}`}</p>
               </div>
@@ -726,33 +726,33 @@ function ClassStatsPanel({
             <ClassTrendChart points={classMetricPoints} selectedPointId={focusedPointId} onSelectPoint={setSelectedStatsId} />
 
             <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
-              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
+              <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">학생 평균</p>
                 <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{scoreLabel(selectedAverage)}</p>
               </div>
-              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
+              <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">반 평균</p>
                 <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{scoreLabel(classAverageAcross)}</p>
               </div>
-              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
+              <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">전체 평균</p>
                 <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{scoreLabel(overallAverageAcross)}</p>
               </div>
-              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
+              <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">점수 표준편차</p>
                 <p className="mt-1 text-lg font-black text-slate-950 dark:text-slate-100">{selectedStdDev == null ? "-" : selectedStdDev.toFixed(1)}</p>
               </div>
-              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
+              <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">반 평균 대비</p>
                 <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{averageClassDelta == null ? "-" : `${averageClassDelta >= 0 ? "+" : ""}${averageClassDelta.toFixed(1)}`}</p>
               </div>
-              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[0.045] dark:ring-0">
+              <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">추세</p>
                 <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{trend == null ? "-" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}`}</p>
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white p-4 shadow-sm [scrollbar-width:thin] dark:border-white/10 dark:bg-black/20 dark:shadow-none">
+            <div className="overflow-x-auto rounded-lg bg-white p-4 [scrollbar-width:thin]">
               <div className="min-w-[860px]">
                 <div className="mb-2 grid grid-cols-[42px_minmax(0,1fr)] gap-3 text-xs text-slate-500">
                   <span>점수</span>
@@ -820,7 +820,7 @@ function ClassStatsPanel({
 
             <div className="grid gap-3 xl:grid-cols-2">
               {sessionStats.map((item) => (
-                <div key={item.detail.id} className="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-black/20 dark:shadow-none">
+                <div key={item.detail.id} className="rounded-md bg-white p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-slate-950 dark:text-white">{item.detail.title}</p>
