@@ -65,6 +65,14 @@ class ExamPaperPlannerTests(unittest.TestCase):
         db.commit()
         return problems
 
+    def _seed_math_pool_with_sparse_difficulty(self, db, count: int = 20):
+        problems = []
+        for number in range(1, count + 1):
+            difficulty = "3점" if number <= 3 else None
+            problems.append(self._add_problem(db, number, difficulty, f"단원{number % 3 + 1}"))
+        db.commit()
+        return problems
+
     def test_math_positions_follow_point_difficulty_bands(self):
         db = self.Session()
         try:
@@ -132,6 +140,26 @@ class ExamPaperPlannerTests(unittest.TestCase):
             self.assertTrue(draft["ignored_difficulty_plan"])
             self.assertEqual(draft["difficulty_distribution"], {"미지정": 20})
             self.assertTrue(any("배점 메타데이터" in warning for warning in draft["warnings"]))
+        finally:
+            db.close()
+
+    def test_sparse_point_metadata_uses_random_selection_without_difficulty_slots(self):
+        db = self.Session()
+        try:
+            self._seed_math_pool_with_sparse_difficulty(db, 20)
+
+            draft = build_exam_paper_draft(
+                db,
+                message="수학 고3 20문항 1-10 3점 11-20 4점 세움 양식 시험지 제작",
+                owner_ids={self.owner_id},
+            )
+
+            self.assertEqual(draft["status"], "draft")
+            self.assertEqual(draft["selected_count"], 20)
+            self.assertEqual(draft["missing_difficulty_slots"], [])
+            self.assertEqual(draft["selection_strategy"], "random_without_difficulty")
+            self.assertTrue(draft["ignored_difficulty_plan"])
+            self.assertEqual(draft["point_difficulty_metadata_count"], 3)
         finally:
             db.close()
 
