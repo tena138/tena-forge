@@ -123,7 +123,7 @@ export default function MyTemplatesPage() {
     <div className="space-y-6 pb-24">
       <Link
         href={withReturnTo("/templates/studio?new=1")}
-        className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-2xl shadow-zinc-950/20 transition hover:bg-zinc-800"
+        className="fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white transition hover:bg-zinc-800"
         aria-label="템플릿 만들기"
         title="템플릿 만들기"
       >
@@ -141,7 +141,7 @@ export default function MyTemplatesPage() {
           {templates.map((template) => {
             const visualSet = getVisualTemplateSet(template);
             return (
-              <article key={template.id} className="overflow-hidden rounded-[10px] bg-white/85 shadow-[0_18px_52px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:bg-white">
+              <article key={template.id} className="overflow-hidden rounded-[10px] bg-white transition hover:bg-zinc-50">
                 <Link href={editorHref(template)} className="block">
                   <TemplateCardPreview template={template} />
                 </Link>
@@ -168,7 +168,7 @@ export default function MyTemplatesPage() {
                           </Button>
                         </DropdownMenu.Trigger>
                         <DropdownMenu.Portal>
-                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] bg-white p-1 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
+                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] bg-white p-1">
                             <DropdownMenu.Item
                               className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-100 focus:bg-zinc-100"
                               onSelect={() => togglePublish(template)}
@@ -203,7 +203,7 @@ export default function MyTemplatesPage() {
           })}
         </div>
       ) : (
-        <section className="rounded-[10px] bg-white/85 p-10 text-center">
+        <section className="rounded-[10px] bg-white p-10 text-center">
           <h2 className="text-lg font-bold text-zinc-950">저장된 템플릿이 없습니다</h2>
           <Link href={withReturnTo("/templates/studio?new=1")} className="mt-5 inline-flex">
             <Button>

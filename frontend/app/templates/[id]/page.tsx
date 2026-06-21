@@ -60,7 +60,7 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
       <section className="space-y-4">
-        <div className="rounded-[12px] bg-white/90 p-6 shadow-[0_18px_70px_rgba(0,0,0,0.06)]">
+        <div className="rounded-[12px] bg-white p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">{categoryLabel(template.category)} · {visibilityLabels[template.visibility]}</p>
@@ -104,7 +104,7 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
         <TemplatePreviewFrame html={template.html} css={template.css} />
       </section>
 
-      <aside className="space-y-3 rounded-[10px] bg-white/85 p-4 shadow-[0_18px_52px_rgba(0,0,0,0.05)]">
+      <aside className="space-y-3 rounded-[10px] bg-white p-4">
         <h2 className="text-lg font-bold text-zinc-950">지원 변수</h2>
         <div className="flex flex-wrap gap-2 text-xs">
           {["test_title", "student_name", "problem_text", "solution", "answer", "page_number", "total_pages", "subject", "unit", "difficulty", "tags"].map((key) => (

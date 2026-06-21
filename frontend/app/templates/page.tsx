@@ -160,7 +160,7 @@ export default function TemplateHubPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[12px] bg-white/90 p-6 shadow-[0_18px_70px_rgba(0,0,0,0.06)]">
+      <section className="overflow-hidden rounded-[12px] bg-white p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-[7px] bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-950">
@@ -189,7 +189,7 @@ export default function TemplateHubPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 rounded-[10px] bg-white/85 p-4 md:grid-cols-[1fr_220px_180px]">
+      <section className="grid gap-3 rounded-[10px] bg-white p-4 md:grid-cols-[1fr_220px_180px]">
         <label className="relative block">
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-500" />
           <Input className="pl-9" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="템플릿 검색" />
@@ -220,7 +220,7 @@ export default function TemplateHubPage() {
           {visible.map((template) => {
             const visualSet = getVisualTemplateSet(template);
             return (
-              <article key={template.id} className="overflow-hidden rounded-[10px] bg-white/85 shadow-[0_18px_52px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:bg-white">
+              <article key={template.id} className="overflow-hidden rounded-[10px] bg-white transition hover:bg-zinc-50">
                 <Link href={openHref(template)} className="block">
                   <TemplateCardPreview template={template} />
                 </Link>
@@ -247,7 +247,7 @@ export default function TemplateHubPage() {
                           </Button>
                         </DropdownMenu.Trigger>
                         <DropdownMenu.Portal>
-                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] bg-white p-1 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
+                          <DropdownMenu.Content align="end" sideOffset={8} className="z-[160] w-40 overflow-hidden rounded-[8px] bg-white p-1">
                             <DropdownMenu.Item asChild>
                               <Link href={openHref(template)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-100 focus:bg-zinc-100">
                                 <Eye className="h-4 w-4" />
