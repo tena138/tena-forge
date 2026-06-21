@@ -758,9 +758,9 @@ function AcademyOperationsPanel() {
   }, [learningStudents, selectedGroupIds, selectedStudentIds]);
   if (!academyId && profile?.account_type === "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
         <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다</h1>
-        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
+        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white hover:bg-zinc-800">
           Student App으로 이동
         </a>
       </div>
@@ -890,15 +890,15 @@ function AcademyOperationsPanel() {
   }
 
   if (!profile) {
-    return <div className="rounded-[12px] border border-white/10 bg-white/[0.04] p-6">로그인이 필요합니다.</div>;
+    return <div className="rounded-[12px] bg-white p-6 text-sm font-semibold text-zinc-700 shadow-[0_14px_38px_rgba(0,0,0,0.04)]">로그인이 필요합니다.</div>;
   }
 
   return (
     <div className="space-y-6">
       {(notice || error) && (
-        <div className="rounded-[12px] border border-zinc-300/20 bg-zinc-400/[0.08] p-4 text-sm">
-          {notice && <div className="text-zinc-100">{notice}</div>}
-          {error && <div className="text-zinc-300">{error}</div>}
+        <div className="rounded-[12px] bg-zinc-100 p-4 text-sm font-semibold">
+          {notice && <div className="text-zinc-800">{notice}</div>}
+          {error && <div className="text-zinc-700">{error}</div>}
         </div>
       )}
 
@@ -919,10 +919,10 @@ function AcademyOperationsPanel() {
                         key={option.value}
                         type="button"
                         onClick={() => setLearningAssignmentSourceMode(option.value as LearningAssignmentSourceMode)}
-                        className={`h-11 rounded-[8px] border px-3 text-sm font-bold transition ${
+                        className={`h-11 rounded-[8px] px-3 text-sm font-bold transition ${
                           learningAssignmentSourceMode === option.value
-                            ? "border-zinc-300/60 bg-zinc-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.22)]"
-                            : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
+                            ? "bg-black text-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]"
+                            : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
                         }`}
                       >
                         {option.label}
@@ -931,7 +931,7 @@ function AcademyOperationsPanel() {
                   </div>
                   {learningAssignmentSourceMode === "archive" ? (
                     <select
-                      className="h-11 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                      className="h-11 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
                       value={selectedArchiveSourceValue}
                       onChange={(event) => selectArchiveLearningSource(event.target.value)}
                     >
@@ -958,8 +958,8 @@ function AcademyOperationsPanel() {
 
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div>
-                    <div className="mb-2 text-sm font-bold text-white">반 선택</div>
-                    <div className="flex max-h-44 flex-wrap gap-2 overflow-auto rounded-[8px] border border-white/10 bg-black/20 p-2">
+                    <div className="mb-2 text-sm font-bold text-zinc-950">반 선택</div>
+                    <div className="flex max-h-44 flex-wrap gap-2 overflow-auto rounded-[8px] bg-zinc-100 p-2">
                       {classes.length ? classes.map((group) => {
                         const selected = selectedGroupIds.includes(group.id);
                         return (
@@ -967,8 +967,8 @@ function AcademyOperationsPanel() {
                             key={group.id}
                             type="button"
                             onClick={() => setSelectedGroupIds((current) => toggleId(current, group.id))}
-                            className={`rounded-[7px] border px-3 py-2 text-sm font-semibold transition ${
-                              selected ? "border-zinc-300/60 bg-zinc-500/80 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
+                            className={`rounded-[7px] px-3 py-2 text-sm font-semibold transition ${
+                              selected ? "bg-black text-white" : "bg-white text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
                             }`}
                           >
                             {group.name}
@@ -979,10 +979,10 @@ function AcademyOperationsPanel() {
                   </div>
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="text-sm font-bold text-white">{selectedGroupIds.length ? "선택한 반 학생" : "학생 선택"}</span>
-                      {selectedGroupIds.length ? <span className="text-xs font-semibold text-slate-500">{visibleLearningStudents.length}명</span> : null}
+                      <span className="text-sm font-bold text-zinc-950">{selectedGroupIds.length ? "선택한 반 학생" : "학생 선택"}</span>
+                      {selectedGroupIds.length ? <span className="text-xs font-semibold text-zinc-500">{visibleLearningStudents.length}명</span> : null}
                     </div>
-                    <div className="flex max-h-44 flex-wrap gap-2 overflow-auto rounded-[8px] border border-white/10 bg-black/20 p-2">
+                    <div className="flex max-h-44 flex-wrap gap-2 overflow-auto rounded-[8px] bg-zinc-100 p-2">
                       {visibleLearningStudents.length ? visibleLearningStudents.map((student) => {
                         const selected = selectedStudentIds.includes(student.student_user_id);
                         return (
@@ -990,12 +990,12 @@ function AcademyOperationsPanel() {
                             key={student.student_user_id}
                             type="button"
                             onClick={() => setSelectedStudentIds((current) => toggleId(current, student.student_user_id))}
-                            className={`min-w-[8rem] rounded-[7px] border px-3 py-2 text-left text-sm font-semibold transition ${
-                              selected ? "border-zinc-300/60 bg-zinc-500/75 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20"
+                            className={`min-w-[8rem] rounded-[7px] px-3 py-2 text-left text-sm font-semibold transition ${
+                              selected ? "bg-black text-white" : "bg-white text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
                             }`}
                           >
                             <span className="block truncate">{student.student_name}</span>
-                            <span className="mt-1 block truncate text-[11px] font-medium text-slate-500">
+                            <span className={`mt-1 block truncate text-[11px] font-medium ${selected ? "text-zinc-300" : "text-zinc-500"}`}>
                               {student.groups.map((group) => group.name).join(", ") || "반 없음"}
                             </span>
                           </button>
@@ -1009,9 +1009,9 @@ function AcademyOperationsPanel() {
                   </div>
                 </div>
 
-                <div className="rounded-[8px] border border-white/10 bg-white/[0.035] p-3 text-sm text-slate-300">
-                  <span className="font-bold text-white">선택 대상 {learningTargetCount}개</span>
-                  <span className="ml-2 text-slate-500">
+                <div className="rounded-[8px] bg-zinc-100 p-3 text-sm font-semibold text-zinc-700">
+                  <span className="font-black text-zinc-950">선택 대상 {learningTargetCount}개</span>
+                  <span className="ml-2 text-zinc-500">
                     {[...selectedGroupNames, ...selectedStudentNames].join(", ") || "반 또는 학생을 선택해주세요."}
                   </span>
                 </div>
@@ -1048,15 +1048,15 @@ function AcademyOperationsPanel() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {learningAssignments.length ? learningAssignments.map((assignment) => (
-                  <button key={assignment.id} onClick={() => openLearningReport(assignment)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/30">
+                  <button key={assignment.id} onClick={() => openLearningReport(assignment)} className="w-full rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="truncate font-semibold text-white">{assignment.title}</div>
-                        <div className="mt-1 text-xs text-slate-500">
+                        <div className="truncate font-semibold text-zinc-950">{assignment.title}</div>
+                        <div className="mt-1 text-xs font-semibold text-zinc-500">
                           {learningAssignmentWorkloadLabel(assignment)} · {assignment.status}{assignment.due_at ? ` · 마감 ${compactDate(assignment.due_at)}` : ""}
                         </div>
                       </div>
-                      <LineChart className="h-4 w-4 shrink-0 text-zinc-200" />
+                      <LineChart className="h-4 w-4 shrink-0 text-zinc-600" />
                     </div>
                   </button>
                 )) : <p className="text-sm text-muted-foreground">아직 배포한 학습 과제가 없습니다.</p>}
@@ -1070,27 +1070,27 @@ function AcademyOperationsPanel() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <div className="font-semibold text-white">{learningReport.assignment.title}</div>
-                    <div className="mt-1 text-xs text-slate-400">
+                    <div className="font-semibold text-zinc-950">{learningReport.assignment.title}</div>
+                    <div className="mt-1 text-xs font-semibold text-zinc-500">
                       대상 {learningReport.summary.target_count} · 완료 {learningReport.summary.submitted_count} · 확인 대기 {learningReport.summary.pending_confirmation_count || 0} · 미제출 {learningReport.summary.missing_count}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-                      <p className="text-xs text-slate-500">완료율</p>
-                      <p className="mt-1 text-xl font-black text-white">{percentLabel(learningReport.summary.completion_rate)}</p>
+                    <div className="rounded-[8px] bg-zinc-100 p-3">
+                      <p className="text-xs font-semibold text-zinc-500">완료율</p>
+                      <p className="mt-1 text-xl font-black text-zinc-950">{percentLabel(learningReport.summary.completion_rate)}</p>
                     </div>
-                    <div className="rounded-[8px] border border-white/10 bg-black/20 p-3">
-                      <p className="text-xs text-slate-500">평균</p>
-                      <p className="mt-1 text-xl font-black text-white">{learningReport.summary.average_score ?? "-"}</p>
+                    <div className="rounded-[8px] bg-zinc-100 p-3">
+                      <p className="text-xs font-semibold text-zinc-500">평균</p>
+                      <p className="mt-1 text-xl font-black text-zinc-950">{learningReport.summary.average_score ?? "-"}</p>
                     </div>
                   </div>
                   <div className="max-h-72 space-y-2 overflow-y-auto">
                     {learningReport.students.map((student) => (
-                      <div key={student.student_id} className="flex items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                        <span className="min-w-0 truncate">{student.student_name}</span>
+                      <div key={student.student_id} className="flex items-center justify-between gap-3 rounded-[8px] bg-zinc-100 px-3 py-2 text-sm">
+                        <span className="min-w-0 truncate font-semibold text-zinc-950">{student.student_name}</span>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className={student.status === "pending_confirmation" ? "text-zinc-200" : "text-slate-400"}>{learningSubmissionStatusLabel(student.status)}</span>
+                          <span className={student.status === "pending_confirmation" ? "font-semibold text-zinc-950" : "font-semibold text-zinc-500"}>{learningSubmissionStatusLabel(student.status)}</span>
                           {student.status === "pending_confirmation" ? (
                             <Button
                               size="sm"
@@ -1278,9 +1278,9 @@ function AcademySchedulePanel() {
 
   if (!academyModeActive && profile?.account_type === "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
-        <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다.</h1>
-        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
+        <h1 className="text-xl font-bold text-zinc-950">학생 계정에서는 Student App을 사용합니다.</h1>
+        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white hover:bg-zinc-800">
           Student App
         </a>
       </div>
@@ -1625,7 +1625,7 @@ function AcademyPageContent() {
 
 export default function AcademyPage() {
   return (
-    <Suspense fallback={<div className="rounded-[12px] border border-white/10 bg-white/[0.04] p-6 text-sm text-slate-400">콘솔을 준비하는 중입니다.</div>}>
+    <Suspense fallback={<div className="rounded-[12px] bg-white p-6 text-sm font-semibold text-zinc-500 shadow-[0_14px_38px_rgba(0,0,0,0.04)]">콘솔을 준비하는 중입니다.</div>}>
       <AcademyPageContent />
     </Suspense>
   );
