@@ -2,7 +2,7 @@
 
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Ban, BookOpenCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, Ban, BookOpenCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -460,62 +460,62 @@ export function ArchiveBatchHistory({
         </div>
       ) : null}
       {assignBatch ? (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl overflow-hidden rounded-[14px] border border-white/10 bg-[#12111a] shadow-2xl shadow-black/50">
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl overflow-hidden rounded-[14px] bg-white text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+            <div className="flex items-start justify-between gap-4 p-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-200">Batch Assignment</p>
-                <h2 className="mt-1 text-xl font-black text-white">클래스/학생에게 할당</h2>
-                <p className="mt-1 text-sm text-slate-400">{assignBatch.name} · {assignBatch.problem_count}문항</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Batch Assignment</p>
+                <h2 className="mt-1 text-xl font-black text-zinc-950">클래스/학생에게 할당</h2>
+                <p className="mt-1 text-sm text-zinc-500">{assignBatch.name} · {assignBatch.problem_count}문항</p>
               </div>
               <button
                 type="button"
                 onClick={() => setAssignBatch(null)}
-                className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-slate-400 transition hover:bg-white/[0.06] hover:text-white"
+                className="grid h-9 w-9 place-items-center rounded-lg bg-zinc-100 text-zinc-700 transition hover:bg-zinc-200 hover:text-zinc-950"
                 aria-label="닫기"
               >
-                ×
+                <X className="h-4 w-4" />
               </button>
             </div>
             <div className="max-h-[70vh] overflow-y-auto p-5">
-              <label className="block text-sm font-bold text-slate-300">
+              <label className="block text-sm font-bold text-zinc-700">
                 할당 날짜
                 <input
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={(event) => setScheduledAt(event.target.value)}
-                  className="mt-2 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none focus:border-zinc-300/50"
+                  className="mt-2 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
                 />
               </label>
 
               <div className="mt-5 space-y-3">
                 {classes.map((classRow) => (
-                  <div key={classRow.id} className="rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
+                  <div key={classRow.id} className="rounded-[10px] bg-zinc-50 p-3">
                     <label className="flex cursor-pointer items-center justify-between gap-3">
                       <span>
-                        <span className="block font-bold text-white">{classRow.name}</span>
-                        <span className="mt-0.5 block text-xs text-slate-500">{classRow.students.length}명</span>
+                        <span className="block font-bold text-zinc-950">{classRow.name}</span>
+                        <span className="mt-0.5 block text-xs text-zinc-500">{classRow.students.length}명</span>
                       </span>
                       <input
                         type="checkbox"
                         checked={selectedClassIds.includes(classRow.id)}
                         onChange={() => toggleClass(classRow.id)}
-                        className="h-5 w-5 accent-zinc-500"
+                        className="h-5 w-5 accent-black"
                       />
                     </label>
                     {classRow.students.length ? (
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {classRow.students.map((student) => (
-                          <label key={student.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[8px] border border-white/10 bg-black/20 px-3 py-2">
+                          <label key={student.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[8px] bg-white px-3 py-2 transition hover:bg-zinc-100">
                             <span className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-slate-100">{student.name}</span>
-                              <span className="mt-0.5 block truncate text-xs text-slate-500">{student.grade_level || "-"} · 오답 {student.unresolved_wrong_count}</span>
+                              <span className="block truncate text-sm font-semibold text-zinc-950">{student.name}</span>
+                              <span className="mt-0.5 block truncate text-xs text-zinc-500">{student.grade_level || "-"} · 오답 {student.unresolved_wrong_count}</span>
                             </span>
                             <input
                               type="checkbox"
                               checked={selectedStudentIds.includes(student.id)}
                               onChange={() => toggleStudent(student.id)}
-                              className="h-4 w-4 shrink-0 accent-zinc-500"
+                              className="h-4 w-4 shrink-0 accent-black"
                             />
                           </label>
                         ))}
@@ -524,13 +524,13 @@ export function ArchiveBatchHistory({
                   </div>
                 ))}
                 {!classes.length ? (
-                  <div className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">표시할 클래스가 없습니다.</div>
+                  <div className="rounded-lg bg-zinc-100 p-4 text-sm text-zinc-500">표시할 클래스가 없습니다.</div>
                 ) : null}
               </div>
 
-              {assignError ? <p className="mt-4 rounded-lg border border-zinc-400/20 bg-zinc-400/10 p-3 text-sm text-zinc-200">{assignError}</p> : null}
+              {assignError ? <p className="mt-4 rounded-lg bg-zinc-100 p-3 text-sm font-semibold text-zinc-700">{assignError}</p> : null}
             </div>
-            <div className="flex flex-col gap-2 border-t border-white/10 p-5 sm:flex-row sm:justify-end">
+            <div className="flex flex-col gap-2 p-5 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setAssignBatch(null)}>취소</Button>
               <Button type="button" onClick={assignSelectedBatch} disabled={assigning || (!selectedClassIds.length && !selectedStudentIds.length)}>
                 <BookOpenCheck className="h-4 w-4" />
