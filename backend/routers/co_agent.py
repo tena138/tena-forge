@@ -1,5 +1,6 @@
 import json
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from openai import OpenAI
@@ -17,11 +18,15 @@ from models import (
     PaperSessionResult,
     Problem,
     ProblemSet,
+    ProblemSetItem,
     RoutineAction,
     StudentAcademyMembership,
 )
 from services.exam_paper_planner import build_exam_paper_draft, format_exam_paper_draft_answer, looks_like_exam_paper_request
 from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id
+from services.problem_usage_history import record_problem_set_usage
+from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, MATH_ENGINE
+from services.usage_cost_policy import estimate_co_agent_exam_build, record_usage_event
 
 router = APIRouter(prefix="/api/co-agent", tags=["co-agent"])
 
@@ -51,6 +56,7 @@ class CoAgentChatResponse(BaseModel):
     model: str | None = None
     drafts: list[dict[str, Any]] = Field(default_factory=list)
     quick_actions: list[dict[str, Any]] = Field(default_factory=list)
+    artifacts: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CoAgentExamPaperDraftRequest(BaseModel):
@@ -411,7 +417,146 @@ def _co_agent_chat_completion(messages: list[dict[str, str]]) -> tuple[str, str]
     raise HTTPException(status_code=502, detail=f"Co-Agent AI request failed: {last_error}")
 
 
+def _co_agent_exam_context_message(message: str, history: list[CoAgentChatMessage]) -> str | None:
+    if looks_like_exam_paper_request(message):
+        return message
+
+    saw_exam_request = False
+    saw_exam_followup = False
+    parts: list[str] = []
+    for item in history[-8:]:
+        content = item.content.strip()
+        if not content:
+            continue
+        if item.role == "user" and looks_like_exam_paper_request(content):
+            saw_exam_request = True
+            parts.append(content)
+            continue
+        if item.role == "assistant" and ("시험지 제작 전에 확인" in content or "시험지 제작" in content):
+            saw_exam_followup = True
+
+    if not saw_exam_request or not saw_exam_followup:
+        return None
+    return "\n".join([*parts[-2:], message])
+
+
+def _exam_subject_label(engine: str | None) -> str:
+    if engine == ENGLISH_ENGINE:
+        return "영어"
+    if engine == KOREAN_ENGINE:
+        return "국어"
+    if engine == MATH_ENGINE:
+        return "수학"
+    return "시험"
+
+
+def _exam_problem_set_name(draft: dict[str, Any]) -> str:
+    grade = str(draft.get("grade") or "").strip()
+    subject = _exam_subject_label(draft.get("subject_engine"))
+    count = int(draft.get("requested_count") or draft.get("selected_count") or 0)
+    parts = [grade, subject, "시험지"]
+    if count:
+        parts.append(f"{count}문항")
+    return " ".join(part for part in parts if part).strip()
+
+
+def _draft_is_ready_to_create(draft: dict[str, Any]) -> bool:
+    requested = int(draft.get("requested_count") or 0)
+    selected = int(draft.get("selected_count") or 0)
+    return (
+        draft.get("status") == "draft"
+        and requested > 0
+        and selected >= requested
+        and not draft.get("missing_required_fields")
+        and not draft.get("missing_difficulty_slots")
+        and bool(draft.get("problems"))
+    )
+
+
+def _create_problem_set_from_exam_draft(
+    db: Session,
+    *,
+    request: Request,
+    draft: dict[str, Any],
+    source_message: str,
+) -> ProblemSet:
+    if not _draft_is_ready_to_create(draft):
+        raise HTTPException(status_code=400, detail="시험지 생성 조건이 아직 완성되지 않았습니다.")
+
+    owner_id = current_workspace_id(request, db, permission="can_manage_materials")
+    problem_ids = [UUID(str(item["id"])) for item in draft.get("problems", []) if item.get("id")]
+    if not problem_ids:
+        raise HTTPException(status_code=400, detail="생성할 문항이 없습니다.")
+
+    found_ids = set(
+        db.scalars(
+            select(Problem.id).where(
+                Problem.id.in_(problem_ids),
+                Problem.owner_id == owner_id,
+                Problem.deleted_at.is_(None),
+            )
+        ).all()
+    )
+    missing = [str(problem_id) for problem_id in problem_ids if problem_id not in found_ids]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"세트에 넣을 문항을 찾을 수 없습니다: {', '.join(missing)}")
+
+    name = _exam_problem_set_name(draft)
+    distribution = draft.get("difficulty_distribution") or {}
+    units = draft.get("unit_distribution") or {}
+    description = (
+        "코파일럿이 사용자 요청을 바탕으로 자동 구성한 시험지입니다.\n"
+        f"요청: {source_message.strip()[:500]}\n"
+        f"배점 분포: {distribution}\n"
+        f"단원 분포: {units}"
+    )
+    problem_set = ProblemSet(
+        name=name,
+        owner_id=owner_id,
+        subtitle="코파일럿 자동 생성",
+        description=description,
+        subject=_exam_subject_label(draft.get("subject_engine")),
+        grade=draft.get("grade"),
+        difficulty="혼합",
+        visibility="private",
+        source_type="self_created",
+        rights_confirmed=False,
+        problem_count=len(problem_ids),
+    )
+    db.add(problem_set)
+    db.flush()
+
+    for index, problem_id in enumerate(problem_ids):
+        db.add(ProblemSetItem(problem_set_id=problem_set.id, problem_id=problem_id, order_index=index))
+
+    record_problem_set_usage(db, problem_set=problem_set, problem_ids=problem_ids, owner_id=owner_id)
+    record_usage_event(db, owner_id, estimate_co_agent_exam_build(len(problem_ids)), job_id=None)
+    db.commit()
+    db.refresh(problem_set)
+    return problem_set
+
+
+def _created_exam_answer(draft: dict[str, Any], problem_set: ProblemSet) -> str:
+    selected = int(draft.get("selected_count") or 0)
+    distribution = draft.get("difficulty_distribution") or {}
+    href = f"/problem-sets/{problem_set.id}"
+    return (
+        f"시험지를 만들어 두었습니다. `{problem_set.name}`에 {selected}문항을 배치했고, 배점 분포는 {distribution or '기록 없음'}입니다. "
+        f"이제 생성 결과만 확인하면 됩니다: {href}"
+    )
+
+
 def _exam_draft_quick_actions(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    if draft.get("status") == "created" and draft.get("problem_set", {}).get("href"):
+        return [
+            {
+                "id": "open_created_exam",
+                "label": "생성된 시험지 확인",
+                "kind": "open",
+                "href": draft["problem_set"]["href"],
+                "problem_set_id": draft["problem_set"].get("id"),
+            }
+        ]
     if draft.get("status") == "needs_input":
         return [
             {"id": "answer_exam_missing_info", "label": "정보 입력", "kind": "revise"},
@@ -420,7 +565,6 @@ def _exam_draft_quick_actions(draft: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
         {"id": "reroll_exam_draft", "label": "다시 고르기", "kind": "reroll"},
-        {"id": "approve_exam_draft", "label": "승인 준비", "kind": "approve"},
     ]
 
 
@@ -444,14 +588,42 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
 
-    if looks_like_exam_paper_request(message):
+    exam_context_message = _co_agent_exam_context_message(message, payload.messages)
+    if exam_context_message:
         owner_ids = _academy_ids_for_co_agent(request, db)
-        draft = build_exam_paper_draft(db, message=message, owner_ids=owner_ids)
+        draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
+        artifacts: list[dict[str, Any]] = []
+        if _draft_is_ready_to_create(draft):
+            problem_set = _create_problem_set_from_exam_draft(db, request=request, draft=draft, source_message=exam_context_message)
+            href = f"/problem-sets/{problem_set.id}"
+            draft = {
+                **draft,
+                "status": "created",
+                "problem_set": {
+                    "id": str(problem_set.id),
+                    "name": problem_set.name,
+                    "href": href,
+                    "problem_count": problem_set.problem_count,
+                },
+            }
+            artifacts.append(
+                {
+                    "type": "problem_set",
+                    "id": str(problem_set.id),
+                    "name": problem_set.name,
+                    "href": href,
+                    "problem_count": problem_set.problem_count,
+                }
+            )
+            answer = _created_exam_answer(draft, problem_set)
+        else:
+            answer = format_exam_paper_draft_answer(draft)
         return CoAgentChatResponse(
-            answer=format_exam_paper_draft_answer(draft),
+            answer=answer,
             model=None,
             drafts=[draft],
             quick_actions=_exam_draft_quick_actions(draft),
+            artifacts=artifacts,
         )
 
     snapshot = next_actions(request, db)

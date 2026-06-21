@@ -7,7 +7,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from services.usage_cost_policy import estimate_extraction, estimate_single_reextract, plan_cost_policy, scaled_plan_cost_policy, trial_plan_cost_policy  # noqa: E402
+from services.usage_cost_policy import estimate_co_agent_exam_build, estimate_extraction, estimate_single_reextract, plan_cost_policy, scaled_plan_cost_policy, trial_plan_cost_policy  # noqa: E402
 
 
 class UsageCostPolicyTests(unittest.TestCase):
@@ -75,6 +75,14 @@ class UsageCostPolicyTests(unittest.TestCase):
 
         self.assertEqual(estimate.credits, 0.7)
         self.assertEqual(estimate.credits_milli, 700)
+
+    def test_co_agent_exam_build_consumes_small_credit(self):
+        estimate = estimate_co_agent_exam_build(20)
+
+        self.assertEqual(estimate.usage_type, "co_agent_exam_build")
+        self.assertEqual(estimate.credits, 0.2)
+        self.assertEqual(estimate.credits_milli, 200)
+        self.assertEqual(estimate.processed_pages, 0)
 
 
 if __name__ == "__main__":

@@ -392,6 +392,22 @@ def estimate_single_reextract() -> ExtractionEstimate:
     )
 
 
+def estimate_co_agent_exam_build(problem_count: int) -> ExtractionEstimate:
+    safe_count = max(int(problem_count or 0), 0)
+    credits = round(max(0.05, min(safe_count, 100) * 0.01), 3)
+    return ExtractionEstimate(
+        usage_type="co_agent_exam_build",
+        processed_pages=0,
+        credits=credits,
+        estimated_cost_krw=int(math.ceil(credits * KRW_PER_BASE_CREDIT)),
+        metadata={
+            "category": "co_agent_exam_build",
+            "problem_count": safe_count,
+            "base_credit_cost_krw": KRW_PER_BASE_CREDIT,
+        },
+    )
+
+
 def _raise_limit(reason_code: str, message: str, *, policy: PlanCostPolicy, estimate: ExtractionEstimate | None = None, current: dict[str, float] | None = None, **extra: Any) -> None:
     detail = {
         "ok": False,

@@ -401,7 +401,7 @@ def format_exam_paper_draft_answer(draft: dict[str, Any]) -> str:
     if draft.get("target_student_label"):
         parts.append(f"대상은 {draft['target_student_label']}으로 해석했습니다.")
     if missing:
-        parts.append("일부 배점 구간은 후보가 부족해서 확인이 필요합니다. 승인 전 조건을 완화하거나 문항을 추가 추출해야 합니다.")
+        parts.append("일부 배점 구간은 후보가 부족해서 아직 생성하지 않았습니다. 조건을 완화할지, 문항을 더 추출할지 알려주시면 제가 이어서 만들겠습니다.")
     else:
-        parts.append("승인 전까지 실제 문제세트나 배정은 생성하지 않습니다.")
+        parts.append("조건이 완성되면 제가 실제 문제세트까지 생성하고 확인 링크를 제시하겠습니다.")
     return " ".join(parts)
