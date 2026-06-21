@@ -92,10 +92,10 @@ function RegisterPageContent() {
 
           <section className="space-y-3" aria-labelledby="signup-agreement-title">
             <div>
-              <h2 id="signup-agreement-title" className="text-sm font-bold text-white">
+              <h2 id="signup-agreement-title" className="text-sm font-bold text-zinc-950">
                 회원가입 전 약관 동의
               </h2>
-              <p className="mt-1 text-xs leading-5 text-slate-400">내용을 끝까지 확인한 뒤 동의해 주세요.</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">내용을 끝까지 확인한 뒤 동의해 주세요.</p>
             </div>
 
             <div className="space-y-2">
@@ -113,7 +113,7 @@ function RegisterPageContent() {
 
           <SocialButtons mode="signup" disabled={!requiredComplete} />
 
-          <p className="pt-2 text-center text-sm text-slate-400">
+          <p className="pt-2 text-center text-sm text-zinc-500">
             이미 계정이 있으신가요?{" "}
             <Link href="/login" className="font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
               로그인
@@ -143,14 +143,14 @@ function AgreementRow({ item, active, onClick }: { item: AgreementItem; active: 
       onClick={onClick}
       aria-pressed={active}
       className={[
-        "flex w-full items-center justify-between gap-3 rounded-lg border p-4 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+        "flex w-full items-center justify-between gap-3 rounded-lg p-4 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
         active
-          ? "border-zinc-300/35 bg-zinc-400/10 text-zinc-50"
-          : "border-white/10 bg-white/[0.035] text-slate-200 hover:border-white/20 hover:bg-white/[0.055]",
+          ? "bg-black text-white"
+          : "bg-zinc-100 text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950",
       ].join(" ")}
     >
       <span className="font-semibold">{item.label}</span>
-      <span className={active ? "shrink-0 text-xs font-bold text-zinc-200" : "shrink-0 text-xs font-bold text-slate-400"}>
+      <span className={active ? "shrink-0 text-xs font-bold text-white" : "shrink-0 text-xs font-bold text-zinc-500"}>
         {active ? item.activeText : item.inactiveText}
       </span>
     </button>
@@ -159,11 +159,11 @@ function AgreementRow({ item, active, onClick }: { item: AgreementItem; active: 
 
 function BusinessInfoSummary() {
   return (
-    <dl className="border-t border-white/10 pt-4 text-[11px] leading-5 text-slate-500">
+    <dl className="border-t border-zinc-100 pt-4 text-[11px] leading-5 text-zinc-500">
       {BUSINESS_INFO_ROWS.map(([label, value]) => (
         <div key={label} className="grid grid-cols-[96px_minmax(0,1fr)] gap-2">
           <dt>{label}</dt>
-          <dd className="break-keep text-slate-400">{value}</dd>
+          <dd className="break-keep text-zinc-600">{value}</dd>
         </div>
       ))}
     </dl>
