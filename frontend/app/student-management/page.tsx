@@ -274,7 +274,7 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
         event.preventDefault();
         onMergeContext(event, student);
       }}
-      className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md bg-white p-3 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:ring-zinc-300"
+      className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md bg-white p-3 transition hover:bg-zinc-50"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -300,14 +300,14 @@ function StudentDirectoryCard({ student, copying, onCopyKey }: { student: Studen
   const meta = [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "학생 정보 미입력";
   const keyLabel = student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "키 없음");
   return (
-    <article className="group min-w-0 rounded-md bg-white p-3 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:ring-zinc-300">
+    <article className="group min-w-0 rounded-md bg-white p-3 transition hover:bg-zinc-50">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Link href={`/student-management/students/${student.id}`} className="truncate text-sm font-black text-zinc-950 hover:text-zinc-700">
               {student.name}
             </Link>
-            <span className="inline-flex max-w-full items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-zinc-800 ring-1 ring-zinc-200">
+            <span className="inline-flex max-w-full items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-zinc-800">
               <span className="text-zinc-500">Key</span>
               <span className="truncate">{keyLabel}</span>
             </span>
@@ -1664,7 +1664,7 @@ export default function StudentManagementPage() {
     <main className="min-h-screen bg-transparent px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         {message ? (
-          <div className="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm text-zinc-800 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200">
+          <div className="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm text-zinc-800">
             <span>{message}</span>
             <button type="button" onClick={() => setMessage("")} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950">
               <X className="h-4 w-4" />
@@ -1680,7 +1680,7 @@ export default function StudentManagementPage() {
         ) : null}
 
         {!loading ? (
-          <nav className="flex gap-2 overflow-x-auto rounded-lg bg-white p-1 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200 [scrollbar-width:thin]">
+          <nav className="flex gap-2 overflow-x-auto rounded-lg bg-white p-1 [scrollbar-width:thin]">
             {tabItems.map((tab) => {
               const Icon = tab.icon;
               const selected = activeTab === tab.id;
@@ -1694,7 +1694,7 @@ export default function StudentManagementPage() {
                   }}
                   className={cn(
                     "flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
-                    selected ? "bg-black text-white shadow-sm shadow-zinc-950/15" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
+                    selected ? "bg-black text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -1829,7 +1829,7 @@ export default function StudentManagementPage() {
                   setDraggingClassId("");
                 }}
                 className={cn(
-                  "overflow-visible rounded-none border-0 border-t border-zinc-200 bg-transparent shadow-none transition",
+                  "overflow-visible rounded-lg border-0 bg-white shadow-none transition",
                   draggingClassId === classRow.id && "bg-zinc-100"
                 )}
               >
@@ -1850,13 +1850,13 @@ export default function StudentManagementPage() {
                         void persistClassOrder();
                       }}
                       className={cn(
-                        "row-span-2 flex h-full min-h-[168px] cursor-grab items-center justify-center border-r border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 active:cursor-grabbing lg:row-span-1",
+                        "row-span-2 flex h-full min-h-[168px] cursor-grab items-center justify-center bg-zinc-50 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 active:cursor-grabbing lg:row-span-1",
                         draggingClassId === classRow.id && "text-zinc-950"
                       )}
                     >
                       <GripVertical className="h-5 w-5" />
                     </button>
-                    <aside className="flex flex-col justify-between gap-4 border-b border-zinc-200 bg-transparent p-4 lg:border-b-0 lg:border-r">
+                    <aside className="flex flex-col justify-between gap-4 bg-zinc-50 p-4">
                       <div>
                         <p className="text-3xl font-black tracking-normal text-zinc-950">{classRow.name}</p>
                         <p className="mt-2 text-2xl font-black text-zinc-800">{classRow.student_count}</p>
@@ -1895,7 +1895,7 @@ export default function StudentManagementPage() {
                         (() => {
                           const existingStudents = existingStudentsForClass(classRow);
                           return (
-                            <div className="rounded-lg bg-white p-3 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200">
+                            <div className="rounded-lg bg-white p-3">
                               <div className="mb-3 inline-flex rounded-md bg-zinc-100 p-1">
                                 {[
                                   ["existing", "기존 학생"] as const,
@@ -2049,14 +2049,14 @@ export default function StudentManagementPage() {
                 ["활성 학생", activeStudentCount],
                 ["미해결 오답", unresolvedStudentWrongs],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-lg bg-white p-4 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200">
+                <div key={label} className="rounded-lg bg-white p-4">
                   <p className="text-xs font-semibold text-zinc-500">{label}</p>
                   <p className="mt-2 text-2xl font-black text-zinc-950">{value}</p>
                 </div>
               ))}
             </div>
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-              <section className="min-w-0 rounded-lg bg-white shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200">
+              <section className="min-w-0 rounded-lg bg-white">
                 <div className="flex flex-col gap-1 border-b border-zinc-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-sm font-black text-zinc-950">학생 목록</h2>
@@ -2080,7 +2080,7 @@ export default function StudentManagementPage() {
                   ) : null}
                 </div>
               </section>
-              <aside className="rounded-lg bg-white p-4 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200">
+              <aside className="rounded-lg bg-white p-4">
                 <div className="mb-4">
                   <h2 className="text-sm font-black text-zinc-950">학생 추가</h2>
                   <p className="mt-1 text-xs text-zinc-500">필요한 정보만 빠르게 등록합니다.</p>
@@ -2101,7 +2101,7 @@ export default function StudentManagementPage() {
                     <option value="">클래스 선택 안 함</option>
                     {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
                   </Select>
-                  <label className="flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-700 ring-1 ring-zinc-200">
+                  <label className="flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-700">
                     <input
                       type="checkbox"
                       checked={studentForm.tuition_enabled}
