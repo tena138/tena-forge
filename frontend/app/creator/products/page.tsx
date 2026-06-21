@@ -98,7 +98,7 @@ export default function CreatorProductsPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[14px] bg-white p-6 shadow-sm">
+      <section className="rounded-[14px] bg-white p-6">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Creator Products</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -123,7 +123,7 @@ export default function CreatorProductsPage() {
       ) : null}
       {notice ? <p className="rounded-[10px] bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">{notice}</p> : null}
 
-      <form onSubmit={create} className="grid gap-3 rounded-[14px] bg-white p-5 shadow-sm md:grid-cols-3">
+      <form onSubmit={create} className="grid gap-3 rounded-[14px] bg-white p-5 md:grid-cols-3">
         <Input name="title" placeholder="상품명" required />
         <Input name="slug" placeholder="slug" required />
         <Input name="subject" placeholder="과목" />
@@ -141,7 +141,7 @@ export default function CreatorProductsPage() {
       </form>
 
       {loading ? (
-        <div className="rounded-[14px] bg-white p-10 text-center text-sm font-semibold text-zinc-500 shadow-sm">
+        <div className="rounded-[14px] bg-white p-10 text-center text-sm font-semibold text-zinc-500">
           <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
           상품을 불러오는 중입니다.
         </div>
@@ -151,7 +151,7 @@ export default function CreatorProductsPage() {
             const isSubmitting = submittingId === product.id;
             const canSubmit = product.status === "draft" || product.status === "rejected";
             return (
-              <div key={product.id} className="flex flex-col gap-4 rounded-[14px] bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+              <div key={product.id} className="flex flex-col gap-4 rounded-[14px] bg-white p-5 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="truncate text-lg font-bold text-zinc-950">{product.title}</h2>
@@ -171,7 +171,7 @@ export default function CreatorProductsPage() {
           })}
         </div>
       ) : (
-        <div className="rounded-[14px] bg-white p-10 text-center shadow-sm">
+        <div className="rounded-[14px] bg-white p-10 text-center">
           <PackageOpen className="mx-auto h-8 w-8 text-zinc-400" />
           <p className="mt-3 text-sm font-semibold text-zinc-600">아직 등록한 상품이 없습니다.</p>
         </div>

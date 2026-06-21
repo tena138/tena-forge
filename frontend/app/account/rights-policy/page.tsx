@@ -24,7 +24,7 @@ const policyItems = [
 export default function RightsPolicyPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <section className="rounded-[14px] bg-white p-7 shadow-sm">
+      <section className="rounded-[14px] bg-white p-7">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Rights Policy</p>
@@ -46,7 +46,7 @@ export default function RightsPolicyPage() {
         {policyItems.map((item) => {
           const Icon = item.icon;
           return (
-            <article key={item.title} className="rounded-[14px] bg-white p-5 shadow-sm">
+            <article key={item.title} className="rounded-[14px] bg-white p-5">
               <Icon className="h-5 w-5 text-zinc-950" />
               <h2 className="mt-4 text-lg font-bold text-zinc-950">{item.title}</h2>
               <p className="mt-2 text-sm font-medium leading-6 text-zinc-600">{item.text}</p>
@@ -55,7 +55,7 @@ export default function RightsPolicyPage() {
         })}
       </section>
 
-      <section className="rounded-[14px] bg-white p-7 text-sm font-medium leading-7 text-zinc-700 shadow-sm">
+      <section className="rounded-[14px] bg-white p-7 text-sm font-medium leading-7 text-zinc-700">
         <h2 className="text-lg font-bold text-zinc-950">확인 및 제한</h2>
         <p className="mt-2">
           Tena Forge는 문항 아이디어나 유형의 소유권을 판정하지 않습니다. 다만 신고 또는 확인 절차에 따라 자료의 노출, 판매, 이용을 제한할 수 있습니다.

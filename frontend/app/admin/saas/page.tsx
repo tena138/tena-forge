@@ -131,7 +131,7 @@ export default function AdminSaasPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[14px] bg-white p-6 shadow-sm">
+      <section className="rounded-[14px] bg-white p-6">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Admin</p>
         <h1 className="mt-2 text-3xl font-bold tracking-normal text-zinc-950">SaaS / Marketplace 관리</h1>
         <p className="mt-2 text-sm font-medium text-zinc-500">크리에이터 승인과 제품 심사를 한 화면에서 처리합니다.</p>
@@ -142,13 +142,13 @@ export default function AdminSaasPage() {
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         {Object.entries(overview).map(([key, value]) => (
-          <div key={key} className="rounded-[14px] bg-white p-4 shadow-sm">
+          <div key={key} className="rounded-[14px] bg-white p-4">
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">{key}</p>
             <p className="mt-2 text-2xl font-bold text-zinc-950">{value}</p>
           </div>
         ))}
         {loading && !Object.keys(overview).length ? (
-          <div className="rounded-[14px] bg-white p-4 text-sm font-semibold text-zinc-500 shadow-sm md:col-span-3 xl:col-span-6">
+          <div className="rounded-[14px] bg-white p-4 text-sm font-semibold text-zinc-500 md:col-span-3 xl:col-span-6">
             <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
             관리 데이터를 불러오는 중입니다.
           </div>
@@ -156,7 +156,7 @@ export default function AdminSaasPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-[14px] bg-white p-5 shadow-sm">
+        <div className="rounded-[14px] bg-white p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-zinc-950">크리에이터 신청</h2>
             <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600">{applications.length}건</span>
@@ -190,7 +190,7 @@ export default function AdminSaasPage() {
           </div>
         </div>
 
-        <div className="rounded-[14px] bg-white p-5 shadow-sm">
+        <div className="rounded-[14px] bg-white p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-zinc-950">제품 심사 대기</h2>
             <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600">{products.length}건</span>

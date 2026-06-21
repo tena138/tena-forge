@@ -25,7 +25,7 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[14px] bg-white p-6 shadow-sm">
+      <section className="rounded-[14px] bg-white p-6">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Library</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -40,14 +40,14 @@ export default function PurchasesPage() {
       </section>
 
       {loading ? (
-        <div className="rounded-[14px] bg-white p-10 text-center text-sm font-semibold text-zinc-500 shadow-sm">
+        <div className="rounded-[14px] bg-white p-10 text-center text-sm font-semibold text-zinc-500">
           <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
           구매 자료를 불러오는 중입니다.
         </div>
       ) : licenses.length ? (
         <div className="grid gap-3">
           {licenses.map((license) => (
-            <div key={license.id} className="rounded-[14px] bg-white p-5 shadow-sm">
+            <div key={license.id} className="rounded-[14px] bg-white p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export default function PurchasesPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-[14px] bg-white p-10 text-center shadow-sm">
+        <div className="rounded-[14px] bg-white p-10 text-center">
           <Library className="mx-auto h-8 w-8 text-zinc-400" />
           <p className="mt-3 text-sm font-semibold text-zinc-600">아직 구매한 자료가 없습니다.</p>
           <Link href="/stores" className="mt-4 inline-flex h-10 items-center justify-center rounded-[9px] bg-zinc-100 px-4 text-sm font-bold text-zinc-900 transition hover:bg-zinc-200">

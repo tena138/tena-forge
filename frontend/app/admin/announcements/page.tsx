@@ -287,7 +287,7 @@ export default function AdminAnnouncementsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-[14px] bg-white p-6 shadow-sm">
+      <section className="rounded-[14px] bg-white p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-[9px] bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700">
@@ -306,7 +306,7 @@ export default function AdminAnnouncementsPage() {
 
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-3">
-          <div className="rounded-[14px] bg-white p-3 shadow-sm">
+          <div className="rounded-[14px] bg-white p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Operations News</div>
@@ -325,7 +325,7 @@ export default function AdminAnnouncementsPage() {
                   key={item.id}
                   className={`rounded-[12px] p-3 transition ${
                     selectedId === item.id
-                      ? "bg-zinc-100 shadow-sm"
+                      ? "bg-zinc-100"
                       : "bg-zinc-50 hover:bg-zinc-100"
                   }`}
                 >
@@ -373,7 +373,7 @@ export default function AdminAnnouncementsPage() {
         </aside>
 
         <main className="space-y-5">
-          <form className="rounded-[14px] bg-white p-5 shadow-sm" onSubmit={save}>
+          <form className="rounded-[14px] bg-white p-5" onSubmit={save}>
             <div className="mb-5 flex flex-col gap-2 border-b border-zinc-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">

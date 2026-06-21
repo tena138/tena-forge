@@ -112,7 +112,7 @@ export default function AccountProfilePage() {
 
   if (!profile) {
     return (
-      <div className="rounded-lg bg-white p-8 text-sm font-semibold text-zinc-500 shadow-sm">
+      <div className="rounded-lg bg-white p-8 text-sm font-semibold text-zinc-500">
         {loading ? "프로필을 불러오는 중..." : error || "프로필 정보가 없습니다."}
       </div>
     );

@@ -66,7 +66,7 @@ export default function CreatorApplyPage() {
 
     return (
       <div className="mx-auto max-w-3xl space-y-4">
-        <section className="rounded-[14px] bg-white p-7 shadow-sm">
+        <section className="rounded-[14px] bg-white p-7">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Creator Application</p>
           <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -93,7 +93,7 @@ export default function CreatorApplyPage() {
   }
 
   return (
-    <form onSubmit={submit} className="mx-auto max-w-3xl space-y-5 rounded-[14px] bg-white p-6 shadow-sm">
+    <form onSubmit={submit} className="mx-auto max-w-3xl space-y-5 rounded-[14px] bg-white p-6">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Creator Onboarding</p>
         <h1 className="mt-2 text-3xl font-bold tracking-normal text-zinc-950">크리에이터 신청</h1>
