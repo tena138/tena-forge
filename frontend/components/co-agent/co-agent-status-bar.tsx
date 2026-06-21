@@ -354,15 +354,15 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   }, [chatOpen]);
 
   return (
-    <div className={cn("relative min-w-0", compact ? "w-full" : chatOpen ? "w-full max-w-none" : "w-full max-w-[760px]")}>
+    <div className={cn("relative min-w-0", compact ? "w-full" : chatOpen ? "w-full max-w-[1120px]" : "w-full max-w-[760px]")}>
       <div
         className={cn(
-          "relative min-w-0 gap-2 overflow-hidden rounded-[14px] bg-white/78 px-3 text-zinc-950 transition-all",
-          chatOpen ? "min-h-[68px] py-2" : "min-h-[52px] py-2.5",
+          "relative isolate min-w-0 gap-2 overflow-hidden rounded-[14px] bg-white/78 px-3 text-zinc-950 transition-all",
+          compact && chatOpen ? "min-h-[68px] py-2" : chatOpen ? "min-h-[52px] py-1.5" : "min-h-[52px] py-2.5",
           compact && chatOpen
             ? "flex flex-col items-stretch"
             : chatOpen
-              ? "grid grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)] items-center gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,38rem)]"
+              ? "grid grid-cols-[minmax(0,1fr)_minmax(14rem,45%)] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,42%)] 2xl:grid-cols-[minmax(0,1fr)_minmax(26rem,40rem)]"
               : "flex items-center"
         )}
       >
@@ -380,7 +380,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span
               className={cn(
                 "block max-w-full overflow-hidden text-[16px] font-medium leading-[1.45] tracking-normal text-zinc-800",
-                compact && chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
+                chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
               )}
             >
               {typedReportMessage || "\u00A0"}
@@ -397,7 +397,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         {chatOpen ? (
           <form
             className={cn(
-              "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2",
+              "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
               compact ? "w-full" : "w-full"
             )}
             onSubmit={submitChat}
