@@ -17,7 +17,7 @@ type Selection = { x: number; y: number; width: number; height: number };
 type ProblemNavigation = { previous_id: string | null; next_id: string | null; position: number | null; total: number };
 
 const emptyTags: Tag = { subject: "", unit: "", difficulty: "", problem_type: "", source: "" };
-const difficulties = ["하", "중", "상", "최상"];
+const difficulties = ["2점", "3점", "4점"];
 const visualUploadTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const visualUploadExtensions = [".png", ".jpg", ".jpeg", ".webp"];
 const visualUploadMaxBytes = 10 * 1024 * 1024;
@@ -542,12 +542,12 @@ function ProblemDetailContent() {
 
   if (loadError) {
     return (
-      <div className="mx-auto flex max-w-xl flex-col items-center justify-center gap-4 rounded-xl border border-white/10 bg-white/[0.045] px-6 py-16 text-center shadow-sm">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-400/30 bg-zinc-500/10 text-zinc-200">
+      <div className="mx-auto flex max-w-xl flex-col items-center justify-center gap-4 rounded-xl bg-white px-6 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-950">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-white">문항을 열 수 없습니다</h1>
+          <h1 className="text-xl font-semibold text-zinc-950">문항을 열 수 없습니다</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{loadError}</p>
         </div>
         <Button variant="outline" onClick={() => router.push(archiveHref)}>
@@ -579,12 +579,12 @@ function ProblemDetailContent() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="sticky top-[65px] z-30 flex min-h-14 flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-[#0b0a12]/95 px-3 py-2 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+      <div className="sticky top-[65px] z-30 flex min-h-14 flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2 backdrop-blur-xl">
         <Button variant="outline" onClick={() => router.push(archiveHref)}>
           <ArrowLeft className="h-4 w-4" />
           문항 아카이브
         </Button>
-        <div className="rounded-[7px] border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-slate-200">
+        <div className="rounded-[7px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">
           {hasFilterContext ? "현재 검색 조건 기준" : "전체 문항 기준"} {navigationLabel}
         </div>
         <Badge variant={saveStatusVariant}>{saveStatusLabel}</Badge>
@@ -605,18 +605,18 @@ function ProblemDetailContent() {
       </div>
 
       {actionError ? (
-        <div className="flex items-center gap-2 rounded-lg border border-zinc-400/25 bg-zinc-500/10 px-4 py-3 text-sm text-zinc-100">
+        <div className="flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-800">
           <AlertTriangle className="h-4 w-4" />
           {actionError}
         </div>
       ) : null}
 
       <div className="grid min-h-[calc(100vh-190px)] gap-4 xl:grid-cols-2">
-        <section className="flex min-h-[680px] flex-col rounded-lg border border-white/10 bg-white/[0.035]">
-          <div className="flex h-14 items-center justify-between gap-3 border-b border-white/10 px-4">
+        <section className="flex min-h-[680px] flex-col rounded-lg bg-white">
+          <div className="flex h-14 items-center justify-between gap-3 px-4">
             <div>
-              <h2 className="text-sm font-bold text-white">원본 페이지 p.{problem.review_page_number || "-"}</h2>
-              <p className="mt-0.5 text-xs text-slate-500">{sourceLabel}</p>
+              <h2 className="text-sm font-bold text-zinc-950">원본 페이지 p.{problem.review_page_number || "-"}</h2>
+              <p className="mt-0.5 text-xs font-semibold text-zinc-500">{sourceLabel}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {cropSourceUrl ? (
@@ -629,7 +629,7 @@ function ProblemDetailContent() {
           </div>
 
           <div
-            className={`relative flex flex-1 items-start justify-center overflow-auto bg-[#07070c] p-4 ${cropSourceUrl ? "cursor-crosshair" : ""}`}
+            className={`relative flex flex-1 items-start justify-center overflow-auto bg-zinc-100 p-4 ${cropSourceUrl ? "cursor-crosshair" : ""}`}
             onPointerDown={startCrop}
             onPointerMove={moveCrop}
             onPointerUp={() => setDragStart(null)}
@@ -641,7 +641,7 @@ function ProblemDetailContent() {
                   ref={imageRef}
                   src={assetUrl(cropSourceUrl)}
                   alt={`${problem.problem_number}번 원본 페이지`}
-                  className="select-none rounded bg-white shadow-[0_18px_55px_rgba(0,0,0,0.42)]"
+                  className="select-none rounded bg-white"
                   draggable={false}
                 />
                 {selection ? (
@@ -652,18 +652,18 @@ function ProblemDetailContent() {
                 ) : null}
               </div>
             ) : (
-              <div className="flex min-h-[560px] w-full items-center justify-center rounded-lg border border-dashed border-white/10 text-center text-sm text-slate-500">
+              <div className="flex min-h-[560px] w-full items-center justify-center rounded-lg bg-zinc-50 text-center text-sm font-semibold text-zinc-500">
                 검토용 원본 페이지 이미지가 없습니다.
               </div>
             )}
           </div>
         </section>
 
-        <section className="flex min-h-[680px] flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
-          <div className="rounded-lg border border-white/10 bg-[#11101a]">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+        <section className="flex min-h-[680px] flex-col gap-3 rounded-lg bg-white p-3">
+          <div className="rounded-lg bg-zinc-50">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-white">본문</h2>
+                <h2 className="text-sm font-bold text-zinc-950">본문</h2>
                 {draftText !== problem.problem_text ? <Badge variant="warning">수정 중</Badge> : null}
               </div>
               <Button
@@ -677,13 +677,13 @@ function ProblemDetailContent() {
                 재추출
               </Button>
             </div>
-            <div className="min-h-[220px] bg-white p-5 text-slate-950">
-              <div className="mb-3 text-sm font-semibold text-slate-500">문항 {problem.problem_number}</div>
+            <div className="min-h-[220px] bg-white p-5 text-zinc-950">
+              <div className="mb-3 text-sm font-semibold text-zinc-500">문항 {problem.problem_number}</div>
               <MathText className="tena-math-review text-[15px] leading-8" value={draftText || "문항 내용이 비어 있습니다."} />
             </div>
-            <div className="border-t border-white/10 bg-[#0c0b13] p-4">
+            <div className="bg-zinc-100 p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-white">문항 텍스트</span>
+                <span className="text-sm font-semibold text-zinc-950">문항 텍스트</span>
                 <Button size="sm" variant="outline" onClick={() => void saveProblemText()} disabled={savingText || !draftText.trim() || draftText === problem.problem_text}>
                   <Save className="h-3.5 w-3.5" />
                   저장
@@ -691,7 +691,7 @@ function ProblemDetailContent() {
               </div>
               <textarea
                 aria-label="문항 텍스트 수정"
-                className="min-h-36 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-zinc-300/60 focus:ring-2 focus:ring-zinc-400/15"
+                className="min-h-36 w-full resize-y rounded-[7px] border-0 bg-white p-3 font-mono text-sm leading-7 text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
                 value={draftText}
                 onChange={(event) => setDraftText(event.target.value)}
                 placeholder="문항 내용이 비어 있습니다."
@@ -700,9 +700,9 @@ function ProblemDetailContent() {
           </div>
 
           <div className="grid gap-3">
-            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+            <div className="rounded-lg bg-zinc-50 p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-bold text-white">정답</h3>
+                <h3 className="text-sm font-bold text-zinc-950">정답</h3>
                 <Button size="sm" variant="outline" onClick={() => void saveProblemAnswer()} disabled={savingAnswer || draftAnswer === (problem.answer || "")}>
                   <Save className="h-3.5 w-3.5" />
                   저장
@@ -710,7 +710,7 @@ function ProblemDetailContent() {
               </div>
               <textarea
                 aria-label="정답 수정"
-                className="min-h-24 w-full resize-y rounded-[7px] border border-white/10 bg-black/35 p-3 font-mono text-sm leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-zinc-300/60 focus:ring-2 focus:ring-zinc-400/15"
+                className="min-h-24 w-full resize-y rounded-[7px] border-0 bg-white p-3 font-mono text-sm leading-7 text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
                 value={draftAnswer}
                 onChange={(event) => setDraftAnswer(event.target.value)}
                 placeholder="정답 데이터 없음"
@@ -718,7 +718,7 @@ function ProblemDetailContent() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+          <div className="rounded-lg bg-zinc-50 p-4">
             <input
               ref={visualFileInputRef}
               type="file"
@@ -728,8 +728,8 @@ function ProblemDetailContent() {
             />
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-bold text-white">문항 그림</h3>
-                {uploadingVisual ? <p className="mt-1 text-xs text-slate-500">업로드 중 {visualUploadProgress}%</p> : null}
+                <h3 className="text-sm font-bold text-zinc-950">문항 그림</h3>
+                {uploadingVisual ? <p className="mt-1 text-xs font-semibold text-zinc-500">업로드 중 {visualUploadProgress}%</p> : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => visualFileInputRef.current?.click()} disabled={uploadingVisual}>
@@ -745,12 +745,12 @@ function ProblemDetailContent() {
               </div>
             </div>
             <div
-              className={`rounded-lg border p-2 transition ${
+              className={`rounded-lg p-2 transition ${
                 visualDragActive
-                  ? "border-zinc-300/50 bg-zinc-500/10"
+                  ? "bg-zinc-200"
                   : problem.visual_url
-                    ? "border-white/10 bg-black/35"
-                    : "border-dashed border-white/12 bg-black/20"
+                    ? "bg-white"
+                    : "bg-white"
               }`}
               onDragOver={handleVisualDragOver}
               onDragLeave={handleVisualDragLeave}
@@ -761,23 +761,23 @@ function ProblemDetailContent() {
               ) : (
                 <button
                   type="button"
-                  className="flex min-h-40 w-full flex-col items-center justify-center gap-2 rounded-[7px] text-center text-sm text-slate-400 transition hover:bg-white/[0.035] hover:text-slate-200"
+                  className="flex min-h-40 w-full flex-col items-center justify-center gap-2 rounded-[7px] text-center text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
                   onClick={() => visualFileInputRef.current?.click()}
                   disabled={uploadingVisual}
                 >
                   <ImagePlus className="h-5 w-5" />
                   <span className="font-semibold">{uploadingVisual ? `업로드 중 ${visualUploadProgress}%` : "그림 파일 추가"}</span>
-                  <span className="text-xs text-slate-600">PNG, JPG, WebP</span>
+                  <span className="text-xs text-zinc-500">PNG, JPG, WebP</span>
                 </button>
               )}
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
+          <div className="rounded-lg bg-zinc-50 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-white">메타데이터</h3>
-                <p className="mt-1 text-xs text-slate-500">문항 정보와 태그를 검토 화면과 같은 위치에서 수정합니다.</p>
+                <h3 className="text-sm font-bold text-zinc-950">메타데이터</h3>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">문항 정보와 태그를 검토 화면과 같은 위치에서 수정합니다.</p>
               </div>
               <Button size="sm" onClick={() => void saveTags()} disabled={savingTags}>
                 <Save className="h-3.5 w-3.5" />
@@ -792,16 +792,16 @@ function ProblemDetailContent() {
             <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_2fr]">
               <TagInput label="출처" listId="sources" value={tags.source || ""} options={facets.sources} onChange={(value) => setTags({ ...tags, source: value })} />
               <div>
-                <div className="mb-2 text-xs font-semibold text-slate-400">난이도</div>
+                <div className="mb-2 text-xs font-semibold text-zinc-500">난이도</div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {difficulties.map((difficulty) => (
                     <button
                       key={difficulty}
                       type="button"
-                      className={`h-10 rounded-[7px] border text-sm font-bold transition ${
+                      className={`h-10 rounded-[7px] text-sm font-bold transition ${
                         tags.difficulty === difficulty
-                          ? "border-zinc-300/60 bg-zinc-500 text-white shadow-[0_12px_30px_rgba(124,58,237,0.26)]"
-                          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07]"
+                          ? "bg-black text-white"
+                          : "bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
                       }`}
                       onClick={() => setTags({ ...tags, difficulty })}
                     >
@@ -814,13 +814,13 @@ function ProblemDetailContent() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4 text-sm">
-              <h3 className="mb-3 text-sm font-bold text-white">문항 정보</h3>
+            <div className="rounded-lg bg-zinc-50 p-4 text-sm">
+              <h3 className="mb-3 text-sm font-bold text-zinc-950">문항 정보</h3>
               <InfoRow label="문항 번호" value={`${problem.problem_number}번`} />
               <InfoRow label="원본 페이지" value={problem.review_page_number ? `${problem.review_page_number}페이지` : "미기록"} />
             </div>
-            <div className="rounded-lg border border-white/10 bg-[#11101a] p-4">
-              <h3 className="mb-3 text-sm font-bold text-white">관리</h3>
+            <div className="rounded-lg bg-zinc-50 p-4">
+              <h3 className="mb-3 text-sm font-bold text-zinc-950">관리</h3>
               <Button variant="destructive" className="w-full" onClick={removeProblem}>
                 <Trash2 className="h-4 w-4" />
                 문항 삭제
@@ -835,9 +835,9 @@ function ProblemDetailContent() {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2">
+    <div className="flex items-start justify-between gap-4 rounded-md bg-white px-3 py-2">
       <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="text-right text-slate-100">{value}</span>
+      <span className="text-right font-semibold text-zinc-950">{value}</span>
     </div>
   );
 }
