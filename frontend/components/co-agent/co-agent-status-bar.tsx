@@ -2,7 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Radio, Send, X } from "lucide-react";
+import { ArrowUpRight, Loader2, Radio, Send, X } from "lucide-react";
 
 import { LiveInteractionEvent, listUpcomingLiveInteractions } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId } from "@/lib/auth-client";
@@ -30,6 +30,13 @@ import { cn } from "@/lib/utils";
 
 const CO_AGENT_CHAT_STORAGE_KEY = "tena-forge-co-agent-chat-v1";
 const MAX_STORED_CHAT_MESSAGES = 12;
+
+type CoAgentChatAction = {
+  id?: string;
+  label?: string;
+  kind?: string;
+  href?: string;
+};
 
 function readStoredCoAgentChatMessages(): CoAgentChatMessage[] {
   if (typeof window === "undefined") return [];
@@ -144,6 +151,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<CoAgentChatMessage[]>(() => readStoredCoAgentChatMessages());
+  const [chatActions, setChatActions] = useState<CoAgentChatAction[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState("");
   const [assistantTypingKey, setAssistantTypingKey] = useState(0);
@@ -202,6 +210,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const shouldAnimateAssistantMessage =
     chatOpen && !chatLoading && Boolean(latestAssistantMessage) && statusMessage === latestAssistantMessage;
   const typedReportMessage = useTypewriterText(statusMessage, assistantTypingKey, !prefersReducedMotion && shouldAnimateAssistantMessage);
+  const primaryChatAction = chatActions.find((action) => action.href);
 
   const loadLiveInteractions = useCallback(async () => {
     const activeWorkspaceId = getActiveWorkspaceId();
@@ -225,6 +234,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     const history = chatMessages.slice(-10);
     const userMessage: CoAgentChatMessage = { role: "user", content };
     setChatMessages((current) => [...current, userMessage]);
+    setChatActions([]);
     setChatInput("");
     setChatError("");
     setChatLoading(true);
@@ -235,11 +245,13 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         current_path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
       });
       setChatMessages((current) => [...current, { role: "assistant", content: response.answer }]);
+      setChatActions((response.quick_actions || []).filter((action) => typeof action.href === "string"));
       setAssistantTypingKey((current) => current + 1);
     } catch (error) {
       const message = chatErrorMessage(error);
       setChatError(message);
       setChatMessages((current) => [...current, { role: "assistant", content: `지금은 AI 연결에 실패했습니다. ${message}` }]);
+      setChatActions([]);
       setAssistantTypingKey((current) => current + 1);
     } finally {
       setChatLoading(false);
@@ -416,6 +428,20 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           <span className="pointer-events-none absolute inset-x-3 bottom-1 h-1 overflow-hidden rounded-full bg-zinc-100">
             <span className="block h-full rounded-full bg-black transition-all duration-500" style={{ width: `${progress}%` }} />
           </span>
+        ) : null}
+
+        {chatOpen && primaryChatAction?.href ? (
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800",
+              compact ? "w-full" : "max-w-[12rem]"
+            )}
+            onClick={() => router.push(primaryChatAction.href || "/problem-sets")}
+          >
+            <span className="truncate">{primaryChatAction.label || "확인하기"}</span>
+            <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+          </button>
         ) : null}
 
         {chatOpen ? (

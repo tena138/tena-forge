@@ -48,7 +48,14 @@ export type CoAgentChatResponse = {
   scope: "tena_forge_operations" | string;
   model?: string | null;
   drafts?: Array<Record<string, unknown>>;
-  quick_actions?: Array<Record<string, unknown>>;
+  quick_actions?: Array<{
+    id?: string;
+    label?: string;
+    kind?: string;
+    href?: string;
+    [key: string]: unknown;
+  }>;
+  artifacts?: Array<Record<string, unknown>>;
 };
 
 export function sendCoAgentChat(payload: {
