@@ -29,14 +29,10 @@ const fallbackAnnouncement: Omit<DashboardAnnouncement, "id" | "created_at" | "u
 };
 
 const fallbackVisuals: Record<DashboardAnnouncement["theme"], string> = {
-  product:
-    "bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.36),transparent_28%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,0.18),transparent_34%),linear-gradient(135deg,#080914,#151027_52%,#071018)]",
-  update:
-    "bg-[radial-gradient(circle_at_22%_24%,rgba(34,211,238,0.26),transparent_28%),radial-gradient(circle_at_78%_68%,rgba(124,58,237,0.24),transparent_34%),linear-gradient(135deg,#050816,#0b1724_50%,#120a26)]",
-  event:
-    "bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.22),transparent_30%),radial-gradient(circle_at_78%_70%,rgba(255,255,255,0.22),transparent_34%),linear-gradient(135deg,#06110e,#101421_54%,#150d25)]",
-  system:
-    "bg-[radial-gradient(circle_at_25%_22%,rgba(148,163,184,0.22),transparent_30%),radial-gradient(circle_at_74%_74%,rgba(124,58,237,0.18),transparent_34%),linear-gradient(135deg,#050505,#111827_52%,#09090b)]",
+  product: "bg-[linear-gradient(135deg,#fafafa,#e5e5e5)]",
+  update: "bg-[linear-gradient(135deg,#f4f4f5,#d4d4d8)]",
+  event: "bg-[linear-gradient(135deg,#ffffff,#e4e4e7)]",
+  system: "bg-[linear-gradient(135deg,#f5f5f5,#d6d3d1)]",
 };
 
 function normalizeItems(announcements?: DashboardAnnouncement[], announcement?: DashboardAnnouncement | null) {
@@ -100,7 +96,7 @@ export function DashboardAnnouncementPanel({
   const item = items[Math.min(activeIndex, items.length - 1)];
 
   return (
-    <section className="relative min-h-[250px] overflow-hidden rounded-[14px] border border-white/10 bg-black shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
+    <section className="relative min-h-[250px] overflow-hidden rounded-[14px] bg-white shadow-sm">
       {items.map((entry, index) => (
         <div
           key={entry.id}
@@ -114,14 +110,13 @@ export function DashboardAnnouncementPanel({
         </div>
       ))}
 
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.78),rgba(0,0,0,0.46)_48%,rgba(0,0,0,0.18)),linear-gradient(0deg,rgba(0,0,0,0.45),transparent_56%)]" />
-      <div className="absolute inset-0 ring-1 ring-inset ring-white/10" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.94),rgba(255,255,255,0.82)_52%,rgba(255,255,255,0.48)),linear-gradient(0deg,rgba(255,255,255,0.78),transparent_58%)]" />
 
       <div className="relative flex min-h-[250px] flex-col justify-end p-6 lg:p-7">
         {canManage && (
           <div className="absolute right-4 top-4">
             <Link href="/admin/announcements">
-              <Button size="sm" className="border border-white/15 bg-black/45 text-white shadow-lg backdrop-blur hover:bg-black/65">
+              <Button size="sm">
                 소식 변경하기
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -130,8 +125,8 @@ export function DashboardAnnouncementPanel({
         )}
 
         <div className="max-w-3xl">
-          <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow lg:text-4xl">{item.title}</h1>
-          {item.body && <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 drop-shadow">{item.body}</p>}
+          <h1 className="text-3xl font-bold tracking-normal text-zinc-950 lg:text-4xl">{item.title}</h1>
+          {item.body && <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-zinc-600">{item.body}</p>}
         </div>
 
         {items.length > 1 && (
@@ -142,7 +137,7 @@ export function DashboardAnnouncementPanel({
                 type="button"
                 className={cn(
                   "h-1.5 rounded-full transition-all",
-                  index === activeIndex ? "w-8 bg-white" : "w-3 bg-white/35 hover:bg-white/60"
+                  index === activeIndex ? "w-8 bg-black" : "w-3 bg-zinc-300 hover:bg-zinc-500"
                 )}
                 aria-label={`${index + 1}번째 소식 보기`}
                 onClick={() => setActiveIndex(index)}

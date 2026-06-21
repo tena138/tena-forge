@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Copy, Megaphone, Pencil, Plus, Save, Trash2, UploadCloud } from "lucide-react";
+import { Copy, Loader2, Megaphone, Pencil, Plus, Save, Trash2, UploadCloud } from "lucide-react";
 
 import { DashboardAnnouncementPanel } from "@/components/dashboard/dashboard-announcement-panel";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,7 @@ export default function AdminAnnouncementsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [actingId, setActingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -184,16 +185,25 @@ export default function AdminAnnouncementsPage() {
 
   async function remove(item: DashboardAnnouncement) {
     if (!window.confirm(`'${item.title}' 소식을 삭제할까요?`)) return;
-    await deleteDashboardAnnouncement(item.id);
-    setMessage("삭제되었습니다.");
-    const next = await listDashboardAnnouncements();
-    setItems(next);
-    if (next[0]) {
-      setDraft(toDraft(next[0]));
-      setSelectedId(next[0].id);
-    } else {
-      setDraft(emptyDraft);
-      setSelectedId(null);
+    setActingId(item.id);
+    setMessage("");
+    setError("");
+    try {
+      await deleteDashboardAnnouncement(item.id);
+      setMessage("삭제되었습니다.");
+      const next = await listDashboardAnnouncements();
+      setItems(next);
+      if (next[0]) {
+        setDraft(toDraft(next[0]));
+        setSelectedId(next[0].id);
+      } else {
+        setDraft(emptyDraft);
+        setSelectedId(null);
+      }
+    } catch {
+      setError("소식을 삭제하지 못했습니다.");
+    } finally {
+      setActingId(null);
     }
   }
 
@@ -213,6 +223,7 @@ export default function AdminAnnouncementsPage() {
   }
 
   async function toggleActive(item: DashboardAnnouncement) {
+    setActingId(item.id);
     setMessage("");
     setError("");
     try {
@@ -223,10 +234,13 @@ export default function AdminAnnouncementsPage() {
       setMessage(updated.is_active ? "소식이 활성화되었습니다." : "소식이 비활성화되었습니다.");
     } catch {
       setError("활성 상태를 변경하지 못했습니다.");
+    } finally {
+      setActingId(null);
     }
   }
 
   async function duplicateItem(item: DashboardAnnouncement) {
+    setActingId(item.id);
     setMessage("");
     setError("");
     try {
@@ -244,6 +258,8 @@ export default function AdminAnnouncementsPage() {
       setMessage("소식이 복제되었습니다. 내용을 확인한 뒤 활성화하세요.");
     } catch {
       setError("소식을 복제하지 못했습니다.");
+    } finally {
+      setActingId(null);
     }
   }
 
@@ -271,14 +287,15 @@ export default function AdminAnnouncementsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-[14px] border border-white/10 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+      <section className="rounded-[14px] bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-2.5 py-1 text-xs font-semibold text-zinc-100">
+            <div className="inline-flex items-center gap-2 rounded-[9px] bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700">
               <Megaphone className="h-4 w-4" />
               Operations News
             </div>
-            <h1 className="mt-4 text-3xl font-bold text-white">소식 관리</h1>
+            <h1 className="mt-4 text-3xl font-bold tracking-normal text-zinc-950">소식 관리</h1>
+            <p className="mt-2 text-sm font-medium text-zinc-500">콘솔 대시보드에 노출되는 운영 소식을 작성하고 순서를 관리합니다.</p>
           </div>
           <Button type="button" variant="outline" onClick={startNew}>
             <Plus className="h-4 w-4" />
@@ -289,64 +306,64 @@ export default function AdminAnnouncementsPage() {
 
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-3">
-          <div className="rounded-[12px] border border-white/10 bg-white/[0.04] p-3">
+          <div className="rounded-[14px] bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Operations News</div>
-                <div className="mt-1 text-xs text-slate-400">전체 {items.length}개 · 활성 {activeItems.length}개</div>
+                <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Operations News</div>
+                <div className="mt-1 text-xs font-semibold text-zinc-500">전체 {items.length}개 · 활성 {activeItems.length}개</div>
               </div>
               <Button type="button" size="sm" variant="outline" onClick={startNew}>
                 <Plus className="h-4 w-4" />
                 추가
               </Button>
             </div>
-            {loading && <p className="text-sm text-slate-400">불러오는 중...</p>}
-            {!loading && items.length === 0 && <p className="text-sm text-slate-400">등록된 소식이 없습니다.</p>}
+            {loading && <p className="rounded-[10px] bg-zinc-50 p-4 text-sm font-semibold text-zinc-500">불러오는 중...</p>}
+            {!loading && items.length === 0 && <p className="rounded-[10px] bg-zinc-50 p-4 text-sm font-semibold text-zinc-500">등록된 소식이 없습니다.</p>}
             <div className="space-y-2">
               {items.map((item) => (
                 <article
                   key={item.id}
-                  className={`rounded-[10px] border p-3 transition ${
+                  className={`rounded-[12px] p-3 transition ${
                     selectedId === item.id
-                      ? "border-zinc-300/45 bg-zinc-400/10 shadow-[0_14px_36px_rgba(109,40,217,0.16)]"
-                      : "border-white/10 bg-black/25 hover:border-zinc-300/30 hover:bg-white/[0.06]"
+                      ? "bg-zinc-100 shadow-sm"
+                      : "bg-zinc-50 hover:bg-zinc-100"
                   }`}
                 >
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      className="relative h-14 w-16 shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/[0.04]"
+                      className="relative h-14 w-16 shrink-0 overflow-hidden rounded-[10px] bg-zinc-100"
                       onClick={() => editItem(item)}
                       aria-label={`${item.title} 편집`}
                     >
                       {item.media_type === "image" && item.media_url ? (
                         <img src={assetUrl(item.media_url)} alt="" className="h-full w-full object-cover" />
                       ) : item.media_type === "video" && item.media_url ? (
-                        <div className="flex h-full w-full items-center justify-center bg-zinc-400/10 text-[10px] font-semibold text-zinc-100">VIDEO</div>
+                        <div className="flex h-full w-full items-center justify-center bg-zinc-200 text-[10px] font-bold text-zinc-700">VIDEO</div>
                       ) : (
-                        <div className="h-full w-full bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.26),transparent_36%),linear-gradient(135deg,#080914,#151027)]" />
+                        <div className="flex h-full w-full items-center justify-center bg-zinc-200 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">News</div>
                       )}
                     </button>
                     <button type="button" className="min-w-0 flex-1 text-left" onClick={() => editItem(item)}>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="line-clamp-1 text-sm font-semibold text-white">{item.title}</span>
-                        <span className={item.is_active ? "shrink-0 text-xs text-zinc-300" : "shrink-0 text-xs text-slate-500"}>{item.is_active ? "활성" : "비활성"}</span>
+                        <span className="line-clamp-1 text-sm font-bold text-zinc-950">{item.title}</span>
+                        <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-zinc-600">{item.is_active ? "활성" : "비활성"}</span>
                       </div>
-                      <div className="mt-1 text-xs text-slate-500">우선순위 {item.priority} · {item.media_type}</div>
+                      <div className="mt-1 text-xs font-semibold text-zinc-500">우선순위 {item.priority} · {item.media_type}</div>
                     </button>
                   </div>
                   <div className="mt-3 grid grid-cols-4 gap-1.5">
-                    <button type="button" className="rounded-md bg-white/[0.06] px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.1]" onClick={() => editItem(item)}>
+                    <button type="button" className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-200" onClick={() => editItem(item)} aria-label={`${item.title} 편집`}>
                       <Pencil className="mx-auto h-3.5 w-3.5" />
                     </button>
-                    <button type="button" className="rounded-md bg-white/[0.06] px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.1]" onClick={() => toggleActive(item)}>
-                      {item.is_active ? "끄기" : "켜기"}
+                    <button type="button" className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-50" disabled={Boolean(actingId)} onClick={() => toggleActive(item)} aria-label={`${item.title} ${item.is_active ? "비활성화" : "활성화"}`}>
+                      {actingId === item.id ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : item.is_active ? "끄기" : "켜기"}
                     </button>
-                    <button type="button" className="rounded-md bg-white/[0.06] px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.1]" onClick={() => duplicateItem(item)}>
-                      <Copy className="mx-auto h-3.5 w-3.5" />
+                    <button type="button" className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-50" disabled={Boolean(actingId)} onClick={() => duplicateItem(item)} aria-label={`${item.title} 복제`}>
+                      {actingId === item.id ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : <Copy className="mx-auto h-3.5 w-3.5" />}
                     </button>
-                    <button type="button" className="rounded-md bg-zinc-400/10 px-2 py-1.5 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-400/20" onClick={() => remove(item)}>
-                      <Trash2 className="mx-auto h-3.5 w-3.5" />
+                    <button type="button" className="rounded-[8px] bg-zinc-200 px-2 py-1.5 text-xs font-bold text-zinc-950 transition hover:bg-zinc-300 disabled:opacity-50" disabled={Boolean(actingId)} onClick={() => remove(item)} aria-label={`${item.title} 삭제`}>
+                      {actingId === item.id ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mx-auto h-3.5 w-3.5" />}
                     </button>
                   </div>
                 </article>
@@ -356,54 +373,54 @@ export default function AdminAnnouncementsPage() {
         </aside>
 
         <main className="space-y-5">
-          <form className="rounded-[12px] border border-white/10 bg-white/[0.04] p-5" onSubmit={save}>
-            <div className="mb-5 flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <form className="rounded-[14px] bg-white p-5 shadow-sm" onSubmit={save}>
+            <div className="mb-5 flex flex-col gap-2 border-b border-zinc-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">
                   {draft.id ? "Edit News Item" : "New News Item"}
                 </div>
-                <h2 className="mt-1 text-lg font-bold text-white">{draft.id ? "선택한 운영 소식 편집" : "새 운영 소식 작성"}</h2>
+                <h2 className="mt-1 text-lg font-bold text-zinc-950">{draft.id ? "선택한 운영 소식 편집" : "새 운영 소식 작성"}</h2>
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs font-semibold text-zinc-500">
                 {draft.id ? `ID ${draft.id.slice(0, 8)}` : "저장하면 목록에 새 소식으로 추가됩니다."}
               </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200 md:col-span-2">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700 md:col-span-2">
                 제목
                 <Input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="예: Tena Forge 5월 업데이트" />
               </label>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200 md:col-span-2">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700 md:col-span-2">
                 본문
                 <textarea
-                  className="min-h-28 w-full rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-zinc-400"
+                  className="min-h-28 w-full rounded-[7px] border-0 bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-950 outline-none transition placeholder:text-zinc-500 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-black/10"
                   value={draft.body}
                   onChange={(event) => setDraft({ ...draft, body: event.target.value })}
                 />
               </label>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700">
                 미디어 유형
-                <select className="h-10 w-full rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none" value={draft.media_type} onChange={(event) => setDraft({ ...draft, media_type: event.target.value as Draft["media_type"] })}>
+                <select className="h-10 w-full rounded-[7px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-black/10" value={draft.media_type} onChange={(event) => setDraft({ ...draft, media_type: event.target.value as Draft["media_type"] })}>
                   <option value="none">없음</option>
                   <option value="image">이미지</option>
                   <option value="video">영상</option>
                 </select>
               </label>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700">
                 테마
-                <select className="h-10 w-full rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none" value={draft.theme} onChange={(event) => setDraft({ ...draft, theme: event.target.value as Draft["theme"] })}>
+                <select className="h-10 w-full rounded-[7px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-black/10" value={draft.theme} onChange={(event) => setDraft({ ...draft, theme: event.target.value as Draft["theme"] })}>
                   <option value="product">제품</option>
                   <option value="update">업데이트</option>
                   <option value="event">이벤트</option>
                   <option value="system">시스템</option>
                 </select>
               </label>
-              <div className="space-y-2 text-sm font-semibold text-slate-200 md:col-span-2">
+              <div className="space-y-2 text-sm font-bold text-zinc-700 md:col-span-2">
                 미디어 파일 업로드
-                <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-black/25 px-4 py-4 text-center transition hover:border-zinc-300/50 hover:bg-zinc-400/10">
-                  <UploadCloud className="h-5 w-5 text-zinc-200" />
-                  <span className="text-sm text-white">{uploadingMedia ? `업로드 중... ${uploadProgress}%` : "사진 또는 짧은 동영상 선택"}</span>
-                  <span className="text-xs font-normal text-slate-500">PNG, JPG, WebP, GIF, MP4, WebM, MOV · 최대 50MB</span>
+                <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-[12px] bg-zinc-100 px-4 py-4 text-center transition hover:bg-zinc-200">
+                  <UploadCloud className="h-5 w-5 text-zinc-600" />
+                  <span className="text-sm font-bold text-zinc-950">{uploadingMedia ? `업로드 중... ${uploadProgress}%` : "사진 또는 짧은 동영상 선택"}</span>
+                  <span className="text-xs font-semibold text-zinc-500">PNG, JPG, WebP, GIF, MP4, WebM, MOV · 최대 50MB</span>
                   <input
                     type="file"
                     className="sr-only"
@@ -417,39 +434,39 @@ export default function AdminAnnouncementsPage() {
                   />
                 </label>
                 {uploadingMedia && (
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full bg-zinc-300 transition-all" style={{ width: `${uploadProgress}%` }} />
+                  <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                    <div className="h-full bg-black transition-all" style={{ width: `${uploadProgress}%` }} />
                   </div>
                 )}
               </div>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200 md:col-span-2">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700 md:col-span-2">
                 미디어 URL
                 <Input value={draft.media_url} onChange={(event) => setDraft({ ...draft, media_url: event.target.value })} placeholder="/static/... 또는 https://..." />
               </label>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200 md:col-span-2">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700 md:col-span-2">
                 미디어 설명
                 <Input value={draft.media_alt} onChange={(event) => setDraft({ ...draft, media_alt: event.target.value })} />
               </label>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700">
                 시작일
                 <Input type="datetime-local" value={draft.starts_at} onChange={(event) => setDraft({ ...draft, starts_at: event.target.value })} />
               </label>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700">
                 종료일
                 <Input type="datetime-local" value={draft.ends_at} onChange={(event) => setDraft({ ...draft, ends_at: event.target.value })} />
               </label>
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200">
+              <label className="space-y-1.5 text-sm font-bold text-zinc-700">
                 우선순위
                 <Input type="number" value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) })} />
               </label>
-              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-slate-200">
-                <input type="checkbox" checked={draft.is_active} onChange={(event) => setDraft({ ...draft, is_active: event.target.checked })} />
+              <label className="flex items-center gap-2 pt-7 text-sm font-bold text-zinc-700">
+                <input className="accent-black" type="checkbox" checked={draft.is_active} onChange={(event) => setDraft({ ...draft, is_active: event.target.checked })} />
                 활성화
               </label>
             </div>
 
-            {message && <p className="mt-4 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-100">{message}</p>}
-            {error && <p className="mt-4 rounded-md border border-zinc-400/20 bg-zinc-400/10 px-3 py-2 text-sm text-zinc-100">{error}</p>}
+            {message && <p className="mt-4 rounded-[10px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">{message}</p>}
+            {error && <p className="mt-4 rounded-[10px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-950">{error}</p>}
 
             <div className="mt-5 flex flex-wrap justify-between gap-2">
               <Button type="submit" disabled={saving}>
@@ -457,7 +474,7 @@ export default function AdminAnnouncementsPage() {
                 {saving ? "저장 중..." : "저장"}
               </Button>
               {draft.id && (
-                <Button type="button" variant="outline" onClick={() => items.find((item) => item.id === draft.id) && remove(items.find((item) => item.id === draft.id)!)}>
+                <Button type="button" variant="outline" disabled={Boolean(actingId)} onClick={() => items.find((item) => item.id === draft.id) && remove(items.find((item) => item.id === draft.id)!)}>
                   <Trash2 className="h-4 w-4" />
                   삭제
                 </Button>
@@ -466,14 +483,14 @@ export default function AdminAnnouncementsPage() {
           </form>
 
           <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Selected News Preview</div>
+            <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Selected News Preview</div>
             <DashboardAnnouncementPanel announcement={preview} />
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Live Dashboard Rotation</div>
-              <div className="text-xs text-slate-500">활성 소식 {activeItems.length}개</div>
+              <div className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Live Dashboard Rotation</div>
+              <div className="text-xs font-semibold text-zinc-500">활성 소식 {activeItems.length}개</div>
             </div>
             <DashboardAnnouncementPanel announcements={activeItems.length > 0 ? activeItems : preview ? [preview] : []} />
           </div>
