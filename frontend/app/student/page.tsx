@@ -101,12 +101,12 @@ function groupLearningProblemsByPage(problems: LearningProblem[]): AssignmentPro
 
 function StatusChip({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "good" | "warn" | "locked" }) {
   const toneClass = {
-    default: "border-zinc-300/25 bg-zinc-300/10 text-zinc-100",
-    good: "border-zinc-300/25 bg-zinc-300/10 text-zinc-100",
-    warn: "border-zinc-300/25 bg-zinc-300/10 text-zinc-100",
-    locked: "border-slate-300/20 bg-slate-300/10 text-slate-200",
+    default: "bg-zinc-100 text-zinc-700",
+    good: "bg-zinc-100 text-zinc-700",
+    warn: "bg-zinc-100 text-zinc-700",
+    locked: "bg-zinc-200 text-zinc-700",
   }[tone];
-  return <span className={`inline-flex h-6 items-center rounded-full border px-2 text-xs font-semibold ${toneClass}`}>{children}</span>;
+  return <span className={`inline-flex h-6 items-center rounded-full px-2 text-xs font-semibold ${toneClass}`}>{children}</span>;
 }
 
 export default function StudentAppPage() {
@@ -250,9 +250,9 @@ export default function StudentAppPage() {
 
   if (profile?.account_type !== "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] border border-zinc-300/20 bg-zinc-300/[0.045] p-6 text-center">
-        <h1 className="text-xl font-bold text-white">학생 계정 전용 학습 공간입니다</h1>
-        <a href="/academy" className="mt-5 inline-flex h-10 items-center rounded-[8px] border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white hover:bg-white/[0.09]">
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+        <h1 className="text-xl font-bold text-zinc-950">학생 계정 전용 학습 공간입니다</h1>
+        <a href="/academy" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white transition hover:bg-zinc-800">
           Academy OS로 이동
         </a>
       </div>
@@ -261,14 +261,14 @@ export default function StudentAppPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-20">
-      <section className="rounded-[16px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.22),rgba(8,10,16,0.95)_46%)] p-5">
+      <section className="rounded-[16px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-zinc-200">Student Learning Workspace</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">모든 학원의 과제와 학습 기록을 한 곳에서</h1>
+            <p className="text-sm font-semibold text-zinc-500">Student Learning Workspace</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-950">모든 학원의 과제와 학습 기록을 한 곳에서</h1>
           </div>
           <select
-            className="h-10 rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+            className="h-10 rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10"
             value={academyFilter}
             onChange={(event) => void applyAcademyFilter(event.target.value)}
           >
@@ -281,18 +281,18 @@ export default function StudentAppPage() {
       </section>
 
       {(notice || error) && (
-        <div className="rounded-[10px] border border-white/10 bg-white/[0.045] p-3 text-sm">
-          {notice && <div className="text-zinc-200">{notice}</div>}
-          {error && <div className="text-zinc-300">{error}</div>}
+        <div className="rounded-[10px] bg-white p-3 text-sm shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
+          {notice && <div className="font-semibold text-zinc-700">{notice}</div>}
+          {error && <div className="font-semibold text-zinc-700">{error}</div>}
         </div>
       )}
 
-      <nav className="grid grid-cols-5 gap-2 rounded-[12px] border border-white/10 bg-white/[0.035] p-2">
+      <nav className="grid grid-cols-5 gap-2 rounded-[12px] bg-white p-2 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         {tabs.map((item) => (
           <button
             key={item.key}
             onClick={() => setTab(item.key)}
-            className={`flex h-12 flex-col items-center justify-center gap-1 rounded-[8px] text-xs font-semibold transition sm:flex-row sm:text-sm ${tab === item.key ? "bg-zinc-500 text-white" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"}`}
+            className={`flex h-12 flex-col items-center justify-center gap-1 rounded-[8px] text-xs font-semibold transition sm:flex-row sm:text-sm ${tab === item.key ? "bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"}`}
           >
             <item.icon className="h-4 w-4" />
             {item.label}
@@ -307,17 +307,17 @@ export default function StudentAppPage() {
             <CardContent className="space-y-3">
               {filteredAssignments.length === 0 && <p className="text-sm text-muted-foreground">표시할 과제가 없습니다.</p>}
               {filteredAssignments.map((item) => (
-                <button key={item.id} onClick={() => void openAssignment(item)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/30 hover:bg-zinc-300/[0.06]">
+                <button key={item.id} onClick={() => void openAssignment(item)} className="w-full rounded-[10px] bg-zinc-50 p-3 text-left transition hover:bg-zinc-100">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-semibold text-white">{item.title}</div>
-                      <div className="mt-1 text-xs text-slate-500">{item.academy_name} · {assignmentWorkloadLabel(item)} · {formatDate(item.due_at)}</div>
+                      <div className="font-semibold text-zinc-950">{item.title}</div>
+                      <div className="mt-1 text-xs font-medium text-zinc-500">{item.academy_name} · {assignmentWorkloadLabel(item)} · {formatDate(item.due_at)}</div>
                     </div>
                     <StatusChip tone={assignmentStatusTone(item)}>
                       {assignmentStatusLabel(item)}
                     </StatusChip>
                   </div>
-                  {item.submission?.score !== null && item.submission?.score !== undefined && <div className="mt-2 text-sm text-zinc-100">Score {item.submission.score}</div>}
+                  {item.submission?.score !== null && item.submission?.score !== undefined && <div className="mt-2 text-sm font-semibold text-zinc-700">Score {item.submission.score}</div>}
                 </button>
               ))}
             </CardContent>
@@ -328,9 +328,9 @@ export default function StudentAppPage() {
             <CardContent className="space-y-4">
               {!selectedAssignment && <p className="text-sm text-muted-foreground">과제를 선택하면 한 화면에서 문제를 풀 수 있습니다.</p>}
               {selectedAssignment && selectedAssignment.content.snapshot.problem_count === 0 ? (
-                <div className="rounded-[10px] border border-white/10 bg-black/20 p-4">
-                  <div className="text-sm font-semibold text-white">{selectedAssignment.content.snapshot.material_title || selectedAssignment.title}</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-300">{selectedAssignment.content.snapshot.material_scope || selectedAssignment.description || "등록된 분량을 확인하세요."}</div>
+                <div className="rounded-[10px] bg-zinc-50 p-4">
+                  <div className="text-sm font-semibold text-zinc-950">{selectedAssignment.content.snapshot.material_title || selectedAssignment.title}</div>
+                  <div className="mt-2 text-sm leading-6 text-zinc-600">{selectedAssignment.content.snapshot.material_scope || selectedAssignment.description || "등록된 분량을 확인하세요."}</div>
                 </div>
               ) : null}
               {selectedAssignment && selectedAssignment.content.snapshot.problem_count > 0 ? (
@@ -338,30 +338,30 @@ export default function StudentAppPage() {
                   {groupLearningProblemsByPage(selectedAssignment.content.snapshot.problems).map((group) => {
                     const collapsed = collapsedAssignmentPages[group.key] || false;
                     return (
-                      <div key={group.key} className="overflow-hidden rounded-[10px] border border-white/10 bg-black/20">
+                      <div key={group.key} className="overflow-hidden rounded-[10px] bg-zinc-50">
                         <button
                           type="button"
-                          className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-left"
+                          className="flex w-full items-center justify-between gap-3 bg-white px-3 py-2 text-left transition hover:bg-zinc-100"
                           onClick={() => setCollapsedAssignmentPages((current) => ({ ...current, [group.key]: !collapsed }))}
                         >
                           <span className="flex min-w-0 items-center gap-2">
-                            {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
-                            <span className="text-sm font-bold text-white">{group.label}</span>
+                            {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" />}
+                            <span className="text-sm font-bold text-zinc-950">{group.label}</span>
                           </span>
-                          <span className="text-xs font-semibold text-slate-500">{group.problems.length}문항</span>
+                          <span className="text-xs font-semibold text-zinc-500">{group.problems.length}문항</span>
                         </button>
                         {!collapsed ? (
                           <div className="space-y-3 p-3">
                             {group.problems.map((problem) => (
-                              <div key={problem.id} className="rounded-[8px] border border-white/10 bg-white/[0.035] p-3">
+                              <div key={problem.id} className="rounded-[8px] bg-white p-3 shadow-sm">
                                 <div className="mb-2 flex items-center justify-between gap-3">
-                                  <span className="text-sm font-semibold text-white">{problem.problem_number}번</span>
+                                  <span className="text-sm font-semibold text-zinc-950">{problem.problem_number}번</span>
                                   <Badge variant="secondary">{problem.tags?.unit || "단원 미지정"}</Badge>
                                 </div>
-                                <MathText className="text-sm leading-6 text-slate-200" value={problem.problem_text} />
-                                {problem.review_page_image_url && <img src={problem.review_page_image_url} alt="" className="mt-3 max-h-56 rounded-[8px] border border-white/10 object-contain" />}
+                                <MathText className="text-sm leading-6 text-zinc-800" value={problem.problem_text} />
+                                {problem.review_page_image_url && <img src={problem.review_page_image_url} alt="" className="mt-3 max-h-56 rounded-[8px] border border-zinc-200 object-contain" />}
                                 <Input className="mt-3" value={answers[problem.id] || ""} onChange={(event) => setAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
-                                {problem.answer && <p className="mt-2 text-xs text-zinc-200">정답: {problem.answer}</p>}
+                                {problem.answer && <p className="mt-2 text-xs font-semibold text-zinc-600">정답: {problem.answer}</p>}
                               </div>
                             ))}
                           </div>
@@ -383,11 +383,11 @@ export default function StudentAppPage() {
             <CardHeader><CardTitle>Accessible Archives</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {filteredArchives.map((grant) => (
-                <button key={grant.id} onClick={() => void openArchive(grant)} className="w-full rounded-[10px] border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/30">
+                <button key={grant.id} onClick={() => void openArchive(grant)} className="w-full rounded-[10px] bg-zinc-50 p-3 text-left transition hover:bg-zinc-100">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-semibold text-white">{grant.title}</div>
-                      <div className="mt-1 text-xs text-slate-500">{grant.academy_name} · {grant.problem_count}문항</div>
+                      <div className="font-semibold text-zinc-950">{grant.title}</div>
+                      <div className="mt-1 text-xs font-medium text-zinc-500">{grant.academy_name} · {grant.problem_count}문항</div>
                     </div>
                     {grant.locked_reason ? <StatusChip tone="locked"><Lock className="mr-1 h-3 w-3" />Locked</StatusChip> : <StatusChip>Open</StatusChip>}
                   </div>
@@ -400,9 +400,9 @@ export default function StudentAppPage() {
             <CardContent className="space-y-3">
               {!selectedArchive && <p className="text-sm text-muted-foreground">권한이 부여된 아카이브를 선택하세요.</p>}
               {selectedArchive?.problems.map((problem) => (
-                <div key={problem.id} className="rounded-[10px] border border-white/10 bg-black/20 p-3">
-                  <div className="text-sm font-semibold text-white">{problem.problem_number}번</div>
-                  <MathText className="mt-2 text-sm leading-6 text-slate-200" value={problem.problem_text} />
+                <div key={problem.id} className="rounded-[10px] bg-zinc-50 p-3">
+                  <div className="text-sm font-semibold text-zinc-950">{problem.problem_number}번</div>
+                  <MathText className="mt-2 text-sm leading-6 text-zinc-800" value={problem.problem_text} />
                   <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                     <Input value={archiveAnswers[problem.id] || ""} onChange={(event) => setArchiveAnswers((prev) => ({ ...prev, [problem.id]: event.target.value }))} placeholder="답 입력" />
                     <Button variant="outline" onClick={() => void solveArchiveProblem(problem.id, selectedArchive.grant.id)}>풀이 저장</Button>
@@ -421,11 +421,11 @@ export default function StudentAppPage() {
           <CardContent className="space-y-3">
             {filteredWrong.length === 0 && <p className="text-sm text-muted-foreground">아직 오답 기록이 없습니다.</p>}
             {filteredWrong.map((item) => (
-              <div key={item.id} className="rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
+              <div key={item.id} className="rounded-[10px] bg-zinc-50 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-semibold text-white">{item.problem?.problem_number || "-"}번 · {item.academy_name}</div>
-                    <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300" value={item.problem?.problem_text || "원문 접근 권한이 없습니다."} />
+                    <div className="font-semibold text-zinc-950">{item.problem?.problem_number || "-"}번 · {item.academy_name}</div>
+                    <MathText className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-700" value={item.problem?.problem_text || "원문 접근 권한이 없습니다."} />
                   </div>
                   <StatusChip tone={item.resolved_status === "mastered" ? "good" : "warn"}>{item.resolved_status}</StatusChip>
                 </div>
@@ -448,7 +448,7 @@ export default function StudentAppPage() {
             <CardHeader><CardTitle>Weak Units</CardTitle></CardHeader>
             <CardContent className="grid gap-2 md:grid-cols-2">
               {stats?.weak_units.map((unit) => (
-                <div key={unit.unit} className="rounded-[8px] border border-white/10 bg-white/[0.035] p-3">
+                <div key={unit.unit} className="rounded-[8px] bg-zinc-50 p-3">
                   <div className="flex justify-between text-sm"><span>{unit.unit}</span><span>{percent(unit.wrong_rate)}</span></div>
                 </div>
               ))}
@@ -472,9 +472,9 @@ export default function StudentAppPage() {
             <CardHeader><CardTitle>Connected Academies / Personal Sets</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {academies.map((academy) => (
-                <div key={academy.id} className="rounded-[8px] border border-white/10 bg-white/[0.035] px-3 py-2 text-sm">
-                  <div className="font-semibold text-white">{academy.academy_name || academy.academy_id}</div>
-                  <div className="text-xs text-slate-500">{academy.status}</div>
+                <div key={academy.id} className="rounded-[8px] bg-zinc-50 px-3 py-2 text-sm">
+                  <div className="font-semibold text-zinc-950">{academy.academy_name || academy.academy_id}</div>
+                  <div className="text-xs font-medium text-zinc-500">{academy.status}</div>
                 </div>
               ))}
               <form className="flex gap-2 pt-2" onSubmit={createSet}>
@@ -482,9 +482,9 @@ export default function StudentAppPage() {
                 <Button type="submit"><Plus className="h-4 w-4" /> 생성</Button>
               </form>
               {personalSets.map((set) => (
-                <div key={set.id} className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                  <div className="font-semibold text-white">{set.title}</div>
-                  <div className="text-xs text-slate-500">{set.item_count}문항 · {set.items.filter((item) => item.locked_reason).length} locked</div>
+                <div key={set.id} className="rounded-[8px] bg-zinc-50 px-3 py-2 text-sm">
+                  <div className="font-semibold text-zinc-950">{set.title}</div>
+                  <div className="text-xs font-medium text-zinc-500">{set.item_count}문항 · {set.items.filter((item) => item.locked_reason).length} locked</div>
                 </div>
               ))}
             </CardContent>
