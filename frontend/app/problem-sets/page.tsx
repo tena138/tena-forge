@@ -25,6 +25,9 @@ export default function ProblemSetsPage() {
   const [marketOpen, setMarketOpen] = useState(false);
   const [marketTarget, setMarketTarget] = useState<ProblemSetListItem | null>(null);
   const [exportSet, setExportSet] = useState<ProblemSetListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProblemSetListItem | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [name, setName] = useState("");
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [noUnauthorizedCopy, setNoUnauthorizedCopy] = useState(false);
@@ -62,10 +65,19 @@ export default function ProblemSetsPage() {
     router.push(`/problem-sets/${created.id}`);
   }
 
-  async function removeSet(set: ProblemSetListItem) {
-    if (!window.confirm(`'${set.name}' 세트를 삭제할까요?`)) return;
-    await api(`/api/problem-sets/${set.id}`, { method: "DELETE" });
-    await load();
+  async function confirmDeleteSet() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api(`/api/problem-sets/${deleteTarget.id}`, { method: "DELETE" });
+      setDeleteTarget(null);
+      await load();
+    } catch {
+      setDeleteError("세트를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function openMarketplaceModal(set: ProblemSetListItem) {
@@ -106,7 +118,7 @@ export default function ProblemSetsPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Clock className="h-4 w-4 text-zinc-200" />
+            <Clock className="h-4 w-4 text-zinc-600" />
             최근 내보내기
           </CardTitle>
         </CardHeader>
@@ -117,12 +129,12 @@ export default function ProblemSetsPage() {
                 <button
                   key={item.id}
                   type="button"
-                  className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-zinc-300/35 hover:bg-white/[0.06]"
+                  className="rounded-[8px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200"
                   onClick={() => item.problemSetId && router.push(`/problem-sets/${item.problemSetId}`)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{item.examTitle}</p>
+                      <p className="truncate text-sm font-semibold text-zinc-950">{item.examTitle}</p>
                       <p className="mt-1 truncate text-xs text-muted-foreground">{item.problemSetName || "문항 세트"}</p>
                     </div>
                     {item.output && <Badge variant="outline">{item.output}</Badge>}
@@ -137,7 +149,7 @@ export default function ProblemSetsPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-md border border-dashed border-white/10 bg-white/[0.025] p-5 text-sm text-muted-foreground">
+            <div className="rounded-[8px] bg-zinc-100 p-5 text-sm text-muted-foreground">
               문항 세트를 내보내면 최근 기록이 여기에 자동으로 쌓입니다.
             </div>
           )}
@@ -153,7 +165,7 @@ export default function ProblemSetsPage() {
               key={set.id}
               role="button"
               tabIndex={0}
-              className="cursor-pointer transition hover:border-zinc-300/35 hover:bg-white/[0.06]"
+              className="cursor-pointer transition hover:bg-zinc-50"
               onClick={() => router.push(`/problem-sets/${set.id}`)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -173,11 +185,11 @@ export default function ProblemSetsPage() {
                   <Badge variant={set.rights_confirmed ? "success" : "warning"}>{set.rights_confirmed ? "권리 확인됨" : "권리 확인 필요"}</Badge>
                   {canManageMarketplace && <Badge variant={eligible ? "success" : "secondary"}>{eligible ? "마켓 등록 가능" : "비공개 유지"}</Badge>}
                 </div>
-                {canManageMarketplace && restricted && <p className="text-xs leading-5 text-zinc-200">이 자료는 공개 또는 마켓플레이스 등록이 제한된 출처 유형입니다.</p>}
+                {canManageMarketplace && restricted && <p className="text-xs leading-5 text-zinc-600">이 자료는 공개 또는 마켓플레이스 등록이 제한된 출처 유형입니다.</p>}
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={(event) => { event.stopPropagation(); setExportSet(set); }}><FileDown className="h-4 w-4" />내보내기</Button>
                   {canManageMarketplace && <Button size="sm" variant="outline" disabled={!eligible} onClick={(event) => { event.stopPropagation(); openMarketplaceModal(set); }}><Store className="h-4 w-4" />마켓 등록 준비</Button>}
-                  <Button size="sm" variant="destructive" onClick={(event) => { event.stopPropagation(); removeSet(set); }}><Trash2 className="h-4 w-4" />삭제</Button>
+                  <Button size="sm" variant="destructive" onClick={(event) => { event.stopPropagation(); setDeleteTarget(set); setDeleteError(""); }}><Trash2 className="h-4 w-4" />삭제</Button>
                 </div>
               </CardContent>
             </Card>
@@ -202,25 +214,47 @@ export default function ProblemSetsPage() {
       </Dialog>
 
       <Dialog open={marketOpen} onOpenChange={setMarketOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg bg-white text-zinc-950">
           <div className="space-y-4">
             <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200"><ShieldCheck className="h-4 w-4" />마켓플레이스 등록 전 권리 확인</div>
-              <h2 className="mt-2 text-xl font-bold text-white">{marketTarget?.name}</h2>
+              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-600"><ShieldCheck className="h-4 w-4" />마켓플레이스 등록 전 권리 확인</div>
+              <h2 className="mt-2 text-xl font-bold text-zinc-950">{marketTarget?.name}</h2>
             </div>
-            <p className="text-sm leading-6 text-slate-300">
+            <p className="text-sm leading-6 text-zinc-600">
               마켓플레이스에 등록하는 자료는 직접 제작했거나 판매·배포할 권리를 보유한 자료여야 합니다. Tena Forge는 문항 아이디어나 유형의 소유권을 판정하지 않으며, 권리 분쟁 또는 신고가 발생할 경우 해당 자료의 노출·판매·이용을 제한할 수 있습니다.
             </p>
-            <label className="flex items-start gap-3 rounded-md border border-white/10 bg-white/[0.04] p-3 text-sm">
+            <label className="flex items-start gap-3 rounded-[8px] bg-zinc-100 p-3 text-sm">
               <input className="mt-1" type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} />
               <span>본인은 이 자료를 직접 제작했거나 판매·배포할 권리를 보유하고 있음을 확인합니다.</span>
             </label>
-            <label className="flex items-start gap-3 rounded-md border border-white/10 bg-white/[0.04] p-3 text-sm">
+            <label className="flex items-start gap-3 rounded-[8px] bg-zinc-100 p-3 text-sm">
               <input className="mt-1" type="checkbox" checked={noUnauthorizedCopy} onChange={(event) => setNoUnauthorizedCopy(event.target.checked)} />
               <span>타인의 교재, 강의자료, 해설, 이미지, 문항 세트 구성을 무단으로 복제하지 않았음을 확인합니다.</span>
             </label>
             <Button className="w-full" disabled={!rightsConfirmed || !noUnauthorizedCopy} onClick={submitMarketplace}>권리 확인 후 등록</Button>
-            {marketMessage && <p className="rounded-md border border-white/10 bg-white/[0.04] p-3 text-sm text-slate-300">{marketMessage}</p>}
+            {marketMessage && <p className="rounded-[8px] bg-zinc-100 p-3 text-sm font-semibold text-zinc-700">{marketMessage}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md bg-white text-zinc-950">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-xl font-black">세트 삭제</h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                {deleteTarget ? `'${deleteTarget.name}' 세트를 삭제합니다. 세트 구성은 복구할 수 없습니다.` : "세트를 삭제합니다."}
+              </p>
+            </div>
+            {deleteError ? <p className="rounded-[8px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">{deleteError}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+                취소
+              </Button>
+              <Button type="button" variant="destructive" disabled={deleting} onClick={confirmDeleteSet}>
+                {deleting ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

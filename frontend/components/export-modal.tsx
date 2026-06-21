@@ -622,7 +622,7 @@ export function ExportModal({
           </section>
 
           <section className="min-w-0 space-y-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 pr-10">
               <div>
                 <h2 className="text-lg font-semibold text-zinc-950">템플릿 선택</h2>
               </div>

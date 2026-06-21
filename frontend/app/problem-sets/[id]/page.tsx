@@ -41,7 +41,7 @@ function SortableRow({ item, returnHref, onRemove }: { item: ProblemSetItem; ret
   const problemNumber = item.problem.problem_number;
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="relative flex items-start gap-3 rounded-lg border bg-card/90 p-3 pr-24 shadow-sm">
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="relative flex items-start gap-3 rounded-[10px] bg-card/90 p-3 pr-24 shadow-sm">
       <button className="text-muted-foreground" {...attributes} {...listeners} aria-label="순서 이동">
         <GripVertical className="h-5 w-5" />
       </button>
@@ -58,7 +58,7 @@ function SortableRow({ item, returnHref, onRemove }: { item: ProblemSetItem; ret
       </Button>
       <Link
         href={`/problems/${item.problem_id}?returnTo=${encodeURIComponent(returnHref)}`}
-        className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/20 text-slate-300 transition hover:border-[#d4d4d8]/60 hover:bg-[#d4d4d8]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4d4d8]/70"
+        className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-[7px] bg-zinc-100 text-zinc-700 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10"
         draggable={false}
         aria-label={`${problemNumber}번 상세 보기`}
         title="문항 상세보기"
@@ -235,7 +235,7 @@ function ProblemPickerModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!h-[88vh] !max-h-[88vh] !w-[96vw] !max-w-[1500px] !overflow-hidden !p-0">
         <div className="flex h-full min-h-0 flex-col gap-3 p-5">
-          <div className="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex shrink-0 flex-col gap-3 pr-10 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-xl font-semibold">문항 추가</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -256,7 +256,7 @@ function ProblemPickerModal({
           </div>
 
           <div className="grid shrink-0 gap-3 xl:grid-cols-[1.2fr_0.8fr_auto]">
-            <div className="flex items-center gap-2 rounded-md border bg-card/80 px-2">
+            <div className="flex items-center gap-2 rounded-[8px] bg-card/80 px-2">
               <Search className="h-4 w-4 text-primary" />
               <Input
                 className="border-0 bg-transparent focus-visible:ring-0"
@@ -285,7 +285,7 @@ function ProblemPickerModal({
             <FilterChips title="문항 유형" options={facets.problem_types} values={types} onToggle={(value) => { setPage(1); toggleValue(value, types, setTypes); }} />
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-md border bg-card/60 px-3 py-2 text-sm">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-[8px] bg-card/60 px-3 py-2 text-sm">
             <span>
               조건 결과 {data.total.toLocaleString("ko-KR")}개 / 현재 화면 {data.items.length}개 / 선택 {selectedIds.length}개
               {usageLoading ? " / 사용 이력 확인 중" : usedOnPage > 0 ? ` / 사용 이력 ${usedOnPage}개` : ""}
@@ -303,7 +303,7 @@ function ProblemPickerModal({
             </label>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-black/10">
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-[8px] bg-zinc-100/80">
             {loading ? (
               <div className="py-16 text-center text-sm text-muted-foreground">문항을 불러오는 중입니다.</div>
             ) : data.items.length ? (
@@ -316,7 +316,7 @@ function ProblemPickerModal({
                   return (
                     <button
                       key={problem.id}
-                      className={`flex min-h-[96px] w-full items-start gap-3 rounded-md border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "bg-card/70 hover:bg-accent"} ${alreadyAdded ? "opacity-55" : ""}`}
+                      className={`flex min-h-[96px] w-full items-start gap-3 rounded-[8px] p-3 text-left transition-colors ${selected ? "bg-black text-white" : "bg-card/70 hover:bg-zinc-100"} ${alreadyAdded ? "opacity-55" : ""}`}
                       disabled={saving || alreadyAdded}
                       onClick={() => toggle(problem.id)}
                     >
@@ -324,14 +324,14 @@ function ProblemPickerModal({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold">{problem.tags?.source || `${problem.problem_number}번`}</span>
-                          <Badge variant="secondary">{problem.tags?.subject || "과목 미지정"}</Badge>
-                          <Badge variant="outline">{problem.tags?.unit || "단원 미지정"}</Badge>
-                          <Badge variant="outline">{problem.tags?.difficulty || "난이도 미지정"}</Badge>
+                          <Badge className={selected ? "bg-white text-zinc-950" : undefined} variant="secondary">{problem.tags?.subject || "과목 미지정"}</Badge>
+                          <Badge className={selected ? "bg-white text-zinc-950" : undefined} variant="outline">{problem.tags?.unit || "단원 미지정"}</Badge>
+                          <Badge className={selected ? "bg-white text-zinc-950" : undefined} variant="outline">{problem.tags?.difficulty || "난이도 미지정"}</Badge>
                           {alreadyAdded && <Badge variant="success">이미 추가됨</Badge>}
                           {histories.length > 0 && <Badge variant="warning">사용 이력 {histories.length}</Badge>}
                         </div>
-                        {latestHistory && <p className="mt-1 truncate text-xs text-zinc-200">최근 {usageLabel(latestHistory)}</p>}
-                        <MathText className="mt-1 text-sm text-muted-foreground" clamp value={problem.problem_text} />
+                        {latestHistory && <p className={`mt-1 truncate text-xs ${selected ? "text-zinc-100" : "text-zinc-600"}`}>최근 {usageLabel(latestHistory)}</p>}
+                        <MathText className={`mt-1 text-sm ${selected ? "text-zinc-100" : "text-muted-foreground"}`} clamp value={problem.problem_text} />
                       </div>
                     </button>
                   );
@@ -361,11 +361,11 @@ function FilterChips({ title, options, values, onToggle }: { title: string; opti
   return (
     <div className="space-y-2">
       <div className="text-sm font-medium">{title}</div>
-      <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-md border bg-card/50 p-2">
+      <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-[8px] bg-card/50 p-2">
         {options.length ? options.map((option) => (
           <button
             key={option}
-            className={`rounded-md border px-2 py-1 text-xs transition-colors ${values.includes(option) ? "border-primary bg-primary text-primary-foreground" : "bg-card/70 hover:bg-accent"}`}
+            className={`rounded-[7px] px-2 py-1 text-xs font-semibold transition-colors ${values.includes(option) ? "bg-black text-white" : "bg-card/70 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"}`}
             onClick={() => onToggle(option)}
           >
             {option}
@@ -452,8 +452,8 @@ export default function ProblemSetDetailPage() {
       <Card>
         <CardContent className="space-y-4 pt-5">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <div className="shrink-0 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-muted-foreground">
-              총 <strong className="text-white">{itemCount.toLocaleString("ko-KR")}</strong>문항
+            <div className="shrink-0 rounded-[8px] bg-zinc-100 px-3 py-2 text-sm text-muted-foreground">
+              총 <strong className="text-zinc-950">{itemCount.toLocaleString("ko-KR")}</strong>문항
             </div>
             <Input value={name} onChange={(event) => setName(event.target.value)} />
             <Button disabled={!name.trim() || name === problemSet.name} onClick={saveName}>
@@ -475,18 +475,18 @@ export default function ProblemSetDetailPage() {
         <CardContent className="pt-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-zinc-200" />
-              <h2 className="text-base font-semibold text-white">최근 내보내기</h2>
+              <Clock className="h-4 w-4 text-zinc-600" />
+              <h2 className="text-base font-semibold text-zinc-950">최근 내보내기</h2>
             </div>
             <span className="text-xs text-muted-foreground">최근 {exportHistory.length}건</span>
           </div>
           {exportHistory.length ? (
             <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {exportHistory.slice(0, 6).map((item) => (
-                <div key={item.id} className="rounded-md border border-white/10 bg-white/[0.035] p-3">
+                <div key={item.id} className="rounded-[8px] bg-zinc-100 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{item.examTitle}</p>
+                      <p className="truncate text-sm font-semibold text-zinc-950">{item.examTitle}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{exportHistoryTime(item.exportedAt)}</p>
                     </div>
                     {item.output && <Badge variant="outline">{item.output}</Badge>}
@@ -501,7 +501,7 @@ export default function ProblemSetDetailPage() {
               ))}
             </div>
           ) : (
-            <div className="mt-3 rounded-md border border-dashed border-white/10 bg-white/[0.025] p-5 text-sm text-muted-foreground">
+            <div className="mt-3 rounded-[8px] bg-zinc-100 p-5 text-sm text-muted-foreground">
               이 세트를 내보내면 여기에 자동으로 기록됩니다.
             </div>
           )}
@@ -521,10 +521,10 @@ export default function ProblemSetDetailPage() {
         }}
       />
       <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-2 sm:flex-row">
-        <Button className="h-12 shadow-[0_18px_50px_rgba(0,0,0,0.34)]" variant="outline" onClick={() => setAddOpen(true)}>
+        <Button className="h-12 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.10)]" variant="outline" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" />문항 추가
         </Button>
-        <Button className="h-12 shadow-[0_18px_50px_rgba(255,255,255,0.34)]" onClick={() => setExportOpen(true)}>
+        <Button className="h-12 shadow-[0_12px_32px_rgba(0,0,0,0.14)]" onClick={() => setExportOpen(true)}>
           <FileDown className="h-4 w-4" />내보내기
         </Button>
       </div>
