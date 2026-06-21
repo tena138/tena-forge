@@ -152,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-[#fbfbfa] text-zinc-950" data-app-shell>
       <OAuthFragmentCapture />
       <header className="app-header-divider sticky top-0 z-30 border-b border-black/10 bg-[#fbfbfa]/90 backdrop-blur-xl">
-        <div className="grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 lg:px-6">
+        <div className="grid min-h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <Link href={homeHref} className="inline-flex shrink-0 items-center" aria-label="Tena Forge">
               <SiteLogo />

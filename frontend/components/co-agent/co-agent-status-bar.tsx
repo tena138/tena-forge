@@ -399,13 +399,13 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/78 px-3 text-zinc-950 transition-all",
-          compact && chatOpen ? "min-h-[86px] py-2" : chatOpen ? "min-h-[60px] py-1.5" : "min-h-[52px] py-2.5",
+          compact && chatOpen ? "min-h-[86px] py-2" : chatOpen ? "min-h-[72px] py-2" : "min-h-[52px] py-2.5",
           compact && chatOpen
             ? "flex flex-col justify-center gap-2"
             : expandedDesktop
               ? cn(
                   "grid items-center gap-3",
-                  primaryChatAction?.href ? "grid-cols-[minmax(0,1fr)_minmax(7rem,11rem)_minmax(18rem,28rem)]" : "grid-cols-[minmax(0,1fr)_minmax(18rem,28rem)]"
+                  primaryChatAction?.href ? "grid-cols-[minmax(0,1fr)_auto_minmax(16rem,24rem)]" : "grid-cols-[minmax(0,1fr)_minmax(16rem,26rem)]"
                 )
               : "flex items-center gap-3"
         )}
@@ -415,7 +415,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           data-coagent-status-message
           className={cn(
             "flex min-w-0 max-w-full overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            expandedDesktop ? "min-h-10 w-full items-center py-0.5 pr-4" : chatOpen ? "min-h-10 flex-1 items-center py-1 pr-2" : "flex-1 items-center py-1",
+            expandedDesktop ? "min-h-12 w-full items-center py-1 pr-2" : chatOpen ? "min-h-10 flex-1 items-center py-1 pr-2" : "flex-1 items-center py-1",
             compact && chatOpen && "w-full"
           )}
           onClick={() => setChatOpen(true)}
@@ -426,8 +426,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span
               className={cn(
                 "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
-                expandedDesktop ? "text-[15px] leading-[1.32]" : "text-[16px] leading-[1.45]",
-                expandedDesktop ? "truncate whitespace-nowrap" : chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
+                expandedDesktop ? "line-clamp-2 whitespace-normal break-words text-[15px] leading-[1.45]" : "text-[16px] leading-[1.45]",
+                !expandedDesktop && (chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate")
               )}
             >
               {typedReportMessage || "\u00A0"}
@@ -446,7 +446,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             type="button"
             className={cn(
               "inline-flex h-10 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800",
-              compact ? "w-full" : "max-w-[12rem]"
+              compact ? "w-full" : "max-w-[9rem]"
             )}
             onClick={() => router.push(primaryChatAction.href || "/problem-sets")}
           >
@@ -460,7 +460,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             data-coagent-chat-form
             className={cn(
               "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              compact || expandedDesktop ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
+              compact ? "w-full" : expandedDesktop ? "w-full max-w-[26rem]" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
             )}
             onSubmit={submitChat}
           >
