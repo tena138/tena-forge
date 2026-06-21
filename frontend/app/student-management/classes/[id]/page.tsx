@@ -203,7 +203,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
         <ArrowLeft className="h-4 w-4" />
         Student Management
       </Link>
-      <header className="rounded-[10px] bg-white p-5 shadow-[0_18px_48px_rgba(0,0,0,0.05)]">
+      <header className="rounded-[10px] bg-white p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500">Class Profile</p>
@@ -280,14 +280,14 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                 ["최근 점수", scoredStudentCount],
                 ["미해결 오답", studentWrongTotal],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-[10px] bg-white p-4 shadow-[0_12px_32px_rgba(0,0,0,0.04)]">
+                <div key={label} className="rounded-[10px] bg-white p-4">
                   <p className="text-xs font-semibold text-zinc-500">{label}</p>
                   <p className="mt-2 text-2xl font-black text-zinc-950">{value}</p>
                 </div>
               ))}
             </div>
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-              <section className="min-w-0 rounded-[10px] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.04)]">
+              <section className="min-w-0 rounded-[10px] bg-white">
                 <div className="flex items-center justify-between px-4 py-3">
                   <h2 className="flex items-center gap-2 text-sm font-black text-zinc-950"><Users className="h-4 w-4" />학생</h2>
                   <span className="text-xs font-semibold text-zinc-500">{classStudents.length}명</span>
@@ -322,7 +322,7 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                   ) : null}
                 </div>
               </section>
-              <aside className="rounded-[10px] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.04)]">
+              <aside className="rounded-[10px] bg-white">
                 <div className="flex items-center justify-between px-4 py-3">
                   <h2 className="flex items-center gap-2 text-sm font-black text-zinc-950"><ClipboardCheck className="h-4 w-4" />Paper Sessions</h2>
                   <span className="text-xs font-semibold text-zinc-500">{paperSessions.length}개</span>
