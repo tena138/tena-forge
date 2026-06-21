@@ -236,7 +236,7 @@ export function HeaderAccountSummary() {
         </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 max-h-[calc(100vh-5.5rem)] w-[min(92vw,28rem)] overflow-y-auto rounded-[10px] bg-white p-2 text-sm text-zinc-950 shadow-[0_24px_70px_rgba(0,0,0,0.14)] ring-1 ring-black/5 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
+        <div className="absolute right-0 mt-2 max-h-[calc(100vh-5.5rem)] w-[min(92vw,28rem)] overflow-y-auto rounded-[10px] bg-white p-2 text-sm text-zinc-950 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
           <div className="rounded-[8px] bg-zinc-100 p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -277,7 +277,7 @@ export function HeaderAccountSummary() {
         </div>
       )}
 
-      <DialogContent className="max-w-lg border-0 bg-white p-0 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+      <DialogContent className="max-w-lg border-0 bg-white p-0">
         <form onSubmit={saveProfile}>
           <div className="bg-zinc-100 px-5 py-4">
             <h2 className="text-lg font-bold">프로필</h2>

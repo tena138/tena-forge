@@ -269,7 +269,7 @@ export function HeaderNotifications() {
           {toast && !open ? (
             <Link
               href={toast.href}
-              className="fixed z-[4000] w-[min(84vw,340px)] rounded-[10px] bg-white p-3 text-sm text-zinc-950 shadow-[0_24px_70px_rgba(0,0,0,0.18)] ring-1 ring-black/5"
+              className="fixed z-[4000] w-[min(84vw,340px)] rounded-[10px] bg-white p-3 text-sm text-zinc-950"
               style={layerStyle}
               onClick={() => openNotification(toast)}
             >
@@ -286,7 +286,7 @@ export function HeaderNotifications() {
           ) : null}
 
           {open ? (
-            <div className="fixed z-[4000] w-[min(88vw,380px)] rounded-[10px] bg-white p-2 text-sm text-zinc-950 shadow-[0_24px_70px_rgba(0,0,0,0.18)] ring-1 ring-black/5" style={layerStyle}>
+            <div className="fixed z-[4000] w-[min(88vw,380px)] rounded-[10px] bg-white p-2 text-sm text-zinc-950" style={layerStyle}>
               <div className="flex items-center justify-between gap-2 px-2 py-1.5">
                 <div>
                   <div className="font-bold text-zinc-950">알림</div>
@@ -357,9 +357,9 @@ export function HeaderNotifications() {
           </>
         ) : null}
         <Bell className="h-4 w-4" />
-        {activeStatusData ? <Loader2 className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 animate-spin rounded-full bg-white p-0.5 text-zinc-950 shadow ring-1 ring-black/10" /> : null}
+        {activeStatusData ? <Loader2 className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 animate-spin rounded-full bg-white p-0.5 text-zinc-950" /> : null}
         {unreadCount ? (
-          <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-black px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(255,255,255,0.95)]">
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-black px-1 text-[10px] font-black leading-none text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}
