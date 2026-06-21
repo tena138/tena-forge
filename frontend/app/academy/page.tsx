@@ -152,7 +152,7 @@ function StageCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="min-h-[360px] bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
+    <Card className="min-h-[360px] bg-white">
       <CardHeader className="flex-row items-center justify-between gap-3 p-4 pb-3">
         <CardTitle className="flex items-center gap-2 text-base text-zinc-950">
           <Icon className="h-4 w-4 text-zinc-700" />
@@ -277,7 +277,7 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
         <div className="h-full w-full rounded-full bg-card" />
         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-visible text-center">
           <span className="whitespace-nowrap text-lg font-black leading-none text-foreground">{Math.round(percent)}%</span>
-          <span className="mt-1 max-w-[5.6rem] truncate whitespace-nowrap text-[10px] font-bold leading-none text-zinc-700 drop-shadow-[0_1px_5px_rgba(255,255,255,0.85)] dark:text-zinc-200 dark:drop-shadow-[0_1px_5px_rgba(0,0,0,0.9)]">
+          <span className="mt-1 max-w-[5.6rem] truncate whitespace-nowrap text-[10px] font-bold leading-none text-zinc-700">
             {ratio}
           </span>
         </div>
@@ -758,8 +758,8 @@ function AcademyOperationsPanel() {
   }, [learningStudents, selectedGroupIds, selectedStudentIds]);
   if (!academyId && profile?.account_type === "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
-        <h1 className="text-xl font-bold text-white">학생 계정에서는 Student App을 사용합니다</h1>
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center">
+        <h1 className="text-xl font-bold text-zinc-950">학생 계정에서는 Student App을 사용합니다</h1>
         <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white hover:bg-zinc-800">
           Student App으로 이동
         </a>
@@ -890,7 +890,7 @@ function AcademyOperationsPanel() {
   }
 
   if (!profile) {
-    return <div className="rounded-[12px] bg-white p-6 text-sm font-semibold text-zinc-700 shadow-[0_14px_38px_rgba(0,0,0,0.04)]">로그인이 필요합니다.</div>;
+    return <div className="rounded-[12px] bg-white p-6 text-sm font-semibold text-zinc-700">로그인이 필요합니다.</div>;
   }
 
   return (
@@ -921,7 +921,7 @@ function AcademyOperationsPanel() {
                         onClick={() => setLearningAssignmentSourceMode(option.value as LearningAssignmentSourceMode)}
                         className={`h-11 rounded-[8px] px-3 text-sm font-bold transition ${
                           learningAssignmentSourceMode === option.value
-                            ? "bg-black text-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]"
+                            ? "bg-black text-white"
                             : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
                         }`}
                       >
@@ -1278,7 +1278,7 @@ function AcademySchedulePanel() {
 
   if (!academyModeActive && profile?.account_type === "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center">
         <h1 className="text-xl font-bold text-zinc-950">학생 계정에서는 Student App을 사용합니다.</h1>
         <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white hover:bg-zinc-800">
           Student App
@@ -1376,7 +1376,7 @@ function AcademySchedulePanel() {
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-        <Card className="bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
+        <Card className="bg-white">
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2 text-zinc-950">
@@ -1464,7 +1464,7 @@ function AcademySchedulePanel() {
         </Card>
 
         <aside className="space-y-3">
-          <Card className="bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
+          <Card className="bg-white">
             <CardContent className="grid grid-cols-3 gap-2 p-3 xl:grid-cols-1">
               <div className="rounded-[8px] bg-zinc-100 p-3">
                 <p className="text-[11px] font-semibold text-zinc-500">클래스</p>
@@ -1481,7 +1481,7 @@ function AcademySchedulePanel() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white shadow-[0_14px_38px_rgba(0,0,0,0.04)]">
+          <Card className="bg-white">
             <CardContent className="space-y-2 p-3">
               {classes.map((classRow) => (
                 <div key={classRow.id} className="flex items-center justify-between rounded-[8px] bg-zinc-100 px-3 py-2 text-sm">
@@ -1504,7 +1504,7 @@ function AcademySchedulePanel() {
           });
           setFormOpen(true);
         }}
-        className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition hover:bg-zinc-800"
+        className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white transition hover:bg-zinc-800"
         aria-label="일정 추가"
       >
         <Plus className="h-5 w-5" />
@@ -1512,7 +1512,7 @@ function AcademySchedulePanel() {
 
       {formOpen ? (
         <div className="fixed inset-0 z-[120] flex items-end justify-end bg-black/35 p-4 backdrop-blur-sm sm:items-center sm:p-6">
-          <div className="w-full max-w-sm rounded-[12px] bg-white p-4 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+          <div className="w-full max-w-sm rounded-[12px] bg-white p-4 text-zinc-950">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-black text-zinc-950">일정 추가</h2>
               <button type="button" onClick={() => setFormOpen(false)} className="grid h-8 w-8 place-items-center rounded-[7px] bg-zinc-100 text-zinc-700 transition hover:bg-zinc-200 hover:text-zinc-950" aria-label="닫기">
@@ -1625,7 +1625,7 @@ function AcademyPageContent() {
 
 export default function AcademyPage() {
   return (
-    <Suspense fallback={<div className="rounded-[12px] bg-white p-6 text-sm font-semibold text-zinc-500 shadow-[0_14px_38px_rgba(0,0,0,0.04)]">콘솔을 준비하는 중입니다.</div>}>
+    <Suspense fallback={<div className="rounded-[12px] bg-white p-6 text-sm font-semibold text-zinc-500">콘솔을 준비하는 중입니다.</div>}>
       <AcademyPageContent />
     </Suspense>
   );
