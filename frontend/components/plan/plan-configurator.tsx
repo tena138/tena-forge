@@ -131,12 +131,10 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
 
   const reviewHref = `/checkout/review?plan=${plan}&billing=${billingCycle}&packages=${encodeURIComponent(stringifySelectedPackageIds(selectedPackageIds))}&engines=${encodeURIComponent(stringifySubjectEngines(selectedSubjectEngines))}`;
   return (
-    <main data-plan-theme={plan} className="relative min-h-screen overflow-x-clip bg-[#07080d] text-white">
+    <main data-plan-theme={plan} className="relative min-h-screen overflow-x-clip bg-[#fbfbfa] text-zinc-950">
       <ConfiguratorNav plan={plan} />
-      {plan === "basic" && <ProPlanBackdrop />}
-      {plan === "pro" && <BasicPlanBackdrop />}
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:72px_72px] opacity-25" />
-      <div data-plan-divider className="pointer-events-none fixed inset-x-0 top-16 h-px bg-gradient-to-r from-transparent via-zinc-200/30 to-transparent" />
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(0,0,0,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.035)_1px,transparent_1px)] bg-[size:72px_72px] opacity-30" />
+      <div data-plan-divider className="pointer-events-none fixed inset-x-0 top-16 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent" />
       <section ref={transitionSceneRef} data-plan-journey className="relative z-10 bg-transparent px-4 pb-16 pt-24 sm:px-6">
         <div data-plan-sticky className="mx-auto max-w-[92rem] bg-transparent">
           <PlanIntroStage
@@ -242,15 +240,15 @@ function ProPlanBackdrop() {
 
 function ConfiguratorNav({ plan }: { plan: PaidPlanType }) {
   return (
-    <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-[#07080d]/76 backdrop-blur-xl">
+    <nav className="fixed inset-x-0 top-0 z-40 border-b border-black/10 bg-[#fbfbfa]/88 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-[104rem] items-center justify-between px-4 sm:px-6 xl:px-8">
-        <Link href="/plan" className="inline-flex h-11 min-w-0 items-center gap-3 text-sm font-black text-slate-300 transition hover:text-white" aria-label="플랜 다시 선택">
-          <img src="/tenaforgelogo-dark.png" alt="Tena Forge" className="h-9 w-auto max-w-[8.75rem] object-contain sm:max-w-none" />
+        <Link href="/plan" className="inline-flex h-11 min-w-0 items-center gap-3 text-sm font-black text-zinc-600 transition hover:text-black" aria-label="플랜 다시 선택">
+          <SiteLogo className="h-9" />
           <span className="hidden items-center gap-1 sm:inline-flex">
             <ArrowLeft className="h-4 w-4" /> 플랜 다시 선택
           </span>
         </Link>
-        <span data-plan-badge className="rounded-[7px] border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-zinc-100">{PLANS[plan].name}</span>
+        <span data-plan-badge className="rounded-[7px] bg-zinc-100 px-3 py-1 text-xs font-black text-zinc-950">{PLANS[plan].name}</span>
       </div>
     </nav>
   );
