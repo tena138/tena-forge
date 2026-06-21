@@ -265,7 +265,7 @@ export function ExportModal({
     }
 
     getStudentManagementDashboard()
-      .then((dashboard) => setClasses(dashboard.classes))
+      .then((dashboard) => setClasses(Array.isArray(dashboard.classes) ? dashboard.classes : []))
       .catch(() => setClasses([]));
   }, [open, initialTemplateId, hideTemplateSelection]);
 
