@@ -417,12 +417,57 @@ def _co_agent_chat_completion(messages: list[dict[str, str]]) -> tuple[str, str]
     raise HTTPException(status_code=502, detail=f"Co-Agent AI request failed: {last_error}")
 
 
+def _exam_followup_fields(content: str) -> set[str]:
+    compact = content.replace(" ", "")
+    fields: set[str] = set()
+    if any(token in compact for token in ("과목", "수학", "국어", "영어")):
+        fields.add("subject")
+    if any(token in compact for token in ("학년", "범위")):
+        fields.add("grade")
+    if any(token in compact for token in ("몇문항", "총몇", "문항수")):
+        fields.add("problem_count")
+    if any(token in compact for token in ("배점", "난이도", "배치")):
+        fields.add("difficulty_plan")
+    if any(token in compact for token in ("템플릿", "양식", "서식", "폼")):
+        fields.add("template")
+    if any(token in compact for token in ("누구에게", "학생", "클래스", "반에")):
+        fields.add("recipient")
+    if any(token in compact for token in ("언제까지", "요일", "수업전", "마감", "기한")):
+        fields.add("due_at")
+    return fields
+
+
+def _exam_clarification_line(message: str, fields: set[str]) -> str:
+    labels = {
+        "subject": "과목",
+        "grade": "학년",
+        "problem_count": "문항 수",
+        "difficulty_plan": "배점/난이도 배치",
+        "template": "템플릿",
+        "recipient": "대상",
+        "due_at": "일정",
+    }
+    ordered = [
+        "subject",
+        "grade",
+        "problem_count",
+        "difficulty_plan",
+        "template",
+        "recipient",
+        "due_at",
+    ]
+    matched = [labels[field] for field in ordered if field in fields]
+    if len(matched) == 1:
+        return f"{matched[0]}: {message}"
+    return message
+
+
 def _co_agent_exam_context_message(message: str, history: list[CoAgentChatMessage]) -> str | None:
     if looks_like_exam_paper_request(message):
         return message
 
     saw_exam_request = False
-    saw_exam_followup = False
+    pending_fields: set[str] = set()
     parts: list[str] = []
     for item in history[-8:]:
         content = item.content.strip()
@@ -433,11 +478,11 @@ def _co_agent_exam_context_message(message: str, history: list[CoAgentChatMessag
             parts.append(content)
             continue
         if item.role == "assistant" and ("시험지 제작 전에 확인" in content or "시험지 제작" in content):
-            saw_exam_followup = True
+            pending_fields = _exam_followup_fields(content) or pending_fields
 
-    if not saw_exam_request or not saw_exam_followup:
+    if not saw_exam_request or not pending_fields:
         return None
-    return "\n".join([*parts[-2:], message])
+    return "\n".join([*parts[-2:], _exam_clarification_line(message, pending_fields)])
 
 
 def _exam_subject_label(engine: str | None) -> str:
