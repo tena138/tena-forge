@@ -128,7 +128,7 @@ export const defaultTemplateCss = `.page {
 
 .eyebrow {
   font-size: 13px;
-  color: #6d28d9;
+  color: #52525b;
   font-weight: 700;
   letter-spacing: 0.08em;
   margin: 0 0 8px;
@@ -158,8 +158,8 @@ h1 {
   display: inline-flex;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #f4f4f5;
+  color: #18181b;
   font-weight: 700;
   margin-bottom: 16px;
 }

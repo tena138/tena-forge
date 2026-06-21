@@ -160,7 +160,7 @@ export function createProblemRegion(x = 64, y = 190, width = 666, height = 760, 
     columnDividerStyle: { stroke: "#d8dee9", strokeWidth: 0, borderStyle: "none" },
     style: { fill: "#ffffff", stroke: "#e8e8e8", strokeWidth: 1, borderStyle: "dashed", radius: 10 },
     cardStyle: { fill: "#ffffff", stroke: "#e5e7eb", strokeWidth: 1, borderStyle: "solid", radius: 10 },
-    numberStyle: { color: "#6d28d9", fontWeight: "bold", fontSize: 12 },
+    numberStyle: { color: "#18181b", fontWeight: "bold", fontSize: 12 },
     bodyStyle: { color: "#111827", fontSize: 12, lineHeight: 1.65 },
     answerSpaceStyle: { fill: "#ffffff", stroke: "#cbd5e1", strokeWidth: 1, borderStyle: "dashed", radius: 8 },
   } as Partial<TemplateElement>) as ContentRegionElement;
@@ -312,7 +312,7 @@ function createPage(name: string, role: PageRole, elements: TemplateElement[] = 
 
 export function createBlankTemplateSet(): TemplateSet {
   const createdAt = now();
-  const theme = { primary: "#6d28d9", graphite: "#111827", muted: "#6b7280", fontFamily: "Pretendard, Noto Sans KR, sans-serif" };
+  const theme = { primary: "#18181b", graphite: "#111827", muted: "#71717a", fontFamily: "Pretendard, Noto Sans KR, sans-serif" };
   return {
     id: nanoid(),
     schemaVersion: 1,
@@ -330,7 +330,7 @@ export function createBlankTemplateSet(): TemplateSet {
 }
 
 export function createTemplateSet(category: TemplateCategory): TemplateSet {
-  const theme = { primary: "#6d28d9", graphite: "#111827", muted: "#6b7280", fontFamily: "Pretendard, Noto Sans KR, sans-serif" };
+  const theme = { primary: "#18181b", graphite: "#111827", muted: "#71717a", fontFamily: "Pretendard, Noto Sans KR, sans-serif" };
   const title = visualTemplateCategories.find((item) => item.value === category)?.label || "템플릿";
   const baseSet: TemplateSet = {
     id: nanoid(),

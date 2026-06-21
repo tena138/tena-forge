@@ -594,7 +594,7 @@ function RegionNumberControls({ region, onChange }: { region: Extract<TemplateEl
           <Input className="h-8" value={currentFormat} onChange={(event) => onChange({ numberFormat: event.target.value || "{n}." })} />
         </FieldLabel>
         <FieldLabel label="번호 색">
-          <Input className="h-8" type="color" value={colorInputValue(region.numberStyle.color, "#6d28d9")} onChange={(event) => onChange({ numberStyle: { ...region.numberStyle, color: event.target.value } })} />
+          <Input className="h-8" type="color" value={colorInputValue(region.numberStyle.color, "#18181b")} onChange={(event) => onChange({ numberStyle: { ...region.numberStyle, color: event.target.value } })} />
         </FieldLabel>
         <FieldLabel label="번호 크기">
           <Input className="h-8" type="number" min={8} max={36} value={region.numberStyle.fontSize || 12} onChange={(event) => onChange({ numberStyle: { ...region.numberStyle, fontSize: clampNumber(Number(event.target.value), 8, 36) } })} />
@@ -1869,7 +1869,7 @@ function VisualTemplateStudioPageContent() {
       const groups: PaletteGroup[] = ["기본 요소", "문서 블록", "동적 영역", "시스템"];
       return (
         <div className="space-y-3">
-          <h2 className="text-sm font-bold text-white">요소</h2>
+          <h2 className="text-sm font-bold text-zinc-950">요소</h2>
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
             <Input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="요소 검색" className="h-9 bg-white/[0.035] pl-9 text-sm" />
@@ -1881,39 +1881,39 @@ function VisualTemplateStudioPageContent() {
             <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handlePdfInput} />
             <button
               type="button"
-              className="flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-zinc-300/45 hover:bg-zinc-400/10"
+              className="flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200"
               onClick={() => imageInputRef.current?.click()}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-zinc-400/15 text-zinc-100 ring-1 ring-zinc-300/20">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-zinc-700 ring-1 ring-zinc-200">
                 <ImageIcon className="h-5 w-5" />
               </span>
-              <span className="block text-sm font-bold text-white">이미지 업로드</span>
+              <span className="block text-sm font-bold text-zinc-950">이미지 업로드</span>
             </button>
             <button
               type="button"
-              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-zinc-300/45 hover:bg-zinc-400/10"
+              className="mt-2 flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200"
               onClick={() => pptxInputRef.current?.click()}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-zinc-400/15 text-zinc-100 ring-1 ring-zinc-300/20">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-zinc-700 ring-1 ring-zinc-200">
                 <FileStack className="h-5 w-5" />
               </span>
               <span className="block min-w-0">
-                <span className="block text-sm font-bold text-white">PPTX 가져오기</span>
-                <span className="mt-0.5 block text-xs text-slate-400">첫 슬라이드를 편집 가능한 요소로 변환</span>
+                <span className="block text-sm font-bold text-zinc-950">PPTX 가져오기</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">첫 슬라이드를 편집 가능한 요소로 변환</span>
               </span>
             </button>
             <button
               type="button"
-              className="mt-2 flex w-full items-center gap-3 rounded-[10px] border border-white/10 bg-black/20 p-3 text-left transition hover:border-zinc-300/45 hover:bg-zinc-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => pdfInputRef.current?.click()}
               disabled={importingPdf}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-zinc-400/15 text-zinc-100 ring-1 ring-zinc-300/20">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-zinc-700 ring-1 ring-zinc-200">
                 <FileText className="h-5 w-5" />
               </span>
               <span className="block min-w-0">
-                <span className="block text-sm font-bold text-white">{importingPdf ? "PDF 분석 중" : "PDF 디자인 추출"}</span>
-                <span className="mt-0.5 block text-xs text-slate-400">PDF 레이아웃을 템플릿 초안으로 변환</span>
+                <span className="block text-sm font-bold text-zinc-950">{importingPdf ? "PDF 분석 중" : "PDF 디자인 추출"}</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">PDF 레이아웃을 템플릿 초안으로 변환</span>
               </span>
             </button>
             {imageAssets.length ? (
@@ -1950,13 +1950,13 @@ function VisualTemplateStudioPageContent() {
                         draggable
                         onDragStart={(event) => event.dataTransfer.setData("application/x-template-element", item.type)}
                         onClick={() => addElement(item.type)}
-                        className="group min-h-[74px] rounded-[11px] border border-white/10 bg-white/[0.045] p-2.5 text-left shadow-[0_10px_26px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:border-zinc-300/45 hover:bg-zinc-500/10"
+                        className="group min-h-[74px] rounded-[11px] bg-zinc-100 p-2.5 text-left transition hover:-translate-y-0.5 hover:bg-zinc-200"
                         title={item.description}
                       >
-                        <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-[9px] border border-white/10 bg-black/30 text-zinc-200 transition group-hover:border-zinc-300/40 group-hover:bg-zinc-400/15">
+                        <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-[9px] bg-white text-zinc-700 ring-1 ring-zinc-200 transition">
                           <Icon className="h-4 w-4" />
                         </span>
-                        <span className="block text-sm font-bold text-white">{item.label}</span>
+                        <span className="block text-sm font-bold text-zinc-950">{item.label}</span>
                       </button>
                     );
                   })}
@@ -1972,7 +1972,7 @@ function VisualTemplateStudioPageContent() {
       return (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-white">요소 검색</h2>
+            <h2 className="text-sm font-bold text-zinc-950">요소 검색</h2>
             <span className="rounded-full border border-white/10 bg-white/[0.045] px-2 py-0.5 text-[11px] font-bold text-slate-400">
               {filteredPageElements.length}/{pageElementsByLayer.length}
             </span>
@@ -1995,7 +1995,7 @@ function VisualTemplateStudioPageContent() {
                   <Layers className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-bold text-white">{getElementLabel(element)}</span>
+                  <span className="block truncate text-sm font-bold text-zinc-950">{getElementLabel(element)}</span>
                   <span className="mt-0.5 block truncate text-[11px] text-slate-500">
                     {element.type} · {Math.round(element.x)}, {Math.round(element.y)} · {Math.round(element.width)}×{Math.round(element.height)}
                   </span>
@@ -2015,7 +2015,7 @@ function VisualTemplateStudioPageContent() {
     if (leftPanel === "pages") {
       return (
         <div className="space-y-3">
-          <h2 className="text-sm font-bold text-white">페이지</h2>
+          <h2 className="text-sm font-bold text-zinc-950">페이지</h2>
           <div className="space-y-2">
             {templateSet.pages.map((page, index) => (
               <button
@@ -2031,7 +2031,7 @@ function VisualTemplateStudioPageContent() {
               >
                 <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded-[6px] bg-white text-xs font-black text-slate-900 shadow">{index + 1}</div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-bold text-white">{page.name}</div>
+                  <div className="truncate text-sm font-bold text-zinc-950">{page.name}</div>
                   <div className="mt-1 text-xs text-slate-500">{pageRoleLabels[page.role]}</div>
                 </div>
                 <span
@@ -2062,7 +2062,7 @@ function VisualTemplateStudioPageContent() {
       const groups = Array.from(new Set(visualTemplateVariableTokens.map((token) => token.group)));
       return (
         <div className="space-y-3">
-          <h2 className="text-sm font-bold text-white">변수</h2>
+          <h2 className="text-sm font-bold text-zinc-950">변수</h2>
           {groups.map((group) => (
             <div key={group} className="space-y-2">
               <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{group}</div>
@@ -2075,7 +2075,7 @@ function VisualTemplateStudioPageContent() {
                       className="min-h-[54px] rounded-[10px] border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left"
                       title={token.label}
                     >
-                      <span className="block font-mono text-sm font-bold text-white">{token.token}</span>
+                      <span className="block font-mono text-sm font-bold text-zinc-950">{token.token}</span>
                       <span className="mt-1 block text-[11px] text-slate-500">{token.label}</span>
                     </div>
                   ))}
@@ -2088,7 +2088,7 @@ function VisualTemplateStudioPageContent() {
 
     return (
       <div className="space-y-3">
-        <h2 className="text-sm font-bold text-white">레이어</h2>
+        <h2 className="text-sm font-bold text-zinc-950">레이어</h2>
         <div className="space-y-2">
           {pageElementsByLayer.map((element) => (
               <button
@@ -2109,15 +2109,15 @@ function VisualTemplateStudioPageContent() {
   }
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-0px)] min-h-[840px] flex-col overflow-hidden bg-[#07080b] text-slate-100">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 bg-[#0b0d12]/95 px-3 shadow-[0_16px_40px_rgba(0,0,0,0.28)] backdrop-blur">
+    <div className="-m-6 flex h-[calc(100vh-0px)] min-h-[840px] flex-col overflow-hidden bg-[#f7f7f5] text-zinc-950">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-black/10 bg-white/95 px-3 shadow-[0_16px_40px_rgba(0,0,0,0.06)] backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
-          <Link href={editorReturnTo} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
+          <Link href={editorReturnTo} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-zinc-100 text-zinc-700 transition hover:bg-zinc-200 hover:text-black">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex min-w-0 flex-col">
             <Input
-              className="h-8 w-[280px] border-transparent bg-transparent px-1 text-sm font-bold text-white hover:bg-white/[0.04] focus-visible:border-zinc-400/40"
+              className="h-8 w-[280px] border-transparent bg-transparent px-1 text-sm font-bold text-zinc-950 hover:bg-zinc-100 focus-visible:border-zinc-300"
               value={templateSet.title}
               onChange={(event) =>
                 updateTemplateSet((draft) => {
@@ -2129,13 +2129,13 @@ function VisualTemplateStudioPageContent() {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-35" onClick={undo} disabled={!undoStack.length} title="실행 취소">
+          <button className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] text-zinc-500 transition hover:bg-zinc-100 hover:text-black disabled:opacity-35" onClick={undo} disabled={!undoStack.length} title="실행 취소">
             <Undo2 className="h-4 w-4" />
           </button>
-          <button className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-35" onClick={redo} disabled={!redoStack.length} title="다시 실행">
+          <button className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] text-zinc-500 transition hover:bg-zinc-100 hover:text-black disabled:opacity-35" onClick={redo} disabled={!redoStack.length} title="다시 실행">
             <Redo2 className="h-4 w-4" />
           </button>
-          <select className="h-9 rounded-[8px] border border-white/10 bg-white/[0.04] px-2 text-sm text-white outline-none transition focus:border-zinc-400/50" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
+          <select className="h-9 rounded-[8px] border-0 bg-zinc-100 px-2 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
             <option value={0.5}>50%</option>
             <option value={0.72}>72%</option>
             <option value={0.84}>84%</option>
@@ -2145,7 +2145,7 @@ function VisualTemplateStudioPageContent() {
           <Button variant="outline" onClick={() => setPreview(true)}>
             <Eye className="h-4 w-4" /> 미리보기
           </Button>
-          <span className={cls("min-w-[108px] text-right text-[11px] font-semibold", autoSaveStatus === "error" ? "text-zinc-300" : autoSaveStatus === "pending" ? "text-zinc-200" : "text-slate-400")}>{autoSaveLabel}</span>
+          <span className={cls("min-w-[108px] text-right text-[11px] font-semibold", autoSaveStatus === "error" ? "text-zinc-950" : autoSaveStatus === "pending" ? "text-zinc-700" : "text-zinc-500")}>{autoSaveLabel}</span>
           <Button onClick={saveTemplate} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? "저장 중" : "저장"}
           </Button>
@@ -2154,7 +2154,7 @@ function VisualTemplateStudioPageContent() {
 
       <div className="grid min-h-0 flex-1 grid-cols-[56px_minmax(0,1fr)_300px]">
         <div className="group/sidebar relative z-40 h-full min-h-0">
-          <nav className="relative z-40 flex h-full min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#080a0f] px-1.5 py-2">
+          <nav className="relative z-40 flex h-full min-h-0 flex-col items-center gap-1 bg-white/80 px-1.5 py-2">
             {panelTabs.map((tab) => {
               const Icon = tab.icon;
               const active = leftPanel === tab.key;
@@ -2163,12 +2163,12 @@ function VisualTemplateStudioPageContent() {
                   key={tab.key}
                   className={cls(
                     "group relative flex h-11 w-11 items-center justify-center rounded-[11px] transition",
-                    active ? "bg-zinc-500/18 text-zinc-100 ring-1 ring-zinc-300/25" : "text-slate-500 hover:bg-white/[0.06] hover:text-slate-200"
+                    active ? "bg-black text-white shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-black"
                   )}
                   onClick={() => setLeftPanel(tab.key)}
                   title={tab.label}
                 >
-                  {active ? <span className="absolute -left-2 h-6 w-0.5 rounded-full bg-zinc-300" /> : null}
+                  {active ? <span className="absolute -left-2 h-6 w-0.5 rounded-full bg-black" /> : null}
                   <Icon className="h-5 w-5" />
                   <span className="sr-only">{tab.label}</span>
                 </button>
@@ -2176,21 +2176,21 @@ function VisualTemplateStudioPageContent() {
             })}
           </nav>
 
-          <aside className="pointer-events-none absolute left-14 top-0 z-30 h-full w-[300px] -translate-x-2 border-r border-white/10 bg-[#090b10]/98 opacity-0 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur transition duration-150 ease-out group-hover/sidebar:pointer-events-auto group-hover/sidebar:translate-x-0 group-hover/sidebar:opacity-100 group-focus-within/sidebar:pointer-events-auto group-focus-within/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100">
-            <div className="h-full overflow-y-auto p-3 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">{renderLeftPanel()}</div>
+          <aside className="pointer-events-none absolute left-14 top-0 z-30 h-full w-[300px] -translate-x-2 bg-white/98 opacity-0 shadow-[18px_0_54px_rgba(0,0,0,0.10)] backdrop-blur transition duration-150 ease-out group-hover/sidebar:pointer-events-auto group-hover/sidebar:translate-x-0 group-hover/sidebar:opacity-100 group-focus-within/sidebar:pointer-events-auto group-focus-within/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100">
+            <div className="h-full overflow-y-auto p-3 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">{renderLeftPanel()}</div>
           </aside>
         </div>
 
-        <main className="min-h-0 overflow-auto bg-[radial-gradient(circle_at_top,#1c2130_0,#0b0e15_42%,#07080b_100%)] [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+        <main className="min-h-0 overflow-auto bg-zinc-100 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
           <div className="mx-auto flex w-fit flex-col gap-7 p-5 pb-20">
             {templateSet.pages.map((page, index) => {
               const size = page.pageSize || templateSet.defaultPageSize;
               const renderedPage = dynamicPreviewPages.find((item) => item.id === page.id) || page;
               return (
                 <section key={page.id} className="space-y-3">
-                  <div className="flex items-center justify-between rounded-[9px] border border-white/10 bg-white/[0.035] px-2.5 py-1.5 text-[11px] text-slate-400">
+                  <div className="flex items-center justify-between rounded-[9px] bg-white px-2.5 py-1.5 text-[11px] text-zinc-500 shadow-sm">
                     <button
-                      className={cls("rounded px-2 py-1 font-bold transition", page.id === selectedPageId ? "bg-zinc-500/20 text-zinc-100" : "hover:bg-white/[0.06]")}
+                      className={cls("rounded px-2 py-1 font-bold transition", page.id === selectedPageId ? "bg-zinc-100 text-zinc-950" : "hover:bg-zinc-100")}
                       onClick={() => {
                         setSelectedPageId(page.id);
                         setSelectedIds([]);
@@ -2247,7 +2247,7 @@ function VisualTemplateStudioPageContent() {
           </div>
         </main>
 
-        <aside className="min-h-0 overflow-y-auto border-l border-white/10 bg-[#090b10] p-3 [scrollbar-color:#2f3543_transparent] [scrollbar-width:thin]">
+        <aside className="min-h-0 overflow-y-auto bg-white p-3 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
           <div className="space-y-3">
             <InspectorSection title="문서 색상" compact>
               <div className="grid grid-cols-2 gap-2">
@@ -2273,18 +2273,18 @@ function VisualTemplateStudioPageContent() {
 
             <InspectorSection title="빠른 작업" compact>
               <div className="grid grid-cols-3 gap-2">
-                <Button variant="outline" size="sm" onClick={() => alignSelected("left")} title="왼쪽 정렬"><AlignStartHorizontal className="h-4 w-4" /></Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("center")} title="가운데 정렬"><AlignHorizontalJustifyCenter className="h-4 w-4" /></Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("right")} title="오른쪽 정렬"><AlignEndHorizontal className="h-4 w-4" /></Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("top")}>상</Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("middle")}><AlignCenter className="h-4 w-4" /></Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("bottom")}>하</Button>
-                <Button variant="outline" size="sm" onClick={() => updateLayer("front")} title="앞으로"><BringToFront className="h-4 w-4" /></Button>
-                <Button variant="outline" size="sm" onClick={() => updateLayer("back")} title="뒤로"><SendToBack className="h-4 w-4" /></Button>
-                <Button variant="outline" size="sm" onClick={duplicateSelected} title="복제"><Copy className="h-4 w-4" /></Button>
+                <Button variant="outline" size="sm" onClick={() => alignSelected("left")} title="왼쪽 정렬" aria-label="왼쪽 정렬"><AlignStartHorizontal className="h-4 w-4" />좌</Button>
+                <Button variant="outline" size="sm" onClick={() => alignSelected("center")} title="가로 가운데 정렬" aria-label="가로 가운데 정렬"><AlignHorizontalJustifyCenter className="h-4 w-4" />중</Button>
+                <Button variant="outline" size="sm" onClick={() => alignSelected("right")} title="오른쪽 정렬" aria-label="오른쪽 정렬"><AlignEndHorizontal className="h-4 w-4" />우</Button>
+                <Button variant="outline" size="sm" onClick={() => alignSelected("top")} title="위쪽 정렬">상</Button>
+                <Button variant="outline" size="sm" onClick={() => alignSelected("middle")} title="세로 가운데 정렬" aria-label="세로 가운데 정렬"><AlignCenter className="h-4 w-4" />중</Button>
+                <Button variant="outline" size="sm" onClick={() => alignSelected("bottom")} title="아래쪽 정렬">하</Button>
+                <Button variant="outline" size="sm" onClick={() => updateLayer("front")} title="앞으로 가져오기" aria-label="앞으로 가져오기"><BringToFront className="h-4 w-4" />앞</Button>
+                <Button variant="outline" size="sm" onClick={() => updateLayer("back")} title="뒤로 보내기" aria-label="뒤로 보내기"><SendToBack className="h-4 w-4" />뒤</Button>
+                <Button variant="outline" size="sm" onClick={duplicateSelected} title="복제" aria-label="복제"><Copy className="h-4 w-4" />복제</Button>
                 <Button variant="outline" size="sm" onClick={groupSelected}>그룹</Button>
                 <Button variant="outline" size="sm" onClick={ungroupSelected}>해제</Button>
-                <Button variant="destructive" size="sm" onClick={deleteSelected}><Trash2 className="h-4 w-4" /></Button>
+                <Button variant="destructive" size="sm" onClick={deleteSelected} title="삭제" aria-label="삭제"><Trash2 className="h-4 w-4" />삭제</Button>
               </div>
             </InspectorSection>
 
@@ -2613,29 +2613,29 @@ function VisualTemplateStudioPageContent() {
       </div>
 
       {notice ? (
-        <div className="fixed right-5 top-16 z-[60] max-w-[420px] rounded-[10px] border border-white/10 bg-[#111827]/95 px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur">
+        <div className="fixed bottom-6 right-6 z-[60] max-w-[420px] rounded-[10px] bg-white px-4 py-3 text-sm font-semibold text-zinc-950 shadow-[0_18px_50px_rgba(0,0,0,0.14)] ring-1 ring-black/10 backdrop-blur">
           {notice}
         </div>
       ) : null}
 
       {importingPdf ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm">
-          <div className="w-full max-w-[460px] rounded-[14px] border border-white/12 bg-[#0b0f19]/95 p-5 shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white/82 px-5 backdrop-blur-sm">
+          <div className="w-full max-w-[460px] rounded-[14px] bg-white p-5 shadow-[0_28px_80px_rgba(0,0,0,0.18)] ring-1 ring-black/10">
             <div className="flex items-start gap-4">
-              <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-400/12 ring-1 ring-zinc-300/25">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-200/25 border-t-zinc-200" />
+              <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 ring-1 ring-zinc-200">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-black" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-bold text-white">PDF 디자인 추출 중</div>
-                <div className="mt-1 truncate text-xs font-semibold text-slate-400">{pdfImportFileName}</div>
-                <div className="mt-3 text-sm leading-6 text-slate-200">{pdfImportMessage || "PDF 레이아웃을 분석하는 중입니다."}</div>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="text-base font-bold text-zinc-950">PDF 디자인 추출 중</div>
+                <div className="mt-1 truncate text-xs font-semibold text-zinc-500">{pdfImportFileName}</div>
+                <div className="mt-3 text-sm leading-6 text-zinc-700">{pdfImportMessage || "PDF 레이아웃을 분석하는 중입니다."}</div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-100">
                   <div
-                    className="h-full rounded-full bg-zinc-300 transition-all duration-300"
+                    className="h-full rounded-full bg-black transition-all duration-300"
                     style={{ width: `${pdfImportProgress == null ? 24 : Math.max(8, pdfImportProgress)}%` }}
                   />
                 </div>
-                <div className="mt-3 text-xs leading-5 text-slate-500">
+                <div className="mt-3 text-xs leading-5 text-zinc-500">
                   여러 페이지 PDF는 전체 구조를 훑어 표지, 내지, 단원 구분 같은 대표 디자인을 고르는 중입니다.
                 </div>
               </div>
@@ -2645,10 +2645,10 @@ function VisualTemplateStudioPageContent() {
       ) : null}
 
       {preview ? (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/88 p-6 backdrop-blur">
+        <div className="fixed inset-0 z-50 flex flex-col bg-white/82 p-6 backdrop-blur">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white">동적 콘텐츠 미리보기</h2>
+              <h2 className="text-xl font-bold text-zinc-950">동적 콘텐츠 미리보기</h2>
             </div>
             <Button variant="outline" onClick={() => setPreview(false)}>닫기</Button>
           </div>
