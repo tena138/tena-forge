@@ -51,12 +51,12 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[12px] bg-white/90 p-6 shadow-[0_18px_70px_rgba(0,0,0,0.06)]">
+      <section className="px-1">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">Workspace Settings</p>
         <h1 className="mt-2 text-3xl font-bold text-zinc-950">설정</h1>
       </section>
 
-      <section className="rounded-[10px] bg-white/85 p-5 shadow-[0_18px_52px_rgba(0,0,0,0.05)]">
+      <section className="rounded-[10px] bg-white p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2 text-sm font-black text-zinc-950">

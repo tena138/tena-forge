@@ -200,7 +200,7 @@ export default function AccountSecurityPage() {
     }
   }
 
-  if (!profile) return <div className="rounded-lg bg-white p-8 text-sm font-semibold text-zinc-500 shadow-sm">{error || "보안 설정을 불러오는 중..."}</div>;
+  if (!profile) return <div className="rounded-lg bg-white p-8 text-sm font-semibold text-zinc-500">{error || "보안 설정을 불러오는 중..."}</div>;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -257,7 +257,7 @@ export default function AccountSecurityPage() {
           {["카카오"].map((provider) => {
             const connected = oauthAccounts.some((item) => providerName(item.provider) === provider);
             return (
-              <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div key={provider} className="flex items-center justify-between gap-3 rounded-lg bg-zinc-50 p-3">
               <div>
                 <div className="font-semibold">{provider}</div>
                 <div className="text-xs text-zinc-500">{connected ? "연결됨" : "연결되지 않음"}</div>
@@ -281,10 +281,10 @@ export default function AccountSecurityPage() {
         <CardContent className="space-y-3">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-y border-zinc-100 bg-zinc-50 text-left text-zinc-500"><tr><th className="p-2">기기</th><th className="hidden p-2 md:table-cell">브라우저</th><th className="hidden p-2 md:table-cell">IP</th><th className="hidden p-2 md:table-cell">마지막 활동</th><th className="p-2 text-right md:text-left">액션</th></tr></thead>
+              <thead className="bg-zinc-100 text-left text-zinc-500"><tr><th className="p-2">기기</th><th className="hidden p-2 md:table-cell">브라우저</th><th className="hidden p-2 md:table-cell">IP</th><th className="hidden p-2 md:table-cell">마지막 활동</th><th className="p-2 text-right md:text-left">액션</th></tr></thead>
               <tbody>
                 {sessions.map((session) => (
-                  <tr key={session.id} className="border-t border-zinc-100">
+                  <tr key={session.id} className="odd:bg-white even:bg-zinc-50">
                     <td className="p-2">
                       <div className="font-medium">{session.device_info || "Unknown"} {session.is_current ? "(현재)" : ""}</div>
                       <div className="mt-1 space-y-0.5 text-xs text-zinc-500 md:hidden">
@@ -321,10 +321,10 @@ export default function AccountSecurityPage() {
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-y border-zinc-100 bg-zinc-50 text-left text-zinc-500"><tr><th className="p-2">날짜/시간</th><th className="hidden p-2 md:table-cell">기기</th><th className="hidden p-2 md:table-cell">IP</th><th className="p-2 text-right md:text-left">결과</th></tr></thead>
+              <thead className="bg-zinc-100 text-left text-zinc-500"><tr><th className="p-2">날짜/시간</th><th className="hidden p-2 md:table-cell">기기</th><th className="hidden p-2 md:table-cell">IP</th><th className="p-2 text-right md:text-left">결과</th></tr></thead>
               <tbody>
                 {history.slice(0, 30).map((item) => (
-                  <tr key={item.id} className="border-t border-zinc-100">
+                  <tr key={item.id} className="odd:bg-white even:bg-zinc-50">
                     <td className="p-2">
                       <div>{new Date(item.login_at).toLocaleString("ko-KR")}</div>
                       <div className="mt-1 space-y-0.5 text-xs text-zinc-500 md:hidden">
@@ -357,7 +357,7 @@ export default function AccountSecurityPage() {
 
       {setup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg rounded-xl bg-white p-6 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+          <div className="relative w-full max-w-lg rounded-xl bg-white p-6 text-zinc-950">
             <button
               type="button"
               className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-lg bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10"
@@ -376,7 +376,7 @@ export default function AccountSecurityPage() {
             {setupStep === 2 && (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">QR 코드 스캔</h2>
-                <img src={setup.qr_code_url} alt="" className="mx-auto h-56 w-56 rounded-lg bg-white p-3 shadow-inner" />
+                <img src={setup.qr_code_url} alt="" className="mx-auto h-56 w-56 rounded-lg bg-zinc-50 p-3" />
                 <p className="rounded-md bg-zinc-100 p-3 text-center text-sm font-semibold text-zinc-950">수동 입력 코드: {setup.secret}</p>
                 <Button onClick={() => setSetupStep(3)}>다음</Button>
               </div>
