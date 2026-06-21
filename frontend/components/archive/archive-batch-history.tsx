@@ -44,10 +44,10 @@ function statusLabel(status: Batch["status"]) {
 
 function statusClass(status: Batch["status"]) {
   return {
-    pending: "border-white/10 bg-white/[0.06] text-slate-300",
-    processing: "border-zinc-400/25 bg-zinc-400/12 text-zinc-200",
-    done: "border-zinc-400/40 bg-zinc-500/90 text-white",
-    error: "border-zinc-400/25 bg-zinc-400/12 text-zinc-200",
+    pending: "bg-zinc-100 text-zinc-700",
+    processing: "bg-black text-white",
+    done: "bg-zinc-800 text-white",
+    error: "bg-zinc-200 text-zinc-950",
   }[status];
 }
 
@@ -59,26 +59,26 @@ function BatchErrorPanel({ batch }: { batch: Batch }) {
   if (batch.status !== "error") return null;
 
   return (
-    <div className="rounded-lg border border-zinc-400/20 bg-zinc-400/10 p-4 text-sm text-zinc-100">
+    <div className="rounded-[10px] bg-zinc-100 p-4 text-sm text-zinc-800">
       <div className="flex items-center gap-2 font-semibold">
         <AlertTriangle className="h-4 w-4" />
         처리 실패 원인
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         <div>
-          <p className="text-xs text-zinc-200/70">실패 단계</p>
+          <p className="text-xs font-semibold text-zinc-500">실패 단계</p>
           <p className="mt-1 leading-6">{batch.failure_stage || "확인되지 않음"}</p>
         </div>
         <div>
-          <p className="text-xs text-zinc-200/70">원인</p>
+          <p className="text-xs font-semibold text-zinc-500">원인</p>
           <p className="mt-1 leading-6">{errorReason(batch)}</p>
         </div>
         <div>
-          <p className="text-xs text-zinc-200/70">대응</p>
+          <p className="text-xs font-semibold text-zinc-500">대응</p>
           <p className="mt-1 leading-6">{batch.failure_hint || "다시 처리하거나 원본 파일과 서버 설정을 확인하세요."}</p>
         </div>
       </div>
-      {batch.failed_at ? <p className="mt-3 text-xs text-zinc-200/60">실패 시각: {formatDate(batch.failed_at)}</p> : null}
+      {batch.failed_at ? <p className="mt-3 text-xs font-semibold text-zinc-500">실패 시각: {formatDate(batch.failed_at)}</p> : null}
     </div>
   );
 }
@@ -88,28 +88,28 @@ function BatchInfoPanel({ batch }: { batch: Batch }) {
   const isActive = batch.status === "pending" || batch.status === "processing";
   return (
     <>
-      <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
-          <Info className="h-4 w-4 text-zinc-200" />
+      <div className="rounded-[9px] bg-zinc-100 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+          <Info className="h-4 w-4 text-zinc-700" />
           처리 정보
         </div>
-        <p className="mt-2 text-xs text-slate-500">최근 단계</p>
-        <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-200">{batch.progress_message || "기록 없음"}</p>
+        <p className="mt-2 text-xs font-semibold text-zinc-500">최근 단계</p>
+        <p className="mt-1 line-clamp-2 text-sm leading-5 text-zinc-800">{batch.progress_message || "기록 없음"}</p>
       </div>
-      <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
-          <Info className="h-4 w-4 text-zinc-200" />
+      <div className="rounded-[9px] bg-zinc-100 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+          <Info className="h-4 w-4 text-zinc-700" />
           진행률
         </div>
         {isActive ? (
           <>
-            <p className="mt-2 text-lg font-bold leading-none text-zinc-100">{progress == null ? "계산 중" : `${progress}%`}</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-zinc-400 transition-all duration-500" style={{ width: `${progress ?? 0}%` }} />
+            <p className="mt-2 text-lg font-bold leading-none text-zinc-950">{progress == null ? "계산 중" : `${progress}%`}</p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-200">
+              <div className="h-full rounded-full bg-black transition-all duration-500" style={{ width: `${progress ?? 0}%` }} />
             </div>
           </>
         ) : (
-          <p className="mt-2 text-sm text-slate-200">{batch.status === "done" ? "완료" : progress == null ? "중단됨" : `${progress}%에서 중단`}</p>
+          <p className="mt-2 text-sm font-semibold text-zinc-800">{batch.status === "done" ? "완료" : progress == null ? "중단됨" : `${progress}%에서 중단`}</p>
         )}
       </div>
     </>
@@ -342,31 +342,31 @@ export function ArchiveBatchHistory({
       ) : null}
 
       {loadError ? (
-        <div className="rounded-lg border border-zinc-400/25 bg-zinc-400/10 p-4 text-sm text-zinc-100">
+        <div className="rounded-[10px] bg-zinc-100 p-4 text-sm font-semibold text-zinc-700">
           {loadError}
         </div>
       ) : null}
 
       {assignNotice ? (
-        <div className="rounded-lg border border-zinc-400/25 bg-zinc-400/10 p-4 text-sm text-zinc-100">
+        <div className="rounded-[10px] bg-zinc-100 p-4 text-sm font-semibold text-zinc-700">
           {assignNotice}
         </div>
       ) : null}
 
       <div className="grid gap-4">
         {batches.map((batch) => (
-          <Card key={batch.id} className="border-white/10 bg-black/35">
+          <Card key={batch.id} className="bg-white">
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="text-white">{batch.name}</CardTitle>
-                    <Badge variant="outline" className={cn("border", statusClass(batch.status))}>{statusLabel(batch.status)}</Badge>
+                    <CardTitle className="text-zinc-950">{batch.name}</CardTitle>
+                    <Badge variant="outline" className={statusClass(batch.status)}>{statusLabel(batch.status)}</Badge>
                     {batch.review_count > 0 ? <Badge variant="warning">검토 {batch.review_count}</Badge> : null}
                   </div>
-                  <p className="mt-1 text-sm text-slate-500">{formatDate(batch.created_at)}</p>
+                  <p className="mt-1 text-sm text-zinc-500">{formatDate(batch.created_at)}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 lg:justify-end">
                   <Button variant="outline" size="sm" disabled={!batch.problem_count} onClick={() => router.push(`/problems?batch_id=${batch.id}`)}>
                     <Eye className="h-4 w-4" />
                     문항 보기
@@ -392,10 +392,6 @@ export function ArchiveBatchHistory({
                     <BookOpenCheck className="h-4 w-4" />
                     클래스/학생에게 할당
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => router.push(`/problems?batch_id=${batch.id}`)}>
-                    <Eye className="h-4 w-4" />
-                    문항 보기
-                  </Button>
                   <Button variant="outline" size="sm" disabled={batch.status === "processing" || busyId === batch.id} onClick={() => retryBatch(batch)}>
                     <RotateCcw className="h-4 w-4" />
                     재처리
@@ -418,32 +414,32 @@ export function ArchiveBatchHistory({
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <BatchInfoPanel batch={batch} />
-                <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-zinc-200" />문항 PDF</div>
-                  <p className="mt-1 break-all text-sm text-slate-500">{fileName(batch.problem_pdf_filename)}</p>
+                <div className="rounded-[9px] bg-zinc-100 p-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900"><FileText className="h-4 w-4 text-zinc-700" />문항 PDF</div>
+                  <p className="mt-1 break-all text-sm text-zinc-500">{fileName(batch.problem_pdf_filename)}</p>
                 </div>
-                <div className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100"><FileText className="h-4 w-4 text-zinc-200" />답안 PDF</div>
-                  <p className="mt-1 break-all text-sm text-slate-500">{fileName(batch.solution_pdf_filename)}</p>
+                <div className="rounded-[9px] bg-zinc-100 p-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900"><FileText className="h-4 w-4 text-zinc-700" />답안 PDF</div>
+                  <p className="mt-1 break-all text-sm text-zinc-500">{fileName(batch.solution_pdf_filename)}</p>
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-4">
-                <div className="rounded-md bg-white/[0.045] p-3">
-                  <p className="text-xs text-slate-500">전체 문항</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{batch.problem_count}</p>
+                <div className="rounded-[9px] bg-zinc-100 p-3">
+                  <p className="text-xs font-semibold text-zinc-500">전체 문항</p>
+                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.problem_count}</p>
                 </div>
-                <div className="rounded-md bg-white/[0.045] p-3">
-                  <p className="text-xs text-slate-500">검토 필요</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{batch.review_count}</p>
+                <div className="rounded-[9px] bg-zinc-100 p-3">
+                  <p className="text-xs font-semibold text-zinc-500">검토 필요</p>
+                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.review_count}</p>
                 </div>
-                <div className="rounded-md bg-white/[0.045] p-3">
-                  <p className="text-xs text-slate-500">태그 완료</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{batch.tagged_count}</p>
+                <div className="rounded-[9px] bg-zinc-100 p-3">
+                  <p className="text-xs font-semibold text-zinc-500">태그 완료</p>
+                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.tagged_count}</p>
                 </div>
-                <div className="rounded-md bg-white/[0.045] p-3">
-                  <p className="text-xs text-slate-500">태그 미완료</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{batch.untagged_count}</p>
+                <div className="rounded-[9px] bg-zinc-100 p-3">
+                  <p className="text-xs font-semibold text-zinc-500">태그 미완료</p>
+                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.untagged_count}</p>
                 </div>
               </div>
             </CardContent>
@@ -452,7 +448,7 @@ export function ArchiveBatchHistory({
       </div>
 
       {!batches.length && !loadError ? (
-        <div className="rounded-lg border border-white/10 bg-white/[0.035] py-14 text-center text-sm text-slate-400">
+        <div className="rounded-[10px] bg-white py-14 text-center text-sm font-semibold text-zinc-500">
           아직 아카이빙 기록이 없습니다.
           <div className="mt-4">
             <Button onClick={() => router.push("/archive/new")}>자료 아카이빙 시작</Button>
