@@ -250,7 +250,7 @@ export default function StudentAppPage() {
 
   if (profile?.account_type !== "student") {
     return (
-      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center">
         <h1 className="text-xl font-bold text-zinc-950">학생 계정 전용 학습 공간입니다</h1>
         <a href="/academy" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white transition hover:bg-zinc-800">
           Academy OS로 이동
@@ -261,7 +261,7 @@ export default function StudentAppPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-20">
-      <section className="rounded-[16px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+      <section className="rounded-[16px] bg-white p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-zinc-500">Student Learning Workspace</p>
@@ -281,18 +281,18 @@ export default function StudentAppPage() {
       </section>
 
       {(notice || error) && (
-        <div className="rounded-[10px] bg-white p-3 text-sm shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
+        <div className="rounded-[10px] bg-white p-3 text-sm">
           {notice && <div className="font-semibold text-zinc-700">{notice}</div>}
           {error && <div className="font-semibold text-zinc-700">{error}</div>}
         </div>
       )}
 
-      <nav className="grid grid-cols-5 gap-2 rounded-[12px] bg-white p-2 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+      <nav className="grid grid-cols-5 gap-2 rounded-[12px] bg-white p-2">
         {tabs.map((item) => (
           <button
             key={item.key}
             onClick={() => setTab(item.key)}
-            className={`flex h-12 flex-col items-center justify-center gap-1 rounded-[8px] text-xs font-semibold transition sm:flex-row sm:text-sm ${tab === item.key ? "bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"}`}
+            className={`flex h-12 flex-col items-center justify-center gap-1 rounded-[8px] text-xs font-semibold transition sm:flex-row sm:text-sm ${tab === item.key ? "bg-black text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"}`}
           >
             <item.icon className="h-4 w-4" />
             {item.label}
@@ -353,7 +353,7 @@ export default function StudentAppPage() {
                         {!collapsed ? (
                           <div className="space-y-3 p-3">
                             {group.problems.map((problem) => (
-                              <div key={problem.id} className="rounded-[8px] bg-white p-3 shadow-sm">
+                              <div key={problem.id} className="rounded-[8px] bg-white p-3">
                                 <div className="mb-2 flex items-center justify-between gap-3">
                                   <span className="text-sm font-semibold text-zinc-950">{problem.problem_number}번</span>
                                   <Badge variant="secondary">{problem.tags?.unit || "단원 미지정"}</Badge>
