@@ -27,10 +27,10 @@ const statusLabel: Record<string, string> = {
 };
 
 const statusClass: Record<string, string> = {
-  pending: "border-zinc-300/30 bg-zinc-300/10 text-zinc-100",
-  reminded: "border-zinc-300/30 bg-zinc-300/10 text-zinc-100",
-  paid: "border-zinc-300/30 bg-zinc-300/10 text-zinc-100",
-  excluded: "border-slate-300/25 bg-white/[0.05] text-slate-300",
+  pending: "border-zinc-200 bg-zinc-100 text-zinc-800",
+  reminded: "border-zinc-300 bg-white text-zinc-950",
+  paid: "border-zinc-300 bg-black text-white",
+  excluded: "border-zinc-200 bg-zinc-50 text-zinc-500",
 };
 
 function formatDate(value?: string | null) {
@@ -60,9 +60,9 @@ function tuitionRange(payment: TuitionPayment) {
 
 function metricItems(summary: TuitionDashboard["summary"]) {
   return [
-    { label: "확인 대기", value: summary.pending_count, tone: "text-zinc-100" },
-    { label: "연체", value: summary.overdue_count, tone: "text-zinc-100" },
-    { label: "문자 발송", value: summary.reminded_count, tone: "text-zinc-100" },
+    { label: "확인 대기", value: summary.pending_count, tone: "text-zinc-950" },
+    { label: "연체", value: summary.overdue_count, tone: "text-zinc-950" },
+    { label: "문자 발송", value: summary.reminded_count, tone: "text-zinc-950" },
   ];
 }
 
@@ -168,21 +168,21 @@ export default function TuitionManagementPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#090b10] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="text-zinc-950">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 pb-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <Link href="/student-management" className="mb-3 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
+            <Link href="/student-management" className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-950">
               <ArrowLeft className="h-4 w-4" />
               학생 관리
             </Link>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[7px] border border-zinc-300/25 bg-zinc-300/10 text-zinc-100">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[7px] bg-zinc-100 text-zinc-950">
                 <WalletCards className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-white">수강료 관리</h1>
-                <p className="text-sm text-slate-400">첫 회차 시작 전 결제 확인</p>
+                <h1 className="text-2xl font-semibold text-zinc-950">수강료 관리</h1>
+                <p className="text-sm text-zinc-500">첫 회차 시작 전 결제 확인</p>
               </div>
             </div>
           </div>
@@ -202,16 +202,16 @@ export default function TuitionManagementPage() {
         </div>
 
         {message ? (
-          <div className="rounded-[7px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">
+          <div className="rounded-[7px] bg-white px-4 py-3 text-sm font-semibold text-zinc-700">
             {message}
           </div>
         ) : null}
 
         <section className="grid gap-3 md:grid-cols-3">
           {metricItems(dashboard?.summary || { pending_count: 0, overdue_count: 0, reminded_count: 0 }).map((item) => (
-            <Card key={item.label} className="border-white/10 bg-white/[0.035]">
+            <Card key={item.label} className="bg-white">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-slate-400">{item.label}</CardTitle>
+                <CardTitle className="text-sm text-zinc-500">{item.label}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className={cn("text-3xl font-semibold", item.tone)}>{item.value}</p>
@@ -222,20 +222,20 @@ export default function TuitionManagementPage() {
 
         <section className="space-y-3">
           {loading ? (
-            <div className="flex min-h-56 items-center justify-center rounded-[7px] border border-white/10 bg-white/[0.03] text-sm text-slate-400">
+            <div className="flex min-h-56 items-center justify-center rounded-[7px] bg-white text-sm font-semibold text-zinc-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               불러오는 중
             </div>
           ) : null}
 
           {!loading && !payments.length ? (
-            <div className="flex min-h-56 items-center justify-center rounded-[7px] border border-dashed border-white/10 text-sm text-slate-500">
+            <div className="flex min-h-56 items-center justify-center rounded-[7px] bg-white text-sm font-semibold text-zinc-500">
               예정된 수강료 알림이 없습니다.
             </div>
           ) : null}
 
           {!loading && payments.length ? (
-            <div className="flex items-center justify-between gap-3 text-sm text-slate-400">
+            <div className="flex items-center justify-between gap-3 text-sm font-semibold text-zinc-500">
               <span>활성 알림 {activePayments.length}건</span>
               <span>전체 {payments.length}건</span>
             </div>
@@ -245,35 +245,35 @@ export default function TuitionManagementPage() {
             const inactive = payment.status === "paid" || payment.status === "excluded";
             const canExclude = Boolean(payment.due_event_id) && !inactive;
             return (
-              <article key={payment.id} className="rounded-[7px] border border-white/10 bg-white/[0.035] p-4 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
+              <article key={payment.id} className="rounded-[7px] bg-white p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold text-white">{payment.student_name}</h2>
+                      <h2 className="text-lg font-semibold text-zinc-950">{payment.student_name}</h2>
                       <Badge variant="outline" className={cn("border", statusClass[payment.status] || statusClass.pending)}>
                         {statusLabel[payment.status] || payment.status}
                       </Badge>
-                      {payment.reminder_count ? <Badge variant="outline" className="border border-zinc-300/25 bg-zinc-300/10 text-zinc-100">문자 {payment.reminder_count}회</Badge> : null}
+                      {payment.reminder_count ? <Badge variant="outline" className="border border-zinc-200 bg-zinc-100 text-zinc-700">문자 {payment.reminder_count}회</Badge> : null}
                     </div>
-                    <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid gap-2 text-sm font-medium text-zinc-700 sm:grid-cols-2 xl:grid-cols-4">
                       <div>
-                        <p className="text-xs text-slate-500">클래스</p>
+                        <p className="text-xs font-semibold text-zinc-500">클래스</p>
                         <p className="truncate">{payment.class_name || "-"}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500">수업</p>
+                        <p className="text-xs font-semibold text-zinc-500">수업</p>
                         <p className="truncate">{payment.event_title || "-"}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500">시작</p>
+                        <p className="text-xs font-semibold text-zinc-500">시작</p>
                         <p>{formatDate(payment.due_at)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500">청구</p>
+                        <p className="text-xs font-semibold text-zinc-500">청구</p>
                         <p>{tuitionRange(payment)} · {formatAmount(payment.amount)}</p>
                       </div>
                     </div>
-                    <div className="grid gap-2 text-sm text-slate-400 sm:grid-cols-2">
+                    <div className="grid gap-2 text-sm font-medium text-zinc-500 sm:grid-cols-2">
                       <p>보호자: {payment.guardian_name || "-"}</p>
                       <p>연락처: {payment.guardian_phone || "-"}</p>
                     </div>
@@ -302,6 +302,6 @@ export default function TuitionManagementPage() {
           })}
         </section>
       </div>
-    </main>
+    </div>
   );
 }
