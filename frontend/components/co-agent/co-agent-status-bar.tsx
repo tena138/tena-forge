@@ -358,11 +358,11 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/78 px-3 text-zinc-950 transition-all",
-          compact && chatOpen ? "min-h-[68px] py-2" : chatOpen ? "min-h-[58px] py-1" : "min-h-[52px] py-2.5",
+          compact && chatOpen ? "min-h-[76px] py-2" : chatOpen ? "min-h-[58px] py-1.5" : "min-h-[52px] py-2.5",
           compact && chatOpen
-            ? "flex flex-col items-stretch"
+            ? "grid grid-cols-1 content-center gap-2"
             : chatOpen
-              ? "flex items-center gap-2 lg:gap-3"
+              ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3"
               : "flex items-center gap-2"
         )}
       >
@@ -370,8 +370,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           type="button"
           className={cn(
             "flex min-w-0 overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            chatOpen ? "flex-1 items-center self-stretch py-1 pr-2" : "flex-1 items-center py-1",
-            compact && chatOpen && "w-full flex-none"
+            chatOpen ? "items-center py-1 pr-2" : "flex-1 items-center py-1",
+            compact && chatOpen && "w-full"
           )}
           onClick={() => setChatOpen(true)}
           title={statusMessage}
@@ -381,7 +381,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span
               className={cn(
                 "block max-w-full overflow-hidden text-[16px] font-medium leading-[1.45] tracking-normal text-zinc-800",
-                chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate"
+                chatOpen && compact ? "line-clamp-2 whitespace-normal break-words" : "truncate"
               )}
             >
               {typedReportMessage || "\u00A0"}
@@ -399,7 +399,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           <form
             className={cn(
               "relative z-10 flex h-10 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              compact ? "w-full" : "w-[clamp(14rem,24vw,28rem)] max-w-[42%] shrink-0"
+              compact ? "w-full" : "w-[clamp(16rem,30vw,34rem)]"
             )}
             onSubmit={submitChat}
           >
