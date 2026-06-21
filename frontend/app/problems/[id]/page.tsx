@@ -41,6 +41,19 @@ function normalizedTags(tag: Tag | null | undefined): Tag {
   };
 }
 
+function stringOptions(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function normalizedFacets(value: Partial<Facets> | null | undefined): Facets {
+  return {
+    subjects: stringOptions(value?.subjects),
+    units: stringOptions(value?.units),
+    problem_types: stringOptions(value?.problem_types),
+    sources: stringOptions(value?.sources),
+  };
+}
+
 function sameTags(a: Tag | null | undefined, b: Tag | null | undefined) {
   const left = normalizedTags(a);
   const right = normalizedTags(b);
@@ -156,7 +169,7 @@ function ProblemDetailContent() {
         );
       });
 
-    api<Facets>("/api/problems/facets").then(setFacets).catch(() => undefined);
+    api<Facets>("/api/problems/facets").then((data) => setFacets(normalizedFacets(data))).catch(() => undefined);
   }, [params.id]);
 
   useEffect(() => {
@@ -855,12 +868,14 @@ function TagInput({
   options: string[];
   onChange: (value: string) => void;
 }) {
+  const safeOptions = Array.isArray(options) ? options : [];
+
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium">{label}</label>
       <Input list={listId} value={value} onChange={(event) => onChange(event.target.value)} />
       <datalist id={listId}>
-        {options.map((option) => (
+        {safeOptions.map((option) => (
           <option key={option} value={option} />
         ))}
       </datalist>
