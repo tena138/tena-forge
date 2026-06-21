@@ -22,6 +22,7 @@ import {
 } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, setActiveWorkspaceId } from "@/lib/auth-client";
 import { AcademyClass, listAcademyClasses } from "@/lib/academyStudent";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type PermissionKey = Exclude<keyof WorkspacePermissions, "can_manage_billing">;
@@ -214,14 +215,24 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
             </div>
             <button
               type="button"
-              onClick={() => setStaffOpen((value) => !value)}
+              onClick={() => setStaffOpen(true)}
               className="inline-flex h-8 items-center gap-1.5 rounded-[7px] bg-zinc-100 px-2.5 text-xs font-black text-zinc-700 transition hover:bg-zinc-200 hover:text-zinc-950"
             >
               <Users className="h-3.5 w-3.5" />
               관리
             </button>
           </div>
-          {staffOpen ? <StaffManager academyId={ownerWorkspace.id} /> : null}
+          <Dialog open={staffOpen} onOpenChange={setStaffOpen}>
+            <DialogContent className="max-w-[44rem] bg-white p-0 text-zinc-950">
+              <div className="bg-zinc-100 px-5 py-4">
+                <h2 className="text-lg font-black">강사 관리</h2>
+                <p className="mt-1 text-sm font-medium text-zinc-600">{ownerWorkspace.name} 워크스페이스의 강사 좌석과 초대 코드를 관리합니다.</p>
+              </div>
+              <div className="px-5 pb-5">
+                <StaffManager academyId={ownerWorkspace.id} />
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       ) : null}
     </section>
@@ -334,7 +345,7 @@ function StaffManager({ academyId }: { academyId: string }) {
   const inviteDisabled = savingKey === "invite" || (inviteRole === "teacher" && inviteClassIds.length === 0);
 
   return (
-    <div className="mt-3 max-h-[48vh] overflow-y-auto rounded-[7px] bg-white p-2 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
+    <div className="mt-3 max-h-[min(68vh,42rem)] overflow-y-auto rounded-[7px] bg-white p-2 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
       <div className="flex items-center justify-between gap-2 rounded-[7px] bg-zinc-100 px-2 py-2">
         <div>
           <div className="text-xs font-black text-zinc-950">강사 관리</div>
