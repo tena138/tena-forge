@@ -134,7 +134,7 @@ export function ArchiveFolderExplorer({
   }
 
   return (
-    <section className="rounded-lg border border-white/10 bg-card/60 p-3">
+    <section className="rounded-[12px] bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{kicker}</div>
@@ -142,7 +142,7 @@ export function ArchiveFolderExplorer({
         </div>
         <div className="flex min-w-[16rem] flex-1 items-center gap-2 sm:flex-none">
           <Input
-            className="h-9 min-w-0 border-white/10 bg-black/20 text-sm"
+            className="h-9 min-w-0 border-0 bg-zinc-100 text-sm text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -153,24 +153,24 @@ export function ArchiveFolderExplorer({
             }}
             placeholder="새 폴더 이름"
           />
-          <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={createFolder}>
+          <Button type="button" size="sm" variant="outline" className="h-9 shrink-0 border-0 bg-black text-white hover:bg-zinc-800" onClick={createFolder}>
             <FolderPlus className="h-4 w-4" />
             새 폴더
           </Button>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-black/15 px-3 py-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs font-semibold text-slate-300">
-          <button type="button" className="rounded px-2 py-1 transition hover:bg-white/[0.06] hover:text-white" onClick={() => onOpenFolder(null)}>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-zinc-100 px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs font-semibold text-zinc-700">
+          <button type="button" className="rounded-[7px] px-2 py-1 transition hover:bg-white hover:text-zinc-950" onClick={() => onOpenFolder(null)}>
             전체 문항
           </button>
           {currentPath.map((folder, index) => (
             <span key={folder.id} className="inline-flex items-center gap-1">
-              <span className="text-slate-600">/</span>
+              <span className="text-zinc-400">/</span>
               <button
                 type="button"
-                className="rounded px-2 py-1 transition hover:bg-white/[0.06] hover:text-white"
+                className="rounded-[7px] px-2 py-1 transition hover:bg-white hover:text-zinc-950"
                 onClick={() => onOpenFolder(folder.id)}
               >
                 {folder.name}
@@ -181,13 +181,13 @@ export function ArchiveFolderExplorer({
         </div>
         <div className="flex items-center gap-2">
           {currentFolderId ? (
-            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}>
+            <Button type="button" size="sm" variant="outline" className="h-8 border-0 bg-white text-zinc-900 shadow-sm hover:bg-zinc-200" onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}>
               <ChevronLeft className="h-4 w-4" />
               상위
             </Button>
           ) : null}
           {mode === "select" ? (
-            <Button type="button" size="sm" className="h-8" disabled={!currentFolderId} onClick={() => onSelectFolder?.(currentFolderId)}>
+            <Button type="button" size="sm" className="h-8 bg-black text-white hover:bg-zinc-800" disabled={!currentFolderId} onClick={() => onSelectFolder?.(currentFolderId)}>
               <Check className="h-4 w-4" />
               이 위치에 저장
             </Button>
@@ -196,7 +196,7 @@ export function ArchiveFolderExplorer({
       </div>
 
       {mode === "select" ? (
-        <div className="mt-2 rounded-md border border-zinc-300/20 bg-zinc-400/10 px-3 py-2 text-xs font-semibold text-zinc-100">
+        <div className="mt-2 rounded-[10px] bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700">
           선택 위치: {selectedFolderId ? selectedPathLabel : "아직 선택되지 않음"}
         </div>
       ) : null}
@@ -220,8 +220,8 @@ export function ArchiveFolderExplorer({
                 dropTo(folder.id);
               }}
               className={cn(
-                "group relative flex min-h-[82px] cursor-grab items-start gap-3 rounded-lg border p-3 text-left transition-colors active:cursor-grabbing",
-                selected ? "border-[#d4d4d8]/70 bg-[#d4d4d8]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                "group relative flex min-h-[82px] cursor-grab items-start gap-3 rounded-[10px] p-3 text-left transition-colors active:cursor-grabbing",
+                selected ? "bg-black text-white shadow-[0_16px_35px_rgba(0,0,0,0.16)]" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
               )}
               role="button"
               tabIndex={0}
@@ -253,7 +253,7 @@ export function ArchiveFolderExplorer({
                 {editingId === folder.id ? (
                   <span className="flex gap-1">
                     <Input
-                      className="h-7 min-w-0 border-white/10 bg-black/25 text-xs"
+                      className="h-7 min-w-0 border-0 bg-white text-xs text-zinc-950 shadow-inner focus-visible:ring-2 focus-visible:ring-black/15"
                       value={editingName}
                       onChange={(event) => setEditingName(event.target.value)}
                       onClick={(event) => event.stopPropagation()}
@@ -269,7 +269,7 @@ export function ArchiveFolderExplorer({
                       }}
                       autoFocus
                     />
-                    <button type="button" className="grid h-7 w-7 place-items-center rounded border border-white/10 bg-black/30 text-slate-200" onClick={(event) => { event.stopPropagation(); commitRename(folder); }}>
+                    <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-black text-white transition hover:bg-zinc-800" onClick={(event) => { event.stopPropagation(); commitRename(folder); }}>
                       <Check className="h-3.5 w-3.5" />
                     </button>
                   </span>
@@ -280,10 +280,10 @@ export function ArchiveFolderExplorer({
                 )}
               </span>
               <span className={cn("absolute right-2 top-2 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100", editingId === folder.id && "hidden")}>
-                <button type="button" className="grid h-7 w-7 place-items-center rounded-md border border-white/10 bg-black/20 text-slate-300 hover:text-white" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
+                <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" className="grid h-7 w-7 place-items-center rounded-md border border-white/10 bg-black/20 text-zinc-200 hover:text-zinc-50" onClick={(event) => { event.stopPropagation(); deleteFolder(folder); }}>
+                <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); deleteFolder(folder); }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </span>
@@ -300,8 +300,8 @@ export function ArchiveFolderExplorer({
               type="button"
               draggable={Boolean(onMoveBatch)}
               className={cn(
-                "group flex min-h-[82px] cursor-grab items-start gap-3 rounded-lg border p-3 text-left transition-colors active:cursor-grabbing",
-                selected ? "border-[#d4d4d8]/70 bg-[#d4d4d8]/16 text-white" : "border-white/10 bg-black/15 text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
+                "group flex min-h-[82px] cursor-grab items-start gap-3 rounded-[10px] p-3 text-left transition-colors active:cursor-grabbing",
+                selected ? "bg-black text-white shadow-[0_16px_35px_rgba(0,0,0,0.16)]" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
               )}
               onClick={() => onSelectBatch?.(batch.id)}
               onDragStart={() => onDragStart("batch", batch.id)}
@@ -323,7 +323,7 @@ export function ArchiveFolderExplorer({
                 <span
                   role="button"
                   tabIndex={0}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/10 bg-black/20 text-slate-400 opacity-0 transition hover:text-white group-hover:opacity-100"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-white text-zinc-600 opacity-0 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-950 group-hover:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
                     onMoveBatch(batch.id, null);
@@ -338,7 +338,7 @@ export function ArchiveFolderExplorer({
         })}
 
         {!loading && !childFolders.length && !visibleBatches.length ? (
-          <div className="flex min-h-[82px] items-center rounded-lg border border-dashed border-white/10 bg-black/10 px-4 text-sm font-semibold text-slate-500">
+          <div className="flex min-h-[82px] items-center rounded-[10px] bg-zinc-50 px-4 text-sm font-semibold text-zinc-500">
             이 위치에는 아직 폴더나 배치가 없습니다.
           </div>
         ) : null}
