@@ -412,8 +412,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
               ? cn(
                   "grid items-center gap-4",
                   primaryChatAction?.href
-                    ? "grid-cols-[minmax(14rem,1fr)_auto_minmax(20rem,30rem)]"
-                    : "grid-cols-[minmax(14rem,1fr)_minmax(20rem,32rem)]"
+                    ? "grid-cols-[minmax(18rem,1fr)_auto_minmax(18rem,28rem)]"
+                    : "grid-cols-[minmax(18rem,1fr)_minmax(18rem,30rem)]"
                 )
               : "flex items-center gap-3"
         )}
@@ -438,7 +438,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span
               className={cn(
                 "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
-                expandedDesktop ? "truncate whitespace-nowrap text-[15px] leading-[1.35]" : "text-[16px] leading-[1.45]",
+                expandedDesktop ? "line-clamp-2 whitespace-normal break-words text-[15px] leading-[1.35]" : "text-[16px] leading-[1.45]",
                 !expandedDesktop && (chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate")
               )}
             >
