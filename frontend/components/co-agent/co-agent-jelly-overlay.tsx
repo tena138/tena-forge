@@ -192,9 +192,8 @@ export function CoAgentJellyOverlay() {
     if (acceptsInput && showBubble && !loading) inputRef.current?.focus();
   }, [acceptsInput, loading, showBubble, workflow?.id, workflow?.active_step]);
 
-  async function submitBubble(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const content = input.trim();
+  async function submitContent(rawContent: string) {
+    const content = rawContent.trim();
     if (!content || loading) return;
 
     const history = readStoredCoAgentChatMessages().slice(-10);
@@ -223,6 +222,11 @@ export function CoAgentJellyOverlay() {
     }
   }
 
+  async function submitBubble(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitContent(input);
+  }
+
   const resolvedLayout =
     layout ||
     ({
@@ -241,6 +245,7 @@ export function CoAgentJellyOverlay() {
   const showBubbleTitle = Boolean(bubbleTitle && bubble?.variant !== "question");
   const targetIsSidebar = resolvedLayout.targetKind === "sidebar";
   const showTargetSpotlight = Boolean(resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle");
+  const bubbleChoices = (bubble?.choices || []).filter((choice) => choice && (choice.value || choice.label));
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
@@ -303,11 +308,8 @@ export function CoAgentJellyOverlay() {
           )}
           style={bubbleStyle}
         >
-          <div className="flex items-start gap-2">
-            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[#6d28d9] text-white">
-              <Bot className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
+          <div className="min-w-0">
+            <div className="min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   {showBubbleTitle ? <p className="truncate text-sm font-black text-zinc-950">{bubbleTitle}</p> : null}
@@ -331,24 +333,45 @@ export function CoAgentJellyOverlay() {
               </div>
 
               {acceptsInput ? (
-                <form className="mt-3 flex min-w-0 items-center gap-2 rounded-[10px] bg-zinc-100 px-2 py-1.5" onSubmit={submitBubble}>
-                  <input
-                    ref={inputRef}
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    disabled={loading}
-                    className="h-9 min-w-0 flex-1 bg-transparent px-1 text-sm font-bold text-zinc-950 outline-none placeholder:text-zinc-500"
-                    placeholder={bubble.placeholder || "답변 입력"}
-                  />
-                  <button
-                    type="submit"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
-                    disabled={loading || !input.trim()}
-                    aria-label="답변 보내기"
-                  >
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </button>
-                </form>
+                <>
+                  {bubbleChoices.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {bubbleChoices.map((choice) => {
+                        const choiceValue = String(choice.value || choice.label || "").trim();
+                        if (!choiceValue) return null;
+                        return (
+                          <button
+                            key={`${choice.engine || choiceValue}-${choice.label || choiceValue}`}
+                            type="button"
+                            className="h-9 rounded-[9px] bg-zinc-950 px-3 text-sm font-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
+                            disabled={loading}
+                            onClick={() => void submitContent(choiceValue)}
+                          >
+                            {choice.label || choiceValue}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  <form className="mt-3 flex min-w-0 items-center gap-2 rounded-[10px] bg-zinc-100 px-2 py-1.5" onSubmit={submitBubble}>
+                    <input
+                      ref={inputRef}
+                      value={input}
+                      onChange={(event) => setInput(event.target.value)}
+                      disabled={loading}
+                      className="h-9 min-w-0 flex-1 bg-transparent px-1 text-sm font-bold text-zinc-950 outline-none placeholder:text-zinc-500"
+                      placeholder={bubble.placeholder || "답변 입력"}
+                    />
+                    <button
+                      type="submit"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
+                      disabled={loading || !input.trim()}
+                      aria-label="답변 보내기"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </button>
+                  </form>
+                </>
               ) : bubble.href ? (
                 <button
                   type="button"

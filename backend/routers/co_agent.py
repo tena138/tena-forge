@@ -25,7 +25,8 @@ from models import (
 from services.exam_paper_planner import build_exam_paper_draft, format_exam_paper_draft_answer, looks_like_exam_paper_request
 from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id
 from services.problem_usage_history import record_problem_set_usage
-from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, MATH_ENGINE
+from services.saas_security import enabled_subject_engines_for_user
+from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, MATH_ENGINE, SUBJECT_ENGINES, normalize_subject_engines
 from services.usage_cost_policy import estimate_co_agent_exam_build, record_usage_event
 
 router = APIRouter(prefix="/api/co-agent", tags=["co-agent"])
@@ -735,6 +736,59 @@ def _exam_subject_label(engine: str | None) -> str:
     return "시험"
 
 
+def _enabled_subject_engines_for_co_agent(request: Request, db: Session) -> list[str]:
+    owner_id = current_workspace_id(request, db, permission="can_manage_coagent")
+    return enabled_subject_engines_for_user(db, owner_id)
+
+
+def _exam_subject_choices(enabled_engines: list[str] | None) -> list[dict[str, str]]:
+    values = {
+        MATH_ENGINE: "수학",
+        KOREAN_ENGINE: "국어",
+        ENGLISH_ENGINE: "영어",
+    }
+    choices: list[dict[str, str]] = []
+    for engine in normalize_subject_engines(enabled_engines or [MATH_ENGINE]):
+        definition = SUBJECT_ENGINES.get(engine)
+        choices.append(
+            {
+                "label": definition.label if definition else values.get(engine, engine),
+                "value": values.get(engine, engine),
+                "engine": engine,
+            }
+        )
+    return choices
+
+
+def _with_exam_subject_choices(draft: dict[str, Any], enabled_engines: list[str] | None) -> dict[str, Any]:
+    missing = draft.get("missing_required_fields") or []
+    if not any(item.get("field") == "subject" for item in missing):
+        return draft
+
+    choices = _exam_subject_choices(enabled_engines)
+    if not choices:
+        return draft
+
+    next_missing: list[dict[str, Any]] = []
+    for item in missing:
+        if item.get("field") == "subject":
+            next_missing.append(
+                {
+                    **item,
+                    "question": "어느 과목 시험지인가요?",
+                    "choices": choices,
+                }
+            )
+        else:
+            next_missing.append(item)
+
+    return {
+        **draft,
+        "missing_required_fields": next_missing,
+        "clarification_questions": [item.get("question", "") for item in next_missing if item.get("question")],
+    }
+
+
 def _exam_problem_set_name(draft: dict[str, Any]) -> str:
     grade = str(draft.get("grade") or "").strip()
     subject = _exam_subject_label(draft.get("subject_engine"))
@@ -918,7 +972,7 @@ def _exam_workflow_steps(active_step: str, status: str, draft: dict[str, Any]) -
     return steps
 
 
-def _exam_workflow_bubble(draft: dict[str, Any], answer: str) -> dict[str, str]:
+def _exam_workflow_bubble(draft: dict[str, Any], answer: str) -> dict[str, Any]:
     status = _exam_workflow_status(draft)
     active_step = _exam_workflow_active_step(draft)
     if status == "needs_input":
@@ -948,13 +1002,17 @@ def _exam_workflow_bubble(draft: dict[str, Any], answer: str) -> dict[str, str]:
         elif active_step == "problem_set":
             title = "배정 정보를 확인할게요"
             placeholder = "예: 3반 / 다음 수업 전"
-        return {
+        bubble: dict[str, Any] = {
             "title": title,
             "message": question,
             "field": field,
             "placeholder": placeholder,
             "variant": "question",
         }
+        choices = first_missing.get("choices")
+        if isinstance(choices, list) and choices:
+            bubble["choices"] = choices
+        return bubble
     if status == "created":
         problem_set = draft.get("problem_set") or {}
         name = problem_set.get("name") or "새 문항 세트"
@@ -1045,6 +1103,7 @@ def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Re
         raise HTTPException(status_code=400, detail="Message is required.")
     owner_ids = _academy_ids_for_co_agent(request, db)
     draft = build_exam_paper_draft(db, message=message, owner_ids=owner_ids)
+    draft = _with_exam_subject_choices(draft, _enabled_subject_engines_for_co_agent(request, db))
     answer = format_exam_paper_draft_answer(draft)
     return {
         "answer": answer,
@@ -1066,16 +1125,19 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
     if exam_context_message:
         owner_ids = _academy_ids_for_co_agent(request, db)
         draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
+        draft = _with_exam_subject_choices(draft, _enabled_subject_engines_for_co_agent(request, db))
         if _should_try_ai_exam_context(payload.messages, draft):
             ai_context_message = _co_agent_exam_context_message_ai(message, payload.messages, payload.visible_context)
             if ai_context_message and ai_context_message != exam_context_message:
                 exam_context_message = ai_context_message
                 draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
+                draft = _with_exam_subject_choices(draft, _enabled_subject_engines_for_co_agent(request, db))
     else:
         exam_context_message = _co_agent_exam_context_message_ai(message, payload.messages, payload.visible_context)
         if exam_context_message:
             owner_ids = _academy_ids_for_co_agent(request, db)
             draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
+            draft = _with_exam_subject_choices(draft, _enabled_subject_engines_for_co_agent(request, db))
 
     if exam_context_message and draft is not None:
         artifacts: list[dict[str, Any]] = []

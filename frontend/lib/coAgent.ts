@@ -66,6 +66,11 @@ export type CoAgentWorkflowBubble = {
   message: string;
   field?: string;
   placeholder?: string;
+  choices?: Array<{
+    label?: string;
+    value?: string;
+    engine?: string;
+  }>;
   variant?: "question" | "status" | "success" | "error" | string;
   href?: string;
 };

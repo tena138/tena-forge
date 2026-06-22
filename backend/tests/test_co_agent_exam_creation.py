@@ -14,7 +14,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from database import Base  # noqa: E402
-from models import Batch, Problem, ProblemSet, ProblemSetItem, ProblemUsageHistory, Tag, UsageLog  # noqa: E402
+from models import Batch, Problem, ProblemSet, ProblemSetItem, ProblemUsageHistory, Subscription, Tag, UsageLog  # noqa: E402
 import routers.co_agent as co_agent_module  # noqa: E402
 from routers.co_agent import CoAgentChatMessage, CoAgentChatRequest, co_agent_chat  # noqa: E402
 from routers.problem_sets import list_problem_sets  # noqa: E402
@@ -213,6 +213,36 @@ class CoAgentExamCreationTests(unittest.TestCase):
             self.assertEqual(response.workflow["bubble"]["variant"], "question")
             self.assertEqual(response.workflow["bubble"]["field"], "candidate_shortfall")
             self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 0)
+        finally:
+            db.close()
+
+    def test_chat_subject_question_uses_enabled_engine_choices(self):
+        db = self.Session()
+        try:
+            db.add(
+                Subscription(
+                    user_id=self.owner_id,
+                    plan_code="basic",
+                    status="active",
+                    enabled_subject_engines=["math", "korean"],
+                    subject_engine_count=2,
+                    subject_multiplier=2,
+                )
+            )
+            db.commit()
+
+            response = co_agent_chat(
+                CoAgentChatRequest(message="시험지 만들어줘"),
+                self.request,
+                db,
+            )
+
+            choices = response.workflow["bubble"]["choices"]
+            self.assertEqual(response.drafts[0]["status"], "needs_input")
+            self.assertEqual(response.workflow["bubble"]["field"], "subject")
+            self.assertEqual([choice["value"] for choice in choices], ["수학", "국어"])
+            self.assertEqual([choice["engine"] for choice in choices], ["math", "korean"])
+            self.assertFalse(any(choice["engine"] == "english" for choice in choices))
         finally:
             db.close()
 
