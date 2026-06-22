@@ -456,8 +456,8 @@ export function ArchiveBatchHistory({
         </div>
       ) : null}
       {assignBatch ? (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl overflow-hidden rounded-[14px] bg-white text-zinc-950">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-3xl overflow-hidden rounded-[14px] bg-white text-zinc-950 shadow-[0_24px_80px_rgba(15,15,15,0.22)]">
             <div className="flex items-start justify-between gap-4 p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Batch Assignment</p>

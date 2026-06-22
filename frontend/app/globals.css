@@ -1743,6 +1743,14 @@
     background-color: rgb(255 255 255 / 0.86) !important;
   }
 
+  html[data-theme="light"] [data-app-shell] [class*="fixed"][class*="inset-0"][class*="bg-black/35"],
+  html[data-theme="light"] [data-app-shell] [class*="fixed"][class*="inset-0"][class*="bg-black/40"],
+  html[data-theme="light"] [data-app-shell] [class*="fixed"][class*="inset-0"][class*="bg-black/45"],
+  html[data-theme="light"] [data-app-shell] [class*="fixed"][class*="inset-0"][class*="bg-black/50"],
+  html[data-theme="light"] [data-app-shell] [class*="fixed"][class*="inset-0"][class*="bg-black/55"] {
+    background-color: rgb(0 0 0 / 0.52) !important;
+  }
+
   html[data-theme="light"] [data-app-shell] [style*="linear-gradient(180deg, hsl(224 28% 7%)"],
   html[data-theme="light"] [data-app-shell] [class*="bg-slate-950/90"] {
     background: linear-gradient(180deg, rgb(245 247 251), rgb(239 243 249)) !important;

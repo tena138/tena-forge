@@ -63,7 +63,7 @@ export function LegalDocumentDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/35 p-3 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/45 p-3 sm:p-6"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();

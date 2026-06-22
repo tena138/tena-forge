@@ -11,10 +11,10 @@ export const DialogTrigger = DialogPrimitive.Trigger;
 export function DialogContent({ className, children, ...props }: DialogPrimitive.DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-[3000] bg-black/50 backdrop-blur-[2px]" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-[3000] bg-black/55" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-[3010] max-h-[90vh] w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-[14px] bg-card p-4",
+          "fixed left-1/2 top-1/2 z-[3010] max-h-[90vh] w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-[14px] bg-white p-4 text-zinc-950 shadow-[0_24px_80px_rgba(15,15,15,0.22)]",
           className
         )}
         {...props}

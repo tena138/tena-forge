@@ -356,8 +356,8 @@ export default function AccountSecurityPage() {
       </Card>
 
       {setup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg rounded-xl bg-white p-6 text-zinc-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+          <div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[14px] bg-white p-5 text-zinc-950 shadow-[0_24px_80px_rgba(15,15,15,0.22)] sm:p-6">
             <button
               type="button"
               className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-lg bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10"

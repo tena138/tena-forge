@@ -161,7 +161,7 @@ function RegisterCompleteContent() {
       </AuthCard>
 
       {readyForSetup ? (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/45 px-4">
           <div className="w-full max-w-md rounded-xl bg-white p-6 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
             <h2 className="text-xl font-bold">시작할 공간을 선택하세요</h2>
             <div className="mt-5 grid gap-2">
