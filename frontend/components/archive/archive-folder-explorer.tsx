@@ -275,11 +275,11 @@ export function ArchiveFolderExplorer({
                   </span>
                 ) : (
                   <>
-                    <span className="block whitespace-normal break-words pr-1 text-sm font-bold leading-5" title={folder.name}>{folder.name}</span>
+                    <span className="block whitespace-normal break-words pr-14 text-sm font-bold leading-5" title={folder.name}>{folder.name}</span>
                   </>
                 )}
               </span>
-              <span className={cn("absolute right-2 top-2 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100", editingId === folder.id && "hidden")}>
+              <span className={cn("absolute right-2 top-2 flex shrink-0 items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100", editingId === folder.id && "hidden")}>
                 <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -317,13 +317,13 @@ export function ArchiveFolderExplorer({
                 </span>
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block whitespace-normal break-words text-sm font-bold leading-5" title={batch.name}>{batch.name}</span>
+                <span className="block whitespace-normal break-words pr-9 text-sm font-bold leading-5" title={batch.name}>{batch.name}</span>
               </span>
               {onMoveBatch && batch.archive_folder_id ? (
                 <span
                   role="button"
                   tabIndex={0}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-white text-zinc-600 opacity-0 transition hover:bg-zinc-200 hover:text-zinc-950 group-hover:opacity-100"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-white text-zinc-600 opacity-100 transition hover:bg-zinc-200 hover:text-zinc-950 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
                     onMoveBatch(batch.id, null);
