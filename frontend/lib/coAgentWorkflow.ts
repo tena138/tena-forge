@@ -11,7 +11,7 @@ export function readStoredCoAgentWorkflow(): CoAgentWorkflow | null {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
     if (typeof parsed.id !== "string" || typeof parsed.status !== "string" || typeof parsed.active_step !== "string") return null;
-    return parsed as CoAgentWorkflow;
+    return normalizeCoAgentWorkflow(parsed as CoAgentWorkflow);
   } catch {
     return null;
   }
@@ -37,6 +37,15 @@ export function notifyCoAgentWorkflowChanged() {
 
 export function areCoAgentWorkflowsEqual(left: CoAgentWorkflow | null, right: CoAgentWorkflow | null) {
   return JSON.stringify(left || null) === JSON.stringify(right || null);
+}
+
+function normalizeCoAgentWorkflow(workflow: CoAgentWorkflow | null): CoAgentWorkflow | null {
+  if (!workflow || workflow.status !== "needs_input") return workflow;
+  return {
+    ...workflow,
+    active_step: "command",
+    steps: (workflow.steps || []).map((step) => ({ ...step, status: "waiting" })),
+  };
 }
 
 export function buildRunningCoAgentWorkflow(message = "코파일럿이 요청을 확인하고 있습니다."): CoAgentWorkflow {
@@ -70,9 +79,9 @@ export function buildErrorCoAgentWorkflow(message: string): CoAgentWorkflow {
 }
 
 export function workflowFromChatResponse(response: CoAgentChatResponse): CoAgentWorkflow {
-  if (response.workflow) return response.workflow;
+  if (response.workflow) return normalizeCoAgentWorkflow(response.workflow) || response.workflow;
   const primaryAction = (response.quick_actions || []).find((action) => typeof action.href === "string");
-  return {
+  return normalizeCoAgentWorkflow({
     id: "generic",
     kind: "generic",
     status: "created",
@@ -84,10 +93,10 @@ export function workflowFromChatResponse(response: CoAgentChatResponse): CoAgent
       variant: "status",
       href: typeof primaryAction?.href === "string" ? primaryAction.href : undefined,
     },
-  };
+  }) as CoAgentWorkflow;
 }
 
 export function commitCoAgentWorkflow(workflow: CoAgentWorkflow | null) {
-  writeStoredCoAgentWorkflow(workflow);
+  writeStoredCoAgentWorkflow(normalizeCoAgentWorkflow(workflow));
   notifyCoAgentWorkflowChanged();
 }

@@ -205,6 +205,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const shouldAnimateAssistantMessage = chatOpen && !chatLoading && Boolean(latestAssistantMessage) && workflow?.status === "created";
   const typedReportMessage = useTypewriterText(statusMessage, assistantTypingKey, !prefersReducedMotion && shouldAnimateAssistantMessage);
   const primaryChatAction = chatActions.find((action) => action.href);
+  const awaitingFollowUp = workflow?.status === "needs_input";
 
   const loadLiveInteractions = useCallback(async () => {
     const activeWorkspaceId = getActiveWorkspaceId();
@@ -455,15 +456,19 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     return () => window.clearTimeout(timer);
   }, [chatError, chatLoading, chatMessages.length, chatOpen]);
 
-  const expandedDesktop = chatOpen && !compact;
+  const expandedDesktop = chatOpen && !compact && !awaitingFollowUp;
+  const stackedChatInput = chatOpen && (compact || awaitingFollowUp);
 
   return (
-    <div data-coagent-anchor="command" className={cn("relative min-w-0", compact ? "w-full" : chatOpen ? "w-full max-w-none" : "w-full max-w-[760px]")}>
+    <div
+      data-coagent-anchor="command"
+      className={cn("relative min-w-0", compact ? "w-full" : chatOpen && !awaitingFollowUp ? "w-full max-w-none" : "w-full max-w-[760px]")}
+    >
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/82 px-3 text-zinc-950 transition-all",
-          compact && chatOpen ? "min-h-[86px] py-2" : chatOpen ? "min-h-[58px] py-2" : "min-h-[52px] py-2.5",
-          compact && chatOpen
+          stackedChatInput ? "min-h-[86px] py-2" : chatOpen ? "min-h-[58px] py-2" : "min-h-[52px] py-2.5",
+          stackedChatInput
             ? "flex flex-col justify-center gap-2"
             : expandedDesktop
               ? cn(
@@ -485,7 +490,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
               : chatOpen
                 ? "min-h-10 flex-1 items-center py-1 pr-2"
                 : "flex-1 items-center py-1",
-            compact && chatOpen && "w-full"
+            stackedChatInput && "w-full"
           )}
           onClick={() => setChatOpen(true)}
           title={statusMessage}
@@ -529,7 +534,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             data-coagent-chat-form
             className={cn(
               "relative z-10 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              compact ? "w-full" : expandedDesktop ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
+              stackedChatInput ? "w-full" : expandedDesktop ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
             )}
             onSubmit={submitChat}
           >
