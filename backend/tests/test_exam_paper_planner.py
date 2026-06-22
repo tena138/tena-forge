@@ -122,6 +122,28 @@ class ExamPaperPlannerTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_random_difficulty_request_ignores_default_point_bands(self):
+        db = self.Session()
+        try:
+            for number in range(1, 21):
+                self._add_problem(db, number, "3점", f"단원{number % 3 + 1}")
+            db.commit()
+
+            draft = build_exam_paper_draft(
+                db,
+                message="수학 고3 20문항 세움 양식 시험지 제작, 난이도는 그냥 랜덤으로",
+                owner_ids={self.owner_id},
+            )
+
+            self.assertEqual(draft["status"], "draft")
+            self.assertEqual(draft["selected_count"], 20)
+            self.assertEqual(draft["missing_difficulty_slots"], [])
+            self.assertEqual(draft["selection_strategy"], "random_without_difficulty")
+            self.assertEqual(draft["difficulty_plan_mode"], "random_without_difficulty")
+            self.assertTrue(any("요청대로" in warning for warning in draft["warnings"]))
+        finally:
+            db.close()
+
     def test_missing_point_metadata_uses_random_selection_without_difficulty_slots(self):
         db = self.Session()
         try:

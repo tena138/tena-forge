@@ -79,6 +79,30 @@ def _difficulty_from_phrase(phrase: str, engine: str) -> str | None:
     return difficulty_for_request_label(phrase, engine)
 
 
+def _wants_random_without_difficulty(message: str) -> bool:
+    compact = str(message or "").replace(" ", "").lower()
+    if not compact:
+        return False
+    explicit_relax_tokens = (
+        "난이도무관",
+        "배점무관",
+        "난이도상관없",
+        "배점상관없",
+        "난이도없이",
+        "배점없이",
+        "난이도제외",
+        "배점제외",
+        "난이도빼고",
+        "배점빼고",
+    )
+    if any(token in compact for token in explicit_relax_tokens):
+        return True
+    random_tokens = ("랜덤", "무작위", "임의", "아무거나", "알아서", "섞어서", "상관없")
+    if not any(token in compact for token in random_tokens):
+        return False
+    return any(token in compact for token in ("난이도", "배점", "배치", "문항", "문제", "시험지", "추출", "골라", "뽑"))
+
+
 def _default_slots(count: int, engine: str) -> list[str]:
     if engine == MATH_ENGINE:
         easy = min(10, count)
@@ -106,6 +130,8 @@ def _difficulty_slots(message: str, count: int, engine: str) -> list[str]:
 
 
 def _has_difficulty_plan(message: str) -> bool:
+    if _wants_random_without_difficulty(message):
+        return True
     text = str(message or "")
     compact = text.replace(" ", "").lower()
     if any(token in compact for token in ("2점", "3점", "4점", "쉬움", "쉬운", "중간", "어려움", "어려운", "난이도", "배점")):
@@ -346,12 +372,13 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
     engine = _subject_engine_from_message(message)
     count = _requested_count(message)
     grade = _grade_keyword(message)
+    random_without_difficulty_requested = _wants_random_without_difficulty(message)
     missing_required = _missing_required_fields(message)
     blocking_missing = [item for item in missing_required if item.get("field") != "difficulty_plan"]
     if blocking_missing:
         return _needs_input_draft(message, missing_required, engine, count, grade)
 
-    slots = _difficulty_slots(message, count, engine)
+    slots = [] if random_without_difficulty_requested else _difficulty_slots(message, count, engine)
 
     candidates = db.scalars(_candidate_query(owner_ids, engine, grade)).unique().all()
     usage_counts = _usage_history_counts(db, owner_ids, [problem.id for problem in candidates])
@@ -363,7 +390,12 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
 
     selection_strategy = "point_difficulty"
     ignored_difficulty_plan = False
-    if can_use_point_metadata:
+    if random_without_difficulty_requested:
+        selected = _select_without_difficulty(unused_candidates, count, message)
+        missing = []
+        selection_strategy = "random_without_difficulty"
+        ignored_difficulty_plan = True
+    elif can_use_point_metadata:
         selected, missing = _select_balanced(unused_candidates, slots)
     else:
         selected = _select_without_difficulty(unused_candidates, count, message)
@@ -383,7 +415,9 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         warnings.append(f"{grade} 조건에 맞는 문항 후보가 없습니다.")
     if missing:
         warnings.append("요청한 배점 구간을 채울 문항이 부족합니다.")
-    if ignored_difficulty_plan:
+    if random_without_difficulty_requested:
+        warnings.append("요청대로 배점/난이도 조건을 쓰지 않고 랜덤 추출했습니다.")
+    elif ignored_difficulty_plan:
         warnings.append("배점 메타데이터가 없어 배점 조건을 제외하고 랜덤 추출했습니다.")
     if len(selected) < count:
         warnings.append(f"{count}문항 중 {len(selected)}문항만 초안에 배치했습니다.")
@@ -403,6 +437,7 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         "difficulty_distribution": dict(difficulty_distribution),
         "unit_distribution": dict(unit_distribution),
         "missing_difficulty_slots": missing,
+        "difficulty_plan_mode": "random_without_difficulty" if random_without_difficulty_requested else "slot_distribution",
         "selection_strategy": selection_strategy,
         "ignored_difficulty_plan": ignored_difficulty_plan,
         "point_difficulty_metadata_count": point_metadata_count,

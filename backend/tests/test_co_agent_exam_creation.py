@@ -133,6 +133,31 @@ class CoAgentExamCreationTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_chat_treats_random_reply_as_random_difficulty_plan(self):
+        db = self.Session()
+        try:
+            self._seed_pool(db)
+
+            response = co_agent_chat(
+                CoAgentChatRequest(
+                    message="그냥 랜덤으로",
+                    messages=[
+                        CoAgentChatMessage(role="user", content="고3 수학 시험지 20문항 세움 양식으로 만들어줘"),
+                        CoAgentChatMessage(role="assistant", content="시험지 제작 전에 확인이 필요합니다. 배점/난이도 배치는 어떻게 할까요? 예: 1-10 2점, 11-20 3점, 21-25 4점."),
+                    ],
+                ),
+                self.request,
+                db,
+            )
+
+            self.assertEqual(response.drafts[0]["status"], "created")
+            self.assertEqual(response.drafts[0]["selection_strategy"], "random_without_difficulty")
+            self.assertEqual(response.drafts[0]["difficulty_plan_mode"], "random_without_difficulty")
+            self.assertEqual(response.drafts[0]["missing_difficulty_slots"], [])
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
+        finally:
+            db.close()
+
     def test_chat_creates_problem_set_randomly_when_point_metadata_is_missing(self):
         db = self.Session()
         try:
