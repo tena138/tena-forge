@@ -2619,7 +2619,7 @@ function VisualTemplateStudioPageContent() {
       ) : null}
 
       {importingPdf ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white/82 px-5 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-5">
           <div className="w-full max-w-[460px] rounded-[14px] bg-white p-5 shadow-[0_28px_80px_rgba(0,0,0,0.18)] ring-1 ring-black/10">
             <div className="flex items-start gap-4">
               <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 ring-1 ring-zinc-200">
@@ -2645,7 +2645,7 @@ function VisualTemplateStudioPageContent() {
       ) : null}
 
       {preview ? (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white/82 p-6 backdrop-blur">
+        <div className="fixed inset-0 z-50 flex flex-col bg-white p-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-zinc-950">동적 콘텐츠 미리보기</h2>

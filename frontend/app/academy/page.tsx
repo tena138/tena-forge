@@ -1511,8 +1511,8 @@ function AcademySchedulePanel() {
       </button>
 
       {formOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-end justify-end bg-black/35 p-4 backdrop-blur-sm sm:items-center sm:p-6">
-          <div className="w-full max-w-sm rounded-[12px] bg-white p-4 text-zinc-950">
+        <div className="fixed inset-0 z-[120] flex items-end justify-end bg-black/45 p-4 sm:items-center sm:p-6">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-[12px] bg-white p-4 text-zinc-950 shadow-[0_24px_80px_rgba(15,15,15,0.22)]">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-black text-zinc-950">일정 추가</h2>
               <button type="button" onClick={() => setFormOpen(false)} className="grid h-8 w-8 place-items-center rounded-[7px] bg-zinc-100 text-zinc-700 transition hover:bg-zinc-200 hover:text-zinc-950" aria-label="닫기">

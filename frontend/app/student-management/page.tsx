@@ -2504,7 +2504,7 @@ export default function StudentManagementPage() {
           </div>
         ) : null}
         {mergeSourceStudent ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/85 px-4 py-8 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-8">
             <section className="w-full max-w-xl rounded-lg bg-zinc-50 p-4 text-zinc-950 shadow-[0_24px_90px_rgba(0,0,0,0.16)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
