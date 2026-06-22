@@ -8,6 +8,7 @@ import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ImagePlus, Refresh
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, assetUrl, Problem, Tag, uploadProblemVisual } from "@/lib/api";
 
@@ -128,6 +129,8 @@ function ProblemDetailContent() {
   const [reextracting, setReextracting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingProblem, setDeletingProblem] = useState(false);
   const returnHref = useMemo(() => safeReturnHref(searchParams.get("returnTo")), [searchParams]);
   const contextQuery = useMemo(() => {
     const params = new URLSearchParams(searchParams.toString());
@@ -547,10 +550,19 @@ function ProblemDetailContent() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navigation?.next_id, navigation?.previous_id, openProblem, reextractProblem, saveCurrentProblem]);
 
-  async function removeProblem() {
+  async function confirmRemoveProblem() {
     if (!problem) return;
-    await api(`/api/problems/${problem.id}`, { method: "DELETE" });
-    router.push(archiveHref);
+    setDeletingProblem(true);
+    setActionError("");
+    try {
+      await api(`/api/problems/${problem.id}`, { method: "DELETE" });
+      setDeleteConfirmOpen(false);
+      router.push(archiveHref);
+    } catch {
+      setActionError("문항 삭제에 실패했습니다.");
+    } finally {
+      setDeletingProblem(false);
+    }
   }
 
   if (loadError) {
@@ -834,7 +846,7 @@ function ProblemDetailContent() {
             </div>
             <div className="rounded-lg bg-zinc-50 p-4">
               <h3 className="mb-3 text-sm font-bold text-zinc-950">관리</h3>
-              <Button variant="destructive" className="w-full" onClick={removeProblem}>
+              <Button variant="destructive" className="w-full" onClick={() => setDeleteConfirmOpen(true)} disabled={deletingProblem}>
                 <Trash2 className="h-4 w-4" />
                 문항 삭제
               </Button>
@@ -842,6 +854,30 @@ function ProblemDetailContent() {
           </div>
         </section>
       </div>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={(open) => !deletingProblem && setDeleteConfirmOpen(open)}>
+        <DialogContent className="max-w-md bg-white text-zinc-950">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-xl font-black">문항 삭제</h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                {problem.problem_number}번 문항을 삭제합니다. 세트나 시험지에 들어간 항목에서도 빠질 수 있으며, 이 작업은 되돌릴 수 없습니다.
+              </p>
+            </div>
+            <div className="rounded-[8px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">
+              출처: {sourceLabel || "출처 미지정"}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={deletingProblem} onClick={() => setDeleteConfirmOpen(false)}>
+                취소
+              </Button>
+              <Button type="button" variant="destructive" disabled={deletingProblem} onClick={confirmRemoveProblem}>
+                {deletingProblem ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
