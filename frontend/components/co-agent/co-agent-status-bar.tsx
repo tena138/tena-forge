@@ -34,6 +34,17 @@ import {
   readStoredCoAgentChatMessages,
   writeStoredCoAgentChatMessages,
 } from "@/lib/coAgentChatHistory";
+import type { CoAgentWorkflow } from "@/lib/coAgent";
+import {
+  areCoAgentWorkflowsEqual,
+  buildErrorCoAgentWorkflow,
+  buildRunningCoAgentWorkflow,
+  CO_AGENT_WORKFLOW_EVENT,
+  CO_AGENT_WORKFLOW_STORAGE_KEY,
+  commitCoAgentWorkflow,
+  readStoredCoAgentWorkflow,
+  workflowFromChatResponse,
+} from "@/lib/coAgentWorkflow";
 import { cn } from "@/lib/utils";
 
 type CoAgentChatAction = {
@@ -125,6 +136,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState("");
   const [assistantTypingKey, setAssistantTypingKey] = useState(0);
+  const [workflow, setWorkflow] = useState<CoAgentWorkflow | null>(() => readStoredCoAgentWorkflow());
 
   const activeStatusData = activeStatus && (activeStatus.status === "pending" || activeStatus.status === "processing") ? activeStatus : null;
   const latestNotification = notifications[0] || null;
@@ -171,14 +183,18 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     return "";
   }, [chatMessages]);
 
-  const statusMessage =
-    chatOpen && (chatLoading || chatError || latestAssistantMessage)
-      ? chatLoading
-        ? "Tena Forge 업무 범위 안에서 확인 중입니다."
-        : latestAssistantMessage || chatError
-      : report.message;
-  const shouldAnimateAssistantMessage =
-    chatOpen && !chatLoading && Boolean(latestAssistantMessage) && statusMessage === latestAssistantMessage;
+  const statusMessage = chatLoading
+    ? "코파일럿이 작업 중입니다."
+    : chatError || workflow?.status === "error"
+      ? "코파일럿 연결을 확인해주세요."
+      : workflow?.status === "needs_input"
+        ? "코파일럿이 추가 정보를 기다립니다."
+        : workflow?.status === "created"
+          ? "작업 결과를 말풍선에 정리했습니다."
+          : workflow?.status === "running"
+            ? "코파일럿이 작업 중입니다."
+            : report.message;
+  const shouldAnimateAssistantMessage = chatOpen && !chatLoading && Boolean(latestAssistantMessage) && workflow?.status === "created";
   const typedReportMessage = useTypewriterText(statusMessage, assistantTypingKey, !prefersReducedMotion && shouldAnimateAssistantMessage);
   const primaryChatAction = chatActions.find((action) => action.href);
 
@@ -207,6 +223,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     setChatActions([]);
     setChatInput("");
     setChatError("");
+    commitCoAgentWorkflow(buildRunningCoAgentWorkflow());
     setChatLoading(true);
     try {
       const response = await sendCoAgentChat({
@@ -216,12 +233,14 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       });
       setChatMessages((current) => [...current, { role: "assistant", content: response.answer }]);
       setChatActions((response.quick_actions || []).filter((action) => typeof action.href === "string"));
+      commitCoAgentWorkflow(workflowFromChatResponse(response));
       setAssistantTypingKey((current) => current + 1);
     } catch (error) {
       const message = chatErrorMessage(error);
       setChatError(message);
       setChatMessages((current) => [...current, { role: "assistant", content: `지금은 AI 연결에 실패했습니다. ${message}` }]);
       setChatActions([]);
+      commitCoAgentWorkflow(buildErrorCoAgentWorkflow(message));
       setAssistantTypingKey((current) => current + 1);
     } finally {
       setChatLoading(false);
@@ -298,6 +317,26 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       window.removeEventListener(CO_AGENT_CHAT_STORAGE_EVENT, syncStoredChatMessages);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("focus", syncStoredChatMessages);
+    };
+  }, []);
+
+  useEffect(() => {
+    function syncStoredWorkflow() {
+      const storedWorkflow = readStoredCoAgentWorkflow();
+      setWorkflow((current) => (areCoAgentWorkflowsEqual(current, storedWorkflow) ? current : storedWorkflow));
+    }
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key === CO_AGENT_WORKFLOW_STORAGE_KEY) syncStoredWorkflow();
+    }
+
+    window.addEventListener(CO_AGENT_WORKFLOW_EVENT, syncStoredWorkflow);
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", syncStoredWorkflow);
+    return () => {
+      window.removeEventListener(CO_AGENT_WORKFLOW_EVENT, syncStoredWorkflow);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", syncStoredWorkflow);
     };
   }, []);
 
@@ -392,7 +431,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const expandedDesktop = chatOpen && !compact;
 
   return (
-    <div className={cn("relative min-w-0", compact ? "w-full" : chatOpen ? "w-full max-w-none" : "w-full max-w-[760px]")}>
+    <div data-coagent-anchor="command" className={cn("relative min-w-0", compact ? "w-full" : chatOpen ? "w-full max-w-none" : "w-full max-w-[760px]")}>
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/82 px-3 text-zinc-950 transition-all",

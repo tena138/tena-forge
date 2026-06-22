@@ -57,6 +57,7 @@ class CoAgentChatResponse(BaseModel):
     drafts: list[dict[str, Any]] = Field(default_factory=list)
     quick_actions: list[dict[str, Any]] = Field(default_factory=list)
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    workflow: dict[str, Any] | None = None
 
 
 class CoAgentExamPaperDraftRequest(BaseModel):
@@ -659,6 +660,121 @@ def _exam_draft_quick_actions(draft: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _exam_workflow_active_step(draft: dict[str, Any]) -> str:
+    if draft.get("status") == "created":
+        return "problem_set"
+    missing = draft.get("missing_required_fields") or []
+    for item in missing:
+        field = item.get("field")
+        if field == "template":
+            return "template"
+        if field in {"recipient", "due_at"}:
+            return "problem_set"
+        if field in {"subject", "grade", "problem_count", "difficulty_plan"}:
+            return "archive"
+    if draft.get("missing_difficulty_slots"):
+        return "archive"
+    return "problem_set"
+
+
+def _exam_workflow_status(draft: dict[str, Any]) -> str:
+    if draft.get("status") == "created":
+        return "created"
+    if draft.get("status") == "needs_input":
+        return "needs_input"
+    if draft.get("missing_difficulty_slots"):
+        return "needs_input"
+    return "running"
+
+
+def _exam_workflow_steps(active_step: str, status: str, draft: dict[str, Any]) -> list[dict[str, str]]:
+    created_href = draft.get("problem_set", {}).get("href")
+    order = ["archive", "template", "problem_set"]
+    labels = {
+        "archive": "보관",
+        "template": "템플릿",
+        "problem_set": "문항 세트",
+    }
+    hrefs = {
+        "archive": "/problems",
+        "template": "/templates/mine",
+        "problem_set": created_href or "/problem-sets",
+    }
+    active_index = order.index(active_step) if active_step in order else 0
+    steps: list[dict[str, str]] = []
+    for index, step_id in enumerate(order):
+        if status == "created":
+            step_status = "done"
+        elif index < active_index:
+            step_status = "done"
+        elif index == active_index:
+            step_status = "active"
+        else:
+            step_status = "waiting"
+        steps.append({"id": step_id, "label": labels[step_id], "href": hrefs[step_id], "status": step_status})
+    return steps
+
+
+def _exam_workflow_bubble(draft: dict[str, Any], answer: str) -> dict[str, str]:
+    status = _exam_workflow_status(draft)
+    active_step = _exam_workflow_active_step(draft)
+    if status == "needs_input":
+        missing = draft.get("missing_required_fields") or []
+        first_missing = missing[0] if missing else {}
+        field = first_missing.get("field") or "exam_info"
+        question = first_missing.get("question") or answer
+        title = "정보가 필요해요"
+        placeholder = "답변 입력"
+        if active_step == "template":
+            title = "템플릿을 골라주세요"
+            placeholder = "예: 세움 A4 2단"
+        elif active_step == "archive":
+            title = "보관 조건을 확인할게요"
+            placeholder = "예: 고3 수학 20문항"
+        elif active_step == "problem_set":
+            title = "배정 정보를 확인할게요"
+            placeholder = "예: 3반 / 다음 수업 전"
+        return {
+            "title": title,
+            "message": question,
+            "field": field,
+            "placeholder": placeholder,
+            "variant": "question",
+        }
+    if status == "created":
+        problem_set = draft.get("problem_set") or {}
+        name = problem_set.get("name") or "새 문항 세트"
+        href = problem_set.get("href") or "/problem-sets"
+        return {
+            "title": "시험지 생성 완료",
+            "message": f"{name} 생성이 끝났습니다. 이제 결과만 확인하면 됩니다.",
+            "field": "created",
+            "placeholder": "",
+            "variant": "success",
+            "href": href,
+        }
+    return {
+        "title": "시험지 구성 중",
+        "message": answer,
+        "field": "status",
+        "placeholder": "",
+        "variant": "status",
+    }
+
+
+def _exam_workflow(draft: dict[str, Any], answer: str) -> dict[str, Any]:
+    status = _exam_workflow_status(draft)
+    active_step = _exam_workflow_active_step(draft)
+    return {
+        "id": "exam_paper_creation",
+        "kind": "exam_paper_creation",
+        "status": status,
+        "active_step": active_step,
+        "steps": _exam_workflow_steps(active_step, status, draft),
+        "bubble": _exam_workflow_bubble(draft, answer),
+    }
+
+
 @router.post("/exam-paper/draft")
 def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Request, db: Session = Depends(get_db)):
     message = payload.message.strip()
@@ -666,10 +782,12 @@ def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Re
         raise HTTPException(status_code=400, detail="Message is required.")
     owner_ids = _academy_ids_for_co_agent(request, db)
     draft = build_exam_paper_draft(db, message=message, owner_ids=owner_ids)
+    answer = format_exam_paper_draft_answer(draft)
     return {
-        "answer": format_exam_paper_draft_answer(draft),
+        "answer": answer,
         "draft": draft,
         "quick_actions": _exam_draft_quick_actions(draft),
+        "workflow": _exam_workflow(draft, answer),
     }
 
 
@@ -715,6 +833,7 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
             drafts=[draft],
             quick_actions=_exam_draft_quick_actions(draft),
             artifacts=artifacts,
+            workflow=_exam_workflow(draft, answer),
         )
 
     snapshot = next_actions(request, db)

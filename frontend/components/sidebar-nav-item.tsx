@@ -15,6 +15,7 @@ export function SidebarNavItem({
   activeClassName,
   activeIndicatorClassName,
   activeIconClassName,
+  coAgentAnchor,
 }: {
   href: string;
   label: string;
@@ -25,10 +26,12 @@ export function SidebarNavItem({
   activeClassName?: string;
   activeIndicatorClassName?: string;
   activeIconClassName?: string;
+  coAgentAnchor?: string;
 }) {
   return (
     <Link
       href={href}
+      data-coagent-anchor={coAgentAnchor}
       title={collapsed && !mobile ? label : undefined}
       aria-label={collapsed && !mobile ? label : undefined}
       aria-current={active ? "page" : undefined}

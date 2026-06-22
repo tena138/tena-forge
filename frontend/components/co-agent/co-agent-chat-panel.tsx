@@ -16,6 +16,7 @@ import {
   readStoredCoAgentChatMessages,
   writeStoredCoAgentChatMessages,
 } from "@/lib/coAgentChatHistory";
+import { buildErrorCoAgentWorkflow, buildRunningCoAgentWorkflow, commitCoAgentWorkflow, workflowFromChatResponse } from "@/lib/coAgentWorkflow";
 import { cn } from "@/lib/utils";
 
 type CoAgentChatAction = {
@@ -98,6 +99,7 @@ export function CoAgentChatPanel() {
     setInput("");
     setError("");
     setActions([]);
+    commitCoAgentWorkflow(buildRunningCoAgentWorkflow());
     setLoading(true);
 
     try {
@@ -108,11 +110,13 @@ export function CoAgentChatPanel() {
       });
       commitMessages([...messagesRef.current, { role: "assistant", content: response.answer }]);
       setActions((response.quick_actions || []).filter((action) => typeof action.href === "string"));
+      commitCoAgentWorkflow(workflowFromChatResponse(response));
     } catch (submitError) {
       const message = chatErrorMessage(submitError);
       setError(message);
       commitMessages([...messagesRef.current, { role: "assistant", content: `지금 AI 연결에 실패했습니다. ${message}` }]);
       setActions([]);
+      commitCoAgentWorkflow(buildErrorCoAgentWorkflow(message));
     } finally {
       setLoading(false);
     }
@@ -120,6 +124,7 @@ export function CoAgentChatPanel() {
 
   function clearHistory() {
     commitMessages([]);
+    commitCoAgentWorkflow(null);
     setActions([]);
     setError("");
     setInput("");

@@ -46,9 +46,9 @@ const sections = [
     items: [
       { href: "/academy", label: "제작 콘솔", icon: LayoutDashboard },
       { href: "/archive/new", label: "추출", icon: FileUp },
-      { href: "/problems", label: "보관", icon: Archive },
-      { href: "/templates/mine", label: "템플릿", icon: LayoutTemplate },
-      { href: "/problem-sets", label: "문항 세트", icon: FolderKanban },
+      { href: "/problems", label: "보관", icon: Archive, coAgentAnchor: "archive" },
+      { href: "/templates/mine", label: "템플릿", icon: LayoutTemplate, coAgentAnchor: "template" },
+      { href: "/problem-sets", label: "문항 세트", icon: FolderKanban, coAgentAnchor: "problem_set" },
     ],
   },
   {
@@ -137,6 +137,11 @@ function isActive(pathname: string, href: string, searchParams?: URLSearchParams
   return pathname === hrefPath;
 }
 
+function coAgentAnchorFor(item: object) {
+  const candidate = item as { coAgentAnchor?: unknown };
+  return typeof candidate.coAgentAnchor === "string" ? candidate.coAgentAnchor : undefined;
+}
+
 export function FloatingNav({
   mobile = false,
   collapsed = false,
@@ -207,7 +212,7 @@ export function FloatingNav({
       <nav className="flex gap-1.5 overflow-x-auto bg-[#fbfbfa]/95 px-4 py-2 pr-8 [scrollbar-width:none] after:w-4 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden lg:hidden" aria-label="주요 메뉴">
         {mobileItems.map((item, index) => {
           const active = isActive(pathname, item.href, searchParams);
-          return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} mobile />;
+          return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} coAgentAnchor={coAgentAnchorFor(item)} mobile />;
         })}
       </nav>
     );
@@ -247,7 +252,7 @@ export function FloatingNav({
             <div className="space-y-0.5 p-1">
               {section.items.map((item, index) => {
                 const active = isActive(pathname, item.href, searchParams);
-                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={section.activeItem} activeIndicatorClassName={section.activeIndicator} activeIconClassName={section.activeIcon} collapsed={isCollapsed} />;
+                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={section.activeItem} activeIndicatorClassName={section.activeIndicator} activeIconClassName={section.activeIcon} coAgentAnchor={coAgentAnchorFor(item)} collapsed={isCollapsed} />;
               })}
             </div>
           </section>

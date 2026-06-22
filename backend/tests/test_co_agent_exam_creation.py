@@ -96,6 +96,9 @@ class CoAgentExamCreationTests(unittest.TestCase):
             self.assertEqual(response.drafts[0]["status"], "created")
             self.assertEqual(response.quick_actions[0]["href"], f"/problem-sets/{problem_sets[0].id}")
             self.assertEqual(response.quick_actions[0]["label"], "새 문항 세트 확인")
+            self.assertEqual(response.workflow["status"], "created")
+            self.assertEqual(response.workflow["active_step"], "problem_set")
+            self.assertEqual(response.workflow["bubble"]["variant"], "success")
 
             listed_sets = list_problem_sets(self.request, db)
             self.assertEqual(len(listed_sets), 1)
@@ -240,6 +243,9 @@ class CoAgentExamCreationTests(unittest.TestCase):
             self.assertEqual(response.drafts[0]["status"], "needs_input")
             self.assertEqual(response.drafts[0]["subject_engine"], "math")
             self.assertEqual(response.drafts[0]["selected_count"], 0)
+            self.assertEqual(response.workflow["status"], "needs_input")
+            self.assertEqual(response.workflow["active_step"], "archive")
+            self.assertEqual(response.workflow["bubble"]["variant"], "question")
             self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 0)
         finally:
             db.close()

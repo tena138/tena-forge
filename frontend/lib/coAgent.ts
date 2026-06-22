@@ -43,6 +43,34 @@ export type CoAgentChatMessage = {
   content: string;
 };
 
+export type CoAgentWorkflowStatus = "idle" | "running" | "needs_input" | "created" | "error";
+export type CoAgentWorkflowStepId = "command" | "archive" | "template" | "problem_set";
+
+export type CoAgentWorkflowStep = {
+  id: CoAgentWorkflowStepId;
+  label: string;
+  href: string;
+  status: "waiting" | "active" | "done" | "error";
+};
+
+export type CoAgentWorkflowBubble = {
+  title: string;
+  message: string;
+  field?: string;
+  placeholder?: string;
+  variant?: "question" | "status" | "success" | "error" | string;
+  href?: string;
+};
+
+export type CoAgentWorkflow = {
+  id: string;
+  kind: "exam_paper_creation" | "generic" | string;
+  status: CoAgentWorkflowStatus;
+  active_step: CoAgentWorkflowStepId;
+  steps: CoAgentWorkflowStep[];
+  bubble?: CoAgentWorkflowBubble | null;
+};
+
 export type CoAgentChatResponse = {
   answer: string;
   scope: "tena_forge_operations" | string;
@@ -56,6 +84,7 @@ export type CoAgentChatResponse = {
     [key: string]: unknown;
   }>;
   artifacts?: Array<Record<string, unknown>>;
+  workflow?: CoAgentWorkflow | null;
 };
 
 export function sendCoAgentChat(payload: {

@@ -729,6 +729,90 @@
   }
 }
 
+@keyframes coagent-jelly-breathe {
+  0% {
+    border-radius: 48% 52% 52% 48% / 54% 45% 55% 46%;
+    transform: translate(-50%, -50%) scale(1) rotate(-4deg);
+  }
+  50% {
+    border-radius: 55% 45% 48% 52% / 44% 58% 42% 56%;
+    transform: translate(-50%, -50%) scale(1.08, 0.94) rotate(3deg);
+  }
+  100% {
+    border-radius: 48% 52% 52% 48% / 54% 45% 55% 46%;
+    transform: translate(-50%, -50%) scale(1) rotate(-4deg);
+  }
+}
+
+@keyframes coagent-jelly-shine {
+  0%,
+  100% {
+    opacity: 0.62;
+    transform: translate(-26%, -28%) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(-18%, -22%) scale(0.84);
+  }
+}
+
+.coagent-jelly-blob {
+  height: 36px;
+  width: 42px;
+  transform: translate(-50%, -50%);
+  transition:
+    left 520ms cubic-bezier(0.2, 0.85, 0.22, 1),
+    top 520ms cubic-bezier(0.2, 0.85, 0.22, 1);
+}
+
+.coagent-jelly-core {
+  position: relative;
+  display: grid;
+  height: 100%;
+  width: 100%;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 48% 52% 52% 48% / 54% 45% 55% 46%;
+  background:
+    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.82) 0 10%, transparent 11%),
+    linear-gradient(135deg, #8b5cf6 0%, #6d28d9 52%, #4c1d95 100%);
+  box-shadow:
+    0 12px 30px rgb(76 29 149 / 0.32),
+    inset 0 -6px 14px rgb(46 16 101 / 0.34),
+    inset 0 8px 14px rgb(255 255 255 / 0.22);
+  animation: coagent-jelly-breathe 2.8s ease-in-out infinite;
+}
+
+.coagent-jelly-core::after {
+  content: "";
+  position: absolute;
+  left: 36%;
+  top: 30%;
+  height: 14px;
+  width: 18px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.72);
+  filter: blur(1px);
+  animation: coagent-jelly-shine 2.8s ease-in-out infinite;
+}
+
+.coagent-jelly-core > svg {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 1px rgb(46 16 101 / 0.35));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coagent-jelly-blob {
+    transition: left 160ms ease-out, top 160ms ease-out;
+  }
+
+  .coagent-jelly-core,
+  .coagent-jelly-core::after {
+    animation: none;
+  }
+}
+
 @keyframes landingAuroraA {
   from {
     transform: translate3d(-4%, -2%, 0) rotate(-3deg) scale(1.02);
