@@ -457,7 +457,6 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   }, [chatError, chatLoading, chatMessages.length, chatOpen]);
 
   const expandedDesktop = chatOpen && !compact && !awaitingFollowUp;
-  const stackedChatInput = chatOpen && (compact || awaitingFollowUp);
 
   return (
     <div
@@ -467,10 +466,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/82 px-3 text-zinc-950 transition-all",
-          stackedChatInput ? "min-h-[86px] py-2" : chatOpen ? "min-h-[58px] py-2" : "min-h-[52px] py-2.5",
-          stackedChatInput
-            ? "flex flex-col justify-center gap-2"
-            : expandedDesktop
+          chatOpen ? "min-h-[58px] py-2" : "min-h-[52px] py-2.5",
+          expandedDesktop
               ? cn(
                   "grid items-center gap-4",
                   primaryChatAction?.href
@@ -490,7 +487,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
               : chatOpen
                 ? "min-h-10 flex-1 items-center py-1 pr-2"
                 : "flex-1 items-center py-1",
-            stackedChatInput && "w-full"
+            compact && chatOpen && "max-w-[46%]"
           )}
           onClick={() => setChatOpen(true)}
           title={statusMessage}
@@ -500,8 +497,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span
               className={cn(
                 "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
-                expandedDesktop ? "line-clamp-2 whitespace-normal break-words text-[15px] leading-[1.35]" : "text-[16px] leading-[1.45]",
-                !expandedDesktop && (chatOpen ? "line-clamp-2 whitespace-normal break-words" : "truncate")
+                expandedDesktop ? "truncate whitespace-nowrap text-[15px] leading-[1.35]" : "truncate whitespace-nowrap text-[16px] leading-[1.45]"
               )}
             >
               {typedReportMessage || "\u00A0"}
@@ -520,7 +516,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             type="button"
             className={cn(
               "inline-flex h-10 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800",
-              compact ? "w-full" : "max-w-[9rem]"
+              compact ? "max-w-[7rem]" : "max-w-[9rem]"
             )}
             onClick={() => router.push(primaryChatAction.href || "/problem-sets")}
           >
@@ -534,7 +530,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             data-coagent-chat-form
             className={cn(
               "relative z-10 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              stackedChatInput ? "w-full" : expandedDesktop ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
+              compact ? "min-w-0 flex-1" : expandedDesktop ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
             )}
             onSubmit={submitChat}
           >
