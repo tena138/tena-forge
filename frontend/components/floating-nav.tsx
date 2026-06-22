@@ -204,7 +204,7 @@ export function FloatingNav({
 
   if (mobile) {
     return (
-      <nav className="flex gap-1 overflow-x-auto bg-[#fbfbfa]/95 px-4 py-2 lg:hidden" aria-label="주요 메뉴">
+      <nav className="flex gap-1.5 overflow-x-auto bg-[#fbfbfa]/95 px-4 py-2 pr-8 [scrollbar-width:none] after:w-4 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden lg:hidden" aria-label="주요 메뉴">
         {mobileItems.map((item, index) => {
           const active = isActive(pathname, item.href, searchParams);
           return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} mobile />;

@@ -1206,7 +1206,7 @@ function ProblemsBrowser() {
             {!problem.tags?.difficulty ? <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold", tone.badge)}>미지정</span> : null}
           </div>
 
-          <MathText className="mt-3 line-clamp-4 text-[14px] font-medium leading-[1.55] text-foreground" value={problem.problem_text} />
+          <MathText className="mt-3 line-clamp-4 text-[15px] font-medium leading-[1.62] text-foreground" value={problem.problem_text} />
 
           <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 text-[11px] font-medium text-muted-foreground">
             {showSubject ? <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-700">{problem.tags?.subject}</span> : null}
@@ -1249,7 +1249,7 @@ function ProblemsBrowser() {
         <div className="grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto_auto_36px_36px] items-start gap-3 py-3 pl-6 pr-3">
           <div className="min-w-0">
             <div className="mb-0.5 line-clamp-1 text-[11px] font-medium text-muted-foreground">{sourceLabel(problem)}</div>
-            <MathText className="line-clamp-1 text-[14px] font-medium leading-[1.45] text-foreground" value={problem.problem_text} />
+            <MathText className="line-clamp-1 text-[15px] font-medium leading-[1.5] text-foreground" value={problem.problem_text} />
           </div>
           <div className="whitespace-nowrap pt-1 text-[11px] font-medium text-muted-foreground">
             {pageLabel(problem)} · {problemTypeLabel(problem)}{problem.has_visual ? " · 이미지" : ""}
@@ -1467,20 +1467,20 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white/96 px-4 py-3 text-zinc-950 backdrop-blur lg:top-[65px]">
-          <div className="flex min-w-0 items-center gap-3 text-sm font-black text-zinc-950">
+        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-col items-stretch gap-3 rounded-[16px] bg-white/98 px-4 py-3 text-zinc-950 shadow-[0_18px_50px_rgba(15,15,15,0.08)] backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:top-[65px]">
+          <div className="flex min-w-0 items-center gap-3 text-[15px] font-black text-zinc-950">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white">
               <CheckSquare className="h-4 w-4" />
             </span>
             <span className="truncate">{selectedIds.length}개 선택됨</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</button>
-            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</button>
-            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</button>
+          <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap sm:justify-end">
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</button>
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</button>
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</button>
             <span className="hidden h-6 w-px bg-zinc-200 sm:block" />
-            <button type="button" className="selection-action-button inline-flex h-9 items-center justify-center gap-2 rounded-[9px] bg-black px-3 text-sm font-black text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 disabled:cursor-wait disabled:bg-zinc-300 disabled:text-zinc-500" disabled={deleting} onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-4 w-4" />삭제</button>
-            <button type="button" className="selection-action-clear inline-flex h-9 items-center rounded-[9px] bg-zinc-100 px-3 text-sm font-black text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10" onClick={() => setSelectedIds([])}>선택 해제</button>
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-black px-3 text-sm font-black text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 disabled:cursor-wait disabled:bg-zinc-300 disabled:text-zinc-500 sm:h-9 sm:w-auto" disabled={deleting} onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-4 w-4" />삭제</button>
+            <button type="button" className="selection-action-clear inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setSelectedIds([])}>선택 해제</button>
           </div>
         </div>
       ) : null}
