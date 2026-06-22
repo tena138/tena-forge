@@ -26,10 +26,15 @@ import {
 import type { BatchStatusResponse } from "@/lib/batch-progress";
 import type { CoAgentChatMessage } from "@/lib/coAgent";
 import { sendCoAgentChat } from "@/lib/coAgent";
+import {
+  areCoAgentChatMessagesEqual,
+  CO_AGENT_CHAT_STORAGE_EVENT,
+  CO_AGENT_CHAT_STORAGE_KEY,
+  notifyCoAgentChatMessagesChanged,
+  readStoredCoAgentChatMessages,
+  writeStoredCoAgentChatMessages,
+} from "@/lib/coAgentChatHistory";
 import { cn } from "@/lib/utils";
-
-const CO_AGENT_CHAT_STORAGE_KEY = "tena-forge-co-agent-chat-v1";
-const MAX_STORED_CHAT_MESSAGES = 12;
 
 type CoAgentChatAction = {
   id?: string;
@@ -37,41 +42,6 @@ type CoAgentChatAction = {
   kind?: string;
   href?: string;
 };
-
-function readStoredCoAgentChatMessages(): CoAgentChatMessage[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.sessionStorage.getItem(CO_AGENT_CHAT_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(
-        (message): message is CoAgentChatMessage =>
-          (message?.role === "user" || message?.role === "assistant") &&
-          typeof message.content === "string" &&
-          Boolean(message.content.trim())
-      )
-      .map((message) => ({ role: message.role, content: message.content.slice(0, 2000) }))
-      .slice(-MAX_STORED_CHAT_MESSAGES);
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredCoAgentChatMessages(messages: CoAgentChatMessage[]) {
-  if (typeof window === "undefined") return;
-  try {
-    const safeMessages = messages.slice(-MAX_STORED_CHAT_MESSAGES);
-    if (!safeMessages.length) {
-      window.sessionStorage.removeItem(CO_AGENT_CHAT_STORAGE_KEY);
-      return;
-    }
-    window.sessionStorage.setItem(CO_AGENT_CHAT_STORAGE_KEY, JSON.stringify(safeMessages));
-  } catch {
-    // Losing transient chat history should not break the status bar.
-  }
-}
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -308,7 +278,28 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     writeStoredCoAgentChatMessages(chatMessages);
+    notifyCoAgentChatMessagesChanged();
   }, [chatMessages]);
+
+  useEffect(() => {
+    function syncStoredChatMessages() {
+      const storedMessages = readStoredCoAgentChatMessages();
+      setChatMessages((current) => (areCoAgentChatMessagesEqual(current, storedMessages) ? current : storedMessages));
+    }
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key === CO_AGENT_CHAT_STORAGE_KEY) syncStoredChatMessages();
+    }
+
+    window.addEventListener(CO_AGENT_CHAT_STORAGE_EVENT, syncStoredChatMessages);
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", syncStoredChatMessages);
+    return () => {
+      window.removeEventListener(CO_AGENT_CHAT_STORAGE_EVENT, syncStoredChatMessages);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", syncStoredChatMessages);
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeBatchId) {

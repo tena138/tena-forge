@@ -1,5 +1,5 @@
-import { RoutineQueue } from "@/components/co-agent/routine-queue";
+import { CoAgentWorkspace } from "@/components/co-agent/co-agent-workspace";
 
 export default function CoAgentPage() {
-  return <RoutineQueue />;
+  return <CoAgentWorkspace />;
 }
