@@ -418,6 +418,170 @@ def _co_agent_chat_completion(messages: list[dict[str, str]]) -> tuple[str, str]
     raise HTTPException(status_code=502, detail=f"Co-Agent AI request failed: {last_error}")
 
 
+def _co_agent_exam_thread_signal(message: str, history: list[CoAgentChatMessage]) -> bool:
+    if looks_like_exam_paper_request(message):
+        return True
+    for item in history[-12:]:
+        content = item.content.strip()
+        if not content:
+            continue
+        if item.role == "user" and looks_like_exam_paper_request(content):
+            return True
+        if item.role == "assistant" and _is_exam_followup_prompt(content):
+            return True
+    return False
+
+
+def _recent_exam_history_scope(history: list[CoAgentChatMessage]) -> list[CoAgentChatMessage]:
+    recent_history = history[-12:]
+    latest_request_index = None
+    for index, item in enumerate(recent_history):
+        content = item.content.strip()
+        if item.role == "user" and looks_like_exam_paper_request(content):
+            latest_request_index = index
+    if latest_request_index is None:
+        return recent_history
+    return recent_history[latest_request_index:]
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+        return payload if isinstance(payload, dict) else None
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start < 0 or end <= start:
+            return None
+    try:
+        payload = json.loads(raw[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _co_agent_exam_context_from_ai_payload(payload: dict[str, Any] | None) -> str | None:
+    if not payload or payload.get("is_exam_request") is not True:
+        return None
+    try:
+        confidence = float(payload.get("confidence", 0))
+    except (TypeError, ValueError):
+        confidence = 0
+    if confidence < 0.45:
+        return None
+    normalized = str(payload.get("normalized_message") or "").strip()
+    if not normalized:
+        return None
+    if not looks_like_exam_paper_request(normalized):
+        if not _looks_like_exam_context_fragment(normalized):
+            return None
+        normalized = f"{normalized}\n시험지 제작"
+    return normalized[:2000]
+
+
+def _co_agent_exam_intent_prompt() -> str:
+    return """
+너는 Tena Forge 코파일럿의 시험지 제작 의도 정규화기다.
+
+목표:
+- 최근 대화와 현재 사용자 메시지를 읽고, 사용자가 시험지/문항 세트 제작 업무를 새로 요청하거나 이어가고 있으면 실행기가 이해할 단일 한국어 지시문으로 합친다.
+- 사용자가 코파일럿의 질문에 짧게 답해도 직전 질문의 의미를 기준으로 해석한다.
+- 모르는 정보는 만들지 않는다. 사용자가 말한 정보와 대화에서 확실히 이어지는 정보만 합친다.
+
+출력은 JSON 객체 하나만 쓴다:
+{
+  "is_exam_request": true 또는 false,
+  "confidence": 0부터 1,
+  "normalized_message": "단일 한국어 지시문. 시험지 제작이 아니면 빈 문자열",
+  "reason": "짧은 내부 판단 근거"
+}
+
+정규화 규칙:
+- 새 시험지 제작 요청이 있으면 이전에 완료된 시험지나 다른 오래된 조건은 버리고 새 요청 기준으로 정리한다.
+- 과목, 학년, 문항 수, 템플릿, 배점/난이도 계획, 대상/마감이 언급되면 지시문에 포함한다.
+- 템플릿 질문 뒤 "세움", "세움 A4", "그 양식"처럼 답하면 템플릿 답변으로 해석한다.
+- 난이도/배점 배치 질문 뒤 "랜덤", "상관없어", "아무거나", "알아서", "적당히 섞어", "조건 없이", "난이도 신경 쓰지 말고"와 같은 의미가 나오면 "난이도/배점 조건 없이 랜덤 추출"로 정규화한다.
+- "골고루", "비슷하게", "균등하게"처럼 분포를 맡기는 말도 사용자가 세부 배치를 맡긴 것으로 보고 "난이도/배점 조건 없이 랜덤 추출"로 정규화한다.
+- 사용자가 단순 설명이나 일반 질문만 하면 is_exam_request는 false다.
+
+예시:
+이전: 사용자 "고3 수학 시험지 20문항 세움 양식으로 만들어줘"
+이전: assistant "배점/난이도 배치는 어떻게 할까요?"
+현재: "그냥 알아서 섞어"
+출력: {"is_exam_request":true,"confidence":0.92,"normalized_message":"고3 수학 20문항 세움 양식 시험지 제작. 난이도/배점 조건 없이 랜덤 추출.","reason":"난이도 질문에 대한 랜덤/위임 답변"}
+""".strip()
+
+
+def _co_agent_exam_intent_completion(messages: list[dict[str, str]]) -> str | None:
+    settings = get_settings()
+    if not settings.openai_api_key:
+        return None
+
+    client = OpenAI(api_key=settings.openai_api_key, timeout=max(10, min(settings.ai_request_timeout_seconds, 30)))
+    attempts = [
+        {"response_format": {"type": "json_object"}, "max_tokens": 500},
+        {"response_format": {"type": "json_object"}, "extra_body": {"max_completion_tokens": 500}},
+        {"max_tokens": 500},
+    ]
+    for extra in attempts:
+        try:
+            response = client.chat.completions.create(model=settings.ai_model, messages=messages, **extra)
+            return (response.choices[0].message.content or "").strip()
+        except Exception as exc:
+            text = str(exc)
+            if any(token in text for token in ("max_tokens", "max_completion_tokens", "response_format")):
+                continue
+            return None
+    return None
+
+
+def _co_agent_exam_context_message_ai(message: str, history: list[CoAgentChatMessage]) -> str | None:
+    if not _co_agent_exam_thread_signal(message, history):
+        return None
+
+    scoped_history = _recent_exam_history_scope(history)
+    recent_messages = [
+        {"role": item.role if item.role in {"user", "assistant"} else "user", "content": item.content.strip()[:1200]}
+        for item in scoped_history[-10:]
+        if item.content.strip()
+    ]
+    payload = {
+        "recent_messages": recent_messages,
+        "current_user_message": message.strip()[:1200],
+    }
+    messages = [
+        {"role": "system", "content": _co_agent_exam_intent_prompt()},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    raw = _co_agent_exam_intent_completion(messages)
+    return _co_agent_exam_context_from_ai_payload(_extract_json_object(raw or ""))
+
+
+def _latest_exam_pending_fields(history: list[CoAgentChatMessage]) -> set[str]:
+    for item in reversed(_recent_exam_history_scope(history)):
+        content = item.content.strip()
+        if not content:
+            continue
+        if item.role == "assistant" and _is_exam_followup_prompt(content):
+            return _exam_followup_fields(content)
+        if item.role == "user" and looks_like_exam_paper_request(content):
+            break
+    return set()
+
+
+def _should_try_ai_exam_context(history: list[CoAgentChatMessage], draft: dict[str, Any]) -> bool:
+    pending_fields = _latest_exam_pending_fields(history)
+    if not pending_fields:
+        return False
+    missing_fields = {str(item.get("field") or "") for item in draft.get("missing_required_fields") or []}
+    if pending_fields & missing_fields:
+        return True
+    return "difficulty_plan" in pending_fields and bool(draft.get("missing_difficulty_slots"))
+
+
 def _exam_followup_fields(content: str) -> set[str]:
     compact = content.replace(" ", "")
     fields: set[str] = set()
@@ -798,9 +962,23 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
         raise HTTPException(status_code=400, detail="Message is required.")
 
     exam_context_message = _co_agent_exam_context_message(message, payload.messages)
+    draft: dict[str, Any] | None = None
+    owner_ids: set[str] | None = None
     if exam_context_message:
         owner_ids = _academy_ids_for_co_agent(request, db)
         draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
+        if _should_try_ai_exam_context(payload.messages, draft):
+            ai_context_message = _co_agent_exam_context_message_ai(message, payload.messages)
+            if ai_context_message and ai_context_message != exam_context_message:
+                exam_context_message = ai_context_message
+                draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
+    else:
+        exam_context_message = _co_agent_exam_context_message_ai(message, payload.messages)
+        if exam_context_message:
+            owner_ids = _academy_ids_for_co_agent(request, db)
+            draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
+
+    if exam_context_message and draft is not None:
         artifacts: list[dict[str, Any]] = []
         if _draft_is_ready_to_create(draft):
             problem_set = _create_problem_set_from_exam_draft(db, request=request, draft=draft, source_message=exam_context_message)

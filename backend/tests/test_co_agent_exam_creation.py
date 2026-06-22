@@ -1,8 +1,10 @@
 import sys
+import json
 import unittest
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
@@ -13,6 +15,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from database import Base  # noqa: E402
 from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag, UsageLog  # noqa: E402
+import routers.co_agent as co_agent_module  # noqa: E402
 from routers.co_agent import CoAgentChatMessage, CoAgentChatRequest, co_agent_chat  # noqa: E402
 from routers.problem_sets import list_problem_sets  # noqa: E402
 
@@ -154,6 +157,50 @@ class CoAgentExamCreationTests(unittest.TestCase):
             self.assertEqual(response.drafts[0]["selection_strategy"], "random_without_difficulty")
             self.assertEqual(response.drafts[0]["difficulty_plan_mode"], "random_without_difficulty")
             self.assertEqual(response.drafts[0]["missing_difficulty_slots"], [])
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
+        finally:
+            db.close()
+
+    def test_ai_intent_normalizer_accepts_flexible_difficulty_reply(self):
+        ai_payload = {
+            "is_exam_request": True,
+            "confidence": 0.91,
+            "normalized_message": "고3 수학 20문항 세움 양식 시험지 제작. 난이도/배점 조건 없이 랜덤 추출.",
+            "reason": "난이도 질문에 대한 위임 답변",
+        }
+        with patch("routers.co_agent._co_agent_exam_intent_completion", return_value=json.dumps(ai_payload, ensure_ascii=False)):
+            normalized = co_agent_module._co_agent_exam_context_message_ai(
+                "적당히 해줘",
+                [
+                    CoAgentChatMessage(role="user", content="고3 수학 시험지 20문항 세움 양식으로 만들어줘"),
+                    CoAgentChatMessage(role="assistant", content="시험지 제작 전에 확인이 필요합니다. 배점/난이도 배치는 어떻게 할까요?"),
+                ],
+            )
+
+        self.assertEqual(normalized, ai_payload["normalized_message"])
+
+    def test_chat_uses_ai_normalized_exam_followup_for_creation(self):
+        db = self.Session()
+        try:
+            self._seed_pool(db)
+            normalized = "고3 수학 20문항 세움 양식 시험지 제작. 난이도/배점 조건 없이 랜덤 추출."
+
+            with patch("routers.co_agent._co_agent_exam_context_message_ai", return_value=normalized) as ai_normalizer:
+                response = co_agent_chat(
+                    CoAgentChatRequest(
+                        message="적당히 해줘",
+                        messages=[
+                            CoAgentChatMessage(role="user", content="고3 수학 시험지 20문항 세움 양식으로 만들어줘"),
+                            CoAgentChatMessage(role="assistant", content="시험지 제작 전에 확인이 필요합니다. 배점/난이도 배치는 어떻게 할까요?"),
+                        ],
+                    ),
+                    self.request,
+                    db,
+                )
+
+            ai_normalizer.assert_called_once()
+            self.assertEqual(response.drafts[0]["status"], "created")
+            self.assertEqual(response.drafts[0]["selection_strategy"], "random_without_difficulty")
             self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
         finally:
             db.close()
