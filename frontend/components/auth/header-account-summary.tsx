@@ -163,7 +163,9 @@ export function HeaderAccountSummary() {
 
   const currentProfile = profile;
   const plan = displayPlan(currentProfile);
-  const initials = (currentProfile.academy_name || currentProfile.email).slice(0, 1).toUpperCase();
+  const accountName = currentProfile.academy_name || currentProfile.email || "Tena Forge";
+  const accountEmail = currentProfile.email || "";
+  const initials = accountName.slice(0, 1).toUpperCase() || "T";
 
   function openProfileEditor() {
     setDraft(toProfileDraft(currentProfile));
@@ -229,8 +231,8 @@ export function HeaderAccountSummary() {
             {initials}
           </span>
           <span className="hidden min-w-0 sm:block">
-            <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{currentProfile.academy_name}</span>
-            <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{currentProfile.email}</span>
+            <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{accountName}</span>
+            <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{accountEmail}</span>
           </span>
           <PlanBadge label={plan.label} tone={plan.tone} />
         </button>
@@ -240,8 +242,8 @@ export function HeaderAccountSummary() {
           <div className="rounded-[8px] bg-zinc-100 p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate font-semibold">{currentProfile.academy_name}</div>
-                <div className="truncate text-xs text-muted-foreground">{currentProfile.email}</div>
+                <div className="truncate font-semibold">{accountName}</div>
+                <div className="truncate text-xs text-muted-foreground">{accountEmail}</div>
               </div>
               <PlanBadge label={plan.label} tone={plan.tone} />
             </div>
@@ -287,7 +289,7 @@ export function HeaderAccountSummary() {
             <div className="rounded-lg bg-zinc-100 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{currentProfile.email}</div>
+                  <div className="truncate text-sm font-semibold">{accountEmail}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{currentProfile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}</div>
                 </div>
                 <PlanBadge label={plan.label} tone={plan.tone} />
@@ -306,7 +308,7 @@ export function HeaderAccountSummary() {
 
             <label className="block text-sm font-semibold">
               이메일
-              <Input className="mt-1.5" value={currentProfile.email} disabled />
+              <Input className="mt-1.5" value={accountEmail} disabled />
             </label>
             <label className="block text-sm font-semibold">
               이름 또는 소속명
