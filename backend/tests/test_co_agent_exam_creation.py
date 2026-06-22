@@ -220,6 +220,9 @@ class CoAgentExamCreationTests(unittest.TestCase):
         db = self.Session()
         try:
             self._seed_sparse_grade_pool(db)
+            for number in range(24, 44):
+                self._add_problem(db, number, None, source_label="고1 수학", batch_name="고1 수학 모의고사")
+            db.commit()
 
             response = co_agent_chat(
                 CoAgentChatRequest(message="고3 수학 시험지 20문항 세움 양식으로 만들어줘"),
@@ -227,9 +230,11 @@ class CoAgentExamCreationTests(unittest.TestCase):
                 db,
             )
 
+            selected_sources = [problem["source_label"] or "" for problem in response.drafts[0]["problems"]]
             self.assertEqual(response.drafts[0]["status"], "created")
             self.assertEqual(response.drafts[0]["selected_count"], 20)
             self.assertTrue(response.drafts[0]["grade_filter_relaxed"])
+            self.assertFalse(any("고1" in source for source in selected_sources))
             self.assertEqual(response.workflow["status"], "created")
             self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
         finally:

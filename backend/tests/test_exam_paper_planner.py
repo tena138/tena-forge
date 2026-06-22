@@ -173,7 +173,34 @@ class ExamPaperPlannerTests(unittest.TestCase):
             self.assertEqual(draft["selected_count"], 20)
             self.assertEqual(draft["candidate_shortfall"], 0)
             self.assertTrue(draft["grade_filter_relaxed"])
-            self.assertTrue(any("수학 보관 범위" in warning for warning in draft["warnings"]))
+            self.assertTrue(any("다른 학년" in warning for warning in draft["warnings"]))
+        finally:
+            db.close()
+
+    def test_sparse_grade_relaxation_excludes_other_explicit_grades(self):
+        db = self.Session()
+        try:
+            for number in range(1, 4):
+                self._add_problem(db, number, None, f"단원{number % 3 + 1}", source_label="고3 수학", batch_name="고3 수학 모의고사")
+            for number in range(4, 24):
+                self._add_problem(db, number, None, f"단원{number % 3 + 1}", source_label="수학 보관", batch_name="수학 보관")
+            for number in range(24, 44):
+                self._add_problem(db, number, None, f"단원{number % 3 + 1}", source_label="고1 수학", batch_name="고1 수학 모의고사")
+            db.commit()
+
+            draft = build_exam_paper_draft(
+                db,
+                message="고3 수학 시험지 20문항 세움 양식으로 만들어줘",
+                owner_ids={self.owner_id},
+            )
+
+            selected_sources = [problem["source_label"] or "" for problem in draft["problems"]]
+            self.assertEqual(draft["status"], "draft")
+            self.assertEqual(draft["selected_count"], 20)
+            self.assertEqual(draft["candidate_shortfall"], 0)
+            self.assertTrue(draft["grade_filter_relaxed"])
+            self.assertFalse(any("고1" in source for source in selected_sources))
+            self.assertTrue(any("수학 보관" in source for source in selected_sources))
         finally:
             db.close()
 

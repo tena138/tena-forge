@@ -14,6 +14,7 @@ from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, MATH_ENGINE,
 
 
 DIFFICULTY_LABELS = ("2점", "3점", "4점")
+GRADE_SIGNAL_PATTERN = re.compile(r"고(?:등(?:학교)?)?\s*([123])\s*(?:학년)?")
 
 
 def looks_like_exam_paper_request(message: str) -> bool:
@@ -260,6 +261,35 @@ def _grade_filter(keyword: str):
     )
 
 
+def _grade_signal_texts(problem: Problem) -> list[str]:
+    texts = [problem.source_label, problem.problem_text]
+    tag = getattr(problem, "tags", None)
+    if tag:
+        texts.extend([tag.subject, tag.unit, tag.source])
+    batch = getattr(problem, "batch", None)
+    if batch:
+        texts.append(batch.name)
+    return [str(text) for text in texts if text]
+
+
+def _explicit_high_school_grades(problem: Problem) -> set[str]:
+    grades: set[str] = set()
+    for text in _grade_signal_texts(problem):
+        grades.update(f"고{match.group(1)}" for match in GRADE_SIGNAL_PATTERN.finditer(text))
+    return grades
+
+
+def _without_other_explicit_grades(candidates: list[Problem], grade_keyword: str | None) -> list[Problem]:
+    if not grade_keyword:
+        return candidates
+    filtered: list[Problem] = []
+    for problem in candidates:
+        explicit_grades = _explicit_high_school_grades(problem)
+        if not explicit_grades or explicit_grades == {grade_keyword}:
+            filtered.append(problem)
+    return filtered
+
+
 def _candidate_query(owner_ids: set[str], engine: str, grade_keyword: str | None):
     filters = [
         Problem.deleted_at.is_(None),
@@ -280,12 +310,14 @@ def _candidate_query(owner_ids: set[str], engine: str, grade_keyword: str | None
 
 def _candidate_pool(db: Session, owner_ids: set[str], engine: str, grade_keyword: str | None, count: int) -> tuple[list[Problem], bool]:
     candidates = db.scalars(_candidate_query(owner_ids, engine, grade_keyword)).unique().all()
+    candidates = _without_other_explicit_grades(candidates, grade_keyword)
     if not grade_keyword or len(candidates) >= count:
         return candidates, False
 
     broader_candidates = db.scalars(_candidate_query(owner_ids, engine, None)).unique().all()
-    if len(broader_candidates) > len(candidates):
-        return broader_candidates, True
+    relaxed_candidates = _without_other_explicit_grades(broader_candidates, grade_keyword)
+    if len(relaxed_candidates) > len(candidates):
+        return relaxed_candidates, True
     return candidates, False
 
 
@@ -482,7 +514,7 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
 
     warnings: list[str] = []
     if grade and grade_filter_relaxed:
-        warnings.append(f"{grade} 표기가 있는 문항만으로 부족해 화면에 보이는 {_subject_label(engine)} 보관 범위로 넓혀 구성했습니다.")
+        warnings.append(f"{grade} 표기가 있는 문항만으로 부족해 학년 미지정 {_subject_label(engine)} 문항까지 넓히고, 다른 학년으로 명시된 문항은 제외했습니다.")
     elif grade and not candidates:
         warnings.append(f"{grade} 조건에 맞는 문항 후보가 없습니다.")
     if missing:
