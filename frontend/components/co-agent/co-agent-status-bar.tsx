@@ -187,11 +187,9 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const workflowBubble = workflow?.bubble || null;
   const needsInputStatusMessage = useMemo(() => {
     if (workflow?.status !== "needs_input") return "";
-    const title = workflowBubble?.title?.trim();
     const message = workflowBubble?.message?.trim();
-    if (title && message) return `${title}: ${message}`;
-    return message || title || "필요한 정보를 알려주세요.";
-  }, [workflow?.status, workflowBubble?.message, workflowBubble?.title]);
+    return message || "필요한 정보를 알려주세요.";
+  }, [workflow?.status, workflowBubble?.message]);
 
   const statusMessage = chatLoading
     ? "코파일럿이 작업 중입니다."

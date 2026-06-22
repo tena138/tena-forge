@@ -181,6 +181,8 @@ export function CoAgentJellyOverlay() {
   const bubbleStyle = resolvedLayout.mobile
     ? { left: 16, right: 16, bottom: 18 }
     : { left: resolvedLayout.bubbleLeft, top: resolvedLayout.bubbleTop, width: resolvedLayout.bubbleWidth };
+  const bubbleTitle = bubble?.title?.trim() || "";
+  const showBubbleTitle = Boolean(bubbleTitle && bubble?.variant !== "question");
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
@@ -209,8 +211,13 @@ export function CoAgentJellyOverlay() {
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-zinc-950">{bubble.title}</p>
-                  <p className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm font-semibold leading-5 text-zinc-600">
+                  {showBubbleTitle ? <p className="truncate text-sm font-black text-zinc-950">{bubbleTitle}</p> : null}
+                  <p
+                    className={cn(
+                      "max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm font-semibold leading-5",
+                      showBubbleTitle ? "mt-1 text-zinc-600" : "text-zinc-800"
+                    )}
+                  >
                     {bubble.message}
                   </p>
                 </div>
