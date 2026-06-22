@@ -4,8 +4,8 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Bot, Loader2, Send, X } from "lucide-react";
 
-import type { CoAgentChatMessage, CoAgentWorkflow } from "@/lib/coAgent";
-import { collectVisibleCoAgentContext, sendCoAgentChat } from "@/lib/coAgent";
+import type { CoAgentChatMessage, CoAgentSubjectChoice, CoAgentWorkflow } from "@/lib/coAgent";
+import { collectVisibleCoAgentContext, getCoAgentSubjectChoices, sendCoAgentChat } from "@/lib/coAgent";
 import {
   MAX_STORED_CHAT_MESSAGES,
   notifyCoAgentChatMessagesChanged,
@@ -104,6 +104,7 @@ export function CoAgentJellyOverlay() {
   const [layout, setLayout] = useState<OverlayLayout | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fallbackSubjectChoices, setFallbackSubjectChoices] = useState<CoAgentSubjectChoice[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeStep = workflow?.active_step || "command";
@@ -111,6 +112,10 @@ export function CoAgentJellyOverlay() {
   const bubble = workflow?.bubble || null;
   const showBubble = Boolean(bubble && workflow?.status && workflow.status !== "idle");
   const acceptsInput = workflow?.status === "needs_input" && bubble?.variant === "question";
+  const bubbleProvidedChoices = bubble?.choices || [];
+  const needsSubjectChoiceFallback = acceptsInput && bubble?.field === "subject" && bubbleProvidedChoices.length === 0;
+  const activeBubbleChoices = (bubbleProvidedChoices.length ? bubbleProvidedChoices : needsSubjectChoiceFallback ? fallbackSubjectChoices : []).filter((choice) => choice && (choice.value || choice.label));
+  const hasChoiceButtons = acceptsInput && activeBubbleChoices.length > 0;
 
   const syncWorkflow = useCallback(() => {
     const storedWorkflow = readStoredCoAgentWorkflow();
@@ -189,8 +194,30 @@ export function CoAgentJellyOverlay() {
   }, [updateLayout]);
 
   useEffect(() => {
-    if (acceptsInput && showBubble && !loading) inputRef.current?.focus();
-  }, [acceptsInput, loading, showBubble, workflow?.id, workflow?.active_step]);
+    let active = true;
+    if (!needsSubjectChoiceFallback) {
+      if (bubble?.field !== "subject") setFallbackSubjectChoices([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    getCoAgentSubjectChoices()
+      .then((response) => {
+        if (active) setFallbackSubjectChoices(response.choices || []);
+      })
+      .catch(() => {
+        if (active) setFallbackSubjectChoices([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bubble?.field, needsSubjectChoiceFallback, workflow?.id]);
+
+  useEffect(() => {
+    if (acceptsInput && showBubble && !loading && !hasChoiceButtons) inputRef.current?.focus();
+  }, [acceptsInput, hasChoiceButtons, loading, showBubble, workflow?.id, workflow?.active_step]);
 
   async function submitContent(rawContent: string) {
     const content = rawContent.trim();
@@ -245,7 +272,6 @@ export function CoAgentJellyOverlay() {
   const showBubbleTitle = Boolean(bubbleTitle && bubble?.variant !== "question");
   const targetIsSidebar = resolvedLayout.targetKind === "sidebar";
   const showTargetSpotlight = Boolean(resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle");
-  const bubbleChoices = (bubble?.choices || []).filter((choice) => choice && (choice.value || choice.label));
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
@@ -334,9 +360,9 @@ export function CoAgentJellyOverlay() {
 
               {acceptsInput ? (
                 <>
-                  {bubbleChoices.length ? (
+                  {hasChoiceButtons ? (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {bubbleChoices.map((choice) => {
+                      {activeBubbleChoices.map((choice) => {
                         const choiceValue = String(choice.value || choice.label || "").trim();
                         if (!choiceValue) return null;
                         return (
@@ -353,24 +379,26 @@ export function CoAgentJellyOverlay() {
                       })}
                     </div>
                   ) : null}
-                  <form className="mt-3 flex min-w-0 items-center gap-2 rounded-[10px] bg-zinc-100 px-2 py-1.5" onSubmit={submitBubble}>
-                    <input
-                      ref={inputRef}
-                      value={input}
-                      onChange={(event) => setInput(event.target.value)}
-                      disabled={loading}
-                      className="h-9 min-w-0 flex-1 bg-transparent px-1 text-sm font-bold text-zinc-950 outline-none placeholder:text-zinc-500"
-                      placeholder={bubble.placeholder || "답변 입력"}
-                    />
-                    <button
-                      type="submit"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
-                      disabled={loading || !input.trim()}
-                      aria-label="답변 보내기"
-                    >
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    </button>
-                  </form>
+                  {!hasChoiceButtons ? (
+                    <form className="mt-3 flex min-w-0 items-center gap-2 rounded-[10px] bg-zinc-100 px-2 py-1.5" onSubmit={submitBubble}>
+                      <input
+                        ref={inputRef}
+                        value={input}
+                        onChange={(event) => setInput(event.target.value)}
+                        disabled={loading}
+                        className="h-9 min-w-0 flex-1 bg-transparent px-1 text-sm font-bold text-zinc-950 outline-none placeholder:text-zinc-500"
+                        placeholder={bubble.placeholder || "답변 입력"}
+                      />
+                      <button
+                        type="submit"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
+                        disabled={loading || !input.trim()}
+                        aria-label="답변 보내기"
+                      >
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      </button>
+                    </form>
+                  ) : null}
                 </>
               ) : bubble.href ? (
                 <button

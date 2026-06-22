@@ -1096,6 +1096,11 @@ def _exam_workflow(draft: dict[str, Any], answer: str) -> dict[str, Any]:
     }
 
 
+@router.get("/subject-choices")
+def co_agent_subject_choices(request: Request, db: Session = Depends(get_db)):
+    return {"choices": _exam_subject_choices(_enabled_subject_engines_for_co_agent(request, db))}
+
+
 @router.post("/exam-paper/draft")
 def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Request, db: Session = Depends(get_db)):
     message = payload.message.strip()

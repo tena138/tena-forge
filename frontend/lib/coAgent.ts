@@ -66,13 +66,15 @@ export type CoAgentWorkflowBubble = {
   message: string;
   field?: string;
   placeholder?: string;
-  choices?: Array<{
-    label?: string;
-    value?: string;
-    engine?: string;
-  }>;
+  choices?: CoAgentSubjectChoice[];
   variant?: "question" | "status" | "success" | "error" | string;
   href?: string;
+};
+
+export type CoAgentSubjectChoice = {
+  label?: string;
+  value?: string;
+  engine?: string;
 };
 
 export type CoAgentWorkflowTarget = {
@@ -120,6 +122,10 @@ export function sendCoAgentChat(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function getCoAgentSubjectChoices() {
+  return api<{ choices: CoAgentSubjectChoice[] }>("/api/co-agent/subject-choices");
 }
 
 export function collectVisibleCoAgentContext(): CoAgentVisibleContext | null {

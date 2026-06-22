@@ -238,10 +238,12 @@ class CoAgentExamCreationTests(unittest.TestCase):
             )
 
             choices = response.workflow["bubble"]["choices"]
+            endpoint_choices = co_agent_module.co_agent_subject_choices(self.request, db)["choices"]
             self.assertEqual(response.drafts[0]["status"], "needs_input")
             self.assertEqual(response.workflow["bubble"]["field"], "subject")
             self.assertEqual([choice["value"] for choice in choices], ["수학", "국어"])
             self.assertEqual([choice["engine"] for choice in choices], ["math", "korean"])
+            self.assertEqual(endpoint_choices, choices)
             self.assertFalse(any(choice["engine"] == "english" for choice in choices))
         finally:
             db.close()
