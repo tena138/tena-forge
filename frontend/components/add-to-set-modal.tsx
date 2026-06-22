@@ -136,7 +136,7 @@ export function AddToSetModal({
           )}
           <div className="flex items-center gap-2 rounded-md bg-zinc-100 px-2">
             <Search className="h-4 w-4 text-zinc-600" />
-            <Input className="border-0 bg-transparent text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-0" placeholder="세트 검색" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Input className="border-0 bg-transparent text-zinc-950 placeholder:text-zinc-500 focus-visible:bg-transparent focus-visible:ring-0" placeholder="세트 검색" value={query} onChange={(event) => setQuery(event.target.value)} />
           </div>
           <div className="max-h-56 space-y-2 overflow-auto">
             {filtered.map((set) => {
