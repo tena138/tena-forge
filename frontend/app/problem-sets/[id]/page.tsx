@@ -233,8 +233,8 @@ function ProblemPickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!h-[88vh] !max-h-[88vh] !w-[96vw] !max-w-[1500px] !overflow-hidden !bg-white !p-0 text-zinc-950">
-        <div className="flex h-full min-h-0 flex-col gap-3 p-5">
+      <DialogContent className="!h-[92dvh] !max-h-[92dvh] !w-[96vw] !max-w-[1500px] !overflow-hidden !bg-white !p-0 text-zinc-950">
+        <div className="flex h-full min-h-0 flex-col gap-3 p-4 sm:p-5">
           <div className="flex shrink-0 flex-col gap-3 pr-10 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-xl font-semibold">문항 추가</h2>
@@ -292,6 +292,7 @@ function ProblemPickerModal({
             </span>
             <label className="flex items-center gap-2">
               <input
+                className="accent-black"
                 type="checkbox"
                 checked={needsReview}
                 onChange={(event) => {
@@ -320,7 +321,7 @@ function ProblemPickerModal({
                       disabled={saving || alreadyAdded}
                       onClick={() => toggle(problem.id)}
                     >
-                      <input className="mt-1 h-4 w-4" type="checkbox" checked={selected || alreadyAdded} disabled={alreadyAdded} readOnly />
+                      <input className="mt-1 h-4 w-4 accent-black" type="checkbox" checked={selected || alreadyAdded} disabled={alreadyAdded} readOnly />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold">{problem.tags?.source || `${problem.problem_number}번`}</span>
@@ -359,9 +360,9 @@ function ProblemPickerModal({
 
 function FilterChips({ title, options, values, onToggle }: { title: string; options: string[]; values: string[]; onToggle: (value: string) => void }) {
   return (
-    <div className="space-y-2">
-      <div className="text-sm font-medium">{title}</div>
-      <div className="flex max-h-24 flex-wrap gap-2 overflow-auto rounded-[8px] bg-zinc-100 p-2">
+    <div className="flex items-center gap-2 sm:block sm:space-y-2">
+      <div className="w-16 shrink-0 text-sm font-semibold text-zinc-800 sm:w-auto sm:font-medium">{title}</div>
+      <div className="flex min-w-0 flex-1 flex-nowrap gap-2 overflow-x-auto rounded-[8px] bg-zinc-100 p-2 [scrollbar-width:none] sm:max-h-24 sm:flex-wrap sm:overflow-auto [&::-webkit-scrollbar]:hidden">
         {options.length ? options.map((option) => (
           <button
             key={option}
@@ -456,7 +457,7 @@ export default function ProblemSetDetailPage() {
               총 <strong className="text-zinc-950">{itemCount.toLocaleString("ko-KR")}</strong>문항
             </div>
             <Input value={name} onChange={(event) => setName(event.target.value)} />
-            <Button disabled={!name.trim() || name === problemSet.name} onClick={saveName}>
+            <Button className="shrink-0 whitespace-nowrap sm:min-w-[86px]" disabled={!name.trim() || name === problemSet.name} onClick={saveName}>
               <Save className="h-4 w-4" />저장
             </Button>
           </div>

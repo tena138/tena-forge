@@ -224,11 +224,11 @@ export default function ProblemSetsPage() {
               마켓플레이스에 등록하는 자료는 직접 제작했거나 판매·배포할 권리를 보유한 자료여야 합니다. Tena Forge는 문항 아이디어나 유형의 소유권을 판정하지 않으며, 권리 분쟁 또는 신고가 발생할 경우 해당 자료의 노출·판매·이용을 제한할 수 있습니다.
             </p>
             <label className="flex items-start gap-3 rounded-[8px] bg-zinc-100 p-3 text-sm">
-              <input className="mt-1" type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} />
+              <input className="mt-1 accent-black" type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} />
               <span>본인은 이 자료를 직접 제작했거나 판매·배포할 권리를 보유하고 있음을 확인합니다.</span>
             </label>
             <label className="flex items-start gap-3 rounded-[8px] bg-zinc-100 p-3 text-sm">
-              <input className="mt-1" type="checkbox" checked={noUnauthorizedCopy} onChange={(event) => setNoUnauthorizedCopy(event.target.checked)} />
+              <input className="mt-1 accent-black" type="checkbox" checked={noUnauthorizedCopy} onChange={(event) => setNoUnauthorizedCopy(event.target.checked)} />
               <span>타인의 교재, 강의자료, 해설, 이미지, 문항 세트 구성을 무단으로 복제하지 않았음을 확인합니다.</span>
             </label>
             <Button className="w-full" disabled={!rightsConfirmed || !noUnauthorizedCopy} onClick={submitMarketplace}>권리 확인 후 등록</Button>
