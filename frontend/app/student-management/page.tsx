@@ -79,6 +79,10 @@ function resolveActiveManagementAcademyId(profile?: AcademyProfile | null) {
   return profile?.account_type === "academy" ? profile.id : "";
 }
 
+function normalizeListResponse<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 type TabKey = "routine" | "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ClassStudentAddMode = "existing" | "new";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
@@ -178,6 +182,33 @@ function statusTone(status?: string) {
   return "border-zinc-200 bg-zinc-100 text-zinc-600";
 }
 
+function statusLabel(status?: string | null) {
+  if (!status) return "대기";
+  if (status === "active" || status === "Active") return "활성";
+  if (status === "completed") return "완료";
+  if (status === "graded") return "채점 완료";
+  if (status === "grading") return "채점 중";
+  if (status === "pending" || status === "not_started") return "대기";
+  if (status === "pending_grading") return "채점 대기";
+  if (status === "scheduled") return "예정";
+  if (status === "reviewing") return "검토 중";
+  if (status === "unresolved") return "미해결";
+  if (status === "resolved") return "해결";
+  if (status === "wrong") return "오답";
+  if (status === "unanswered") return "미응답";
+  if (status === "unmarked") return "미채점";
+  return status;
+}
+
+function sessionTypeLabel(type?: string | null) {
+  if (type === "test") return "시험";
+  if (type === "homework") return "숙제";
+  if (type === "review") return "복습";
+  if (type === "mock_exam") return "모의고사";
+  if (type === "practice") return "연습";
+  return type || "세션";
+}
+
 function routineTypeLabel(type: string) {
   if (type === "grade_report") return "채점 리포트";
   if (type === "class_feedback") return "수업 피드백";
@@ -199,6 +230,7 @@ function routineStatusTone(status: string) {
 }
 
 function routineChannelLabel(channel: string) {
+  if (channel === "student_app") return "학생앱 알림";
   return channel === "student_notification" ? "학생앱 알림" : channel;
 }
 
@@ -274,7 +306,7 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
         event.preventDefault();
         onMergeContext(event, student);
       }}
-      className="flex h-full min-h-[136px] w-[210px] shrink-0 flex-col justify-between rounded-md bg-white p-3 transition hover:bg-zinc-50"
+      className="flex h-full min-h-[136px] w-full flex-col justify-between rounded-md bg-white p-3 transition hover:bg-zinc-50 sm:w-[210px] sm:shrink-0"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -829,7 +861,7 @@ function ClassStatsPanel({
                         {item.showOverallAverage ? ` · 전체 평균 ${scoreLabel(item.overallAverage)}` : ""}
                       </p>
                     </div>
-                    <Badge className={cn("shrink-0 border", statusTone(item.selectedStatus))}>{item.selectedStatus}</Badge>
+                    <Badge className={cn("shrink-0 border", statusTone(item.selectedStatus))}>{statusLabel(item.selectedStatus)}</Badge>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
                     <span className="rounded bg-slate-50 px-2 py-1 text-slate-700 ring-1 ring-slate-200 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-0">석차 {item.rank == null ? "-" : `${item.rank}/${item.classGradedCount}`}</span>
@@ -1091,11 +1123,16 @@ export default function StudentManagementPage() {
         listWrongAnswers().catch(() => []),
         listPaperSessions().catch(() => []),
       ]);
+      const problemSetRows = normalizeListResponse<ProblemSetListItem>(sets);
+      const wrongRows = normalizeListResponse<WrongAnswer>(wrongs);
+      const sessionRows = normalizeListResponse<PaperSessionSummary>(allSessions);
+      const dashboardSessions = normalizeListResponse<PaperSessionSummary>(dashboard.recent_sessions);
       setClasses(dashboard.classes);
-      setSessions(allSessions.length ? allSessions : dashboard.recent_sessions);
-      setProblemSets(sets);
-      setWrongAnswers(wrongs);
-      if (!selectedSessionId && (allSessions[0] || dashboard.recent_sessions[0])) setSelectedSessionId((allSessions[0] || dashboard.recent_sessions[0]).id);
+      setSessions(sessionRows.length ? sessionRows : dashboardSessions);
+      setProblemSets(problemSetRows);
+      setWrongAnswers(wrongRows);
+      const nextSession = sessionRows[0] || dashboardSessions[0];
+      if (!selectedSessionId && nextSession) setSelectedSessionId(nextSession.id);
     } finally {
       setLoading(false);
     }
@@ -1816,6 +1853,25 @@ export default function StudentManagementPage() {
 
         {!loading && activeTab === "classes" ? (
           <section className="space-y-3">
+            {!showKeyManager && !showClassCreator ? (
+              <div className="grid grid-cols-2 gap-2 sm:hidden">
+                <Button type="button" variant="outline" onClick={toggleKeyManager} className="h-11 rounded-lg bg-white">
+                  <KeyRound className="h-4 w-4" />
+                  학생 키
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setShowKeyManager(false);
+                    setShowClassCreator(true);
+                  }}
+                  className="h-11 rounded-lg"
+                >
+                  <Plus className="h-4 w-4" />
+                  클래스 만들기
+                </Button>
+              </div>
+            ) : null}
             {classes.map((classRow) => (
               <Card
                 key={classRow.id}
@@ -2002,7 +2058,7 @@ export default function StudentManagementPage() {
                         })()
                       ) : null}
                       {classRow.students.length ? (
-                        <div className="flex min-h-[136px] flex-1 items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
+                        <div className="flex min-h-[136px] flex-1 flex-col items-stretch gap-3 pb-1 sm:flex-row sm:overflow-x-auto sm:[scrollbar-color:#d4d4d8_transparent] sm:[scrollbar-width:thin]">
                           {classRow.students.map((student) => (
                             <ClassStudentCard
                               key={student.id}
@@ -2183,7 +2239,7 @@ export default function StudentManagementPage() {
                   <Input type="date" value={sessionForm.scheduled_at} onChange={(event) => setSessionForm((current) => ({ ...current, scheduled_at: event.target.value }))} />
                 </div>
                 <Input type="date" value={sessionForm.due_at} onChange={(event) => setSessionForm((current) => ({ ...current, due_at: event.target.value }))} />
-                <Button className="w-full" onClick={submitSession}>PaperSession 만들기</Button>
+                <Button className="w-full" onClick={submitSession}>세션 만들기</Button>
               </CardContent>
             </Card>
             <div className="space-y-3">
@@ -2192,10 +2248,10 @@ export default function StudentManagementPage() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="font-semibold text-zinc-950">{session.title}</p>
-                      <p className="mt-1 text-sm text-zinc-500">{formatDate(session.scheduled_at)} · {session.session_type} · {session.problem_count}문항</p>
+                      <p className="mt-1 text-sm text-zinc-500">{formatDate(session.scheduled_at)} · {sessionTypeLabel(session.session_type)} · {session.problem_count}문항</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className={cn("border", statusTone(session.status))}>{session.status}</Badge>
+                      <Badge className={cn("border", statusTone(session.status))}>{statusLabel(session.status)}</Badge>
                       <span className="text-sm text-zinc-500">{session.graded_count}/{session.assigned_count} 채점</span>
                     </div>
                   </div>
@@ -2229,7 +2285,7 @@ export default function StudentManagementPage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-semibold text-zinc-950">{student.name}</span>
-                        <Badge className={cn("border", statusTone(student.result.status))}>{student.result.status}</Badge>
+                        <Badge className={cn("border", statusTone(student.result.status))}>{statusLabel(student.result.status)}</Badge>
                       </div>
                       <p className="mt-1 text-xs text-zinc-500">{student.result.correct_count}/{student.result.total_count || sessionDetail.problem_count} 정답</p>
                     </button>
@@ -2353,7 +2409,7 @@ export default function StudentManagementPage() {
                         <CardTitle className="text-base text-zinc-950">{wrong.student_name} · {wrong.problem_number}번</CardTitle>
                         <p className="mt-1 text-xs text-zinc-500">{[wrong.subject, wrong.unit].filter(Boolean).join(" · ") || "단원 정보 없음"}</p>
                       </div>
-                      <Badge className={cn("border", statusTone(wrong.resolved_status))}>{wrong.resolved_status}</Badge>
+                      <Badge className={cn("border", statusTone(wrong.resolved_status))}>{statusLabel(wrong.resolved_status)}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -2380,7 +2436,7 @@ export default function StudentManagementPage() {
                   {sessionsForClass(classRow).slice(0, 6).map((session) => (
                     <div key={session.id} className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-200">
                       <p className="text-sm font-semibold text-zinc-950">{session.title}</p>
-                      <p className="mt-1 text-xs text-zinc-500">{formatDate(session.scheduled_at)} · {session.session_type}</p>
+                      <p className="mt-1 text-xs text-zinc-500">{formatDate(session.scheduled_at)} · {sessionTypeLabel(session.session_type)}</p>
                     </div>
                   ))}
                   {!sessionsForClass(classRow).length ? <p className="text-sm text-zinc-500">등록된 일정이 없습니다.</p> : null}
@@ -2610,27 +2666,31 @@ export default function StudentManagementPage() {
                 </div>
               </div>
             ) : null}
-            <Button
-              type="button"
-              onClick={toggleKeyManager}
-              variant={showKeyManager ? "default" : "outline"}
-              className="fixed bottom-20 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-zinc-950/30"
-              aria-label="학생 키 관리"
-              title="학생 키 관리"
-            >
-              <KeyRound className="h-5 w-5" />
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setShowKeyManager(false);
-                setShowClassCreator((current) => !current);
-              }}
-              className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full p-0 shadow-2xl shadow-zinc-950/40"
-              aria-label="클래스 만들기"
-            >
-              <Plus className="h-5 w-5" />
-            </Button>
+            {!showKeyManager && !showClassCreator ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={toggleKeyManager}
+                  variant="outline"
+                  className="fixed bottom-20 right-6 z-40 hidden h-12 w-12 rounded-full p-0 shadow-2xl shadow-zinc-950/30 sm:inline-flex"
+                  aria-label="학생 키 관리"
+                  title="학생 키 관리"
+                >
+                  <KeyRound className="h-5 w-5" />
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setShowKeyManager(false);
+                    setShowClassCreator(true);
+                  }}
+                  className="fixed bottom-6 right-6 z-40 hidden h-12 w-12 rounded-full p-0 shadow-2xl shadow-zinc-950/40 sm:inline-flex"
+                  aria-label="클래스 만들기"
+                >
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
