@@ -1467,7 +1467,7 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-col items-stretch gap-3 rounded-[16px] bg-white/98 px-4 py-3 text-zinc-950 shadow-[0_18px_50px_rgba(15,15,15,0.08)] backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:top-[65px]">
+        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-col items-stretch gap-3 rounded-[16px] bg-white px-4 py-3 text-zinc-950 shadow-[0_18px_50px_rgba(15,15,15,0.08)] sm:flex-row sm:items-center sm:justify-between lg:top-[65px]">
           <div className="flex min-w-0 items-center gap-3 text-[15px] font-black text-zinc-950">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white">
               <CheckSquare className="h-4 w-4" />
