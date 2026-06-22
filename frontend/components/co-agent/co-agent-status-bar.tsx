@@ -137,6 +137,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const [chatError, setChatError] = useState("");
   const [assistantTypingKey, setAssistantTypingKey] = useState(0);
   const [workflow, setWorkflow] = useState<CoAgentWorkflow | null>(() => readStoredCoAgentWorkflow());
+  const lastNeedsInputOpenKeyRef = useRef<string | null>(null);
 
   const activeStatusData = activeStatus && (activeStatus.status === "pending" || activeStatus.status === "processing") ? activeStatus : null;
   const latestNotification = notifications[0] || null;
@@ -183,12 +184,21 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     return "";
   }, [chatMessages]);
 
+  const workflowBubble = workflow?.bubble || null;
+  const needsInputStatusMessage = useMemo(() => {
+    if (workflow?.status !== "needs_input") return "";
+    const title = workflowBubble?.title?.trim();
+    const message = workflowBubble?.message?.trim();
+    if (title && message) return `${title}: ${message}`;
+    return message || title || "필요한 정보를 알려주세요.";
+  }, [workflow?.status, workflowBubble?.message, workflowBubble?.title]);
+
   const statusMessage = chatLoading
     ? "코파일럿이 작업 중입니다."
     : chatError || workflow?.status === "error"
       ? "코파일럿 연결을 확인해주세요."
       : workflow?.status === "needs_input"
-        ? "코파일럿이 추가 정보를 기다립니다."
+        ? needsInputStatusMessage
         : workflow?.status === "created"
           ? "작업 결과를 말풍선에 정리했습니다."
           : workflow?.status === "running"
@@ -423,6 +433,25 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   }, [chatOpen]);
 
   useEffect(() => {
+    if (workflow?.status !== "needs_input") {
+      lastNeedsInputOpenKeyRef.current = null;
+      return;
+    }
+    if (chatLoading) return;
+    const needsInputKey = [
+      workflow.id,
+      workflow.active_step,
+      workflowBubble?.field || "",
+      workflowBubble?.message || "",
+    ].join(":");
+    if (lastNeedsInputOpenKeyRef.current === needsInputKey) return;
+    lastNeedsInputOpenKeyRef.current = needsInputKey;
+    setChatOpen(true);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [chatLoading, workflow?.active_step, workflow?.id, workflow?.status, workflowBubble?.field, workflowBubble?.message]);
+
+  useEffect(() => {
     if (!chatOpen || chatLoading) return;
     const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
@@ -511,7 +540,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
               value={chatInput}
               onChange={(event) => setChatInput(event.target.value)}
               className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500"
-              placeholder="Tena Forge 업무 입력"
+              placeholder={workflow?.status === "needs_input" ? workflowBubble?.placeholder || "답변 입력" : "Tena Forge 업무 입력"}
               disabled={chatLoading}
             />
             <button

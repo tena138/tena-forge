@@ -167,17 +167,26 @@ export function CoAgentJellyOverlay() {
     }
   }
 
-  if (!layout) return null;
+  const resolvedLayout =
+    layout ||
+    ({
+      x: 96,
+      y: 44,
+      bubbleLeft: 16,
+      bubbleTop: 78,
+      bubbleWidth: 360,
+      mobile: false,
+    } satisfies OverlayLayout);
 
-  const bubbleStyle = layout.mobile
+  const bubbleStyle = resolvedLayout.mobile
     ? { left: 16, right: 16, bottom: 18 }
-    : { left: layout.bubbleLeft, top: layout.bubbleTop, width: layout.bubbleWidth };
+    : { left: resolvedLayout.bubbleLeft, top: resolvedLayout.bubbleTop, width: resolvedLayout.bubbleWidth };
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
       <div
         className="coagent-jelly-blob pointer-events-none fixed"
-        style={{ left: layout.x, top: layout.y }}
+        style={{ left: resolvedLayout.x, top: resolvedLayout.y }}
         aria-hidden="true"
       >
         <span className="coagent-jelly-core">
@@ -189,7 +198,7 @@ export function CoAgentJellyOverlay() {
         <div
           className={cn(
             "pointer-events-auto fixed max-h-[236px] overflow-hidden rounded-[14px] bg-white p-3 text-zinc-950 shadow-[0_18px_48px_rgba(24,24,27,0.18)] ring-1 ring-black/10",
-            layout.mobile && "max-h-[42vh]"
+            resolvedLayout.mobile && "max-h-[42vh]"
           )}
           style={bubbleStyle}
         >
