@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { HeaderAccountSummary } from "@/components/auth/header-account-summary";
-import { CoAgentJellyOverlay } from "@/components/co-agent/co-agent-jelly-overlay";
 import { CoAgentStatusBar } from "@/components/co-agent/co-agent-status-bar";
 import { FloatingNav } from "@/components/floating-nav";
 import { SiteLogo } from "@/components/site-logo";
@@ -177,8 +176,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <FloatingNav collapsed hoverExpand />
       </Suspense>
-      <CoAgentJellyOverlay />
-
       <main className="w-full px-4 py-6 transition-[padding] duration-200 lg:pl-24 lg:pr-8">
         <div className="mx-auto w-full max-w-[1440px]">{children}</div>
       </main>
