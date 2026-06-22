@@ -32,11 +32,18 @@ class CoAgentExamCreationTests(unittest.TestCase):
         self.owner_id = str(uuid.uuid4())
         self.request = make_request(self.owner_id)
 
-    def _add_problem(self, db, number: int, difficulty: str | None):
-        batch = db.query(Batch).first()
+    def _add_problem(
+        self,
+        db,
+        number: int,
+        difficulty: str | None,
+        source_label: str = "고3 수학",
+        batch_name: str = "고3 수학 모의고사",
+    ):
+        batch = db.query(Batch).filter(Batch.name == batch_name).first()
         if not batch:
             batch = Batch(
-                name="고3 수학 모의고사",
+                name=batch_name,
                 problem_pdf_filename="math.pdf",
                 subject_engine="math",
                 owner_id=self.owner_id,
@@ -45,15 +52,15 @@ class CoAgentExamCreationTests(unittest.TestCase):
             db.flush()
         problem = Problem(
             problem_number=number,
-            problem_text=f"고3 수학 {difficulty} problem {number}",
+            problem_text=f"{source_label} {difficulty} problem {number}",
             choices=[],
             has_visual=False,
             needs_review=False,
             source_batch_id=batch.id,
-            source_label="고3 수학",
+            source_label=source_label,
             owner_id=self.owner_id,
         )
-        problem.tags = Tag(subject="수학", unit=f"단원{number % 3 + 1}", difficulty=difficulty, source=f"고3 / {number}번")
+        problem.tags = Tag(subject="수학", unit=f"단원{number % 3 + 1}", difficulty=difficulty, source=f"{source_label} / {number}번")
         db.add(problem)
         db.flush()
         return problem
@@ -73,6 +80,13 @@ class CoAgentExamCreationTests(unittest.TestCase):
     def _seed_pool_with_sparse_difficulty(self, db):
         for number in range(1, 21):
             self._add_problem(db, number, "3점" if number <= 3 else None)
+        db.commit()
+
+    def _seed_sparse_grade_pool(self, db):
+        for number in range(1, 4):
+            self._add_problem(db, number, None, source_label="고3 수학", batch_name="고3 수학 모의고사")
+        for number in range(4, 24):
+            self._add_problem(db, number, None, source_label="수학 보관", batch_name="수학 보관")
         db.commit()
 
     def _mark_all_problems_used(self, db):
@@ -196,6 +210,25 @@ class CoAgentExamCreationTests(unittest.TestCase):
             self.assertEqual(response.workflow["bubble"]["variant"], "question")
             self.assertEqual(response.workflow["bubble"]["field"], "candidate_shortfall")
             self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 0)
+        finally:
+            db.close()
+
+    def test_chat_creates_from_subject_pool_when_grade_metadata_is_sparse(self):
+        db = self.Session()
+        try:
+            self._seed_sparse_grade_pool(db)
+
+            response = co_agent_chat(
+                CoAgentChatRequest(message="고3 수학 시험지 20문항 세움 양식으로 만들어줘"),
+                self.request,
+                db,
+            )
+
+            self.assertEqual(response.drafts[0]["status"], "created")
+            self.assertEqual(response.drafts[0]["selected_count"], 20)
+            self.assertTrue(response.drafts[0]["grade_filter_relaxed"])
+            self.assertEqual(response.workflow["status"], "created")
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
         finally:
             db.close()
 

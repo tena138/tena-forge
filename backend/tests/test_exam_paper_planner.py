@@ -22,11 +22,19 @@ class ExamPaperPlannerTests(unittest.TestCase):
         self.Session = sessionmaker(bind=engine)
         self.owner_id = str(uuid.uuid4())
 
-    def _add_problem(self, db, number: int, difficulty: str | None, unit: str):
-        batch = db.query(Batch).first()
+    def _add_problem(
+        self,
+        db,
+        number: int,
+        difficulty: str | None,
+        unit: str,
+        source_label: str = "고3 수학",
+        batch_name: str = "고3 수학 모의고사",
+    ):
+        batch = db.query(Batch).filter(Batch.name == batch_name).first()
         if not batch:
             batch = Batch(
-                name="고3 수학 모의고사",
+                name=batch_name,
                 problem_pdf_filename="math.pdf",
                 subject_engine="math",
                 owner_id=self.owner_id,
@@ -40,10 +48,10 @@ class ExamPaperPlannerTests(unittest.TestCase):
             has_visual=False,
             needs_review=False,
             source_batch_id=batch.id,
-            source_label="고3 수학",
+            source_label=source_label,
             owner_id=self.owner_id,
         )
-        problem.tags = Tag(subject="수학", unit=unit, difficulty=difficulty, source=f"고3 / {number}번")
+        problem.tags = Tag(subject="수학", unit=unit, difficulty=difficulty, source=f"{source_label} / {number}번")
         db.add(problem)
         db.flush()
         return problem
@@ -143,6 +151,29 @@ class ExamPaperPlannerTests(unittest.TestCase):
             self.assertEqual(draft["selection_strategy"], "random_without_difficulty")
             self.assertEqual(draft["difficulty_plan_mode"], "random_without_difficulty")
             self.assertTrue(any("요청대로" in warning for warning in draft["warnings"]))
+        finally:
+            db.close()
+
+    def test_sparse_grade_metadata_relaxes_to_visible_subject_pool(self):
+        db = self.Session()
+        try:
+            for number in range(1, 4):
+                self._add_problem(db, number, None, f"단원{number % 3 + 1}", source_label="고3 수학", batch_name="고3 수학 모의고사")
+            for number in range(4, 24):
+                self._add_problem(db, number, None, f"단원{number % 3 + 1}", source_label="수학 보관", batch_name="수학 보관")
+            db.commit()
+
+            draft = build_exam_paper_draft(
+                db,
+                message="고3 수학 시험지 20문항 세움 양식으로 만들어줘",
+                owner_ids={self.owner_id},
+            )
+
+            self.assertEqual(draft["status"], "draft")
+            self.assertEqual(draft["selected_count"], 20)
+            self.assertEqual(draft["candidate_shortfall"], 0)
+            self.assertTrue(draft["grade_filter_relaxed"])
+            self.assertTrue(any("수학 보관 범위" in warning for warning in draft["warnings"]))
         finally:
             db.close()
 

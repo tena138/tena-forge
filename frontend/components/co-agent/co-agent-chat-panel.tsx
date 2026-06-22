@@ -6,7 +6,7 @@ import { ArrowUpRight, Bot, Loader2, MessageSquareText, Send, Trash2, UserRound 
 
 import { Button } from "@/components/ui/button";
 import type { CoAgentChatMessage } from "@/lib/coAgent";
-import { sendCoAgentChat } from "@/lib/coAgent";
+import { collectVisibleCoAgentContext, sendCoAgentChat } from "@/lib/coAgent";
 import {
   areCoAgentChatMessagesEqual,
   CO_AGENT_CHAT_STORAGE_EVENT,
@@ -109,10 +109,12 @@ export function CoAgentChatPanel() {
     setLoading(true);
 
     try {
+      const visibleContext = collectVisibleCoAgentContext();
       const response = await sendCoAgentChat({
         message: content,
         messages: history,
-        current_path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+        current_path: visibleContext?.current_path || (typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`),
+        visible_context: visibleContext,
       });
       commitMessages([...messagesRef.current, { role: "assistant", content: response.answer }]);
       setActions((response.quick_actions || []).filter((action) => typeof action.href === "string"));

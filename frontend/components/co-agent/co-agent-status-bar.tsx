@@ -25,7 +25,7 @@ import {
 } from "@/lib/batch-progress";
 import type { BatchStatusResponse } from "@/lib/batch-progress";
 import type { CoAgentChatMessage } from "@/lib/coAgent";
-import { sendCoAgentChat } from "@/lib/coAgent";
+import { collectVisibleCoAgentContext, sendCoAgentChat } from "@/lib/coAgent";
 import {
   areCoAgentChatMessagesEqual,
   CO_AGENT_CHAT_STORAGE_EVENT,
@@ -234,10 +234,12 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     commitCoAgentWorkflow(buildRunningCoAgentWorkflow(undefined, workflow));
     setChatLoading(true);
     try {
+      const visibleContext = collectVisibleCoAgentContext();
       const response = await sendCoAgentChat({
         message: content,
         messages: history,
-        current_path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+        current_path: visibleContext?.current_path || (typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`),
+        visible_context: visibleContext,
       });
       setChatMessages((current) => [...current, { role: "assistant", content: response.answer }]);
       setChatActions((response.quick_actions || []).filter((action) => typeof action.href === "string"));

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight, Bot, Loader2, Send, X } from "lucide-react";
 
 import type { CoAgentChatMessage, CoAgentWorkflow } from "@/lib/coAgent";
-import { sendCoAgentChat } from "@/lib/coAgent";
+import { collectVisibleCoAgentContext, sendCoAgentChat } from "@/lib/coAgent";
 import {
   MAX_STORED_CHAT_MESSAGES,
   notifyCoAgentChatMessagesChanged,
@@ -151,10 +151,12 @@ export function CoAgentJellyOverlay() {
     commitCoAgentWorkflow(buildRunningCoAgentWorkflow("답변을 반영해 작업을 이어가고 있습니다.", workflow));
 
     try {
+      const visibleContext = collectVisibleCoAgentContext();
       const response = await sendCoAgentChat({
         message: content,
         messages: history,
-        current_path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+        current_path: visibleContext?.current_path || (typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`),
+        visible_context: visibleContext,
       });
       commitChatMessages([...readStoredCoAgentChatMessages(), { role: "assistant", content: response.answer }]);
       commitCoAgentWorkflow(workflowFromChatResponse(response));

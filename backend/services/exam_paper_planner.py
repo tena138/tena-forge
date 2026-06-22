@@ -47,6 +47,14 @@ def _subject_terms(engine: str) -> list[str]:
     return ["수학", "math"]
 
 
+def _subject_label(engine: str) -> str:
+    if engine == ENGLISH_ENGINE:
+        return "영어"
+    if engine == KOREAN_ENGINE:
+        return "국어"
+    return "수학"
+
+
 def _grade_keyword(message: str) -> str | None:
     match = re.search(r"고\s*([123])", str(message or ""))
     if match:
@@ -270,6 +278,17 @@ def _candidate_query(owner_ids: set[str], engine: str, grade_keyword: str | None
     )
 
 
+def _candidate_pool(db: Session, owner_ids: set[str], engine: str, grade_keyword: str | None, count: int) -> tuple[list[Problem], bool]:
+    candidates = db.scalars(_candidate_query(owner_ids, engine, grade_keyword)).unique().all()
+    if not grade_keyword or len(candidates) >= count:
+        return candidates, False
+
+    broader_candidates = db.scalars(_candidate_query(owner_ids, engine, None)).unique().all()
+    if len(broader_candidates) > len(candidates):
+        return broader_candidates, True
+    return candidates, False
+
+
 def _usage_history_counts(db: Session, owner_ids: set[str], problem_ids: list[Any]) -> dict[str, int]:
     if not problem_ids:
         return {}
@@ -422,7 +441,7 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
 
     slots = [] if random_without_difficulty_requested else _difficulty_slots(message, count, engine)
 
-    candidates = db.scalars(_candidate_query(owner_ids, engine, grade)).unique().all()
+    candidates, grade_filter_relaxed = _candidate_pool(db, owner_ids, engine, grade, count)
     usage_counts = _usage_history_counts(db, owner_ids, [problem.id for problem in candidates])
     unused_candidates = [problem for problem in candidates if usage_counts.get(str(problem.id), 0) == 0]
     used_candidates = [problem for problem in candidates if usage_counts.get(str(problem.id), 0) > 0]
@@ -462,7 +481,9 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         target_student = f"{student_match.group(1)} 학생"
 
     warnings: list[str] = []
-    if grade and not candidates:
+    if grade and grade_filter_relaxed:
+        warnings.append(f"{grade} 표기가 있는 문항만으로 부족해 화면에 보이는 {_subject_label(engine)} 보관 범위로 넓혀 구성했습니다.")
+    elif grade and not candidates:
         warnings.append(f"{grade} 조건에 맞는 문항 후보가 없습니다.")
     if missing:
         warnings.append("요청한 배점 구간을 채울 문항이 부족합니다.")
@@ -494,6 +515,7 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         "selection_strategy": selection_strategy,
         "ignored_difficulty_plan": ignored_difficulty_plan,
         "point_difficulty_metadata_count": point_metadata_count,
+        "grade_filter_relaxed": grade_filter_relaxed,
         "relaxed_difficulty_candidates": _relaxed_candidates(unused_candidates, selected),
         "used_exclusion": {
             "scope": "workspace_usage_history",

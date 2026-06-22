@@ -43,6 +43,14 @@ export type CoAgentChatMessage = {
   content: string;
 };
 
+export type CoAgentVisibleContext = {
+  source: "browser_dom";
+  current_path: string;
+  page_title: string;
+  visible_text: string;
+  active_element?: string;
+};
+
 export type CoAgentWorkflowStatus = "idle" | "running" | "needs_input" | "created" | "error";
 export type CoAgentWorkflowStepId = "command" | "archive" | "template" | "problem_set";
 
@@ -91,10 +99,40 @@ export function sendCoAgentChat(payload: {
   message: string;
   messages?: CoAgentChatMessage[];
   current_path?: string | null;
+  visible_context?: CoAgentVisibleContext | null;
 }) {
   return api<CoAgentChatResponse>("/api/co-agent/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function collectVisibleCoAgentContext(): CoAgentVisibleContext | null {
+  if (typeof window === "undefined") return null;
+
+  const root =
+    document.querySelector<HTMLElement>("[data-co-agent-visible-root]") ||
+    document.querySelector<HTMLElement>("main") ||
+    document.body;
+  const visibleText = (root?.innerText || document.body.innerText || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 8000);
+  const active = document.activeElement;
+  const activeElement =
+    active instanceof HTMLElement
+      ? [active.tagName.toLowerCase(), active.getAttribute("aria-label"), active.getAttribute("placeholder")]
+          .filter(Boolean)
+          .join(" ")
+          .slice(0, 200)
+      : "";
+
+  return {
+    source: "browser_dom",
+    current_path: `${window.location.pathname}${window.location.search}`,
+    page_title: document.title || "",
+    visible_text: visibleText,
+    active_element: activeElement || undefined,
+  };
 }
