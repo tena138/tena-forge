@@ -246,7 +246,11 @@ export function FloatingNav({
 
   if (mobile) {
     return (
-      <nav className="flex gap-1.5 overflow-x-auto bg-[#fbfbfa]/95 px-4 py-2 pr-8 [scrollbar-width:none] after:w-4 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden lg:hidden" aria-label="주요 메뉴">
+      <nav
+        className="flex gap-1.5 overflow-x-auto bg-[#fbfbfa]/95 px-4 py-2 pr-8 [scrollbar-width:none] after:w-4 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden lg:hidden"
+        data-coagent-sidebar-nav="mobile"
+        aria-label="주요 메뉴"
+      >
         {mobileItems.map((item, index) => {
           const active = isActive(pathname, item.href, searchParams);
           const coAgentAnchor = coAgentAnchorFor(item);
@@ -263,6 +267,7 @@ export function FloatingNav({
         "fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto bg-[#fbfbfa] py-4 shadow-none transition-[width,padding] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex",
         isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
       )}
+      data-coagent-sidebar-nav="desktop"
       onMouseEnter={() => hoverExpand && setAutoExpanded(true)}
       onMouseLeave={() => hoverExpand && setAutoExpanded(false)}
       onFocusCapture={() => hoverExpand && setAutoExpanded(true)}

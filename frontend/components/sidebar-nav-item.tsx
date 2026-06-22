@@ -34,11 +34,12 @@ export function SidebarNavItem({
     <Link
       href={href}
       data-coagent-anchor={coAgentAnchor}
+      data-coagent-sidebar-item={coAgentAnchor ? "" : undefined}
       title={collapsed && !mobile ? label : undefined}
       aria-label={collapsed && !mobile ? label : undefined}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative inline-flex items-center border text-sm font-medium transition-all duration-150",
+        "group relative inline-flex items-center overflow-visible border text-sm font-medium transition-all duration-150",
         mobile
           ? "h-9 shrink-0 gap-2.5 rounded-full border-black/10 bg-[#f3f3f3] px-3 text-zinc-700 hover:border-black/20 hover:bg-zinc-200 hover:text-zinc-950"
           : collapsed
@@ -53,20 +54,10 @@ export function SidebarNavItem({
       )}
     >
       {!mobile && !collapsed && <span className={cn("absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-transparent transition-colors", active && (activeIndicatorClassName || "bg-black"))} />}
-      <Icon className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-colors group-hover:text-zinc-950", coAgentActive && !active && "text-violet-700 group-hover:text-violet-800", active && (activeIconClassName || "text-white group-hover:text-white"))} />
+      <span data-coagent-icon-shell className="relative z-[1] grid h-5 w-5 shrink-0 place-items-center">
+        <Icon className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-colors group-hover:text-zinc-950", coAgentActive && !active && "text-violet-700 group-hover:text-violet-800", active && (activeIconClassName || "text-white group-hover:text-white"))} />
+      </span>
       {!collapsed && <span className="truncate">{label}</span>}
-      {coAgentActive ? (
-        <span
-          data-coagent-side-indicator
-          className={cn(
-            "pointer-events-none absolute grid place-items-center rounded-full bg-violet-600 shadow-[0_0_0_3px_rgba(124,58,237,0.16),0_0_18px_rgba(124,58,237,0.42)]",
-            mobile ? "-right-1 -top-1 h-4 w-4" : collapsed ? "-right-0.5 -top-0.5 h-4 w-4" : "right-2 top-1/2 h-4 w-4 -translate-y-1/2"
-          )}
-          aria-hidden="true"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-white" />
-        </span>
-      ) : null}
     </Link>
   );
 }

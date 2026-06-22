@@ -39,6 +39,7 @@ type OverlayLayout = {
   };
   labelLeft?: number;
   labelTop?: number;
+  targetKind?: "command" | "sidebar" | "inline";
 };
 
 function isVisibleElement(element: HTMLElement) {
@@ -119,9 +120,12 @@ export function CoAgentJellyOverlay() {
   const updateLayout = useCallback(() => {
     const targetElement = visibleTargetFor(workflow, activeStep);
     if (!targetElement) return;
-    const rect = targetElement.getBoundingClientRect();
+    const targetIsSidebar = Boolean(targetElement.closest("[data-coagent-sidebar-nav]"));
+    const sidebarIconElement = targetIsSidebar ? targetElement.querySelector<HTMLElement>("[data-coagent-icon-shell]") : null;
+    const rect = (sidebarIconElement || targetElement).getBoundingClientRect();
     const mobile = window.innerWidth < 1024;
-    const x = activeStep === "command" ? rect.left + Math.min(Math.max(rect.width * 0.18, 26), 54) : rect.left + rect.width / 2;
+    const targetKind = targetIsSidebar ? "sidebar" : activeStep === "command" ? "command" : "inline";
+    const x = targetKind === "command" ? rect.left + Math.min(Math.max(rect.width * 0.18, 26), 54) : rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
     const bubbleWidth = mobile ? Math.max(280, window.innerWidth - 32) : 360;
     const preferredLeft = rect.right + 14;
@@ -130,6 +134,7 @@ export function CoAgentJellyOverlay() {
     const bubbleTop = Math.min(Math.max(12, rect.top - 4), Math.max(12, window.innerHeight - 260));
     const labelLeft = Math.min(Math.max(12, rect.left), Math.max(12, window.innerWidth - 220));
     const labelTop = rect.top > 40 ? rect.top - 34 : rect.bottom + 8;
+    const sidebarSpotlightSize = Math.max(50, Math.min(58, Math.max(rect.width, rect.height) + 34));
     setLayout({
       x,
       y,
@@ -138,13 +143,14 @@ export function CoAgentJellyOverlay() {
       bubbleWidth,
       mobile,
       targetRect: {
-        left: Math.max(4, rect.left - 5),
-        top: Math.max(4, rect.top - 5),
-        width: rect.width + 10,
-        height: rect.height + 10,
+        left: targetIsSidebar ? rect.left + rect.width / 2 - sidebarSpotlightSize / 2 : Math.max(4, rect.left - 5),
+        top: targetIsSidebar ? rect.top + rect.height / 2 - sidebarSpotlightSize / 2 : Math.max(4, rect.top - 5),
+        width: targetIsSidebar ? sidebarSpotlightSize : rect.width + 10,
+        height: targetIsSidebar ? sidebarSpotlightSize : rect.height + 10,
       },
       labelLeft,
       labelTop,
+      targetKind,
     });
   }, [activeStep, workflow]);
 
@@ -233,22 +239,37 @@ export function CoAgentJellyOverlay() {
     : { left: resolvedLayout.bubbleLeft, top: resolvedLayout.bubbleTop, width: resolvedLayout.bubbleWidth };
   const bubbleTitle = bubble?.title?.trim() || "";
   const showBubbleTitle = Boolean(bubbleTitle && bubble?.variant !== "question");
+  const targetIsSidebar = resolvedLayout.targetKind === "sidebar";
+  const showTargetSpotlight = Boolean(resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle");
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
-      {resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle" ? (
+      {showTargetSpotlight && resolvedLayout.targetRect ? (
         <>
-          <div
-            className="pointer-events-none fixed rounded-[14px] border-2 border-violet-500/90 shadow-[0_0_0_5px_rgba(124,58,237,0.12),0_0_30px_rgba(124,58,237,0.32)]"
-            style={{
-              left: resolvedLayout.targetRect.left,
-              top: resolvedLayout.targetRect.top,
-              width: resolvedLayout.targetRect.width,
-              height: resolvedLayout.targetRect.height,
-            }}
-            aria-hidden="true"
-          />
-          {target ? (
+          {targetIsSidebar ? (
+            <div
+              className={cn("coagent-sidebar-jelly-ring", workflow?.status === "needs_input" && "coagent-sidebar-jelly-ring--asking")}
+              style={{
+                left: resolvedLayout.targetRect.left,
+                top: resolvedLayout.targetRect.top,
+                width: resolvedLayout.targetRect.width,
+                height: resolvedLayout.targetRect.height,
+              }}
+              aria-hidden="true"
+            />
+          ) : (
+            <div
+              className="pointer-events-none fixed rounded-[14px] border-2 border-violet-500/90 shadow-[0_0_0_5px_rgba(124,58,237,0.12),0_0_30px_rgba(124,58,237,0.32)]"
+              style={{
+                left: resolvedLayout.targetRect.left,
+                top: resolvedLayout.targetRect.top,
+                width: resolvedLayout.targetRect.width,
+                height: resolvedLayout.targetRect.height,
+              }}
+              aria-hidden="true"
+            />
+          )}
+          {target && !targetIsSidebar ? (
             <div
               className="pointer-events-none fixed max-w-[220px] truncate rounded-full bg-violet-700 px-3 py-1 text-[11px] font-black text-white shadow-[0_10px_26px_rgba(91,33,182,0.28)]"
               style={{
@@ -262,15 +283,17 @@ export function CoAgentJellyOverlay() {
         </>
       ) : null}
 
-      <div
-        className="coagent-jelly-blob pointer-events-none fixed"
-        style={{ left: resolvedLayout.x, top: resolvedLayout.y }}
-        aria-hidden="true"
-      >
-        <span className="coagent-jelly-core">
-          <Bot className="h-4 w-4 text-white" />
-        </span>
-      </div>
+      {!targetIsSidebar ? (
+        <div
+          className="coagent-jelly-blob pointer-events-none fixed"
+          style={{ left: resolvedLayout.x, top: resolvedLayout.y }}
+          aria-hidden="true"
+        >
+          <span className="coagent-jelly-core">
+            <Bot className="h-4 w-4 text-white" />
+          </span>
+        </div>
+      ) : null}
 
       {showBubble && bubble ? (
         <div
