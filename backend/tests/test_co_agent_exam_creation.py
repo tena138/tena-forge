@@ -14,7 +14,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from database import Base  # noqa: E402
-from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag, UsageLog  # noqa: E402
+from models import Batch, Problem, ProblemSet, ProblemSetItem, ProblemUsageHistory, Tag, UsageLog  # noqa: E402
 import routers.co_agent as co_agent_module  # noqa: E402
 from routers.co_agent import CoAgentChatMessage, CoAgentChatRequest, co_agent_chat  # noqa: E402
 from routers.problem_sets import list_problem_sets  # noqa: E402
@@ -75,6 +75,19 @@ class CoAgentExamCreationTests(unittest.TestCase):
             self._add_problem(db, number, "3점" if number <= 3 else None)
         db.commit()
 
+    def _mark_all_problems_used(self, db):
+        problems = db.scalars(select(Problem).where(Problem.owner_id == self.owner_id)).all()
+        for problem in problems:
+            db.add(
+                ProblemUsageHistory(
+                    owner_id=self.owner_id,
+                    problem_id=problem.id,
+                    usage_type="export",
+                    metadata_json={"test": True},
+                )
+            )
+        db.commit()
+
     def test_chat_creates_problem_set_when_exam_request_is_complete(self):
         db = self.Session()
         try:
@@ -133,6 +146,56 @@ class CoAgentExamCreationTests(unittest.TestCase):
 
             self.assertEqual(response.drafts[0]["status"], "created")
             self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
+        finally:
+            db.close()
+
+    def test_chat_finishes_problem_set_after_template_reply_with_used_candidates(self):
+        db = self.Session()
+        try:
+            self._seed_pool(db)
+            self._mark_all_problems_used(db)
+
+            response = co_agent_chat(
+                CoAgentChatRequest(
+                    message="세움 양식으로",
+                    messages=[
+                        CoAgentChatMessage(role="user", content="고3 수학 시험지 1-10까지는 3점, 11-20번까지는 4점으로 만들어줘"),
+                        CoAgentChatMessage(role="assistant", content="시험지 제작 전에 확인이 필요합니다. 어떤 시험지 템플릿 또는 양식을 사용할까요?"),
+                    ],
+                ),
+                self.request,
+                db,
+            )
+
+            self.assertEqual(response.drafts[0]["status"], "created")
+            self.assertEqual(response.drafts[0]["used_exclusion"]["reused_count"], 20)
+            self.assertEqual(response.workflow["status"], "created")
+            self.assertEqual(response.workflow["bubble"]["variant"], "success")
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 20)
+        finally:
+            db.close()
+
+    def test_chat_reports_needs_input_when_total_candidates_are_short(self):
+        db = self.Session()
+        try:
+            for number in range(1, 4):
+                self._add_problem(db, number, None)
+            db.commit()
+
+            response = co_agent_chat(
+                CoAgentChatRequest(message="고3 수학 시험지 20문항 세움 양식으로 만들어줘"),
+                self.request,
+                db,
+            )
+
+            self.assertEqual(response.drafts[0]["status"], "draft")
+            self.assertEqual(response.drafts[0]["selected_count"], 3)
+            self.assertEqual(response.drafts[0]["candidate_shortfall"], 17)
+            self.assertEqual(response.workflow["status"], "needs_input")
+            self.assertEqual(response.workflow["active_step"], "archive")
+            self.assertEqual(response.workflow["bubble"]["variant"], "question")
+            self.assertEqual(response.workflow["bubble"]["field"], "candidate_shortfall")
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 0)
         finally:
             db.close()
 

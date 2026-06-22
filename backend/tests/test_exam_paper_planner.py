@@ -93,7 +93,7 @@ class ExamPaperPlannerTests(unittest.TestCase):
         finally:
             db.close()
 
-    def test_used_problem_is_excluded_and_missing_slot_is_reported(self):
+    def test_used_problem_is_reused_when_needed_to_complete_distribution(self):
         db = self.Session()
         try:
             problems = self._seed_math_pool(db)
@@ -115,10 +115,12 @@ class ExamPaperPlannerTests(unittest.TestCase):
             )
 
             selected_ids = {problem["id"] for problem in draft["problems"]}
-            self.assertNotIn(str(used_hard_problem.id), selected_ids)
-            self.assertEqual(draft["used_exclusion"]["excluded_count"], 1)
-            self.assertEqual(len(draft["missing_difficulty_slots"]), 1)
-            self.assertEqual(draft["missing_difficulty_slots"][0]["difficulty"], "4점")
+            self.assertIn(str(used_hard_problem.id), selected_ids)
+            self.assertEqual(draft["selected_count"], 25)
+            self.assertEqual(draft["used_exclusion"]["excluded_count"], 0)
+            self.assertEqual(draft["used_exclusion"]["reused_count"], 1)
+            self.assertEqual(draft["missing_difficulty_slots"], [])
+            self.assertTrue(any("사용 이력이 있는 문항 1개" in warning for warning in draft["warnings"]))
         finally:
             db.close()
 

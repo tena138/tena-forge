@@ -729,6 +729,12 @@ def _draft_is_ready_to_create(draft: dict[str, Any]) -> bool:
     )
 
 
+def _draft_has_candidate_shortfall(draft: dict[str, Any]) -> bool:
+    requested = int(draft.get("requested_count") or 0)
+    selected = int(draft.get("selected_count") or 0)
+    return requested > 0 and selected < requested
+
+
 def _create_problem_set_from_exam_draft(
     db: Session,
     *,
@@ -813,7 +819,7 @@ def _exam_draft_quick_actions(draft: dict[str, Any]) -> list[dict[str, Any]]:
                 "problem_set_id": draft["problem_set"].get("id"),
             }
         ]
-    if draft.get("status") == "needs_input":
+    if draft.get("status") == "needs_input" or draft.get("missing_difficulty_slots") or _draft_has_candidate_shortfall(draft):
         return [
             {"id": "answer_exam_missing_info", "label": "정보 입력", "kind": "revise"},
             {"id": "revise_exam_draft", "label": "조건 수정", "kind": "revise"},
@@ -838,6 +844,8 @@ def _exam_workflow_active_step(draft: dict[str, Any]) -> str:
             return "archive"
     if draft.get("missing_difficulty_slots"):
         return "archive"
+    if _draft_has_candidate_shortfall(draft):
+        return "archive"
     return "problem_set"
 
 
@@ -847,6 +855,8 @@ def _exam_workflow_status(draft: dict[str, Any]) -> str:
     if draft.get("status") == "needs_input":
         return "needs_input"
     if draft.get("missing_difficulty_slots"):
+        return "needs_input"
+    if _draft_has_candidate_shortfall(draft):
         return "needs_input"
     return "running"
 
@@ -889,10 +899,21 @@ def _exam_workflow_bubble(draft: dict[str, Any], answer: str) -> dict[str, str]:
         question = first_missing.get("question") or answer
         title = "정보가 필요해요"
         placeholder = "답변 입력"
+        if not first_missing and _draft_has_candidate_shortfall(draft):
+            requested = int(draft.get("requested_count") or 0)
+            selected = int(draft.get("selected_count") or 0)
+            title = "문항이 더 필요해요"
+            question = f"요청한 {requested}문항 중 {selected}문항만 찾았습니다. 보관 문항을 더 추가하거나 조건을 넓혀주세요."
+            field = "candidate_shortfall"
+            placeholder = "예: 범위 넓혀줘 / 문항 더 추출할게"
+        elif not first_missing and draft.get("missing_difficulty_slots"):
+            title = "배점 후보가 부족해요"
+            field = "difficulty_shortfall"
+            placeholder = "예: 난이도 조건 없이 랜덤으로"
         if active_step == "template":
             title = "템플릿을 골라주세요"
             placeholder = "예: 세움 A4 2단"
-        elif active_step == "archive":
+        elif active_step == "archive" and field == "exam_info":
             title = "보관 조건을 확인할게요"
             placeholder = "예: 고3 수학 20문항"
         elif active_step == "problem_set":

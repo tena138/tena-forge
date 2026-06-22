@@ -339,6 +339,48 @@ def _select_balanced(candidates: list[Problem], slots: list[str]) -> tuple[list[
     return selected, missing
 
 
+def _fill_balanced_missing_slots(
+    candidates: list[Problem],
+    selected: list[Problem],
+    missing_slots: list[dict[str, Any]],
+) -> tuple[list[Problem], list[dict[str, Any]]]:
+    remaining_by_difficulty: dict[str, list[Problem]] = {label: [] for label in DIFFICULTY_LABELS}
+    selected_ids = {str(problem.id) for problem in selected}
+    unit_counts: Counter[str] = Counter(_problem_unit(problem) for problem in selected)
+    for problem in candidates:
+        difficulty = _problem_difficulty(problem)
+        if difficulty in remaining_by_difficulty and str(problem.id) not in selected_ids:
+            remaining_by_difficulty[difficulty].append(problem)
+
+    filled: list[Problem] = []
+    still_missing: list[dict[str, Any]] = []
+    for slot in missing_slots:
+        difficulty = str(slot.get("difficulty") or "")
+        pool = [
+            problem
+            for problem in remaining_by_difficulty.get(difficulty, [])
+            if str(problem.id) not in selected_ids
+        ]
+        if not pool:
+            still_missing.append(slot)
+            continue
+        pool.sort(
+            key=lambda problem: (
+                unit_counts[_problem_unit(problem)],
+                _problem_unit(problem),
+                problem.review_page_number or 10**9,
+                problem.problem_number,
+                str(problem.id),
+            )
+        )
+        picked = pool[0]
+        filled.append(picked)
+        selected_ids.add(str(picked.id))
+        unit_counts[_problem_unit(picked)] += 1
+
+    return filled, still_missing
+
+
 def _point_difficulty_metadata_count(candidates: list[Problem]) -> int:
     return sum(1 for problem in candidates if _problem_difficulty(problem))
 
@@ -383,6 +425,7 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
     candidates = db.scalars(_candidate_query(owner_ids, engine, grade)).unique().all()
     usage_counts = _usage_history_counts(db, owner_ids, [problem.id for problem in candidates])
     unused_candidates = [problem for problem in candidates if usage_counts.get(str(problem.id), 0) == 0]
+    used_candidates = [problem for problem in candidates if usage_counts.get(str(problem.id), 0) > 0]
     point_metadata_count = _point_difficulty_metadata_count(candidates)
     can_use_point_metadata = point_metadata_count >= count
     if missing_required and can_use_point_metadata:
@@ -392,17 +435,25 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
     ignored_difficulty_plan = False
     if random_without_difficulty_requested:
         selected = _select_without_difficulty(unused_candidates, count, message)
+        if len(selected) < count:
+            selected.extend(_select_without_difficulty(used_candidates, count - len(selected), f"{message}:reuse"))
         missing = []
         selection_strategy = "random_without_difficulty"
         ignored_difficulty_plan = True
     elif can_use_point_metadata:
         selected, missing = _select_balanced(unused_candidates, slots)
+        if missing:
+            filled, missing = _fill_balanced_missing_slots(used_candidates, selected, missing)
+            selected.extend(filled)
     else:
         selected = _select_without_difficulty(unused_candidates, count, message)
+        if len(selected) < count:
+            selected.extend(_select_without_difficulty(used_candidates, count - len(selected), f"{message}:reuse"))
         missing = []
         selection_strategy = "random_without_difficulty"
         ignored_difficulty_plan = True
 
+    reused_problem_count = sum(1 for problem in selected if usage_counts.get(str(problem.id), 0) > 0)
     difficulty_distribution = Counter(_problem_difficulty(problem) or "미지정" for problem in selected)
     unit_distribution = Counter(_problem_unit(problem) for problem in selected)
     target_student = None
@@ -419,6 +470,8 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         warnings.append("요청대로 배점/난이도 조건을 쓰지 않고 랜덤 추출했습니다.")
     elif ignored_difficulty_plan:
         warnings.append("배점 메타데이터가 없어 배점 조건을 제외하고 랜덤 추출했습니다.")
+    if reused_problem_count:
+        warnings.append(f"새 후보만으로 수량을 채우기 어려워 사용 이력이 있는 문항 {reused_problem_count}개를 포함했습니다.")
     if len(selected) < count:
         warnings.append(f"{count}문항 중 {len(selected)}문항만 초안에 배치했습니다.")
 
@@ -444,8 +497,10 @@ def build_exam_paper_draft(db: Session, *, message: str, owner_ids: set[str]) ->
         "relaxed_difficulty_candidates": _relaxed_candidates(unused_candidates, selected),
         "used_exclusion": {
             "scope": "workspace_usage_history",
-            "excluded_count": len(candidates) - len(unused_candidates),
+            "excluded_count": max(0, len(used_candidates) - reused_problem_count),
+            "reused_count": reused_problem_count,
         },
+        "candidate_shortfall": max(0, count - len(selected)),
         "problems": [_serialize_problem(problem, position=index + 1) for index, problem in enumerate(selected)],
         "warnings": warnings,
     }
@@ -470,7 +525,9 @@ def format_exam_paper_draft_answer(draft: dict[str, Any]) -> str:
     ]
     if draft.get("target_student_label"):
         parts.append(f"대상은 {draft['target_student_label']}으로 해석했습니다.")
-    if missing:
+    if selected < requested:
+        parts.append("요청 문항 수를 채우려면 보관 문항을 더 추가하거나 조건을 넓혀야 합니다.")
+    elif missing:
         parts.append("일부 배점 구간은 후보가 부족해서 아직 생성하지 않았습니다. 조건을 완화할지, 문항을 더 추출할지 알려주시면 제가 이어서 만들겠습니다.")
     else:
         parts.append("조건이 완성되면 제가 실제 문제세트까지 생성하고 확인 링크를 제시하겠습니다.")
