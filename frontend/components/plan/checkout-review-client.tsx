@@ -183,17 +183,17 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
 
             <div className="mt-8 grid gap-4">
               <ReviewBlock title="플랜">
-                <div className="flex items-center justify-between">
+                <div className="grid gap-1 sm:flex sm:items-center sm:justify-between">
                   <span>{PLANS[plan].name}</span>
-                  <span>7일 체험 후 월 자동결제</span>
+                  <span className="font-bold sm:text-right">7일 체험 후 월 자동결제</span>
                 </div>
               </ReviewBlock>
               <ReviewBlock title="선택 엔진">
                 <div className="grid gap-3">
                   {selectedSubjectEngines.map((engine) => (
-                    <div key={engine} className="flex items-center justify-between rounded-[12px] bg-slate-50 px-4 py-3">
+                    <div key={engine} className="grid gap-1 rounded-[12px] bg-slate-50 px-4 py-3 sm:flex sm:items-center sm:justify-between">
                       <span className="font-bold text-slate-500">{subjectEngineLabel(engine)}</span>
-                      <span className="font-black">{engine === "math" ? "수학 추출" : `${subjectEngineLabel(engine)} 추출`}</span>
+                      <span className="font-black sm:text-right">{engine === "math" ? "수학 추출" : `${subjectEngineLabel(engine)} 추출`}</span>
                     </div>
                   ))}
                 </div>
@@ -207,9 +207,9 @@ export function CheckoutReviewClient({ plan, billingCycle, packages, engines }: 
                     const option = selectedPackages[group];
                     if (!option) return null;
                     return (
-                      <div key={group} className="flex items-center justify-between rounded-[12px] bg-slate-50 px-4 py-3">
+                      <div key={group} className="grid gap-1 rounded-[12px] bg-slate-50 px-4 py-3 sm:flex sm:items-center sm:justify-between">
                         <span className="font-bold text-slate-500">{PACKAGE_LABELS[group]}</span>
-                        <span className="font-black">{option.name} · {option.monthlyPriceDelta ? `+${formatKRW(option.monthlyPriceDelta)} / 월` : "포함"}</span>
+                        <span className="font-black sm:text-right">{option.name} · {option.monthlyPriceDelta ? `+${formatKRW(option.monthlyPriceDelta)} / 월` : "포함"}</span>
                       </div>
                     );
                   })}

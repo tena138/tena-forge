@@ -279,13 +279,13 @@ export function HeaderAccountSummary() {
         </div>
       )}
 
-      <DialogContent className="max-w-lg border-0 bg-white p-0">
-        <form onSubmit={saveProfile}>
-          <div className="bg-zinc-100 px-5 py-4">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-hidden border-0 bg-white p-0">
+        <form onSubmit={saveProfile} className="flex max-h-[calc(100dvh-2rem)] flex-col">
+          <div className="shrink-0 bg-zinc-100 px-5 py-4">
             <h2 className="text-lg font-bold">프로필</h2>
           </div>
 
-          <div className="space-y-4 px-5 py-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
             <div className="rounded-lg bg-zinc-100 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -358,7 +358,7 @@ export function HeaderAccountSummary() {
             {error && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{error}</p>}
           </div>
 
-          <div className="flex justify-end gap-2 bg-zinc-50 px-5 py-4">
+          <div className="flex shrink-0 justify-end gap-2 bg-zinc-50 px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>
               취소
             </Button>
