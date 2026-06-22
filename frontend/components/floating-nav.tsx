@@ -27,6 +27,13 @@ import {
 import { SidebarNavItem } from "@/components/sidebar-nav-item";
 import { getDashboardAnnouncementAccess } from "@/lib/api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
+import type { CoAgentWorkflow } from "@/lib/coAgent";
+import {
+  areCoAgentWorkflowsEqual,
+  CO_AGENT_WORKFLOW_EVENT,
+  CO_AGENT_WORKFLOW_STORAGE_KEY,
+  readStoredCoAgentWorkflow,
+} from "@/lib/coAgentWorkflow";
 import { cn } from "@/lib/utils";
 
 type AccountType = "academy" | "student";
@@ -157,7 +164,16 @@ export function FloatingNav({
   const [canManageAnnouncements, setCanManageAnnouncements] = useState(false);
   const [accountType, setAccountType] = useState<AccountType>("academy");
   const [autoExpanded, setAutoExpanded] = useState(false);
+  const [coAgentWorkflow, setCoAgentWorkflow] = useState<CoAgentWorkflow | null>(() => readStoredCoAgentWorkflow());
   const isCollapsed = collapsed && !(hoverExpand && autoExpanded);
+  const coAgentActiveAnchor =
+    coAgentWorkflow &&
+    coAgentWorkflow.kind !== "generic" &&
+    coAgentWorkflow.active_step !== "command" &&
+    coAgentWorkflow.status !== "idle" &&
+    coAgentWorkflow.status !== "error"
+      ? coAgentWorkflow.active_step
+      : null;
 
   const visibleSections = useMemo(
     () =>
@@ -207,12 +223,34 @@ export function FloatingNav({
     };
   }, []);
 
+  useEffect(() => {
+    function syncCoAgentWorkflow() {
+      const storedWorkflow = readStoredCoAgentWorkflow();
+      setCoAgentWorkflow((current) => (areCoAgentWorkflowsEqual(current, storedWorkflow) ? current : storedWorkflow));
+    }
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key === CO_AGENT_WORKFLOW_STORAGE_KEY) syncCoAgentWorkflow();
+    }
+
+    syncCoAgentWorkflow();
+    window.addEventListener(CO_AGENT_WORKFLOW_EVENT, syncCoAgentWorkflow);
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", syncCoAgentWorkflow);
+    return () => {
+      window.removeEventListener(CO_AGENT_WORKFLOW_EVENT, syncCoAgentWorkflow);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", syncCoAgentWorkflow);
+    };
+  }, []);
+
   if (mobile) {
     return (
       <nav className="flex gap-1.5 overflow-x-auto bg-[#fbfbfa]/95 px-4 py-2 pr-8 [scrollbar-width:none] after:w-4 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden lg:hidden" aria-label="주요 메뉴">
         {mobileItems.map((item, index) => {
           const active = isActive(pathname, item.href, searchParams);
-          return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} coAgentAnchor={coAgentAnchorFor(item)} mobile />;
+          const coAgentAnchor = coAgentAnchorFor(item);
+          return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={item.activeItem} activeIndicatorClassName={item.activeIndicator} activeIconClassName={item.activeIcon} coAgentAnchor={coAgentAnchor} coAgentActive={coAgentActiveAnchor === coAgentAnchor} mobile />;
         })}
       </nav>
     );
@@ -252,7 +290,8 @@ export function FloatingNav({
             <div className="space-y-0.5 p-1">
               {section.items.map((item, index) => {
                 const active = isActive(pathname, item.href, searchParams);
-                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={section.activeItem} activeIndicatorClassName={section.activeIndicator} activeIconClassName={section.activeIcon} coAgentAnchor={coAgentAnchorFor(item)} collapsed={isCollapsed} />;
+                const coAgentAnchor = coAgentAnchorFor(item);
+                return <SidebarNavItem key={`${item.href}-${index}`} href={item.href} label={item.label} icon={item.icon} active={active} activeClassName={section.activeItem} activeIndicatorClassName={section.activeIndicator} activeIconClassName={section.activeIcon} coAgentAnchor={coAgentAnchor} coAgentActive={coAgentActiveAnchor === coAgentAnchor} collapsed={isCollapsed} />;
               })}
             </div>
           </section>
