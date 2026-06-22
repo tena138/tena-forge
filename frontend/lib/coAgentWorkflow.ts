@@ -66,6 +66,12 @@ export function buildRunningCoAgentWorkflow(
         message,
         variant: "status",
       },
+      target: currentWorkflow.target || {
+        step: currentWorkflow.active_step,
+        label: "현재 단계에서 작업 중",
+        action: "click",
+        selector: `[data-coagent-anchor="${currentWorkflow.active_step}"]`,
+      },
     };
   }
 
@@ -79,6 +85,12 @@ export function buildRunningCoAgentWorkflow(
       title: "작업 중",
       message,
       variant: "status",
+    },
+    target: {
+      step: "command",
+      label: "상단 명령창 확인 중",
+      action: "read",
+      selector: '[data-coagent-anchor="command"]',
     },
   };
 }
@@ -94,6 +106,12 @@ export function buildErrorCoAgentWorkflow(message: string): CoAgentWorkflow {
       title: "연결 확인 필요",
       message,
       variant: "error",
+    },
+    target: {
+      step: "command",
+      label: "상단 명령창",
+      action: "wait",
+      selector: '[data-coagent-anchor="command"]',
     },
   };
 }
@@ -111,6 +129,13 @@ export function workflowFromChatResponse(response: CoAgentChatResponse): CoAgent
       title: "코파일럿 답변",
       message: response.answer,
       variant: "status",
+      href: typeof primaryAction?.href === "string" ? primaryAction.href : undefined,
+    },
+    target: {
+      step: "command",
+      label: "상단 명령창",
+      action: "read",
+      selector: '[data-coagent-anchor="command"]',
       href: typeof primaryAction?.href === "string" ? primaryAction.href : undefined,
     },
   };

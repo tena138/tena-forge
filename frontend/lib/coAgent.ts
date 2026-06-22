@@ -70,6 +70,14 @@ export type CoAgentWorkflowBubble = {
   href?: string;
 };
 
+export type CoAgentWorkflowTarget = {
+  step: CoAgentWorkflowStepId;
+  label: string;
+  action: "click" | "wait" | "read" | "created" | string;
+  selector?: string;
+  href?: string;
+};
+
 export type CoAgentWorkflow = {
   id: string;
   kind: "exam_paper_creation" | "generic" | string;
@@ -77,6 +85,7 @@ export type CoAgentWorkflow = {
   active_step: CoAgentWorkflowStepId;
   steps: CoAgentWorkflowStep[];
   bubble?: CoAgentWorkflowBubble | null;
+  target?: CoAgentWorkflowTarget | null;
 };
 
 export type CoAgentChatResponse = {

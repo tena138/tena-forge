@@ -31,27 +31,57 @@ type OverlayLayout = {
   bubbleTop: number;
   bubbleWidth: number;
   mobile: boolean;
+  targetRect?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  labelLeft?: number;
+  labelTop?: number;
 };
+
+function isVisibleElement(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > 0 &&
+    rect.right > 0 &&
+    rect.top < window.innerHeight &&
+    rect.left < window.innerWidth &&
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    style.opacity !== "0"
+  );
+}
 
 function visibleAnchorFor(step: string) {
   const anchors = Array.from(document.querySelectorAll<HTMLElement>(`[data-coagent-anchor="${step}"]`));
-  return (
-    anchors.find((element) => {
-      const rect = element.getBoundingClientRect();
-      const style = window.getComputedStyle(element);
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        rect.bottom > 0 &&
-        rect.right > 0 &&
-        rect.top < window.innerHeight &&
-        rect.left < window.innerWidth &&
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        style.opacity !== "0"
-      );
-    }) || null
-  );
+  return anchors.find(isVisibleElement) || null;
+}
+
+function visibleTargetFor(workflow: CoAgentWorkflow | null, activeStep: string) {
+  const selector = workflow?.target?.selector?.trim();
+  if (selector) {
+    try {
+      const targets = Array.from(document.querySelectorAll<HTMLElement>(selector));
+      const target = targets.find(isVisibleElement);
+      if (target) return target;
+    } catch {
+      // Ignore malformed selectors from stored transient workflow state.
+    }
+  }
+  return visibleAnchorFor(workflow?.target?.step || activeStep) || visibleAnchorFor(activeStep) || visibleAnchorFor("command");
+}
+
+function targetActionLabel(action?: string) {
+  if (action === "wait") return "대기 중";
+  if (action === "click") return "클릭 위치";
+  if (action === "created") return "완료";
+  if (action === "read") return "읽는 중";
+  return "진행 중";
 }
 
 function chatErrorMessage(error: unknown) {
@@ -76,6 +106,7 @@ export function CoAgentJellyOverlay() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeStep = workflow?.active_step || "command";
+  const target = workflow?.target || null;
   const bubble = workflow?.bubble || null;
   const showBubble = Boolean(bubble && workflow?.status && workflow.status !== "idle");
   const acceptsInput = workflow?.status === "needs_input" && bubble?.variant === "question";
@@ -86,9 +117,9 @@ export function CoAgentJellyOverlay() {
   }, []);
 
   const updateLayout = useCallback(() => {
-    const anchor = visibleAnchorFor(activeStep) || visibleAnchorFor("command");
-    if (!anchor) return;
-    const rect = anchor.getBoundingClientRect();
+    const targetElement = visibleTargetFor(workflow, activeStep);
+    if (!targetElement) return;
+    const rect = targetElement.getBoundingClientRect();
     const mobile = window.innerWidth < 1024;
     const x = activeStep === "command" ? rect.left + Math.min(Math.max(rect.width * 0.18, 26), 54) : rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
@@ -97,8 +128,25 @@ export function CoAgentJellyOverlay() {
     const fallbackLeft = rect.left - bubbleWidth - 14;
     const bubbleLeft = preferredLeft + bubbleWidth + 16 <= window.innerWidth ? preferredLeft : Math.max(16, fallbackLeft);
     const bubbleTop = Math.min(Math.max(12, rect.top - 4), Math.max(12, window.innerHeight - 260));
-    setLayout({ x, y, bubbleLeft, bubbleTop, bubbleWidth, mobile });
-  }, [activeStep]);
+    const labelLeft = Math.min(Math.max(12, rect.left), Math.max(12, window.innerWidth - 220));
+    const labelTop = rect.top > 40 ? rect.top - 34 : rect.bottom + 8;
+    setLayout({
+      x,
+      y,
+      bubbleLeft,
+      bubbleTop,
+      bubbleWidth,
+      mobile,
+      targetRect: {
+        left: Math.max(4, rect.left - 5),
+        top: Math.max(4, rect.top - 5),
+        width: rect.width + 10,
+        height: rect.height + 10,
+      },
+      labelLeft,
+      labelTop,
+    });
+  }, [activeStep, workflow]);
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
@@ -188,6 +236,32 @@ export function CoAgentJellyOverlay() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
+      {resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle" ? (
+        <>
+          <div
+            className="pointer-events-none fixed rounded-[14px] border-2 border-violet-500/90 shadow-[0_0_0_5px_rgba(124,58,237,0.12),0_0_30px_rgba(124,58,237,0.32)]"
+            style={{
+              left: resolvedLayout.targetRect.left,
+              top: resolvedLayout.targetRect.top,
+              width: resolvedLayout.targetRect.width,
+              height: resolvedLayout.targetRect.height,
+            }}
+            aria-hidden="true"
+          />
+          {target ? (
+            <div
+              className="pointer-events-none fixed max-w-[220px] truncate rounded-full bg-violet-700 px-3 py-1 text-[11px] font-black text-white shadow-[0_10px_26px_rgba(91,33,182,0.28)]"
+              style={{
+                left: resolvedLayout.labelLeft || resolvedLayout.targetRect.left,
+                top: resolvedLayout.labelTop || Math.max(8, resolvedLayout.targetRect.top - 34),
+              }}
+            >
+              {targetActionLabel(target.action)} · {target.label}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
       <div
         className="coagent-jelly-blob pointer-events-none fixed"
         style={{ left: resolvedLayout.x, top: resolvedLayout.y }}

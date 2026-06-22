@@ -976,6 +976,54 @@ def _exam_workflow_bubble(draft: dict[str, Any], answer: str) -> dict[str, str]:
     }
 
 
+def _exam_workflow_target(active_step: str, status: str, draft: dict[str, Any]) -> dict[str, str]:
+    selectors = {
+        "archive": '[data-coagent-anchor="archive"]',
+        "template": '[data-coagent-anchor="template"]',
+        "problem_set": '[data-coagent-anchor="problem_set"]',
+        "command": '[data-coagent-anchor="command"]',
+    }
+    labels = {
+        "archive": "보관 버튼",
+        "template": "템플릿 버튼",
+        "problem_set": "문항 세트 버튼",
+        "command": "상단 명령창",
+    }
+    if status == "needs_input":
+        action = "wait"
+        if active_step == "template":
+            label = "템플릿 선택 답변 대기"
+        elif active_step == "archive":
+            label = "보관 조건 답변 대기"
+        elif active_step == "problem_set":
+            label = "문항 세트 정보 답변 대기"
+        else:
+            label = "사용자 답변 대기"
+    elif status == "created":
+        action = "created"
+        label = "새 문항 세트 확인"
+    elif status == "running":
+        action = "click"
+        label = f"{labels.get(active_step, '화면 항목')} 확인 중"
+    else:
+        action = "read"
+        label = labels.get(active_step, "화면 항목")
+
+    hrefs = {
+        "archive": "/problems",
+        "template": "/templates/mine",
+        "problem_set": draft.get("problem_set", {}).get("href") or "/problem-sets",
+        "command": "",
+    }
+    return {
+        "step": active_step,
+        "label": label,
+        "action": action,
+        "selector": selectors.get(active_step, selectors["command"]),
+        "href": hrefs.get(active_step, ""),
+    }
+
+
 def _exam_workflow(draft: dict[str, Any], answer: str) -> dict[str, Any]:
     status = _exam_workflow_status(draft)
     active_step = _exam_workflow_active_step(draft)
@@ -986,6 +1034,7 @@ def _exam_workflow(draft: dict[str, Any], answer: str) -> dict[str, Any]:
         "active_step": active_step,
         "steps": _exam_workflow_steps(active_step, status, draft),
         "bubble": _exam_workflow_bubble(draft, answer),
+        "target": _exam_workflow_target(active_step, status, draft),
     }
 
 
