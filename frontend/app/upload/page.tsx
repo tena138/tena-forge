@@ -1307,7 +1307,7 @@ export default function UploadPage() {
     [archiveBatches, subjectEngine],
   );
   const enabledSubjectEngines = useMemo(
-    () => usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan.enabled_subject_engines || ["math"],
+    () => usageSummary?.subscription?.enabled_subject_engines || usageSummary?.plan?.enabled_subject_engines || ["math"],
     [usageSummary],
   );
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
