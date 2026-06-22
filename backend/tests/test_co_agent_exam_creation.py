@@ -218,6 +218,32 @@ class CoAgentExamCreationTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_chat_resets_exam_context_after_new_exam_request(self):
+        db = self.Session()
+        try:
+            self._seed_pool(db)
+
+            response = co_agent_chat(
+                CoAgentChatRequest(
+                    message="수학",
+                    messages=[
+                        CoAgentChatMessage(role="user", content="고3 수학 시험지 1-10까지는 3점, 11-20번까지는 4점으로 기본 양식으로 만들어줘"),
+                        CoAgentChatMessage(role="assistant", content="문항 세트에 시험지를 생성했습니다. /problem-sets/old"),
+                        CoAgentChatMessage(role="user", content="시험지 만들어줘"),
+                        CoAgentChatMessage(role="assistant", content="시험지 제작 전에 확인이 필요합니다. 어떤 과목 시험지인가요? 수학, 국어, 영어 중에서 알려주세요."),
+                    ],
+                ),
+                self.request,
+                db,
+            )
+
+            self.assertEqual(response.drafts[0]["status"], "needs_input")
+            self.assertEqual(response.drafts[0]["subject_engine"], "math")
+            self.assertEqual(response.drafts[0]["selected_count"], 0)
+            self.assertEqual(db.scalar(select(func.count(ProblemSetItem.id))), 0)
+        finally:
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

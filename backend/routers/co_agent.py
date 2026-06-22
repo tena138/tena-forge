@@ -494,10 +494,19 @@ def _co_agent_exam_context_message(message: str, history: list[CoAgentChatMessag
     if looks_like_exam_paper_request(message):
         return message
 
+    recent_history = history[-12:]
+    latest_request_index = None
+    for index, item in enumerate(recent_history):
+        content = item.content.strip()
+        if item.role == "user" and looks_like_exam_paper_request(content):
+            latest_request_index = index
+    if latest_request_index is not None:
+        recent_history = recent_history[latest_request_index:]
+
     saw_exam_thread = False
     pending_fields: set[str] = set()
     parts: list[str] = []
-    for item in history[-12:]:
+    for item in recent_history:
         content = item.content.strip()
         if not content:
             continue
