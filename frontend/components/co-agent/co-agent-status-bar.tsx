@@ -205,7 +205,6 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const shouldAnimateAssistantMessage = chatOpen && !chatLoading && Boolean(latestAssistantMessage) && workflow?.status === "created";
   const typedReportMessage = useTypewriterText(statusMessage, assistantTypingKey, !prefersReducedMotion && shouldAnimateAssistantMessage);
   const primaryChatAction = chatActions.find((action) => action.href);
-  const awaitingFollowUp = workflow?.status === "needs_input";
 
   const loadLiveInteractions = useCallback(async () => {
     const activeWorkspaceId = getActiveWorkspaceId();
@@ -456,25 +455,16 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     return () => window.clearTimeout(timer);
   }, [chatError, chatLoading, chatMessages.length, chatOpen]);
 
-  const expandedDesktop = chatOpen && !compact && !awaitingFollowUp;
-
   return (
     <div
       data-coagent-anchor="command"
-      className={cn("relative min-w-0", compact ? "w-full" : chatOpen && !awaitingFollowUp ? "w-full max-w-none" : "w-full max-w-[760px]")}
+      className={cn("relative min-w-0", compact ? "w-full" : "w-full max-w-[760px]")}
     >
       <div
         className={cn(
           "relative isolate min-w-0 overflow-hidden rounded-[14px] bg-white/82 px-3 text-zinc-950 transition-all",
-          chatOpen ? "min-h-[58px] py-2" : "min-h-[52px] py-2.5",
-          expandedDesktop
-              ? cn(
-                  "grid items-center gap-4",
-                  primaryChatAction?.href
-                    ? "grid-cols-[minmax(18rem,1fr)_auto_minmax(18rem,28rem)]"
-                    : "grid-cols-[minmax(18rem,1fr)_minmax(18rem,30rem)]"
-                )
-              : "flex items-center gap-3"
+          "min-h-[52px] py-2.5",
+          "flex items-center gap-3"
         )}
       >
         <button
@@ -482,12 +472,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           data-coagent-status-message
           className={cn(
             "flex min-w-0 max-w-full overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            expandedDesktop
-              ? "h-11 w-full items-center bg-zinc-50/80 py-1 pr-4"
-              : chatOpen
-                ? "min-h-10 flex-1 items-center py-1 pr-2"
-                : "flex-1 items-center py-1",
-            compact && chatOpen && "max-w-[46%]"
+            "flex-1 items-center py-1"
           )}
           onClick={() => setChatOpen(true)}
           title={statusMessage}
@@ -497,7 +482,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             <span
               className={cn(
                 "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
-                expandedDesktop ? "truncate whitespace-nowrap text-[15px] leading-[1.35]" : "truncate whitespace-nowrap text-[16px] leading-[1.45]"
+                "truncate whitespace-nowrap text-[16px] leading-[1.45]"
               )}
             >
               {typedReportMessage || "\u00A0"}
@@ -525,41 +510,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           </button>
         ) : null}
 
-        {chatOpen ? (
-          <form
-            data-coagent-chat-form
-            className={cn(
-              "relative z-10 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-zinc-100 px-2 shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-              compact ? "min-w-0 flex-1" : expandedDesktop ? "w-full" : "w-[clamp(18rem,34vw,32rem)] shrink-0"
-            )}
-            onSubmit={submitChat}
-          >
-            <input
-              ref={inputRef}
-              value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
-              className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500"
-              placeholder={workflow?.status === "needs_input" ? workflowBubble?.placeholder || "답변 입력" : "Tena Forge 업무 입력"}
-              disabled={chatLoading}
-            />
-            <button
-              type="submit"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
-              disabled={chatLoading || !chatInput.trim()}
-              aria-label="AI에게 보내기"
-            >
-              {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
-            <button
-              type="button"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-zinc-500 transition hover:bg-zinc-200 hover:text-black"
-              onClick={() => setChatOpen(false)}
-              aria-label="입력 닫기"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </form>
-        ) : primaryLiveEvent ? (
+        {!chatOpen && primaryLiveEvent ? (
           <button
             type="button"
             onClick={() => router.push(primaryLiveEvent.live_href)}
@@ -573,6 +524,39 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           </button>
         ) : null}
       </div>
+
+      {chatOpen ? (
+        <form
+          data-coagent-chat-form
+          className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-white px-2 shadow-[0_14px_34px_rgba(0,0,0,0.14)] ring-1 ring-black/10"
+          onSubmit={submitChat}
+        >
+          <input
+            ref={inputRef}
+            value={chatInput}
+            onChange={(event) => setChatInput(event.target.value)}
+            className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500"
+            placeholder={workflow?.status === "needs_input" ? workflowBubble?.placeholder || "답변 입력" : "Tena Forge 업무 입력"}
+            disabled={chatLoading}
+          />
+          <button
+            type="submit"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+            disabled={chatLoading || !chatInput.trim()}
+            aria-label="AI에게 보내기"
+          >
+            {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-zinc-500 transition hover:bg-zinc-200 hover:text-black"
+            onClick={() => setChatOpen(false)}
+            aria-label="입력 닫기"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </form>
+      ) : null}
     </div>
   );
 }
