@@ -148,7 +148,7 @@ export function CoAgentJellyOverlay() {
     commitChatMessages(nextMessages);
     setInput("");
     setLoading(true);
-    commitCoAgentWorkflow(buildRunningCoAgentWorkflow("답변을 반영해 작업을 이어가고 있습니다."));
+    commitCoAgentWorkflow(buildRunningCoAgentWorkflow("답변을 반영해 작업을 이어가고 있습니다.", workflow));
 
     try {
       const response = await sendCoAgentChat({

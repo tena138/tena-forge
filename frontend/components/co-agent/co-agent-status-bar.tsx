@@ -232,7 +232,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     setChatActions([]);
     setChatInput("");
     setChatError("");
-    commitCoAgentWorkflow(buildRunningCoAgentWorkflow());
+    commitCoAgentWorkflow(buildRunningCoAgentWorkflow(undefined, workflow));
     setChatLoading(true);
     try {
       const response = await sendCoAgentChat({

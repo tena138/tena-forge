@@ -11,7 +11,7 @@ export function readStoredCoAgentWorkflow(): CoAgentWorkflow | null {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
     if (typeof parsed.id !== "string" || typeof parsed.status !== "string" || typeof parsed.active_step !== "string") return null;
-    return normalizeCoAgentWorkflow(parsed as CoAgentWorkflow);
+    return parsed as CoAgentWorkflow;
   } catch {
     return null;
   }
@@ -39,16 +39,36 @@ export function areCoAgentWorkflowsEqual(left: CoAgentWorkflow | null, right: Co
   return JSON.stringify(left || null) === JSON.stringify(right || null);
 }
 
-function normalizeCoAgentWorkflow(workflow: CoAgentWorkflow | null): CoAgentWorkflow | null {
-  if (!workflow || workflow.status !== "needs_input") return workflow;
-  return {
-    ...workflow,
-    active_step: "command",
-    steps: (workflow.steps || []).map((step) => ({ ...step, status: "waiting" })),
-  };
+function shouldKeepCurrentWorkflowPosition(workflow: CoAgentWorkflow | null | undefined) {
+  return Boolean(
+    workflow &&
+      workflow.kind !== "generic" &&
+      workflow.active_step &&
+      workflow.active_step !== "command" &&
+      (workflow.status === "needs_input" || workflow.status === "running")
+  );
 }
 
-export function buildRunningCoAgentWorkflow(message = "코파일럿이 요청을 확인하고 있습니다."): CoAgentWorkflow {
+export function buildRunningCoAgentWorkflow(
+  message = "코파일럿이 요청을 확인하고 있습니다.",
+  currentWorkflow?: CoAgentWorkflow | null
+): CoAgentWorkflow {
+  if (shouldKeepCurrentWorkflowPosition(currentWorkflow) && currentWorkflow) {
+    return {
+      ...currentWorkflow,
+      status: "running",
+      steps: (currentWorkflow.steps || []).map((step) => ({
+        ...step,
+        status: step.id === currentWorkflow.active_step ? "active" : step.status === "done" ? "done" : "waiting",
+      })),
+      bubble: {
+        title: "작업 중",
+        message,
+        variant: "status",
+      },
+    };
+  }
+
   return {
     id: "generic",
     kind: "generic",
@@ -79,9 +99,9 @@ export function buildErrorCoAgentWorkflow(message: string): CoAgentWorkflow {
 }
 
 export function workflowFromChatResponse(response: CoAgentChatResponse): CoAgentWorkflow {
-  if (response.workflow) return normalizeCoAgentWorkflow(response.workflow) || response.workflow;
+  if (response.workflow) return response.workflow;
   const primaryAction = (response.quick_actions || []).find((action) => typeof action.href === "string");
-  return normalizeCoAgentWorkflow({
+  return {
     id: "generic",
     kind: "generic",
     status: "created",
@@ -93,10 +113,10 @@ export function workflowFromChatResponse(response: CoAgentChatResponse): CoAgent
       variant: "status",
       href: typeof primaryAction?.href === "string" ? primaryAction.href : undefined,
     },
-  }) as CoAgentWorkflow;
+  };
 }
 
 export function commitCoAgentWorkflow(workflow: CoAgentWorkflow | null) {
-  writeStoredCoAgentWorkflow(normalizeCoAgentWorkflow(workflow));
+  writeStoredCoAgentWorkflow(workflow);
   notifyCoAgentWorkflowChanged();
 }

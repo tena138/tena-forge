@@ -16,7 +16,13 @@ import {
   readStoredCoAgentChatMessages,
   writeStoredCoAgentChatMessages,
 } from "@/lib/coAgentChatHistory";
-import { buildErrorCoAgentWorkflow, buildRunningCoAgentWorkflow, commitCoAgentWorkflow, workflowFromChatResponse } from "@/lib/coAgentWorkflow";
+import {
+  buildErrorCoAgentWorkflow,
+  buildRunningCoAgentWorkflow,
+  commitCoAgentWorkflow,
+  readStoredCoAgentWorkflow,
+  workflowFromChatResponse,
+} from "@/lib/coAgentWorkflow";
 import { cn } from "@/lib/utils";
 
 type CoAgentChatAction = {
@@ -99,7 +105,7 @@ export function CoAgentChatPanel() {
     setInput("");
     setError("");
     setActions([]);
-    commitCoAgentWorkflow(buildRunningCoAgentWorkflow());
+    commitCoAgentWorkflow(buildRunningCoAgentWorkflow(undefined, readStoredCoAgentWorkflow()));
     setLoading(true);
 
     try {
