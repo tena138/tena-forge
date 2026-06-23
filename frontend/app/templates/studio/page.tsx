@@ -2059,6 +2059,24 @@ function VisualTemplateStudioPageContent() {
                       <div className="truncate text-sm font-bold text-zinc-950">{page.name}</div>
                       <div className="mt-1 text-xs text-slate-500">{pageRoleLabels[page.role]}</div>
                     </div>
+                    <select
+                      className="h-9 max-w-[108px] shrink-0 rounded-[9px] border border-zinc-200 bg-white px-2 text-xs font-black text-zinc-900 outline-none transition hover:border-zinc-400 hover:bg-zinc-50 focus:border-black"
+                      value={page.role}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => {
+                        setSelectedPageId(page.id);
+                        setSelectedIds([]);
+                        updatePageRole(page.id, event.target.value as PageRole);
+                      }}
+                      aria-label={`${page.name} 페이지 유형 선택`}
+                    >
+                      {pageRoleOptions.map((role) => (
+                        <option key={role} value={role}>
+                          {pageRoleLabels[role]}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       className="rounded-[7px] p-1.5 text-slate-500 hover:bg-zinc-500/15 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
@@ -2072,34 +2090,17 @@ function VisualTemplateStudioPageContent() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  {active ? (
-                    <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-black/5 pt-2">
-                      {pageRoleOptions.map((role) => (
-                        <button
-                          key={role}
-                          type="button"
-                          className={cls(
-                            "h-8 rounded-[8px] px-2 text-xs font-bold transition",
-                            page.role === role ? "bg-black text-white shadow-sm" : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100 hover:text-black"
-                          )}
-                          onClick={() => updatePageRole(page.id, role)}
-                        >
-                          {pageRoleLabels[role]}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
           </div>
           <button
             type="button"
-            className="mt-auto flex min-h-16 w-full items-center justify-center gap-2 rounded-[14px] border border-dashed border-zinc-300 bg-white text-sm font-black text-zinc-950 transition hover:border-zinc-500 hover:bg-zinc-100"
+            className="flex min-h-20 w-full items-center justify-center rounded-[14px] border border-dashed border-zinc-300 bg-white text-zinc-950 transition hover:border-zinc-500 hover:bg-zinc-100"
             onClick={() => addPage()}
+            aria-label="페이지 추가"
           >
-            <Plus className="h-6 w-6" />
-            페이지 추가
+            <Plus className="h-8 w-8" />
           </button>
         </div>
       );
