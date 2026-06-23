@@ -15,6 +15,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 from database import Base  # noqa: E402
 from routers.co_agent import CoAgentChatRequest, CoAgentVisibleContext, co_agent_chat  # noqa: E402
 from services.co_agent_capabilities import co_agent_product_map, search_co_agent_capabilities  # noqa: E402
+from services.exam_paper_planner import looks_like_exam_paper_request  # noqa: E402
 
 
 def make_request(owner_id: str):
@@ -31,6 +32,17 @@ class CoAgentCapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(matches[0]["id"], "exam_paper_creation")
         self.assertTrue(matches[0]["can_execute"])
         self.assertIn("template", matches[0]["required_info"])
+
+    def test_search_prioritizes_problem_extraction_for_extraction_request(self):
+        matches = search_co_agent_capabilities(
+            message="문항 추출 하고 싶어",
+            history=[{"role": "user", "content": "고3 수학 시험지 20문항 만들어줘"}],
+            current_path="/academy",
+        )
+
+        self.assertEqual(matches[0]["id"], "problem_extraction")
+        self.assertIn("direct:문항 추출", matches[0]["matches"])
+        self.assertFalse(looks_like_exam_paper_request("문항 추출 하고 싶어"))
 
     def test_search_uses_visible_ui_and_path(self):
         matches = search_co_agent_capabilities(
@@ -91,6 +103,37 @@ class CoAgentCapabilityRegistryTests(unittest.TestCase):
         self.assertIn("capability_registry_matches", context_text)
         self.assertIn("student_management", context_text)
         self.assertIn("searched_capability_registry", context_text)
+
+    def test_chat_routes_problem_extraction_without_exam_draft(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+        owner_id = str(uuid.uuid4())
+
+        try:
+            with patch("routers.co_agent._co_agent_chat_completion") as chat_completion:
+                response = co_agent_chat(
+                    CoAgentChatRequest(
+                        message="문항 추출 하고 싶어",
+                        messages=[
+                            {"role": "user", "content": "고3 수학 시험지 20문항 만들어줘"},
+                            {"role": "assistant", "content": "어떤 템플릿을 사용할까요?"},
+                        ],
+                        current_path="/academy",
+                    ),
+                    make_request(owner_id),
+                    db,
+                )
+        finally:
+            db.close()
+
+        chat_completion.assert_not_called()
+        self.assertEqual(response.capabilities[0]["id"], "problem_extraction")
+        self.assertEqual(response.drafts, [])
+        self.assertEqual(response.workflow["kind"], "problem_extraction")
+        self.assertEqual(response.workflow["active_step"], "archive")
+        self.assertEqual(response.quick_actions[0]["href"], "/archive/new")
 
 
 if __name__ == "__main__":

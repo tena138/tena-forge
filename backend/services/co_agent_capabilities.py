@@ -12,6 +12,8 @@ class CoAgentCapability:
     summary: str
     href: str
     intents: tuple[str, ...]
+    direct_intents: tuple[str, ...] = ()
+    negative_intents: tuple[str, ...] = ()
     visible_signals: tuple[str, ...] = ()
     required_info: tuple[str, ...] = ()
     side_effects: tuple[str, ...] = ()
@@ -32,7 +34,9 @@ CAPABILITIES: tuple[CoAgentCapability, ...] = (
         category="problem_set",
         summary="보관된 문항과 템플릿 조건을 읽어 새 문항 세트를 생성합니다.",
         href="/problem-sets",
-        intents=("시험지", "문항", "문제", "모의고사", "출제", "만들", "생성", "랜덤", "배점", "난이도", "template", "exam", "paper"),
+        intents=("시험지", "모의고사", "문항 세트", "출제", "만들", "생성", "랜덤", "배점", "난이도", "template", "exam", "paper"),
+        direct_intents=("시험지 제작", "시험지 만들", "시험지 생성", "모의고사 제작", "모의고사 만들", "문항 세트 제작", "문항 세트 만들"),
+        negative_intents=("문항 추출", "문제 추출", "PDF 추출", "PDF 업로드", "문항 인식", "문제 인식", "OCR", "스캔", "업로드"),
         visible_signals=("보관", "문항 확인", "세트 제작", "제작된 세트", "과목별 문항 수", "템플릿"),
         required_info=("subject", "grade_or_scope", "problem_count", "template", "point_or_difficulty_policy"),
         side_effects=("creates_problem_set", "records_problem_usage", "uses_co_agent_exam_build_credit"),
@@ -51,7 +55,8 @@ CAPABILITIES: tuple[CoAgentCapability, ...] = (
         category="archive",
         summary="PDF를 업로드해 문항, 선택지, 정답, 해설, 태그 후보를 추출합니다.",
         href="/archive/new",
-        intents=("pdf", "업로드", "추출", "스캔", "문항 인식", "ocr", "archive"),
+        intents=("pdf", "업로드", "추출", "스캔", "문항", "문제", "문항 인식", "ocr", "archive"),
+        direct_intents=("문항 추출", "문제 추출", "PDF 추출", "PDF 업로드", "PDF 문항", "문항 인식", "문제 인식", "OCR", "스캔"),
         visible_signals=("추출", "현재 추출 중", "추출 대기", "진행 중인 배치", "대기 중인 배치"),
         required_info=("source_file", "subject_engine"),
         side_effects=("starts_extraction_batch", "uses_extraction_credit"),
@@ -216,7 +221,8 @@ def _score_capability(
     visible_text: str,
     current_path: str,
 ) -> tuple[int, list[str]]:
-    query_compact = _compact(" ".join((message, history_text)))
+    current_compact = _compact(message)
+    history_compact = _compact(history_text)
     visible_compact = _compact(visible_text)
     plain_query = _plain(" ".join((message, history_text, visible_text)))
     score = 0
@@ -226,14 +232,36 @@ def _score_capability(
         score += 45
         matches.append(f"path:{capability.href}")
 
+    direct_match = False
+    for term in capability.direct_intents:
+        clean = _compact(term)
+        if clean and clean in current_compact:
+            score += 44
+            matches.append(f"direct:{term}")
+            direct_match = True
+        elif clean and clean in history_compact:
+            score += 10
+            matches.append(f"history:{term}")
+
     for term in capability.intents:
         clean = _compact(term)
-        if clean and clean in query_compact:
-            score += 16
+        if clean and clean in current_compact:
+            score += 18
             matches.append(term)
+        elif clean and clean in history_compact:
+            score += 5
+            matches.append(f"history:{term}")
         elif clean and clean in visible_compact:
             score += 7
             matches.append(f"visible:{term}")
+
+    if not direct_match:
+        for term in capability.negative_intents:
+            clean = _compact(term)
+            if clean and clean in current_compact:
+                score -= 70
+                matches.append(f"blocked:{term}")
+                break
 
     for signal in capability.visible_signals:
         clean = _compact(signal)

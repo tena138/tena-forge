@@ -21,9 +21,34 @@ def looks_like_exam_paper_request(message: str) -> bool:
     text = str(message or "")
     if not text.strip():
         return False
-    has_exam_word = any(token in text for token in ("시험지", "테스트", "모의고사", "문항", "문제"))
-    has_action_word = any(token in text for token in ("제작", "만들", "출제", "추출", "골라", "뽑", "낼"))
-    return has_exam_word and has_action_word
+    compact = text.replace(" ", "").lower()
+    extraction_only = any(
+        token in compact
+        for token in (
+            "문항추출",
+            "문제추출",
+            "pdf추출",
+            "pdf업로드",
+            "문항인식",
+            "문제인식",
+            "ocr",
+            "스캔",
+            "업로드",
+        )
+    )
+    has_exam_container = any(token in text for token in ("시험지", "테스트", "모의고사"))
+    has_problem_set_container = any(token in compact for token in ("문항세트", "문제세트"))
+    has_problem_word = any(token in text for token in ("문항", "문제"))
+    has_build_action = any(token in text for token in ("제작", "만들", "생성", "출제", "골라", "뽑", "낼"))
+    has_exam_planning_signal = any(token in text for token in ("랜덤", "배점", "난이도", "템플릿", "양식"))
+
+    if extraction_only and not (has_exam_container or has_problem_set_container):
+        return False
+    if has_exam_container and (has_build_action or has_exam_planning_signal or has_problem_word):
+        return True
+    if has_problem_set_container and (has_build_action or has_exam_planning_signal):
+        return True
+    return has_problem_word and has_build_action and not extraction_only
 
 
 def _subject_engine_from_message(message: str) -> str:

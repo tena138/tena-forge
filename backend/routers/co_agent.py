@@ -637,6 +637,114 @@ def _should_try_ai_exam_context(history: list[CoAgentChatMessage], draft: dict[s
     return "difficulty_plan" in pending_fields and bool(draft.get("missing_difficulty_slots"))
 
 
+def _top_capability(capabilities: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return capabilities[0] if capabilities else None
+
+
+def _top_capability_id(capabilities: list[dict[str, Any]]) -> str:
+    return str((_top_capability(capabilities) or {}).get("id") or "")
+
+
+def _top_capability_score(capabilities: list[dict[str, Any]]) -> int:
+    try:
+        return int((_top_capability(capabilities) or {}).get("score") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _capability_has_current_intent(capability: dict[str, Any] | None) -> bool:
+    if not capability:
+        return False
+    for match in capability.get("matches") or []:
+        text = str(match or "")
+        if not text or text == "default":
+            continue
+        if text.startswith(("path:", "visible:", "history:", "ui:", "category:", "blocked:")):
+            continue
+        return True
+    return False
+
+
+def _should_use_exam_workflow(
+    message: str,
+    history: list[CoAgentChatMessage],
+    capabilities: list[dict[str, Any]],
+) -> bool:
+    top_id = _top_capability_id(capabilities)
+    if top_id == "exam_paper_creation":
+        return True
+    if looks_like_exam_paper_request(message):
+        return True
+
+    pending_fields = _latest_exam_pending_fields(history)
+    if not pending_fields:
+        return False
+
+    exam_followup_compatible = {"exam_paper_creation", "template_management", "problem_set_management", "problem_archive"}
+    if top_id and top_id not in exam_followup_compatible and _top_capability_score(capabilities) >= 32 and _capability_has_current_intent(_top_capability(capabilities)):
+        return False
+    return True
+
+
+def _problem_extraction_workflow(current_path: str | None) -> dict[str, Any]:
+    on_upload_page = str(current_path or "").startswith("/archive/new")
+    target_action = "wait" if on_upload_page else "click"
+    target_label = "PDF 업로드 대기" if on_upload_page else "문항 추출 화면 열기"
+    return {
+        "id": "problem_extraction",
+        "kind": "problem_extraction",
+        "status": "needs_input",
+        "active_step": "archive",
+        "steps": [
+            {
+                "id": "archive",
+                "label": "추출",
+                "href": "/archive/new",
+                "status": "active",
+            }
+        ],
+        "bubble": {
+            "title": "",
+            "message": "추출할 PDF를 올려주세요. PDF가 들어오면 과목 엔진과 답안 파일 여부를 확인하고 추출 배치를 시작할게요.",
+            "field": "source_file",
+            "placeholder": "PDF 업로드 후 이어서 진행",
+            "variant": "question",
+        },
+        "target": {
+            "step": "archive",
+            "label": target_label,
+            "action": target_action,
+            "selector": '[data-coagent-anchor="archive"]',
+            "href": "/archive/new",
+        },
+    }
+
+
+def _capability_direct_response(
+    capabilities: list[dict[str, Any]],
+    current_path: str | None,
+) -> CoAgentChatResponse | None:
+    top = _top_capability(capabilities)
+    if not top or top.get("id") != "problem_extraction" or not _capability_has_current_intent(top):
+        return None
+
+    workflow = _problem_extraction_workflow(current_path)
+    return CoAgentChatResponse(
+        answer=workflow["bubble"]["message"],
+        model=None,
+        capabilities=capabilities,
+        quick_actions=[
+            {
+                "id": "open_problem_extraction",
+                "label": "문항 추출 화면 열기",
+                "kind": "navigate",
+                "href": "/archive/new",
+            }
+        ],
+        workflow=workflow,
+    )
+
+
 def _exam_followup_fields(content: str) -> set[str]:
     compact = content.replace(" ", "")
     fields: set[str] = set()
@@ -1174,7 +1282,12 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
         current_path=current_path,
     )
 
-    exam_context_message = _co_agent_exam_context_message(message, payload.messages)
+    should_use_exam_workflow = _should_use_exam_workflow(message, payload.messages, capabilities)
+    direct_capability_response = None if should_use_exam_workflow else _capability_direct_response(capabilities, current_path)
+    if direct_capability_response is not None:
+        return direct_capability_response
+
+    exam_context_message = _co_agent_exam_context_message(message, payload.messages) if should_use_exam_workflow else None
     draft: dict[str, Any] | None = None
     owner_ids: set[str] | None = None
     if exam_context_message:
@@ -1187,7 +1300,7 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
                 exam_context_message = ai_context_message
                 draft = build_exam_paper_draft(db, message=exam_context_message, owner_ids=owner_ids)
                 draft = _with_exam_subject_choices(draft, _enabled_subject_engines_for_co_agent(request, db))
-    else:
+    elif should_use_exam_workflow:
         exam_context_message = _co_agent_exam_context_message_ai(message, payload.messages, payload.visible_context)
         if exam_context_message:
             owner_ids = _academy_ids_for_co_agent(request, db)
