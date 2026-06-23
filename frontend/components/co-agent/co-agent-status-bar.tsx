@@ -469,11 +469,16 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           "flex items-center gap-3"
         )}
       >
+        <span
+          data-coagent-command-slot
+          className="pointer-events-none absolute left-4 top-1/2 h-6 w-8 -translate-y-1/2"
+          aria-hidden="true"
+        />
         <button
           type="button"
           data-coagent-status-message
           className={cn(
-            "flex min-w-0 max-w-full overflow-hidden rounded-[10px] px-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
+            "flex min-w-0 max-w-full overflow-hidden rounded-[10px] pl-12 pr-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
             "flex-1 items-center py-1"
           )}
           onClick={() => setChatOpen(true)}

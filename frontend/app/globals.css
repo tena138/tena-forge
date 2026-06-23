@@ -793,22 +793,53 @@
     top 520ms cubic-bezier(0.2, 0.85, 0.22, 1);
 }
 
+.coagent-jelly-blob--command {
+  height: 24px;
+  width: 32px;
+}
+
 .coagent-jelly-core {
   position: relative;
-  display: grid;
+  display: block;
   height: 100%;
   width: 100%;
-  place-items: center;
   overflow: hidden;
   border-radius: 48% 52% 52% 48% / 54% 45% 55% 46%;
   background:
-    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.82) 0 10%, transparent 11%),
-    linear-gradient(135deg, #8b5cf6 0%, #6d28d9 52%, #4c1d95 100%);
+    radial-gradient(circle at 30% 26%, rgb(255 255 255 / 0.92) 0 8%, transparent 9%),
+    radial-gradient(circle at 76% 78%, rgb(192 132 252 / 0.7) 0 13%, transparent 14%),
+    linear-gradient(135deg, #a78bfa 0%, #7c3aed 46%, #5b21b6 100%);
   box-shadow:
-    0 12px 30px rgb(76 29 149 / 0.32),
-    inset 0 -6px 14px rgb(46 16 101 / 0.34),
-    inset 0 8px 14px rgb(255 255 255 / 0.22);
+    0 10px 24px rgb(91 33 182 / 0.24),
+    0 0 0 1px rgb(124 58 237 / 0.12),
+    inset 0 -5px 12px rgb(46 16 101 / 0.3),
+    inset 0 7px 12px rgb(255 255 255 / 0.26);
   animation: coagent-jelly-breathe 2.8s ease-in-out infinite;
+}
+
+.coagent-jelly-blob--command .coagent-jelly-core {
+  background:
+    radial-gradient(circle at 26% 24%, rgb(255 255 255 / 0.95) 0 9%, transparent 10%),
+    radial-gradient(circle at 82% 70%, rgb(216 180 254 / 0.82) 0 11%, transparent 12%),
+    linear-gradient(135deg, #a855f7 0%, #7c3aed 52%, #5b21b6 100%);
+  box-shadow:
+    0 8px 22px rgb(91 33 182 / 0.2),
+    0 0 28px rgb(124 58 237 / 0.12),
+    inset 0 -4px 9px rgb(46 16 101 / 0.26),
+    inset 0 5px 9px rgb(255 255 255 / 0.3);
+}
+
+.coagent-jelly-core::before {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 34%;
+  height: 10px;
+  width: 10px;
+  border-radius: 62% 38% 54% 46% / 47% 55% 45% 53%;
+  background: #7c3aed;
+  opacity: 0.72;
+  filter: blur(0.1px);
 }
 
 .coagent-jelly-core::after {
@@ -816,18 +847,28 @@
   position: absolute;
   left: 36%;
   top: 30%;
-  height: 14px;
-  width: 18px;
+  height: 12px;
+  width: 16px;
   border-radius: 999px;
   background: rgb(255 255 255 / 0.72);
   filter: blur(1px);
   animation: coagent-jelly-shine 2.8s ease-in-out infinite;
 }
 
-.coagent-jelly-core > svg {
-  position: relative;
-  z-index: 1;
-  filter: drop-shadow(0 1px 1px rgb(46 16 101 / 0.35));
+.coagent-jelly-blob--command .coagent-jelly-core::before {
+  right: -2px;
+  top: 40%;
+  height: 7px;
+  width: 7px;
+  opacity: 0.6;
+}
+
+.coagent-jelly-blob--command .coagent-jelly-core::after {
+  left: 35%;
+  top: 28%;
+  height: 8px;
+  width: 11px;
+  opacity: 0.75;
 }
 
 .coagent-sidebar-jelly-ring {

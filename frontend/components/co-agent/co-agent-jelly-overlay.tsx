@@ -2,7 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, Bot, Loader2, Send, X } from "lucide-react";
+import { ArrowUpRight, Loader2, Send, X } from "lucide-react";
 
 import type { CoAgentChatMessage, CoAgentSubjectChoice, CoAgentWorkflow } from "@/lib/coAgent";
 import { collectVisibleCoAgentContext, getCoAgentSubjectChoices, sendCoAgentChat } from "@/lib/coAgent";
@@ -127,10 +127,11 @@ export function CoAgentJellyOverlay() {
     if (!targetElement) return;
     const targetIsSidebar = Boolean(targetElement.closest("[data-coagent-sidebar-nav]"));
     const sidebarIconElement = targetIsSidebar ? targetElement.querySelector<HTMLElement>("[data-coagent-icon-shell]") : null;
-    const rect = (sidebarIconElement || targetElement).getBoundingClientRect();
     const mobile = window.innerWidth < 1024;
     const targetKind = targetIsSidebar ? "sidebar" : activeStep === "command" ? "command" : "inline";
-    const x = targetKind === "command" ? rect.left + Math.min(Math.max(rect.width * 0.18, 26), 54) : rect.left + rect.width / 2;
+    const commandSlotElement = targetKind === "command" ? targetElement.querySelector<HTMLElement>("[data-coagent-command-slot]") : null;
+    const rect = (sidebarIconElement || commandSlotElement || targetElement).getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
     const bubbleWidth = mobile ? Math.max(280, window.innerWidth - 32) : 360;
     const preferredLeft = rect.right + 14;
@@ -271,7 +272,8 @@ export function CoAgentJellyOverlay() {
   const bubbleTitle = bubble?.title?.trim() || "";
   const showBubbleTitle = Boolean(bubbleTitle && bubble?.variant !== "question");
   const targetIsSidebar = resolvedLayout.targetKind === "sidebar";
-  const showTargetSpotlight = Boolean(resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle");
+  const targetIsCommand = resolvedLayout.targetKind === "command";
+  const showTargetSpotlight = Boolean(resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle" && !targetIsCommand);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
@@ -316,13 +318,11 @@ export function CoAgentJellyOverlay() {
 
       {!targetIsSidebar ? (
         <div
-          className="coagent-jelly-blob pointer-events-none fixed"
+          className={cn("coagent-jelly-blob pointer-events-none fixed", targetIsCommand && "coagent-jelly-blob--command")}
           style={{ left: resolvedLayout.x, top: resolvedLayout.y }}
           aria-hidden="true"
         >
-          <span className="coagent-jelly-core">
-            <Bot className="h-4 w-4 text-white" />
-          </span>
+          <span className="coagent-jelly-core" />
         </div>
       ) : null}
 
