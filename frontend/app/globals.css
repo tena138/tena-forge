@@ -254,6 +254,17 @@
     border-color: rgba(24, 24, 27, 0.14) !important;
   }
 
+  .landing-feature-nav,
+  .landing-feature-grid,
+  .landing-feature-icon {
+    border-color: rgba(24, 24, 27, 0.14) !important;
+  }
+
+  .landing-feature-nav,
+  .landing-feature-grid {
+    background-color: rgba(24, 24, 27, 0.14) !important;
+  }
+
   .landing-aurora {
     position: absolute;
     inset: -30% -12%;
@@ -2018,8 +2029,16 @@
   }
 
   html[data-theme="light"] [data-app-shell] .landing-academy-logo-band,
-  html[data-theme="light"] [data-app-shell] .landing-academy-logo-cell {
+  html[data-theme="light"] [data-app-shell] .landing-academy-logo-cell,
+  html[data-theme="light"] [data-app-shell] .landing-feature-nav,
+  html[data-theme="light"] [data-app-shell] .landing-feature-grid,
+  html[data-theme="light"] [data-app-shell] .landing-feature-icon {
     border-color: rgba(24, 24, 27, 0.14) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] .landing-feature-nav,
+  html[data-theme="light"] [data-app-shell] .landing-feature-grid {
+    background-color: rgba(24, 24, 27, 0.14) !important;
   }
 
   html[data-theme="light"] [data-app-shell] [class*="shadow-"],

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { ComponentType, CSSProperties, ReactNode } from "react";
+import type { ComponentType, CSSProperties, MouseEvent, ReactNode } from "react";
 import {
   Archive,
   ArrowRight,
@@ -79,7 +79,58 @@ const planCtaToneClass: Record<PlanCardTone, string> = {
   pro: "bg-[linear-gradient(135deg,#bdbdbd_0%,#f5f5f5_58%,#dcdcdc_100%)] text-white shadow-[0_18px_54px_rgba(255,255,255,0.18)] hover:shadow-[0_22px_64px_rgba(255,255,255,0.26)]",
 };
 
-const landingProofMarks = ["자료 제작", "학생 관리", "수업 일정", "오답 기록", "실시간 강의"];
+type LandingFeatureCategory = {
+  id: string;
+  title: string;
+  description: string;
+  features: string[];
+  icon: IconComponent;
+};
+
+const landingFeatureCategories: LandingFeatureCategory[] = [
+  {
+    id: "materials",
+    title: "자료 제작",
+    description: "PDF 문항을 추출하고, 교재·시험지·과제지를 몇 분 안에 제작합니다.",
+    features: ["LaTeX 기반 문항 추출", "그림, 그래프, 도형 자동 추출", "교재·시험지 2~5분 제작", "템플릿 허브 제공", "개인화 디자인 적용"],
+    icon: FileUp,
+  },
+  {
+    id: "students",
+    title: "학생 관리",
+    description: "학생별 과제, 출석, 수업료, 학습 기록을 한 곳에서 관리합니다.",
+    features: ["학생별 자동 과제 생성", "과제 알림 및 완료 확인", "출석 관리", "수업료 관리", "학생별 학습 이력 저장"],
+    icon: Users,
+  },
+  {
+    id: "classes",
+    title: "수업 운영",
+    description: "전체 수업 일정과 강사·매니저 협업을 하나의 워크스페이스에서 관리합니다.",
+    features: ["전체 수업 일정 관리", "실시간 강의 탭을 통한 출석, 테스트, 과제 등 통합 관리", "강의 노트 및 강의 슬라이드 자동 생성", "강사 및 매니저 워크스페이스 공유"],
+    icon: LayoutDashboard,
+  },
+  {
+    id: "review",
+    title: "오답 복습",
+    description: "학생이 틀린 문제를 자동으로 저장하고, 복습까지 연결합니다.",
+    features: ["학생별 오답 아카이브", "학생용 앱을 통한 복습 기능", "학생별 약점 분석 및 오답 모음 자료 제작"],
+    icon: ClipboardCheck,
+  },
+  {
+    id: "counseling",
+    title: "상담 관리",
+    description: "입학 상담과 정기 상담을 자동으로 정리하고 학생 기록으로 저장합니다.",
+    features: ["상담 내용 자동 요약", "입학 상담 리포트 생성", "수시 상담 기록 저장", "상담부터 등록까지 관리"],
+    icon: UserCircle,
+  },
+  {
+    id: "automation",
+    title: "업무 자동화",
+    description: "반복되는 리포트 작성과 운영 업무를 코파일럿이 더 빠르게 처리합니다.",
+    features: ["테스트, 과제, 출석 기반 리포트", "학생별 통계 반영", "반복 업무 루틴화", "코파일럿 기반 업무 보조", "자료 제작, 상담 정리, 리포트 작성 자동화"],
+    icon: Bell,
+  },
+];
 
 type AcademyLogoSlot = {
   mark: string;
@@ -407,9 +458,22 @@ function activeStoryIndex(progress: number) {
   return 2;
 }
 
+function scrollToLandingFeature(event: MouseEvent<HTMLAnchorElement>, featureId: string) {
+  event.preventDefault();
+  const target = document.getElementById(`landing-feature-${featureId}`);
+  if (!target) return;
+
+  const targetTop = target.getBoundingClientRect().top + window.scrollY - 88;
+  window.history.pushState(null, "", `#landing-feature-${featureId}`);
+  window.scrollTo({
+    top: Math.max(0, targetTop),
+    behavior: "auto",
+  });
+}
+
 export function PlanLandingPage() {
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-transparent text-[var(--landing-text-primary)]">
+    <main className="relative isolate min-h-screen overflow-x-hidden bg-transparent text-[var(--landing-text-primary)]">
       <LandingNav />
 
       <section className="relative overflow-hidden border-b border-black/10 bg-[#fbfbfa] pt-16 text-zinc-950">
@@ -433,21 +497,64 @@ export function PlanLandingPage() {
 
           <div className="mx-auto w-full max-w-6xl pb-10 sm:pb-12">
             <AcademyLogoCarousel />
-            <div className="grid grid-cols-2 gap-x-8 gap-y-7 pt-8 text-center sm:grid-cols-5 sm:pt-9">
-              {landingProofMarks.map((label) => (
-                <div key={label} className="text-lg font-black tracking-normal text-black sm:text-xl">
-                  {label}
-                </div>
+            <div className="landing-feature-nav grid grid-cols-2 gap-px border bg-zinc-200 text-center sm:grid-cols-3 lg:grid-cols-6">
+              {landingFeatureCategories.map((category) => (
+                <a
+                  key={category.id}
+                  href={`#landing-feature-${category.id}`}
+                  onClick={(event) => scrollToLandingFeature(event, category.id)}
+                  className="landing-feature-nav-item group flex min-h-[5.75rem] flex-col items-center justify-center gap-2 bg-[#fbfbfa] px-3 py-4 text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/10"
+                >
+                  <category.icon className="h-4 w-4 text-zinc-500 transition group-hover:text-black" />
+                  <span className="text-base font-black tracking-normal sm:text-lg">{category.title}</span>
+                </a>
               ))}
             </div>
           </div>
         </div>
       </section>
 
+      <LandingFeatureSection />
       <ScrollStorySection />
       <PlanSection />
       <LandingFooter />
     </main>
+  );
+}
+
+function LandingFeatureSection() {
+  return (
+    <section className="bg-[#fbfbfa] px-4 py-16 text-zinc-950 sm:px-6 sm:py-20">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="landing-feature-grid grid gap-px overflow-hidden border bg-zinc-200 md:grid-cols-2">
+          {landingFeatureCategories.map((category) => (
+            <article
+              key={category.id}
+              id={`landing-feature-${category.id}`}
+              className="landing-feature-card scroll-mt-24 bg-white p-6 sm:p-7"
+            >
+              <div className="flex items-start gap-4">
+                <span className="landing-feature-icon grid h-11 w-11 shrink-0 place-items-center border bg-[#fbfbfa] text-zinc-950">
+                  <category.icon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-2xl font-black tracking-normal text-zinc-950">{category.title}</h2>
+                  <p className="landing-keep-words mt-2 text-sm font-semibold leading-6 text-zinc-600 sm:text-base">{category.description}</p>
+                </div>
+              </div>
+              <ul className="mt-6 grid gap-3">
+                {category.features.map((feature) => (
+                  <li key={feature} className="flex gap-3 text-sm font-bold leading-6 text-zinc-800 sm:text-base">
+                    <Check className="mt-1 h-4 w-4 shrink-0 text-zinc-950" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
