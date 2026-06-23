@@ -15,6 +15,7 @@ MAX_TABLE_COLUMNS = 14
 MAX_TABLE_CELL_LENGTH = 400
 DEFAULT_GRAPH_VIEWPORT = {"xMin": -5.0, "xMax": 5.0, "yMin": -5.0, "yMax": 5.0, "xStep": 1.0, "yStep": 1.0}
 DEFAULT_SHAPE_VIEWPORT = {"width": 100.0, "height": 100.0}
+STRUCTURED_VISUAL_CONFIDENCE_THRESHOLD = 0.82
 GRAPH_OBJECT_KINDS = {"function", "point", "segment", "line", "polyline", "vertical_line", "horizontal_line", "label"}
 SHAPE_OBJECT_KINDS = {"point", "segment", "line", "polyline", "polygon", "circle", "ellipse", "rect", "arc", "angle", "label"}
 ALLOWED_STYLE_KEYS = {"stroke", "fill", "strokeWidth", "dash", "radius", "opacity"}
@@ -417,6 +418,22 @@ def normalize_problem_visual_schema(value: Any) -> dict[str, Any] | None:
     if schema_type == "shape_diagram":
         return _normalize_shape_diagram(value)
     return None
+
+
+def problem_visual_schema_confidence(value: Any) -> float:
+    if not isinstance(value, dict):
+        return 0.0
+    confidence = _num(value.get("confidence"))
+    if confidence is None:
+        return 0.0
+    return max(0.0, min(confidence, 1.0))
+
+
+def is_high_confidence_problem_visual_schema(value: Any, *, threshold: float = STRUCTURED_VISUAL_CONFIDENCE_THRESHOLD) -> bool:
+    schema = normalize_problem_visual_schema(value)
+    if not schema:
+        return False
+    return problem_visual_schema_confidence(schema) >= threshold
 
 
 def _resolve_expression(obj: dict[str, Any], math_model: dict[str, Any] | None) -> str | None:

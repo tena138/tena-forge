@@ -16,7 +16,7 @@ from sqlalchemy.orm import object_session
 from database import get_settings
 from models import HubTemplate, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem
 from services.math_normalization import normalize_geometry_notation
-from services.problem_visuals import problem_visual_schema_to_svg
+from services.problem_visuals import is_high_confidence_problem_visual_schema, problem_visual_schema_to_svg
 
 
 BLOCKED_CONTAINER_TAGS = ("script", "iframe", "object", "embed")
@@ -205,7 +205,9 @@ def problem_to_template_data(problem: Problem, base_data: dict[str, Any], page_n
         "visual_url": _export_visual_url(problem.visual_url),
         "visual_schema": problem.visual_schema,
         "math_model": problem.math_model,
-        "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model)),
+        "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model))
+        if is_high_confidence_problem_visual_schema(problem.visual_schema) or not problem.visual_url
+        else Markup(""),
     }
 
 
@@ -480,7 +482,9 @@ def _problem_export_data(problem: Problem, index: int, total: int, base_data: di
         "visual_url": _export_visual_url(problem.visual_url),
         "visual_schema": problem.visual_schema,
         "math_model": problem.math_model,
-        "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model)),
+        "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model))
+        if is_high_confidence_problem_visual_schema(problem.visual_schema) or not problem.visual_url
+        else Markup(""),
         "page_number": index,
         "total_pages": total,
     }
@@ -722,10 +726,10 @@ def _render_problem_card(problem: dict[str, Any], region: dict[str, Any], base_d
     number = escape(str(problem.get("number") or problem.get("problem_number") or ""))
     number_label = escape(_problem_number_label(problem, region))
     visual = ""
-    if problem.get("visual_svg"):
-        visual = f'<div class="problem-visual problem-structured-visual-wrap">{problem["visual_svg"]}</div>'
-    elif problem.get("visual_url"):
+    if problem.get("visual_url"):
         visual = f'<img class="problem-visual" src="{escape(str(problem["visual_url"]), quote=True)}" alt="" />'
+    elif problem.get("visual_svg"):
+        visual = f'<div class="problem-visual problem-structured-visual-wrap">{problem["visual_svg"]}</div>'
     choices = ""
     choice_lines = _choice_lines(problem.get("choices"))
     if choice_lines:

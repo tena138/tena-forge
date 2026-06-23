@@ -24,6 +24,7 @@ type VisualCell = string | Record<string, unknown>;
 
 const DEFAULT_GRAPH_VIEWPORT: Viewport = { xMin: -5, xMax: 5, yMin: -5, yMax: 5, xStep: 1, yStep: 1 };
 const DEFAULT_SHAPE_VIEWPORT: ShapeViewport = { width: 100, height: 100 };
+const STRUCTURED_VISUAL_CONFIDENCE_THRESHOLD = 0.82;
 const GRAPH_WIDTH = 420;
 const GRAPH_HEIGHT = 300;
 const GRAPH_MARGIN = 30;
@@ -585,6 +586,17 @@ export function canRenderProblemVisual(schema?: ProblemVisualSchema | null) {
   if (schema.type === "shape_diagram") return Boolean((schema.objects?.length || 0) > 0);
   if (schema.type === "structured_table") return Boolean((schema.rows?.length || 0) > 0);
   return false;
+}
+
+export function problemVisualSchemaConfidence(schema?: ProblemVisualSchema | null) {
+  const confidence = Number(schema?.confidence);
+  return Number.isFinite(confidence) ? Math.max(0, Math.min(confidence, 1)) : 0;
+}
+
+export function shouldPreferProblemVisualSchema(schema?: ProblemVisualSchema | null, hasImageFallback = false) {
+  if (!canRenderProblemVisual(schema)) return false;
+  if (!hasImageFallback) return true;
+  return problemVisualSchemaConfidence(schema) >= STRUCTURED_VISUAL_CONFIDENCE_THRESHOLD;
 }
 
 export function ProblemVisualRenderer({

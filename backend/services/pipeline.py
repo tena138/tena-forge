@@ -42,7 +42,7 @@ from services.korean_extraction import (
 from services.matcher import match_with_summary
 from services.math_normalization import normalize_geometry_notation
 from services.point_difficulty import apply_point_difficulty_to_payload
-from services.problem_visuals import normalize_math_model, normalize_problem_visual_schema
+from services.problem_visuals import is_high_confidence_problem_visual_schema, normalize_math_model, normalize_problem_visual_schema
 from services.storage import save_visual_bytes
 from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, is_language_passage_engine, language_engine_label, normalize_subject_engine
 
@@ -71,7 +71,7 @@ For each problem return a JSON object with:
   "problem_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>},
   "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
   "math_model": {"expressions": {"f": "<plain editable expression in x>"}, "parameters": {}} or null,
-  "visual_schema": <editable schema when confident: {"type": "cartesian_graph", "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}]} or {"type": "structured_table", "rows": [[{"text": "x", "header": true}, {"text": "1", "header": true}], ["$f(x)$", "2"]], "headerRows": 1} or {"type": "shape_diagram", "viewport": {"width": 100, "height": 100}, "objects": [{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}, {"kind": "circle", "cx": 50, "cy": 50, "r": 24}]}> or null,
+  "visual_schema": <editable schema when confident, always including "confidence": 0.0-1.0, e.g. {"type": "cartesian_graph", "confidence": 0.92, "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}]} or {"type": "structured_table", "confidence": 0.92, "rows": [[{"text": "x", "header": true}, {"text": "1", "header": true}], ["$f(x)$", "2"]], "headerRows": 1} or {"type": "shape_diagram", "confidence": 0.92, "viewport": {"width": 100, "height": 100}, "objects": [{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}, {"kind": "circle", "cx": 50, "cy": 50, "r": 24}]}> or null,
   "is_exercise": <true only for standalone unsolved exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
@@ -84,7 +84,7 @@ If there are no valid standalone exercises, return [].
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
 visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
-For structured visuals, extract an editable visual_schema in addition to visual_bbox when the visual can be represented confidently. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Define reusable graph expressions in math_model.expressions and reference them from graph objects with refs such as "expressions.f". Use plain graph expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null for visual_schema when the visual is decorative, scanned art, a photo, or too ambiguous to reconstruct.
+For structured visuals, extract an editable visual_schema in addition to visual_bbox only when the visual can be represented confidently and set confidence to at least 0.85. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Define reusable graph expressions in math_model.expressions and reference them from graph objects with refs such as "expressions.f". Use plain graph expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null for visual_schema when the visual is a pure illustration, decorative, scanned art, a photo, complex art, or too ambiguous to reconstruct; the system will preserve it as an image crop instead.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 If a visible point value such as (2점), [3점], 4점, or 배점 3점 is printed as a difficulty/score label for the problem, store it in difficulty as 2점, 3점, or 4점 and do not include that label in problem_text.
 Convert every mathematical expression, function, interval, limit, summation, fraction, root, exponent, coordinate, and equation into LaTeX.
@@ -117,7 +117,7 @@ For each problem return a JSON object with:
   "problem_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>},
   "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
   "math_model": {"expressions": {"f": "<plain editable expression in x>"}, "parameters": {}} or null,
-  "visual_schema": <editable schema when confident: {"type": "cartesian_graph", "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}]} or {"type": "structured_table", "rows": [[{"text": "x", "header": true}, {"text": "1", "header": true}], ["$f(x)$", "2"]], "headerRows": 1} or {"type": "shape_diagram", "viewport": {"width": 100, "height": 100}, "objects": [{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}, {"kind": "circle", "cx": 50, "cy": 50, "r": 24}]}> or null,
+  "visual_schema": <editable schema when confident, always including "confidence": 0.0-1.0, e.g. {"type": "cartesian_graph", "confidence": 0.92, "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}]} or {"type": "structured_table", "confidence": 0.92, "rows": [[{"text": "x", "header": true}, {"text": "1", "header": true}], ["$f(x)$", "2"]], "headerRows": 1} or {"type": "shape_diagram", "confidence": 0.92, "viewport": {"width": 100, "height": 100}, "objects": [{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}, {"kind": "circle", "cx": 50, "cy": 50, "r": 24}]}> or null,
   "is_exercise": <true only for standalone exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
@@ -129,7 +129,7 @@ For each problem return a JSON object with:
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
 visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
-For structured visuals, extract an editable visual_schema in addition to visual_bbox when the visual can be represented confidently. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Define reusable graph expressions in math_model.expressions and reference them from graph objects with refs such as "expressions.f". Use plain graph expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null for visual_schema when the visual is decorative, scanned art, a photo, or too ambiguous to reconstruct.
+For structured visuals, extract an editable visual_schema in addition to visual_bbox only when the visual can be represented confidently and set confidence to at least 0.85. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Define reusable graph expressions in math_model.expressions and reference them from graph objects with refs such as "expressions.f". Use plain graph expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null for visual_schema when the visual is a pure illustration, decorative, scanned art, a photo, complex art, or too ambiguous to reconstruct; the system will preserve it as an image crop instead.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 If a visible point value such as (2점), [3점], 4점, or 배점 3점 is printed as a difficulty/score label for the problem, store it in difficulty as 2점, 3점, or 4점 and do not include that label in problem_text.
 Convert mathematical expressions into LaTeX.
@@ -4021,6 +4021,9 @@ def _normalize_extracted_items(
         if not _is_exercise_candidate(item):
             continue
         section_label = _structure_label(item)
+        visual_schema = normalize_problem_visual_schema(item.get("visual_schema"))
+        if visual_schema and not is_high_confidence_problem_visual_schema(visual_schema):
+            visual_schema = None
         occurrence_key = (section_label, number)
         page_number_occurrence = occurrence_counts[occurrence_key]
         occurrence_counts[occurrence_key] += 1
@@ -4036,8 +4039,8 @@ def _normalize_extracted_items(
                 "section_label": section_label,
                 "problem_bbox": _normalized_visual_bbox(item.get("problem_bbox")),
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
-                "math_model": normalize_math_model(item.get("math_model")),
-                "visual_schema": normalize_problem_visual_schema(item.get("visual_schema")),
+                "math_model": normalize_math_model(item.get("math_model")) if visual_schema else None,
+                "visual_schema": visual_schema,
                 "page_index": page.page_index,
                 "page_number_occurrence": page_number_occurrence,
                 "_source_order": page.page_index * 10000 + int(getattr(page, "column_index", 0) or 0) * 1000 + item_order,
@@ -4223,7 +4226,7 @@ Return a JSON array with exactly one object:
     "has_visual": <true if this problem uses a non-text figure, graph, diagram, table, or image>,
     "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
     "math_model": {"expressions": {"f": "<plain editable expression in x>"}, "parameters": {}} or null,
-    "visual_schema": <editable schema when confident: {"type": "cartesian_graph", "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}]} or {"type": "structured_table", "rows": [[{"text": "x", "header": true}, {"text": "1", "header": true}], ["$f(x)$", "2"]], "headerRows": 1} or {"type": "shape_diagram", "viewport": {"width": 100, "height": 100}, "objects": [{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}, {"kind": "circle", "cx": 50, "cy": 50, "r": 24}]}> or null,
+    "visual_schema": <editable schema when confident, always including "confidence": 0.0-1.0, e.g. {"type": "cartesian_graph", "confidence": 0.92, "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}]} or {"type": "structured_table", "confidence": 0.92, "rows": [[{"text": "x", "header": true}, {"text": "1", "header": true}], ["$f(x)$", "2"]], "headerRows": 1} or {"type": "shape_diagram", "confidence": 0.92, "viewport": {"width": 100, "height": 100}, "objects": [{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}, {"kind": "circle", "cx": 50, "cy": 50, "r": 24}]}> or null,
     "visible_numbers": ["<numbers/measurements visibly inside the visual only>"],
     "visible_point_labels": ["A", "B", "..."],
     "visible_geometry_labels": ["AB", "ABC", "..."],
@@ -4244,7 +4247,7 @@ Rules:
 - visual_bbox coordinates are relative to this cropped preview, not the full page.
 - visual_bbox must tightly enclose only the non-text figure/graph/diagram/table/image belonging to this problem. Exclude the problem stem, answer choices, and pure text condition boxes.
 - If there is no real visual asset, set has_visual false and visual_bbox null.
-- For structured visuals, return an editable visual_schema and matching math_model when the visual can be represented confidently. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Use null for visual_schema when the visual is ambiguous or cannot be reconstructed. Do not invent graph equations, table values, labels, or measurements that are not visible or inferable from explicit problem text.
+- For structured visuals, return an editable visual_schema and matching math_model only when the visual can be represented confidently; include confidence and set it to at least 0.85. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Use null for pure illustrations, photos, complex art, ambiguous visuals, or anything that cannot be reconstructed. Do not invent graph equations, table values, labels, or measurements that are not visible or inferable from explicit problem text.
 - Use expected_visual_anchors from the supplied extraction JSON as a consistency check. Compare numbers, measurements, point labels, and geometry labels in the visual against the target problem text.
 - Set visual_anchor_consistency to "matched" when visible diagram anchors agree with the expected anchors. Set it to "mismatch" when the diagram visibly contains different numbers/labels that suggest it belongs to a neighboring problem. Set it to "insufficient" when the target text has anchors but the visual has too few readable anchors to verify. Set it to "not_applicable" when neither the text nor the visual has useful anchors.
 - Do not reject a correct diagram merely because it has extra labels, but do reject when key labels or measurements conflict with the target problem.
@@ -4364,13 +4367,18 @@ def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: di
         if previous_has_visual and not problem["has_visual"]:
             problem["needs_review"] = True
 
-    math_model = normalize_math_model(qa.get("math_model"))
     visual_schema = normalize_problem_visual_schema(qa.get("visual_schema"))
-    if math_model:
-        problem["math_model"] = math_model
-    if visual_schema:
+    if visual_schema and is_high_confidence_problem_visual_schema(visual_schema):
+        math_model = normalize_math_model(qa.get("math_model"))
         problem["visual_schema"] = visual_schema
+        problem["math_model"] = math_model
         problem["has_visual"] = True
+    else:
+        if "visual_schema" in qa:
+            if visual_schema:
+                problem["needs_review"] = True
+            problem["visual_schema"] = None
+            problem["math_model"] = None
 
     if not bool(qa.get("latex_ok", True)) or bool(qa.get("needs_review")):
         problem["needs_review"] = True
@@ -4687,14 +4695,18 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
             "solution_steps": item.get("solution_steps"),
             "key_concept": item.get("key_concept"),
         }
+        visual_schema = normalize_problem_visual_schema(item.get("visual_schema"))
+        if visual_schema and not is_high_confidence_problem_visual_schema(visual_schema):
+            visual_schema = None
+        math_model = normalize_math_model(item.get("math_model")) if visual_schema else None
         problem = Problem(
             problem_number=item["problem_number"],
             problem_text=item["problem_text"],
             choices=_normalize_problem_choices(item.get("choices")),
-            has_visual=bool(item["has_visual"] or item.get("visual_schema")),
+            has_visual=bool(item.get("has_visual") or item.get("visual_url") or visual_schema),
             visual_url=item.get("visual_url"),
-            visual_schema=normalize_problem_visual_schema(item.get("visual_schema")),
-            math_model=normalize_math_model(item.get("math_model")),
+            visual_schema=visual_schema,
+            math_model=math_model,
             review_page_image_url=item.get("review_page_image_url"),
             review_page_number=item.get("review_page_number"),
             answer=answer_for_subject(solution.get("answer"), item.get("choices"), subject_engine),

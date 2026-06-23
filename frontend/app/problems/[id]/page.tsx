@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ImagePlus, RefreshCcw, Save, Trash2 } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
-import { canRenderProblemVisual, ProblemVisualRenderer } from "@/components/problem-visual-renderer";
+import { ProblemVisualRenderer, shouldPreferProblemVisualSchema } from "@/components/problem-visual-renderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -589,7 +589,7 @@ function ProblemDetailContent() {
   }
 
   const cropSourceUrl = problem.review_page_image_url || problem.visual_url;
-  const hasStructuredVisual = canRenderProblemVisual(problem.visual_schema);
+  const hasStructuredVisual = shouldPreferProblemVisualSchema(problem.visual_schema, Boolean(problem.visual_url));
   const sourceLabel =
     tags.source || problem.source_label || `${problem.review_page_number ? `${problem.review_page_number}페이지 / ` : ""}${problem.problem_number}번`;
   const navigationLabel =

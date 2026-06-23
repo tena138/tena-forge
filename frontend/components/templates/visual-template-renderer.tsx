@@ -3,7 +3,7 @@
 import { CSSProperties, PointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react";
 
 import { MathText } from "@/components/math-text";
-import { canRenderProblemVisual, ProblemVisualRenderer } from "@/components/problem-visual-renderer";
+import { ProblemVisualRenderer, shouldPreferProblemVisualSchema } from "@/components/problem-visual-renderer";
 import { assetUrl } from "@/lib/api";
 import { isRegionElement, resolveTemplateText, visualTemplateSampleData } from "@/lib/visualTemplateEngine";
 import { ContentRegionElement, ExamStatsChartElement, ExamStatsMetricKey, PAGE_SIZES, SampleProblem, TemplateElement, TemplatePage, TemplateSet, VariableElement, sampleProblems } from "@/lib/visualTemplateTypes";
@@ -341,7 +341,7 @@ function renderExamStatsChart(element: ExamStatsChartElement) {
 function ProblemCard({ problem, region }: { problem: SampleProblem; region: ContentRegionElement }) {
   const fixedSlot = Boolean(region.rows && region.rows > 0);
   const visualUrl = problem.visualUrl || problem.visual_url;
-  const hasStructuredVisual = canRenderProblemVisual(problem.visual_schema);
+  const hasStructuredVisual = shouldPreferProblemVisualSchema(problem.visual_schema, Boolean(visualUrl));
   return (
     <div
       className="overflow-hidden"
@@ -381,9 +381,11 @@ function ProblemCard({ problem, region }: { problem: SampleProblem; region: Cont
         <MathText value={problem.text} />
       </div>
       {problem.choices?.length ? <div className="mt-2 grid grid-cols-5 gap-1 text-[11px] text-slate-700">{problem.choices.map((choice, index) => <MathText key={`${index}-${choice}`} value={`${index + 1}) ${choice}`} />)}</div> : null}
-      {hasStructuredVisual ? (
+      {visualUrl && !hasStructuredVisual ? (
+        <img src={assetUrl(visualUrl)} alt="" className="mx-auto mt-3 block h-auto max-w-full object-contain" style={{ width: "min(100%, 420px)", maxHeight: 320 }} />
+      ) : hasStructuredVisual ? (
         <ProblemVisualRenderer schema={problem.visual_schema} mathModel={problem.math_model} className="mx-auto mt-3 block h-auto max-w-full object-contain" style={{ width: "min(100%, 420px)", maxHeight: 320 }} />
-      ) : visualUrl ? <img src={assetUrl(visualUrl)} alt="" className="mx-auto mt-3 block h-auto max-w-full object-contain" style={{ width: "min(100%, 420px)", maxHeight: 320 }} /> : null}
+      ) : null}
       {region.type === "solutionRegion" ? <div className="mt-3 rounded bg-slate-50 p-2 text-[11px] leading-relaxed text-slate-700"><MathText value={problem.solution} /></div> : null}
       {region.type === "answerRegion" ? <div className="mt-2 text-[12px] font-bold text-slate-900">{formatProblemNumber(problem, region)} <MathText value={problem.answer || ""} /></div> : null}
       {region.type === "problemRegion" ? (
@@ -404,7 +406,8 @@ function estimatePreviewProblemHeight(problem: SampleProblem, region: ContentReg
   const lineHeight = region.bodyStyle.lineHeight || 1.6;
   const textLines = Math.max(3, Math.ceil((problem.text || "").length / 32));
   const choicesLines = problem.choices?.length ? Math.ceil(problem.choices.join("   ").length / 40) : 0;
-  const visualSpace = problem.visualUrl || problem.visual_url || canRenderProblemVisual(problem.visual_schema) ? 210 : 0;
+  const visualUrl = problem.visualUrl || problem.visual_url;
+  const visualSpace = visualUrl || shouldPreferProblemVisualSchema(problem.visual_schema, false) ? 210 : 0;
   return Math.max(region.minItemHeight, 52 + textLines * fontSize * lineHeight + choicesLines * (fontSize + 8) + visualSpace + region.padding);
 }
 

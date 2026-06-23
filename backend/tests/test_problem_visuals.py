@@ -1,4 +1,10 @@
-from services.problem_visuals import normalize_math_model, normalize_problem_visual_schema, problem_visual_schema_to_svg
+from services.problem_visuals import (
+    is_high_confidence_problem_visual_schema,
+    normalize_math_model,
+    normalize_problem_visual_schema,
+    problem_visual_schema_confidence,
+    problem_visual_schema_to_svg,
+)
 
 
 def test_problem_visual_schema_renders_referenced_expression_svg():
@@ -67,3 +73,27 @@ def test_problem_visual_schema_renders_shape_diagram():
     assert 'class="problem-shape-visual"' in svg
     assert "<line" in svg
     assert "<circle" in svg
+
+
+def test_problem_visual_schema_confidence_gate_prefers_crops_without_confidence():
+    low_confidence = normalize_problem_visual_schema(
+        {
+            "type": "shape_diagram",
+            "objects": [
+                {"kind": "segment", "x1": 10, "y1": 80, "x2": 90, "y2": 80},
+                {"kind": "segment", "x1": 10, "y1": 80, "x2": 10, "y2": 20},
+            ],
+        }
+    )
+    high_confidence = normalize_problem_visual_schema(
+        {
+            "type": "structured_table",
+            "confidence": 0.91,
+            "rows": [["A", "B"], ["1", "2"]],
+        }
+    )
+
+    assert low_confidence is not None
+    assert problem_visual_schema_confidence(low_confidence) == 0.0
+    assert not is_high_confidence_problem_visual_schema(low_confidence)
+    assert is_high_confidence_problem_visual_schema(high_confidence)
