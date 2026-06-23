@@ -14,8 +14,6 @@ import {
   PaidPlanType,
   SubjectEngineCode,
   calculateMonthlyPrice,
-  calculateSingleEngineMonthlyPrice,
-  calculateSubjectEngineMonthlyDelta,
   formatKRW,
   getDefaultSelections,
   getResolvedSpecs,
@@ -28,19 +26,6 @@ type ChoiceGroup = Extract<PackageGroup, "ai" | "storage">;
 type StepperGroup = Extract<PackageGroup, "student" | "staff">;
 
 const billingCycle: BillingCycle = "monthly";
-
-const planCopy: Record<PaidPlanType, { eyebrow: string; title: string; description: string }> = {
-  basic: {
-    eyebrow: "Basic setup",
-    title: "Basic 플랜 구성",
-    description: "개인 과외와 소규모 수업 운영에 필요한 항목만 선택하세요.",
-  },
-  pro: {
-    eyebrow: "Pro setup",
-    title: "Pro 플랜 구성",
-    description: "학원 운영 규모에 맞춰 과목, 사용량, 좌석만 간단히 조정하세요.",
-  },
-};
 
 const subjectEngineOptions: Array<{
   code: SubjectEngineCode;
@@ -99,9 +84,7 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   const [selectedSubjectEngines, setSelectedSubjectEngines] = useState<SubjectEngineCode[]>(["math"]);
 
   const specs = useMemo(() => getResolvedSpecs(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
-  const singleEngineMonthlyPrice = useMemo(() => calculateSingleEngineMonthlyPrice(plan, selectedPackageIds), [plan, selectedPackageIds]);
   const monthlyPrice = useMemo(() => calculateMonthlyPrice(plan, selectedPackageIds, selectedSubjectEngines), [plan, selectedPackageIds, selectedSubjectEngines]);
-  const subjectEngineDelta = useMemo(() => calculateSubjectEngineMonthlyDelta(singleEngineMonthlyPrice, selectedSubjectEngines), [singleEngineMonthlyPrice, selectedSubjectEngines]);
   const reviewHref = `/checkout/review?plan=${plan}&billing=${billingCycle}&packages=${encodeURIComponent(stringifySelectedPackageIds(selectedPackageIds))}&engines=${encodeURIComponent(stringifySubjectEngines(selectedSubjectEngines))}`;
 
   function selectPackage(group: PackageGroup, id: string) {
@@ -121,17 +104,11 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
   return (
     <main className="min-h-screen bg-[#fbfbfa] text-zinc-950">
       <ConfiguratorNav plan={plan} />
-      <section className="px-4 pb-20 pt-28 sm:px-6 lg:pb-24 lg:pt-32">
+      <section className="px-4 pb-20 pt-24 sm:px-6 lg:pb-24 lg:pt-28">
         <div className="mx-auto w-full max-w-[96rem]">
-          <header className="max-w-4xl">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{planCopy[plan].eyebrow}</p>
-            <h1 className="mt-4 text-5xl font-black tracking-normal text-zinc-950 sm:text-7xl">{planCopy[plan].title}</h1>
-            <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-zinc-600">{planCopy[plan].description}</p>
-          </header>
-
-          <div className="mt-14 grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start">
+          <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start">
             <div>
-              <SubjectEngineSection selectedSubjectEngines={selectedSubjectEngines} subjectEngineDelta={subjectEngineDelta} onToggle={toggleSubjectEngine} />
+              <SubjectEngineSection selectedSubjectEngines={selectedSubjectEngines} onToggle={toggleSubjectEngine} />
               <PackageChoiceSection plan={plan} group="ai" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} />
               <PackageChoiceSection plan={plan} group="storage" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} />
               <StepperPackageSection plan={plan} group="student" selectedPackageIds={selectedPackageIds} onSelect={selectPackage} />
@@ -196,11 +173,9 @@ function ConfigSection({
 
 function SubjectEngineSection({
   selectedSubjectEngines,
-  subjectEngineDelta,
   onToggle,
 }: {
   selectedSubjectEngines: SubjectEngineCode[];
-  subjectEngineDelta: number;
   onToggle: (engine: SubjectEngineCode) => void;
 }) {
   return (
@@ -224,9 +199,6 @@ function SubjectEngineSection({
           );
         })}
       </div>
-      <p className="mt-4 text-sm font-bold text-zinc-500">
-        {subjectEngineDelta > 0 ? `추가 과목 금액 ${formatKRW(subjectEngineDelta)} / 월` : "수학 엔진은 기본 포함"}
-      </p>
     </ConfigSection>
   );
 }
