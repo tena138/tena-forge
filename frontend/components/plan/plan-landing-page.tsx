@@ -81,6 +81,36 @@ const planCtaToneClass: Record<PlanCardTone, string> = {
 
 const landingProofMarks = ["자료 제작", "학생 관리", "수업 일정", "오답 기록", "실시간 강의"];
 
+type AcademyLogoSlot = {
+  mark: string;
+  name: string;
+  src?: string;
+};
+
+// Replace these placeholder wordmarks with approved academy logo assets as they arrive.
+const academyLogoSets: AcademyLogoSlot[][] = [
+  [
+    { mark: "NOVA", name: "로고 슬롯 01" },
+    { mark: "APEX", name: "로고 슬롯 02" },
+    { mark: "VECTOR", name: "로고 슬롯 03" },
+    { mark: "PRIME", name: "로고 슬롯 04" },
+  ],
+  [
+    { mark: "SUMMIT", name: "로고 슬롯 05" },
+    { mark: "FOCUS", name: "로고 슬롯 06" },
+    { mark: "ORBIT", name: "로고 슬롯 07" },
+    { mark: "CORE", name: "로고 슬롯 08" },
+  ],
+  [
+    { mark: "SEUM", name: "로고 슬롯 09" },
+    { mark: "RADIUS", name: "로고 슬롯 10" },
+    { mark: "AXIS", name: "로고 슬롯 11" },
+    { mark: "ONEDAY", name: "로고 슬롯 12" },
+  ],
+];
+
+const academyLogoRotationMs = 3600;
+
 const storyScenes = [
   { title: "오프라인 문항들을 한 곳에 전산화", eyebrow: "Private Studio", pageTitle: "문항 보관함", route: "/problems" },
   { title: "가장 빠르게 컨텐츠 제작", eyebrow: "Private Studio", pageTitle: "세트 제작", route: "/problem-sets/export" },
@@ -401,12 +431,15 @@ export function PlanLandingPage() {
             </div>
           </div>
 
-          <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-8 gap-y-7 border-t border-black/10 py-10 text-center sm:grid-cols-5 sm:py-12">
-            {landingProofMarks.map((label) => (
-              <div key={label} className="text-lg font-black tracking-normal text-black sm:text-xl">
-                {label}
-              </div>
-            ))}
+          <div className="mx-auto w-full max-w-6xl pb-10 sm:pb-12">
+            <AcademyLogoCarousel />
+            <div className="grid grid-cols-2 gap-x-8 gap-y-7 pt-8 text-center sm:grid-cols-5 sm:pt-9">
+              {landingProofMarks.map((label) => (
+                <div key={label} className="text-lg font-black tracking-normal text-black sm:text-xl">
+                  {label}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -415,6 +448,46 @@ export function PlanLandingPage() {
       <PlanSection />
       <LandingFooter />
     </main>
+  );
+}
+
+function AcademyLogoCarousel() {
+  const [activeSetIndex, setActiveSetIndex] = useState(0);
+
+  useEffect(() => {
+    const rotationTimer = window.setInterval(() => {
+      setActiveSetIndex((currentIndex) => (currentIndex + 1) % academyLogoSets.length);
+    }, academyLogoRotationMs);
+
+    return () => window.clearInterval(rotationTimer);
+  }, []);
+
+  const activeSet = academyLogoSets[activeSetIndex];
+
+  return (
+    <section aria-label="제휴 및 사용 학원 로고" className="landing-academy-logo-band overflow-hidden border bg-white">
+      <div key={activeSetIndex} className="landing-academy-logo-set grid grid-cols-2 lg:grid-cols-4">
+        {activeSet.map((logo, index) => (
+          <div
+            key={`${logo.mark}-${logo.name}`}
+            className={cn(
+              "landing-academy-logo-cell flex min-h-[6.5rem] items-center justify-center px-4 py-5 text-center sm:min-h-[7.5rem] lg:min-h-[8.5rem]",
+              index < 2 && "border-b lg:border-b-0",
+              index % 2 === 1 && "border-l",
+              index > 0 && "lg:border-l"
+            )}
+          >
+            {logo.src ? (
+              <img src={logo.src} alt={logo.name} className="max-h-12 max-w-[72%] object-contain sm:max-h-14" />
+            ) : (
+              <div className="min-w-0" role="img" aria-label={logo.name}>
+                <div aria-hidden="true" className="truncate text-2xl font-black tracking-normal text-zinc-950 sm:text-3xl">{logo.mark}</div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

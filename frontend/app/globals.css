@@ -234,6 +234,26 @@
     letter-spacing: 0;
   }
 
+  @keyframes landing-academy-logo-set-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .landing-academy-logo-set {
+    animation: landing-academy-logo-set-in 520ms ease both;
+  }
+
+  .landing-academy-logo-band,
+  .landing-academy-logo-cell {
+    border-color: rgba(24, 24, 27, 0.14) !important;
+  }
+
   .landing-aurora {
     position: absolute;
     inset: -30% -12%;
@@ -693,6 +713,7 @@
     }
 
     .landing-motion-safe,
+    .landing-academy-logo-set,
     .landing-story-copy,
     .landing-story-visual,
     .landing-story-paper,
@@ -1994,6 +2015,11 @@
   html[data-theme="light"] [data-app-shell] .forge-panel,
   html[data-theme="light"] [data-app-shell] .forge-surface {
     border-color: transparent !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] .landing-academy-logo-band,
+  html[data-theme="light"] [data-app-shell] .landing-academy-logo-cell {
+    border-color: rgba(24, 24, 27, 0.14) !important;
   }
 
   html[data-theme="light"] [data-app-shell] [class*="shadow-"],
