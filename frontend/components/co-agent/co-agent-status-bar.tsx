@@ -185,6 +185,12 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   }, [chatMessages]);
 
   const workflowBubble = workflow?.bubble || null;
+  const sidebarBubbleOwnsInput = Boolean(
+    workflow?.status === "needs_input" &&
+      workflow.active_step &&
+      workflow.active_step !== "command" &&
+      workflowBubble?.variant === "question"
+  );
   const needsInputStatusMessage = useMemo(() => {
     if (workflow?.status !== "needs_input") return "";
     const message = workflowBubble?.message?.trim();
@@ -433,6 +439,11 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   }, [chatOpen]);
 
   useEffect(() => {
+    if (sidebarBubbleOwnsInput) {
+      lastNeedsInputOpenKeyRef.current = null;
+      setChatOpen(false);
+      return;
+    }
     if (workflow?.status !== "needs_input") {
       lastNeedsInputOpenKeyRef.current = null;
       return;
@@ -449,7 +460,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     setChatOpen(true);
     const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
-  }, [chatLoading, workflow?.active_step, workflow?.id, workflow?.status, workflowBubble?.field, workflowBubble?.message]);
+  }, [chatLoading, sidebarBubbleOwnsInput, workflow?.active_step, workflow?.id, workflow?.status, workflowBubble?.field, workflowBubble?.message]);
 
   useEffect(() => {
     if (!chatOpen || chatLoading) return;
@@ -478,7 +489,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           type="button"
           data-coagent-status-message
           className={cn(
-            "flex min-w-0 max-w-full overflow-hidden rounded-[10px] pl-12 pr-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
+            "flex min-w-0 max-w-full overflow-hidden rounded-[10px] pl-1.5 pr-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
             "flex-1 items-center py-1"
           )}
           onClick={() => setChatOpen(true)}
@@ -532,7 +543,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         ) : null}
       </div>
 
-      {chatOpen ? (
+      {chatOpen && !sidebarBubbleOwnsInput ? (
         <form
           data-coagent-chat-form
           className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-white px-2 shadow-[0_14px_34px_rgba(0,0,0,0.14)] ring-1 ring-black/10"

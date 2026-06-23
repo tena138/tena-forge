@@ -303,9 +303,9 @@ export function CoAgentJellyOverlay() {
         </>
       ) : null}
 
-      {!targetIsSidebar ? (
+      {!targetIsSidebar && !targetIsCommand ? (
         <div
-          className={cn("coagent-jelly-blob pointer-events-none fixed", targetIsCommand && "coagent-jelly-blob--command")}
+          className="coagent-jelly-blob pointer-events-none fixed"
           style={{ left: resolvedLayout.x, top: resolvedLayout.y }}
           aria-hidden="true"
         >
