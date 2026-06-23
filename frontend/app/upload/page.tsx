@@ -1178,10 +1178,16 @@ export default function UploadPage() {
     setSelectedSubjects(folderCandidates);
   }
 
+  function openArchiveDestinationFolder(folderId: string | null) {
+    setCurrentArchiveFolderId(folderId);
+    selectArchiveFolder(folderId);
+  }
+
   async function createArchiveFolderInCurrent(payload: { name: string; parent_id: string | null; color: string }) {
     const folder = await createArchiveFolder({ ...payload, subject_engine: subjectEngine });
     await refreshArchiveFolders();
     setCurrentArchiveFolderId(folder.id);
+    selectArchiveFolder(folder.id);
   }
 
   async function updateArchiveFolderInList(folderId: string, payload: { name?: string; parent_id?: string | null; color?: string | null; order?: number }) {
@@ -1449,7 +1455,8 @@ export default function UploadPage() {
                       title="저장 폴더"
                       kicker="Archive folders"
                       showBatches={false}
-                      onOpenFolder={setCurrentArchiveFolderId}
+                      destinationPicker
+                      onOpenFolder={openArchiveDestinationFolder}
                       onSelectFolder={selectArchiveFolder}
                       onCreateFolder={createArchiveFolderInCurrent}
                       onUpdateFolder={updateArchiveFolderInList}

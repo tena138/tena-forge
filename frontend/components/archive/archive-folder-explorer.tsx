@@ -28,6 +28,7 @@ type ArchiveFolderExplorerProps = {
   title?: string;
   kicker?: string;
   showBatches?: boolean;
+  destinationPicker?: boolean;
   loading?: boolean;
   onOpenFolder: (folderId: string | null) => void;
   onSelectFolder?: (folderId: string | null) => void;
@@ -56,6 +57,7 @@ export function ArchiveFolderExplorer({
   title = "문항 아카이브 폴더",
   kicker = "Batch folders",
   showBatches = true,
+  destinationPicker = false,
   loading = false,
   onOpenFolder,
   onSelectFolder,
@@ -72,6 +74,7 @@ export function ArchiveFolderExplorer({
 
   const currentPath = useMemo(() => archiveFolderPath(currentFolderId, folders), [currentFolderId, folders]);
   const childFolders = useMemo(() => archiveFolderChildren(folders, currentFolderId), [currentFolderId, folders]);
+  const parentFolderId = currentPath.at(-2)?.id || null;
   const parentIdsWithChildren = useMemo(() => {
     const parentIds = new Set<string>();
     for (const folder of folders) {
@@ -135,73 +138,92 @@ export function ArchiveFolderExplorer({
 
   return (
     <section className="rounded-[12px] bg-white p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{kicker}</div>
-          <h2 className="mt-1 text-sm font-bold text-foreground">{title}</h2>
-        </div>
-        <div className="flex min-w-[16rem] flex-1 items-center gap-2 sm:flex-none">
-          <Input
-            className="h-9 min-w-0 border-0 bg-zinc-100 text-sm text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                createFolder();
-              }
-            }}
-            placeholder="새 폴더 이름"
-          />
-          <Button type="button" size="sm" variant="outline" className="h-9 shrink-0 border-0 bg-black text-white hover:bg-zinc-800" onClick={createFolder}>
-            <FolderPlus className="h-4 w-4" />
-            새 폴더
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-zinc-100 px-3 py-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs font-semibold text-zinc-700">
-          <button type="button" className="rounded-[7px] px-2 py-1 transition hover:bg-white hover:text-zinc-950" onClick={() => onOpenFolder(null)}>
-            전체 문항
-          </button>
-          {currentPath.map((folder, index) => (
-            <span key={folder.id} className="inline-flex items-center gap-1">
-              <span className="text-zinc-400">/</span>
-              <button
-                type="button"
-                className="rounded-[7px] px-2 py-1 transition hover:bg-white hover:text-zinc-950"
-                onClick={() => onOpenFolder(folder.id)}
-              >
-                {folder.name}
-              </button>
-              {index === currentPath.length - 1 ? null : null}
-            </span>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          {currentFolderId ? (
-            <Button type="button" size="sm" variant="outline" className="h-8 border-0 bg-white text-zinc-900 hover:bg-zinc-200" onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}>
-              <ChevronLeft className="h-4 w-4" />
-              상위
+      {!destinationPicker ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{kicker}</div>
+            <h2 className="mt-1 text-sm font-bold text-foreground">{title}</h2>
+          </div>
+          <div className="flex min-w-[16rem] flex-1 items-center gap-2 sm:flex-none">
+            <Input
+              className="h-9 min-w-0 border-0 bg-zinc-100 text-sm text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  createFolder();
+                }
+              }}
+              placeholder="새 폴더 이름"
+            />
+            <Button type="button" size="sm" variant="outline" className="h-9 shrink-0 border-0 bg-black text-white hover:bg-zinc-800" onClick={createFolder}>
+              <FolderPlus className="h-4 w-4" />
+              새 폴더
             </Button>
-          ) : null}
-          {mode === "select" ? (
-            <Button type="button" size="sm" className="h-8 bg-black text-white hover:bg-zinc-800" disabled={!currentFolderId} onClick={() => onSelectFolder?.(currentFolderId)}>
-              <Check className="h-4 w-4" />
-              이 위치에 저장
-            </Button>
-          ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {mode === "select" ? (
+      {!destinationPicker ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-zinc-100 px-3 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs font-semibold text-zinc-700">
+            <button type="button" className="rounded-[7px] px-2 py-1 transition hover:bg-white hover:text-zinc-950" onClick={() => onOpenFolder(null)}>
+              전체 문항
+            </button>
+            {currentPath.map((folder, index) => (
+              <span key={folder.id} className="inline-flex items-center gap-1">
+                <span className="text-zinc-400">/</span>
+                <button
+                  type="button"
+                  className="rounded-[7px] px-2 py-1 transition hover:bg-white hover:text-zinc-950"
+                  onClick={() => onOpenFolder(folder.id)}
+                >
+                  {folder.name}
+                </button>
+                {index === currentPath.length - 1 ? null : null}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            {currentFolderId ? (
+              <Button type="button" size="sm" variant="outline" className="h-8 border-0 bg-white text-zinc-900 hover:bg-zinc-200" onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}>
+                <ChevronLeft className="h-4 w-4" />
+                상위
+              </Button>
+            ) : null}
+            {mode === "select" ? (
+              <Button type="button" size="sm" className="h-8 bg-black text-white hover:bg-zinc-800" disabled={!currentFolderId} onClick={() => onSelectFolder?.(currentFolderId)}>
+                <Check className="h-4 w-4" />
+                이 위치에 저장
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {mode === "select" && !destinationPicker ? (
         <div className="mt-2 rounded-[10px] bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700">
           선택 위치: {selectedFolderId ? selectedPathLabel : "아직 선택되지 않음"}
         </div>
       ) : null}
 
-      <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]" onDragOver={allowDrop}>
+      <div className={cn("grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]", destinationPicker ? "mt-0" : "mt-3")} onDragOver={allowDrop}>
+        {destinationPicker && currentFolderId ? (
+          <button
+            type="button"
+            className="flex min-h-[82px] items-center gap-3 rounded-[10px] bg-zinc-50 p-3 text-left text-zinc-800 transition-colors hover:bg-zinc-100"
+            onClick={() => onOpenFolder(parentFolderId)}
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-white text-zinc-700">
+              <ChevronLeft className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold leading-5">상위 폴더</span>
+            </span>
+          </button>
+        ) : null}
+
         {childFolders.map((folder) => {
           const selected = selectedFolderId === folder.id || currentFolderId === folder.id;
           const hasChildFolders = parentIdsWithChildren.has(folder.id);
@@ -291,6 +313,29 @@ export function ArchiveFolderExplorer({
           );
         })}
 
+        {destinationPicker ? (
+          <div className="flex min-h-[82px] items-center gap-2 rounded-[10px] bg-zinc-50 p-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-white text-zinc-700">
+              <FolderPlus className="h-5 w-5" />
+            </span>
+            <Input
+              className="h-9 min-w-0 flex-1 border-0 bg-white text-sm font-semibold text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  createFolder();
+                }
+              }}
+              placeholder="새 폴더"
+            />
+            <Button type="button" size="icon" className="h-9 w-9 shrink-0" onClick={createFolder} disabled={!draft.trim()}>
+              <FolderPlus className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : null}
+
         {visibleBatches.map((batch) => {
           const selected = selectedBatchId === batch.id;
           const color = normalizeHexColor(batch.accent_color) || "#64748b";
@@ -337,7 +382,7 @@ export function ArchiveFolderExplorer({
           );
         })}
 
-        {!loading && !childFolders.length && !visibleBatches.length ? (
+        {!destinationPicker && !loading && !childFolders.length && !visibleBatches.length ? (
           <div className="flex min-h-[82px] items-center rounded-[10px] bg-zinc-50 px-4 text-sm font-semibold text-zinc-500">
             이 위치에는 아직 폴더나 배치가 없습니다.
           </div>
