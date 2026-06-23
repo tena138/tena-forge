@@ -756,6 +756,22 @@
   }
 }
 
+@keyframes coagent-command-token-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 8px 18px rgb(109 40 217 / 0.2),
+      inset 0 1px 0 rgb(255 255 255 / 0.22);
+  }
+  50% {
+    transform: scale(0.96);
+    box-shadow:
+      0 5px 14px rgb(109 40 217 / 0.16),
+      inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+}
+
 .coagent-jelly-blob {
   height: 36px;
   width: 42px;
@@ -766,8 +782,8 @@
 }
 
 .coagent-jelly-blob--command {
-  height: 24px;
-  width: 32px;
+  height: 30px;
+  width: 30px;
 }
 
 .coagent-jelly-core {
@@ -790,15 +806,12 @@
 }
 
 .coagent-jelly-blob--command .coagent-jelly-core {
-  background:
-    radial-gradient(circle at 26% 24%, rgb(255 255 255 / 0.95) 0 9%, transparent 10%),
-    radial-gradient(circle at 82% 70%, rgb(216 180 254 / 0.82) 0 11%, transparent 12%),
-    linear-gradient(135deg, #a855f7 0%, #7c3aed 52%, #5b21b6 100%);
+  border-radius: 9px;
+  background: #6d28d9;
   box-shadow:
-    0 8px 22px rgb(91 33 182 / 0.2),
-    0 0 28px rgb(124 58 237 / 0.12),
-    inset 0 -4px 9px rgb(46 16 101 / 0.26),
-    inset 0 5px 9px rgb(255 255 255 / 0.3);
+    0 8px 18px rgb(109 40 217 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.22);
+  animation: coagent-command-token-pulse 2.2s ease-in-out infinite;
 }
 
 .coagent-jelly-core::before {
@@ -828,19 +841,29 @@
 }
 
 .coagent-jelly-blob--command .coagent-jelly-core::before {
-  right: -2px;
-  top: 40%;
-  height: 7px;
-  width: 7px;
-  opacity: 0.6;
+  left: 8px;
+  top: 8px;
+  height: 5px;
+  width: 5px;
+  border-radius: 1.5px;
+  background: #ffffff;
+  opacity: 0.96;
+  box-shadow:
+    9px 0 0 #ffffff,
+    0 9px 0 #ffffff,
+    9px 9px 0 #ffffff;
+  filter: none;
 }
 
 .coagent-jelly-blob--command .coagent-jelly-core::after {
-  left: 35%;
-  top: 28%;
-  height: 8px;
-  width: 11px;
-  opacity: 0.75;
+  inset: 2px;
+  height: auto;
+  width: auto;
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.18), transparent 38%);
+  opacity: 1;
+  filter: none;
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
