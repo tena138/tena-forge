@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import math
 import re
 import uuid
@@ -9,6 +10,9 @@ from pathlib import Path
 from typing import Any
 
 import fitz
+from openai import OpenAI
+
+from database import get_settings
 
 PDF_POINT_TO_PX = 96 / 72
 MAX_IMPORT_PAGES = 6
@@ -16,6 +20,8 @@ MAX_ANALYSIS_PAGES = 120
 MAX_ELEMENTS_PER_PAGE = 220
 MAX_INLINE_IMAGE_BYTES = 3 * 1024 * 1024
 MAX_TEXT_MASKS_PER_PAGE = 80
+MAX_AI_REBUILD_ELEMENTS_PER_PAGE = 80
+BLANK_PAGE_NON_WHITE_RATIO = 0.006
 
 ROLE_PRIORITY = {
     "cover": 0,
@@ -74,6 +80,77 @@ def _hex_from_seq(value: Any, fallback = "transparent") -> str:
             number *= 255
         rgb.append(max(0, min(255, int(round(number)))))
     return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+
+def _clean_hex(value: Any, fallback = "#111827") -> str:
+    text = str(value or "").strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", text):
+        return text.lower()
+    if re.fullmatch(r"[0-9a-fA-F]{6}", text):
+        return f"#{text.lower()}"
+    return fallback
+
+
+def _clamp_int(value: Any, minimum: int, maximum: int, fallback: int) -> int:
+    try:
+        number = int(round(float(value)))
+    except (TypeError, ValueError):
+        number = fallback
+    return max(minimum, min(maximum, number))
+
+
+def _clamp_float(value: Any, minimum: float, maximum: float, fallback: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = fallback
+    return max(minimum, min(maximum, number))
+
+
+def _page_visual_stats(page: fitz.Page) -> dict[str, Any]:
+    width = max(float(page.rect.width), 1)
+    height = max(float(page.rect.height), 1)
+    zoom = min(96 / width, 96 / height)
+    try:
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+    except Exception:
+        return {"dominantColor": "#ffffff", "dominantRatio": 1.0, "nonWhiteRatio": 0.0, "isVisuallyBlank": False}
+
+    channels = max(3, int(getattr(pix, "n", 3) or 3))
+    samples = pix.samples
+    total = max(1, pix.width * pix.height)
+    buckets: dict[tuple[int, int, int], list[int]] = {}
+    non_white = 0
+    step = max(1, total // 9000)
+    seen = 0
+    for pixel_index in range(0, total, step):
+        offset = pixel_index * channels
+        if offset + 2 >= len(samples):
+            continue
+        red, green, blue = samples[offset], samples[offset + 1], samples[offset + 2]
+        seen += 1
+        if min(red, green, blue) < 246 or max(red, green, blue) - min(red, green, blue) > 10:
+            non_white += 1
+        bucket = (red // 16, green // 16, blue // 16)
+        current = buckets.setdefault(bucket, [0, 0, 0, 0])
+        current[0] += 1
+        current[1] += red
+        current[2] += green
+        current[3] += blue
+
+    if not buckets or not seen:
+        return {"dominantColor": "#ffffff", "dominantRatio": 1.0, "nonWhiteRatio": 0.0, "isVisuallyBlank": False}
+
+    dominant = max(buckets.values(), key=lambda item: item[0])
+    count = max(1, dominant[0])
+    color = f"#{round(dominant[1] / count):02x}{round(dominant[2] / count):02x}{round(dominant[3] / count):02x}"
+    non_white_ratio = non_white / seen
+    return {
+        "dominantColor": color,
+        "dominantRatio": count / seen,
+        "nonWhiteRatio": non_white_ratio,
+        "isVisuallyBlank": non_white_ratio <= BLANK_PAGE_NON_WHITE_RATIO,
+    }
 
 
 def _point_xy(point: Any) -> tuple[float, float] | None:
@@ -169,6 +246,26 @@ def _base_element(element_type: str, name: str, frame: dict[str, int], z_index: 
 
 def _looks_like_full_page(frame: dict[str, int], size: dict[str, Any]) -> bool:
     return frame["x"] <= 8 and frame["y"] <= 8 and frame["width"] >= size["width"] * 0.94 and frame["height"] >= size["height"] * 0.94
+
+
+def _full_page_drawing_background(page: fitz.Page, size: dict[str, Any]) -> str | None:
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        return None
+    candidates: list[tuple[int, str]] = []
+    for drawing in drawings:
+        fill = _hex_from_seq(drawing.get("fill"), "")
+        if not fill or fill == "transparent":
+            continue
+        frame = _scale_rect(drawing.get("rect"))
+        if not frame or not _looks_like_full_page(frame, size):
+            continue
+        area = frame["width"] * frame["height"]
+        candidates.append((area, fill))
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda item: item[0], reverse=True)[0][1]
 
 
 def _line_element(p1: Any, p2: Any, style: dict[str, Any], z_index: int) -> dict[str, Any] | None:
@@ -501,10 +598,185 @@ def _problem_region(frame: dict[str, int], size: dict[str, Any], columns: int, z
 
 
 def _page_snapshot_data_url(page: fitz.Page, size: dict[str, Any]) -> str:
+    return f"data:image/png;base64,{base64.b64encode(_page_snapshot_png_bytes(page, size)).decode('ascii')}"
+
+
+def _page_snapshot_png_base64(page: fitz.Page, size: dict[str, Any]) -> str:
+    return base64.b64encode(_page_snapshot_png_bytes(page, size)).decode("ascii")
+
+
+def _page_snapshot_png_bytes(page: fitz.Page, size: dict[str, Any]) -> bytes:
     zoom_x = size["width"] / max(1, page.rect.width)
     zoom_y = size["height"] / max(1, page.rect.height)
     pix = page.get_pixmap(matrix=fitz.Matrix(zoom_x, zoom_y), alpha=False)
-    return f"data:image/png;base64,{base64.b64encode(pix.tobytes('png')).decode('ascii')}"
+    return pix.tobytes("png")
+
+
+def _extract_json_array(content: str) -> list[Any]:
+    text = (content or "").strip()
+    text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        text = text[start : end + 1]
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _ai_template_rebuild_prompt(size: dict[str, Any], page_number: int) -> str:
+    return f"""
+You are rebuilding one scanned PDF page as an editable visual template.
+Return ONLY a JSON array with one object. Coordinates MUST be pixels on a {size['width']}x{size['height']} canvas.
+
+Object shape:
+{{
+  "is_blank": false,
+  "page_role": "cover|toc|textbookInner|textbookLeft|textbookRight|problem|exam|solution|answer|custom",
+  "background_color": "#ffffff",
+  "elements": [
+    {{"type":"text","text":"visible text","x":0,"y":0,"width":100,"height":30,"font_size":18,"color":"#111827","font_weight":"normal|bold","text_align":"left|center|right"}},
+    {{"type":"shape","shape":"rect|roundRect|circle","x":0,"y":0,"width":100,"height":80,"fill":"#ffffff","stroke":"transparent","stroke_width":0,"radius":0,"opacity":1}},
+    {{"type":"line","x":0,"y":0,"width":100,"height":2,"rotation":0,"stroke":"#111827","stroke_width":2,"line_kind":"solid|dashed|dotted"}}
+  ]
+}}
+
+Rules:
+- Rebuild the design as editable elements; do not describe the page and do not ask for confirmation.
+- For cover pages, keep large title text, issue numbers, author names, colored backgrounds, and simple decorative geometry.
+- For reusable inner/problem pages, omit the actual body problem text and represent that area as open layout space; keep headers, page labels, rules, frames, and reusable markers.
+- If the page is a blank separator with no meaningful visual design, set is_blank true and return an empty elements array.
+- Approximate complex logos or illustrations using simple shapes only when they are central to the template; otherwise omit them.
+- Use at most {MAX_AI_REBUILD_ELEMENTS_PER_PAGE} elements.
+- This is source page {page_number}.
+""".strip()
+
+
+def _ai_rebuild_page(page: fitz.Page, index: int, size: dict[str, Any], warnings: list[str]) -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.openai_api_key:
+        return None
+    try:
+        client = OpenAI(api_key=settings.openai_api_key, timeout=min(max(settings.ai_request_timeout_seconds, 30), 180))
+        max_output_tokens = min(max(settings.ai_max_output_tokens, 4096), 8192)
+        kwargs = {
+            "model": settings.ai_reextract_model or settings.ai_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{_page_snapshot_png_base64(page, size)}",
+                                "detail": settings.ai_image_detail or "high",
+                            },
+                        },
+                        {"type": "text", "text": _ai_template_rebuild_prompt(size, index + 1)},
+                    ],
+                }
+            ],
+        }
+        try:
+            response = client.chat.completions.create(max_tokens=max_output_tokens, **kwargs)
+        except Exception as exc:
+            if "max_tokens" not in str(exc):
+                raise
+            response = client.chat.completions.create(extra_body={"max_completion_tokens": max_output_tokens}, **kwargs)
+        data = _extract_json_array(response.choices[0].message.content or "[]")
+        if data and isinstance(data[0], dict):
+            return data[0]
+    except Exception as exc:
+        warnings.append(f"{index + 1}page: AI rebuild failed, so the importer used deterministic PDF structure only. ({type(exc).__name__})")
+    return None
+
+
+def _ai_frame(item: dict[str, Any], size: dict[str, Any]) -> dict[str, int] | None:
+    x = _clamp_int(item.get("x"), 0, size["width"] - 1, 0)
+    y = _clamp_int(item.get("y"), 0, size["height"] - 1, 0)
+    width = _clamp_int(item.get("width"), 1, size["width"] - x, 1)
+    height = _clamp_int(item.get("height"), 1, size["height"] - y, 1)
+    if width < 2 or height < 2:
+        return None
+    return {"x": x, "y": y, "width": width, "height": height}
+
+
+def _ai_elements(ai_result: dict[str, Any], size: dict[str, Any], z_index: int) -> list[dict[str, Any]]:
+    elements: list[dict[str, Any]] = []
+    raw_elements = ai_result.get("elements")
+    if not isinstance(raw_elements, list):
+        return elements
+    for item in raw_elements[:MAX_AI_REBUILD_ELEMENTS_PER_PAGE]:
+        if not isinstance(item, dict):
+            continue
+        frame = _ai_frame(item, size)
+        if not frame:
+            continue
+        element_type = str(item.get("type") or "").strip()
+        if element_type == "text":
+            text = str(item.get("text") or "").strip()
+            if not text:
+                continue
+            style = _base_style(
+                color=_clean_hex(item.get("color"), "#111827"),
+                fontSize=_clamp_int(item.get("font_size"), 6, 96, 14),
+                fontWeight="bold" if str(item.get("font_weight") or "").lower() in {"bold", "black", "heavy"} else "normal",
+                textAlign=str(item.get("text_align") or "left") if str(item.get("text_align") or "left") in {"left", "center", "right"} else "left",
+                fill="transparent",
+                stroke="transparent",
+                strokeWidth=0,
+                borderStyle="none",
+            )
+            elements.append(_base_element("text", "AI rebuilt PDF text", frame, z_index + len(elements) + 1, text=text[:1000], style=style))
+            continue
+        if element_type == "shape":
+            shape = str(item.get("shape") or "rect")
+            if shape not in {"rect", "roundRect", "circle"}:
+                shape = "rect"
+            stroke_width = _clamp_int(item.get("stroke_width"), 0, 24, 0)
+            style = _base_style(
+                fill=_clean_hex(item.get("fill"), "transparent") if str(item.get("fill") or "").lower() != "transparent" else "transparent",
+                stroke=_clean_hex(item.get("stroke"), "transparent") if str(item.get("stroke") or "").lower() != "transparent" else "transparent",
+                strokeWidth=stroke_width,
+                borderStyle="solid" if stroke_width > 0 else "none",
+                radius=_clamp_int(item.get("radius"), 0, 120, 0),
+            )
+            elements.append(
+                _base_element(
+                    "shape",
+                    "AI rebuilt PDF shape",
+                    frame,
+                    z_index + len(elements) + 1,
+                    shape=shape,
+                    opacity=_clamp_float(item.get("opacity"), 0, 1, 1),
+                    style=style,
+                )
+            )
+            continue
+        if element_type == "line":
+            stroke_width = _clamp_int(item.get("stroke_width"), 1, 24, 2)
+            style = _base_style(
+                stroke=_clean_hex(item.get("stroke"), "#111827"),
+                strokeWidth=stroke_width,
+                borderStyle="solid",
+            )
+            line_kind = str(item.get("line_kind") or "solid")
+            if line_kind not in {"solid", "dashed", "dotted"}:
+                line_kind = "solid"
+            elements.append(
+                _base_element(
+                    "line",
+                    "AI rebuilt PDF line",
+                    frame,
+                    z_index + len(elements) + 1,
+                    rotation=round(_clamp_float(item.get("rotation"), -360, 360, 0), 2),
+                    lineKind=line_kind,
+                    style=style,
+                )
+            )
+    return elements
 
 
 def _content_mask(frame: dict[str, int], size: dict[str, Any], name: str, z_index: int, padding: int = 3) -> dict[str, Any] | None:
@@ -605,6 +877,8 @@ def _role_display(role_key: str, source_page_number: int) -> tuple[str, str]:
         return "toc", "PDF Table of Contents"
     if role_key == "unitDivider":
         return "custom", "PDF Unit Divider"
+    if role_key == "textbookInner":
+        return "textbookInner", "PDF Inner Page"
     if role_key == "textbookLeft":
         return "textbookLeft", "PDF Left Inner Page"
     if role_key == "textbookRight":
@@ -652,6 +926,14 @@ def _analyze_page(page: fitz.Page, index: int) -> dict[str, Any]:
         drawing_count = 0
     image_count = sum(1 for block in blocks if block.get("type") == 1)
     max_top_font = _max_top_font_size(blocks, size)
+    visual_stats = _page_visual_stats(page)
+    is_blank = (
+        word_count == 0
+        and body_count == 0
+        and drawing_count <= 1
+        and image_count <= 1
+        and bool(visual_stats.get("isVisuallyBlank"))
+    )
     role_key = _classify_page_role(index, text, body_frame, body_count, word_count, max_top_font)
     return {
         "index": index,
@@ -665,6 +947,9 @@ def _analyze_page(page: fitz.Page, index: int) -> dict[str, Any]:
         "drawing_count": drawing_count,
         "image_count": image_count,
         "max_top_font": max_top_font,
+        "is_blank": is_blank,
+        "dominant_color": visual_stats.get("dominantColor") or "#ffffff",
+        "non_white_ratio": visual_stats.get("nonWhiteRatio") or 0,
         "signature": _layout_signature(size, body_frame, body_count, drawing_count, image_count),
     }
 
@@ -679,6 +964,7 @@ def _analysis_score(analysis: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _select_representative_pages(analyses: list[dict[str, Any]], max_pages: int) -> list[dict[str, Any]]:
+    analyses = [analysis for analysis in analyses if not analysis.get("is_blank")]
     selected: list[dict[str, Any]] = []
     selected_indexes: set[int] = set()
     selected_role_signatures: set[tuple[str, tuple[Any, ...]]] = set()
@@ -733,6 +1019,8 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: s
     text_dict = page.get_text("dict")
     blocks = list(text_dict.get("blocks") or [])
     page_assets: list[dict[str, Any]] = []
+    visual_stats = _page_visual_stats(page)
+    background_color = _full_page_drawing_background(page, size) or str(visual_stats.get("dominantColor") or "#ffffff")
 
     drawing_elements = _drawing_elements(page, size, 0)
 
@@ -747,27 +1035,34 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: s
     if body_frame:
         region_element = _problem_region(body_frame, size, _estimate_columns(body_frame, body_block_count, size), 0)
 
-    masks: list[dict[str, Any]] = []
-    text_mask_candidates = text_elements if len(text_elements) <= MAX_TEXT_MASKS_PER_PAGE else [element for element in text_elements if element.get("type") == "variable"]
-    for text_element in text_mask_candidates[:MAX_TEXT_MASKS_PER_PAGE]:
-        mask = _content_mask(text_element, size, "PDF editable text mask", 0)
-        if mask:
-            masks.append(mask)
-    if len(text_elements) > MAX_TEXT_MASKS_PER_PAGE:
-        warnings.append(f"{index + 1}page: text masks were limited to variable fields to keep the imported template responsive.")
-    if body_frame:
-        mask = _content_mask(body_frame, size, "PDF dynamic content mask", 0, padding=12)
-        if mask:
-            masks.append(mask)
+    ai_result: dict[str, Any] | None = None
+    ai_elements: list[dict[str, Any]] = []
+    scan_like_page = skipped_images > 0 and len(image_elements) == 0
+    if scan_like_page:
+        ai_result = _ai_rebuild_page(page, index, size, warnings)
+        if ai_result:
+            ai_role = str(ai_result.get("page_role") or "").strip()
+            if ai_role in {"cover", "toc", "textbookInner", "textbookLeft", "textbookRight", "problem", "exam", "solution", "answer", "custom"}:
+                role_key = ai_role
+            background_color = _clean_hex(ai_result.get("background_color"), background_color)
+            ai_elements = _ai_elements(ai_result, size, 0)
+            if ai_elements and not region_element and (role_key or "") in {"textbookInner", "textbookLeft", "textbookRight", "problem", "exam"}:
+                fallback_frame = {"x": 64, "y": round(size["height"] * 0.16), "width": size["width"] - 128, "height": round(size["height"] * 0.7)}
+                region_element = _problem_region(fallback_frame, size, 2 if role_key == "exam" else 1, 0)
 
-    elements = [*drawing_elements, *image_elements, *masks, *text_elements]
+    elements = ai_elements if ai_elements else [*drawing_elements, *image_elements, *text_elements]
     if region_element:
         elements.append(region_element)
 
+    fallback_snapshot_url: str | None = None
     if not elements:
-        fallback_frame = {"x": 64, "y": round(size["height"] * 0.18), "width": size["width"] - 128, "height": round(size["height"] * 0.68)}
-        elements.append(_problem_region(fallback_frame, size, 1, 1))
-        warnings.append(f"{index + 1}page: no editable structure was detected, so the rendered PDF page was preserved as the background.")
+        if scan_like_page:
+            fallback_snapshot_url = _page_snapshot_data_url(page, size)
+            warnings.append(f"{index + 1}page: scanned page could not be rebuilt into editable elements, so it was preserved as a raster fallback.")
+        else:
+            fallback_frame = {"x": 64, "y": round(size["height"] * 0.18), "width": size["width"] - 128, "height": round(size["height"] * 0.68)}
+            elements.append(_problem_region(fallback_frame, size, 1, 1))
+            warnings.append(f"{index + 1}page: no editable structure was detected, so a reusable dynamic region was created instead.")
 
     if len(elements) > MAX_ELEMENTS_PER_PAGE:
         dynamic_regions = [element for element in elements if element.get("type", "").endswith("Region")]
@@ -780,7 +1075,10 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: s
         page_name = name
 
     _renumber_z_indexes(elements)
-    snapshot_url = _page_snapshot_data_url(page, size)
+    background = {"color": background_color or "#ffffff"}
+    if fallback_snapshot_url:
+        background["imageUrl"] = fallback_snapshot_url
+        background["opacity"] = 1
 
     return {
         "id": _id("page"),
@@ -789,7 +1087,7 @@ def _page_from_pdf(page: fitz.Page, index: int, warnings: list[str], role_key: s
         "sourcePageNumber": index + 1,
         "sourceRole": role_key or page_role,
         "pageSize": size,
-        "background": {"color": "#ffffff", "imageUrl": snapshot_url, "opacity": 1},
+        "background": background,
         "safeArea": _safe_area(size),
         "guides": [],
         "elements": elements,
@@ -813,7 +1111,12 @@ def build_visual_template_set_from_pdf(pdf_bytes: bytes, filename: str | None = 
             warnings.append(f"{len(analysis_indexes)} representative positions were scanned across a {doc.page_count}-page PDF.")
 
         analyses = [_analyze_page(doc[index], index) for index in analysis_indexes]
+        blank_page_numbers = [analysis["index"] + 1 for analysis in analyses if analysis.get("is_blank")]
+        if blank_page_numbers:
+            warnings.append(f"Skipped blank separator page(s): {blank_page_numbers}.")
         selected_analyses = _select_representative_pages(analyses, page_limit)
+        if not selected_analyses:
+            raise ValueError("No reusable visual template pages were detected in this PDF.")
         selected_indexes = [analysis["index"] + 1 for analysis in selected_analyses]
         if doc.page_count > len(selected_analyses):
             warnings.append(f"Selected {len(selected_analyses)} representative design page(s), not the first {len(selected_analyses)} page(s): {selected_indexes}.")

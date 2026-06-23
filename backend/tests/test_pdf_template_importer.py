@@ -40,14 +40,13 @@ class PdfTemplateImporterTests(unittest.TestCase):
         page = template_set["pages"][0]
         elements = page["elements"]
 
-        self.assertTrue(page["background"]["imageUrl"].startswith("data:image/png;base64,"))
+        self.assertNotIn("imageUrl", page["background"])
         text_values = [element.get("text", "") for element in elements if element.get("type") == "text"]
         variable_keys = [element.get("variableKey", "") for element in elements if element.get("type") == "variable"]
         self.assertIn("academy_name", variable_keys)
         self.assertIn("test_title", variable_keys)
         self.assertFalse(any("Tena Academy" in value for value in text_values))
         self.assertFalse(any("quadratic equation" in value for value in text_values))
-        self.assertTrue(any(element.get("name") == "PDF dynamic content mask" for element in elements))
         self.assertTrue(any(element.get("type") == "problemRegion" for element in elements))
         self.assertTrue(any(element.get("type") in {"shape", "line"} for element in elements))
         self.assertEqual(template_set["sourceType"], "unknown")
@@ -66,8 +65,37 @@ class PdfTemplateImporterTests(unittest.TestCase):
 
         self.assertLessEqual(result["imported_page_count"], 6)
         self.assertEqual(len(result["templateSet"]["pages"]), result["imported_page_count"])
-        self.assertTrue(all(page["background"].get("imageUrl", "").startswith("data:image/png;base64,") for page in result["templateSet"]["pages"]))
+        self.assertTrue(all("imageUrl" not in page["background"] for page in result["templateSet"]["pages"]))
         self.assertTrue(result["warnings"])
+
+    def test_skips_blank_separator_pages(self):
+        doc = fitz.open()
+
+        cover = doc.new_page(width=595, height=842)
+        cover.insert_text((96, 210), "Algebra Workbook", fontsize=30)
+
+        doc.new_page(width=595, height=842)
+
+        inner = doc.new_page(width=595, height=842)
+        inner.insert_textbox(
+            fitz.Rect(54, 150, 540, 620),
+            "1. Solve the expression below.\n"
+            "This page contains enough body text to become a dynamic problem region.\n"
+            "A second paragraph keeps the body area large enough for layout detection.",
+            fontsize=11,
+        )
+
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        doc.close()
+
+        result = build_visual_template_set_from_pdf(buffer.getvalue(), "blank.pdf")
+
+        selected_numbers = result["templateSet"]["importMeta"]["selectedPageNumbers"]
+        self.assertNotIn(2, selected_numbers)
+        self.assertIn(1, selected_numbers)
+        self.assertIn(3, selected_numbers)
+        self.assertTrue(any("blank separator" in warning for warning in result["warnings"]))
 
     def test_selects_representative_roles_beyond_the_first_six_pages(self):
         doc = fitz.open()
