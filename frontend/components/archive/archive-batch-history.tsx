@@ -44,10 +44,10 @@ function statusLabel(status: Batch["status"]) {
 
 function statusClass(status: Batch["status"]) {
   return {
-    pending: "bg-zinc-100 text-zinc-700",
-    processing: "bg-black text-white",
-    done: "bg-zinc-800 text-white",
-    error: "bg-zinc-200 text-zinc-950",
+    pending: "!bg-zinc-100 !text-zinc-800 ring-1 ring-inset ring-zinc-200",
+    processing: "!bg-violet-600 !text-white ring-1 ring-inset ring-violet-500",
+    done: "!bg-zinc-950 !text-white ring-1 ring-inset ring-zinc-900",
+    error: "!bg-red-50 !text-red-700 ring-1 ring-inset ring-red-200",
   }[status];
 }
 
