@@ -106,6 +106,10 @@ export function PlanConfigurator({ plan }: { plan: PaidPlanType }) {
       <ConfiguratorNav plan={plan} />
       <section className="px-4 pb-20 pt-24 sm:px-6 lg:pb-24 lg:pt-28">
         <div className="mx-auto w-full max-w-[96rem]">
+          <header className="mb-12">
+            <h1 className="text-5xl font-black tracking-normal text-zinc-950 sm:text-7xl">{PLANS[plan].name}</h1>
+          </header>
+
           <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start">
             <div>
               <SubjectEngineSection selectedSubjectEngines={selectedSubjectEngines} onToggle={toggleSubjectEngine} />
