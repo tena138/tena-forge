@@ -273,35 +273,22 @@ export function CoAgentJellyOverlay() {
   const showBubbleTitle = Boolean(bubbleTitle && bubble?.variant !== "question");
   const targetIsSidebar = resolvedLayout.targetKind === "sidebar";
   const targetIsCommand = resolvedLayout.targetKind === "command";
-  const showTargetSpotlight = Boolean(resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle" && !targetIsCommand);
+  const showTargetSpotlight = Boolean(resolvedLayout.targetRect && workflow?.status && workflow.status !== "idle" && !targetIsCommand && !targetIsSidebar);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[2100]" aria-live="polite">
       {showTargetSpotlight && resolvedLayout.targetRect ? (
         <>
-          {targetIsSidebar ? (
-            <div
-              className={cn("coagent-sidebar-jelly-ring", workflow?.status === "needs_input" && "coagent-sidebar-jelly-ring--asking")}
-              style={{
-                left: resolvedLayout.targetRect.left,
-                top: resolvedLayout.targetRect.top,
-                width: resolvedLayout.targetRect.width,
-                height: resolvedLayout.targetRect.height,
-              }}
-              aria-hidden="true"
-            />
-          ) : (
-            <div
-              className="pointer-events-none fixed rounded-[14px] border-2 border-violet-500/90 shadow-[0_0_0_5px_rgba(124,58,237,0.12),0_0_30px_rgba(124,58,237,0.32)]"
-              style={{
-                left: resolvedLayout.targetRect.left,
-                top: resolvedLayout.targetRect.top,
-                width: resolvedLayout.targetRect.width,
-                height: resolvedLayout.targetRect.height,
-              }}
-              aria-hidden="true"
-            />
-          )}
+          <div
+            className="pointer-events-none fixed rounded-[14px] border-2 border-violet-500/90 shadow-[0_0_0_5px_rgba(124,58,237,0.12),0_0_30px_rgba(124,58,237,0.32)]"
+            style={{
+              left: resolvedLayout.targetRect.left,
+              top: resolvedLayout.targetRect.top,
+              width: resolvedLayout.targetRect.width,
+              height: resolvedLayout.targetRect.height,
+            }}
+            aria-hidden="true"
+          />
           {target && !targetIsSidebar ? (
             <div
               className="pointer-events-none fixed max-w-[220px] truncate rounded-full bg-violet-700 px-3 py-1 text-[11px] font-black text-white shadow-[0_10px_26px_rgba(91,33,182,0.28)]"

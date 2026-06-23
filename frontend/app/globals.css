@@ -756,34 +756,6 @@
   }
 }
 
-@keyframes coagent-sidebar-jelly-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes coagent-sidebar-jelly-counterspin {
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
-@keyframes coagent-sidebar-jelly-morph {
-  0%,
-  100% {
-    border-radius: 46% 54% 50% 50% / 56% 46% 54% 44%;
-    filter: saturate(1.12);
-  }
-  38% {
-    border-radius: 58% 42% 54% 46% / 43% 58% 42% 57%;
-    filter: saturate(1.28);
-  }
-  72% {
-    border-radius: 42% 58% 45% 55% / 60% 40% 57% 43%;
-    filter: saturate(1.18);
-  }
-}
-
 .coagent-jelly-blob {
   height: 36px;
   width: 42px;
@@ -871,66 +843,13 @@
   opacity: 0.75;
 }
 
-.coagent-sidebar-jelly-ring {
-  pointer-events: none;
-  position: fixed;
-  z-index: 2110;
-  border-radius: 999px;
-  filter: drop-shadow(0 10px 18px rgb(91 33 182 / 0.22));
-}
-
-.coagent-sidebar-jelly-ring::before,
-.coagent-sidebar-jelly-ring::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 46% 54% 50% 50% / 56% 46% 54% 44%;
-  -webkit-mask: radial-gradient(circle at center, transparent 0 calc(50% - 9px), #000 calc(50% - 7px));
-  mask: radial-gradient(circle at center, transparent 0 calc(50% - 9px), #000 calc(50% - 7px));
-}
-
-.coagent-sidebar-jelly-ring::before {
-  background:
-    radial-gradient(circle at 28% 24%, rgb(255 255 255 / 0.92) 0 8%, transparent 9%),
-    conic-gradient(from 12deg, #a78bfa 0 16%, #7c3aed 21% 48%, #4c1d95 57% 70%, #9333ea 78% 100%);
-  box-shadow:
-    0 0 0 1px rgb(124 58 237 / 0.18),
-    0 0 24px rgb(124 58 237 / 0.36),
-    inset 0 4px 8px rgb(255 255 255 / 0.38),
-    inset 0 -7px 12px rgb(46 16 101 / 0.34);
-  animation:
-    coagent-sidebar-jelly-spin 1.55s linear infinite,
-    coagent-sidebar-jelly-morph 3.2s ease-in-out infinite;
-}
-
-.coagent-sidebar-jelly-ring::after {
-  inset: 4px;
-  background:
-    radial-gradient(circle at 70% 24%, rgb(255 255 255 / 0.7) 0 10%, transparent 11%),
-    conic-gradient(from 190deg, transparent 0 10%, rgb(221 214 254 / 0.9) 13% 22%, transparent 30% 55%, rgb(139 92 246 / 0.72) 62% 74%, transparent 82% 100%);
-  opacity: 0.8;
-  animation:
-    coagent-sidebar-jelly-counterspin 2.6s linear infinite,
-    coagent-sidebar-jelly-morph 2.7s ease-in-out infinite reverse;
-}
-
-.coagent-sidebar-jelly-ring--asking::before {
-  animation-duration: 2.4s, 3.2s;
-}
-
-.coagent-sidebar-jelly-ring--asking::after {
-  animation-duration: 3.4s, 2.7s;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .coagent-jelly-blob {
     transition: left 160ms ease-out, top 160ms ease-out;
   }
 
   .coagent-jelly-core,
-  .coagent-jelly-core::after,
-  .coagent-sidebar-jelly-ring::before,
-  .coagent-sidebar-jelly-ring::after {
+  .coagent-jelly-core::after {
     animation: none;
   }
 }
@@ -1992,11 +1911,18 @@
 
   html[data-theme="light"] [data-app-shell] .console-nav-active,
   html[data-theme="light"] [data-app-shell] .console-nav-active *,
+  html[data-theme="light"] [data-app-shell] .coagent-nav-active,
+  html[data-theme="light"] [data-app-shell] .coagent-nav-active *,
   html[data-theme="light"] [data-app-shell] .coagent-choice-button,
   html[data-theme="light"] [data-app-shell] .coagent-choice-button *,
   html[data-theme="light"] [data-app-shell] [class~="bg-black"][class*="text-white"],
   html[data-theme="light"] [data-app-shell] [class~="bg-black"][class*="text-white"] * {
     color: rgb(255 255 255) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] .coagent-nav-active {
+    border-color: rgb(109 40 217) !important;
+    background: rgb(109 40 217) !important;
   }
 
   html[data-theme="light"] [data-app-shell] .coagent-choice-button {
