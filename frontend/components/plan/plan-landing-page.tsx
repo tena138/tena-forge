@@ -138,25 +138,25 @@ type AcademyLogoSlot = {
   src?: string;
 };
 
-// Replace these placeholder wordmarks with approved academy logo assets as they arrive.
+// Replace these invitation messages with approved academy logo assets as they arrive.
 const academyLogoSets: AcademyLogoSlot[][] = [
   [
-    { mark: "NOVA", name: "로고 슬롯 01" },
-    { mark: "APEX", name: "로고 슬롯 02" },
-    { mark: "VECTOR", name: "로고 슬롯 03" },
-    { mark: "PRIME", name: "로고 슬롯 04" },
+    { mark: "We're waiting for", name: "Partner invitation 01" },
+    { mark: "new academy partners", name: "Partner invitation 02" },
+    { mark: "to grow with", name: "Partner invitation 03" },
+    { mark: "Tena Forge", name: "Partner invitation 04" },
   ],
   [
-    { mark: "SUMMIT", name: "로고 슬롯 05" },
-    { mark: "FOCUS", name: "로고 슬롯 06" },
-    { mark: "ORBIT", name: "로고 슬롯 07" },
-    { mark: "CORE", name: "로고 슬롯 08" },
+    { mark: "We're looking for", name: "Partner invitation 05" },
+    { mark: "academies ready", name: "Partner invitation 06" },
+    { mark: "to build better", name: "Partner invitation 07" },
+    { mark: "learning with us", name: "Partner invitation 08" },
   ],
   [
-    { mark: "SEUM", name: "로고 슬롯 09" },
-    { mark: "RADIUS", name: "로고 슬롯 10" },
-    { mark: "AXIS", name: "로고 슬롯 11" },
-    { mark: "ONEDAY", name: "로고 슬롯 12" },
+    { mark: "Your academy", name: "Partner invitation 09" },
+    { mark: "could be next", name: "Partner invitation 10" },
+    { mark: "to shape the future", name: "Partner invitation 11" },
+    { mark: "with Tena Forge", name: "Partner invitation 12" },
   ],
 ];
 
@@ -576,8 +576,8 @@ function AcademyLogoCarousel() {
             {logo.src ? (
               <img src={logo.src} alt={logo.name} className="max-h-12 max-w-[72%] object-contain sm:max-h-14" />
             ) : (
-              <div className="min-w-0" role="img" aria-label={logo.name}>
-                <div aria-hidden="true" className="truncate text-2xl font-black tracking-normal text-zinc-950 sm:text-3xl">{logo.mark}</div>
+              <div className="min-w-0">
+                <div className="text-balance text-xl font-black leading-tight tracking-normal text-zinc-950 sm:text-2xl">{logo.mark}</div>
               </div>
             )}
           </div>
