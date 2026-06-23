@@ -499,25 +499,23 @@ export function PlanLandingPage() {
             <div className="mb-14 sm:mb-16 lg:mb-20">
               <AcademyLogoCarousel />
             </div>
-            <div className="landing-feature-nav grid grid-cols-2 gap-px border bg-zinc-200 text-center sm:grid-cols-3 lg:grid-cols-6">
+            <nav className="landing-feature-nav grid grid-cols-2 gap-x-8 gap-y-4 text-center sm:grid-cols-3 lg:grid-cols-6" aria-label="주요 기능">
               {landingFeatureCategories.map((category) => (
                 <a
                   key={category.id}
                   href={`#landing-feature-${category.id}`}
                   onClick={(event) => scrollToLandingFeature(event, category.id)}
-                  className="landing-feature-nav-item group flex min-h-[5.75rem] flex-col items-center justify-center gap-2 bg-[#fbfbfa] px-3 py-4 text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/10"
+                  className="landing-feature-nav-item inline-flex min-h-12 items-center justify-center px-2 text-base font-black tracking-normal text-black transition hover:text-zinc-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-black/10 sm:text-lg"
                 >
-                  <category.icon className="h-4 w-4 text-zinc-500 transition group-hover:text-black" />
-                  <span className="text-base font-black tracking-normal sm:text-lg">{category.title}</span>
+                  {category.title}
                 </a>
               ))}
-            </div>
+            </nav>
           </div>
         </div>
       </section>
 
       <LandingFeatureSection />
-      <ScrollStorySection />
       <PlanSection />
       <LandingFooter />
     </main>
@@ -526,30 +524,24 @@ export function PlanLandingPage() {
 
 function LandingFeatureSection() {
   return (
-    <section className="bg-[#fbfbfa] px-4 py-16 text-zinc-950 sm:px-6 sm:py-20">
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="landing-feature-grid grid gap-px overflow-hidden border bg-zinc-200 md:grid-cols-2">
+    <section className="bg-[#fbfbfa] px-4 py-14 text-zinc-950 sm:px-6 sm:py-16">
+      <div className="mx-auto w-full max-w-[96rem]">
+        <div className="landing-feature-list">
           {landingFeatureCategories.map((category) => (
             <article
               key={category.id}
               id={`landing-feature-${category.id}`}
-              className="landing-feature-card scroll-mt-24 bg-white p-6 sm:p-7"
+              className="landing-feature-row scroll-mt-24 py-12 sm:py-14 lg:grid lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.35fr)] lg:items-start lg:gap-16"
             >
-              <div className="flex items-start gap-4">
-                <span className="landing-feature-icon grid h-11 w-11 shrink-0 place-items-center border bg-[#fbfbfa] text-zinc-950">
-                  <category.icon className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <h2 className="text-2xl font-black tracking-normal text-zinc-950">{category.title}</h2>
-                  <p className="landing-keep-words mt-2 text-sm font-semibold leading-6 text-zinc-600 sm:text-base">{category.description}</p>
-                </div>
+              <div className="min-w-0">
+                <h2 className="text-3xl font-black tracking-normal text-zinc-950 sm:text-4xl">{category.title}</h2>
+                <p className="landing-keep-words mt-3 max-w-2xl text-base font-semibold leading-7 text-zinc-600 sm:text-lg sm:leading-8">
+                  {category.description}
+                </p>
               </div>
-              <ul className="mt-6 grid gap-3">
+              <ul className="mt-7 grid gap-x-10 gap-y-3 text-sm font-bold leading-7 text-zinc-800 sm:grid-cols-2 sm:text-base lg:mt-1">
                 {category.features.map((feature) => (
-                  <li key={feature} className="flex gap-3 text-sm font-bold leading-6 text-zinc-800 sm:text-base">
-                    <Check className="mt-1 h-4 w-4 shrink-0 text-zinc-950" />
-                    <span>{feature}</span>
-                  </li>
+                  <li key={feature} className="landing-keep-words">{feature}</li>
                 ))}
               </ul>
             </article>
