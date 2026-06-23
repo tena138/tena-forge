@@ -147,10 +147,7 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
   return (
     <section className="mt-2 rounded-[8px] bg-zinc-100 p-2">
       <div className="flex items-center justify-between gap-2 px-1 pb-2">
-        <div>
-          <div className="text-sm font-semibold text-zinc-950">내 워크스페이스</div>
-          <div className="text-xs text-muted-foreground">학생 앱과 학원 콘솔 전환</div>
-        </div>
+        <div className="text-sm font-semibold text-zinc-950">워크스페이스</div>
         {loading ? <Loader2 className="h-4 w-4 animate-spin text-zinc-500" /> : null}
       </div>
 
@@ -164,13 +161,13 @@ export function WorkspaceMenuSection({ onClose }: { onClose?: () => void }) {
               type="button"
               onClick={() => switchWorkspace(item)}
               className={cn(
-                "flex min-w-0 items-center justify-between gap-3 rounded-[7px] px-3 py-2 text-left transition",
-                selected ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
+                "flex min-w-0 items-center justify-between gap-3 rounded-[7px] bg-white px-3 py-2 text-left text-zinc-800 transition",
+                selected ? "ring-1 ring-zinc-950" : "hover:bg-zinc-50 hover:text-zinc-950"
               )}
             >
               <span className="min-w-0">
                 <span className="block truncate text-sm font-bold">{item.name}</span>
-                <span className={cn("block truncate text-xs", selected ? "text-zinc-200" : "text-muted-foreground")}>{roleLabel(item.role)}</span>
+                <span className="block truncate text-xs text-muted-foreground">{roleLabel(item.role)}</span>
               </span>
               {selected ? <Check className="h-4 w-4 shrink-0" /> : null}
             </button>
