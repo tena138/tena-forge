@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { AddToSetModal } from "@/components/add-to-set-modal";
+import { ArchiveFolderExplorer } from "@/components/archive/archive-folder-explorer";
 import { ExportModal } from "@/components/export-modal";
 import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
@@ -516,13 +517,19 @@ function ProblemsBrowser() {
     if (reviewFilter === "needs") params.set("needs_review", "true");
     if (reviewFilter === "reviewed") params.set("needs_review", "false");
     if (sort !== "source_order") params.set("sort", sort);
-    if (selectedBatchId) {
+    if (selectedBatchFolderId) {
+      if (selectedFolderBatchIds.length) {
+        selectedFolderBatchIds.forEach((batchId) => params.append("batch_ids", batchId));
+      } else {
+        params.set("batch_id", "00000000-0000-0000-0000-000000000000");
+      }
+    } else if (selectedBatchId) {
       params.set("batch_id", selectedBatchId);
     }
     subjects.forEach((value) => params.append("subject", value));
     selectedDiffs.forEach((value) => params.append("difficulty", value));
     return params.toString();
-  }, [pageRange, parsedPageRange, reviewFilter, search, selectedBatchId, selectedDiffs, sort, subjects, unit]);
+  }, [pageRange, parsedPageRange, reviewFilter, search, selectedBatchFolderId, selectedBatchId, selectedDiffs, selectedFolderBatchIds, sort, subjects, unit]);
 
   useEffect(() => {
     if (selectedBatchFolderId && archiveFoldersLoaded && !archiveFolders.some((folder) => folder.id === selectedBatchFolderId)) {
@@ -1476,6 +1483,47 @@ function ProblemsBrowser() {
           </div>
         ) : null}
 
+      </section>
+
+      <section className="forge-panel rounded-lg p-4">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-zinc-950">문항 보관</h2>
+            <p className="mt-1 text-xs font-semibold text-zinc-500">추출 배치가 저장된 보관 트리 기준으로 문항을 탐색합니다.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {SUBJECT_ENGINES.map((engine) => (
+              <button
+                key={engine.code}
+                type="button"
+                className={cn(
+                  "h-9 rounded-[9px] px-3 text-sm font-bold transition-colors",
+                  archiveEngine === engine.code ? "bg-black text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
+                )}
+                onClick={() => setArchiveEngine(engine.code)}
+              >
+                {subjectEngineLabel(engine.code)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <ArchiveFolderExplorer
+          folders={archiveFolders}
+          batches={archiveEngineBatches}
+          currentFolderId={currentArchiveFolderId}
+          selectedFolderId={selectedBatchFolderId || null}
+          selectedBatchId={selectedBatchId || null}
+          title="문항 보관 트리"
+          kicker="Archive folders"
+          loading={!archiveFoldersLoaded || !batchesLoaded}
+          onOpenFolder={openArchiveFolder}
+          onSelectFolder={selectArchiveFolderForProblems}
+          onSelectBatch={selectBatch}
+          onCreateFolder={createServerArchiveFolder}
+          onUpdateFolder={updateServerArchiveFolder}
+          onDeleteFolder={deleteServerArchiveFolder}
+          onMoveBatch={moveBatchToServerFolder}
+        />
       </section>
 
       {selectedIds.length > 0 ? (
