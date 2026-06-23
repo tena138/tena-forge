@@ -2183,23 +2183,11 @@ function VisualTemplateStudioPageContent() {
 
         <main className="min-h-0 overflow-auto bg-zinc-100 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
           <div className="mx-auto flex w-fit flex-col gap-7 p-5 pb-20">
-            {templateSet.pages.map((page, index) => {
+            {templateSet.pages.map((page) => {
               const size = page.pageSize || templateSet.defaultPageSize;
               const renderedPage = dynamicPreviewPages.find((item) => item.id === page.id) || page;
               return (
-                <section key={page.id} className="space-y-3">
-                  <div className="flex items-center justify-between rounded-[9px] bg-white px-2.5 py-1.5 text-[11px] text-zinc-500 shadow-sm">
-                    <button
-                      className={cls("rounded px-2 py-1 font-bold transition", page.id === selectedPageId ? "bg-zinc-100 text-zinc-950" : "hover:bg-zinc-100")}
-                      onClick={() => {
-                        setSelectedPageId(page.id);
-                        setSelectedIds([]);
-                      }}
-                    >
-                      {index + 1}. {page.name}
-                    </button>
-                    <span>{size.preset.replaceAll("_", " ")} · {size.width}×{size.height}px</span>
-                  </div>
+                <section key={page.id}>
                   <div
                     data-page-frame
                     className="relative"
