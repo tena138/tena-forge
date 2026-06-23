@@ -88,6 +88,8 @@ const panelTabs: Array<{ key: StudioPanel; label: string; icon: typeof Type }> =
   { key: "layers", label: "레이어", icon: Layers },
 ];
 
+const pageRoleOptions = Object.keys(pageRoleLabels) as PageRole[];
+
 const elementPalette: Array<{ type: TemplateElementType; label: string; description: string; group: PaletteGroup; icon: typeof Type }> = [
   { type: "counselingRegion", label: "상담 항목 영역", description: "상담 항목 자동 배치", group: "?숈쟻 ?곸뿭" as PaletteGroup, icon: MessageSquareText },
   { type: "text", label: "텍스트", description: "자유 텍스트 박스", group: "기본 요소", icon: Type },
@@ -1804,13 +1806,23 @@ function VisualTemplateStudioPageContent() {
     });
   }
 
-  function addPage(role: PageRole) {
+  function addPage(role: PageRole = "custom") {
     const page = createStudioPage(role, templateSet);
     updateTemplateSet((draft) => {
       draft.pages.push(page);
     });
     setSelectedPageId(page.id);
     setSelectedIds([]);
+  }
+
+  function updatePageRole(pageId: string, role: PageRole) {
+    updateTemplateSet((draft) => {
+      const page = draft.pages.find((item) => item.id === pageId);
+      if (!page || page.role === role) return;
+      const previousRole = page.role;
+      page.role = role;
+      if (!page.name || page.name === pageRoleLabels[previousRole]) page.name = pageRoleLabels[role];
+    });
   }
 
   function removePage(pageId: string) {
@@ -2014,46 +2026,81 @@ function VisualTemplateStudioPageContent() {
 
     if (leftPanel === "pages") {
       return (
-        <div className="space-y-3">
+        <div className="flex min-h-full flex-col gap-3">
           <h2 className="text-sm font-bold text-zinc-950">페이지</h2>
           <div className="space-y-2">
-            {templateSet.pages.map((page, index) => (
-              <button
-                key={page.id}
-                className={cls(
-                  "flex w-full items-center gap-3 rounded-[12px] border p-2 text-left transition",
-                  page.id === selectedPageId ? "border-zinc-300/55 bg-zinc-500/14 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
-                )}
-                onClick={() => {
-                  setSelectedPageId(page.id);
-                  setSelectedIds([]);
-                }}
-              >
-                <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded-[6px] bg-white text-xs font-black text-slate-900 shadow">{index + 1}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-bold text-zinc-950">{page.name}</div>
-                  <div className="mt-1 text-xs text-slate-500">{pageRoleLabels[page.role]}</div>
-                </div>
-                <span
-                  role="button"
-                  className="rounded-[7px] p-1.5 text-slate-500 hover:bg-zinc-500/15 hover:text-zinc-200"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    removePage(page.id);
-                  }}
+            {templateSet.pages.map((page, index) => {
+              const active = page.id === selectedPageId;
+              return (
+                <div
+                  key={page.id}
+                  className={cls(
+                    "rounded-[12px] border p-2 transition",
+                    active ? "border-zinc-300/55 bg-zinc-500/14 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                  )}
                 >
-                  <Trash2 className="h-4 w-4" />
-                </span>
-              </button>
-            ))}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-[9px] text-left outline-none"
+                    onClick={() => {
+                      setSelectedPageId(page.id);
+                      setSelectedIds([]);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      setSelectedPageId(page.id);
+                      setSelectedIds([]);
+                    }}
+                  >
+                    <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded-[6px] bg-white text-xs font-black text-slate-900 shadow">{index + 1}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-bold text-zinc-950">{page.name}</div>
+                      <div className="mt-1 text-xs text-slate-500">{pageRoleLabels[page.role]}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-[7px] p-1.5 text-slate-500 hover:bg-zinc-500/15 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={templateSet.pages.length <= 1}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removePage(page.id);
+                      }}
+                      aria-label={`${page.name} 페이지 삭제`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {active ? (
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-black/5 pt-2">
+                      {pageRoleOptions.map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          className={cls(
+                            "h-8 rounded-[8px] px-2 text-xs font-bold transition",
+                            page.role === role ? "bg-black text-white shadow-sm" : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100 hover:text-black"
+                          )}
+                          onClick={() => updatePageRole(page.id, role)}
+                        >
+                          {pageRoleLabels[role]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(pageRoleLabels) as PageRole[]).map((role) => (
-              <Button key={role} variant="outline" size="sm" onClick={() => addPage(role)} className="justify-start">
-                <Plus className="h-3.5 w-3.5" /> {pageRoleLabels[role]}
-              </Button>
-            ))}
-          </div>
+          <button
+            type="button"
+            className="mt-auto flex min-h-16 w-full items-center justify-center gap-2 rounded-[14px] border border-dashed border-zinc-300 bg-white text-sm font-black text-zinc-950 transition hover:border-zinc-500 hover:bg-zinc-100"
+            onClick={() => addPage()}
+          >
+            <Plus className="h-6 w-6" />
+            페이지 추가
+          </button>
         </div>
       );
     }
