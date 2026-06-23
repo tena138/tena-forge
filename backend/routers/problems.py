@@ -205,16 +205,7 @@ Return a JSON array with exactly one object:
       "expressions": {{"f": "<plain expression in x such as x^2-2*x-3>"}},
       "parameters": {{}}
     }} or null,
-    "visual_schema": {{
-      "type": "cartesian_graph",
-      "viewport": {{"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}},
-      "axes": {{"x": true, "y": true, "grid": true, "ticks": true, "labels": true}},
-      "objects": [
-        {{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}},
-        {{"kind": "point", "x": 1, "y": 2, "label": "A"}}
-      ],
-      "labels": []
-    }} or null
+    "visual_schema": <editable schema when confident: {{"type": "cartesian_graph", "viewport": {{"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}}, "axes": {{"x": true, "y": true, "grid": true}}, "objects": [{{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}}]}} or {{"type": "structured_table", "rows": [[{{"text": "x", "header": true}}, {{"text": "1", "header": true}}], ["$f(x)$", "2"]], "headerRows": 1}} or {{"type": "shape_diagram", "viewport": {{"width": 100, "height": 100}}, "objects": [{{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}}, {{"kind": "circle", "cx": 50, "cy": 50, "r": 24}}]}}> or null
   }}
 ]
 
@@ -232,8 +223,8 @@ Rules:
 - When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\\overline{{BC}}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 - If an expression was already correctly converted in the existing extraction, keep it unless the source image contradicts it.
 - Do not invent answers or solutions.
-- For visible coordinate-plane function graphs, extract an editable visual_schema using only visible graph facts or expressions explicitly present in the problem. Use plain expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null when the graph is geometric, ambiguous, decorative, or cannot be represented confidently.
-- If a visual_schema object references an expression, define that expression in math_model.expressions so later problem edits can update the graph by changing the math model.
+- For structured visuals, extract an editable visual_schema using only visible facts or expressions explicitly present in the problem. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Use null when the visual is decorative, a photo, ambiguous, or cannot be represented confidently.
+- If a graph visual_schema object references an expression, define that expression in math_model.expressions so later problem edits can update the graph by changing the math model.
 - Return raw JSON only. No markdown."""
 
 

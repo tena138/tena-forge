@@ -25,12 +25,16 @@ export type ProblemGraphViewport = {
 };
 
 export type ProblemVisualSchema = {
-  type: "cartesian_graph";
+  type: "cartesian_graph" | "structured_table" | "shape_diagram";
   version?: number;
   viewport?: Partial<ProblemGraphViewport>;
   axes?: Record<string, boolean>;
   objects?: Array<Record<string, unknown>>;
   labels?: Array<Record<string, unknown>>;
+  rows?: Array<Array<string | Record<string, unknown>>>;
+  caption?: string;
+  headerRows?: number;
+  headerCols?: number;
   confidence?: number;
   source?: string;
 };

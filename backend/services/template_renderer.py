@@ -723,7 +723,7 @@ def _render_problem_card(problem: dict[str, Any], region: dict[str, Any], base_d
     number_label = escape(_problem_number_label(problem, region))
     visual = ""
     if problem.get("visual_svg"):
-        visual = f'<div class="problem-visual problem-graph-visual-wrap">{problem["visual_svg"]}</div>'
+        visual = f'<div class="problem-visual problem-structured-visual-wrap">{problem["visual_svg"]}</div>'
     elif problem.get("visual_url"):
         visual = f'<img class="problem-visual" src="{escape(str(problem["visual_url"]), quote=True)}" alt="" />'
     choices = ""
@@ -1628,8 +1628,12 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
     .problem-text {{ white-space: pre-wrap; line-height: 1.65; overflow-wrap: break-word; }}
     .problem-choices {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 8px; font-size: 11px; color: #334155; }}
     .problem-visual {{ display: block; width: min(100%, 420px); height: auto; max-height: 320px; object-fit: contain; margin: 12px auto 0; flex: 0 0 auto; }}
-    .problem-graph-visual-wrap {{ max-height: none; object-fit: initial; }}
-    .problem-graph-visual-wrap svg {{ display: block; width: 100%; height: auto; max-height: 320px; }}
+    .problem-structured-visual-wrap {{ max-height: none; object-fit: initial; }}
+    .problem-structured-visual-wrap svg {{ display: block; width: 100%; height: auto; max-height: 320px; }}
+    .problem-structured-table {{ width: min(100%, 520px); margin: 0 auto; border-collapse: collapse; background: #fff; font-size: 12px; }}
+    .problem-structured-table caption {{ margin-bottom: 6px; font-weight: 700; color: #52525b; }}
+    .problem-structured-table th, .problem-structured-table td {{ border: 1px solid #d4d4d8; padding: 6px 8px; text-align: center; vertical-align: middle; }}
+    .problem-structured-table th {{ background: #f4f4f5; font-weight: 700; }}
     .problem-solution {{ margin-top: 10px; padding: 10px; border-radius: 8px; background: #f8fafc; color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }}
     .problem-answer {{ margin-top: 8px; font-weight: 700; }}
     .answer-space {{ height: 40px; margin-top: 12px; border: 1px dashed #cbd5e1; background: #fff; }}
