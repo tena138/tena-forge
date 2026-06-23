@@ -266,18 +266,18 @@ function UsageRing({ label, used, total, ratio }: { label: string; used: number;
   const percent = remainingPercent(used, total);
   const tone = remainingTone(percent);
   return (
-    <div className="grid min-h-[9rem] min-w-0 place-items-center rounded-[10px] bg-card/65 p-3 text-center shadow-none">
-      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
+    <div className="grid min-h-[7.25rem] min-w-0 place-items-center rounded-[10px] bg-card/65 p-2 text-center shadow-none sm:min-h-[9rem] sm:p-3">
+      <div className="max-w-full truncate text-[11px] font-semibold text-muted-foreground sm:text-xs">{label}</div>
       <div
-        className="relative mt-2 grid aspect-square w-full max-w-[6.75rem] place-items-center overflow-visible rounded-full p-[7px]"
+        className="relative mt-1.5 grid aspect-square w-full max-w-[4.75rem] place-items-center overflow-visible rounded-full p-[5px] sm:mt-2 sm:max-w-[6.75rem] sm:p-[7px]"
         style={{
           background: `conic-gradient(${tone} ${percent * 3.6}deg, rgb(229 229 229) 0deg)`,
         }}
       >
         <div className="h-full w-full rounded-full bg-card" />
         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-visible text-center">
-          <span className="whitespace-nowrap text-lg font-black leading-none text-foreground">{Math.round(percent)}%</span>
-          <span className="mt-1 max-w-[5.6rem] truncate whitespace-nowrap text-[10px] font-bold leading-none text-zinc-700">
+          <span className="whitespace-nowrap text-sm font-black leading-none text-foreground sm:text-lg">{Math.round(percent)}%</span>
+          <span className="mt-0.5 max-w-[4rem] truncate whitespace-nowrap text-[9px] font-bold leading-none text-zinc-700 sm:mt-1 sm:max-w-[5.6rem] sm:text-[10px]">
             {ratio}
           </span>
         </div>
@@ -343,7 +343,7 @@ function UsageOverview({
             ))}
           </div>
         </Link>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
           <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} ratio={`${formatUsageNumber(creditsRemaining)}/${formatUsageNumber(creditsLimit)}`} />
           <UsageRing
             label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"}
