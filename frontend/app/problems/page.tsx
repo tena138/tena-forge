@@ -230,6 +230,7 @@ function readSort(value: string | null): ProblemSort {
 function problemLoadErrorMessage(error: unknown) {
   const response = (error as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
   if (response?.status === 401) return "로그인이 만료되어 문항을 불러오지 못했습니다. 다시 로그인해 주세요.";
+  if (response?.status === 429) return "요청이 잠시 많아져 자동 재시도 중입니다. 잠깐 후 다시 표시됩니다.";
   const detail = response?.data?.detail;
   if (typeof detail === "string" && detail.trim()) return detail;
   return "문항을 불러오지 못했습니다. 네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.";
@@ -320,6 +321,7 @@ function ProblemsBrowser() {
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const loadRequestRef = useRef(0);
+  const loadAbortRef = useRef<AbortController | null>(null);
   const archiveEngineInitializedRef = useRef(false);
   const activeBatchFolderDragKey = batchFolderDrag ? `${batchFolderDrag.folderId}:${batchFolderDrag.pointerId}` : "";
 
@@ -556,24 +558,34 @@ function ProblemsBrowser() {
   async function loadProblems(requestQuery = query) {
     const requestId = loadRequestRef.current + 1;
     loadRequestRef.current = requestId;
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
     setLoadingProblems(true);
     try {
-      const nextData = await api<ProblemPage>(`/api/problems?${requestQuery}`);
+      const nextData = await api<ProblemPage>(`/api/problems?${requestQuery}`, { signal: controller.signal });
       if (requestId === loadRequestRef.current) {
         setData(nextData);
         setLoadError("");
       }
       return nextData;
     } catch (error) {
+      if (controller.signal.aborted) return data;
       if (requestId === loadRequestRef.current) setLoadError(problemLoadErrorMessage(error));
       throw error;
     } finally {
-      if (requestId === loadRequestRef.current) setLoadingProblems(false);
+      if (requestId === loadRequestRef.current) {
+        setLoadingProblems(false);
+        loadAbortRef.current = null;
+      }
     }
   }
 
   useEffect(() => {
     loadProblems(query).catch(() => undefined);
+    return () => {
+      loadAbortRef.current?.abort();
+    };
   }, [query]);
 
   useEffect(() => {

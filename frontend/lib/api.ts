@@ -1,3 +1,5 @@
+import axios from "axios";
+
 import type { CanvasDocument } from "@/lib/editorTypes";
 import { authHttp, getAccessToken } from "@/lib/auth-client";
 
@@ -466,15 +468,41 @@ export async function downloadCounselingExport(payload: {
   URL.revokeObjectURL(url);
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+function rateLimitRetryDelay(error: unknown) {
+  if (!axios.isAxiosError(error) || error.response?.status !== 429) return null;
+  const retryAfter = error.response.headers?.["retry-after"];
+  const retryAfterSeconds = Array.isArray(retryAfter) ? Number(retryAfter[0]) : Number(retryAfter);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(2500, Math.max(500, retryAfterSeconds * 1000));
+  }
+  return 900;
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await authHttp.request<T>({
-    url: path,
-    method: init?.method || "GET",
-    data: init?.body ? JSON.parse(String(init.body)) : undefined,
-    headers: init?.headers as Record<string, string> | undefined,
-  });
-  if (response.status === 204) return undefined as T;
-  return response.data;
+  const method = init?.method || "GET";
+  const canRetryRateLimit = method.toUpperCase() === "GET";
+  for (let attempt = 0; attempt < (canRetryRateLimit ? 2 : 1); attempt += 1) {
+    try {
+      const response = await authHttp.request<T>({
+        url: path,
+        method,
+        data: init?.body ? JSON.parse(String(init.body)) : undefined,
+        headers: init?.headers as Record<string, string> | undefined,
+        signal: init?.signal || undefined,
+      });
+      if (response.status === 204) return undefined as T;
+      return response.data;
+    } catch (error) {
+      const delay = attempt === 0 ? rateLimitRetryDelay(error) : null;
+      if (delay === null || init?.signal?.aborted) throw error;
+      await sleep(delay);
+    }
+  }
+  throw new Error("Request failed");
 }
 
 export async function listArchiveFolders(subjectEngine?: "math" | "korean" | "english") {

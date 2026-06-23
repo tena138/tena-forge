@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     naver_client_secret: str = ""
     redis_url: str = ""
     redis_password: str = ""
+    api_rate_limit_per_minute: int = 120
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

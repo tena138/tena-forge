@@ -9,6 +9,7 @@ export const legacyBatchFoldersStorageKey = "tena.problemBrowser.batchFolders";
 export const legacyCustomSubjectsStorageKey = "tena-forge-upload-custom-subjects-v2";
 const customSubjectMigrationKey = "tena.archiveFolders.migrated.customSubjects.v1";
 const batchFolderMigrationKey = "tena.archiveFolders.migrated.batchFolders.v1";
+const migrationLeaseMs = 10 * 60 * 1000;
 const palette = ["#8b5cf6", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ec4899", "#6366f1", "#06b6d4", "#84cc16"];
 type SubjectEngineCode = "math" | "korean" | "english";
 
@@ -110,6 +111,20 @@ function readJsonArray(key: string) {
   }
 }
 
+function shouldSkipMigration(migrationKey: string) {
+  if (typeof window === "undefined") return true;
+  const value = window.localStorage.getItem(migrationKey);
+  if (value === "done") return true;
+  const startedAt = value?.startsWith("started:") ? Number(value.slice("started:".length)) : NaN;
+  return Number.isFinite(startedAt) && Date.now() - startedAt < migrationLeaseMs;
+}
+
+function markMigrationStarted(migrationKey: string) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(migrationKey, `started:${Date.now()}`);
+  }
+}
+
 async function ensureFolderPath(parts: string[], folders: ArchiveFolder[], subjectEngine: SubjectEngineCode) {
   let parentId: string | null = null;
   let currentFolders = folders;
@@ -135,9 +150,10 @@ async function ensureFolderPath(parts: string[], folders: ArchiveFolder[], subje
 
 export async function migrateCustomSubjectFolders(folders: ArchiveFolder[], subjectEngine: SubjectEngineCode) {
   const migrationKey = `${customSubjectMigrationKey}.${subjectEngine}`;
-  if (typeof window === "undefined" || window.localStorage.getItem(migrationKey) === "done") {
+  if (shouldSkipMigration(migrationKey)) {
     return { folders, changed: false };
   }
+  markMigrationStarted(migrationKey);
   const values = readJsonArray(legacyCustomSubjectsStorageKey).map((value) => String(value || ""));
   let currentFolders = folders;
   let changed = false;
@@ -187,9 +203,10 @@ function legacyFolderPath(folder: LegacyBatchFolder, folders: LegacyBatchFolder[
 
 export async function migrateLegacyBatchFolders(folders: ArchiveFolder[], batches: Batch[], subjectEngine: SubjectEngineCode) {
   const migrationKey = `${batchFolderMigrationKey}.${subjectEngine}`;
-  if (typeof window === "undefined" || window.localStorage.getItem(migrationKey) === "done") {
+  if (shouldSkipMigration(migrationKey)) {
     return { folders, changed: false };
   }
+  markMigrationStarted(migrationKey);
   const legacyFolders = readLegacyBatchFolders();
   const batchIds = new Set(batches.map((batch) => batch.id));
   let currentFolders = folders;
