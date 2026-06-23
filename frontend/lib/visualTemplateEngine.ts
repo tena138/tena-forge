@@ -216,7 +216,7 @@ export function estimateProblemHeight(problem: SampleProblem, region: ContentReg
   const choicesLines = problem.choices?.length ? Math.ceil(problem.choices.join("   ").length / 44) : 0;
   const answerSpace = region.type === "answerRegion" || region.type === "solutionRegion" ? 0 : 42;
   const solutionSpace = region.type === "solutionRegion" ? Math.max(36, Math.ceil((problem.solution || "").length / 46) * bodyFontSize * lineHeight) : 0;
-  const visualSpace = problem.visualUrl || problem.visual_url ? 210 : 0;
+  const visualSpace = problem.visualUrl || problem.visual_url || problem.visual_schema ? 210 : 0;
   const height = 44 + textLines * bodyFontSize * lineHeight + choicesLines * (bodyFontSize + 8) + visualSpace + answerSpace + solutionSpace + region.padding;
   return Math.max(region.minItemHeight, Math.min(region.maxItemHeight || 420, Math.ceil(height)));
 }

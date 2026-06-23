@@ -350,6 +350,8 @@ class Problem(Base):
     choices: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     has_visual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     visual_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    visual_schema: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    math_model: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     review_page_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     review_page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)

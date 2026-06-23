@@ -33,6 +33,8 @@ class ProblemRead(BaseModel):
     choices: list[dict] = Field(default_factory=list)
     has_visual: bool
     visual_url: str | None
+    visual_schema: dict | None = None
+    math_model: dict | None = None
     review_page_image_url: str | None = None
     review_page_number: int | None = None
     answer: str | None
@@ -67,6 +69,8 @@ class ProblemListItem(BaseModel):
     choices: list[dict] = Field(default_factory=list)
     has_visual: bool
     visual_url: str | None
+    visual_schema: dict | None = None
+    math_model: dict | None = None
     review_page_image_url: str | None = None
     review_page_number: int | None = None
     needs_review: bool
@@ -110,6 +114,8 @@ class ProblemUpdate(BaseModel):
     problem_text: str | None = None
     answer: str | None = None
     solution_steps: str | None = None
+    visual_schema: dict | None = None
+    math_model: dict | None = None
 
 
 class VisualCropUpdate(BaseModel):

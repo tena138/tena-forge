@@ -217,6 +217,8 @@ def _problem_snapshot(problem: Problem) -> dict[str, Any]:
         "problem_text": problem.problem_text,
         "has_visual": problem.has_visual,
         "visual_url": problem.visual_url,
+        "visual_schema": problem.visual_schema,
+        "math_model": problem.math_model,
         "review_page_image_url": problem.review_page_image_url,
         "answer": problem.answer,
         "solution_steps": None,

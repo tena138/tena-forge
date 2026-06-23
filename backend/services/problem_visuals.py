@@ -1,0 +1,438 @@
+from __future__ import annotations
+
+import ast
+import html
+import math
+import re
+from typing import Any
+
+
+MAX_OBJECTS = 32
+MAX_LABELS = 40
+MAX_EXPR_LENGTH = 240
+DEFAULT_VIEWPORT = {"xMin": -5.0, "xMax": 5.0, "yMin": -5.0, "yMax": 5.0, "xStep": 1.0, "yStep": 1.0}
+ALLOWED_OBJECT_KINDS = {"function", "point", "segment", "line", "polyline", "vertical_line", "horizontal_line", "label"}
+ALLOWED_STYLE_KEYS = {"stroke", "fill", "strokeWidth", "dash", "radius"}
+ALLOWED_AXES_KEYS = {"x", "y", "grid", "arrowheads", "labels", "ticks"}
+ALLOWED_MATH_FUNCS = {
+    "abs": abs,
+    "acos": math.acos,
+    "asin": math.asin,
+    "atan": math.atan,
+    "cos": math.cos,
+    "exp": math.exp,
+    "ln": math.log,
+    "log": math.log10,
+    "sin": math.sin,
+    "sqrt": math.sqrt,
+    "tan": math.tan,
+}
+ALLOWED_MATH_CONSTS = {"e": math.e, "pi": math.pi}
+
+
+def _num(value: Any, default: float | None = None) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(number):
+        return default
+    return number
+
+
+def _clean_text(value: Any, max_length: int) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return text[:max_length]
+
+
+def _clean_string_map(value: Any, *, max_items: int = 32, max_value_length: int = 300) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, str] = {}
+    for key, raw_value in value.items():
+        clean_key = re.sub(r"[^A-Za-z0-9_.-]+", "", str(key or "").strip())[:80]
+        clean_value = _clean_text(raw_value, max_value_length)
+        if clean_key and clean_value:
+            cleaned[clean_key] = clean_value
+        if len(cleaned) >= max_items:
+            break
+    return cleaned
+
+
+def normalize_math_model(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    expressions = _clean_string_map(value.get("expressions"))
+    parameters: dict[str, float | str] = {}
+    if isinstance(value.get("parameters"), dict):
+        for key, raw_value in value["parameters"].items():
+            clean_key = re.sub(r"[^A-Za-z0-9_.-]+", "", str(key or "").strip())[:80]
+            if not clean_key:
+                continue
+            number = _num(raw_value)
+            parameters[clean_key] = number if number is not None else str(raw_value or "").strip()[:120]
+            if len(parameters) >= 32:
+                break
+    if not expressions and not parameters:
+        return None
+    result: dict[str, Any] = {}
+    if expressions:
+        result["expressions"] = expressions
+    if parameters:
+        result["parameters"] = parameters
+    return result
+
+
+def _normalize_viewport(value: Any) -> dict[str, float]:
+    viewport = dict(DEFAULT_VIEWPORT)
+    if isinstance(value, dict):
+        for key in ("xMin", "xMax", "yMin", "yMax", "xStep", "yStep"):
+            number = _num(value.get(key))
+            if number is not None:
+                viewport[key] = number
+    if viewport["xMax"] <= viewport["xMin"]:
+        viewport["xMin"], viewport["xMax"] = DEFAULT_VIEWPORT["xMin"], DEFAULT_VIEWPORT["xMax"]
+    if viewport["yMax"] <= viewport["yMin"]:
+        viewport["yMin"], viewport["yMax"] = DEFAULT_VIEWPORT["yMin"], DEFAULT_VIEWPORT["yMax"]
+    if viewport["xStep"] <= 0:
+        viewport["xStep"] = 1.0
+    if viewport["yStep"] <= 0:
+        viewport["yStep"] = 1.0
+    return viewport
+
+
+def _normalize_point(value: Any) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    x = _num(value.get("x"))
+    y = _num(value.get("y"))
+    if x is None or y is None:
+        return None
+    return {"x": x, "y": y}
+
+
+def _normalize_points(value: Any) -> list[dict[str, float]]:
+    if not isinstance(value, list):
+        return []
+    points: list[dict[str, float]] = []
+    for item in value[:240]:
+        point = _normalize_point(item)
+        if point:
+            points.append(point)
+    return points
+
+
+def _normalize_domain(value: Any) -> list[float] | None:
+    if not isinstance(value, list) or len(value) < 2:
+        return None
+    left = _num(value[0])
+    right = _num(value[1])
+    if left is None or right is None or right <= left:
+        return None
+    return [left, right]
+
+
+def _normalize_style(target: dict[str, Any], source: dict[str, Any]) -> None:
+    for key in ALLOWED_STYLE_KEYS:
+        if key not in source:
+            continue
+        if key in {"strokeWidth", "radius"}:
+            number = _num(source.get(key))
+            if number is not None:
+                target[key] = max(0.25, min(number, 12))
+        else:
+            text = _clean_text(source.get(key), 40)
+            if text:
+                target[key] = text
+
+
+def _normalize_object(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    kind = str(value.get("kind") or "").strip()
+    if kind not in ALLOWED_OBJECT_KINDS:
+        return None
+    result: dict[str, Any] = {"kind": kind}
+    _normalize_style(result, value)
+    label = _clean_text(value.get("label"), 80)
+    if label:
+        result["label"] = label
+    if kind == "function":
+        expr = _clean_text(value.get("expr"), MAX_EXPR_LENGTH)
+        ref = _clean_text(value.get("ref"), 120)
+        if not expr and not ref:
+            return None
+        if expr:
+            result["expr"] = expr
+        if ref:
+            result["ref"] = ref
+        domain = _normalize_domain(value.get("domain"))
+        if domain:
+            result["domain"] = domain
+        return result
+    if kind == "point":
+        point = _normalize_point(value)
+        if not point:
+            return None
+        result.update(point)
+        return result
+    if kind in {"segment", "line"}:
+        for key in ("x1", "y1", "x2", "y2"):
+            number = _num(value.get(key))
+            if number is None:
+                return None
+            result[key] = number
+        return result
+    if kind == "polyline":
+        points = _normalize_points(value.get("points"))
+        if len(points) < 2:
+            return None
+        result["points"] = points
+        return result
+    if kind == "vertical_line":
+        x = _num(value.get("x"))
+        if x is None:
+            return None
+        result["x"] = x
+        return result
+    if kind == "horizontal_line":
+        y = _num(value.get("y"))
+        if y is None:
+            return None
+        result["y"] = y
+        return result
+    if kind == "label":
+        point = _normalize_point(value)
+        text = _clean_text(value.get("text") or value.get("label"), 100)
+        if not point or not text:
+            return None
+        result.update(point)
+        result["text"] = text
+        return result
+    return None
+
+
+def normalize_problem_visual_schema(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    if str(value.get("type") or "").strip() != "cartesian_graph":
+        return None
+    objects = [_normalize_object(item) for item in value.get("objects", []) if isinstance(value.get("objects"), list)]
+    objects = [item for item in objects if item][:MAX_OBJECTS]
+    labels = [_normalize_object({"kind": "label", **item}) for item in value.get("labels", []) if isinstance(item, dict)] if isinstance(value.get("labels"), list) else []
+    labels = [item for item in labels if item][:MAX_LABELS]
+    if not objects and not labels:
+        return None
+    axes_source = value.get("axes") if isinstance(value.get("axes"), dict) else {}
+    axes = {key: bool(axes_source[key]) for key in ALLOWED_AXES_KEYS if key in axes_source}
+    result: dict[str, Any] = {
+        "type": "cartesian_graph",
+        "version": 1,
+        "viewport": _normalize_viewport(value.get("viewport")),
+        "axes": axes,
+        "objects": objects,
+    }
+    if labels:
+        result["labels"] = labels
+    confidence = _num(value.get("confidence"))
+    if confidence is not None:
+        result["confidence"] = max(0.0, min(confidence, 1.0))
+    source = _clean_text(value.get("source"), 80)
+    if source:
+        result["source"] = source
+    return result
+
+
+def _resolve_expression(obj: dict[str, Any], math_model: dict[str, Any] | None) -> str | None:
+    expr = _clean_text(obj.get("expr"), MAX_EXPR_LENGTH)
+    if expr:
+        return expr
+    ref = _clean_text(obj.get("ref"), 120)
+    expressions = math_model.get("expressions") if isinstance(math_model, dict) else None
+    if not ref or not isinstance(expressions, dict):
+        return None
+    for key in (ref, ref.removeprefix("expressions.")):
+        if key in expressions:
+            return _clean_text(expressions.get(key), MAX_EXPR_LENGTH)
+    return None
+
+
+def _replace_latex_frac(expr: str) -> str:
+    pattern = re.compile(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
+    previous = None
+    while previous != expr:
+        previous = expr
+        expr = pattern.sub(r"((\1)/(\2))", expr)
+    return expr
+
+
+def _normalize_expression(expr: str) -> str:
+    value = expr.strip().strip("$")
+    value = re.sub(r"^[A-Za-z]\s*\(\s*x\s*\)\s*=", "", value)
+    value = re.sub(r"^y\s*=", "", value)
+    value = value.replace("−", "-").replace("π", "pi")
+    value = value.replace("\\left", "").replace("\\right", "")
+    value = _replace_latex_frac(value)
+    replacements = {
+        "\\sqrt": "sqrt",
+        "\\sin": "sin",
+        "\\cos": "cos",
+        "\\tan": "tan",
+        "\\log": "log",
+        "\\ln": "ln",
+        "\\pi": "pi",
+    }
+    for old, new in replacements.items():
+        value = value.replace(old, new)
+    value = value.replace("{", "(").replace("}", ")").replace("^", "**")
+    value = re.sub(r"(\d)(x|\()", r"\1*\2", value)
+    value = re.sub(r"(x|\))(\d|x|\()", r"\1*\2", value)
+    return value
+
+
+def _safe_eval_expression(expr: str, x: float) -> float:
+    source = _normalize_expression(expr)
+    tree = ast.parse(source, mode="eval")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name) or node.func.id not in ALLOWED_MATH_FUNCS:
+                raise ValueError("unsupported function")
+        elif isinstance(node, ast.Name):
+            if node.id != "x" and node.id not in ALLOWED_MATH_CONSTS:
+                raise ValueError("unsupported name")
+        elif not isinstance(
+            node,
+            (
+                ast.Expression,
+                ast.BinOp,
+                ast.UnaryOp,
+                ast.Add,
+                ast.Sub,
+                ast.Mult,
+                ast.Div,
+                ast.Pow,
+                ast.Mod,
+                ast.USub,
+                ast.UAdd,
+                ast.Load,
+                ast.Constant,
+                ast.Name,
+            ),
+        ):
+            raise ValueError("unsupported expression")
+    env = {"__builtins__": {}, "x": x, **ALLOWED_MATH_CONSTS, **ALLOWED_MATH_FUNCS}
+    value = eval(compile(tree, "<graph-expression>", "eval"), env, {})
+    if not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError("non-finite expression result")
+    return float(value)
+
+
+def _svg_point(x: float, y: float, viewport: dict[str, float], width: int, height: int, margin: int) -> tuple[float, float]:
+    plot_w = width - margin * 2
+    plot_h = height - margin * 2
+    sx = margin + ((x - viewport["xMin"]) / (viewport["xMax"] - viewport["xMin"])) * plot_w
+    sy = margin + ((viewport["yMax"] - y) / (viewport["yMax"] - viewport["yMin"])) * plot_h
+    return sx, sy
+
+
+def _attrs(values: dict[str, Any]) -> str:
+    return " ".join(f'{key}="{html.escape(str(value), quote=True)}"' for key, value in values.items() if value is not None)
+
+
+def _sample_function_path(obj: dict[str, Any], viewport: dict[str, float], math_model: dict[str, Any] | None, width: int, height: int, margin: int) -> str:
+    expr = _resolve_expression(obj, math_model)
+    if not expr:
+        return ""
+    domain = obj.get("domain") if isinstance(obj.get("domain"), list) and len(obj["domain"]) >= 2 else [viewport["xMin"], viewport["xMax"]]
+    left = max(viewport["xMin"], float(domain[0]))
+    right = min(viewport["xMax"], float(domain[1]))
+    if right <= left:
+        return ""
+    points: list[str] = []
+    segment_open = False
+    samples = 180
+    for index in range(samples + 1):
+        x = left + (right - left) * index / samples
+        try:
+            y = _safe_eval_expression(expr, x)
+        except Exception:
+            segment_open = False
+            continue
+        if y < viewport["yMin"] - 100 or y > viewport["yMax"] + 100:
+            segment_open = False
+            continue
+        sx, sy = _svg_point(x, y, viewport, width, height, margin)
+        command = "M" if not segment_open else "L"
+        points.append(f"{command}{sx:.2f},{sy:.2f}")
+        segment_open = True
+    return " ".join(points)
+
+
+def problem_visual_schema_to_svg(schema: dict[str, Any] | None, math_model: dict[str, Any] | None = None, *, width: int = 420, height: int = 300) -> str:
+    normalized = normalize_problem_visual_schema(schema)
+    if not normalized:
+        return ""
+    normalized_math = normalize_math_model(math_model)
+    viewport = normalized["viewport"]
+    margin = 30
+    axes = normalized.get("axes") or {}
+    pieces: list[str] = [
+        f'<svg class="problem-graph-visual" viewBox="0 0 {width} {height}" role="img" aria-label="문항 그래프" xmlns="http://www.w3.org/2000/svg">'
+        f'<rect x="0" y="0" width="{width}" height="{height}" rx="10" fill="#fff"/>'
+    ]
+    if axes.get("grid", True):
+        x_step = viewport.get("xStep") or 1
+        y_step = viewport.get("yStep") or 1
+        start_x = math.ceil(viewport["xMin"] / x_step) * x_step
+        while start_x <= viewport["xMax"]:
+            sx, _ = _svg_point(start_x, 0, viewport, width, height, margin)
+            pieces.append(f'<line x1="{sx:.2f}" y1="{margin}" x2="{sx:.2f}" y2="{height - margin}" stroke="#e4e4e7" stroke-width="1"/>')
+            start_x += x_step
+        start_y = math.ceil(viewport["yMin"] / y_step) * y_step
+        while start_y <= viewport["yMax"]:
+            _, sy = _svg_point(0, start_y, viewport, width, height, margin)
+            pieces.append(f'<line x1="{margin}" y1="{sy:.2f}" x2="{width - margin}" y2="{sy:.2f}" stroke="#e4e4e7" stroke-width="1"/>')
+            start_y += y_step
+    if axes.get("x", True) and viewport["yMin"] <= 0 <= viewport["yMax"]:
+        _, y0 = _svg_point(0, 0, viewport, width, height, margin)
+        pieces.append(f'<line x1="{margin}" y1="{y0:.2f}" x2="{width - margin}" y2="{y0:.2f}" stroke="#18181b" stroke-width="1.5"/>')
+    if axes.get("y", True) and viewport["xMin"] <= 0 <= viewport["xMax"]:
+        x0, _ = _svg_point(0, 0, viewport, width, height, margin)
+        pieces.append(f'<line x1="{x0:.2f}" y1="{margin}" x2="{x0:.2f}" y2="{height - margin}" stroke="#18181b" stroke-width="1.5"/>')
+    for obj in normalized.get("objects", []) + normalized.get("labels", []):
+        kind = obj.get("kind")
+        stroke = obj.get("stroke") or "#111827"
+        stroke_width = obj.get("strokeWidth") or 2
+        if kind == "function":
+            path = _sample_function_path(obj, viewport, normalized_math, width, height, margin)
+            if path:
+                pieces.append(f'<path d="{html.escape(path, quote=True)}" fill="none" stroke="{html.escape(str(stroke), quote=True)}" stroke-width="{stroke_width}" stroke-linecap="round" stroke-linejoin="round"/>')
+        elif kind in {"segment", "line"}:
+            x1, y1 = _svg_point(float(obj["x1"]), float(obj["y1"]), viewport, width, height, margin)
+            x2, y2 = _svg_point(float(obj["x2"]), float(obj["y2"]), viewport, width, height, margin)
+            pieces.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{html.escape(str(stroke), quote=True)}" stroke-width="{stroke_width}" stroke-linecap="round"/>')
+        elif kind == "polyline":
+            points = [_svg_point(float(point["x"]), float(point["y"]), viewport, width, height, margin) for point in obj.get("points", [])]
+            points_attr = " ".join(f"{x:.2f},{y:.2f}" for x, y in points)
+            pieces.append(f'<polyline points="{points_attr}" fill="none" stroke="{html.escape(str(stroke), quote=True)}" stroke-width="{stroke_width}" stroke-linecap="round" stroke-linejoin="round"/>')
+        elif kind == "vertical_line":
+            x1, y1 = _svg_point(float(obj["x"]), viewport["yMin"], viewport, width, height, margin)
+            x2, y2 = _svg_point(float(obj["x"]), viewport["yMax"], viewport, width, height, margin)
+            pieces.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{html.escape(str(stroke), quote=True)}" stroke-width="{stroke_width}"/>')
+        elif kind == "horizontal_line":
+            x1, y1 = _svg_point(viewport["xMin"], float(obj["y"]), viewport, width, height, margin)
+            x2, y2 = _svg_point(viewport["xMax"], float(obj["y"]), viewport, width, height, margin)
+            pieces.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{html.escape(str(stroke), quote=True)}" stroke-width="{stroke_width}"/>')
+        elif kind == "point":
+            x, y = _svg_point(float(obj["x"]), float(obj["y"]), viewport, width, height, margin)
+            radius = obj.get("radius") or 3.5
+            pieces.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{radius}" fill="{html.escape(str(obj.get("fill") or stroke), quote=True)}"/>')
+            if obj.get("label"):
+                pieces.append(f'<text x="{x + 7:.2f}" y="{y - 7:.2f}" font-size="13" font-weight="700" fill="#111827">{html.escape(str(obj["label"]))}</text>')
+        elif kind == "label":
+            x, y = _svg_point(float(obj["x"]), float(obj["y"]), viewport, width, height, margin)
+            pieces.append(f'<text x="{x:.2f}" y="{y:.2f}" font-size="13" font-weight="700" fill="#111827">{html.escape(str(obj.get("text") or ""))}</text>')
+    pieces.append("</svg>")
+    return "".join(pieces)

@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ImagePlus, RefreshCcw, Save, Trash2 } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
+import { canRenderProblemVisual, ProblemVisualRenderer } from "@/components/problem-visual-renderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -588,6 +589,7 @@ function ProblemDetailContent() {
   }
 
   const cropSourceUrl = problem.review_page_image_url || problem.visual_url;
+  const hasStructuredVisual = canRenderProblemVisual(problem.visual_schema);
   const sourceLabel =
     tags.source || problem.source_label || `${problem.review_page_number ? `${problem.review_page_number}페이지 / ` : ""}${problem.problem_number}번`;
   const navigationLabel =
@@ -781,7 +783,9 @@ function ProblemDetailContent() {
               onDragLeave={handleVisualDragLeave}
               onDrop={handleVisualDrop}
             >
-              {problem.visual_url ? (
+              {hasStructuredVisual ? (
+                <ProblemVisualRenderer schema={problem.visual_schema} mathModel={problem.math_model} className="max-h-64 w-full rounded object-contain" />
+              ) : problem.visual_url ? (
                 <img src={assetUrl(problem.visual_url)} alt="문항 그림" className="max-h-52 w-full rounded object-contain" />
               ) : (
                 <button

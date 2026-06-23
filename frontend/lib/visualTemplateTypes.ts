@@ -259,6 +259,8 @@ export type SampleProblem = {
   solution?: string;
   visualUrl?: string;
   visual_url?: string;
+  visual_schema?: import("@/lib/api").ProblemVisualSchema | null;
+  math_model?: import("@/lib/api").ProblemMathModel | null;
   difficulty?: string;
   tags?: string[];
 };

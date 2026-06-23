@@ -42,6 +42,7 @@ from services.korean_extraction import (
 from services.matcher import match_with_summary
 from services.math_normalization import normalize_geometry_notation
 from services.point_difficulty import apply_point_difficulty_to_payload
+from services.problem_visuals import normalize_math_model, normalize_problem_visual_schema
 from services.storage import save_visual_bytes
 from services.subject_engines import ENGLISH_ENGINE, KOREAN_ENGINE, is_language_passage_engine, language_engine_label, normalize_subject_engine
 
@@ -69,6 +70,8 @@ For each problem return a JSON object with:
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "problem_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>},
   "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
+  "math_model": {"expressions": {"f": "<plain editable expression in x>"}, "parameters": {}} or null,
+  "visual_schema": {"type": "cartesian_graph", "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true, "ticks": true, "labels": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}], "labels": []} or null,
   "is_exercise": <true only for standalone unsolved exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
@@ -81,6 +84,7 @@ If there are no valid standalone exercises, return [].
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
 visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
+For visible coordinate-plane function graphs, extract an editable visual_schema in addition to visual_bbox when the graph can be represented confidently. Define reusable expressions in math_model.expressions and reference them from visual_schema objects with refs such as "expressions.f". Use plain expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null for visual_schema when the visual is geometric, ambiguous, decorative, table-only, or not confidently reconstructable as a graph.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 If a visible point value such as (2점), [3점], 4점, or 배점 3점 is printed as a difficulty/score label for the problem, store it in difficulty as 2점, 3점, or 4점 and do not include that label in problem_text.
 Convert every mathematical expression, function, interval, limit, summation, fraction, root, exponent, coordinate, and equation into LaTeX.
@@ -112,6 +116,8 @@ For each problem return a JSON object with:
   "has_visual": <true if figure/diagram/table/graph present, else false>,
   "problem_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>},
   "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
+  "math_model": {"expressions": {"f": "<plain editable expression in x>"}, "parameters": {}} or null,
+  "visual_schema": {"type": "cartesian_graph", "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true, "ticks": true, "labels": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}], "labels": []} or null,
   "is_exercise": <true only for standalone exercises>,
   "skip_reason": null,
   "subject": <subject label or null>,
@@ -123,6 +129,7 @@ For each problem return a JSON object with:
 Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 problem_bbox must tightly enclose the entire target problem on this page, including its number, stem, choices, and any attached figure, using normalized page coordinates from 0.0 to 1.0.
 visual_bbox must tightly enclose only the non-text figure, graph, diagram, table, or image that belongs to this exact problem, using normalized page coordinates from 0.0 to 1.0. If there are multiple visual pieces for the same problem, return one tight union box. Do not include neighboring problems, answer choices, problem text, or text-only condition boxes in visual_bbox. Use null when there is no real visual asset.
+For visible coordinate-plane function graphs, extract an editable visual_schema in addition to visual_bbox when the graph can be represented confidently. Define reusable expressions in math_model.expressions and reference them from visual_schema objects with refs such as "expressions.f". Use plain expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null for visual_schema when the visual is geometric, ambiguous, decorative, table-only, or not confidently reconstructable as a graph.
 For the math engine, remove answer choices from problem_text but preserve visible choices in choices[] so answer keys can be resolved to concrete choice text.
 If a visible point value such as (2점), [3점], 4점, or 배점 3점 is printed as a difficulty/score label for the problem, store it in difficulty as 2점, 3점, or 4점 and do not include that label in problem_text.
 Convert mathematical expressions into LaTeX.
@@ -4023,12 +4030,14 @@ def _normalize_extracted_items(
                 "problem_no": problem_no,
                 "problem_text": normalize_geometry_notation(str(item.get("problem_text") or "").strip()),
                 "choices": _normalize_problem_choices(item.get("choices"), item.get("problem_text")),
-                "has_visual": bool(item.get("has_visual")),
+                "has_visual": bool(item.get("has_visual") or item.get("visual_schema")),
                 "subject": str(item.get("subject") or "").strip() or None,
                 "unit": _clean_unit_label(item.get("unit")),
                 "section_label": section_label,
                 "problem_bbox": _normalized_visual_bbox(item.get("problem_bbox")),
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
+                "math_model": normalize_math_model(item.get("math_model")),
+                "visual_schema": normalize_problem_visual_schema(item.get("visual_schema")),
                 "page_index": page.page_index,
                 "page_number_occurrence": page_number_occurrence,
                 "_source_order": page.page_index * 10000 + int(getattr(page, "column_index", 0) or 0) * 1000 + item_order,
@@ -4167,6 +4176,10 @@ def extract_and_cross_check(
         visual_values = {item["has_visual"] for item in items}
         problem_boxes = [item.get("problem_bbox") for item in items if item.get("problem_bbox")]
         visual_boxes = [item.get("visual_bbox") for item in items if item.get("visual_bbox")]
+        visual_schemas = [item.get("visual_schema") for item in items if item.get("visual_schema")]
+        math_models = [item.get("math_model") for item in items if item.get("math_model")]
+        visual_schema = max(visual_schemas, key=lambda value: float(value.get("confidence") or 0)) if visual_schemas else None
+        math_model = math_models[0] if math_models else None
         section_labels = [item.get("section_label") for item in items if item.get("section_label")]
         problem_nos = [item.get("problem_no") for item in items if item.get("problem_no")]
         choice_sets = [item.get("choices") for item in items if isinstance(item.get("choices"), list) and item.get("choices")]
@@ -4185,6 +4198,8 @@ def extract_and_cross_check(
                 "problem_bbox": _preferred_bbox(problem_boxes, largest=True),
                 "visual_bbox": _preferred_bbox(visual_boxes),
                 "visual_url": None,
+                "visual_schema": visual_schema,
+                "math_model": math_model,
                 "needs_review": True,
                 "page_index": page_index,
                 "page_number_occurrence": occurrence,
@@ -4207,6 +4222,8 @@ Return a JSON array with exactly one object:
     ],
     "has_visual": <true if this problem uses a non-text figure, graph, diagram, table, or image>,
     "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
+    "math_model": {"expressions": {"f": "<plain editable expression in x>"}, "parameters": {}} or null,
+    "visual_schema": {"type": "cartesian_graph", "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true, "ticks": true, "labels": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}], "labels": []} or null,
     "visible_numbers": ["<numbers/measurements visibly inside the visual only>"],
     "visible_point_labels": ["A", "B", "..."],
     "visible_geometry_labels": ["AB", "ABC", "..."],
@@ -4227,6 +4244,7 @@ Rules:
 - visual_bbox coordinates are relative to this cropped preview, not the full page.
 - visual_bbox must tightly enclose only the non-text figure/graph/diagram/table/image belonging to this problem. Exclude the problem stem, answer choices, and pure text condition boxes.
 - If there is no real visual asset, set has_visual false and visual_bbox null.
+- For visible coordinate-plane function graphs, return an editable visual_schema and matching math_model when the graph can be represented confidently. Use null for visual_schema when the visual is ambiguous or not a coordinate-plane graph. Do not invent graph equations that are not visible or inferable from explicit problem text.
 - Use expected_visual_anchors from the supplied extraction JSON as a consistency check. Compare numbers, measurements, point labels, and geometry labels in the visual against the target problem text.
 - Set visual_anchor_consistency to "matched" when visible diagram anchors agree with the expected anchors. Set it to "mismatch" when the diagram visibly contains different numbers/labels that suggest it belongs to a neighboring problem. Set it to "insufficient" when the target text has anchors but the visual has too few readable anchors to verify. Set it to "not_applicable" when neither the text nor the visual has useful anchors.
 - Do not reject a correct diagram merely because it has extra labels, but do reject when key labels or measurements conflict with the target problem.
@@ -4240,6 +4258,8 @@ def _problem_preview_qa_prompt(problem: dict[str, Any]) -> str:
         "problem_text": problem.get("problem_text"),
         "choices": problem.get("choices") or [],
         "has_visual": bool(problem.get("has_visual")),
+        "math_model": problem.get("math_model"),
+        "visual_schema": problem.get("visual_schema"),
         "page_number": int(problem.get("page_index") or 0) + 1,
         "expected_visual_anchors": _problem_visual_anchor_hints(problem),
     }
@@ -4344,6 +4364,14 @@ def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: di
         if previous_has_visual and not problem["has_visual"]:
             problem["needs_review"] = True
 
+    math_model = normalize_math_model(qa.get("math_model"))
+    visual_schema = normalize_problem_visual_schema(qa.get("visual_schema"))
+    if math_model:
+        problem["math_model"] = math_model
+    if visual_schema:
+        problem["visual_schema"] = visual_schema
+        problem["has_visual"] = True
+
     if not bool(qa.get("latex_ok", True)) or bool(qa.get("needs_review")):
         problem["needs_review"] = True
 
@@ -4351,6 +4379,7 @@ def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: di
     if anchor_rejects_crop:
         problem["needs_review"] = True
         problem["visual_url"] = None
+        problem["visual_schema"] = None
 
     if problem.get("has_visual"):
         visual_bbox = _normalized_visual_bbox(qa.get("visual_bbox"))
@@ -4365,6 +4394,8 @@ def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: di
             problem["needs_review"] = True
     else:
         problem["visual_url"] = None
+        problem["visual_schema"] = None
+        problem["math_model"] = None
 
     if text_has_suspicious_math(problem.get("problem_text")):
         problem["needs_review"] = True
@@ -4660,8 +4691,10 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
             problem_number=item["problem_number"],
             problem_text=item["problem_text"],
             choices=_normalize_problem_choices(item.get("choices")),
-            has_visual=item["has_visual"],
+            has_visual=bool(item["has_visual"] or item.get("visual_schema")),
             visual_url=item.get("visual_url"),
+            visual_schema=normalize_problem_visual_schema(item.get("visual_schema")),
+            math_model=normalize_math_model(item.get("math_model")),
             review_page_image_url=item.get("review_page_image_url"),
             review_page_number=item.get("review_page_number"),
             answer=answer_for_subject(solution.get("answer"), item.get("choices"), subject_engine),

@@ -24,6 +24,7 @@ from services.batch_colors import batch_color_for_seed, normalize_batch_color
 from services.ownership import current_owner_ids, current_workspace_id
 from services.pipeline import strip_answer_choices, vision_json
 from services.private_files import sign_static_url
+from services.problem_visuals import normalize_math_model, normalize_problem_visual_schema
 from services.storage import save_visual_bytes
 from services.usage_cost_policy import enforce_extraction_preflight, estimate_single_reextract, record_usage_event
 
@@ -199,7 +200,21 @@ Return a JSON array with exactly one object:
   {{
     "problem_number": {problem.problem_number},
     "problem_text": "<the full visible question stem for this problem only, excluding answer choices>",
-    "has_visual": <true if this problem uses a figure, graph, table, diagram, or image>
+    "has_visual": <true if this problem uses a figure, graph, table, diagram, or image>,
+    "math_model": {{
+      "expressions": {{"f": "<plain expression in x such as x^2-2*x-3>"}},
+      "parameters": {{}}
+    }} or null,
+    "visual_schema": {{
+      "type": "cartesian_graph",
+      "viewport": {{"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}},
+      "axes": {{"x": true, "y": true, "grid": true, "ticks": true, "labels": true}},
+      "objects": [
+        {{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}},
+        {{"kind": "point", "x": 1, "y": 2, "label": "A"}}
+      ],
+      "labels": []
+    }} or null
   }}
 ]
 
@@ -213,9 +228,12 @@ Rules:
 - Remove answer choices such as ①②③④⑤ or numbered options from problem_text.
 - Include all condition text that belongs to the problem, even when it is inside a bordered box, shaded callout, rounded rectangle, table-like condition block, or region labeled (가), (나), ㄱ, ㄴ, etc. A text-only box is part of problem_text, not a separate visual asset. Preserve its labels, order, and line breaks.
 - Convert mathematical expressions into LaTeX with $...$ or $$...$$.
+- Always use display LaTeX delimiters like $$\\sum_{{k=1}}^{{n}} a_k$$ for any sigma/summation expression containing \\sum, \\Sigma, or ∑; never write those expressions as inline $...$ math.
 - When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\\overline{{BC}}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 - If an expression was already correctly converted in the existing extraction, keep it unless the source image contradicts it.
 - Do not invent answers or solutions.
+- For visible coordinate-plane function graphs, extract an editable visual_schema using only visible graph facts or expressions explicitly present in the problem. Use plain expressions with x, +, -, *, /, ^ and common functions such as sin, cos, tan, sqrt, log, ln. Use null when the graph is geometric, ambiguous, decorative, or cannot be represented confidently.
+- If a visual_schema object references an expression, define that expression in math_model.expressions so later problem edits can update the graph by changing the math model.
 - Return raw JSON only. No markdown."""
 
 
@@ -544,6 +562,13 @@ def update_problem(problem_id: UUID, payload: ProblemUpdate, request: Request, d
         answer = (payload.answer or "").strip()
         problem.answer = answer or None
         changed = True
+    if "math_model" in fields_set:
+        problem.math_model = normalize_math_model(payload.math_model)
+        changed = True
+    if "visual_schema" in fields_set:
+        problem.visual_schema = normalize_problem_visual_schema(payload.visual_schema)
+        problem.has_visual = bool(problem.visual_schema or problem.visual_url)
+        changed = True
     if changed:
         problem.needs_review = True
     db.commit()
@@ -568,6 +593,8 @@ def duplicate_problem(problem_id: UUID, request: Request, db: Session = Depends(
         choices=copy.deepcopy(problem.choices or []),
         has_visual=problem.has_visual,
         visual_url=problem.visual_url,
+        visual_schema=copy.deepcopy(problem.visual_schema),
+        math_model=copy.deepcopy(problem.math_model),
         review_page_image_url=problem.review_page_image_url,
         review_page_number=problem.review_page_number,
         answer=problem.answer,
@@ -647,6 +674,9 @@ def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(
     cleaned, suspicious = strip_answer_choices(str(selected.get("problem_text") or ""))
     problem.problem_text = normalize_geometry_notation(cleaned)
     problem.has_visual = bool(selected.get("has_visual", problem.has_visual))
+    problem.math_model = normalize_math_model(selected.get("math_model")) or problem.math_model
+    problem.visual_schema = normalize_problem_visual_schema(selected.get("visual_schema"))
+    problem.has_visual = bool(problem.has_visual or problem.visual_schema)
     problem.needs_review = True if suspicious else problem.needs_review
     record_usage_event(db, owner_id, estimate, job_id=problem.source_batch_id)
     db.commit()
@@ -692,6 +722,8 @@ def crop_visual(problem_id: UUID, payload: VisualCropUpdate, request: Request, d
     filename = f"{problem.id}_visual_crop_{int(time.time())}.png"
     problem.visual_url = save_visual_bytes(buffer.getvalue(), filename)
     problem.has_visual = True
+    problem.visual_schema = None
+    problem.math_model = None
     problem.needs_review = True
     db.commit()
     db.refresh(problem)
@@ -736,6 +768,8 @@ async def upload_visual(problem_id: UUID, request: Request, file: UploadFile = F
     filename = f"{problem.id}_visual_upload_{int(time.time())}.png"
     problem.visual_url = save_visual_bytes(buffer.getvalue(), filename)
     problem.has_visual = True
+    problem.visual_schema = None
+    problem.math_model = None
     problem.needs_review = True
     db.commit()
     db.refresh(problem)
@@ -752,6 +786,8 @@ def delete_visual(problem_id: UUID, request: Request, db: Session = Depends(get_
     if not problem:
         raise HTTPException(status_code=404, detail="문항을 찾을 수 없습니다.")
     problem.visual_url = None
+    problem.visual_schema = None
+    problem.math_model = None
     problem.has_visual = False
     problem.needs_review = True
     db.commit()

@@ -230,6 +230,8 @@ export type LearningProblem = {
   problem_text: string;
   has_visual: boolean;
   visual_url: string | null;
+  visual_schema?: Record<string, unknown> | null;
+  math_model?: Record<string, unknown> | null;
   review_page_image_url?: string | null;
   answer?: string | null;
   solution_steps?: string | null;

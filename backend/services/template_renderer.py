@@ -16,6 +16,7 @@ from sqlalchemy.orm import object_session
 from database import get_settings
 from models import HubTemplate, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem
 from services.math_normalization import normalize_geometry_notation
+from services.problem_visuals import problem_visual_schema_to_svg
 
 
 BLOCKED_CONTAINER_TAGS = ("script", "iframe", "object", "embed")
@@ -202,6 +203,9 @@ def problem_to_template_data(problem: Problem, base_data: dict[str, Any], page_n
         "tags": ", ".join(tag_values),
         "problem_number": problem.problem_number,
         "visual_url": _export_visual_url(problem.visual_url),
+        "visual_schema": problem.visual_schema,
+        "math_model": problem.math_model,
+        "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model)),
     }
 
 
@@ -474,6 +478,9 @@ def _problem_export_data(problem: Problem, index: int, total: int, base_data: di
         "tags": ", ".join(tag_values),
         "source": tags.source if tags and tags.source else "",
         "visual_url": _export_visual_url(problem.visual_url),
+        "visual_schema": problem.visual_schema,
+        "math_model": problem.math_model,
+        "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model)),
         "page_number": index,
         "total_pages": total,
     }
@@ -634,7 +641,7 @@ def _estimate_problem_height(problem_data: dict[str, Any], region: dict[str, Any
     text_lines = max(2, int(len(str(problem_data.get("text", ""))) / 38) + 1)
     solution_lines = int(len(str(problem_data.get("solution", ""))) / 48) + 1 if region.get("type") == "solutionRegion" else 0
     answer_space = 0 if region.get("type") in {"answerRegion", "solutionRegion"} else 42
-    image_space = 210 if problem_data.get("visual_url") else 0
+    image_space = 210 if problem_data.get("visual_url") or problem_data.get("visual_svg") else 0
     padding = int(_num(region.get("padding"), 12))
     return max(int(_num(region.get("minItemHeight"), 120)), 44 + int(text_lines * font_size * line_height) + solution_lines * 18 + answer_space + image_space + padding)
 
@@ -715,7 +722,9 @@ def _render_problem_card(problem: dict[str, Any], region: dict[str, Any], base_d
     number = escape(str(problem.get("number") or problem.get("problem_number") or ""))
     number_label = escape(_problem_number_label(problem, region))
     visual = ""
-    if problem.get("visual_url"):
+    if problem.get("visual_svg"):
+        visual = f'<div class="problem-visual problem-graph-visual-wrap">{problem["visual_svg"]}</div>'
+    elif problem.get("visual_url"):
         visual = f'<img class="problem-visual" src="{escape(str(problem["visual_url"]), quote=True)}" alt="" />'
     choices = ""
     choice_lines = _choice_lines(problem.get("choices"))
@@ -1619,6 +1628,8 @@ def _render_visual_template_document(template_set: dict[str, Any], problems: lis
     .problem-text {{ white-space: pre-wrap; line-height: 1.65; overflow-wrap: break-word; }}
     .problem-choices {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 8px; font-size: 11px; color: #334155; }}
     .problem-visual {{ display: block; width: min(100%, 420px); height: auto; max-height: 320px; object-fit: contain; margin: 12px auto 0; flex: 0 0 auto; }}
+    .problem-graph-visual-wrap {{ max-height: none; object-fit: initial; }}
+    .problem-graph-visual-wrap svg {{ display: block; width: 100%; height: auto; max-height: 320px; }}
     .problem-solution {{ margin-top: 10px; padding: 10px; border-radius: 8px; background: #f8fafc; color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }}
     .problem-answer {{ margin-top: 8px; font-weight: 700; }}
     .answer-space {{ height: 40px; margin-top: 12px; border: 1px dashed #cbd5e1; background: #fff; }}

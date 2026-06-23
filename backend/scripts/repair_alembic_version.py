@@ -49,6 +49,8 @@ PROBLEM_REQUIRED_COLUMNS = {
     "updated_at",
     "review_page_image_url",
     "review_page_number",
+    "visual_schema",
+    "math_model",
     "deleted_at",
     "delete_scheduled_at",
 }
@@ -319,6 +321,8 @@ def _ensure_problem_columns(connection, inspector) -> bool:
         ("updated_at", "TIMESTAMP NULL"),
         ("review_page_image_url", "VARCHAR(1000) NULL"),
         ("review_page_number", "INTEGER NULL"),
+        ("visual_schema", "JSONB NULL" if connection.dialect.name == "postgresql" else "JSON NULL"),
+        ("math_model", "JSONB NULL" if connection.dialect.name == "postgresql" else "JSON NULL"),
         ("deleted_at", "TIMESTAMP NULL"),
         ("delete_scheduled_at", "TIMESTAMP NULL"),
     ]

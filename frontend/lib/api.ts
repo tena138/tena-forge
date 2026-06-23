@@ -15,6 +15,31 @@ export type Tag = {
   source: string | null;
 };
 
+export type ProblemGraphViewport = {
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+  xStep?: number;
+  yStep?: number;
+};
+
+export type ProblemVisualSchema = {
+  type: "cartesian_graph";
+  version?: number;
+  viewport?: Partial<ProblemGraphViewport>;
+  axes?: Record<string, boolean>;
+  objects?: Array<Record<string, unknown>>;
+  labels?: Array<Record<string, unknown>>;
+  confidence?: number;
+  source?: string;
+};
+
+export type ProblemMathModel = {
+  expressions?: Record<string, string>;
+  parameters?: Record<string, number | string>;
+};
+
 export type Problem = {
   id: string;
   problem_number: number;
@@ -22,6 +47,8 @@ export type Problem = {
   choices?: Array<{ label?: string; choice_label?: string; text?: string; choice_text?: string }>;
   has_visual: boolean;
   visual_url: string | null;
+  visual_schema?: ProblemVisualSchema | null;
+  math_model?: ProblemMathModel | null;
   review_page_image_url?: string | null;
   review_page_number?: number | null;
   answer?: string | null;
