@@ -10,7 +10,7 @@ import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0033_live_interactions_settings"
+HEAD_REVISION = "0035_batch_document_type_hints"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -19,6 +19,7 @@ BATCH_REQUIRED_COLUMNS = {
     "rights_note",
     "subject_candidates",
     "unit_candidates",
+    "document_type_hints",
     "archive_folder_id",
     "processing_task",
     "subject_engine",
@@ -216,6 +217,7 @@ def _ensure_batch_columns(connection, inspector) -> bool:
         ("rights_note", "TEXT NULL"),
         ("subject_candidates", json_definition),
         ("unit_candidates", json_definition),
+        ("document_type_hints", json_definition),
         ("archive_folder_id", "UUID NULL" if connection.dialect.name == "postgresql" else "CHAR(36) NULL"),
         ("processing_task", "VARCHAR(30) NOT NULL DEFAULT 'full'"),
         ("subject_engine", "VARCHAR(30) NOT NULL DEFAULT 'math'"),
@@ -241,6 +243,7 @@ def _ensure_batch_columns(connection, inspector) -> bool:
     connection.execute(text("UPDATE batches SET owner_id = 'local_user' WHERE owner_id IS NULL OR owner_id = ''"))
     connection.execute(text(f"UPDATE batches SET subject_candidates = {json_default} WHERE subject_candidates IS NULL"))
     connection.execute(text(f"UPDATE batches SET unit_candidates = {json_default} WHERE unit_candidates IS NULL"))
+    connection.execute(text(f"UPDATE batches SET document_type_hints = {json_default} WHERE document_type_hints IS NULL"))
     connection.execute(text("UPDATE batches SET processing_task = 'full' WHERE processing_task IS NULL OR processing_task = ''"))
     connection.execute(text("UPDATE batches SET subject_engine = 'math' WHERE subject_engine IS NULL OR subject_engine = ''"))
     inspector = inspect(connection)

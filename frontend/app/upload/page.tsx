@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 type UploadResponse = { batch_id: string; status: BatchStatus };
 type TagColorMap = Record<string, string>;
+type PdfDocumentType = "problem" | "solution" | "mixed";
 
 const SUBJECT_TAG_COLORS_KEY = "tena-forge-upload-subject-tag-colors";
 const CUSTOM_SUBJECTS_KEY = "tena-forge-upload-custom-subjects-v2";
@@ -38,6 +39,11 @@ const MB = 1024 * 1024;
 const PDF_SAMPLE_BYTES = 16 * MB;
 const PDF_FULL_SCAN_LIMIT_BYTES = 80 * MB;
 const tagPalette = ["#111111", "#2f2f2f", "#525252", "#737373", "#a3a3a3", "#d4d4d4"];
+const pdfDocumentTypeOptions: Array<{ value: PdfDocumentType; label: string }> = [
+  { value: "problem", label: "본문" },
+  { value: "solution", label: "해설" },
+  { value: "mixed", label: "믹스" },
+];
 
 type PdfPageEstimate = {
   pages: number | null;
@@ -117,6 +123,10 @@ function readStringList(key: string) {
 function writeStringList(key: string, values: string[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, JSON.stringify([...new Set(values.map(normalizeSubjectValue).filter(Boolean))]));
+}
+
+function pdfFileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
 function isSubjectPathMatch(value: string, target: string) {
@@ -873,12 +883,16 @@ function SubjectEditRow({
 
 function MultiPdfDropZone({
   files,
+  documentTypes,
   required = false,
   onChange,
+  onDocumentTypeChange,
 }: {
   files: File[];
+  documentTypes: Record<string, PdfDocumentType>;
   required?: boolean;
   onChange: (files: File[]) => void;
+  onDocumentTypeChange: (file: File, type: PdfDocumentType) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -942,9 +956,29 @@ function MultiPdfDropZone({
         <div className="rounded-[10px] bg-zinc-50 p-3">
           <div className="max-h-32 space-y-1 overflow-auto text-xs font-semibold text-zinc-600">
             {files.map((file, index) => (
-              <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-3 rounded bg-white px-2 py-1">
+              <div key={pdfFileKey(file)} className="flex flex-col gap-2 rounded bg-white px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between">
                 <span className="min-w-0 truncate">{index + 1}. {file.name}</span>
-                <span className="shrink-0 text-zinc-500">{formatCompactNumber(fileSizeMb(file))}MB</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="inline-flex rounded-[8px] bg-zinc-100 p-0.5" aria-label={`${file.name} 자료 유형`}>
+                    {pdfDocumentTypeOptions.map((option) => {
+                      const selected = (documentTypes[pdfFileKey(file)] || "mixed") === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={cn(
+                            "h-7 rounded-[7px] px-2 text-[11px] font-black transition-colors",
+                            selected ? "bg-black text-white" : "text-zinc-500 hover:bg-white hover:text-zinc-950"
+                          )}
+                          onClick={() => onDocumentTypeChange(file, option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="w-14 shrink-0 text-right text-zinc-500">{formatCompactNumber(fileSizeMb(file))}MB</span>
+                </div>
               </div>
             ))}
           </div>
@@ -962,6 +996,7 @@ export default function UploadPage() {
   const [batchName, setBatchName] = useState("");
   const [autoBatchName, setAutoBatchName] = useState("");
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [pdfDocumentTypes, setPdfDocumentTypes] = useState<Record<string, PdfDocumentType>>({});
   const [problemPdf, setProblemPdf] = useState<File | null>(null);
   const [problemPdfEstimate, setProblemPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
   const [subjectEngine, setSubjectEngine] = useState<SubjectEngineCode>("math");
@@ -1214,6 +1249,7 @@ export default function UploadPage() {
 
   function resetUploadDraft() {
     setPdfFiles([]);
+    setPdfDocumentTypes({});
     setProblemPdf(null);
     setBatchName("");
     setAutoBatchName("");
@@ -1227,6 +1263,14 @@ export default function UploadPage() {
     const nextAutoBatchName = firstFile ? `${fileNameToBatchName(firstFile.name)}${files.length > 1 ? ` 외 ${files.length - 1}개` : ""}` : "";
     const inferredSubjects = inferSubjectsFromFilename(files.map((file) => file.name).join(" "));
     setPdfFiles(files);
+    setPdfDocumentTypes((current) => {
+      const next: Record<string, PdfDocumentType> = {};
+      files.forEach((file) => {
+        const key = pdfFileKey(file);
+        next[key] = current[key] || "mixed";
+      });
+      return next;
+    });
     setProblemPdf(firstFile);
     if (!batchColorTouched && nextAutoBatchName) setBatchAccentColor(defaultTagColor(nextAutoBatchName, "batch"));
     setBatchName((current) => {
@@ -1244,6 +1288,10 @@ export default function UploadPage() {
     setAutoBatchName(nextAutoBatchName);
   }
 
+  function updatePdfDocumentType(file: File, type: PdfDocumentType) {
+    setPdfDocumentTypes((current) => ({ ...current, [pdfFileKey(file)]: type }));
+  }
+
   async function submit() {
     if (selectedEngineLocked) {
       setMessage("선택한 과목 엔진은 현재 플랜에서 잠겨 있습니다. 결제 화면에서 엔진을 추가해주세요.");
@@ -1256,6 +1304,17 @@ export default function UploadPage() {
     const form = new FormData();
     form.append("batch_name", batchName);
     pdfFiles.forEach((file) => form.append("pdf_files", file));
+    form.append(
+      "document_type_hints",
+      JSON.stringify(
+        pdfFiles.map((file, index) => ({
+          file_index: index,
+          filename: file.name,
+          size: file.size,
+          type: pdfDocumentTypes[pdfFileKey(file)] || "mixed",
+        }))
+      )
+    );
     form.append("source_type", sourceType);
     form.append("source_label", sourceLabel);
     form.append("rights_confirmed", String(rightsConfirmed));
@@ -1476,7 +1535,13 @@ export default function UploadPage() {
 
             <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-                <MultiPdfDropZone files={pdfFiles} required onChange={handlePdfFilesChange} />
+                <MultiPdfDropZone
+                  files={pdfFiles}
+                  documentTypes={pdfDocumentTypes}
+                  required
+                  onChange={handlePdfFilesChange}
+                  onDocumentTypeChange={updatePdfDocumentType}
+                />
               </div>
 
           <div className="rounded-[12px] bg-zinc-50 p-4">

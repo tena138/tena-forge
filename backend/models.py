@@ -249,6 +249,7 @@ class Batch(Base):
     accent_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     subject_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     unit_candidates: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
+    document_type_hints: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list, nullable=False)
     archive_folder_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("archive_folders.id", ondelete="SET NULL"), nullable=True, index=True)
     subject_engine: Mapped[str] = mapped_column(String(30), default="math", nullable=False, index=True)
     processing_task: Mapped[str] = mapped_column(String(30), default="full", nullable=False, index=True)

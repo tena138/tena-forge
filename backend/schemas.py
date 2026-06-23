@@ -235,6 +235,7 @@ class BatchRead(BaseModel):
     accent_color: str
     subject_candidates: list[str] = Field(default_factory=list)
     unit_candidates: list[str] = Field(default_factory=list)
+    document_type_hints: list[dict] = Field(default_factory=list)
     archive_folder_id: UUID | None = None
     subject_engine: str = "math"
     processing_task: str = "full"
@@ -268,6 +269,21 @@ class BatchRead(BaseModel):
             if isinstance(parsed, list):
                 return [str(item) for item in parsed if str(item or "").strip()]
             return [str(parsed)] if str(parsed or "").strip() else []
+        return []
+
+    @field_validator("document_type_hints", mode="before")
+    @classmethod
+    def empty_document_type_hints_for_legacy_null(cls, value):
+        if not value:
+            return []
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                return []
+            return [item for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
         return []
 
     @field_validator("processing_task", mode="before")

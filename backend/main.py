@@ -386,6 +386,7 @@ def _ensure_sqlite_columns():
             "accent_color": "VARCHAR(7)",
             "subject_candidates": "JSON DEFAULT '[]' NOT NULL",
             "unit_candidates": "JSON DEFAULT '[]' NOT NULL",
+            "document_type_hints": "JSON DEFAULT '[]' NOT NULL",
             "archive_folder_id": "CHAR(36)",
             "subject_engine": "VARCHAR(30) DEFAULT 'math' NOT NULL",
             "processing_task": "VARCHAR(30) DEFAULT 'full' NOT NULL",

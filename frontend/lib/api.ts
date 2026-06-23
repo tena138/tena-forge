@@ -91,6 +91,7 @@ export type Batch = {
   rights_note: string | null;
   subject_candidates?: string[];
   unit_candidates?: string[];
+  document_type_hints?: Array<Record<string, unknown>>;
   archive_folder_id?: string | null;
   subject_engine?: "math" | "korean" | "english";
   processing_task?: "full" | "solution_only";

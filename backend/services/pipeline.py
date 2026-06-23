@@ -25,6 +25,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
+from services.document_type_hints import (
+    apply_document_type_hints_to_metadata,
+    document_type_for_page,
+    document_type_hints_allow_embedded_solutions,
+    document_type_hints_note,
+)
 from services.english_extraction import (
     ENGLISH_EXTRACTION_PROMPT,
     ENGLISH_SOLUTION_PROMPT,
@@ -381,11 +387,17 @@ def apply_solutions_to_existing_problems(
     }
 
 
-def build_extraction_prompt(subject_candidates: list[str] | None = None, unit_candidates: list[str] | None = None) -> str:
+def build_extraction_prompt(
+    subject_candidates: list[str] | None = None,
+    unit_candidates: list[str] | None = None,
+    document_type_hint: str | None = None,
+) -> str:
     subjects = _clean_text_candidates(subject_candidates, max_items=24)
     units = [unit for unit in _clean_text_candidates(unit_candidates, max_items=80) if _clean_unit_label(unit)]
     return (
         EXTRACTION_PROMPT
+        + "\n\n"
+        + document_type_hints_note(document_type_hint, doc_kind="problem")
         + "\n\nClassify each extracted problem while extracting it.\n"
         + "A single PDF can contain multiple subjects, so classify per problem, not per file.\n"
         + _candidate_instruction("subject", subjects)
@@ -1009,6 +1021,7 @@ def extract_page_metadata(
     offset: int = 0,
     total: int | None = None,
     display_total_pages: int | None = None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     if not pages:
         return []
@@ -1028,7 +1041,11 @@ def extract_page_metadata(
                 vision_json,
                 client,
                 page.base64_png,
-                f"{PAGE_STRUCTURE_PROMPT}\n\nDocument kind: {doc_kind}. Current page_number: {page.page_index + 1}. Return this exact page_number.",
+                (
+                    f"{PAGE_STRUCTURE_PROMPT}\n\n"
+                    f"Document kind: {doc_kind}. Current page_number: {page.page_index + 1}. Return this exact page_number.\n"
+                    f"{document_type_hints_note(document_type_for_page(document_type_hints, page.page_index), doc_kind=doc_kind)}"
+                ),
                 _page_split_model(model_pool, page.page_index, display_total_pages),
                 page.ai_image_mime,
                 1800,
@@ -1045,7 +1062,11 @@ def extract_page_metadata(
         ):
             items = future.result()
             raw = items[0] if items and isinstance(items[0], dict) else {}
-            metadata.append(_normalize_page_metadata(raw, page, doc_kind))
+            normalized = _normalize_page_metadata(raw, page, doc_kind)
+            page_hint = document_type_for_page(document_type_hints, page.page_index)
+            if page_hint:
+                normalized["document_type_hint"] = page_hint
+            metadata.append(normalized)
             completed += 1
             if batch_id:
                 set_progress(
@@ -1547,6 +1568,7 @@ def collect_page_metadata_for_pdf(
     batch_id: UUID,
     offset: int,
     total_units: int,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     model_pool = _ai_model_pool(get_settings().ai_solution_model_pool if doc_kind == "solution" else get_settings().ai_model_pool, get_settings().ai_model)
     metadata: list[dict[str, Any]] = []
@@ -1579,9 +1601,11 @@ def collect_page_metadata_for_pdf(
                 offset=base + chunk_len,
                 total=total_units,
                 display_total_pages=page_count,
+                document_type_hints=document_type_hints,
             )
         )
         processed_pages += chunk_len
+    metadata = apply_document_type_hints_to_metadata(metadata, document_type_hints)
     return sorted(metadata, key=lambda item: int(item.get("page_index") or 0))
 
 
@@ -1687,6 +1711,7 @@ def scan_quick_answer_table_pages(
     batch_id: UUID | None,
     progress_offset: int,
     total_units: int | None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     candidate_indexes = _quick_answer_candidate_page_indexes(page_count)
     report: dict[str, Any] = {
@@ -1730,6 +1755,7 @@ def scan_quick_answer_table_pages(
                 page.base64_png,
                 (
                     f"{QUICK_ANSWER_TABLE_SCAN_PROMPT}\n\n"
+                    f"{document_type_hints_note(document_type_for_page(document_type_hints, page.page_index), doc_kind='solution')}\n"
                     f"Current answer PDF page_idx: {page.page_index}.\n"
                     f"Current answer PDF page number: {page.page_index + 1}."
                 ),
@@ -1815,8 +1841,9 @@ def extract_quick_answer_table_solutions(
     batch_id: UUID | None,
     progress_offset: int,
     total_units: int | None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    report = scan_quick_answer_table_pages(path, page_count, dpi, batch_id, progress_offset, total_units)
+    report = scan_quick_answer_table_pages(path, page_count, dpi, batch_id, progress_offset, total_units, document_type_hints=document_type_hints)
     selected_indexes = [int(index) for index in report.get("selected_page_indexes") or []]
     if not selected_indexes:
         report["extracted_answer_count"] = 0
@@ -1842,6 +1869,7 @@ def extract_quick_answer_table_solutions(
         prompt_override=QUICK_ANSWER_TABLE_EXTRACTION_PROMPT,
         mode_label_override="빠른 답안표 검사",
         max_output_tokens_override=max(settings.ai_solution_max_output_tokens, settings.ai_max_output_tokens, 4096),
+        document_type_hints=document_type_hints,
     )
     for solution in solutions:
         solution["extraction_source"] = "quick_answer_table"
@@ -1863,6 +1891,7 @@ def extract_full_solution_pdf(
     units_per_page: int,
     solution_sections: list[dict[str, Any]],
     solution_page_metadata: dict[int, dict[str, Any]] | None = None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
@@ -1895,6 +1924,7 @@ def extract_full_solution_pdf(
             offset=base + chunk_len,
             total=total_units,
             display_total_pages=page_count,
+            document_type_hints=document_type_hints,
         )
         _apply_section_ranges_to_items(extracted_solutions, solution_sections, "page_idx")
         solutions.extend(extracted_solutions)
@@ -1912,6 +1942,7 @@ def extract_solution_page_indexes(
     total_units: int,
     solution_sections: list[dict[str, Any]],
     solution_page_metadata: dict[int, dict[str, Any]] | None = None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     selected = sorted(set(index for index in page_indexes if 0 <= index < page_count))
     if not selected:
@@ -1933,6 +1964,7 @@ def extract_solution_page_indexes(
         offset=offset + len(selected),
         total=total_units,
         display_total_pages=page_count,
+        document_type_hints=document_type_hints,
     )
     _apply_section_ranges_to_items(solutions, solution_sections, "page_idx")
     for solution in solutions:
@@ -2061,6 +2093,7 @@ def _extract_korean_problem_document(
     dpi: int,
     total_units: int,
     subject_engine: str = KOREAN_ENGINE,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], dict[int, str]]:
     settings = get_settings()
     client = _openai_client()
@@ -2108,6 +2141,7 @@ def _extract_korean_problem_document(
                         f"Document id: {document_id}\n"
                         f"Source file: {source_file}\n"
                         f"Current source page: {page.page_index + 1}\n"
+                        f"{document_type_hints_note(document_type_for_page(document_type_hints, page.page_index), doc_kind='problem')}\n"
                         "Use the current source page number in every source_pages array."
                     ),
                     _page_split_model(model_pool, page.page_index, page_count),
@@ -2165,6 +2199,7 @@ def _extract_korean_solution_items(
     total_units: int,
     subject_engine: str = KOREAN_ENGINE,
     page_indexes: list[int] | None = None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     client = _openai_client()
@@ -2186,7 +2221,11 @@ def _extract_korean_solution_items(
                     vision_json,
                     client,
                     page.base64_png,
-                    f"{solution_prompt}\n\nCurrent source page: {page.page_index + 1}. Use this page number in source_pages.",
+                    (
+                        f"{solution_prompt}\n\n"
+                        f"{document_type_hints_note(document_type_for_page(document_type_hints, page.page_index), doc_kind='solution')}\n"
+                        f"Current source page: {page.page_index + 1}. Use this page number in source_pages."
+                    ),
                     _page_split_model(model_pool, page.page_index, page_count),
                     page.ai_image_mime,
                     settings.ai_solution_max_output_tokens,
@@ -2395,10 +2434,13 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     settings = get_settings()
     subject_engine = normalize_subject_engine(batch.subject_engine)
     subject_label = language_engine_label(subject_engine)
+    document_type_hints = batch.document_type_hints or []
     problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
     solution_page_count = count_pdf_pages(batch.solution_pdf_filename) if batch.solution_pdf_filename else 0
     solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
-    should_detect_embedded_answers = bool(not batch.solution_pdf_filename and solution_mode != "skip")
+    should_detect_embedded_answers = bool(
+        not batch.solution_pdf_filename and solution_mode != "skip" and document_type_hints_allow_embedded_solutions(document_type_hints)
+    )
     total_units = max(problem_page_count * 2 + solution_page_count * 2 + (problem_page_count if should_detect_embedded_answers else 0), 1)
     problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
     solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)) if batch.solution_pdf_filename else problem_dpi
@@ -2414,11 +2456,13 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
         problem_dpi,
         total_units,
         subject_engine=subject_engine,
+        document_type_hints=document_type_hints,
     )
     _write_batch_artifact(batch_id, "korean_extraction.json", document)
 
     answer_source_path = batch.solution_pdf_filename if batch.solution_pdf_filename else (batch.problem_pdf_filename if should_detect_embedded_answers else None)
     answer_source_page_count = solution_page_count if batch.solution_pdf_filename else problem_page_count
+    answer_document_type_hints = None if batch.solution_pdf_filename else document_type_hints
     if answer_source_path:
         answer_items: list[dict[str, Any]] = []
         question_count = len([question for question in document.get("questions") or [] if isinstance(question, dict)])
@@ -2429,6 +2473,7 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
             batch_id,
             progress_offset=problem_page_count * 2,
             total_units=total_units,
+            document_type_hints=answer_document_type_hints,
         )
         selected_quick_pages = [int(index) for index in quick_answer_report.get("selected_page_indexes") or []]
         if selected_quick_pages:
@@ -2441,6 +2486,7 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
                 total_units=total_units,
                 subject_engine=subject_engine,
                 page_indexes=selected_quick_pages,
+                document_type_hints=answer_document_type_hints,
             )
         quick_answer_count = len(
             {
@@ -2467,6 +2513,7 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
                 offset=problem_page_count * 2,
                 total_units=total_units,
                 subject_engine=subject_engine,
+                document_type_hints=answer_document_type_hints,
             )
             quick_answer_report["full_fallback_answer_count"] = len(
                 {
@@ -2787,10 +2834,13 @@ def process_batch(batch_id: UUID) -> None:
             process_korean_batch(db, batch, batch_id)
             return
 
+        document_type_hints = batch.document_type_hints or []
         extraction_passes = max(settings.ai_extraction_passes, 1)
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
         should_extract_separate_solutions = bool(batch.solution_pdf_filename and solution_mode != "skip")
-        should_detect_embedded_solutions = bool(not batch.solution_pdf_filename and solution_mode != "skip")
+        should_detect_embedded_solutions = bool(
+            not batch.solution_pdf_filename and solution_mode != "skip" and document_type_hints_allow_embedded_solutions(document_type_hints)
+        )
         should_extract_solutions = should_extract_separate_solutions or should_detect_embedded_solutions
         units_per_page = 1 + extraction_passes
         problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
@@ -2816,6 +2866,7 @@ def process_batch(batch_id: UUID) -> None:
                 batch_id,
                 progress_offset=0,
                 total_units=total_units,
+                document_type_hints=document_type_hints if not should_extract_separate_solutions else None,
             )
             quick_answer_count = _solution_answer_count(quick_solutions)
             if _quick_answers_cover_expected_count(quick_answer_count, None):
@@ -2837,6 +2888,7 @@ def process_batch(batch_id: UUID) -> None:
                             batch_id,
                             offset=0,
                             total_units=total_units,
+                            document_type_hints=None,
                         )
                     )
         page_metadata.extend(
@@ -2848,6 +2900,7 @@ def process_batch(batch_id: UUID) -> None:
                 batch_id,
                 offset=solution_page_count * 2,
                 total_units=total_units,
+                document_type_hints=document_type_hints,
             )
         )
         _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
@@ -2881,6 +2934,7 @@ def process_batch(batch_id: UUID) -> None:
                 units_per_page=units_per_page,
                 solution_sections=solution_sections,
                 solution_page_metadata=solution_page_metadata,
+                document_type_hints=None,
             )
             if not any(has_solution_content(solution) for solution in solutions):
                 raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
@@ -2895,6 +2949,7 @@ def process_batch(batch_id: UUID) -> None:
                 total_units=total_units,
                 solution_sections=solution_sections,
                 solution_page_metadata=solution_page_metadata,
+                document_type_hints=document_type_hints,
             )
         if quick_answer_report is not None:
             _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
@@ -2922,6 +2977,7 @@ def process_batch(batch_id: UUID) -> None:
                 display_total_pages=problem_page_count,
                 subject_candidates=batch.subject_candidates,
                 unit_candidates=batch.unit_candidates,
+                document_type_hints=document_type_hints,
             )
             _apply_section_ranges_to_items(extracted, problem_sections, "page_index")
             page_range_label = format_page_index_chunk(page_index_chunk, problem_page_count)
@@ -2976,6 +3032,7 @@ def process_batch(batch_id: UUID) -> None:
                         batch_id,
                         offset=fallback_metadata_offset,
                         total_units=fallback_total_units,
+                        document_type_hints=None,
                     )
                     problem_metadata = [item for item in page_metadata if item.get("document_kind") == "problem"]
                     page_metadata = solution_metadata + problem_metadata
@@ -2993,6 +3050,7 @@ def process_batch(batch_id: UUID) -> None:
                         units_per_page=units_per_page,
                         solution_sections=solution_sections,
                         solution_page_metadata=solution_page_metadata,
+                        document_type_hints=None,
                     )
                     total_units = fallback_total_units
                     if not any(has_solution_content(solution) for solution in solutions):
@@ -3010,6 +3068,7 @@ def process_batch(batch_id: UUID) -> None:
                         total_units=total_units + max(len(embedded_solution_page_indexes) * units_per_page, 1),
                         solution_sections=solution_sections,
                         solution_page_metadata=solution_page_metadata,
+                        document_type_hints=document_type_hints,
                     )
                 else:
                     solutions = []
@@ -4213,6 +4272,7 @@ def extract_and_cross_check(
     display_total_pages: int | None = None,
     subject_candidates: list[str] | None = None,
     unit_candidates: list[str] | None = None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     if not settings.openai_api_key:
@@ -4223,7 +4283,6 @@ def extract_and_cross_check(
     total_steps = total or len(pages) * extraction_passes
     subjects = _clean_text_candidates(subject_candidates, max_items=24)
     units = _clean_text_candidates(unit_candidates, max_items=80)
-    prompt = build_extraction_prompt(subjects, units)
     model_pool = _ai_model_pool()
 
     tasks = [(local_index, page, run_index) for local_index, page in enumerate(pages) for run_index in range(extraction_passes)]
@@ -4238,7 +4297,7 @@ def extract_and_cross_check(
                 vision_json,
                 client,
                 page.base64_png,
-                prompt,
+                build_extraction_prompt(subjects, units, document_type_for_page(document_type_hints, page.page_index)),
                 _page_split_model(model_pool, page.page_index, display_total_pages),
                 page.ai_image_mime,
             ): (local_index, page, run_index)
@@ -4282,7 +4341,10 @@ def extract_and_cross_check(
                     vision_json,
                     client,
                     page.base64_png,
-                    RESCUE_EXTRACTION_PROMPT,
+                    (
+                        f"{RESCUE_EXTRACTION_PROMPT}\n\n"
+                        f"{document_type_hints_note(document_type_for_page(document_type_hints, page.page_index), doc_kind='problem')}"
+                    ),
                     _page_split_model(model_pool, page.page_index, display_total_pages),
                     page.ai_image_mime,
                 ): page
@@ -4713,6 +4775,7 @@ def extract_solutions(
     prompt_override: str | None = None,
     mode_label_override: str | None = None,
     max_output_tokens_override: int | None = None,
+    document_type_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     client = _openai_client()
@@ -4739,7 +4802,11 @@ def extract_solutions(
                 vision_json,
                 client,
                 page.base64_png,
-                f"{solution_prompt}\n\nCurrent solution PDF page_idx: {page.page_index}. Return this exact integer in page_idx for every item on this page.",
+                (
+                    f"{solution_prompt}\n\n"
+                    f"{document_type_hints_note(document_type_for_page(document_type_hints, page.page_index), doc_kind='solution')}\n"
+                    f"Current solution PDF page_idx: {page.page_index}. Return this exact integer in page_idx for every item on this page."
+                ),
                 _page_split_model(model_pool, page.page_index, display_total_pages),
                 page.ai_image_mime,
                 solution_max_tokens,

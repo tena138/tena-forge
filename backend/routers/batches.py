@@ -30,6 +30,7 @@ from schemas import (
 )
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
+from services.document_type_hints import normalize_document_type_hint, normalize_document_type_hint_items
 from services.korean_extraction import parse_passage_question_range
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids, current_workspace_id
 from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progress_detail
@@ -64,6 +65,57 @@ def _parse_candidate_list(raw: str | None, max_items: int = 24) -> list[str]:
         if len(candidates) >= max_items:
             break
     return candidates
+
+
+def _parse_document_type_hints(raw: str | None) -> list[dict]:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return normalize_document_type_hint_items(parsed)
+
+
+def _document_type_for_upload(hints: list[dict], index: int, filename: str | None, size: int | None) -> str:
+    for item in hints:
+        if item.get("file_index") == index:
+            return normalize_document_type_hint(item.get("type"))
+    filename_text = str(filename or "")
+    for item in hints:
+        if filename_text and item.get("filename") == filename_text:
+            if size is None or not item.get("size") or int(item.get("size") or 0) == int(size or 0):
+                return normalize_document_type_hint(item.get("type"))
+    return normalize_document_type_hint(None)
+
+
+def _build_document_type_page_hints(selected_uploads: list[UploadFile], saved_paths: list[str], raw_hints: list[dict]) -> list[dict]:
+    output: list[dict] = []
+    page_cursor = 0
+    for index, path in enumerate(saved_paths):
+        page_count = count_pdf_pages(path)
+        upload = selected_uploads[index] if index < len(selected_uploads) else None
+        try:
+            size = int(getattr(upload, "size", 0) or 0)
+        except (TypeError, ValueError):
+            size = 0
+        page_start = page_cursor + 1
+        page_end = page_cursor + page_count
+        output.append(
+            {
+                "file_index": index,
+                "filename": str(getattr(upload, "filename", "") or os.path.basename(path))[:500],
+                "size": size,
+                "type": _document_type_for_upload(raw_hints, index, getattr(upload, "filename", None), size),
+                "page_start": page_start,
+                "page_end": page_end,
+                "page_index_start": page_cursor,
+                "page_index_end": max(page_cursor + page_count - 1, page_cursor),
+                "page_count": page_count,
+            }
+        )
+        page_cursor += page_count
+    return output
 
 
 def _safe_unlink(path: str | None) -> None:
@@ -240,6 +292,7 @@ def _batch_read(
             "accent_color": normalize_batch_color(batch.accent_color) or batch_color_for_seed(batch.id or batch.name),
             "subject_candidates": batch.subject_candidates,
             "unit_candidates": batch.unit_candidates,
+            "document_type_hints": batch.document_type_hints,
             "archive_folder_id": batch.archive_folder_id,
             "subject_engine": batch.subject_engine or "math",
             "processing_task": batch.processing_task or "full",
@@ -292,6 +345,7 @@ def upload_batch(
     accent_color: str | None = Form(default=None),
     subject_candidates: str | None = Form(default=None),
     unit_candidates: str | None = Form(default=None),
+    document_type_hints: str | None = Form(default=None),
     archive_folder_id: UUID | None = Form(default=None),
     subject_engine: str | None = Form(default=None),
     db: Session = Depends(get_db),
@@ -319,6 +373,14 @@ def upload_batch(
     saved_pdf_paths = [save_upload(upload) for upload in selected_pdfs]
     uses_unified_upload = bool(pdf_files)
     solution_path = None if uses_unified_upload else (save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None)
+    parsed_document_type_hints = _parse_document_type_hints(document_type_hints)
+    try:
+        document_type_page_hints = _build_document_type_page_hints(selected_pdfs, saved_pdf_paths, parsed_document_type_hints)
+    except Exception as exc:
+        for path in saved_pdf_paths:
+            _safe_unlink(path)
+        _safe_unlink(solution_path)
+        raise HTTPException(status_code=400, detail=f"PDF 페이지 수를 확인하지 못했습니다: {exc}")
     try:
         problem_path = _merge_pdf_paths(saved_pdf_paths, batch_name)
     except Exception:
@@ -367,6 +429,7 @@ def upload_batch(
         accent_color=normalize_batch_color(accent_color) or batch_color_for_seed(batch_name),
         subject_candidates=parsed_subject_candidates,
         unit_candidates=_parse_candidate_list(unit_candidates, max_items=80),
+        document_type_hints=document_type_page_hints,
         archive_folder_id=validated_archive_folder_id,
         subject_engine=engine,
         processing_task="full",
