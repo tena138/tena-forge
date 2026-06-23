@@ -1,13 +1,13 @@
 "use client";
 
-import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Ban, BookOpenCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { api, attachBatchSolutionPdf, Batch } from "@/lib/api";
+import { api, Batch } from "@/lib/api";
 import { rememberActiveBatch } from "@/lib/batch-progress";
 import { formatKstDateTime } from "@/lib/datetime";
 import { ClassCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
@@ -128,11 +128,8 @@ export function ArchiveBatchHistory({
   onActiveBatchSnapshot?: (batch: Batch | null) => void;
 }) {
   const router = useRouter();
-  const solutionPdfInputRef = useRef<HTMLInputElement | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [solutionUploadBatch, setSolutionUploadBatch] = useState<Batch | null>(null);
-  const [solutionUploadPercent, setSolutionUploadPercent] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assignBatch, setAssignBatch] = useState<Batch | null>(null);
   const [classes, setClasses] = useState<ClassCard[]>([]);
@@ -235,42 +232,6 @@ export function ArchiveBatchHistory({
     }
   }
 
-  function openSolutionUpload(batch: Batch) {
-    if (!batch.problem_count || batch.solution_pdf_filename || batch.status === "pending" || batch.status === "processing" || busyId === batch.id) return;
-    setSolutionUploadBatch(batch);
-    setSolutionUploadPercent(null);
-    window.setTimeout(() => solutionPdfInputRef.current?.click(), 0);
-  }
-
-  async function handleSolutionPdfChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] || null;
-    event.target.value = "";
-    const batch = solutionUploadBatch;
-    setSolutionUploadBatch(null);
-    if (!file || !batch) return;
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      window.alert("답안 자료는 PDF 파일만 업로드할 수 있습니다.");
-      return;
-    }
-    const ok = window.confirm(`'${batch.name}' 배치에 답안 PDF를 추가하고 기존 문항에 정답을 매칭할까요?`);
-    if (!ok) return;
-    setBusyId(batch.id);
-    setSolutionUploadPercent(0);
-    try {
-      const response = await attachBatchSolutionPdf(batch.id, file, setSolutionUploadPercent);
-      rememberActiveBatch(response.batch_id);
-      await loadBatches();
-      router.push("/archive/new");
-    } catch (error: any) {
-      const detail = error.response?.data?.detail;
-      const message = typeof detail === "string" ? detail : detail?.message || "답안 PDF를 추가하지 못했습니다.";
-      window.alert(message);
-    } finally {
-      setBusyId(null);
-      setSolutionUploadPercent(null);
-    }
-  }
-
   async function deleteBatch(batch: Batch) {
     const ok = window.confirm(`'${batch.name}' 배치를 삭제할까요? 연결된 문항과 태그도 함께 삭제됩니다.`);
     if (!ok) return;
@@ -331,7 +292,6 @@ export function ArchiveBatchHistory({
 
   return (
     <section className={cn("space-y-4", compact && "pt-1")}>
-      <input ref={solutionPdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleSolutionPdfChange} />
       {!compact ? (
         <div className="flex justify-end">
           <Button onClick={() => router.push("/archive/new")}>
@@ -377,12 +337,6 @@ export function ArchiveBatchHistory({
                       답안만 재처리
                     </Button>
                   ) : null}
-                  {!batch.solution_pdf_filename && batch.problem_count > 0 ? (
-                    <Button variant="outline" size="sm" disabled={batch.status === "pending" || batch.status === "processing" || busyId === batch.id} onClick={() => openSolutionUpload(batch)}>
-                      <UploadCloud className="h-4 w-4" />
-                      {busyId === batch.id && solutionUploadPercent !== null ? `답안 추가 ${solutionUploadPercent}%` : "답안 추가"}
-                    </Button>
-                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"
@@ -415,13 +369,20 @@ export function ArchiveBatchHistory({
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <BatchInfoPanel batch={batch} />
                 <div className="rounded-[9px] bg-zinc-100 p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900"><FileText className="h-4 w-4 text-zinc-700" />문항 PDF</div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900"><FileText className="h-4 w-4 text-zinc-700" />입력 PDF</div>
                   <p className="mt-1 break-all text-sm text-zinc-500">{fileName(batch.problem_pdf_filename)}</p>
                 </div>
-                <div className="rounded-[9px] bg-zinc-100 p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900"><FileText className="h-4 w-4 text-zinc-700" />답안 PDF</div>
-                  <p className="mt-1 break-all text-sm text-zinc-500">{fileName(batch.solution_pdf_filename)}</p>
-                </div>
+                {batch.solution_pdf_filename ? (
+                  <div className="rounded-[9px] bg-zinc-100 p-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900"><FileText className="h-4 w-4 text-zinc-700" />레거시 답안 PDF</div>
+                    <p className="mt-1 break-all text-sm text-zinc-500">{fileName(batch.solution_pdf_filename)}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-[9px] bg-zinc-100 p-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900"><Info className="h-4 w-4 text-zinc-700" />정답 감지</div>
+                    <p className="mt-1 text-sm text-zinc-500">입력 PDF 안에서 본문, 정답, 해설 페이지를 함께 감지합니다.</p>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-4">

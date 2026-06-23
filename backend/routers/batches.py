@@ -1,11 +1,13 @@
 import json
 import os
+import re
 import shutil
 import traceback
 from datetime import datetime
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import fitz
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.orm import Session
@@ -82,6 +84,46 @@ def _file_size_mb(path: str | None) -> float:
         return os.path.getsize(path) / (1024 * 1024)
     except OSError:
         return 0.0
+
+
+def _clean_combined_pdf_stem(value: str) -> str:
+    stem = re.sub(r"[^0-9A-Za-z가-힣_.-]+", "_", str(value or "combined").strip())
+    stem = stem.strip("._") or "combined"
+    return stem[:80]
+
+
+def _merge_pdf_paths(paths: list[str], batch_name: str) -> str:
+    if not paths:
+        raise HTTPException(status_code=400, detail="PDF 파일을 선택해 주세요.")
+    if len(paths) == 1:
+        return paths[0]
+    target_dir = Path(get_settings().uploads_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{_clean_combined_pdf_stem(batch_name)}_{uuid4().hex}_combined.pdf"
+    merged = fitz.open()
+    try:
+        for path in paths:
+            source = fitz.open(path)
+            try:
+                if source.page_count:
+                    merged.insert_pdf(source)
+            finally:
+                source.close()
+        if merged.page_count <= 0:
+            raise HTTPException(status_code=400, detail="병합할 수 있는 PDF 페이지가 없습니다.")
+        merged.save(str(target))
+    finally:
+        merged.close()
+    return str(target)
+
+
+def _selected_pdf_uploads(pdf_files: list[UploadFile] | None, problem_pdf: UploadFile | None) -> list[UploadFile]:
+    uploads = [file for file in (pdf_files or []) if file and file.filename]
+    if uploads:
+        return uploads
+    if problem_pdf and problem_pdf.filename:
+        return [problem_pdf]
+    return []
 
 
 def _clear_batch_artifacts(batch_id: UUID) -> None:
@@ -239,7 +281,8 @@ def _validate_archive_folder(db: Session, owner_id: str, folder_id: UUID | None,
 @router.post("/upload", response_model=BatchUploadResponse)
 def upload_batch(
     request: Request,
-    problem_pdf: UploadFile = File(...),
+    problem_pdf: UploadFile | None = File(default=None),
+    pdf_files: list[UploadFile] | None = File(default=None),
     solution_pdf: UploadFile | None = File(default=None),
     batch_name: str = Form(...),
     source_type: str = Form(...),
@@ -253,8 +296,12 @@ def upload_batch(
     subject_engine: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    if not problem_pdf.filename or not problem_pdf.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="문항 자료는 PDF 파일만 업로드할 수 있습니다.")
+    selected_pdfs = _selected_pdf_uploads(pdf_files, problem_pdf)
+    if not selected_pdfs:
+        raise HTTPException(status_code=400, detail="PDF 파일을 하나 이상 선택해 주세요.")
+    for upload in selected_pdfs:
+        if not upload.filename or not upload.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="PDF 파일만 업로드할 수 있습니다.")
     if solution_pdf and solution_pdf.filename and not solution_pdf.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="답안 자료는 PDF 파일만 업로드할 수 있습니다.")
     if source_type not in SOURCE_TYPES:
@@ -265,12 +312,23 @@ def upload_batch(
     owner_id = current_workspace_id(request, db, permission="can_manage_materials")
     parsed_subject_candidates = _parse_candidate_list(subject_candidates)
     if not parsed_subject_candidates:
-        parsed_subject_candidates = infer_subject_candidates_from_text(problem_pdf.filename, batch_name)
+        parsed_subject_candidates = infer_subject_candidates_from_text(" ".join(upload.filename or "" for upload in selected_pdfs), batch_name)
     engine = normalize_subject_engine(subject_engine or infer_subject_engine_from_subjects(parsed_subject_candidates))
     validated_archive_folder_id = _validate_archive_folder(db, owner_id, archive_folder_id, engine)
     ensure_subject_engine_access(db, owner_id, engine)
-    problem_path = save_upload(problem_pdf)
-    solution_path = save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None
+    saved_pdf_paths = [save_upload(upload) for upload in selected_pdfs]
+    uses_unified_upload = bool(pdf_files)
+    solution_path = None if uses_unified_upload else (save_upload(solution_pdf) if solution_pdf and solution_pdf.filename else None)
+    try:
+        problem_path = _merge_pdf_paths(saved_pdf_paths, batch_name)
+    except Exception:
+        for path in saved_pdf_paths:
+            _safe_unlink(path)
+        _safe_unlink(solution_path)
+        raise
+    if len(saved_pdf_paths) > 1:
+        for path in saved_pdf_paths:
+            _safe_unlink(path)
     try:
         problem_pages = count_pdf_pages(problem_path)
         solution_pages = count_pdf_pages(solution_path) if solution_path else 0

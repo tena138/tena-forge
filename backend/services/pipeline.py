@@ -770,6 +770,17 @@ def format_page_range_group(ranges: list[tuple[int, int]], page_count: int) -> s
     return f"{', '.join(labels)}/{page_count}페이지"
 
 
+def iter_page_index_chunks(page_indexes: list[int], chunk_size: int = PAGE_CHUNK_SIZE):
+    ordered = sorted(set(index for index in page_indexes if index >= 0))
+    for start in range(0, len(ordered), chunk_size):
+        yield ordered[start : start + chunk_size]
+
+
+def format_page_index_chunk(page_indexes: list[int], page_count: int) -> str:
+    labels = [f"{start + 1}" if end == start + 1 else f"{start + 1}-{end}" for start, end in _contiguous_page_ranges(page_indexes)]
+    return f"{', '.join(labels)}/{page_count}페이지"
+
+
 def interleave_rendered_page_groups(groups: list[list[RenderedPage]]) -> list[RenderedPage]:
     interleaved: list[RenderedPage] = []
     max_group_len = max((len(group) for group in groups), default=0)
@@ -1448,6 +1459,45 @@ def _metadata_by_page(metadata: list[dict[str, Any]], doc_kind: str) -> dict[int
     }
 
 
+def _metadata_with_document_kind(metadata: list[dict[str, Any]], doc_kind: str, page_indexes: set[int] | None = None) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for item in metadata:
+        page_index = int(item.get("page_index") or 0)
+        if page_indexes is not None and page_index not in page_indexes:
+            continue
+        copied = dict(item)
+        copied["document_kind"] = doc_kind
+        output.append(copied)
+    return output
+
+
+def _embedded_solution_page_indexes(metadata: list[dict[str, Any]]) -> list[int]:
+    indexes: list[int] = []
+    for item in metadata:
+        page_index = int(item.get("page_index") or 0)
+        page_type = str(item.get("page_type") or "").strip()
+        problem_headers = item.get("detected_problem_headers") or []
+        solution_headers = item.get("detected_solution_headers") or []
+        if page_type == "solution_page":
+            indexes.append(page_index)
+            continue
+        if solution_headers and not problem_headers and page_type in {"unknown", ""}:
+            indexes.append(page_index)
+    return sorted(set(indexes))
+
+
+def _problem_page_indexes_from_metadata(metadata: list[dict[str, Any]], page_count: int) -> list[int]:
+    excluded_types = {"solution_page", "toc", "cover", "blank", "log"}
+    indexes = [
+        int(item.get("page_index") or 0)
+        for item in metadata
+        if int(item.get("page_index") or 0) < page_count and str(item.get("page_type") or "") not in excluded_types
+    ]
+    if indexes:
+        return sorted(set(indexes))
+    return list(range(page_count)) if not metadata else []
+
+
 def _encode_image_for_ai(image: Image.Image, mime: str) -> tuple[str, bytes, str]:
     buffer = io.BytesIO()
     if mime == "image/jpeg":
@@ -1849,6 +1899,44 @@ def extract_full_solution_pdf(
         _apply_section_ranges_to_items(extracted_solutions, solution_sections, "page_idx")
         solutions.extend(extracted_solutions)
         processed_solution_pages += chunk_len
+    return _apply_structure_indexes(solutions, page_key="page_idx")
+
+
+def extract_solution_page_indexes(
+    path: str,
+    page_indexes: list[int],
+    page_count: int,
+    dpi: int,
+    batch_id: UUID,
+    offset: int,
+    total_units: int,
+    solution_sections: list[dict[str, Any]],
+    solution_page_metadata: dict[int, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    selected = sorted(set(index for index in page_indexes if 0 <= index < page_count))
+    if not selected:
+        return []
+    pages = render_pdf_page_indexes(
+        path,
+        selected,
+        batch_id=batch_id,
+        label="PDF 내 답안 페이지 렌더링 중",
+        dpi=dpi,
+        progress_offset=offset,
+        progress_total=total_units,
+    )
+    if solution_page_metadata:
+        pages = split_two_column_solution_pages(pages, solution_page_metadata)
+    solutions = extract_solutions(
+        pages,
+        batch_id,
+        offset=offset + len(selected),
+        total=total_units,
+        display_total_pages=page_count,
+    )
+    _apply_section_ranges_to_items(solutions, solution_sections, "page_idx")
+    for solution in solutions:
+        solution["extraction_source"] = "embedded_solution_page"
     return _apply_structure_indexes(solutions, page_key="page_idx")
 
 
@@ -2309,7 +2397,9 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     subject_label = language_engine_label(subject_engine)
     problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
     solution_page_count = count_pdf_pages(batch.solution_pdf_filename) if batch.solution_pdf_filename else 0
-    total_units = max(problem_page_count * 2 + solution_page_count * 2, 1)
+    solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
+    should_detect_embedded_answers = bool(not batch.solution_pdf_filename and solution_mode != "skip")
+    total_units = max(problem_page_count * 2 + solution_page_count * 2 + (problem_page_count if should_detect_embedded_answers else 0), 1)
     problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
     solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)) if batch.solution_pdf_filename else problem_dpi
     set_progress(batch_id, f"{subject_label} 추출 준비 완료", 0, total_units)
@@ -2327,12 +2417,14 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
     )
     _write_batch_artifact(batch_id, "korean_extraction.json", document)
 
-    if batch.solution_pdf_filename:
+    answer_source_path = batch.solution_pdf_filename if batch.solution_pdf_filename else (batch.problem_pdf_filename if should_detect_embedded_answers else None)
+    answer_source_page_count = solution_page_count if batch.solution_pdf_filename else problem_page_count
+    if answer_source_path:
         answer_items: list[dict[str, Any]] = []
         question_count = len([question for question in document.get("questions") or [] if isinstance(question, dict)])
         quick_answer_report = scan_quick_answer_table_pages(
-            batch.solution_pdf_filename,
-            solution_page_count,
+            answer_source_path,
+            answer_source_page_count,
             solution_dpi,
             batch_id,
             progress_offset=problem_page_count * 2,
@@ -2341,9 +2433,9 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
         selected_quick_pages = [int(index) for index in quick_answer_report.get("selected_page_indexes") or []]
         if selected_quick_pages:
             answer_items = _extract_korean_solution_items(
-                batch.solution_pdf_filename,
+                answer_source_path,
                 batch_id,
-                solution_page_count,
+                answer_source_page_count,
                 solution_dpi,
                 offset=problem_page_count * 2,
                 total_units=total_units,
@@ -2363,14 +2455,14 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
         if _quick_answers_cover_expected_count(quick_answer_count, question_count):
             quick_answer_report["used"] = True
             quick_answer_report["final_used_source"] = "quick_answer_table"
-        else:
+        elif batch.solution_pdf_filename:
             quick_answer_report["used"] = False
             quick_answer_report.setdefault("fallback_reason", "quick_answer_count_below_extracted_question_count")
             quick_answer_report["final_used_source"] = "full_solution_pdf"
             answer_items = _extract_korean_solution_items(
-                batch.solution_pdf_filename,
+                answer_source_path,
                 batch_id,
-                solution_page_count,
+                answer_source_page_count,
                 solution_dpi,
                 offset=problem_page_count * 2,
                 total_units=total_units,
@@ -2383,6 +2475,10 @@ def process_korean_batch(db: Session, batch: Batch, batch_id: UUID) -> None:
                     if isinstance(item, dict) and _question_number_key(item.get("question_number"))
                 }
             )
+        else:
+            quick_answer_report["used"] = False
+            quick_answer_report.setdefault("fallback_reason", "embedded_quick_answer_table_not_complete")
+            quick_answer_report["final_used_source"] = "embedded_problem_pdf_scan"
         _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         _write_batch_artifact(batch_id, "korean_answer_solution_items.json", answer_items)
         document = map_korean_answers(document, answer_items)
@@ -2693,16 +2789,19 @@ def process_batch(batch_id: UUID) -> None:
 
         extraction_passes = max(settings.ai_extraction_passes, 1)
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
-        should_extract_solutions = bool(batch.solution_pdf_filename and solution_mode != "skip")
+        should_extract_separate_solutions = bool(batch.solution_pdf_filename and solution_mode != "skip")
+        should_detect_embedded_solutions = bool(not batch.solution_pdf_filename and solution_mode != "skip")
+        should_extract_solutions = should_extract_separate_solutions or should_detect_embedded_solutions
         units_per_page = 1 + extraction_passes
         problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
-        solution_page_count = count_pdf_pages(batch.solution_pdf_filename) if should_extract_solutions else 0
+        solution_source_path = batch.solution_pdf_filename if should_extract_separate_solutions else batch.problem_pdf_filename
+        solution_page_count = count_pdf_pages(solution_source_path) if should_extract_solutions else 0
         structure_units = 2 * (problem_page_count + solution_page_count)
         solution_units = solution_page_count * units_per_page
         problem_units = problem_page_count * units_per_page
         total_units = structure_units + solution_units + problem_units
         problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
-        solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)) if should_extract_solutions else problem_dpi
+        solution_dpi = (settings.pdf_solution_render_dpi or choose_render_dpi(solution_source_path, solution_page_count)) if should_extract_solutions else problem_dpi
         set_progress(batch_id, "PDF 페이지 수 확인 완료", 0, total_units)
 
         page_metadata: list[dict[str, Any]] = []
@@ -2711,7 +2810,7 @@ def process_batch(batch_id: UUID) -> None:
         quick_answers_used = False
         if should_extract_solutions:
             quick_solutions, quick_answer_report = extract_quick_answer_table_solutions(
-                batch.solution_pdf_filename,
+                solution_source_path,
                 solution_page_count,
                 solution_dpi,
                 batch_id,
@@ -2728,17 +2827,18 @@ def process_batch(batch_id: UUID) -> None:
                 if quick_answer_report is not None:
                     quick_answer_report["used"] = False
                     quick_answer_report.setdefault("fallback_reason", "quick_answer_table_not_complete")
-                page_metadata.extend(
-                    collect_page_metadata_for_pdf(
-                        batch.solution_pdf_filename,
-                        solution_page_count,
-                        solution_dpi,
-                        "solution",
-                        batch_id,
-                        offset=0,
-                        total_units=total_units,
+                if should_extract_separate_solutions:
+                    page_metadata.extend(
+                        collect_page_metadata_for_pdf(
+                            solution_source_path,
+                            solution_page_count,
+                            solution_dpi,
+                            "solution",
+                            batch_id,
+                            offset=0,
+                            total_units=total_units,
+                        )
                     )
-                )
         page_metadata.extend(
             collect_page_metadata_for_pdf(
                 batch.problem_pdf_filename,
@@ -2751,15 +2851,28 @@ def process_batch(batch_id: UUID) -> None:
             )
         )
         _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
-        problem_sections = build_section_ranges_from_metadata(page_metadata, "problem", problem_page_count)
-        solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count) if should_extract_solutions else []
+        embedded_solution_page_indexes = _embedded_solution_page_indexes(page_metadata) if should_detect_embedded_solutions else []
+        embedded_solution_index_set = set(embedded_solution_page_indexes)
+        problem_metadata = [item for item in page_metadata if int(item.get("page_index") or 0) not in embedded_solution_index_set]
+        problem_sections = build_section_ranges_from_metadata(problem_metadata, "problem", problem_page_count)
+        if should_extract_separate_solutions:
+            solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count)
+        elif embedded_solution_page_indexes:
+            embedded_solution_metadata = _metadata_with_document_kind(page_metadata, "solution", embedded_solution_index_set)
+            solution_sections = build_section_ranges_from_metadata(embedded_solution_metadata, "solution", problem_page_count)
+        else:
+            embedded_solution_metadata = []
+            solution_sections = []
         _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
         _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
-        solution_page_metadata = _metadata_by_page(page_metadata, "solution")
+        solution_page_metadata = _metadata_by_page(page_metadata, "solution") if should_extract_separate_solutions else _metadata_by_page(embedded_solution_metadata, "solution")
+        problem_page_indexes = _problem_page_indexes_from_metadata(problem_metadata, problem_page_count)
+        if not problem_page_indexes:
+            raise RuntimeError("No problem pages were detected in the uploaded PDF set.")
 
-        if should_extract_solutions and not quick_answers_used:
+        if should_extract_separate_solutions and not quick_answers_used:
             solutions = extract_full_solution_pdf(
-                batch.solution_pdf_filename,
+                solution_source_path,
                 solution_page_count,
                 solution_dpi,
                 batch_id,
@@ -2771,32 +2884,36 @@ def process_batch(batch_id: UUID) -> None:
             )
             if not any(has_solution_content(solution) for solution in solutions):
                 raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+        elif should_detect_embedded_solutions and not quick_answers_used and embedded_solution_page_indexes:
+            solutions = extract_solution_page_indexes(
+                batch.problem_pdf_filename,
+                embedded_solution_page_indexes,
+                problem_page_count,
+                solution_dpi,
+                batch_id,
+                offset=structure_units,
+                total_units=total_units,
+                solution_sections=solution_sections,
+                solution_page_metadata=solution_page_metadata,
+            )
         if quick_answer_report is not None:
             _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
 
-        problem_model_pool = _ai_model_pool()
         all_extracted: list[dict[str, Any]] = []
         processed_problem_pages = 0
-        for range_group in iter_split_page_range_groups(problem_page_count, len(problem_model_pool)):
-            chunk_len = sum(end - start for start, end in range_group)
+        for page_index_chunk in iter_page_index_chunks(problem_page_indexes):
+            chunk_len = len(page_index_chunk)
             base = structure_units + solution_units + processed_problem_pages * units_per_page
-            rendered_groups: list[list[RenderedPage]] = []
-            rendered_pages = 0
-            for start, end in range_group:
-                rendered = render_pdf(
-                    batch.problem_pdf_filename,
-                    batch_id=batch_id,
-                    label="문제 PDF 렌더링 중",
-                    start_page=start,
-                    end_page=end,
-                    dpi=problem_dpi,
-                    progress_offset=base + rendered_pages,
-                    progress_total=total_units,
-                )
-                rendered_groups.append(rendered)
-                rendered_pages += end - start
-            problem_pages = interleave_rendered_page_groups(rendered_groups)
+            problem_pages = render_pdf_page_indexes(
+                batch.problem_pdf_filename,
+                page_index_chunk,
+                batch_id=batch_id,
+                label="문제 PDF 렌더링 중",
+                dpi=problem_dpi,
+                progress_offset=base,
+                progress_total=total_units,
+            )
             extracted = extract_and_cross_check(
                 problem_pages,
                 batch_id,
@@ -2807,7 +2924,7 @@ def process_batch(batch_id: UUID) -> None:
                 unit_candidates=batch.unit_candidates,
             )
             _apply_section_ranges_to_items(extracted, problem_sections, "page_index")
-            page_range_label = format_page_range_group(range_group, problem_page_count)
+            page_range_label = format_page_index_chunk(page_index_chunk, problem_page_count)
 
             set_progress(batch_id, f"검토용 원본 페이지 저장 중 ({page_range_label})", base + chunk_len * units_per_page, total_units)
             attach_review_page_images(extracted, problem_pages, batch_id)
@@ -2844,42 +2961,60 @@ def process_batch(batch_id: UUID) -> None:
                 if quick_answer_report is not None:
                     quick_answer_report["used"] = False
                     quick_answer_report["fallback_reason"] = "quick_answer_count_below_extracted_problem_count"
-                    quick_answer_report["final_used_source"] = "full_solution_pdf"
-                fallback_extra_units = solution_page_count * (units_per_page + 2)
-                fallback_total_units = total_units + fallback_extra_units
-                fallback_metadata_offset = total_units
-                set_progress(batch_id, "빠른 답안표 부족으로 전체 답안 PDF 확인 중", total_units, fallback_total_units)
-                solution_metadata = collect_page_metadata_for_pdf(
-                    batch.solution_pdf_filename,
-                    solution_page_count,
-                    solution_dpi,
-                    "solution",
-                    batch_id,
-                    offset=fallback_metadata_offset,
-                    total_units=fallback_total_units,
-                )
-                problem_metadata = [item for item in page_metadata if item.get("document_kind") == "problem"]
-                page_metadata = solution_metadata + problem_metadata
-                solution_sections = build_section_ranges_from_metadata(solution_metadata, "solution", solution_page_count)
-                solution_page_metadata = _metadata_by_page(solution_metadata, "solution")
-                _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
-                _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
-                solutions = extract_full_solution_pdf(
-                    batch.solution_pdf_filename,
-                    solution_page_count,
-                    solution_dpi,
-                    batch_id,
-                    offset=fallback_metadata_offset + solution_page_count * 2,
-                    total_units=fallback_total_units,
-                    units_per_page=units_per_page,
-                    solution_sections=solution_sections,
-                    solution_page_metadata=solution_page_metadata,
-                )
-                total_units = fallback_total_units
+                if should_extract_separate_solutions:
+                    if quick_answer_report is not None:
+                        quick_answer_report["final_used_source"] = "full_solution_pdf"
+                    fallback_extra_units = solution_page_count * (units_per_page + 2)
+                    fallback_total_units = total_units + fallback_extra_units
+                    fallback_metadata_offset = total_units
+                    set_progress(batch_id, "빠른 답안표 부족으로 전체 답안 PDF 확인 중", total_units, fallback_total_units)
+                    solution_metadata = collect_page_metadata_for_pdf(
+                        solution_source_path,
+                        solution_page_count,
+                        solution_dpi,
+                        "solution",
+                        batch_id,
+                        offset=fallback_metadata_offset,
+                        total_units=fallback_total_units,
+                    )
+                    problem_metadata = [item for item in page_metadata if item.get("document_kind") == "problem"]
+                    page_metadata = solution_metadata + problem_metadata
+                    solution_sections = build_section_ranges_from_metadata(solution_metadata, "solution", solution_page_count)
+                    solution_page_metadata = _metadata_by_page(solution_metadata, "solution")
+                    _write_batch_artifact(batch_id, "pages_metadata.json", page_metadata)
+                    _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
+                    solutions = extract_full_solution_pdf(
+                        solution_source_path,
+                        solution_page_count,
+                        solution_dpi,
+                        batch_id,
+                        offset=fallback_metadata_offset + solution_page_count * 2,
+                        total_units=fallback_total_units,
+                        units_per_page=units_per_page,
+                        solution_sections=solution_sections,
+                        solution_page_metadata=solution_page_metadata,
+                    )
+                    total_units = fallback_total_units
+                    if not any(has_solution_content(solution) for solution in solutions):
+                        raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+                elif should_detect_embedded_solutions and embedded_solution_page_indexes:
+                    if quick_answer_report is not None:
+                        quick_answer_report["final_used_source"] = "embedded_solution_pages"
+                    solutions = extract_solution_page_indexes(
+                        batch.problem_pdf_filename,
+                        embedded_solution_page_indexes,
+                        problem_page_count,
+                        solution_dpi,
+                        batch_id,
+                        offset=total_units,
+                        total_units=total_units + max(len(embedded_solution_page_indexes) * units_per_page, 1),
+                        solution_sections=solution_sections,
+                        solution_page_metadata=solution_page_metadata,
+                    )
+                else:
+                    solutions = []
                 if quick_answer_report is not None:
                     quick_answer_report["full_fallback_answer_count"] = _solution_answer_count(solutions)
-                if not any(has_solution_content(solution) for solution in solutions):
-                    raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
                 _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
                 if quick_answer_report is not None:
                     _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)

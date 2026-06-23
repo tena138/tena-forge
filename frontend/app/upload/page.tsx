@@ -244,41 +244,33 @@ function subjectEngineForSubject(subject: string): SubjectEngineCode | null {
 
 function buildCreditEstimate({
   problem,
-  solution,
   subjectEngine,
-  problemFile,
-  solutionFile,
+  pdfFiles = [],
 }: {
   problem: PdfPageEstimate;
-  solution: PdfPageEstimate;
   subjectEngine: SubjectEngineCode;
-  problemFile: File | null;
-  solutionFile: File | null;
+  pdfFiles?: File[];
 }) {
-  if (!problemFile || problem.loading || solution.loading || !problem.pages) return null;
+  const sourceFiles = pdfFiles;
+  if (!sourceFiles.length || problem.loading || !problem.pages) return null;
   const problemPages = problem.pages;
-  const solutionPages = solutionFile ? solution.pages || 0 : 0;
-  const totalPages = problemPages + solutionPages;
-  const totalMb = fileSizeMb(problemFile) + fileSizeMb(solutionFile);
+  const totalPages = problemPages;
+  const totalMb = sourceFiles.reduce((sum, file) => sum + fileSizeMb(file), 0);
   const hardScan = likelyHardScan(totalMb, Math.max(totalPages, 1));
   let problemMultiplier = 1;
-  let solutionMultiplier = 1.35;
   if (isLanguagePassageEngine(subjectEngine)) {
     problemMultiplier = hardScan ? 4 : 3;
-    solutionMultiplier = 1.5;
   } else if (hardScan) {
     problemMultiplier = 2;
-    solutionMultiplier = 2;
   }
-  const credits = problemPages * problemMultiplier + solutionPages * solutionMultiplier;
+  const credits = problemPages * problemMultiplier;
   return {
     credits: Math.round(credits * 10) / 10,
     problemPages,
-    solutionPages,
     totalPages,
     totalMb,
     hardScan,
-    approximate: problem.source !== "pdf" || (solutionFile ? solution.source !== "pdf" : false),
+    approximate: problem.source !== "pdf",
   };
 }
 
@@ -879,29 +871,29 @@ function SubjectEditRow({
   );
 }
 
-function DropZone({
-  label,
-  file,
+function MultiPdfDropZone({
+  files,
   required = false,
-  onChange
+  onChange,
 }: {
-  label: string;
-  file: File | null;
+  files: File[];
   required?: boolean;
-  onChange: (file: File | null) => void;
+  onChange: (files: File[]) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
 
-  function pickFile(nextFile: File | null) {
-    if (!nextFile) {
-      onChange(null);
+  function pickFiles(fileList: FileList | null) {
+    const nextFiles = Array.from(fileList || []);
+    if (!nextFiles.length) {
+      onChange([]);
       return;
     }
-    if (nextFile.type !== "application/pdf" && !nextFile.name.toLowerCase().endsWith(".pdf")) {
+    const invalid = nextFiles.find((file) => file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"));
+    if (invalid) {
       window.alert("PDF 파일만 업로드할 수 있습니다.");
       return;
     }
-    onChange(nextFile);
+    onChange(nextFiles);
   }
 
   return (
@@ -927,28 +919,41 @@ function DropZone({
         onDrop={(event) => {
           event.preventDefault();
           setIsDragging(false);
-          pickFile(event.dataTransfer.files?.[0] ?? null);
+          pickFiles(event.dataTransfer.files);
         }}
       >
         <UploadCloud className="mb-3 h-9 w-9 text-zinc-500" />
         <span className="font-semibold text-zinc-950">
-          {label} {required && <span className="text-zinc-500">*</span>}
+          PDF 자료 {required && <span className="text-zinc-500">*</span>}
         </span>
-        {file || isDragging ? <span className="mt-2 text-sm text-zinc-600">{file ? file.name : "여기에 PDF를 놓으세요"}</span> : null}
+        <span className="mt-2 text-sm text-zinc-600">
+          {files.length ? `${files.length}개 PDF 선택됨 · ${formatCompactNumber(files.reduce((sum, file) => sum + fileSizeMb(file), 0))}MB` : "본문, 정답, 해설이 섞인 PDF를 한꺼번에 선택하세요"}
+        </span>
         <input
-          key={file ? `${file.name}:${file.size}:${file.lastModified}` : "empty"}
+          key={files.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join("|") || "empty"}
           className="hidden"
           type="file"
           accept="application/pdf"
-          onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
+          multiple
+          onChange={(event) => pickFiles(event.target.files)}
         />
       </label>
-      {file && (
-        <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
-          <X className="h-4 w-4" />
-          선택 취소
-        </Button>
-      )}
+      {files.length ? (
+        <div className="rounded-[10px] bg-zinc-50 p-3">
+          <div className="max-h-32 space-y-1 overflow-auto text-xs font-semibold text-zinc-600">
+            {files.map((file, index) => (
+              <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-3 rounded bg-white px-2 py-1">
+                <span className="min-w-0 truncate">{index + 1}. {file.name}</span>
+                <span className="shrink-0 text-zinc-500">{formatCompactNumber(fileSizeMb(file))}MB</span>
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => onChange([])}>
+            <X className="h-4 w-4" />
+            선택 취소
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -956,10 +961,9 @@ function DropZone({
 export default function UploadPage() {
   const [batchName, setBatchName] = useState("");
   const [autoBatchName, setAutoBatchName] = useState("");
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [problemPdf, setProblemPdf] = useState<File | null>(null);
-  const [solutionPdf, setSolutionPdf] = useState<File | null>(null);
   const [problemPdfEstimate, setProblemPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
-  const [solutionPdfEstimate, setSolutionPdfEstimate] = useState<PdfPageEstimate>(emptyPdfEstimate);
   const [subjectEngine, setSubjectEngine] = useState<SubjectEngineCode>("math");
   const [subjectEngineTouched, setSubjectEngineTouched] = useState(false);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
@@ -1051,37 +1055,29 @@ export default function UploadPage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!problemPdf) {
+    if (!pdfFiles.length) {
       setProblemPdfEstimate(emptyPdfEstimate);
       return () => {
         cancelled = true;
       };
     }
     setProblemPdfEstimate({ pages: null, source: "none", loading: true });
-    estimatePdfPageCount(problemPdf).then((estimate) => {
-      if (!cancelled) setProblemPdfEstimate(estimate);
+    Promise.all(pdfFiles.map((file) => estimatePdfPageCount(file))).then((estimates) => {
+      if (cancelled) return;
+      const pages = estimates.reduce((sum, estimate) => sum + (estimate.pages || 0), 0);
+      const failed = estimates.find((estimate) => estimate.error);
+      const source: PdfPageEstimate["source"] = estimates.every((estimate) => estimate.source === "pdf") ? "pdf" : failed ? "error" : "size";
+      setProblemPdfEstimate({
+        pages: pages || null,
+        source,
+        loading: false,
+        error: failed?.error,
+      });
     });
     return () => {
       cancelled = true;
     };
-  }, [problemPdf]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!solutionPdf) {
-      setSolutionPdfEstimate(emptyPdfEstimate);
-      return () => {
-        cancelled = true;
-      };
-    }
-    setSolutionPdfEstimate({ pages: null, source: "none", loading: true });
-    estimatePdfPageCount(solutionPdf).then((estimate) => {
-      if (!cancelled) setSolutionPdfEstimate(estimate);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [solutionPdf]);
+  }, [pdfFiles]);
 
   function applyInferredSubjectEngine(engine: SubjectEngineCode) {
     if (!subjectEngineTouched) setSubjectEngine(engine);
@@ -1217,8 +1213,8 @@ export default function UploadPage() {
   }
 
   function resetUploadDraft() {
+    setPdfFiles([]);
     setProblemPdf(null);
-    setSolutionPdf(null);
     setBatchName("");
     setAutoBatchName("");
     setBatchAccentColor(defaultTagColor("new-batch", "batch"));
@@ -1226,14 +1222,16 @@ export default function UploadPage() {
     setRightsNote("");
   }
 
-  function handleProblemPdfChange(file: File | null) {
-    const nextAutoBatchName = file ? fileNameToBatchName(file.name) : "";
-    const inferredSubjects = inferSubjectsFromFilename(file?.name);
-    setProblemPdf(file);
+  function handlePdfFilesChange(files: File[]) {
+    const firstFile = files[0] || null;
+    const nextAutoBatchName = firstFile ? `${fileNameToBatchName(firstFile.name)}${files.length > 1 ? ` 외 ${files.length - 1}개` : ""}` : "";
+    const inferredSubjects = inferSubjectsFromFilename(files.map((file) => file.name).join(" "));
+    setPdfFiles(files);
+    setProblemPdf(firstFile);
     if (!batchColorTouched && nextAutoBatchName) setBatchAccentColor(defaultTagColor(nextAutoBatchName, "batch"));
     setBatchName((current) => {
       const trimmed = current.trim();
-      if (!file) return autoBatchName && trimmed === autoBatchName ? "" : current;
+      if (!firstFile) return autoBatchName && trimmed === autoBatchName ? "" : current;
       if (!trimmed || trimmed === autoBatchName) return nextAutoBatchName;
       return current;
     });
@@ -1257,7 +1255,7 @@ export default function UploadPage() {
     setMessage("업로드 중입니다.");
     const form = new FormData();
     form.append("batch_name", batchName);
-    form.append("problem_pdf", problemPdf);
+    pdfFiles.forEach((file) => form.append("pdf_files", file));
     form.append("source_type", sourceType);
     form.append("source_label", sourceLabel);
     form.append("rights_confirmed", String(rightsConfirmed));
@@ -1268,7 +1266,6 @@ export default function UploadPage() {
     form.append("unit_candidates", JSON.stringify([]));
     form.append("archive_folder_id", selectedArchiveFolderId);
     form.append("subject_engine", subjectEngine);
-    if (solutionPdf) form.append("solution_pdf", solutionPdf);
     let data: UploadResponse;
     try {
       const response = await authHttp.post<UploadResponse>("/api/batches/upload", form, {
@@ -1329,12 +1326,10 @@ export default function UploadPage() {
   const creditEstimate = useMemo(
     () => buildCreditEstimate({
       problem: problemPdfEstimate,
-      solution: solutionPdfEstimate,
       subjectEngine,
-      problemFile: problemPdf,
-      solutionFile: solutionPdf,
+      pdfFiles,
     }),
-    [problemPdfEstimate, solutionPdfEstimate, subjectEngine, problemPdf, solutionPdf]
+    [problemPdfEstimate, subjectEngine, pdfFiles]
   );
   const creditsRemaining = usageSummary?.extraction_credits_remaining ?? (
     usageSummary ? Math.max((usageSummary.monthly_credit_limit || 0) - (usageSummary.extraction_credits_used || 0), 0) : null
@@ -1375,12 +1370,12 @@ export default function UploadPage() {
         </div>
       </div>
       <div className="mt-4 grid gap-2 text-xs font-semibold text-zinc-700 sm:grid-cols-2">
-        <div className="rounded-[7px] bg-white px-3 py-2">문제 {pageEstimateLabel(problemPdfEstimate)}</div>
-        <div className="rounded-[7px] bg-white px-3 py-2">답안 {solutionPdf ? pageEstimateLabel(solutionPdfEstimate) : "-"}</div>
-        <div className="rounded-[7px] bg-white px-3 py-2">파일 {formatCompactNumber(fileSizeMb(problemPdf) + fileSizeMb(solutionPdf))}MB</div>
+        <div className="rounded-[7px] bg-white px-3 py-2">PDF {pageEstimateLabel(problemPdfEstimate)}</div>
+        <div className="rounded-[7px] bg-white px-3 py-2">자료 {pdfFiles.length.toLocaleString("ko-KR")}개</div>
+        <div className="rounded-[7px] bg-white px-3 py-2">파일 {formatCompactNumber(pdfFiles.reduce((sum, file) => sum + fileSizeMb(file), 0))}MB</div>
         <div className="rounded-[7px] bg-white px-3 py-2">{creditEstimate?.hardScan ? "스캔 가중치 적용" : isLanguagePassageEngine(subjectEngine) ? `${subjectEngineLabel(subjectEngine)} 가중치` : "기본 가중치"}</div>
       </div>
-      {creditEstimate?.approximate || problemPdfEstimate.error || solutionPdfEstimate.error ? (
+      {creditEstimate?.approximate || problemPdfEstimate.error ? (
         <p className="mt-3 text-xs font-semibold text-zinc-600">페이지 수를 정확히 읽기 어려운 PDF는 파일 크기 기준으로 보수 추정합니다.</p>
       ) : null}
       {creditEstimateExceedsRemaining ? (
@@ -1481,8 +1476,7 @@ export default function UploadPage() {
 
             <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-                <DropZone label="문제 PDF" file={problemPdf} required onChange={handleProblemPdfChange} />
-                <DropZone label="답안 PDF" file={solutionPdf} onChange={setSolutionPdf} />
+                <MultiPdfDropZone files={pdfFiles} required onChange={handlePdfFilesChange} />
               </div>
 
           <div className="rounded-[12px] bg-zinc-50 p-4">

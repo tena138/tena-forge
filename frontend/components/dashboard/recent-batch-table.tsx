@@ -40,13 +40,20 @@ function BatchDetail({ batch }: { batch: Batch }) {
         </div>
         <dl className="grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
           <div>
-            <dt className="text-slate-500">문항 PDF</dt>
+            <dt className="text-slate-500">입력 PDF</dt>
             <dd className="mt-0.5 break-all text-slate-200">{fileName(batch.problem_pdf_filename)}</dd>
           </div>
-          <div>
-            <dt className="text-slate-500">답안 PDF</dt>
-            <dd className="mt-0.5 break-all text-slate-200">{fileName(batch.solution_pdf_filename)}</dd>
-          </div>
+          {batch.solution_pdf_filename ? (
+            <div>
+              <dt className="text-slate-500">레거시 답안 PDF</dt>
+              <dd className="mt-0.5 break-all text-slate-200">{fileName(batch.solution_pdf_filename)}</dd>
+            </div>
+          ) : (
+            <div>
+              <dt className="text-slate-500">정답 감지</dt>
+              <dd className="mt-0.5 text-slate-200">입력 PDF 안에서 자동 감지</dd>
+            </div>
+          )}
           <div>
             <dt className="text-slate-500">자료 출처</dt>
             <dd className="mt-0.5 text-slate-200">{sourceTypeLabel(batch.source_type)}</dd>
