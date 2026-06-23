@@ -477,8 +477,8 @@ export function PlanLandingPage() {
       <LandingNav />
 
       <section className="relative overflow-hidden border-b border-black/10 bg-[#fbfbfa] pt-16 text-zinc-950">
-        <div className="relative z-10 mx-auto flex min-h-[calc(92svh-4rem)] w-full max-w-[90rem] flex-col px-4 sm:px-6 xl:px-8">
-          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center py-24 text-center sm:py-32 lg:py-40">
+        <div className="relative z-10 mx-auto flex min-h-[calc(92svh-4rem)] w-full max-w-[104rem] flex-col px-4 sm:px-6 xl:px-8">
+          <div className="mx-auto flex w-full max-w-6xl flex-col items-center pb-12 pt-24 text-center sm:pb-12 sm:pt-32 lg:pb-14 lg:pt-40">
             <h1 className="landing-hero-title landing-keep-words max-w-none whitespace-nowrap text-zinc-950">
               학원 운영의 새로운 표준.
             </h1>
@@ -495,8 +495,10 @@ export function PlanLandingPage() {
             </div>
           </div>
 
-          <div className="mx-auto w-full max-w-6xl pb-10 sm:pb-12">
-            <AcademyLogoCarousel />
+          <div className="mx-auto w-full max-w-[96rem] pb-10 sm:pb-12">
+            <div className="mb-14 sm:mb-16 lg:mb-20">
+              <AcademyLogoCarousel />
+            </div>
             <div className="landing-feature-nav grid grid-cols-2 gap-px border bg-zinc-200 text-center sm:grid-cols-3 lg:grid-cols-6">
               {landingFeatureCategories.map((category) => (
                 <a
@@ -572,17 +574,12 @@ function AcademyLogoCarousel() {
   const activeSet = academyLogoSets[activeSetIndex];
 
   return (
-    <section aria-label="제휴 및 사용 학원 로고" className="landing-academy-logo-band overflow-hidden border bg-white">
-      <div key={activeSetIndex} className="landing-academy-logo-set grid grid-cols-2 lg:grid-cols-4">
-        {activeSet.map((logo, index) => (
+    <section aria-label="제휴 및 사용 학원 로고" className="landing-academy-logo-band overflow-hidden bg-transparent">
+      <div key={activeSetIndex} className="landing-academy-logo-set grid grid-cols-2 gap-x-8 gap-y-5 lg:grid-cols-4">
+        {activeSet.map((logo) => (
           <div
             key={`${logo.mark}-${logo.name}`}
-            className={cn(
-              "landing-academy-logo-cell flex min-h-[6.5rem] items-center justify-center px-4 py-5 text-center sm:min-h-[7.5rem] lg:min-h-[8.5rem]",
-              index < 2 && "border-b lg:border-b-0",
-              index % 2 === 1 && "border-l",
-              index > 0 && "lg:border-l"
-            )}
+            className="landing-academy-logo-cell flex min-h-[4.75rem] items-center justify-center px-3 py-3 text-center sm:min-h-[5rem] lg:min-h-[5.5rem]"
           >
             {logo.src ? (
               <img src={logo.src} alt={logo.name} className="max-h-12 max-w-[72%] object-contain sm:max-h-14" />
