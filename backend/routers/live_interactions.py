@@ -21,7 +21,7 @@ class LiveInteractionSettingsPayload(BaseModel):
 def _workspace_settings(db: Session, academy_id: str) -> AcademyWorkspaceSettings:
     row = db.get(AcademyWorkspaceSettings, academy_id)
     if not row:
-        row = AcademyWorkspaceSettings(academy_id=academy_id, live_start_lead_minutes=10)
+        row = AcademyWorkspaceSettings(academy_id=academy_id, live_start_lead_minutes=5)
         db.add(row)
         db.flush()
     return row
@@ -109,7 +109,7 @@ def list_upcoming_live_interactions(request: Request, db: Session = Depends(get_
     academy_id = current_workspace_id(request, db)
     user_id = current_user_id(request)
     if not _is_academy_workspace(db, academy_id):
-        return {"settings": {"academy_id": academy_id, "live_start_lead_minutes": 10, "updated_at": None}, "events": []}
+        return {"settings": {"academy_id": academy_id, "live_start_lead_minutes": 5, "updated_at": None}, "events": []}
     settings = _workspace_settings(db, academy_id)
     now = datetime.utcnow()
     lead_until = now + timedelta(minutes=settings.live_start_lead_minutes)

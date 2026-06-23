@@ -43,8 +43,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [homeHref, setHomeHref] = useState("/academy");
   const [sessionReady, setSessionReady] = useState(false);
+  const [isLiveLectureShareRoute, setIsLiveLectureShareRoute] = useState(() => (
+    typeof window !== "undefined" &&
+    window.location.pathname === "/live-lecture" &&
+    new URLSearchParams(window.location.search).get("share") === "1"
+  ));
   const isAuthRoute = authRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isMarketingRoute = marketingRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
+  useEffect(() => {
+    function syncLiveLectureShareRoute() {
+      setIsLiveLectureShareRoute(
+        window.location.pathname === "/live-lecture" &&
+        new URLSearchParams(window.location.search).get("share") === "1"
+      );
+    }
+    syncLiveLectureShareRoute();
+    window.addEventListener("popstate", syncLiveLectureShareRoute);
+    return () => window.removeEventListener("popstate", syncLiveLectureShareRoute);
+  }, [pathname]);
 
   useEffect(() => {
     function syncHomeHref() {
@@ -145,6 +162,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#fbfbfa] text-sm text-zinc-500" data-app-shell>
         세션을 복구하는 중입니다...
+      </div>
+    );
+  }
+
+  if (isLiveLectureShareRoute) {
+    return (
+      <div className="min-h-screen bg-black text-white" data-app-shell>
+        {children}
       </div>
     );
   }

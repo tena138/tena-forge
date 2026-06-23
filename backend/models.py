@@ -1150,7 +1150,7 @@ class AcademyWorkspaceSettings(Base):
     __tablename__ = "academy_workspace_settings"
 
     academy_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    live_start_lead_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    live_start_lead_minutes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

@@ -34,7 +34,7 @@ def upgrade() -> None:
     op.create_table(
         "academy_workspace_settings",
         sa.Column("academy_id", sa.String(length=64), nullable=False),
-        sa.Column("live_start_lead_minutes", sa.Integer(), nullable=False, server_default="10"),
+        sa.Column("live_start_lead_minutes", sa.Integer(), nullable=False, server_default="5"),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("academy_id"),

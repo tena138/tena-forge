@@ -29,7 +29,7 @@ export function LiveInteractionBar() {
     setLoading(true);
     try {
       const data = await listUpcomingLiveInteractions();
-      setEvents(data.events || []);
+      setEvents((data.events || []).filter((event) => event.minutes_until_start <= 5 || event.status === "ready"));
     } catch {
       setEvents([]);
     } finally {

@@ -439,10 +439,10 @@ def _ensure_academy_workspace_settings_columns(connection, inspector) -> bool:
         return False
 
     changed = False
-    if _add_column_if_missing(connection, inspector, "academy_workspace_settings", "live_start_lead_minutes", "INTEGER NOT NULL DEFAULT 10"):
+    if _add_column_if_missing(connection, inspector, "academy_workspace_settings", "live_start_lead_minutes", "INTEGER NOT NULL DEFAULT 5"):
         changed = True
         inspector = inspect(connection)
-    connection.execute(text("UPDATE academy_workspace_settings SET live_start_lead_minutes = 10 WHERE live_start_lead_minutes IS NULL"))
+    connection.execute(text("UPDATE academy_workspace_settings SET live_start_lead_minutes = 5 WHERE live_start_lead_minutes IS NULL"))
     return changed
 
 

@@ -56,7 +56,7 @@ class LiveInteractionTests(unittest.TestCase):
             result = list_upcoming_live_interactions(request_for(self.staff_id, self.owner_id), db)
             titles = [event["title"] for event in result["events"]]
             self.assertEqual(titles, ["Assigned Live Class"])
-            self.assertEqual(result["settings"]["live_start_lead_minutes"], 10)
+            self.assertEqual(result["settings"]["live_start_lead_minutes"], 5)
         finally:
             db.close()
 

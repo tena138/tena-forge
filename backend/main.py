@@ -446,7 +446,7 @@ def _ensure_sqlite_columns():
             "assigned_class_ids": "JSON DEFAULT '[]' NOT NULL",
         },
         "academy_workspace_settings": {
-            "live_start_lead_minutes": "INTEGER DEFAULT 10 NOT NULL",
+            "live_start_lead_minutes": "INTEGER DEFAULT 5 NOT NULL",
         },
         "problem_sets": {
             "owner_id": "VARCHAR(64) DEFAULT 'local_user' NOT NULL",

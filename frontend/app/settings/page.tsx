@@ -6,7 +6,7 @@ import { Loader2, Radio, Save } from "lucide-react";
 import { getLiveInteractionSettings, updateLiveInteractionSettings } from "@/lib/auth-api";
 
 export default function SettingsPage() {
-  const [minutes, setMinutes] = useState(10);
+  const [minutes, setMinutes] = useState(5);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
