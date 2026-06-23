@@ -1951,13 +1951,25 @@
 
   html[data-theme="light"] [data-app-shell] .console-nav-active,
   html[data-theme="light"] [data-app-shell] .console-nav-active *,
+  html[data-theme="light"] [data-app-shell] .coagent-choice-button,
+  html[data-theme="light"] [data-app-shell] .coagent-choice-button *,
   html[data-theme="light"] [data-app-shell] [class~="bg-black"][class*="text-white"],
   html[data-theme="light"] [data-app-shell] [class~="bg-black"][class*="text-white"] * {
     color: rgb(255 255 255) !important;
   }
 
+  html[data-theme="light"] [data-app-shell] .coagent-choice-button {
+    background: rgb(0 0 0) !important;
+  }
+
   html[data-theme="light"] [data-app-shell] .workspace-primary-cta:disabled,
   html[data-theme="light"] [data-app-shell] .workspace-primary-cta:disabled * {
+    color: rgb(113 113 122) !important;
+  }
+
+  html[data-theme="light"] [data-app-shell] .coagent-choice-button:disabled,
+  html[data-theme="light"] [data-app-shell] .coagent-choice-button:disabled * {
+    background: rgb(212 212 216) !important;
     color: rgb(113 113 122) !important;
   }
 

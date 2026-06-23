@@ -369,7 +369,7 @@ export function CoAgentJellyOverlay() {
                           <button
                             key={`${choice.engine || choiceValue}-${choice.label || choiceValue}`}
                             type="button"
-                            className="h-9 rounded-[9px] bg-zinc-950 px-3 text-sm font-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
+                            className="coagent-choice-button h-9 rounded-[9px] bg-black px-3 text-sm font-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
                             disabled={loading}
                             onClick={() => void submitContent(choiceValue)}
                           >
