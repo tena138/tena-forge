@@ -20,6 +20,22 @@ export type CoAgentProductMapItem = {
   summary: string;
 };
 
+export type CoAgentCapability = {
+  id: string;
+  title: string;
+  category: string;
+  summary: string;
+  href: string;
+  required_info?: string[];
+  side_effects?: string[];
+  execution_notes?: string[];
+  ui_anchors?: string[];
+  workflow_steps?: string[];
+  can_execute?: boolean;
+  score?: number;
+  matches?: string[];
+};
+
 export type CoAgentNextActions = {
   owner_id: string;
   current_stage: string;
@@ -99,6 +115,7 @@ export type CoAgentChatResponse = {
   answer: string;
   scope: "tena_forge_operations" | string;
   model?: string | null;
+  capabilities?: CoAgentCapability[];
   drafts?: Array<Record<string, unknown>>;
   quick_actions?: Array<{
     id?: string;
@@ -126,6 +143,20 @@ export function sendCoAgentChat(payload: {
 
 export function getCoAgentSubjectChoices() {
   return api<{ choices: CoAgentSubjectChoice[] }>("/api/co-agent/subject-choices");
+}
+
+export function searchCoAgentCapabilities(payload: {
+  message?: string;
+  messages?: CoAgentChatMessage[];
+  current_path?: string | null;
+  visible_context?: CoAgentVisibleContext | null;
+  limit?: number;
+}) {
+  return api<{ capabilities: CoAgentCapability[]; product_map: CoAgentProductMapItem[] }>("/api/co-agent/capabilities/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function collectVisibleCoAgentContext(): CoAgentVisibleContext | null {

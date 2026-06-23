@@ -23,6 +23,7 @@ from models import (
     StudentAcademyMembership,
 )
 from services.exam_paper_planner import build_exam_paper_draft, format_exam_paper_draft_answer, looks_like_exam_paper_request
+from services.co_agent_capabilities import capability_prompt_context, co_agent_product_map, search_co_agent_capabilities
 from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id
 from services.problem_usage_history import record_problem_set_usage
 from services.saas_security import enabled_subject_engines_for_user
@@ -64,10 +65,19 @@ class CoAgentChatResponse(BaseModel):
     answer: str
     scope: str = "tena_forge_operations"
     model: str | None = None
+    capabilities: list[dict[str, Any]] = Field(default_factory=list)
     drafts: list[dict[str, Any]] = Field(default_factory=list)
     quick_actions: list[dict[str, Any]] = Field(default_factory=list)
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
     workflow: dict[str, Any] | None = None
+
+
+class CoAgentCapabilitySearchRequest(BaseModel):
+    message: str = Field(default="", max_length=2000)
+    messages: list[CoAgentChatMessage] = Field(default_factory=list, max_length=12)
+    current_path: str | None = Field(default=None, max_length=300)
+    visible_context: CoAgentVisibleContext | None = None
+    limit: int = Field(default=5, ge=1, le=8)
 
 
 class CoAgentExamPaperDraftRequest(BaseModel):
@@ -82,6 +92,9 @@ PRODUCT_MAP = [
     {"id": "sessions", "label": "시험 배정", "href": "/student-management", "summary": "문항 세트를 학생에게 배정하고 채점 흐름을 만듭니다."},
     {"id": "routines", "label": "루틴", "href": "/co-agent/routines", "summary": "완료된 리포트와 피드백을 검토 후 전송합니다."},
 ]
+
+
+PRODUCT_MAP = co_agent_product_map()
 
 
 def _academy_ids_for_co_agent(request: Request, db: Session) -> set[str]:
@@ -366,12 +379,24 @@ def _visible_context_payload(visible_context: CoAgentVisibleContext | None) -> d
     }
 
 
-def _co_agent_chat_system_prompt(snapshot: dict, current_path: str | None, visible_context: CoAgentVisibleContext | None = None) -> str:
+def _co_agent_chat_system_prompt(
+    snapshot: dict,
+    current_path: str | None,
+    visible_context: CoAgentVisibleContext | None = None,
+    capabilities: list[dict[str, Any]] | None = None,
+) -> str:
     context = {
         "current_path": current_path or "",
         "visible_ui": _visible_context_payload(visible_context),
         "current_stage": snapshot.get("current_stage"),
         "stats": snapshot.get("stats", {}),
+        "capability_registry_matches": capability_prompt_context(capabilities or []),
+        "registry_usage_policy": {
+            "source": "searched_capability_registry",
+            "use_matches_as_product_truth": True,
+            "do_not_assume_unlisted_capabilities": True,
+            "decision_fields": ["required_info", "side_effects", "can_execute", "execution_notes", "ui_anchors"],
+        },
         "recommended_actions": [
             {
                 "title": action.get("title"),
@@ -1101,6 +1126,23 @@ def co_agent_subject_choices(request: Request, db: Session = Depends(get_db)):
     return {"choices": _exam_subject_choices(_enabled_subject_engines_for_co_agent(request, db))}
 
 
+@router.post("/capabilities/search")
+def co_agent_capability_search(payload: CoAgentCapabilitySearchRequest, request: Request, db: Session = Depends(get_db)):
+    _academy_ids_for_co_agent(request, db)
+    current_path = payload.current_path or (payload.visible_context.current_path if payload.visible_context else None)
+    capabilities = search_co_agent_capabilities(
+        message=payload.message,
+        history=payload.messages,
+        visible_context=payload.visible_context,
+        current_path=current_path,
+        limit=payload.limit,
+    )
+    return {
+        "capabilities": capabilities,
+        "product_map": PRODUCT_MAP,
+    }
+
+
 @router.post("/exam-paper/draft")
 def co_agent_exam_paper_draft(payload: CoAgentExamPaperDraftRequest, request: Request, db: Session = Depends(get_db)):
     message = payload.message.strip()
@@ -1123,6 +1165,14 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
+
+    current_path = payload.current_path or (payload.visible_context.current_path if payload.visible_context else None)
+    capabilities = search_co_agent_capabilities(
+        message=message,
+        history=payload.messages,
+        visible_context=payload.visible_context,
+        current_path=current_path,
+    )
 
     exam_context_message = _co_agent_exam_context_message(message, payload.messages)
     draft: dict[str, Any] | None = None
@@ -1174,6 +1224,7 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
         return CoAgentChatResponse(
             answer=answer,
             model=None,
+            capabilities=capabilities,
             drafts=[draft],
             quick_actions=_exam_draft_quick_actions(draft),
             artifacts=artifacts,
@@ -1181,11 +1232,11 @@ def co_agent_chat(payload: CoAgentChatRequest, request: Request, db: Session = D
         )
 
     snapshot = next_actions(request, db)
-    system_prompt = _co_agent_chat_system_prompt(snapshot, payload.current_path, payload.visible_context)
+    system_prompt = _co_agent_chat_system_prompt(snapshot, current_path, payload.visible_context, capabilities)
     messages = [
         {"role": "system", "content": system_prompt},
         *_safe_chat_history(payload.messages),
         {"role": "user", "content": message[:2000]},
     ]
     answer, model_name = _co_agent_chat_completion(messages)
-    return CoAgentChatResponse(answer=answer, model=model_name)
+    return CoAgentChatResponse(answer=answer, model=model_name, capabilities=capabilities)
