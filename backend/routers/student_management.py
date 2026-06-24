@@ -1680,6 +1680,17 @@ class ScheduleEventPayload(BaseModel):
     counts_for_tuition: bool = True
 
 
+class ScheduleEventUpdatePayload(BaseModel):
+    class_id: UUID | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    event_type: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    linked_paper_session_id: UUID | None = None
+    counts_for_tuition: bool | None = None
+
+
 class TuitionEventCountPayload(BaseModel):
     counts_for_tuition: bool
 
@@ -4150,6 +4161,51 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
     )
     db.add(row)
     db.commit()
+    return _schedule_event_payload(row)
+
+
+@router.patch("/schedule-events/{event_id}")
+def update_schedule_event(event_id: UUID, payload: ScheduleEventUpdatePayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    row = db.get(ClassScheduleEvent, event_id)
+    if not row or row.academy_id not in visible_academy_ids:
+        raise HTTPException(status_code=404, detail="Schedule event not found.")
+
+    if payload.class_id is not None:
+        class_row = _get_class(db, academy_id, payload.class_id, visible_academy_ids)
+        row.academy_id = class_row.academy_id
+        row.class_id = payload.class_id
+    if payload.linked_paper_session_id is not None:
+        _get_visible_session(db, visible_academy_ids, payload.linked_paper_session_id)
+        row.linked_paper_session_id = payload.linked_paper_session_id
+    if payload.title is not None:
+        row.title = payload.title.strip()
+    if "description" in payload.model_fields_set:
+        row.description = payload.description
+    if payload.event_type is not None:
+        row.event_type = payload.event_type
+    if payload.starts_at is not None:
+        row.starts_at = payload.starts_at
+    if "ends_at" in payload.model_fields_set:
+        row.ends_at = payload.ends_at
+    if payload.counts_for_tuition is not None:
+        row.counts_for_tuition = payload.counts_for_tuition
+
+    if row.ends_at and row.ends_at <= row.starts_at:
+        raise HTTPException(status_code=400, detail="Schedule event end time must be after start time.")
+
+    if row.linked_paper_session_id:
+        session = db.get(PaperSession, row.linked_paper_session_id)
+        if session and session.academy_id in visible_academy_ids:
+            session.scheduled_at = row.starts_at
+            if row.ends_at:
+                session.due_at = row.ends_at
+            session.updated_at = _now()
+
+    row.updated_at = _now()
+    db.commit()
+    db.refresh(row)
     return _schedule_event_payload(row)
 
 

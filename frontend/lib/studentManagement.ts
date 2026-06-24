@@ -493,6 +493,23 @@ export function createScheduleEvent(payload: {
   });
 }
 
+export function updateScheduleEvent(id: string, payload: Partial<{
+  class_id: string;
+  title: string;
+  description: string | null;
+  event_type: string;
+  starts_at: string;
+  ends_at: string | null;
+  linked_paper_session_id: string | null;
+  counts_for_tuition: boolean;
+}>) {
+  return api<ScheduleEvent>(`/api/student-management/schedule-events/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listScheduleEvents(params?: { class_id?: string; start_date?: string; end_date?: string }) {
   const search = new URLSearchParams();
   if (params?.class_id) search.set("class_id", params.class_id);

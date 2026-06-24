@@ -1,5 +1,5 @@
 import { cp, lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 
 const nextDir = join(process.cwd(), ".next");
 
@@ -14,11 +14,16 @@ async function ensurePackageManifest(targetDir) {
 
 await ensurePackageManifest(nextDir);
 
+function shouldCopyNextOutput(source) {
+  const relativePath = relative(nextDir, source);
+  return relativePath !== "dev" && !relativePath.startsWith(`dev${sep}`);
+}
+
 if (basename(process.cwd()) === "frontend") {
   const parentDir = dirname(process.cwd());
   const parentNextDir = join(parentDir, ".next");
   await rm(parentNextDir, { recursive: true, force: true });
-  await cp(nextDir, parentNextDir, { recursive: true });
+  await cp(nextDir, parentNextDir, { recursive: true, filter: shouldCopyNextOutput });
   await ensurePackageManifest(parentNextDir);
 
   const parentNodeModules = join(parentDir, "node_modules");

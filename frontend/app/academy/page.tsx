@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowUpRight,
@@ -62,6 +62,7 @@ import {
   deleteScheduleEvent,
   getStudentManagementDashboard,
   listScheduleEvents,
+  updateScheduleEvent,
 } from "@/lib/studentManagement";
 
 function resolveActiveAcademyId(profile?: AcademyProfile | null) {
@@ -947,6 +948,77 @@ function academyShortcutTargetIsEditable(target: EventTarget | null) {
   return target.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select";
 }
 
+const ACADEMY_TIMELINE_START_MINUTES = 6 * 60;
+const ACADEMY_TIMELINE_END_MINUTES = 24 * 60;
+const ACADEMY_TIMELINE_STEP_MINUTES = 10;
+const ACADEMY_TIMELINE_PX_PER_MINUTE = 0.48;
+const ACADEMY_MIN_EVENT_DURATION_MINUTES = 10;
+
+type AcademyTimeDragMode = "move" | "resize-start" | "resize-end";
+type AcademyTimeEditorState = {
+  eventId: string;
+  dateKey: string;
+  startsAt: string;
+  endsAt: string | null;
+  mode: AcademyTimeDragMode | null;
+  pointerOffsetMinutes: number;
+  dirty: boolean;
+};
+
+function academyMinutesOfDay(value?: string | null) {
+  if (!value) return ACADEMY_TIMELINE_START_MINUTES;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return ACADEMY_TIMELINE_START_MINUTES;
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function academyEndMinutesForEditor(startsAt: string, endsAt?: string | null) {
+  const startMinutes = academyMinutesOfDay(startsAt);
+  if (!endsAt) return startMinutes + 60;
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return startMinutes + 60;
+  if (academyDateKey(start) !== academyDateKey(end)) return ACADEMY_TIMELINE_END_MINUTES;
+  return academyMinutesOfDay(endsAt);
+}
+
+function academyEventDurationMinutes(event: ScheduleEvent) {
+  const start = new Date(event.starts_at);
+  const end = event.ends_at ? new Date(event.ends_at) : null;
+  if (!end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 60;
+  return Math.max(ACADEMY_MIN_EVENT_DURATION_MINUTES, Math.round((end.getTime() - start.getTime()) / 60000));
+}
+
+function academySnapMinutes(value: number) {
+  return Math.round(value / ACADEMY_TIMELINE_STEP_MINUTES) * ACADEMY_TIMELINE_STEP_MINUTES;
+}
+
+function academyClampMinutes(value: number, min = ACADEMY_TIMELINE_START_MINUTES, max = ACADEMY_TIMELINE_END_MINUTES) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function academyDateTimeFromMinutes(dateKey: string, minutes: number) {
+  const safeMinutes = academyClampMinutes(Math.round(minutes), 0, ACADEMY_TIMELINE_END_MINUTES);
+  if (safeMinutes >= 24 * 60) {
+    const nextDate = new Date(`${dateKey}T00:00:00`);
+    nextDate.setDate(nextDate.getDate() + 1);
+    return academyLocalDateTimeWithSeconds(nextDate);
+  }
+  const hour = Math.floor(safeMinutes / 60);
+  const minute = safeMinutes % 60;
+  return `${dateKey}T${academyPad(hour)}:${academyPad(minute)}:00`;
+}
+
+function academyTimeRangeLabel(startsAt: string, endsAt?: string | null) {
+  if (!endsAt) return academyTimeLabel(startsAt);
+  return `${academyTimeLabel(startsAt)} - ${academyTimeLabel(endsAt)}`;
+}
+
+function academyTimelineMinutesFromPointer(clientY: number, rect: DOMRect) {
+  const offset = clientY - rect.top;
+  return academySnapMinutes(ACADEMY_TIMELINE_START_MINUTES + offset / ACADEMY_TIMELINE_PX_PER_MINUTE);
+}
+
 function academyAddDays(value: Date, days: number) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate() + days);
 }
@@ -1016,6 +1088,11 @@ function AcademySchedulePanel() {
   const [selectedEventId, setSelectedEventId] = useState("");
   const [copiedEvent, setCopiedEvent] = useState<ScheduleEvent | null>(null);
   const [pastingEvent, setPastingEvent] = useState(false);
+  const [timeEditor, setTimeEditor] = useState<AcademyTimeEditorState | null>(null);
+  const [savingTimeEdit, setSavingTimeEdit] = useState(false);
+  const dateCellRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const activeTimeEditRef = useRef<AcademyTimeEditorState | null>(null);
   const [form, setForm] = useState({
     class_id: "",
     title: "",
@@ -1092,6 +1169,9 @@ function AcademySchedulePanel() {
   const studentCount = useMemo(() => classes.reduce((sum, classRow) => sum + classRow.student_count, 0), [classes]);
   const deleteTargetClass = deleteTarget ? classById.get(deleteTarget.class_id) : null;
   const selectedEvent = useMemo(() => events.find((event) => event.id === selectedEventId) || null, [events, selectedEventId]);
+  const timeEditorEvent = useMemo(() => (timeEditor ? events.find((event) => event.id === timeEditor.eventId) || null : null), [events, timeEditor]);
+  const timeEditorClass = timeEditorEvent ? classById.get(timeEditorEvent.class_id) : null;
+  const timeEditorCellRect = timeEditor?.dateKey ? dateCellRefs.current[timeEditor.dateKey]?.getBoundingClientRect() || null : null;
   const academyStartDateTime = `${form.date}T${form.starts_at || "00:00"}`;
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
@@ -1210,6 +1290,93 @@ function AcademySchedulePanel() {
     }
   }
 
+  function openTimeEditor(event: ScheduleEvent, dateKey: string, mode: AcademyTimeDragMode | null = null, pointerOffsetMinutes?: number) {
+    const duration = academyEventDurationMinutes(event);
+    const sourceStart = academyMinutesOfDay(event.starts_at);
+    const startMinutes = academyClampMinutes(
+      academySnapMinutes(sourceStart),
+      ACADEMY_TIMELINE_START_MINUTES,
+      ACADEMY_TIMELINE_END_MINUTES - duration
+    );
+    const endMinutes = academyClampMinutes(startMinutes + duration, startMinutes + ACADEMY_MIN_EVENT_DURATION_MINUTES, ACADEMY_TIMELINE_END_MINUTES);
+    setSelectedDateKey(dateKey);
+    setSelectedEventId(event.id);
+    setTimeEditor({
+      eventId: event.id,
+      dateKey,
+      startsAt: academyDateTimeFromMinutes(dateKey, startMinutes),
+      endsAt: academyDateTimeFromMinutes(dateKey, endMinutes),
+      mode,
+      pointerOffsetMinutes: pointerOffsetMinutes ?? Math.min(duration / 2, 60),
+      dirty: false,
+    });
+  }
+
+  function updateTimeEditorFromPointer(clientX: number, clientY: number) {
+    setTimeEditor((current) => {
+      if (!current?.mode) return current;
+      let dateKey = current.dateKey;
+      const target = document.elementFromPoint(clientX, clientY);
+      const dateTarget = target instanceof HTMLElement ? target.closest<HTMLElement>("[data-academy-date]") : null;
+      if (dateTarget?.dataset.academyDate) dateKey = dateTarget.dataset.academyDate;
+
+      const startMinutes = academyMinutesOfDay(current.startsAt);
+      const endMinutes = academyEndMinutesForEditor(current.startsAt, current.endsAt);
+      let nextStart = startMinutes;
+      let nextEnd = Math.max(endMinutes, startMinutes + ACADEMY_MIN_EVENT_DURATION_MINUTES);
+      const timelineRect = timelineRef.current?.getBoundingClientRect();
+      if (timelineRect && clientX >= timelineRect.left - 24 && clientX <= timelineRect.right + 24 && clientY >= timelineRect.top - 24 && clientY <= timelineRect.bottom + 24) {
+        const pointerMinutes = academyClampMinutes(academyTimelineMinutesFromPointer(clientY, timelineRect));
+        if (current.mode === "move") {
+          const duration = Math.max(ACADEMY_MIN_EVENT_DURATION_MINUTES, nextEnd - nextStart);
+          nextStart = academyClampMinutes(academySnapMinutes(pointerMinutes - current.pointerOffsetMinutes), ACADEMY_TIMELINE_START_MINUTES, ACADEMY_TIMELINE_END_MINUTES - duration);
+          nextEnd = nextStart + duration;
+        }
+        if (current.mode === "resize-start") {
+          nextStart = academyClampMinutes(pointerMinutes, ACADEMY_TIMELINE_START_MINUTES, nextEnd - ACADEMY_MIN_EVENT_DURATION_MINUTES);
+        }
+        if (current.mode === "resize-end") {
+          nextEnd = academyClampMinutes(pointerMinutes, nextStart + ACADEMY_MIN_EVENT_DURATION_MINUTES, ACADEMY_TIMELINE_END_MINUTES);
+        }
+      }
+
+      const nextStartsAt = academyDateTimeFromMinutes(dateKey, nextStart);
+      const nextEndsAt = academyDateTimeFromMinutes(dateKey, nextEnd);
+
+      return {
+        ...current,
+        dateKey,
+        startsAt: nextStartsAt,
+        endsAt: nextEndsAt,
+        dirty: current.dirty || dateKey !== current.dateKey || nextStartsAt !== current.startsAt || nextEndsAt !== current.endsAt,
+      };
+    });
+  }
+
+  async function saveTimeEditor(edit: AcademyTimeEditorState | null) {
+    if (!edit) return;
+    if (!edit.dirty) return;
+    const existing = events.find((event) => event.id === edit.eventId);
+    if (existing && existing.starts_at === edit.startsAt && (existing.ends_at || null) === (edit.endsAt || null)) return;
+    setSavingTimeEdit(true);
+    setError("");
+    try {
+      const updated = await updateScheduleEvent(edit.eventId, {
+        starts_at: edit.startsAt,
+        ends_at: edit.endsAt,
+      });
+      setEvents((current) => [...current.filter((event) => event.id !== updated.id), updated]);
+      setSelectedDateKey(academyDateKey(updated.starts_at));
+      setSelectedEventId(updated.id);
+      setTimeEditor((current) => current?.eventId === updated.id ? { ...current, startsAt: updated.starts_at, endsAt: updated.ends_at || null, dateKey: academyDateKey(updated.starts_at), mode: null, dirty: false } : current);
+      setNotice(`"${updated.title}" 일정 시간이 변경되었습니다.`);
+    } catch {
+      setError("일정 시간을 변경하지 못했습니다.");
+    } finally {
+      setSavingTimeEdit(false);
+    }
+  }
+
   async function pasteCopiedEvent(targetDateKey = selectedDateKey) {
     if (!copiedEvent || !targetDateKey || pastingEvent) return;
     setError("");
@@ -1262,6 +1429,42 @@ function AcademySchedulePanel() {
     return () => window.removeEventListener("keydown", handleScheduleShortcut);
   }, [copiedEvent, deleteTarget, formOpen, pastingEvent, selectedDateKey, selectedEvent]);
 
+  useEffect(() => {
+    activeTimeEditRef.current = timeEditor;
+  }, [timeEditor]);
+
+  useEffect(() => {
+    if (!timeEditor?.mode) return;
+
+    function handlePointerMove(event: PointerEvent) {
+      event.preventDefault();
+      updateTimeEditorFromPointer(event.clientX, event.clientY);
+    }
+
+    function handlePointerUp() {
+      const finalEdit = activeTimeEditRef.current;
+      setTimeEditor((current) => current ? { ...current, mode: null } : current);
+      void saveTimeEditor(finalEdit ? { ...finalEdit, mode: null } : null);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [timeEditor?.mode]);
+
+  const timeEditorTimelineHeight = (ACADEMY_TIMELINE_END_MINUTES - ACADEMY_TIMELINE_START_MINUTES) * ACADEMY_TIMELINE_PX_PER_MINUTE;
+  const timeEditorStartMinutes = timeEditor ? academyMinutesOfDay(timeEditor.startsAt) : ACADEMY_TIMELINE_START_MINUTES;
+  const timeEditorEndMinutes = timeEditor ? academyEndMinutesForEditor(timeEditor.startsAt, timeEditor.endsAt) : timeEditorStartMinutes + 60;
+  const timeEditorBlockTop = Math.max(0, (timeEditorStartMinutes - ACADEMY_TIMELINE_START_MINUTES) * ACADEMY_TIMELINE_PX_PER_MINUTE);
+  const timeEditorBlockHeight = Math.max(30, (timeEditorEndMinutes - timeEditorStartMinutes) * ACADEMY_TIMELINE_PX_PER_MINUTE);
+  const timeEditorViewportWidth = typeof window === "undefined" ? 1200 : window.innerWidth;
+  const timeEditorViewportHeight = typeof window === "undefined" ? 900 : window.innerHeight;
+  const timeEditorLeft = timeEditorCellRect ? Math.max(16, Math.min(timeEditorCellRect.left + timeEditorCellRect.width / 2 - 170, timeEditorViewportWidth - 356)) : 96;
+  const timeEditorTop = timeEditorCellRect ? Math.max(16, Math.min(timeEditorCellRect.top - 26, timeEditorViewportHeight - 620)) : 96;
+
   return (
     <div className="relative space-y-4">
       {(notice || error) ? (
@@ -1295,6 +1498,10 @@ function AcademySchedulePanel() {
                     return (
                       <div
                         key={key}
+                        ref={(node) => {
+                          dateCellRefs.current[key] = node;
+                        }}
+                        data-academy-date={key}
                         className={`min-h-[118px] cursor-pointer p-2 transition ${inMonth ? "bg-white" : "bg-zinc-50 text-zinc-400"} ${isSelectedDate ? "ring-1 ring-inset ring-black/15" : "hover:bg-zinc-50"}`}
                         onClick={() => setSelectedDateKey(key)}
                         title={copiedEvent ? "Ctrl+V로 복사한 일정을 이 날짜에 붙여넣기" : "붙여넣기 대상 날짜 선택"}
@@ -1322,6 +1529,13 @@ function AcademySchedulePanel() {
                                   setSelectedEventId(event.id);
                                   setError("");
                                 }}
+                                onPointerDown={(pointerEvent) => {
+                                  if (pointerEvent.button !== 0) return;
+                                  pointerEvent.preventDefault();
+                                  pointerEvent.stopPropagation();
+                                  setError("");
+                                  openTimeEditor(event, key, "move", Math.min(academyEventDurationMinutes(event) / 2, 60));
+                                }}
                                 onKeyDown={(keyEvent) => {
                                   if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
                                   keyEvent.preventDefault();
@@ -1338,6 +1552,7 @@ function AcademySchedulePanel() {
                                   </div>
                                   <button
                                     type="button"
+                                    onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
                                     onClick={(clickEvent) => {
                                       clickEvent.stopPropagation();
                                       setError("");
@@ -1421,6 +1636,96 @@ function AcademySchedulePanel() {
           </Card>
         </aside>
       </section>
+
+      {timeEditor && timeEditorEvent ? (
+        <div
+          className="fixed z-[110] w-[340px] rounded-[14px] bg-white p-3 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)] ring-1 ring-black/10"
+          style={{ left: timeEditorLeft, top: timeEditorTop }}
+        >
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-black">{timeEditorEvent.title}</div>
+              <div className="mt-0.5 text-xs font-semibold text-zinc-500">
+                {timeEditor.dateKey} · {timeEditorClass?.name || "클래스"}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950"
+              onClick={() => setTimeEditor(null)}
+              aria-label="시간 편집 닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mb-2 flex items-center justify-between text-xs font-bold text-zinc-500">
+            <span>{academyTimeRangeLabel(timeEditor.startsAt, timeEditor.endsAt)}</span>
+            <span>{savingTimeEdit ? "저장 중" : "10분 단위"}</span>
+          </div>
+          <div
+            ref={timelineRef}
+            className="relative overflow-hidden rounded-[12px] bg-zinc-50 ring-1 ring-zinc-200"
+            style={{ height: timeEditorTimelineHeight }}
+          >
+            {Array.from({ length: 19 }, (_, index) => ACADEMY_TIMELINE_START_MINUTES + index * 60).map((minutes) => (
+              <div
+                key={minutes}
+                className="absolute left-0 right-0 border-t border-zinc-200/80"
+                style={{ top: (minutes - ACADEMY_TIMELINE_START_MINUTES) * ACADEMY_TIMELINE_PX_PER_MINUTE }}
+              >
+                <span className="absolute left-2 -translate-y-1/2 bg-zinc-50 pr-1 text-[10px] font-bold text-zinc-400">
+                  {`${academyPad(Math.floor(minutes / 60))}:00`}
+                </span>
+              </div>
+            ))}
+            <div
+              className="absolute left-14 right-3 cursor-grab rounded-[10px] bg-black px-3 py-2 text-white shadow-lg active:cursor-grabbing"
+              style={{ top: timeEditorBlockTop, height: timeEditorBlockHeight }}
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                const rect = timelineRef.current?.getBoundingClientRect();
+                const pointerMinutes = rect ? academyTimelineMinutesFromPointer(event.clientY, rect) : timeEditorStartMinutes;
+                event.preventDefault();
+                event.stopPropagation();
+                setTimeEditor((current) => current ? {
+                  ...current,
+                  mode: "move",
+                  pointerOffsetMinutes: Math.max(0, pointerMinutes - academyMinutesOfDay(current.startsAt)),
+                } : current);
+              }}
+            >
+              <button
+                type="button"
+                aria-label="시작 시간 조정"
+                className="absolute left-2 right-2 top-1 h-2 cursor-ns-resize rounded-full bg-white/45 transition hover:bg-white/70"
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setTimeEditor((current) => current ? { ...current, mode: "resize-start" } : current);
+                }}
+              />
+              <div className="pointer-events-none flex h-full min-h-0 flex-col justify-center">
+                <span className="truncate text-xs font-black">{timeEditorEvent.title}</span>
+                <span className="mt-0.5 text-[11px] font-semibold text-white/70">
+                  {academyTimeRangeLabel(timeEditor.startsAt, timeEditor.endsAt)}
+                </span>
+              </div>
+              <button
+                type="button"
+                aria-label="종료 시간 조정"
+                className="absolute bottom-1 left-2 right-2 h-2 cursor-ns-resize rounded-full bg-white/45 transition hover:bg-white/70"
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setTimeEditor((current) => current ? { ...current, mode: "resize-end" } : current);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <button
         type="button"
