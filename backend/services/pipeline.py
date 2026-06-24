@@ -392,13 +392,17 @@ def build_extraction_prompt(
     subject_candidates: list[str] | None = None,
     unit_candidates: list[str] | None = None,
     document_type_hint: str | None = None,
+    problem_inventory: dict[str, Any] | None = None,
+    page_index: int | None = None,
 ) -> str:
     subjects = _clean_text_candidates(subject_candidates, max_items=24)
     units = [unit for unit in _clean_text_candidates(unit_candidates, max_items=80) if _clean_unit_label(unit)]
+    inventory_note = _problem_inventory_prompt_note(problem_inventory, page_index)
     return (
         EXTRACTION_PROMPT
         + "\n\n"
         + document_type_hints_note(document_type_hint, doc_kind="problem")
+        + (("\n\n" + inventory_note) if inventory_note else "")
         + "\n\nClassify each extracted problem while extracting it.\n"
         + "A single PDF can contain multiple subjects, so classify per problem, not per file.\n"
         + _candidate_instruction("subject", subjects)
@@ -585,7 +589,7 @@ Rules:
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
 PAGE_STRUCTURE_PROMPT = r"""You are reading one page from a Korean problem book or solution book.
-Extract page-level structure metadata only for problem/answer extraction. Do not extract full problems or full solutions.
+This is the first-pass inventory scan. Extract page-level structure metadata, problem-number inventory, and answer-number inventory only. Do not extract full problems or full solutions.
 Do not classify visual-template roles here. Non-question title, separator, publisher-log, decorative, and other irrelevant pages are simply skip_page.
 
 Return exactly one JSON object inside a JSON array:
@@ -623,8 +627,9 @@ Rules:
 - For 회차형 books, detected_section_ids must prefer the visible 회차 label over subject/book-title text.
 - Treat "Single Connection", "singleconnection", "싱글 커넥션", and similar book/source titles as source titles, not units and not section IDs.
 - Treat "수학Ⅰ", "수1", "수학 1", "수학Ⅱ", "수2" as subjects only unless a real curriculum unit or 회차 label is also visible.
-- detected_problem_headers should contain problem numbers that start problem statements.
-- detected_solution_headers should contain problem numbers that start answers or solutions.
+- detected_problem_headers should contain every visible problem number that starts a student-facing problem statement on this page. Count/list numbers carefully; this list is used as the scaffold for the second-pass full text extraction.
+- detected_solution_headers should contain every visible problem number that starts a final answer, answer key row, worked solution, or teacher explanation on this page. In mixed PDFs, fill both detected_problem_headers and detected_solution_headers when both are visible on the same page.
+- This pass must establish the total problem-number inventory before full text extraction. Do not merge text extraction with answer matching here; return only the visible numbers and page roles.
 - toc_entries.page_number should be the printed page number or visible destination page number in the table of contents. If no page number is visible, use null.
 - If a table of contents row shows a problem range/count for a section, fill problem_number_start, problem_number_end, and problem_count. If not visible, use null.
 - For two-column solution pages, set layout to "two_column".
@@ -1371,6 +1376,182 @@ def _items_by_section(items: list[dict[str, Any]], page_key: str) -> dict[str, l
             }
         )
     return grouped
+
+
+def _number_key_or_none(value: Any) -> str | None:
+    key = _question_number_key(value)
+    return key if key else None
+
+
+def _sort_number_keys(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    keys: list[str] = []
+    for value in values:
+        key = _number_key_or_none(value)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        keys.append(key)
+    return sorted(keys, key=lambda item: (0, int(item)) if item.isdigit() else (1, item))
+
+
+def _number_range_from_bounds(start: Any, end: Any) -> list[str]:
+    left = _int_or_none(start)
+    right = _int_or_none(end)
+    if left is None or right is None or right < left or right - left > 300:
+        return []
+    return [str(number) for number in range(left, right + 1)]
+
+
+def _metadata_headers_for_page_range(
+    metadata: list[dict[str, Any]],
+    *,
+    page_start: int,
+    page_end: int,
+    header_key: str,
+) -> list[str]:
+    numbers: list[Any] = []
+    for item in metadata:
+        page_number = int(item.get("page_number") or 1)
+        if page_start <= page_number <= page_end:
+            numbers.extend(item.get(header_key) or [])
+    return _sort_number_keys(numbers)
+
+
+def _problem_inventory_page_entries(metadata: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for item in sorted(metadata, key=lambda value: int(value.get("page_index") or 0)):
+        problem_numbers = _sort_number_keys(item.get("detected_problem_headers") or [])
+        solution_numbers = _sort_number_keys(item.get("detected_solution_headers") or [])
+        if not problem_numbers and not solution_numbers:
+            continue
+        entries.append(
+            {
+                "page_index": int(item.get("page_index") or 0),
+                "page_number": int(item.get("page_number") or int(item.get("page_index") or 0) + 1),
+                "page_type": item.get("page_type"),
+                "section_id": _item_section_id(item),
+                "problem_numbers": problem_numbers,
+                "solution_numbers": solution_numbers,
+            }
+        )
+    return entries
+
+
+def build_problem_inventory_report(
+    metadata: list[dict[str, Any]],
+    problem_sections: list[dict[str, Any]],
+    solution_sections: list[dict[str, Any]],
+    solutions: list[dict[str, Any]],
+    page_count: int,
+) -> dict[str, Any]:
+    sections: list[dict[str, Any]] = []
+    section_sources = problem_sections or [
+        {
+            "section_id": "UNSECTIONED",
+            "page_start": 1,
+            "page_end": page_count,
+            "source": "page_metadata",
+        }
+    ]
+    for section in section_sources:
+        section_id = str(section.get("section_id") or "UNSECTIONED").strip() or "UNSECTIONED"
+        page_start = max(1, int(section.get("page_start") or 1))
+        page_end = max(page_start, min(int(section.get("page_end") or page_count), page_count))
+        range_numbers = _number_range_from_bounds(section.get("expected_problem_start"), section.get("expected_problem_end"))
+        header_numbers = _metadata_headers_for_page_range(
+            metadata,
+            page_start=page_start,
+            page_end=page_end,
+            header_key="detected_problem_headers",
+        )
+        expected_numbers = range_numbers or header_numbers
+        expected_count = _int_or_none(section.get("expected_problem_count")) or len(expected_numbers) or None
+        sections.append(
+            {
+                "section_id": None if section_id == "UNSECTIONED" else section_id,
+                "page_start": page_start,
+                "page_end": page_end,
+                "expected_problem_numbers": expected_numbers,
+                "expected_problem_count": expected_count,
+                "problem_number_source": "toc_range" if range_numbers else "page_headers" if header_numbers else "unknown",
+            }
+        )
+
+    expected_numbers = _sort_number_keys(
+        [number for section in sections for number in (section.get("expected_problem_numbers") or [])]
+    )
+    expected_problem_count = sum(int(section.get("expected_problem_count") or 0) for section in sections) or len(expected_numbers) or None
+    answer_numbers = _sort_number_keys(
+        [solution.get("problem_number") or solution.get("problem_no") for solution in solutions if has_solution_content(solution)]
+    )
+    expected_set = set(expected_numbers)
+    answer_set = set(answer_numbers)
+    return {
+        "strategy": "first_pass_pdf_inventory",
+        "expected_problem_count": expected_problem_count,
+        "expected_problem_numbers": expected_numbers,
+        "answer_candidate_count": len(answer_numbers),
+        "answer_candidate_numbers": answer_numbers,
+        "matched_answer_numbers": _sort_number_keys(list(expected_set & answer_set)),
+        "missing_answer_numbers": _sort_number_keys(list(expected_set - answer_set)) if expected_set else [],
+        "unmatched_answer_numbers": _sort_number_keys(list(answer_set - expected_set)) if expected_set else [],
+        "sections": sections,
+        "solution_sections": solution_sections,
+        "pages": _problem_inventory_page_entries(metadata),
+    }
+
+
+def _compact_inventory_numbers(numbers: list[Any], *, limit: int = 80) -> str:
+    compact = _sort_number_keys(numbers)
+    if not compact:
+        return "none"
+    rendered = ", ".join(compact[:limit])
+    if len(compact) > limit:
+        rendered += f", ... (+{len(compact) - limit} more)"
+    return rendered
+
+
+def _problem_inventory_prompt_note(problem_inventory: dict[str, Any] | None, page_index: int | None = None) -> str:
+    if not problem_inventory:
+        return ""
+    expected_numbers = problem_inventory.get("expected_problem_numbers") or []
+    answer_numbers = problem_inventory.get("answer_candidate_numbers") or []
+    page_numbers: list[Any] = []
+    page_solution_numbers: list[Any] = []
+    if page_index is not None:
+        for entry in problem_inventory.get("pages") or []:
+            entry_page_index = entry.get("page_index")
+            try:
+                normalized_page_index = int(entry_page_index)
+            except (TypeError, ValueError):
+                normalized_page_index = -1
+            if normalized_page_index == int(page_index):
+                page_numbers.extend(entry.get("problem_numbers") or [])
+                page_solution_numbers.extend(entry.get("solution_numbers") or [])
+    return (
+        "First-pass PDF inventory scaffold for this second-pass extraction:\n"
+        f"- Expected total problem slots: {problem_inventory.get('expected_problem_count') or 'unknown'}.\n"
+        f"- Expected problem numbers across the PDF: {_compact_inventory_numbers(expected_numbers)}.\n"
+        f"- Current page first-pass problem numbers: {_compact_inventory_numbers(page_numbers)}.\n"
+        f"- Current page first-pass answer/solution numbers: {_compact_inventory_numbers(page_solution_numbers)}.\n"
+        f"- Answer candidate numbers already found before full text extraction: {_compact_inventory_numbers(answer_numbers)}.\n"
+        "Use this inventory only as a scaffold: carefully extract every visible problem stem on this page, especially numbers listed for the current page, but do not invent a problem that is not visibly present. "
+        "Do not copy final answers or worked solutions into problem_text, and do not perform final answer matching in this text extraction pass."
+    )
+
+
+def _attach_extraction_inventory_gaps(problem_inventory: dict[str, Any], extracted: list[dict[str, Any]]) -> dict[str, Any]:
+    report = dict(problem_inventory or {})
+    extracted_numbers = _sort_number_keys([item.get("problem_number") or item.get("problem_no") for item in extracted])
+    expected_numbers = _sort_number_keys(report.get("expected_problem_numbers") or [])
+    expected_set = set(expected_numbers)
+    extracted_set = set(extracted_numbers)
+    report["extracted_problem_count"] = len(extracted)
+    report["extracted_problem_numbers"] = extracted_numbers
+    report["missing_extracted_numbers"] = _sort_number_keys(list(expected_set - extracted_set)) if expected_set else []
+    report["unexpected_extracted_numbers"] = _sort_number_keys(list(extracted_set - expected_set)) if expected_set else []
+    return report
 
 
 def _numbers_from_values(values: list[Any]) -> list[int]:
@@ -3117,6 +3298,21 @@ def process_batch(batch_id: UUID) -> None:
         if not problem_page_indexes:
             raise RuntimeError("No problem pages were detected in the uploaded PDF set.")
 
+        problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
+        inventory_expected_count = _int_or_none(problem_inventory.get("expected_problem_count"))
+        if should_extract_solutions and quick_answers_used:
+            quick_answer_count = _solution_answer_count(solutions)
+            if quick_answer_report is not None:
+                quick_answer_report["inventory_expected_problem_count"] = inventory_expected_count
+                quick_answer_report["inventory_expected_problem_numbers"] = problem_inventory.get("expected_problem_numbers") or []
+                quick_answer_report["coverage_threshold_met"] = _quick_answers_cover_expected_count(quick_answer_count, inventory_expected_count)
+            if not _quick_answers_cover_expected_count(quick_answer_count, inventory_expected_count):
+                quick_answers_used = False
+                solutions = []
+                if quick_answer_report is not None:
+                    quick_answer_report["used"] = False
+                    quick_answer_report["fallback_reason"] = "quick_answer_count_below_first_pass_inventory"
+
         if should_extract_separate_solutions and not quick_answers_used:
             solutions = extract_full_solution_pdf(
                 solution_source_path,
@@ -3147,13 +3343,64 @@ def process_batch(batch_id: UUID) -> None:
             )
         if quick_answer_report is not None:
             _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
+        problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
+        inventory_expected_count = _int_or_none(problem_inventory.get("expected_problem_count"))
         _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
+        _write_batch_artifact(batch_id, "problem_inventory_report.json", problem_inventory)
+
+        mixed_answer_recovery_ran = False
+        problem_extraction_offset = structure_units + solution_units
+        if (
+            should_detect_embedded_solutions
+            and _document_type_hints_include_mixed(document_type_hints)
+            and not _quick_answers_cover_expected_count(_solution_answer_count(solutions), inventory_expected_count)
+        ):
+            recovery_page_indexes = _mixed_answer_recovery_page_indexes(page_metadata, problem_page_count)
+            recovery_units = max(len(recovery_page_indexes) * units_per_page, 1)
+            recovery_total_units = total_units + recovery_units
+            set_progress(batch_id, "1차 인벤토리 기준 혼합 PDF 정답 회수 중", problem_extraction_offset, recovery_total_units)
+            recovery_page_metadata = _metadata_by_page(
+                _metadata_with_document_kind(page_metadata, "solution", set(recovery_page_indexes)),
+                "solution",
+            )
+            recovered_solutions = extract_mixed_pdf_answer_recovery(
+                batch.problem_pdf_filename,
+                recovery_page_indexes,
+                problem_page_count,
+                solution_dpi,
+                batch_id,
+                offset=problem_extraction_offset,
+                total_units=recovery_total_units,
+                units_per_page=units_per_page,
+                solution_page_metadata=recovery_page_metadata,
+                document_type_hints=document_type_hints,
+            )
+            if _solution_answer_count(recovered_solutions) >= _solution_answer_count(solutions):
+                solutions = recovered_solutions
+            mixed_answer_recovery_ran = True
+            total_units = recovery_total_units
+            problem_extraction_offset += recovery_units
+            problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
+            _write_batch_artifact(
+                batch_id,
+                "mixed_answer_recovery_report.json",
+                {
+                    "strategy": "pre_text_inventory_recovery",
+                    "candidate_page_indexes": recovery_page_indexes,
+                    "candidate_page_numbers": [index + 1 for index in recovery_page_indexes],
+                    "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                    "chosen_answer_count": _solution_answer_count(solutions),
+                    "inventory_expected_problem_count": inventory_expected_count,
+                },
+            )
+            _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
+            _write_batch_artifact(batch_id, "problem_inventory_report.json", problem_inventory)
 
         all_extracted: list[dict[str, Any]] = []
         processed_problem_pages = 0
         for page_index_chunk in iter_page_index_chunks(problem_page_indexes):
             chunk_len = len(page_index_chunk)
-            base = structure_units + solution_units + processed_problem_pages * units_per_page
+            base = problem_extraction_offset + processed_problem_pages * units_per_page
             problem_pages = render_pdf_page_indexes(
                 batch.problem_pdf_filename,
                 page_index_chunk,
@@ -3172,6 +3419,7 @@ def process_batch(batch_id: UUID) -> None:
                 subject_candidates=batch.subject_candidates,
                 unit_candidates=batch.unit_candidates,
                 document_type_hints=document_type_hints,
+                problem_inventory=problem_inventory,
             )
             _apply_section_ranges_to_items(extracted, problem_sections, "page_index")
             page_range_label = format_page_index_chunk(page_index_chunk, problem_page_count)
@@ -3200,6 +3448,8 @@ def process_batch(batch_id: UUID) -> None:
 
         _apply_section_ranges_to_items(all_extracted, problem_sections, "page_index")
         all_extracted = _apply_structure_indexes(all_extracted, page_key="page_index")
+        problem_inventory = _attach_extraction_inventory_gaps(problem_inventory, all_extracted)
+        _write_batch_artifact(batch_id, "problem_inventory_report.json", problem_inventory)
         _write_batch_artifact(batch_id, "extracted_problems_by_section.json", _items_by_section(all_extracted, "page_index"))
         if should_extract_solutions and quick_answers_used:
             expected_problem_count = len(all_extracted)
@@ -3277,6 +3527,7 @@ def process_batch(batch_id: UUID) -> None:
                 _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         should_run_answer_recovery = (
             should_detect_embedded_solutions
+            and not mixed_answer_recovery_ran
             and (_document_type_hints_include_mixed(document_type_hints) or _should_run_mixed_answer_recovery(all_extracted, solutions))
         )
         if should_run_answer_recovery:
@@ -4506,6 +4757,7 @@ def extract_and_cross_check(
     subject_candidates: list[str] | None = None,
     unit_candidates: list[str] | None = None,
     document_type_hints: list[dict[str, Any]] | None = None,
+    problem_inventory: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     if not settings.openai_api_key:
@@ -4530,7 +4782,13 @@ def extract_and_cross_check(
                 vision_json,
                 client,
                 page.base64_png,
-                build_extraction_prompt(subjects, units, document_type_for_page(document_type_hints, page.page_index)),
+                build_extraction_prompt(
+                    subjects,
+                    units,
+                    document_type_for_page(document_type_hints, page.page_index),
+                    problem_inventory,
+                    page.page_index,
+                ),
                 _page_split_model(model_pool, page.page_index, display_total_pages),
                 page.ai_image_mime,
             ): (local_index, page, run_index)
@@ -4577,6 +4835,7 @@ def extract_and_cross_check(
                     (
                         f"{RESCUE_EXTRACTION_PROMPT}\n\n"
                         f"{document_type_hints_note(document_type_for_page(document_type_hints, page.page_index), doc_kind='problem')}"
+                        + (f"\n\n{_problem_inventory_prompt_note(problem_inventory, page.page_index)}" if problem_inventory else "")
                     ),
                     _page_split_model(model_pool, page.page_index, display_total_pages),
                     page.ai_image_mime,

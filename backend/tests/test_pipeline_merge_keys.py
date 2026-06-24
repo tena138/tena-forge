@@ -23,6 +23,8 @@ from services.pipeline import (  # noqa: E402
     _problem_page_indexes_from_metadata,
     _should_run_mixed_answer_recovery,
     answer_for_subject,
+    build_extraction_prompt,
+    build_problem_inventory_report,
     build_section_ranges_from_metadata,
     build_structure_validation_report,
     clean_solution_answer,
@@ -137,6 +139,67 @@ class PipelineMergeKeyTests(unittest.TestCase):
     def test_document_type_hints_include_mixed(self):
         self.assertTrue(_document_type_hints_include_mixed([{"type": "mixed"}]))
         self.assertFalse(_document_type_hints_include_mixed([{"type": "problem"}, {"type": "solution"}]))
+
+    def test_problem_inventory_builds_before_full_text_extraction(self):
+        metadata = [
+            {
+                "page_index": 0,
+                "page_number": 1,
+                "document_kind": "problem",
+                "page_type": "problem_page",
+                "detected_problem_headers": ["1", "2"],
+                "detected_solution_headers": [],
+            },
+            {
+                "page_index": 1,
+                "page_number": 2,
+                "document_kind": "problem",
+                "page_type": "problem_page",
+                "detected_problem_headers": ["3"],
+                "detected_solution_headers": ["1", "2", "3"],
+            },
+        ]
+        sections = [
+            {
+                "section_id": "UNSECTIONED",
+                "page_start": 1,
+                "page_end": 2,
+                "expected_problem_start": 1,
+                "expected_problem_end": 3,
+                "expected_problem_count": 3,
+            }
+        ]
+        solutions = [
+            {"problem_number": "1", "answer": "A"},
+            {"problem_number": "2", "answer": "B"},
+        ]
+
+        report = build_problem_inventory_report(metadata, sections, [], solutions, 2)
+
+        self.assertEqual(report["expected_problem_count"], 3)
+        self.assertEqual(report["expected_problem_numbers"], ["1", "2", "3"])
+        self.assertEqual(report["answer_candidate_numbers"], ["1", "2"])
+        self.assertEqual(report["missing_answer_numbers"], ["3"])
+        self.assertEqual(report["pages"][1]["solution_numbers"], ["1", "2", "3"])
+
+    def test_extraction_prompt_includes_first_pass_inventory_scaffold(self):
+        prompt = build_extraction_prompt(
+            ["수학Ⅰ"],
+            ["수열"],
+            "mixed",
+            {
+                "expected_problem_count": 3,
+                "expected_problem_numbers": ["1", "2", "3"],
+                "answer_candidate_numbers": ["1", "2"],
+                "pages": [{"page_index": 0, "problem_numbers": ["1", "2"], "solution_numbers": []}],
+            },
+            0,
+        )
+
+        self.assertIn("First-pass PDF inventory scaffold", prompt)
+        self.assertIn("Expected total problem slots: 3", prompt)
+        self.assertIn("Current page first-pass problem numbers: 1, 2", prompt)
+        self.assertIn("do not perform final answer matching in this text extraction pass", prompt)
 
     def test_recovered_solution_candidates_replace_weaker_current_set(self):
         problems = [
