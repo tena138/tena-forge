@@ -1,12 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  ChevronLeft,
-  ChevronRight,
   Copy,
   Download,
+  FileUp,
   Mic,
   MonitorUp,
   Pause,
@@ -23,11 +22,10 @@ import { cn } from "@/lib/utils";
 type RecordingMode = "audio" | "video";
 type RecordingState = "idle" | "recording" | "paused";
 
-type LectureSlide = {
-  id: string;
-  title: string;
-  body: string;
-  accent: string;
+type SlidePdf = {
+  url: string;
+  name: string;
+  size: number;
 };
 
 type SharedLectureState = {
@@ -35,31 +33,9 @@ type SharedLectureState = {
   classId: string;
   title: string;
   className: string;
-  slideIndex: number;
-  slides: LectureSlide[];
+  slidePdf: SlidePdf | null;
   updatedAt: number;
 };
-
-const defaultSlides: LectureSlide[] = [
-  {
-    id: "opening",
-    title: "오늘의 강의",
-    body: "수업 목표와 핵심 개념을 정리합니다.",
-    accent: "#14b8a6",
-  },
-  {
-    id: "concept",
-    title: "핵심 개념",
-    body: "판서와 예시를 연결해 설명할 내용입니다.",
-    accent: "#4f46e5",
-  },
-  {
-    id: "practice",
-    title: "문항 풀이",
-    body: "학생과 함께 확인할 대표 문항을 배치합니다.",
-    accent: "#111827",
-  },
-];
 
 function liveShareKey(eventId: string, classId: string) {
   return `tena-live-lecture-share:${eventId || "manual"}:${classId || "all"}`;
@@ -82,6 +58,13 @@ function durationText(ms: number) {
   const minutes = totalMinutes % 60;
   if (hours > 0) return `${hours}시간 ${minutes}분`;
   return `${minutes}분`;
+}
+
+function fileSizeText(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return "";
+  const mb = size / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1)}MB`;
+  return `${Math.max(1, Math.round(size / 1024))}KB`;
 }
 
 function minuteTickStep(totalMinutes: number) {
@@ -202,23 +185,21 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
   );
 }
 
-function SlideCanvas({ slide, className, shared = false }: { slide: LectureSlide; className?: string; shared?: boolean }) {
+function PdfSlideViewer({ slidePdf, className, shared = false, onUpload }: { slidePdf: SlidePdf | null; className?: string; shared?: boolean; onUpload?: () => void }) {
+  const pdfSrc = slidePdf ? `${slidePdf.url}#toolbar=0&navpanes=0&view=FitH` : "";
   return (
     <div className={cn("relative flex min-h-[28rem] overflow-hidden rounded-[8px] bg-white text-zinc-950 ring-1 ring-black/5", className)}>
-      <div className="absolute inset-x-0 top-0 h-2" style={{ backgroundColor: slide.accent }} />
-      <div className="absolute right-8 top-8 h-24 w-24 rounded-full border-[18px] border-zinc-100" />
-      <div className="absolute bottom-10 right-10 h-28 w-44 rotate-[-18deg] rounded-full border-[14px] border-zinc-100" />
-      <div className={cn("relative z-[1] flex w-full flex-col justify-between", shared ? "p-16" : "p-10")}>
-        <div>
-          <div className="text-sm font-black uppercase tracking-[0.2em] text-zinc-400">Tena Forge Live</div>
-          <h1 className={cn("mt-5 max-w-4xl font-black tracking-normal", shared ? "text-7xl" : "text-5xl")}>{slide.title}</h1>
-          <p className={cn("mt-6 max-w-3xl font-semibold leading-relaxed text-zinc-600", shared ? "text-3xl" : "text-xl")}>{slide.body}</p>
-        </div>
-        <div className="flex items-end justify-between gap-6">
-          <div className="h-1.5 w-48 rounded-full" style={{ backgroundColor: slide.accent }} />
-          <div className={cn("font-black text-zinc-200", shared ? "text-8xl" : "text-6xl")}>LIVE</div>
-        </div>
-      </div>
+      {slidePdf ? (
+        <iframe src={pdfSrc} title={slidePdf.name} className="h-full min-h-[inherit] w-full bg-white" />
+      ) : (
+        <button type="button" onClick={onUpload} className="flex min-h-[inherit] w-full flex-col items-center justify-center gap-3 bg-zinc-50 px-6 text-center transition hover:bg-zinc-100">
+          <span className="grid h-14 w-14 place-items-center rounded-[8px] bg-black text-white">
+            <FileUp className="h-6 w-6" />
+          </span>
+          <span className={cn("font-black text-zinc-950", shared ? "text-3xl" : "text-xl")}>PDF 슬라이드</span>
+          <span className="max-w-md text-sm font-semibold leading-6 text-zinc-500">{shared ? "발표자 화면에서 PDF를 올리면 표시됩니다." : "수업에 사용할 PDF를 선택하세요."}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -248,8 +229,6 @@ function ShareOnlyView({ eventId, classId }: { eventId: string; classId: string 
     };
   }, [storageKey]);
 
-  const slide = state?.slides[state.slideIndex] || defaultSlides[0];
-
   return (
     <main className="min-h-screen bg-black p-5 text-white">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-[1800px] flex-col">
@@ -260,7 +239,7 @@ function ShareOnlyView({ eventId, classId }: { eventId: string; classId: string 
           </div>
           <div className="rounded-full bg-white px-4 py-2 text-sm font-black text-black">공유 화면</div>
         </div>
-        <SlideCanvas slide={slide} shared className="min-h-0 flex-1" />
+        <PdfSlideViewer slidePdf={state?.slidePdf || null} shared className="min-h-0 flex-1" />
       </div>
     </main>
   );
@@ -273,8 +252,7 @@ function LiveLectureContent() {
   const shareOnly = searchParams.get("share") === "1";
   const { event } = useLectureEvent(eventId || null);
   const [now, setNow] = useState(() => Date.now());
-  const [slides, setSlides] = useState<LectureSlide[]>(defaultSlides);
-  const [slideIndex, setSlideIndex] = useState(0);
+  const [slidePdf, setSlidePdf] = useState<SlidePdf | null>(null);
   const [notes, setNotes] = useState("수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리");
   const [sharing, setSharing] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
@@ -284,11 +262,11 @@ function LiveLectureContent() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const slidePdfInputRef = useRef<HTMLInputElement | null>(null);
 
   const sessionTitle = event?.title || "즉시 강의";
   const sessionClassName = event?.class_name || "클래스 선택 없음";
   const storageKey = liveShareKey(eventId, classId);
-  const currentSlide = slides[slideIndex] || slides[0];
   const shareUrl = slideShareUrl(eventId, classId);
 
   useEffect(() => {
@@ -303,12 +281,17 @@ function LiveLectureContent() {
       classId,
       title: sessionTitle,
       className: sessionClassName,
-      slideIndex,
-      slides,
+      slidePdf,
       updatedAt: Date.now(),
     };
     window.localStorage.setItem(storageKey, JSON.stringify(payload));
-  }, [classId, eventId, sessionClassName, sessionTitle, sharing, slideIndex, slides, storageKey]);
+  }, [classId, eventId, sessionClassName, sessionTitle, sharing, slidePdf, storageKey]);
+
+  useEffect(() => {
+    return () => {
+      if (slidePdf?.url) URL.revokeObjectURL(slidePdf.url);
+    };
+  }, [slidePdf?.url]);
 
   useEffect(() => {
     if (!shareOnly) return;
@@ -378,8 +361,7 @@ function LiveLectureContent() {
       classId,
       title: sessionTitle,
       className: sessionClassName,
-      slideIndex,
-      slides,
+      slidePdf,
       updatedAt: Date.now(),
     };
     window.localStorage.setItem(storageKey, JSON.stringify(payload));
@@ -391,21 +373,20 @@ function LiveLectureContent() {
     await navigator.clipboard?.writeText(absoluteUrl);
   }
 
-  function addSlide() {
-    setSlides((current) => {
-      const nextSlide: LectureSlide = {
-        id: `slide-${Date.now()}`,
-        title: `새 슬라이드 ${current.length + 1}`,
-        body: "수업 중 공유할 내용을 입력하세요.",
-        accent: "#111827",
-      };
-      setSlideIndex(current.length);
-      return [...current, nextSlide];
+  function handleSlidePdfInput(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      window.alert("PDF 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setSlidePdf((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return { url, name: file.name, size: file.size };
     });
-  }
-
-  function updateCurrentSlide(patch: Partial<LectureSlide>) {
-    setSlides((current) => current.map((slide, index) => (index === slideIndex ? { ...slide, ...patch } : slide)));
   }
 
   return (
@@ -425,22 +406,20 @@ function LiveLectureContent() {
         </section>
       ) : null}
 
-      <section className="grid min-h-[34rem] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(22rem,0.8fr)]">
+      <section className="grid min-h-[34rem] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(20rem,0.65fr)]">
         <div className="min-w-0 space-y-3">
-          <SlideCanvas slide={currentSlide} className="min-h-[34rem]" />
+          <PdfSlideViewer slidePdf={slidePdf} className="min-h-[34rem]" onUpload={() => slidePdfInputRef.current?.click()} />
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] bg-white p-2 ring-1 ring-black/5">
-            <div className="flex items-center gap-1.5">
-              <button type="button" className="grid h-9 w-9 place-items-center rounded-[7px] bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200" onClick={() => setSlideIndex((value) => Math.max(0, value - 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <div className="min-w-20 text-center text-sm font-black text-zinc-700">{slideIndex + 1} / {slides.length}</div>
-              <button type="button" className="grid h-9 w-9 place-items-center rounded-[7px] bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200" onClick={() => setSlideIndex((value) => Math.min(slides.length - 1, value + 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </button>
+            <input ref={slidePdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleSlidePdfInput} />
+            <div className="min-w-0">
+              <div className="text-xs font-black text-zinc-500">슬라이드 PDF</div>
+              <div className="mt-0.5 truncate text-sm font-bold text-zinc-950">
+                {slidePdf ? `${slidePdf.name}${fileSizeText(slidePdf.size) ? ` · ${fileSizeText(slidePdf.size)}` : ""}` : "선택된 PDF 없음"}
+              </div>
             </div>
-            <button type="button" onClick={addSlide} className="inline-flex h-9 items-center gap-2 rounded-[7px] bg-zinc-100 px-3 text-xs font-black text-zinc-800 transition hover:bg-zinc-200">
-              <Play className="h-3.5 w-3.5" />
-              슬라이드 추가
+            <button type="button" onClick={() => slidePdfInputRef.current?.click()} className="inline-flex h-9 items-center gap-2 rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800">
+              <FileUp className="h-3.5 w-3.5" />
+              PDF 업로드
             </button>
           </div>
         </div>
@@ -453,17 +432,6 @@ function LiveLectureContent() {
               onChange={(event) => setNotes(event.target.value)}
               className="mt-3 min-h-[18rem] w-full resize-none rounded-[8px] bg-zinc-100 p-3 text-sm font-medium leading-6 text-zinc-800 outline-none focus:ring-2 focus:ring-black/10"
             />
-          </div>
-          <div className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-            <div className="text-sm font-black text-zinc-950">슬라이드 편집</div>
-            <label className="mt-3 block text-xs font-bold text-zinc-500">
-              제목
-              <input value={currentSlide.title} onChange={(event) => updateCurrentSlide({ title: event.target.value })} className="mt-1 h-10 w-full rounded-[7px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none" />
-            </label>
-            <label className="mt-3 block text-xs font-bold text-zinc-500">
-              본문
-              <textarea value={currentSlide.body} onChange={(event) => updateCurrentSlide({ body: event.target.value })} className="mt-1 min-h-24 w-full resize-none rounded-[7px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-800 outline-none" />
-            </label>
           </div>
         </aside>
       </section>
@@ -499,7 +467,12 @@ function LiveLectureContent() {
             <Copy className="h-4 w-4" />
             공유 URL
           </button>
-          <button type="button" onClick={startSharing} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800">
+          <button
+            type="button"
+            onClick={startSharing}
+            disabled={!slidePdf}
+            className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300 disabled:text-zinc-500"
+          >
             <MonitorUp className="h-4 w-4" />
             슬라이드 공유
           </button>
