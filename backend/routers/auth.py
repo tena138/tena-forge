@@ -10,7 +10,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 import httpx
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
 from sqlalchemy import case, select
@@ -413,7 +413,7 @@ def _verify_registration_code(email: str, code: str, verification_session: str) 
         raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않습니다.")
 
 
-def _apply_failed_login_policy(academy: Academy) -> None:
+def _apply_failed_login_policy(academy: Academy, background_tasks: BackgroundTasks | None = None) -> None:
     academy.failed_login_attempts += 1
     attempts = academy.failed_login_attempts
     if attempts >= 20:
@@ -422,7 +422,10 @@ def _apply_failed_login_policy(academy: Academy) -> None:
         academy.locked_until = None
     elif attempts >= 10:
         academy.locked_until = now_utc() + timedelta(hours=24)
-        send_account_locked_email(academy.email, academy.locked_until)
+        if background_tasks:
+            background_tasks.add_task(send_account_locked_email, academy.email, academy.locked_until)
+        else:
+            send_account_locked_email(academy.email, academy.locked_until)
     elif attempts >= 5:
         academy.locked_until = now_utc() + timedelta(minutes=15)
 
@@ -580,7 +583,7 @@ def resend_verification(payload: ResendVerificationRequest, request: Request, db
 
 @router.post("/login", response_model=TokenResponse | TotpRequiredResponse)
 @limiter.limit("5 per 15 minutes")
-def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, response: Response, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     academy = db.scalar(select(Academy).where(Academy.email == _login_lookup_email(payload.email)))
     generic = "아이디 또는 비밀번호가 올바르지 않습니다"
     if not academy:
@@ -601,7 +604,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         db.commit()
         raise HTTPException(status_code=423, detail={"message": "계정이 잠겨 있습니다", "locked_until": academy.locked_until.isoformat()})
     if not verify_password(payload.password, academy.password_hash):
-        _apply_failed_login_policy(academy)
+        _apply_failed_login_policy(academy, background_tasks)
         record_login_history(db, request, academy, False, failure_reason="bad_password")
         db.commit()
         raise HTTPException(status_code=401, detail=generic)
@@ -618,7 +621,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
     academy.last_login_ip = get_real_ip(request)
     record_login_history(db, request, academy, True, provider="email")
     parsed = parse_user_agent(request.headers.get("user-agent", ""))
-    send_new_device_login_email(academy.email, parsed["browser"], parsed["os"], get_real_ip(request))
+    background_tasks.add_task(send_new_device_login_email, academy.email, parsed["browser"], parsed["os"], get_real_ip(request))
     result = _issue_token_response(db, request, response, academy, remember=payload.remember)
     db.commit()
     return result

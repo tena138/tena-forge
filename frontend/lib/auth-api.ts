@@ -1,6 +1,7 @@
 import { authHttp, clearAuthState, setAccessToken, storeAuthProfile } from "@/lib/auth-client";
 
 const PROFILE_REQUEST_TIMEOUT_MS = 5000;
+const LOGIN_REQUEST_TIMEOUT_MS = 8000;
 
 export type AcademyProfile = {
   id: string;
@@ -167,7 +168,7 @@ export async function requestRegistrationCode(email: string) {
 }
 
 export async function loginAcademy(payload: unknown) {
-  const response = await authHttp.post("/api/auth/login", payload);
+  const response = await authHttp.post("/api/auth/login", payload, { timeout: LOGIN_REQUEST_TIMEOUT_MS });
   const data = response.data as LoginResult;
   if (data.access_token) setAccessToken(data.access_token);
   if (data.academy) storeAuthProfile(data.academy);
