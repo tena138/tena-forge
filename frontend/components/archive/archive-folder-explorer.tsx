@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type DragEvent } from "react";
-import { Check, ChevronLeft, Folder, FolderPlus, Pencil, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, Folder, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -157,9 +157,16 @@ export function ArchiveFolderExplorer({
               }}
               placeholder="새 폴더 이름"
             />
-            <Button type="button" size="sm" variant="outline" className="h-9 shrink-0 border-0 bg-black text-white hover:bg-zinc-800" onClick={createFolder}>
-              <FolderPlus className="h-4 w-4" />
-              새 폴더
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-9 w-9 shrink-0 border-0 bg-black text-white hover:bg-zinc-800"
+              onClick={createFolder}
+              aria-label="새 폴더 만들기"
+              title="새 폴더 만들기"
+            >
+              <Plus className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -187,9 +194,16 @@ export function ArchiveFolderExplorer({
           </div>
           <div className="flex items-center gap-2">
             {currentFolderId ? (
-              <Button type="button" size="sm" variant="outline" className="h-8 border-0 bg-white text-zinc-900 hover:bg-zinc-200" onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 border-0 bg-white text-zinc-900 hover:bg-zinc-200"
+                onClick={() => onOpenFolder(currentPath.at(-2)?.id || null)}
+                aria-label="상위 폴더로 이동"
+                title="상위 폴더로 이동"
+              >
                 <ChevronLeft className="h-4 w-4" />
-                상위
               </Button>
             ) : null}
             {mode === "select" ? (
@@ -212,15 +226,12 @@ export function ArchiveFolderExplorer({
         {destinationPicker && currentFolderId ? (
           <button
             type="button"
-            className="flex min-h-[82px] items-center gap-3 rounded-[10px] bg-zinc-50 p-3 text-left text-zinc-800 transition-colors hover:bg-zinc-100"
+            className="grid min-h-[82px] place-items-center rounded-[10px] bg-zinc-50 p-3 text-zinc-800 transition-colors hover:bg-zinc-100"
             onClick={() => onOpenFolder(parentFolderId)}
+            aria-label="상위 폴더로 이동"
+            title="상위 폴더로 이동"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-white text-zinc-700">
-              <ChevronLeft className="h-5 w-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-bold leading-5">상위 폴더</span>
-            </span>
+            <ChevronLeft className="h-5 w-5" />
           </button>
         ) : null}
 
@@ -297,11 +308,11 @@ export function ArchiveFolderExplorer({
                   </span>
                 ) : (
                   <>
-                    <span className="block whitespace-normal break-words pr-14 text-sm font-bold leading-5" title={folder.name}>{folder.name}</span>
+                    <span className="block whitespace-normal break-words pr-8 text-sm font-bold leading-5" title={folder.name}>{folder.name}</span>
                   </>
                 )}
               </span>
-              <span className={cn("absolute right-2 top-2 flex shrink-0 items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100", editingId === folder.id && "hidden")}>
+              <span className={cn("absolute right-2 top-2 flex shrink-0 flex-col items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100", editingId === folder.id && "hidden")}>
                 <button type="button" className="grid h-7 w-7 place-items-center rounded-[7px] bg-white text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950" onClick={(event) => { event.stopPropagation(); openRename(folder); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -315,9 +326,6 @@ export function ArchiveFolderExplorer({
 
         {destinationPicker ? (
           <div className="flex min-h-[82px] items-center gap-2 rounded-[10px] bg-zinc-50 p-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-white text-zinc-700">
-              <FolderPlus className="h-5 w-5" />
-            </span>
             <Input
               className="h-9 min-w-0 flex-1 border-0 bg-white text-sm font-semibold text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
               value={draft}
@@ -330,8 +338,16 @@ export function ArchiveFolderExplorer({
               }}
               placeholder="새 폴더"
             />
-            <Button type="button" size="icon" className="h-9 w-9 shrink-0" onClick={createFolder} disabled={!draft.trim()}>
-              <FolderPlus className="h-4 w-4" />
+            <Button
+              type="button"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={createFolder}
+              disabled={!draft.trim()}
+              aria-label="새 폴더 만들기"
+              title="새 폴더 만들기"
+            >
+              <Plus className="h-4 w-4" />
             </Button>
           </div>
         ) : null}
