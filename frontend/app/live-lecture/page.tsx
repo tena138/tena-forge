@@ -218,7 +218,8 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
       ? { aspectRatio: slideAspectRatio }
       : {
           aspectRatio: slideAspectRatio,
-          width: `min(100%, calc((100vh - 18rem) * ${slideAspectValue}))`,
+          width: `min(100%, calc((100dvh - 16rem) * ${slideAspectValue}))`,
+          maxHeight: "calc(100dvh - 16rem)",
         }
     : undefined;
 
@@ -382,8 +383,8 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
   return (
     <div
       className={cn(
-        "relative flex w-full overflow-hidden rounded-[8px] bg-white text-zinc-950 ring-1 ring-black/5",
-        slidePdf ? "min-h-0" : "min-h-[28rem]",
+        "relative flex w-full shrink-0 overflow-hidden rounded-[8px] bg-white text-zinc-950 ring-1 ring-black/5",
+        slidePdf ? "min-h-0 shadow-[0_18px_55px_rgba(0,0,0,0.08)]" : "min-h-[28rem]",
         slidePdf && !shared && "mx-auto",
         shared && "h-screen w-screen",
         dragging && "ring-2 ring-black",
@@ -398,7 +399,7 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
       onKeyDown={handleKeyDown}
     >
       {slidePdf ? (
-        <div ref={frameRef} className="relative flex h-full w-full items-center justify-center overflow-hidden bg-white">
+        <div ref={frameRef} className="relative flex h-full w-full items-center justify-center overflow-hidden bg-zinc-950">
           <canvas ref={canvasRef} className="block max-h-full max-w-full bg-white object-contain" />
           {renderState === "loading" ? (
             <div className="absolute inset-0 grid place-items-center bg-white/78 text-sm font-black text-zinc-800">
@@ -427,21 +428,25 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
             type="button"
             onClick={() => movePage(-1)}
             disabled={activePage <= 1}
-            className="absolute left-3 top-1/2 z-20 grid h-16 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/90 text-white shadow-[0_14px_35px_rgba(0,0,0,0.22)] transition hover:bg-black disabled:pointer-events-none disabled:opacity-20"
+            className="absolute inset-y-0 left-0 z-20 grid w-20 place-items-center bg-gradient-to-r from-black/20 to-transparent text-white transition hover:from-black/32 disabled:pointer-events-none disabled:opacity-0"
             aria-label="이전 슬라이드"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-black/82 shadow-[0_16px_36px_rgba(0,0,0,0.26)]">
+              <ChevronLeft className="h-5 w-5" />
+            </span>
           </button>
           <button
             type="button"
             onClick={() => movePage(1)}
             disabled={!pageCount || activePage >= pageCount}
-            className="absolute right-3 top-1/2 z-20 grid h-16 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/90 text-white shadow-[0_14px_35px_rgba(0,0,0,0.22)] transition hover:bg-black disabled:pointer-events-none disabled:opacity-20"
+            className="absolute inset-y-0 right-0 z-20 grid w-20 place-items-center bg-gradient-to-l from-black/20 to-transparent text-white transition hover:from-black/32 disabled:pointer-events-none disabled:opacity-0"
             aria-label="다음 슬라이드"
           >
-            <ChevronRight className="h-5 w-5" />
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-black/82 shadow-[0_16px_36px_rgba(0,0,0,0.26)]">
+              <ChevronRight className="h-5 w-5" />
+            </span>
           </button>
-          <div className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black px-3 py-1 text-xs font-black text-white shadow-[0_14px_35px_rgba(0,0,0,0.18)]">
+          <div className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/86 px-3 py-1 text-xs font-black text-white shadow-[0_14px_35px_rgba(0,0,0,0.18)]">
             {activePage} / {pageCount || "..."}
           </div>
         </>
