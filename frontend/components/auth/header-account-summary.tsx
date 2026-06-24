@@ -9,8 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { AcademyBilling, getAcademyBilling } from "@/lib/academyStudent";
 import { AcademyProfile, fetchMe, logout, updateMe } from "@/lib/auth-api";
-import { AUTH_CHANGED_EVENT, authHttp, getAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, authHttp, getAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { UsageSummary, getUsageSummary } from "@/lib/saas";
 import { cn } from "@/lib/utils";
 
 type PlanTone = "admin" | "trial" | "free" | "basic" | "pro" | "enterprise";
@@ -96,6 +98,100 @@ function displayPlan(profile: AcademyProfile) {
   return { ...plan, status: profile.is_active ? "활성" : "비활성", statusClass: profile.is_active ? "text-zinc-600" : "text-zinc-600" };
 }
 
+function resolveActiveAcademyId(profile?: AcademyProfile | null) {
+  const activeWorkspaceId = getActiveWorkspaceId();
+  if (activeWorkspaceId && activeWorkspaceId !== "student") return activeWorkspaceId;
+  return profile?.account_type === "academy" ? profile.id : "";
+}
+
+function defaultStudentSeatLimit(plan?: string | null) {
+  const key = String(plan || "").toLowerCase();
+  if (key === "basic") return 5;
+  if (key === "pro") return 10;
+  return 0;
+}
+
+function formatUsageNumber(value: number, suffix = "") {
+  const safe = Number.isFinite(value) ? value : 0;
+  if (Math.abs(safe) >= 10_000) {
+    return `${new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 }).format(safe)}${suffix}`;
+  }
+  const rounded = safe >= 100 ? Math.round(safe) : Math.round(safe * 10) / 10;
+  return `${rounded.toLocaleString("ko-KR")}${suffix}`;
+}
+
+function formatCapacityMb(value: number) {
+  const safe = Number.isFinite(value) ? value : 0;
+  if (safe >= 1024 * 1024) return formatUsageNumber(safe / (1024 * 1024), "TB");
+  if (safe >= 1024) return formatUsageNumber(safe / 1024, "GB");
+  return formatUsageNumber(safe, "MB");
+}
+
+function buildUsageRows(summary: UsageSummary | null, billing: AcademyBilling | null, profile: AcademyProfile) {
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (summary) {
+    const creditsUsed = summary.extraction_credits_used ?? 0;
+    const creditsLimit = summary.monthly_credit_limit || summary.plan?.monthly_ai_tokens || 0;
+    const creditsRemaining = summary.extraction_credits_remaining ?? Math.max(creditsLimit - creditsUsed, 0);
+    const uploadUsed = summary.uploaded_mb_this_month ?? 0;
+    const uploadLimit = summary.monthly_upload_mb_limit || 0;
+    const uploadRemaining = Math.max(uploadLimit - uploadUsed, 0);
+    const storageUsed = summary.storage_mb_used ?? 0;
+    const storageLimit = summary.plan?.storage_quota_mb || 0;
+    const storageRemaining = Math.max(storageLimit - storageUsed, 0);
+
+    rows.push({ label: "AI credits", value: `${formatUsageNumber(creditsRemaining)} / ${formatUsageNumber(creditsLimit)} 남음` });
+    rows.push({ label: "업로드", value: `${formatCapacityMb(uploadRemaining)} / ${formatCapacityMb(uploadLimit)} 남음` });
+    rows.push({ label: "보관", value: `${formatCapacityMb(storageRemaining)} / ${formatCapacityMb(storageLimit)} 남음` });
+  }
+
+  if (billing) {
+    const activeSeats = billing.active_seats ?? 0;
+    const assignedSeats = billing.assigned_seats ?? 0;
+    const seatLimit = billing.unlimited_seats ? Math.max(activeSeats, assignedSeats, 1) : billing.included_seats ?? defaultStudentSeatLimit(profile.plan);
+    const seatValue = billing.unlimited_seats
+      ? `${formatUsageNumber(activeSeats)}명 활성 / 무제한`
+      : `${formatUsageNumber(Math.max(seatLimit - activeSeats, 0))} / ${formatUsageNumber(seatLimit)}명 남음`;
+    rows.splice(1, 0, { label: "활성 가능 학생", value: seatValue });
+  }
+
+  return rows;
+}
+
+function AccountUsageSummary({
+  summary,
+  billing,
+  profile,
+  loading,
+}: {
+  summary: UsageSummary | null;
+  billing: AcademyBilling | null;
+  profile: AcademyProfile;
+  loading: boolean;
+}) {
+  const rows = buildUsageRows(summary, billing, profile);
+  if (!loading && rows.length === 0) return null;
+
+  return (
+    <div className="mt-3 rounded-[7px] bg-white px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase text-muted-foreground">사용량</div>
+      {rows.length > 0 ? (
+        <div className="mt-2 space-y-1.5">
+          {rows.map((row) => (
+            <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-semibold text-zinc-500">{row.label}</span>
+              <span className="text-right font-bold text-zinc-950">{row.value}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-2 text-xs font-semibold text-zinc-500">사용량 불러오는 중</div>
+      )}
+    </div>
+  );
+}
+
 function PlanBadge({ label, tone }: { label: string; tone: PlanTone }) {
   return (
     <Badge className={cn("rounded-full border px-2.5 font-black shadow-none", planStyles[tone])}>
@@ -113,6 +209,9 @@ export function HeaderAccountSummary() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [billingSummary, setBillingSummary] = useState<AcademyBilling | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +248,35 @@ export function HeaderAccountSummary() {
       window.removeEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
     };
   }, []);
+
+  useEffect(() => {
+    if (!profile || (!open && !profileOpen)) return;
+    let cancelled = false;
+
+    async function loadAccountUsage() {
+      setUsageLoading(true);
+      const academyId = resolveActiveAcademyId(profile);
+      const [usageResult, billingResult] = await Promise.allSettled([
+        getUsageSummary(),
+        academyId ? getAcademyBilling(academyId) : Promise.resolve(null),
+      ]);
+
+      if (cancelled) return;
+      setUsageSummary(usageResult.status === "fulfilled" ? usageResult.value : null);
+      setBillingSummary(billingResult.status === "fulfilled" ? billingResult.value : null);
+      setUsageLoading(false);
+    }
+
+    void loadAccountUsage();
+    const handleWorkspaceChange = () => {
+      void loadAccountUsage();
+    };
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
+    };
+  }, [open, profile, profileOpen]);
 
   if (!profile) {
     if (loading) {
@@ -247,13 +375,7 @@ export function HeaderAccountSummary() {
               </div>
               <PlanBadge label={plan.label} tone={plan.tone} />
             </div>
-            <div className="mt-3 rounded-[7px] bg-white px-3 py-2">
-              <div className="text-[11px] font-semibold uppercase text-muted-foreground">구독 플랜</div>
-              <div className="mt-1 flex items-center justify-between">
-                <span className="text-sm font-bold">{plan.label}</span>
-                <span className={`text-xs font-semibold ${plan.statusClass}`}>{plan.status}</span>
-              </div>
-            </div>
+            <AccountUsageSummary summary={usageSummary} billing={billingSummary} profile={currentProfile} loading={usageLoading} />
             <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5" />
               {currentProfile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}
@@ -304,6 +426,7 @@ export function HeaderAccountSummary() {
                   <div className={`mt-1 font-bold ${plan.statusClass}`}>{plan.status}</div>
                 </div>
               </div>
+              <AccountUsageSummary summary={usageSummary} billing={billingSummary} profile={currentProfile} loading={usageLoading} />
             </div>
 
             <label className="block text-sm font-semibold">

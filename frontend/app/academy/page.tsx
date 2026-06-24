@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { AcademyProfile, fetchMe } from "@/lib/auth-api";
+import { AcademyProfile } from "@/lib/auth-api";
 import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
 import { formatKstDateTime } from "@/lib/datetime";
@@ -41,10 +41,7 @@ import {
   scheduleWeekdays,
   weekIntervalOptions,
 } from "@/lib/scheduleRecurrence";
-import { getUsageSummary, UsageSummary } from "@/lib/saas";
-import { subjectEngineLabel } from "@/lib/plan-pricing";
 import {
-  AcademyBilling,
   AcademyClass,
   AcademyLearningStudent,
   LearningAssignment,
@@ -52,7 +49,6 @@ import {
   confirmLearningAssignmentCompletion,
   createLearningAccessGrant,
   createLearningAssignment,
-  getAcademyBilling,
   listAcademyClasses,
   listAcademyLearningAssignments,
   listAcademyLearningStudents,
@@ -199,204 +195,15 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="rounded-[8px] bg-zinc-100 px-3 py-4 text-sm font-semibold text-zinc-500">{children}</div>;
 }
 
-function remainingPercent(used: number, total: number) {
-  if (!total || total <= 0) return 0;
-  return Math.min(100, Math.max(0, ((total - used) / total) * 100));
-}
-
-function remainingTone(percent: number) {
-  if (percent <= 10) return "#737373";
-  if (percent <= 25) return "#525252";
-  return "#111111";
-}
-
-function formatUsageNumber(value: number, suffix = "") {
-  const safe = Number.isFinite(value) ? value : 0;
-  if (Math.abs(safe) >= 10_000) {
-    const compact = new Intl.NumberFormat("ko-KR", {
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(safe);
-    return `${compact}${suffix}`;
-  }
-  const rounded = safe >= 100 ? Math.round(safe) : Math.round(safe * 10) / 10;
-  return `${rounded.toLocaleString("ko-KR")}${suffix}`;
-}
-
-function formatCapacityMb(value: number) {
-  const safe = Number.isFinite(value) ? value : 0;
-  if (safe >= 1024 * 1024) return formatUsageNumber(safe / (1024 * 1024), "TB");
-  if (safe >= 1024) return formatUsageNumber(safe / 1024, "GB");
-  return formatUsageNumber(safe, "MB");
-}
-
-function planNameFallback(plan?: string | null) {
-  const labels: Record<string, string> = {
-    free: "Free",
-    basic: "Basic",
-    pro: "Pro",
-    enterprise: "Enterprise",
-  };
-  return labels[String(plan || "").toLowerCase()] || "Plan";
-}
-
-function planAuroraToneClass(plan?: string | null, name?: string | null) {
-  const key = `${plan || ""} ${name || ""}`.toLowerCase();
-  if (key.includes("enterprise") || key.includes("business")) return "plan-aurora-tone-enterprise";
-  if (key.includes("pro")) return "plan-aurora-tone-pro";
-  if (key.includes("basic") || key.includes("plus")) return "plan-aurora-tone-basic";
-  if (key.includes("free")) return "plan-aurora-tone-free";
-  return "plan-aurora-tone-trial";
-}
-
-function defaultStudentSeatLimit(plan?: string | null) {
-  const key = String(plan || "").toLowerCase();
-  if (key === "basic") return 5;
-  if (key === "pro") return 10;
-  return 0;
-}
-
-function daysUntil(value?: string | null) {
-  if (!value) return null;
-  const diff = new Date(value).getTime() - Date.now();
-  return Math.ceil(diff / 86_400_000);
-}
-
-function UsageRing({ label, used, total, ratio }: { label: string; used: number; total: number; ratio: string }) {
-  const percent = remainingPercent(used, total);
-  const tone = remainingTone(percent);
-  return (
-    <div className="grid min-h-[7.25rem] min-w-0 place-items-center rounded-[10px] bg-card/65 p-2 text-center shadow-none sm:min-h-[9rem] sm:p-3">
-      <div className="max-w-full truncate text-[11px] font-semibold text-muted-foreground sm:text-xs">{label}</div>
-      <div
-        className="relative mt-1.5 grid aspect-square w-full max-w-[4.75rem] place-items-center overflow-visible rounded-full p-[5px] sm:mt-2 sm:max-w-[6.75rem] sm:p-[7px]"
-        style={{
-          background: `conic-gradient(${tone} ${percent * 3.6}deg, rgb(229 229 229) 0deg)`,
-        }}
-      >
-        <div className="h-full w-full rounded-full bg-card" />
-        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-visible text-center">
-          <span className="whitespace-nowrap text-sm font-black leading-none text-foreground sm:text-lg">{Math.round(percent)}%</span>
-          <span className="mt-0.5 max-w-[4rem] truncate whitespace-nowrap text-[9px] font-bold leading-none text-zinc-700 sm:mt-1 sm:max-w-[5.6rem] sm:text-[10px]">
-            {ratio}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function UsageOverview({
-  summary,
-  profile,
-  billing,
-}: {
-  summary: UsageSummary | null;
-  profile: AcademyProfile | null;
-  billing: AcademyBilling | null;
-}) {
-  const planName = summary?.plan?.name || planNameFallback(profile?.plan);
-  const planToneClass = planAuroraToneClass(summary?.plan?.code || profile?.plan, planName);
-  const engines = summary ? summary.subscription?.enabled_subject_engines || summary.plan.enabled_subject_engines || ["math"] : ["math"];
-  const subscription = summary?.subscription;
-  const normalizedPlan = String(summary?.plan?.code || profile?.plan || "").toLowerCase();
-  const hasAssignedPlan = !["", "free", "plan"].includes(normalizedPlan) || !["", "Free", "Trial", "Plan"].includes(planName);
-  const remainingDays = daysUntil(profile?.trial_ends_at || profile?.plan_expires_at || null);
-  const isTrial = subscription?.status === "trialing" || Boolean(profile?.plan_expires_at && profile?.plan && profile.plan !== "free");
-  const planStatus = isTrial && remainingDays !== null ? `무료 체험 ${Math.max(remainingDays, 0)}일 남음` : subscription?.status === "active" || hasAssignedPlan ? "사용 중" : "플랜 미등록";
-  const creditsUsed = summary?.extraction_credits_used ?? 0;
-  const creditsLimit = summary?.monthly_credit_limit || summary?.plan?.monthly_ai_tokens || 0;
-  const activeSeats = billing?.active_seats ?? 0;
-  const assignedSeats = billing?.assigned_seats ?? 0;
-  const seatLimit = billing?.unlimited_seats
-    ? Math.max(activeSeats, assignedSeats, 1)
-    : billing?.included_seats ?? defaultStudentSeatLimit(profile?.plan);
-  const uploadMbUsed = summary?.uploaded_mb_this_month ?? 0;
-  const uploadMbLimit = summary?.monthly_upload_mb_limit || 0;
-  const storageUsed = summary?.storage_mb_used ?? 0;
-  const storageLimit = summary?.plan?.storage_quota_mb || 0;
-  const creditsRemaining = Math.max(creditsLimit - creditsUsed, 0);
-  const uploadMbRemaining = Math.max(uploadMbLimit - uploadMbUsed, 0);
-  const storageRemaining = Math.max(storageLimit - storageUsed, 0);
-
-  return (
-    <section className="rounded-[12px] bg-card/70 p-4 shadow-none">
-      <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <Link
-          href="/billing"
-          aria-label="결제 및 플랜 관리로 이동"
-          className={`plan-aurora-surface plan-aurora-card ${planToneClass} group rounded-[10px] p-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60`}
-        >
-          <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
-          <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
-          <div className="relative z-10 text-2xl font-black text-foreground">{planName}</div>
-          <div className={`plan-aurora-surface plan-aurora-badge ${planToneClass} relative z-10 mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-black backdrop-blur`}>
-            <span className="plan-aurora__ribbon plan-aurora__ribbon--a" />
-            <span className="plan-aurora__ribbon plan-aurora__ribbon--b" />
-            <span className="relative z-10">{planStatus}</span>
-          </div>
-          <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
-            {engines.map((engine) => (
-              <span key={engine} className="rounded-full bg-background/70 px-2 py-1 text-[11px] font-semibold text-foreground shadow-none backdrop-blur">
-                {subjectEngineLabel(engine)}
-              </span>
-            ))}
-          </div>
-        </Link>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-          <UsageRing label="AI credits" used={creditsUsed} total={creditsLimit} ratio={`${formatUsageNumber(creditsRemaining)}/${formatUsageNumber(creditsLimit)}`} />
-          <UsageRing
-            label={"\ud65c\uc131 \uac00\ub2a5 \ud559\uc0dd"}
-            used={billing?.unlimited_seats ? 0 : activeSeats}
-            total={billing?.unlimited_seats ? 0 : seatLimit}
-            ratio={billing?.unlimited_seats ? `${formatUsageNumber(activeSeats)}/무제한` : `${formatUsageNumber(Math.max(seatLimit - activeSeats, 0))}/${formatUsageNumber(seatLimit)}`}
-          />
-          <UsageRing label="업로드 용량" used={uploadMbUsed} total={uploadMbLimit} ratio={`${formatCapacityMb(uploadMbRemaining)}/${formatCapacityMb(uploadMbLimit)}`} />
-          <UsageRing label="보관 용량" used={storageUsed} total={storageLimit} ratio={`${formatCapacityMb(storageRemaining)}/${formatCapacityMb(storageLimit)}`} />
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function AcademyConsoleHome() {
-  const [profile, setProfile] = useState<AcademyProfile | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [problemStats, setProblemStats] = useState<ProblemStats>({ total: 0, needs_review: 0, tagged: 0, untagged: 0 });
   const [subjectCounts, setSubjectCounts] = useState<SubjectCount[]>([]);
   const [sets, setSets] = useState<ProblemSetListItem[]>([]);
-  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
-  const [billingSummary, setBillingSummary] = useState<AcademyBilling | null>(null);
   const [dataError, setDataError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    const storedProfile = readStoredAuthProfile<AcademyProfile>();
-    setProfile(storedProfile);
-
-    async function loadBilling(profileId?: string | null) {
-      if (!profileId) {
-        if (!cancelled) setBillingSummary(null);
-        return;
-      }
-      try {
-        const billingData = await getAcademyBilling(profileId);
-        if (!cancelled) setBillingSummary(billingData);
-      } catch {
-        if (!cancelled) setBillingSummary(null);
-      }
-    }
-
-    async function loadProfile() {
-      try {
-        const freshProfile = await fetchMe();
-        if (!cancelled) setProfile(freshProfile);
-        await loadBilling(resolveActiveAcademyId(freshProfile));
-      } catch {
-        if (!cancelled && !storedProfile) setProfile(null);
-        await loadBilling(resolveActiveAcademyId(storedProfile));
-      }
-    }
 
     async function loadBatches() {
       try {
@@ -458,33 +265,19 @@ function AcademyConsoleHome() {
       }
     }
 
-    async function loadUsage() {
-      try {
-        const summary = await getUsageSummary();
-        if (!cancelled) setUsageSummary(summary);
-      } catch {
-        if (!cancelled) setUsageSummary(null);
-      }
-    }
-
     async function loadConsole() {
-      await Promise.all([loadProfile(), loadBatches(), loadArchiveAndSets()]);
-      await loadUsage();
+      await Promise.all([loadBatches(), loadArchiveAndSets()]);
     }
 
     void loadConsole();
     const handleWorkspaceChange = () => {
-      const currentProfile = readStoredAuthProfile<AcademyProfile>();
-      void loadBilling(resolveActiveAcademyId(currentProfile));
       void loadBatches();
       void loadArchiveAndSets();
-      void loadUsage();
     };
     window.addEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
     const batchTimer = window.setInterval(() => void loadBatches(), 4000);
     const archiveTimer = window.setInterval(() => {
       void loadArchiveAndSets();
-      void loadUsage();
     }, 30000);
 
     return () => {
@@ -505,7 +298,6 @@ function AcademyConsoleHome() {
 
   return (
     <div className="space-y-5">
-      <UsageOverview summary={usageSummary} profile={profile} billing={billingSummary} />
       {dataError ? <p className="rounded-[8px] bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">{dataError}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-4">
