@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Ban, BookOpenCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud, X } from "lucide-react";
 
@@ -42,13 +42,21 @@ function statusLabel(status: Batch["status"]) {
   }[status];
 }
 
-function statusClass(status: Batch["status"]) {
+function statusBadgeStyle(status: Batch["status"]): CSSProperties {
   return {
-    pending: "!bg-zinc-100 !text-zinc-800 ring-1 ring-inset ring-zinc-200",
-    processing: "!bg-violet-600 !text-white ring-1 ring-inset ring-violet-500",
-    done: "!bg-zinc-950 !text-white ring-1 ring-inset ring-zinc-900",
-    error: "!bg-red-50 !text-red-700 ring-1 ring-inset ring-red-200",
+    pending: { backgroundColor: "#f4f4f5", color: "#27272a", boxShadow: "inset 0 0 0 1px #e4e4e7" },
+    processing: { backgroundColor: "#7c3aed", color: "#ffffff", boxShadow: "inset 0 0 0 1px #6d28d9" },
+    done: { backgroundColor: "#09090b", color: "#ffffff", boxShadow: "inset 0 0 0 1px #18181b" },
+    error: { backgroundColor: "#fef2f2", color: "#b91c1c", boxShadow: "inset 0 0 0 1px #fecaca" },
   }[status];
+}
+
+function StatusBadge({ status }: { status: Batch["status"] }) {
+  return (
+    <span className="inline-flex h-6 items-center rounded-[6px] px-2 text-xs font-black leading-none" style={statusBadgeStyle(status)}>
+      {statusLabel(status)}
+    </span>
+  );
 }
 
 function errorReason(batch: Batch) {
@@ -321,7 +329,7 @@ export function ArchiveBatchHistory({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle className="text-zinc-950">{batch.name}</CardTitle>
-                    <Badge variant="outline" className={statusClass(batch.status)}>{statusLabel(batch.status)}</Badge>
+                    <StatusBadge status={batch.status} />
                     {batch.review_count > 0 ? <Badge variant="warning">검토 {batch.review_count}</Badge> : null}
                   </div>
                   <p className="mt-1 text-sm text-zinc-500">{formatDate(batch.created_at)}</p>
