@@ -233,6 +233,9 @@ def _normalize_section_id(value: Any) -> str | None:
     text = _normalized_label_text(value)
     if not text:
         return None
+    elective = _elective_section_label(text)
+    if elective:
+        return elective
     normalized = text.replace("＞", ">")
     for pattern, label in SECTION_ID_PATTERNS:
         match = pattern.search(normalized)
@@ -243,6 +246,21 @@ def _normalize_section_id(value: Any) -> str | None:
         return f"{match.group(1)} {int(match.group(2)):02d}"
     normalized = re.sub(r"\s*[/>\-]\s*", " / ", normalized)
     return normalized
+
+
+def _elective_section_label(*values: Any) -> str | None:
+    text = " ".join(_normalized_label_text(value) for value in values if value is not None)
+    if not text:
+        return None
+    normalized = unicodedata.normalize("NFKC", text)
+    compact = re.sub(r"\s+", "", normalized)
+    if "확률과통계" in compact or "확통" in compact:
+        return "선택과목 / 확률과 통계"
+    if "미적분" in compact:
+        return "선택과목 / 미적분"
+    if "기하" in compact:
+        return "선택과목 / 기하"
+    return None
 
 
 def _usable_section_id(value: Any, *, allow_plain_title: bool = False) -> str | None:
@@ -305,10 +323,71 @@ def _problem_match_payload(problem: Problem) -> dict[str, Any]:
     }
 
 
+ELECTIVE_SECTION_ORDER = ["선택과목 / 확률과 통계", "선택과목 / 미적분", "선택과목 / 기하"]
+
+
+def _elective_page_section_map(page_metadata: list[dict[str, Any]] | None) -> dict[int, str]:
+    if not page_metadata:
+        return {}
+    relevant = sorted(
+        [
+            item
+            for item in page_metadata
+            if isinstance(item, dict)
+            and item.get("document_kind") == "problem"
+            and str(item.get("page_type") or "") == "problem_page"
+        ],
+        key=lambda item: int(item.get("page_index") or 0),
+    )
+    page_labels: dict[int, str] = {}
+    repeated_2829_pages: list[int] = []
+    for item in relevant:
+        page_index = int(item.get("page_index") or 0)
+        label = _elective_section_label(
+            *(item.get("detected_section_ids") or []),
+            *(item.get("detected_subjects") or []),
+            *(item.get("detected_units") or []),
+        )
+        if label:
+            page_labels[page_index] = label
+        numbers = set(_sort_number_keys(item.get("detected_problem_headers") or []))
+        if {"28", "29"}.issubset(numbers):
+            repeated_2829_pages.append(page_index)
+
+    if len(repeated_2829_pages) == len(ELECTIVE_SECTION_ORDER):
+        for page_index, label in zip(sorted(repeated_2829_pages), ELECTIVE_SECTION_ORDER):
+            page_labels.setdefault(page_index, label)
+    return page_labels
+
+
+def _apply_elective_page_sections_to_problem_payloads(
+    problem_payloads: list[dict[str, Any]],
+    page_metadata: list[dict[str, Any]] | None,
+) -> None:
+    page_labels = _elective_page_section_map(page_metadata)
+    if not page_labels:
+        return
+    for payload in problem_payloads:
+        number = _number_key_or_none(payload.get("problem_no") or payload.get("problem_number"))
+        if number not in {"28", "29"}:
+            continue
+        page_index = _int_or_none(payload.get("page_index"))
+        if page_index is None:
+            continue
+        label = page_labels.get(page_index)
+        if not label:
+            continue
+        payload["section_label"] = label
+        payload["section_id"] = label
+        payload["unit"] = label
+        payload["section_from_page_context"] = True
+
+
 def _existing_problem_match_payloads(
     db: Session,
     batch: Batch,
     problem_sections: list[dict[str, Any]] | None = None,
+    page_metadata: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     problems = (
         db.query(Problem)
@@ -327,6 +406,7 @@ def _existing_problem_match_payloads(
     for global_index, payload in enumerate(payloads, start=1):
         payload["global_index"] = global_index
         payload["local_index"] = global_index
+    _apply_elective_page_sections_to_problem_payloads(payloads, page_metadata)
     if problem_sections:
         _apply_section_ranges_to_items(payloads, problem_sections, "page_index")
         payloads = _apply_structure_indexes(payloads, page_key="page_index")
@@ -377,6 +457,7 @@ def apply_solutions_to_existing_problems(
     for global_index, payload in enumerate(problem_payloads, start=1):
         payload["global_index"] = global_index
         payload["local_index"] = global_index
+    _apply_elective_page_sections_to_problem_payloads(problem_payloads, page_metadata)
     if problem_sections:
         _apply_section_ranges_to_items(problem_payloads, problem_sections, "page_index")
         problem_payloads = _apply_structure_indexes(problem_payloads, page_key="page_index")
@@ -4032,7 +4113,7 @@ def process_solutions_only(batch_id: UUID) -> None:
             problem_sections = build_section_ranges_from_metadata(problem_page_metadata, "problem", problem_page_count)
             _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
 
-        existing_problem_payloads = _existing_problem_match_payloads(db, batch, problem_sections)
+        existing_problem_payloads = _existing_problem_match_payloads(db, batch, problem_sections, problem_page_metadata)
         problem_inventory = build_problem_inventory_report(problem_page_metadata, problem_sections, [], [], problem_page_count)
         problem_inventory = _attach_existing_problem_numbers_to_inventory(problem_inventory, existing_problem_payloads)
         _write_batch_artifact(batch_id, "problem_inventory_report.json", problem_inventory)

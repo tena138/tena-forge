@@ -14,6 +14,7 @@ from services.pipeline import (  # noqa: E402
     RESCUE_EXTRACTION_PROMPT,
     RenderedPage,
     _apply_section_ranges_to_items,
+    _apply_elective_page_sections_to_problem_payloads,
     _answer_inventory_prompt_note,
     _choose_solution_candidates,
     _document_type_hints_include_mixed,
@@ -355,6 +356,54 @@ class PipelineMergeKeyTests(unittest.TestCase):
         )
 
         self.assertEqual([item["problem_number"] for item in repaired], ["28", "29", "28", "29", "28", "29"])
+
+    def test_repeated_elective_math_pages_get_distinct_sections(self):
+        payloads = [
+            {"problem_number": "28", "page_index": 6},
+            {"problem_number": "29", "page_index": 6},
+            {"problem_number": "28", "page_index": 7},
+            {"problem_number": "29", "page_index": 7},
+            {"problem_number": "28", "page_index": 8},
+            {"problem_number": "29", "page_index": 8},
+        ]
+        metadata = [
+            {
+                "document_kind": "problem",
+                "page_type": "problem_page",
+                "page_index": 6,
+                "detected_units": ["영역(확률과 통계)"],
+                "detected_problem_headers": ["28", "29"],
+            },
+            {
+                "document_kind": "problem",
+                "page_type": "problem_page",
+                "page_index": 7,
+                "detected_units": [],
+                "detected_problem_headers": ["28", "29"],
+            },
+            {
+                "document_kind": "problem",
+                "page_type": "problem_page",
+                "page_index": 8,
+                "detected_units": ["수학 영역(기하)"],
+                "detected_problem_headers": ["28", "29"],
+            },
+        ]
+
+        _apply_elective_page_sections_to_problem_payloads(payloads, metadata)
+
+        self.assertEqual(
+            [item["section_label"] for item in payloads],
+            [
+                "선택과목 / 확률과 통계",
+                "선택과목 / 확률과 통계",
+                "선택과목 / 미적분",
+                "선택과목 / 미적분",
+                "선택과목 / 기하",
+                "선택과목 / 기하",
+            ],
+        )
+        self.assertTrue(all(item["section_from_page_context"] for item in payloads))
 
     def test_page_metadata_prefers_exam_round_over_single_connection_title(self):
         page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")

@@ -23,6 +23,35 @@ class MatcherTests(unittest.TestCase):
         self.assertIsNone(_normalize_section_label("singleconnection 수학 1"))
         self.assertIsNone(_normalize_section_label("수학Ⅰ"))
 
+    def test_section_label_normalizes_math_electives(self):
+        self.assertEqual(_normalize_section_label("선택과목 / 확률과 통계"), "선택과목 / 확률과 통계")
+        self.assertEqual(_normalize_section_label("선택과목 (미적분) 정답 및 해설"), "선택과목 / 미적분")
+        self.assertEqual(_normalize_section_label("수학 영역(기하)"), "선택과목 / 기하")
+
+    def test_repeated_elective_math_numbers_match_by_section(self):
+        result = match_with_summary(
+            [
+                {"problem_number": "28", "problem_text": "확통 28", "section_label": "선택과목 / 확률과 통계", "page_index": 6},
+                {"problem_number": "29", "problem_text": "확통 29", "section_label": "선택과목 / 확률과 통계", "page_index": 6},
+                {"problem_number": "28", "problem_text": "미적분 28", "section_label": "선택과목 / 미적분", "page_index": 7},
+                {"problem_number": "29", "problem_text": "미적분 29", "section_label": "선택과목 / 미적분", "page_index": 7},
+                {"problem_number": "28", "problem_text": "기하 28", "section_label": "선택과목 / 기하", "page_index": 8},
+                {"problem_number": "29", "problem_text": "기하 29", "section_label": "선택과목 / 기하", "page_index": 8},
+            ],
+            [
+                {"problem_number": "28", "answer": "A", "solution_steps": "확통 28 해설", "section_label": "선택과목 / 확률과 통계", "page_idx": 13},
+                {"problem_number": "29", "answer": "B", "solution_steps": "확통 29 해설", "section_label": "선택과목 / 확률과 통계", "page_idx": 13},
+                {"problem_number": "28", "answer": "C", "solution_steps": "미적분 28 해설", "section_label": "선택과목 (미적분) 정답 및 해설", "page_idx": 14},
+                {"problem_number": "29", "answer": "D", "solution_steps": "미적분 29 해설", "section_label": "선택과목 (미적분) 정답 및 해설", "page_idx": 14},
+                {"problem_number": "28", "answer": "E", "solution_steps": "기하 28 해설", "section_label": "선택과목 (기하) 정답 및 해설", "page_idx": 16},
+                {"problem_number": "29", "answer": "F", "solution_steps": "기하 29 해설", "section_label": "선택과목 (기하) 정답 및 해설", "page_idx": 16},
+            ],
+        )
+
+        self.assertEqual([item["solution"]["answer"] for item in result["problems"]], ["A", "B", "C", "D", "E", "F"])
+        self.assertEqual(result["summary"]["matched_count"], 6)
+        self.assertEqual(result["validation_report"]["method_counts"]["section_number"], 6)
+
     def test_repeated_numbers_use_number_order_when_sections_disagree(self):
         problems = [
             {

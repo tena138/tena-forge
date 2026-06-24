@@ -88,10 +88,27 @@ def _normalize_spaces(value: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
 
 
+def _elective_section_label(value: Any) -> str | None:
+    text = _normalize_spaces(_text(value))
+    if not text:
+        return None
+    compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
+    if "확률과통계" in compact or "확통" in compact:
+        return "선택과목 / 확률과 통계"
+    if "미적분" in compact:
+        return "선택과목 / 미적분"
+    if "기하" in compact:
+        return "선택과목 / 기하"
+    return None
+
+
 def _normalize_section_label(value: Any) -> str | None:
     text = _normalize_spaces(_text(value))
     if not text:
         return None
+    elective = _elective_section_label(text)
+    if elective:
+        return elective
     for pattern, label in SECTION_PATTERNS:
         match = pattern.search(text)
         if match:
