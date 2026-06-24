@@ -7,7 +7,6 @@ import {
   Archive,
   ArrowUpRight,
   BookOpenCheck,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -1169,24 +1168,7 @@ function AcademySchedulePanel() {
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
         <Card className="bg-white">
-          <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="flex items-center gap-2 text-zinc-950">
-                <CalendarDays className="h-5 w-5 text-zinc-700" />
-                클래스 시간표
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="이전 달">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="min-w-36 text-center text-sm font-black text-zinc-950">{academyMonthTitle(monthCursor)}</div>
-                <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="다음 달">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4">
             {loading ? (
               <div className="flex min-h-[560px] items-center justify-center text-zinc-500">불러오는 중</div>
             ) : (
@@ -1256,6 +1238,17 @@ function AcademySchedulePanel() {
         </Card>
 
         <aside className="space-y-3">
+          <Card className="bg-white">
+            <CardContent className="flex items-center justify-between gap-2 p-3">
+              <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="이전 달">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0 flex-1 text-center text-sm font-black text-zinc-950">{academyMonthTitle(monthCursor)}</div>
+              <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="다음 달">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
           <Card className="bg-white">
             <CardContent className="grid grid-cols-3 gap-2 p-3 xl:grid-cols-1">
               <div className="rounded-[8px] bg-zinc-100 p-3">
