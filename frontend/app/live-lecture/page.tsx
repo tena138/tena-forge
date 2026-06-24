@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -13,7 +11,6 @@ import {
   MonitorUp,
   Pause,
   Play,
-  Radio,
   ScreenShare,
   ScreenShareOff,
   Square,
@@ -87,6 +84,25 @@ function durationText(ms: number) {
   return `${minutes}분`;
 }
 
+function minuteTickStep(totalMinutes: number) {
+  if (totalMinutes <= 30) return 5;
+  if (totalMinutes <= 60) return 10;
+  if (totalMinutes <= 120) return 15;
+  if (totalMinutes <= 240) return 30;
+  return 60;
+}
+
+function buildMinuteTicks(totalMinutes: number) {
+  const durationMinutes = Math.max(1, Math.round(totalMinutes));
+  const step = minuteTickStep(durationMinutes);
+  const ticks: number[] = [];
+  for (let minute = 0; minute < durationMinutes; minute += step) {
+    ticks.push(minute);
+  }
+  if (ticks[ticks.length - 1] !== durationMinutes) ticks.push(durationMinutes);
+  return ticks;
+}
+
 function fileNameForRecording(mode: RecordingMode) {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return `tena-live-${mode}-${stamp}.${mode === "audio" ? "webm" : "webm"}`;
@@ -137,11 +153,16 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
   const endsAt = parseDate(event?.ends_at) || new Date(startsAt.getTime() + 60 * 60000);
   const totalMs = Math.max(1, endsAt.getTime() - startsAt.getTime());
   const elapsedMs = Math.max(0, Math.min(totalMs, now - startsAt.getTime()));
-  const progress = Math.round((elapsedMs / totalMs) * 100);
+  const progressRatio = Math.max(0, Math.min(1, elapsedMs / totalMs));
+  const progress = Math.round(progressRatio * 100);
+  const progressPercent = progressRatio * 100;
   const remainingMs = Math.max(0, endsAt.getTime() - now);
+  const lectureDurationMinutes = Math.max(1, Math.round(totalMs / 60000));
+  const elapsedMinutes = Math.max(0, Math.min(lectureDurationMinutes, Math.floor(elapsedMs / 60000)));
+  const ticks = useMemo(() => buildMinuteTicks(lectureDurationMinutes), [lectureDurationMinutes]);
 
   return (
-    <section className="rounded-[8px] bg-white px-4 py-3 ring-1 ring-black/5">
+    <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">Timeline</div>
@@ -150,17 +171,31 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
         <div className="flex items-center gap-2 text-xs font-bold text-zinc-600">
           <span>{timeText(startsAt)}</span>
           <span className="h-1 w-1 rounded-full bg-zinc-300" />
-          <span>{durationText(totalMs)}</span>
+          <span>{lectureDurationMinutes}분 블록</span>
           <span className="h-1 w-1 rounded-full bg-zinc-300" />
           <span>{remainingMs <= 0 ? "종료 시간 지남" : `${durationText(remainingMs)} 남음`}</span>
         </div>
       </div>
-      <div className="mt-3 h-4 overflow-hidden rounded-full bg-zinc-100">
-        <div className="h-full rounded-full bg-black transition-all duration-700" style={{ width: `${progress}%` }} />
+      <div className="relative mt-3 h-24 overflow-hidden rounded-[8px] bg-zinc-100 ring-1 ring-black/5">
+        <div className="absolute inset-y-0 left-0 bg-black transition-[width] duration-700" style={{ width: `${progressPercent}%` }} />
+        <div className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-zinc-950 shadow-sm">
+          {elapsedMinutes}분 진행 · {progress}%
+        </div>
+        {ticks.map((minute) => {
+          const left = (minute / lectureDurationMinutes) * 100;
+          const passed = left <= progressPercent + 0.5;
+          const labelAlign = minute === 0 ? "translate-x-0" : minute === lectureDurationMinutes ? "-translate-x-full" : "-translate-x-1/2";
+          return (
+            <div key={minute} className="absolute top-0 z-10 h-full" style={{ left: `${left}%` }}>
+              <span className={cn("absolute top-0 h-12 border-l", passed ? "border-white/75" : "border-zinc-500/55")} />
+              <span className={cn("absolute bottom-3 whitespace-nowrap text-[10px] font-black", labelAlign, passed ? "text-white" : "text-zinc-600")}>{minute}분</span>
+            </div>
+          );
+        })}
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px] font-bold text-zinc-500">
-        <span>수업 시작</span>
-        <span>{progress}%</span>
+        <span>수업 시작 {timeText(startsAt)}</span>
+        <span>캘린더 기준 {lectureDurationMinutes}분</span>
         <span>수업 종료 {timeText(endsAt)}</span>
       </div>
     </section>
@@ -236,7 +271,7 @@ function LiveLectureContent() {
   const eventId = searchParams.get("eventId") || "";
   const classId = searchParams.get("classId") || "";
   const shareOnly = searchParams.get("share") === "1";
-  const { event, loading } = useLectureEvent(eventId || null);
+  const { event } = useLectureEvent(eventId || null);
   const [now, setNow] = useState(() => Date.now());
   const [slides, setSlides] = useState<LectureSlide[]>(defaultSlides);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -375,25 +410,6 @@ function LiveLectureContent() {
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link href="/academy" className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] bg-white text-zinc-700 ring-1 ring-black/5 transition hover:text-zinc-950">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
-              <Radio className="h-3.5 w-3.5" />
-              Live Lecture
-            </div>
-            <h1 className="mt-1 truncate text-2xl font-black text-zinc-950">{sessionTitle}</h1>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 rounded-[8px] bg-white px-3 py-2 text-sm font-bold text-zinc-700 ring-1 ring-black/5">
-          <span className="max-w-[14rem] truncate">{sessionClassName}</span>
-          {loading ? <span className="text-xs text-zinc-400">일정 확인 중</span> : null}
-        </div>
-      </section>
-
       <LectureTimeline event={event} now={now} />
 
       {sharing ? (
