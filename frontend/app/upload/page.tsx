@@ -168,10 +168,36 @@ function uploadLimitDetail(detail: Record<string, unknown>) {
   return `업로드를 시작하지 못했습니다.${suffix}`;
 }
 
+function uploadValidationDetail(detail: unknown[]) {
+  const messages = detail
+    .map((item) => {
+      if (!item || typeof item !== "object") return "";
+      const entry = item as { loc?: unknown; msg?: unknown };
+      const rawField = Array.isArray(entry.loc) ? entry.loc.at(-1) : null;
+      const field = typeof rawField === "string" ? rawField : "";
+      const message = typeof entry.msg === "string" ? entry.msg : "";
+      const fieldLabels: Record<string, string> = {
+        archive_folder_id: "저장 폴더",
+        batch_name: "배치 이름",
+        pdf_files: "PDF 자료",
+        source_type: "자료 유형",
+        rights_confirmed: "권리 확인",
+        document_type_hints: "PDF 유형",
+        subject_engine: "Subject Engine",
+      };
+      if (field && fieldLabels[field]) return `${fieldLabels[field]}: ${message || "값을 다시 확인해 주세요."}`;
+      return message;
+    })
+    .filter(Boolean);
+  if (messages.length) return `업로드 요청 값을 다시 확인해 주세요. ${messages.join(" / ")}`;
+  return "업로드 요청 값을 다시 확인해 주세요.";
+}
+
 function uploadFailureMessage(error: any) {
   const status = error?.response?.status;
   const detail = error?.response?.data?.detail;
   if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) return uploadValidationDetail(detail);
   if (detail && typeof detail === "object") return uploadLimitDetail(detail);
   if (status === 429) return "요청이 잠시 몰려 업로드를 시작하지 못했습니다. 잠깐 후 다시 시도해 주세요.";
   if (status === 413) return "PDF 용량이 서버 업로드 한도를 넘었습니다. 파일을 나누어 업로드해 주세요.";

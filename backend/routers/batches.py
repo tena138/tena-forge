@@ -331,6 +331,18 @@ def _validate_archive_folder(db: Session, owner_id: str, folder_id: UUID | None,
     return folder.id
 
 
+def _parse_archive_folder_id(raw: str | UUID | None) -> UUID | None:
+    if raw is None or isinstance(raw, UUID):
+        return raw
+    value = str(raw).strip()
+    if not value or value.lower() in {"null", "none", "undefined"}:
+        return None
+    try:
+        return UUID(value)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="저장 폴더를 다시 선택해 주세요.")
+
+
 @router.post("/upload", response_model=BatchUploadResponse)
 @limiter.exempt
 def upload_batch(
@@ -347,7 +359,7 @@ def upload_batch(
     subject_candidates: str | None = Form(default=None),
     unit_candidates: str | None = Form(default=None),
     document_type_hints: str | None = Form(default=None),
-    archive_folder_id: UUID | None = Form(default=None),
+    archive_folder_id: str | None = Form(default=None),
     subject_engine: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
@@ -369,7 +381,7 @@ def upload_batch(
     if not parsed_subject_candidates:
         parsed_subject_candidates = infer_subject_candidates_from_text(" ".join(upload.filename or "" for upload in selected_pdfs), batch_name)
     engine = normalize_subject_engine(subject_engine or infer_subject_engine_from_subjects(parsed_subject_candidates))
-    validated_archive_folder_id = _validate_archive_folder(db, owner_id, archive_folder_id, engine)
+    validated_archive_folder_id = _validate_archive_folder(db, owner_id, _parse_archive_folder_id(archive_folder_id), engine)
     ensure_subject_engine_access(db, owner_id, engine)
     saved_pdf_paths = [save_upload(upload) for upload in selected_pdfs]
     uses_unified_upload = bool(pdf_files)
