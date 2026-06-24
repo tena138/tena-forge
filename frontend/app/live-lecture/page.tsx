@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Copy,
@@ -37,6 +37,16 @@ type SharedLectureState = {
   updatedAt: number;
 };
 
+type PdfSlideViewerProps = {
+  slidePdf: SlidePdf | null;
+  className?: string;
+  shared?: boolean;
+  dragging?: boolean;
+  onUpload?: () => void;
+  onDropFile?: (file: File) => void;
+  onDragStateChange?: (dragging: boolean) => void;
+};
+
 function liveShareKey(eventId: string, classId: string) {
   return `tena-live-lecture-share:${eventId || "manual"}:${classId || "all"}`;
 }
@@ -65,6 +75,10 @@ function fileSizeText(size: number) {
   const mb = size / (1024 * 1024);
   if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1)}MB`;
   return `${Math.max(1, Math.round(size / 1024))}KB`;
+}
+
+function isPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
 function minuteTickStep(totalMinutes: number) {
@@ -185,10 +199,43 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
   );
 }
 
-function PdfSlideViewer({ slidePdf, className, shared = false, onUpload }: { slidePdf: SlidePdf | null; className?: string; shared?: boolean; onUpload?: () => void }) {
+function PdfSlideViewer({ slidePdf, className, shared = false, dragging = false, onUpload, onDropFile, onDragStateChange }: PdfSlideViewerProps) {
   const pdfSrc = slidePdf ? `${slidePdf.url}#toolbar=0&navpanes=0&view=FitH` : "";
+  const canDrop = Boolean(onDropFile);
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!canDrop) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    onDragStateChange?.(true);
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (!canDrop) return;
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    onDragStateChange?.(false);
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    if (!canDrop) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onDragStateChange?.(false);
+    const files = Array.from(event.dataTransfer.files || []);
+    const file = files.find(isPdfFile) || files[0];
+    if (file) onDropFile?.(file);
+  }
+
   return (
-    <div className={cn("relative flex min-h-[28rem] overflow-hidden rounded-[8px] bg-white text-zinc-950 ring-1 ring-black/5", className)}>
+    <div
+      className={cn("relative flex min-h-[28rem] overflow-hidden rounded-[8px] bg-white text-zinc-950 ring-1 ring-black/5", dragging && "ring-2 ring-black", className)}
+      onDragEnter={handleDragOver}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {slidePdf ? (
         <iframe src={pdfSrc} title={slidePdf.name} className="h-full min-h-[inherit] w-full bg-white" />
       ) : (
@@ -200,6 +247,13 @@ function PdfSlideViewer({ slidePdf, className, shared = false, onUpload }: { sli
           <span className="max-w-md text-sm font-semibold leading-6 text-zinc-500">{shared ? "발표자 화면에서 PDF를 올리면 표시됩니다." : "수업에 사용할 PDF를 선택하세요."}</span>
         </button>
       )}
+      {canDrop ? (
+        <div className={cn("pointer-events-none absolute inset-0 z-10 grid place-items-center bg-white/0 opacity-0 transition", dragging && "pointer-events-auto bg-white/88 opacity-100")}>
+          <div className="rounded-[8px] bg-black px-5 py-3 text-sm font-black text-white shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+            PDF를 여기에 놓기
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -259,6 +313,7 @@ function LiveLectureContent() {
   const [recordingMode, setRecordingMode] = useState<RecordingMode>("audio");
   const [recordingUrl, setRecordingUrl] = useState("");
   const [recordingName, setRecordingName] = useState("");
+  const [slideDragActive, setSlideDragActive] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -373,12 +428,8 @@ function LiveLectureContent() {
     await navigator.clipboard?.writeText(absoluteUrl);
   }
 
-  function handleSlidePdfInput(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    if (!isPdf) {
+  function applySlidePdfFile(file: File) {
+    if (!isPdfFile(file)) {
       window.alert("PDF 파일만 업로드할 수 있습니다.");
       return;
     }
@@ -387,6 +438,13 @@ function LiveLectureContent() {
       if (current?.url) URL.revokeObjectURL(current.url);
       return { url, name: file.name, size: file.size };
     });
+  }
+
+  function handleSlidePdfInput(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    applySlidePdfFile(file);
   }
 
   return (
@@ -408,7 +466,14 @@ function LiveLectureContent() {
 
       <section className="grid min-h-[34rem] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(20rem,0.65fr)]">
         <div className="min-w-0 space-y-3">
-          <PdfSlideViewer slidePdf={slidePdf} className="min-h-[34rem]" onUpload={() => slidePdfInputRef.current?.click()} />
+          <PdfSlideViewer
+            slidePdf={slidePdf}
+            className="min-h-[34rem]"
+            dragging={slideDragActive}
+            onUpload={() => slidePdfInputRef.current?.click()}
+            onDropFile={applySlidePdfFile}
+            onDragStateChange={setSlideDragActive}
+          />
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] bg-white p-2 ring-1 ring-black/5">
             <input ref={slidePdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleSlidePdfInput} />
             <div className="min-w-0">
