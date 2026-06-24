@@ -169,13 +169,18 @@ function uploadLimitDetail(detail: Record<string, unknown>) {
 }
 
 function uploadValidationDetail(detail: unknown[]) {
+  function validationMessage(field: string, message: string) {
+    if (field === "pdf_files" && /valid list/i.test(message)) return "PDF를 다시 선택해 주세요.";
+    if (/Field required/i.test(message)) return "필수 값이 비어 있습니다.";
+    return message || "값을 다시 확인해 주세요.";
+  }
   const messages = detail
     .map((item) => {
       if (!item || typeof item !== "object") return "";
       const entry = item as { loc?: unknown; msg?: unknown };
       const rawField = Array.isArray(entry.loc) ? entry.loc.at(-1) : null;
       const field = typeof rawField === "string" ? rawField : "";
-      const message = typeof entry.msg === "string" ? entry.msg : "";
+      const message = validationMessage(field, typeof entry.msg === "string" ? entry.msg : "");
       const fieldLabels: Record<string, string> = {
         archive_folder_id: "저장 폴더",
         batch_name: "배치 이름",
@@ -185,7 +190,7 @@ function uploadValidationDetail(detail: unknown[]) {
         document_type_hints: "PDF 유형",
         subject_engine: "Subject Engine",
       };
-      if (field && fieldLabels[field]) return `${fieldLabels[field]}: ${message || "값을 다시 확인해 주세요."}`;
+      if (field && fieldLabels[field]) return `${fieldLabels[field]}: ${message}`;
       return message;
     })
     .filter(Boolean);
@@ -1379,12 +1384,17 @@ export default function UploadPage() {
     setUploadPercent(0);
     setMessage("업로드 중입니다.");
     const form = new FormData();
+    const uploadFiles = pdfFiles.length ? pdfFiles : problemPdf ? [problemPdf] : [];
     form.append("batch_name", batchName);
-    pdfFiles.forEach((file) => form.append("pdf_files", file));
+    if (uploadFiles.length === 1) {
+      form.append("problem_pdf", uploadFiles[0]);
+    } else {
+      uploadFiles.forEach((file) => form.append("pdf_files", file));
+    }
     form.append(
       "document_type_hints",
       JSON.stringify(
-        pdfFiles.map((file, index) => ({
+        uploadFiles.map((file, index) => ({
           file_index: index,
           filename: file.name,
           size: file.size,
