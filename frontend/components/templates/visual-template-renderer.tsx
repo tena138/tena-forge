@@ -66,8 +66,12 @@ function columnDividerLeft(index: number, columns: number, padding: number, gap:
 }
 
 function formatProblemNumber(problem: SampleProblem, region: ContentRegionElement) {
+  return formatRegionNumber(problem.number, region);
+}
+
+function formatRegionNumber(number: number, region: ContentRegionElement) {
   const format = region.numberFormat || "문 {n}.";
-  return format.replace(/\{n\}/g, String(problem.number));
+  return format.replace(/\{n\}/g, String(number));
 }
 
 export function elementStyle(element: TemplateElement, selected = false): CSSProperties {
@@ -401,6 +405,41 @@ function ProblemCard({ problem, region }: { problem: SampleProblem; region: Cont
   );
 }
 
+function previewProblemSlots(region: ContentRegionElement, problems: SampleProblem[]) {
+  if (problems.length) return problems.map((problem) => problem.number);
+  const rowCount = region.rows ? Math.max(1, region.rows) : 0;
+  const columnCount = Math.max(1, region.columns || 1);
+  const count = rowCount ? rowCount * columnCount : Math.max(1, Math.min(6, columnCount * 2));
+  return Array.from({ length: count }, (_, index) => index + 1);
+}
+
+function ProblemSlotCard({ number, region }: { number: number; region: ContentRegionElement }) {
+  const fixedSlot = Boolean(region.rows && region.rows > 0);
+  return (
+    <div
+      className="grid place-items-center overflow-hidden"
+      style={{
+        height: fixedSlot ? "100%" : undefined,
+        minHeight: fixedSlot ? 0 : region.minItemHeight,
+        ...boxStyle(region.cardStyle, { fill: "#ffffff", stroke: "#e5e7eb", strokeWidth: 1, borderStyle: "solid", radius: 10 }),
+        padding: Math.max(10, region.padding * 0.75),
+      }}
+    >
+      <span
+        style={{
+          color: region.numberStyle.color,
+          fontSize: Math.max(12, region.numberStyle.fontSize || 12),
+          fontWeight: fontWeight(region.numberStyle.fontWeight || "bold"),
+          fontStyle: region.numberStyle.fontStyle,
+          letterSpacing: px(region.numberStyle.letterSpacing),
+        }}
+      >
+        {formatRegionNumber(number, region)}
+      </span>
+    </div>
+  );
+}
+
 function estimatePreviewProblemHeight(problem: SampleProblem, region: ContentRegionElement) {
   const fontSize = region.bodyStyle.fontSize || 12;
   const lineHeight = region.bodyStyle.lineHeight || 1.6;
@@ -511,6 +550,7 @@ function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = 
   const isCounseling = region.type === "counselingRegion" || region.binding === "counseling";
   const label = isCounseling ? "Counseling Region" : region.binding === "problems" ? "Problem Region" : region.binding === "solutions" || region.binding === "answers" ? "Answer Region" : "Content Region";
   const rowCount = region.rows ? Math.max(1, region.rows) : 0;
+  const useSlotPreview = showChrome && region.type === "problemRegion";
   const dividerStyle = columnDividerLineStyle(region);
   const dividers = dividerStyle
     ? Array.from({ length: Math.max(0, region.columns - 1) }, (_, index) => (
@@ -526,7 +566,7 @@ function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = 
         />
       ))
     : null;
-  if (!isCounseling && region.layoutMode === "korean-passage-flow") {
+  if (!isCounseling && region.layoutMode === "korean-passage-flow" && !useSlotPreview) {
     return renderKoreanPassageFlowRegion(region, problems, showChrome, label, dividers);
   }
   const grid = (
@@ -543,7 +583,7 @@ function renderRegion(region: ContentRegionElement, problems: SampleProblem[] = 
         alignItems: rowCount ? "stretch" : "start",
       }}
     >
-      {problems.length ? problems.map((problem) => <ProblemCard key={problem.id} problem={region.type === "solutionRegion" ? { ...problem, solution: problem.answer || "" } : problem} region={region} />) : <div className="rounded border border-dashed border-zinc-200 bg-white/75 p-3 text-xs text-zinc-700">내보내기 시 문항과 답안이 이 영역에 자동 배치됩니다.</div>}
+      {useSlotPreview ? previewProblemSlots(region, problems).map((number) => <ProblemSlotCard key={`slot-${number}`} number={number} region={region} />) : problems.length ? problems.map((problem) => <ProblemCard key={problem.id} problem={region.type === "solutionRegion" ? { ...problem, solution: problem.answer || "" } : problem} region={region} />) : <div className="rounded border border-dashed border-zinc-200 bg-white/75 p-3 text-xs text-zinc-700">내보내기 시 문항과 답안이 이 영역에 자동 배치됩니다.</div>}
     </div>
   );
   const body = (
