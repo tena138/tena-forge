@@ -37,7 +37,7 @@ from services.document_type_hints import (
 )
 from services.korean_extraction import parse_passage_question_range
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids, current_workspace_id
-from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progress_detail
+from services.pipeline import CANCEL_FAILURE_STAGE, _read_batch_artifact, count_pdf_pages, get_progress_detail
 from services.private_files import sign_static_url
 from services.saas_security import ensure_subject_engine_access
 from services.storage import save_upload
@@ -824,6 +824,19 @@ def batch_status(batch_id: UUID, request: Request, db: Session = Depends(get_db)
         except Exception:
             traceback.print_exc()
     return _batch_status_payload(batch)
+
+
+@router.get("/{batch_id}/artifacts/{filename}")
+def batch_artifact(batch_id: UUID, filename: str, request: Request, db: Session = Depends(get_db)):
+    if "/" in filename or "\\" in filename or ".." in filename or not filename.endswith(".json"):
+        raise HTTPException(status_code=400, detail="Invalid artifact filename.")
+    batch = db.scalars(select(Batch).where(Batch.id == batch_id, Batch.owner_id.in_(current_owner_ids(request, db)))).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    artifact = _read_batch_artifact(batch.id, filename)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+    return artifact
 
 
 @router.post("/{batch_id}/retry", response_model=BatchUploadResponse)
