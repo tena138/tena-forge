@@ -13,6 +13,7 @@ import {
   BoxSelect,
   Braces,
   BringToFront,
+  ChevronDown,
   Copy,
   Eye,
   EyeOff,
@@ -215,11 +216,15 @@ function centerTemplateElementOnPage(element: TemplateElement, page: TemplatePag
   };
 }
 
-function InspectorSection({ title, children, compact = false }: { title: string; children: React.ReactNode; compact?: boolean }) {
+function InspectorSection({ title, children, compact = false, defaultOpen = true }: { title: string; children: React.ReactNode; compact?: boolean; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <section className={cls("rounded-[11px] border border-white/10 bg-white/[0.045] shadow-[0_14px_36px_rgba(0,0,0,0.18)]", compact ? "p-2.5" : "p-3")}>
-      <h3 className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{title}</h3>
-      {children}
+      <button type="button" className={cls("flex w-full items-center justify-between gap-2 text-left", open && "mb-2.5")} onClick={() => setOpen((current) => !current)}>
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{title}</h3>
+        <ChevronDown className={cls("h-4 w-4 text-slate-500 transition", open && "rotate-180")} />
+      </button>
+      {open ? children : null}
     </section>
   );
 }
@@ -230,6 +235,74 @@ function FieldLabel({ label, children }: { label: string; children: React.ReactN
       {label}
       <div className="mt-1">{children}</div>
     </label>
+  );
+}
+
+function MiniNumberField({ label, mark, value, min, max, step = 1, onChange }: { label: string; mark: string; value: number; min?: number; max?: number; step?: number; onChange: (value: number) => void }) {
+  return (
+    <label className="flex h-9 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2" title={label} aria-label={label}>
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-white/[0.06] text-[11px] font-black text-slate-300">{mark}</span>
+      <Input className="h-7 min-w-0 border-0 bg-transparent px-0 text-xs font-bold text-white focus-visible:ring-0" type="number" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
+  );
+}
+
+function ColorSwatchField({ label, mark, value, fallback, onChange }: { label: string; mark: string; value?: string; fallback: string; onChange: (value: string) => void }) {
+  const color = colorInputValue(value, fallback);
+  return (
+    <label className="relative flex h-9 cursor-pointer items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2 transition hover:border-zinc-300/35" title={label} aria-label={label}>
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-white/[0.06] text-[11px] font-black text-slate-300">{mark}</span>
+      <span className="h-5 flex-1 rounded border border-white/15" style={{ background: color }} />
+      <input className="absolute inset-0 cursor-pointer opacity-0" type="color" value={color} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function FontWeightControl({ value, onChange }: { value?: ElementStyle["fontWeight"]; onChange: (value: ElementStyle["fontWeight"]) => void }) {
+  const current = value || "normal";
+  return (
+    <div className="grid grid-cols-3 gap-1 rounded-md border border-white/10 bg-white/[0.04] p-1" title="굵기">
+      {[
+        ["normal", "R", "normal"],
+        ["medium", "M", "600"],
+        ["bold", "B", "700"],
+      ].map(([weight, label, cssWeight]) => (
+        <button
+          key={weight}
+          type="button"
+          className={cls("h-7 rounded text-xs transition", current === weight ? "bg-white text-zinc-950" : "text-slate-400 hover:bg-white/[0.08] hover:text-white")}
+          style={{ fontWeight: cssWeight }}
+          onClick={() => onChange(weight as ElementStyle["fontWeight"])}
+          aria-label={`굵기 ${label}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BorderModeControl({ value, onChange }: { value?: ElementStyle["borderStyle"]; onChange: (value: ElementStyle["borderStyle"]) => void }) {
+  const current = value || "none";
+  return (
+    <div className="grid grid-cols-4 gap-1 rounded-md border border-white/10 bg-white/[0.04] p-1" title="테두리 방식">
+      {[
+        ["none", "0"],
+        ["solid", "━"],
+        ["dashed", "— —"],
+        ["dotted", "···"],
+      ].map(([mode, label]) => (
+        <button
+          key={mode}
+          type="button"
+          className={cls("h-7 rounded text-[11px] font-black transition", current === mode ? "bg-white text-zinc-950" : "text-slate-400 hover:bg-white/[0.08] hover:text-white")}
+          onClick={() => onChange(mode as ElementStyle["borderStyle"])}
+          aria-label={`테두리 ${mode}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -2170,7 +2243,7 @@ function VisualTemplateStudioPageContent() {
           <div className="space-y-3">
             {selectedElement ? (
               <>
-                <InspectorSection title="위치와 크기">
+                <InspectorSection title="위치와 크기" defaultOpen={false}>
                   <div className="grid grid-cols-2 gap-2">
                     <FieldLabel label="이름"><Input className="h-8" value={selectedElement.name} onChange={(event) => updateSelectedElement((element) => ({ ...element, name: event.target.value }))} /></FieldLabel>
                     <FieldLabel label="타입"><Input className="h-8" value={selectedElement.type} readOnly /></FieldLabel>
@@ -2203,7 +2276,7 @@ function VisualTemplateStudioPageContent() {
                 ) : null}
 
                 {isRegionElement(selectedElement) ? (
-                  <InspectorSection title="동적 영역">
+                  <InspectorSection title="동적 영역" defaultOpen={false}>
                     {selectedElement.binding === "problems" ? (
                       <FieldLabel label="배치 방식">
                         <select
@@ -2410,16 +2483,16 @@ function VisualTemplateStudioPageContent() {
 
                 <InspectorSection title="스타일">
                   <div className="grid grid-cols-2 gap-2">
-                    <FieldLabel label="글자 크기"><Input className="h-8" type="number" value={selectedElement.style.fontSize || 14} onChange={(event) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, fontSize: Number(event.target.value) } }))} /></FieldLabel>
-                    <FieldLabel label="글자색"><Input className="h-8" type="color" value={colorInputValue(selectedElement.style.color, "#111827")} onChange={(event) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, color: event.target.value } }))} /></FieldLabel>
-                    <FieldLabel label="채우기"><Input className="h-8" type="color" value={colorInputValue(selectedElement.style.fill, "#ffffff")} onChange={(event) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, fill: event.target.value } }))} /></FieldLabel>
-                    <FieldLabel label="테두리"><Input className="h-8" type="color" value={colorInputValue(selectedElement.style.stroke, "#d8dee9")} onChange={(event) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, stroke: event.target.value } }))} /></FieldLabel>
-                    <FieldLabel label="테두리 방식">
-                      <select className="h-8 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-xs text-white outline-none" value={selectedElement.style.borderStyle || ((selectedElement.style.strokeWidth || 0) > 0 ? "solid" : "none")} onChange={(event) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, borderStyle: event.target.value as ElementStyle["borderStyle"], strokeWidth: event.target.value === "none" ? 0 : Math.max(1, element.style.strokeWidth || 1) } }))}>
-                        {borderStyleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    </FieldLabel>
-                    <FieldLabel label="테두리 두께"><Input className="h-8" type="number" min={0} max={40} value={selectedElement.style.strokeWidth || 0} onChange={(event) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, strokeWidth: Number(event.target.value) } }))} /></FieldLabel>
+                    <MiniNumberField label="글자 크기" mark="T" min={6} max={96} value={selectedElement.style.fontSize || 14} onChange={(value) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, fontSize: value } }))} />
+                    <ColorSwatchField label="글자색" mark="T" value={selectedElement.style.color} fallback="#111827" onChange={(value) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, color: value } }))} />
+                    <ColorSwatchField label="채우기" mark="F" value={selectedElement.style.fill} fallback="#ffffff" onChange={(value) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, fill: value } }))} />
+                    <ColorSwatchField label="테두리" mark="S" value={selectedElement.style.stroke} fallback="#d8dee9" onChange={(value) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, stroke: value } }))} />
+                    <FontWeightControl value={selectedElement.style.fontWeight} onChange={(value) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, fontWeight: value } }))} />
+                    <BorderModeControl
+                      value={selectedElement.style.borderStyle || ((selectedElement.style.strokeWidth || 0) > 0 ? "solid" : "none")}
+                      onChange={(value) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, borderStyle: value, strokeWidth: value === "none" ? 0 : Math.max(1, element.style.strokeWidth || 1) } }))}
+                    />
+                    <MiniNumberField label="테두리 두께" mark="W" min={0} max={40} value={selectedElement.style.strokeWidth || 0} onChange={(value) => updateSelectedElement((element) => ({ ...element, style: { ...element.style, strokeWidth: value, borderStyle: value <= 0 ? "none" : element.style.borderStyle === "none" ? "solid" : element.style.borderStyle } }))} />
                   </div>
                   {canRoundVisualElement(selectedElement) ? (
                     <div className="mt-3 rounded-md border border-white/10 bg-white/[0.04] p-2.5">
