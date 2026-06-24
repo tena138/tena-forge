@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
@@ -202,14 +202,25 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
 
 function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, dragging = false, onUpload, onDropFile, onPageChange, onDragStateChange }: PdfSlideViewerProps) {
   const canDrop = Boolean(onDropFile);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [pageSize, setPageSize] = useState<PdfPageSize>(DEFAULT_SLIDE_SIZE);
+  const [frameSize, setFrameSize] = useState<PdfPageSize>({ width: 0, height: 0 });
   const [renderState, setRenderState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const activePage = Math.max(1, pageNumber);
   const slideAspectRatio = `${pageSize.width} / ${pageSize.height}`;
+  const slideAspectValue = pageSize.width / Math.max(1, pageSize.height);
   const showPageControls = Boolean(slidePdf && !shared);
+  const slideFrameStyle = slidePdf
+    ? shared
+      ? { aspectRatio: slideAspectRatio }
+      : {
+          aspectRatio: slideAspectRatio,
+          width: `min(100%, calc((100vh - 18rem) * ${slideAspectValue}))`,
+        }
+    : undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -254,6 +265,26 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
   }, [slidePdf?.url]);
 
   useEffect(() => {
+    if (!slidePdf) return undefined;
+    const frame = frameRef.current;
+    if (!frame) return undefined;
+
+    const syncFrameSize = (width: number, height: number) => {
+      const nextWidth = Math.max(1, Math.round(width));
+      const nextHeight = Math.max(1, Math.round(height));
+      setFrameSize((current) => (current.width === nextWidth && current.height === nextHeight ? current : { width: nextWidth, height: nextHeight }));
+    };
+
+    syncFrameSize(frame.clientWidth, frame.clientHeight);
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      syncFrameSize(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [slidePdf, shared, slideAspectRatio]);
+
+  useEffect(() => {
     if (!pdfDocument || !slidePdf) return undefined;
     const documentProxy = pdfDocument;
     const safePage = Math.min(Math.max(1, activePage), Math.max(1, documentProxy.numPages));
@@ -273,7 +304,10 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
         const page = await documentProxy.getPage(safePage);
         if (cancelled) return;
         const baseViewport = page.getViewport({ scale: 1 });
-        const cssScale = Math.min(2.4, Math.max(1.2, 1200 / Math.max(1, baseViewport.width)));
+        const hasFrameSize = frameSize.width > 1 && frameSize.height > 1;
+        const cssScale = hasFrameSize
+          ? Math.max(0.1, Math.min(frameSize.width / Math.max(1, baseViewport.width), frameSize.height / Math.max(1, baseViewport.height)))
+          : Math.min(2.4, Math.max(1.2, 1200 / Math.max(1, baseViewport.width)));
         const pixelRatio = Math.min(2, window.devicePixelRatio || 1);
         const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
         const cssWidth = baseViewport.width * cssScale;
@@ -301,11 +335,23 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [activePage, onPageChange, pdfDocument, slidePdf]);
+  }, [activePage, frameSize.height, frameSize.width, onPageChange, pdfDocument, slidePdf]);
 
   function movePage(delta: number) {
     if (!pageCount) return;
     onPageChange?.(Math.min(pageCount, Math.max(1, activePage + delta)));
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!showPageControls) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      movePage(-1);
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      movePage(1);
+    }
   }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
@@ -337,19 +383,23 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
     <div
       className={cn(
         "relative flex w-full overflow-hidden rounded-[8px] bg-white text-zinc-950 ring-1 ring-black/5",
-        slidePdf ? "min-h-[20rem]" : "min-h-[28rem]",
+        slidePdf ? "min-h-0" : "min-h-[28rem]",
+        slidePdf && !shared && "mx-auto",
+        shared && "h-screen w-screen",
         dragging && "ring-2 ring-black",
         className
       )}
-      style={slidePdf ? { aspectRatio: slideAspectRatio } : undefined}
+      style={slideFrameStyle}
+      tabIndex={showPageControls ? 0 : undefined}
       onDragEnter={handleDragOver}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onKeyDown={handleKeyDown}
     >
       {slidePdf ? (
-        <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-zinc-100 p-3">
-          <canvas ref={canvasRef} className="block max-h-full max-w-full bg-white object-contain shadow-[0_16px_45px_rgba(0,0,0,0.10)]" />
+        <div ref={frameRef} className="relative flex h-full w-full items-center justify-center overflow-hidden bg-white">
+          <canvas ref={canvasRef} className="block max-h-full max-w-full bg-white object-contain" />
           {renderState === "loading" ? (
             <div className="absolute inset-0 grid place-items-center bg-white/78 text-sm font-black text-zinc-800">
               슬라이드 렌더링 중
@@ -377,7 +427,7 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
             type="button"
             onClick={() => movePage(-1)}
             disabled={activePage <= 1}
-            className="absolute left-3 top-1/2 z-20 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black text-white shadow-[0_14px_35px_rgba(0,0,0,0.22)] transition hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-20"
+            className="absolute left-3 top-1/2 z-20 grid h-16 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/90 text-white shadow-[0_14px_35px_rgba(0,0,0,0.22)] transition hover:bg-black disabled:pointer-events-none disabled:opacity-20"
             aria-label="이전 슬라이드"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -386,7 +436,7 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
             type="button"
             onClick={() => movePage(1)}
             disabled={!pageCount || activePage >= pageCount}
-            className="absolute right-3 top-1/2 z-20 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black text-white shadow-[0_14px_35px_rgba(0,0,0,0.22)] transition hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-20"
+            className="absolute right-3 top-1/2 z-20 grid h-16 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/90 text-white shadow-[0_14px_35px_rgba(0,0,0,0.22)] transition hover:bg-black disabled:pointer-events-none disabled:opacity-20"
             aria-label="다음 슬라이드"
           >
             <ChevronRight className="h-5 w-5" />

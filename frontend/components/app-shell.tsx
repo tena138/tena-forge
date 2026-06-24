@@ -86,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isAuthRoute || isMarketingRoute) {
+    if (isLiveLectureShareRoute || isAuthRoute || isMarketingRoute) {
       setSessionReady(true);
       return;
     }
@@ -150,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       active = false;
       if (readyFallback !== null) window.clearTimeout(readyFallback);
     };
-  }, [isAuthRoute, isMarketingRoute, pathname, router]);
+  }, [isAuthRoute, isLiveLectureShareRoute, isMarketingRoute, pathname, router]);
 
   if (isAuthRoute || isMarketingRoute) {
     return (
@@ -166,18 +166,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!sessionReady) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#fbfbfa] text-sm text-zinc-500" data-app-shell>
-        세션을 복구하는 중입니다...
-      </div>
-    );
-  }
-
   if (isLiveLectureShareRoute) {
     return (
       <div className="min-h-screen bg-black text-white" data-app-shell>
         {children}
+      </div>
+    );
+  }
+
+  if (!sessionReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#fbfbfa] text-sm text-zinc-500" data-app-shell>
+        세션을 복구하는 중입니다...
       </div>
     );
   }
