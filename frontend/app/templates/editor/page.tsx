@@ -218,6 +218,14 @@ function snap(value: number, gridSize: number, enabled: boolean) {
   return enabled ? Math.round(value / gridSize) * gridSize : value;
 }
 
+function centerCanvasElementOnPage(element: CanvasElement, page: CanvasDocument["page"]): CanvasElement {
+  return {
+    ...element,
+    x: Math.round(Math.max(0, (page.width - element.width) / 2)),
+    y: Math.round(Math.max(0, (page.height - element.height) / 2)),
+  };
+}
+
 function clamp(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
@@ -472,7 +480,12 @@ function CanvaLeftPanel({
   }
 
   function addPreset(preset: ElementPreset) {
-    addElement(preset.create(120, 120));
+    const element = preset.create(0, 0);
+    if (preset.type === "question_area") {
+      addElement(centerCanvasElementOnPage(element, useEditorStore.getState().canvasJson.page));
+      return;
+    }
+    addElement({ ...element, x: 120, y: 120 });
   }
 
   const layerList = (

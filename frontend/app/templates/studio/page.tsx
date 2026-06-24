@@ -206,6 +206,15 @@ function canRoundVisualElement(element: TemplateElement | null) {
   return Boolean(element && element.type === "shape" && (element.shape === "rect" || element.shape === "roundRect"));
 }
 
+function centerTemplateElementOnPage(element: TemplateElement, page: TemplatePage): TemplateElement {
+  const size = page.pageSize || PAGE_SIZES.A4_PORTRAIT;
+  return {
+    ...element,
+    x: Math.round(Math.max(0, (size.width - element.width) / 2)),
+    y: Math.round(Math.max(0, (size.height - element.height) / 2)),
+  };
+}
+
 function InspectorSection({ title, children, compact = false }: { title: string; children: React.ReactNode; compact?: boolean }) {
   return (
     <section className={cls("rounded-[11px] border border-white/10 bg-white/[0.045] shadow-[0_14px_36px_rgba(0,0,0,0.18)]", compact ? "p-2.5" : "p-3")}>
@@ -1243,9 +1252,12 @@ function VisualTemplateStudioPageContent() {
     };
   }
 
-  function addElement(type: TemplateElementType, pageId = selectedPage?.id, x = 120, y = 140) {
+  function addElement(type: TemplateElementType, pageId = selectedPage?.id, x?: number, y?: number) {
     if (!pageId) return;
-    const element = createElement(type, x, y);
+    const pageForPlacement = templateSet.pages.find((item) => item.id === pageId);
+    if (!pageForPlacement) return;
+    const hasExplicitPosition = typeof x === "number" && typeof y === "number";
+    const element = hasExplicitPosition ? createElement(type, x, y) : centerTemplateElementOnPage(createElement(type, 0, 0), pageForPlacement);
     updateTemplateSet((draft) => {
       const page = draft.pages.find((item) => item.id === pageId);
       if (!page) return;
