@@ -9,6 +9,8 @@ sys.path.insert(0, str(BACKEND_DIR))
 from services.pipeline import (  # noqa: E402
     EXTRACTION_PROMPT,
     PROBLEM_PREVIEW_QA_PROMPT,
+    QUICK_ANSWER_TABLE_EXTRACTION_PROMPT,
+    QUICK_ANSWER_TABLE_SCAN_PROMPT,
     RESCUE_EXTRACTION_PROMPT,
     RenderedPage,
     _apply_section_ranges_to_items,
@@ -21,6 +23,7 @@ from services.pipeline import (  # noqa: E402
     _normalize_extracted_items,
     _normalize_page_metadata,
     _problem_page_indexes_from_metadata,
+    _quick_answer_candidate_page_indexes,
     _should_run_mixed_answer_recovery,
     answer_for_subject,
     build_extraction_prompt,
@@ -38,6 +41,17 @@ class PipelineMergeKeyTests(unittest.TestCase):
             self.assertIn("Do not merely trace pixels", prompt)
             self.assertIn("visual_and_problem_text", prompt)
             self.assertIn("problem_text supplies explicit constraints", prompt)
+
+    def test_quick_answer_prompts_allow_tables_with_explanations(self):
+        self.assertIn("may also contain worked solutions", QUICK_ANSWER_TABLE_SCAN_PROMPT)
+        self.assertIn("visible anywhere on the page", QUICK_ANSWER_TABLE_SCAN_PROMPT)
+        self.assertIn("ignore those areas", QUICK_ANSWER_TABLE_EXTRACTION_PROMPT)
+        self.assertIn("Preserve full elective labels", QUICK_ANSWER_TABLE_EXTRACTION_PROMPT)
+
+    def test_quick_answer_candidates_include_middle_boundary_pages(self):
+        indexes = _quick_answer_candidate_page_indexes(14)
+
+        self.assertIn(7, indexes)
 
     def test_solution_reprocess_distinguishes_structural_section_from_unit_tag(self):
         self.assertTrue(_is_structural_section_label("DAY 03"))

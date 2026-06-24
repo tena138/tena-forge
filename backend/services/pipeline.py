@@ -508,7 +508,8 @@ Return raw JSON array only. No markdown. No explanation outside JSON."""
 
 QUICK_ANSWER_TABLE_SCAN_PROMPT = r"""You are classifying one page from an answer or solution PDF.
 
-Decide whether this page is a compact quick answer key/table/list page.
+Decide whether this page visibly contains a compact quick answer key/table/list region.
+The page may also contain worked solutions, derivations, or explanations elsewhere. Still classify true when a dense final-answer table/list is visible anywhere on the page, especially near the top or left side.
 
 Return exactly one JSON object inside a JSON array:
 [
@@ -524,16 +525,17 @@ Return exactly one JSON object inside a JSON array:
   }
 ]
 
-Classify true only when the page is primarily a dense final-answer key: for example pages titled 빠른 정답, 빠른 답, 정답표, 답안표, 정답만 모아보기, answer key, quick answers, or a continuation page that is mostly problem-number/final-answer pairs.
-Classify false for ordinary solution/explanation pages, even when each explanation starts with a final answer.
+Classify true when a compact final-answer key/table/list is visible: for example pages titled 빠른 정답, 빠른 답, 정답표, 답안표, 정답만 모아보기, answer key, quick answers, or a table with columns like 번호/정답/배점.
+Classify false for ordinary solution/explanation pages only when there is no compact answer key/table/list region.
 has_explanations must be true when the page contains paragraphs of solution reasoning, derivations, or worked explanations.
-answer_count_estimate should count visible problem-number/final-answer pairs only.
+answer_count_estimate should count visible problem-number/final-answer pairs in the compact answer key/table/list region only. Do not count per-problem solution headers outside that region.
 Use 0-based page_idx only in the prompt context; do not include page_idx in the returned object.
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
 QUICK_ANSWER_TABLE_EXTRACTION_PROMPT = r"""You are extracting final answers from a compact quick answer key/table/list page.
 
-If this page is not primarily a quick final-answer key, return [].
+If this page does not contain a compact quick final-answer key/table/list region, return [].
+If this page also contains worked solutions or explanations, ignore those areas and extract only from the compact answer key/table/list region.
 
 For every visible answer pair return:
 {
@@ -549,11 +551,13 @@ For every visible answer pair return:
 
 Rules:
 - Extract only final answers. Do not transcribe explanations, notes, or 풀이 text.
+- Extract problem-number/final-answer pairs from every compact answer table/list region on the page, even when the page also contains explanations.
 - Keep solution_steps, key_concept, referenced_problem_snippet, and solution_first_line null.
 - For math, if an objective answer is shown only as a choice number or symbol, return that marker so the matcher can resolve it from the stored choices. If the actual choice value is visible, return the actual value.
 - For Korean Language and English, keep objective answers as the visible choice label or number.
 - Convert mathematical expressions in answer into LaTeX.
 - Preserve original problem labels such as "1", "1-1", "23-(가)", or "[보기 5]".
+- When multiple answer sections are visible on the same page, set section_label to the nearest table/list header for that pair. Preserve full elective labels such as "선택과목(확률과 통계)", "선택과목(미적분)", or "선택과목(기하)" so repeated problem numbers like 28 and 29 can be matched to the correct section.
 - Read table/list order top-to-bottom and left-to-right unless the page clearly shows another order.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 
@@ -1939,7 +1943,13 @@ def _quick_answer_candidate_page_indexes(page_count: int, edge_count: int = QUIC
     if page_count <= 0:
         return []
     edge = max(1, min(int(edge_count), page_count))
-    indexes = list(range(0, edge)) + list(range(max(0, page_count - edge), page_count))
+    middle_radius = max(2, edge // 2)
+    middle = page_count // 2
+    indexes = (
+        list(range(0, edge))
+        + list(range(max(0, middle - middle_radius), min(page_count, middle + middle_radius + 1)))
+        + list(range(max(0, page_count - edge), page_count))
+    )
     return sorted(set(index for index in indexes if 0 <= index < page_count))
 
 
@@ -1987,6 +1997,34 @@ def render_pdf_page_indexes(
         rendered_by_index.update({page.page_index: page for page in rendered})
         rendered_count += end - start
     return [rendered_by_index[index] for index in ordered_indexes if index in rendered_by_index]
+
+
+def focus_quick_answer_table_pages(pages: list[RenderedPage]) -> list[RenderedPage]:
+    focused: list[RenderedPage] = []
+    for page in pages:
+        try:
+            with Image.open(io.BytesIO(page.png_bytes)) as image:
+                rgb = image.convert("RGB")
+                width, height = rgb.size
+                crop_box = (0, 0, max(1, int(width * 0.62)), max(1, int(height * 0.72)))
+                cropped = rgb.crop(crop_box)
+                buffer = io.BytesIO()
+                cropped.save(buffer, format="PNG")
+                png = buffer.getvalue()
+        except Exception:
+            focused.append(page)
+            continue
+        focused.append(
+            RenderedPage(
+                page_index=page.page_index,
+                base64_png=base64.b64encode(png).decode("ascii"),
+                png_bytes=png,
+                ai_image_mime="image/png",
+                column_index=page.column_index,
+                source_page_index=page.source_page_index,
+            )
+        )
+    return focused
 
 
 def _quick_answer_bool(value: Any) -> bool:
@@ -2100,13 +2138,11 @@ def scan_quick_answer_table_pages(
             has_explanations = _quick_answer_bool(raw.get("has_explanations"))
             strong = (
                 is_quick
-                and not has_explanations
                 and confidence >= QUICK_ANSWER_STRONG_CONFIDENCE
                 and answer_count >= QUICK_ANSWER_MIN_ANSWER_COUNT
             )
             weak = (
                 is_quick
-                and not has_explanations
                 and confidence >= QUICK_ANSWER_WEAK_CONFIDENCE
                 and answer_count >= 3
             )
@@ -2179,8 +2215,9 @@ def extract_quick_answer_table_solutions(
         progress_total=total_units,
     )
     settings = get_settings()
+    focused_pages = focus_quick_answer_table_pages(pages)
     solutions = extract_solutions(
-        pages,
+        focused_pages,
         batch_id=batch_id,
         offset=progress_offset + len(report.get("candidate_page_indexes") or []) + len(pages),
         total=total_units,
@@ -2190,6 +2227,23 @@ def extract_quick_answer_table_solutions(
         max_output_tokens_override=max(settings.ai_solution_max_output_tokens, settings.ai_max_output_tokens, 4096),
         document_type_hints=document_type_hints,
     )
+    focused_answer_count = _solution_answer_count(solutions)
+    report["focused_crop_extracted_answer_count"] = focused_answer_count
+    if focused_answer_count < QUICK_ANSWER_MIN_ANSWER_COUNT:
+        report["focused_crop_fallback_reason"] = "focused_crop_extracted_too_few_answers"
+        solutions = extract_solutions(
+            pages,
+            batch_id=batch_id,
+            offset=progress_offset + len(report.get("candidate_page_indexes") or []) + len(pages),
+            total=total_units,
+            display_total_pages=page_count,
+            prompt_override=QUICK_ANSWER_TABLE_EXTRACTION_PROMPT,
+            mode_label_override="빠른 답안표 검사",
+            max_output_tokens_override=max(settings.ai_solution_max_output_tokens, settings.ai_max_output_tokens, 4096),
+            document_type_hints=document_type_hints,
+        )
+    else:
+        report["focused_crop_used"] = True
     for solution in solutions:
         solution["extraction_source"] = "quick_answer_table"
     answer_count = _solution_answer_count(solutions)
