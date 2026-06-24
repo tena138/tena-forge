@@ -1510,10 +1510,10 @@ function VisualTemplateStudioPageContent() {
     try {
       const imported = await importPdfTemplate(file, (progress) => {
         setPdfImportProgress(progress);
-        setPdfImportMessage(progress >= 100 ? "업로드 완료. 대표 양식 페이지를 확인하는 중입니다." : `PDF 양식을 업로드하는 중입니다. ${progress}%`);
+        setPdfImportMessage(progress >= 100 ? "업로드 완료. PDF 페이지를 배경으로 불러오는 중입니다." : `PDF 양식을 업로드하는 중입니다. ${progress}%`);
       });
       setPdfImportProgress(100);
-      setPdfImportMessage("불러온 PDF 양식을 템플릿으로 적용하는 중입니다.");
+      setPdfImportMessage("원본 PDF 페이지를 템플릿 배경으로 적용하는 중입니다.");
       const next = imported.templateSet;
       if (!next?.pages?.length) {
         setNotice("PDF에서 템플릿 페이지를 만들지 못했습니다.");
@@ -2574,7 +2574,7 @@ function VisualTemplateStudioPageContent() {
                   />
                 </div>
                 <div className="mt-3 text-xs leading-5 text-zinc-500">
-                  여러 페이지 PDF는 대표 양식 페이지와 배경 요소를 확인하는 중입니다.
+                  원본 PDF 페이지를 그대로 배경으로 불러오는 중입니다.
                 </div>
               </div>
             </div>

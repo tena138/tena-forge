@@ -34,25 +34,23 @@ def sample_pdf_bytes() -> bytes:
 
 
 class PdfTemplateImporterTests(unittest.TestCase):
-    def test_imports_header_design_and_converts_body_to_region(self):
+    def test_imports_pdf_page_as_original_background(self):
         result = build_visual_template_set_from_pdf(sample_pdf_bytes(), "midterm.pdf")
         template_set = result["templateSet"]
         page = template_set["pages"][0]
-        elements = page["elements"]
 
-        self.assertNotIn("imageUrl", page["background"])
-        text_values = [element.get("text", "") for element in elements if element.get("type") == "text"]
-        variable_keys = [element.get("variableKey", "") for element in elements if element.get("type") == "variable"]
-        self.assertIn("academy_name", variable_keys)
-        self.assertIn("test_title", variable_keys)
-        self.assertFalse(any("Tena Academy" in value for value in text_values))
-        self.assertFalse(any("quadratic equation" in value for value in text_values))
-        self.assertTrue(any(element.get("type") == "problemRegion" for element in elements))
-        self.assertTrue(any(element.get("type") in {"shape", "line"} for element in elements))
+        self.assertIn("imageUrl", page["background"])
+        self.assertTrue(page["background"]["imageUrl"].startswith("data:image/png;base64,"))
+        self.assertEqual(page["background"]["color"], "#ffffff")
+        self.assertEqual(page["background"]["opacity"], 1)
+        self.assertEqual(page["elements"], [])
+        self.assertEqual(page["sourceRole"], "pdfBackground")
+        self.assertEqual(page["sourcePageNumber"], 1)
         self.assertEqual(template_set["sourceType"], "unknown")
         self.assertFalse(template_set["rightsConfirmed"])
+        self.assertEqual(template_set["importMeta"]["mode"], "backgroundSnapshot")
 
-    def test_limits_representative_pages(self):
+    def test_imports_first_pages_in_order_until_limit(self):
         doc = fitz.open()
         for index in range(8):
             page = doc.new_page(width=595, height=842)
@@ -65,10 +63,12 @@ class PdfTemplateImporterTests(unittest.TestCase):
 
         self.assertLessEqual(result["imported_page_count"], 6)
         self.assertEqual(len(result["templateSet"]["pages"]), result["imported_page_count"])
-        self.assertTrue(all("imageUrl" not in page["background"] for page in result["templateSet"]["pages"]))
+        self.assertEqual(result["templateSet"]["importMeta"]["selectedPageNumbers"], [1, 2, 3, 4, 5, 6])
+        self.assertTrue(all(page["background"].get("imageUrl", "").startswith("data:image/png;base64,") for page in result["templateSet"]["pages"]))
+        self.assertTrue(all(page["elements"] == [] for page in result["templateSet"]["pages"]))
         self.assertTrue(result["warnings"])
 
-    def test_skips_blank_separator_pages(self):
+    def test_keeps_blank_separator_pages_as_original_pdf_pages(self):
         doc = fitz.open()
 
         cover = doc.new_page(width=595, height=842)
@@ -92,12 +92,11 @@ class PdfTemplateImporterTests(unittest.TestCase):
         result = build_visual_template_set_from_pdf(buffer.getvalue(), "blank.pdf")
 
         selected_numbers = result["templateSet"]["importMeta"]["selectedPageNumbers"]
-        self.assertNotIn(2, selected_numbers)
-        self.assertIn(1, selected_numbers)
-        self.assertIn(3, selected_numbers)
-        self.assertTrue(any("blank separator" in warning for warning in result["warnings"]))
+        self.assertEqual(selected_numbers, [1, 2, 3])
+        self.assertEqual(len(result["templateSet"]["pages"]), 3)
+        self.assertFalse(any("blank separator" in warning for warning in result["warnings"]))
 
-    def test_selects_representative_roles_beyond_the_first_six_pages(self):
+    def test_does_not_select_representative_roles_or_rebuild_elements(self):
         doc = fitz.open()
 
         cover = doc.new_page(width=595, height=842)
@@ -131,15 +130,13 @@ class PdfTemplateImporterTests(unittest.TestCase):
 
         result = build_visual_template_set_from_pdf(buffer.getvalue(), "roles.pdf")
         pages = result["templateSet"]["pages"]
-        roles = {page["sourceRole"] for page in pages}
         selected_numbers = result["templateSet"]["importMeta"]["selectedPageNumbers"]
 
         self.assertLessEqual(len(pages), 6)
-        self.assertIn("cover", roles)
-        self.assertIn("unitDivider", roles)
-        self.assertIn("textbookLeft", roles)
-        self.assertIn("textbookRight", roles)
-        self.assertTrue(any(number > 6 for number in selected_numbers))
+        self.assertEqual(selected_numbers, [1, 2, 3, 4, 5, 6])
+        self.assertEqual({page["sourceRole"] for page in pages}, {"pdfBackground"})
+        self.assertTrue(all(page["elements"] == [] for page in pages))
+        self.assertTrue(all(page["background"].get("imageUrl", "").startswith("data:image/png;base64,") for page in pages))
 
 
 if __name__ == "__main__":

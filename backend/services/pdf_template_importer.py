@@ -608,7 +608,11 @@ def _page_snapshot_png_base64(page: fitz.Page, size: dict[str, Any]) -> str:
 def _page_snapshot_png_bytes(page: fitz.Page, size: dict[str, Any]) -> bytes:
     zoom_x = size["width"] / max(1, page.rect.width)
     zoom_y = size["height"] / max(1, page.rect.height)
-    pix = page.get_pixmap(matrix=fitz.Matrix(zoom_x, zoom_y), alpha=False)
+    matrix = fitz.Matrix(zoom_x, zoom_y)
+    try:
+        pix = page.get_pixmap(matrix=matrix, colorspace=fitz.csRGB, alpha=False, annots=True)
+    except TypeError:
+        pix = page.get_pixmap(matrix=matrix, alpha=False)
     return pix.tobytes("png")
 
 
@@ -1106,29 +1110,34 @@ def build_visual_template_set_from_pdf(pdf_bytes: bytes, filename: str | None = 
 
         warnings: list[str] = []
         page_limit = max(1, min(max_pages, MAX_IMPORT_PAGES))
-        analysis_indexes = _analysis_indexes(doc.page_count)
-        if doc.page_count > len(analysis_indexes):
-            warnings.append(f"{len(analysis_indexes)} representative positions were scanned across a {doc.page_count}-page PDF.")
-
-        analyses = [_analyze_page(doc[index], index) for index in analysis_indexes]
-        blank_page_numbers = [analysis["index"] + 1 for analysis in analyses if analysis.get("is_blank")]
-        if blank_page_numbers:
-            warnings.append(f"Skipped blank separator page(s): {blank_page_numbers}.")
-        selected_analyses = _select_representative_pages(analyses, page_limit)
-        if not selected_analyses:
-            raise ValueError("No reusable visual template pages were detected in this PDF.")
-        selected_indexes = [analysis["index"] + 1 for analysis in selected_analyses]
-        if doc.page_count > len(selected_analyses):
-            warnings.append(f"Selected {len(selected_analyses)} representative design page(s), not the first {len(selected_analyses)} page(s): {selected_indexes}.")
+        imported_count = min(doc.page_count, page_limit)
+        selected_indexes = list(range(1, imported_count + 1))
+        if doc.page_count > imported_count:
+            warnings.append(f"Imported the first {imported_count} page(s) as PDF backgrounds. {doc.page_count - imported_count} page(s) were omitted by the template import limit.")
 
         pages: list[dict[str, Any]] = []
         assets: list[dict[str, Any]] = []
-        for analysis in selected_analyses:
-            index = int(analysis["index"])
-            page_role, page_name = _role_display(str(analysis["role_key"]), index + 1)
-            page, page_assets = _page_from_pdf(doc[index], index, warnings, str(analysis["role_key"]), page_name)
-            pages.append(page)
-            assets.extend(page_assets)
+        for index in range(imported_count):
+            pdf_page = doc[index]
+            size = _page_size(pdf_page)
+            pages.append(
+                {
+                    "id": _id("page"),
+                    "name": f"PDF Page {index + 1}",
+                    "role": "custom",
+                    "sourcePageNumber": index + 1,
+                    "sourceRole": "pdfBackground",
+                    "pageSize": size,
+                    "background": {
+                        "color": "#ffffff",
+                        "imageUrl": _page_snapshot_data_url(pdf_page, size),
+                        "opacity": 1,
+                    },
+                    "safeArea": _safe_area(size),
+                    "guides": [],
+                    "elements": [],
+                }
+            )
 
         created_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         first_size = pages[0]["pageSize"]
@@ -1137,7 +1146,7 @@ def build_visual_template_set_from_pdf(pdf_bytes: bytes, filename: str | None = 
             "id": _id("template"),
             "schemaVersion": 1,
             "title": title,
-            "description": "Imported from a PDF design. Review dynamic regions before publishing or exporting.",
+            "description": "Imported from a PDF as original page backgrounds. Add problem and answer regions on top before exporting.",
             "category": "exam",
             "visibility": "private",
             "defaultPageSize": first_size,
@@ -1159,6 +1168,7 @@ def build_visual_template_set_from_pdf(pdf_bytes: bytes, filename: str | None = 
                 "pageCount": doc.page_count,
                 "importedPageCount": len(pages),
                 "selectedPageNumbers": selected_indexes,
+                "mode": "backgroundSnapshot",
                 "importedAt": created_at,
                 "warnings": warnings,
             },
