@@ -129,6 +129,57 @@ function pdfFileKey(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
+function compactNumber(value: unknown, unit = "") {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const formatted = numeric >= 100 ? Math.round(numeric).toLocaleString("ko-KR") : Math.round(numeric * 10) / 10;
+  return `${formatted}${unit}`;
+}
+
+function uploadLimitDetail(detail: Record<string, unknown>) {
+  const code = String(detail.reasonCode || detail.code || "");
+  const suffixParts: string[] = [];
+  const fileSize = compactNumber(detail.fileSizeMb, "MB");
+  const maxFileSize = compactNumber(detail.maxFileSizeMb, "MB");
+  const pageCount = compactNumber(detail.pageCount, "쪽");
+  const maxPages = compactNumber(detail.maxPagesPerJob, "쪽");
+  const estimatedCredits = compactNumber(detail.estimatedCredits, " credits");
+  const creditsRemaining = compactNumber(detail.creditsRemaining, " credits");
+  const uploadedMb = compactNumber(detail.uploadedMbThisMonth, "MB");
+  const monthlyUploadMbLimit = compactNumber(detail.monthlyUploadMbLimit, "MB");
+  if (fileSize && maxFileSize) suffixParts.push(`${fileSize}/${maxFileSize}`);
+  if (pageCount && maxPages) suffixParts.push(`${pageCount}/${maxPages}`);
+  if (estimatedCredits && creditsRemaining) suffixParts.push(`필요 ${estimatedCredits}, 남음 ${creditsRemaining}`);
+  if (uploadedMb && monthlyUploadMbLimit) suffixParts.push(`이번 달 ${uploadedMb}/${monthlyUploadMbLimit}`);
+  const suffix = suffixParts.length ? ` (${suffixParts.join(", ")})` : "";
+
+  const messages: Record<string, string> = {
+    TRIAL_EXPIRED: "체험 기간이 종료되어 문항 추출을 시작할 수 없습니다.",
+    MAX_FILE_SIZE_EXCEEDED: "PDF 용량이 현재 플랜에서 허용하는 한도를 넘었습니다.",
+    MAX_PAGES_PER_JOB_EXCEEDED: "PDF 페이지 수가 한 번에 추출할 수 있는 한도를 넘었습니다.",
+    MONTHLY_UPLOAD_MB_EXCEEDED: "이번 달 업로드 용량 한도를 넘게 됩니다.",
+    MONTHLY_CREDIT_LIMIT_EXCEEDED: "문항 추출 credits가 부족합니다.",
+    MONTHLY_COST_CAP_EXCEEDED: "이번 달 처리 예산 한도를 넘게 됩니다.",
+    DAILY_JOB_LIMIT_EXCEEDED: "오늘 생성할 수 있는 추출 작업 수를 이미 사용했습니다.",
+    CONCURRENT_JOB_LIMIT_EXCEEDED: "이미 대기 중이거나 처리 중인 추출 작업이 너무 많습니다.",
+  };
+  if (messages[code]) return `${messages[code]}${suffix}`;
+  if (typeof detail.message === "string" && detail.message.trim()) return `${detail.message.trim()}${suffix}`;
+  return `업로드를 시작하지 못했습니다.${suffix}`;
+}
+
+function uploadFailureMessage(error: any) {
+  const status = error?.response?.status;
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") return uploadLimitDetail(detail);
+  if (status === 429) return "요청이 잠시 몰려 업로드를 시작하지 못했습니다. 잠깐 후 다시 시도해 주세요.";
+  if (status === 413) return "PDF 용량이 서버 업로드 한도를 넘었습니다. 파일을 나누어 업로드해 주세요.";
+  if (status >= 500) return "서버에서 배치 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+  if (error?.message === "Network Error") return "서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.";
+  return "업로드에 실패했습니다.";
+}
+
 function isSubjectPathMatch(value: string, target: string) {
   const normalizedValue = normalizeSubjectValue(value);
   const normalizedTarget = normalizeSubjectValue(target);
@@ -1337,10 +1388,9 @@ export default function UploadPage() {
       });
       data = response.data;
     } catch (error: any) {
-      const detail = error.response?.data?.detail;
       setSubmitting(false);
       setUploadPercent(null);
-      setMessage(typeof detail === "string" ? detail : "업로드에 실패했습니다.");
+      setMessage(uploadFailureMessage(error));
       return;
     }
     setSubmitting(false);

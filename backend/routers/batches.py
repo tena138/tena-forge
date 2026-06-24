@@ -332,6 +332,7 @@ def _validate_archive_folder(db: Session, owner_id: str, folder_id: UUID | None,
 
 
 @router.post("/upload", response_model=BatchUploadResponse)
+@limiter.exempt
 def upload_batch(
     request: Request,
     problem_pdf: UploadFile | None = File(default=None),
