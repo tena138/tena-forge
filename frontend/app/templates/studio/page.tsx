@@ -40,7 +40,7 @@ import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget
 import { ClipboardDesignImage, createClipboardEditableElements, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createBlankTemplateSet, createElement, createProblemRegion, pageRoleLabels } from "@/lib/visualTemplatePresets";
-import { ElementStyle, ExamStatsDataSource, ExamStatsMetricKey, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
+import { ElementStyle, ExamStatsDataSource, ExamStatsMetricKey, PAGE_SIZES, PageRole, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
 import { HubTemplatePayload, TemplateCategory as HubTemplateCategory, createHubTemplate, ensureTemplateHubSession, getHubTemplate, importPdfTemplate, updateHubTemplate } from "@/lib/templateHub";
 
 const LOCAL_STORAGE_KEY = "tena-forge-visual-template-studio";
@@ -728,13 +728,6 @@ function resizeFromHandle(start: TemplateElement, dx: number, dy: number, direct
   return { ...start, x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
 }
 
-type TemplateColorToken = {
-  color: string;
-  count: number;
-};
-
-const STYLE_COLOR_KEYS: Array<keyof Pick<ElementStyle, "fill" | "stroke" | "color">> = ["fill", "stroke", "color"];
-
 function normalizeHexColor(value?: string | null) {
   if (!value) return null;
   const trimmed = value.trim().toLowerCase();
@@ -743,89 +736,6 @@ function normalizeHexColor(value?: string | null) {
     return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`;
   }
   return trimmed;
-}
-
-function incrementColor(counts: Map<string, number>, value?: string | null) {
-  const color = normalizeHexColor(value);
-  if (!color) return;
-  counts.set(color, (counts.get(color) || 0) + 1);
-}
-
-function collectInlineColors(value: string | undefined, counts: Map<string, number>) {
-  if (!value) return;
-  for (const match of value.matchAll(/#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b/g)) {
-    incrementColor(counts, match[0]);
-  }
-}
-
-function collectStyleColors(style: ElementStyle | undefined, counts: Map<string, number>) {
-  if (!style) return;
-  STYLE_COLOR_KEYS.forEach((key) => incrementColor(counts, style[key]));
-  incrementColor(counts, style.shadow?.color);
-}
-
-function replaceColorValue(value: string | undefined, from: string, to: string) {
-  return normalizeHexColor(value) === from ? to : value;
-}
-
-function replaceInlineColors(value: string | undefined, from: string, to: string) {
-  if (!value) return value;
-  return value.replace(/#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b/g, (match) => (normalizeHexColor(match) === from ? to : match));
-}
-
-function replaceStyleColors(style: ElementStyle, from: string, to: string): ElementStyle {
-  const next: ElementStyle = { ...style };
-  STYLE_COLOR_KEYS.forEach((key) => {
-    const replaced = replaceColorValue(next[key], from, to);
-    if (replaced !== undefined) next[key] = replaced;
-  });
-  if (next.shadow) {
-    next.shadow = { ...next.shadow, color: replaceColorValue(next.shadow.color, from, to) || next.shadow.color };
-  }
-  return next;
-}
-
-function collectElementColors(element: TemplateElement, counts: Map<string, number>) {
-  collectStyleColors(element.style, counts);
-  if (element.type === "richText") collectInlineColors(element.html, counts);
-  if (isRegionElement(element)) {
-    collectStyleColors(element.cardStyle, counts);
-    collectStyleColors(element.numberStyle, counts);
-    collectStyleColors(element.bodyStyle, counts);
-    collectStyleColors(element.answerSpaceStyle, counts);
-    if (element.columnDividerStyle) collectStyleColors(element.columnDividerStyle, counts);
-  }
-}
-
-function replaceElementColors(element: TemplateElement, from: string, to: string): TemplateElement {
-  let next = { ...element, style: replaceStyleColors(element.style, from, to) } as TemplateElement;
-  if (next.type === "richText") next = { ...next, html: replaceInlineColors(next.html, from, to) || next.html };
-  if (isRegionElement(next)) {
-    next = {
-      ...next,
-      cardStyle: replaceStyleColors(next.cardStyle, from, to),
-      numberStyle: replaceStyleColors(next.numberStyle, from, to),
-      bodyStyle: replaceStyleColors(next.bodyStyle, from, to),
-      answerSpaceStyle: replaceStyleColors(next.answerSpaceStyle, from, to),
-      columnDividerStyle: next.columnDividerStyle ? replaceStyleColors(next.columnDividerStyle, from, to) : next.columnDividerStyle,
-    };
-  }
-  return next;
-}
-
-function collectTemplateColors(templateSet: TemplateSet): TemplateColorToken[] {
-  const counts = new Map<string, number>();
-  incrementColor(counts, templateSet.theme.primary);
-  incrementColor(counts, templateSet.theme.graphite);
-  incrementColor(counts, templateSet.theme.muted);
-  templateSet.pages.forEach((page) => {
-    incrementColor(counts, page.background.color);
-    page.elements.forEach((element) => collectElementColors(element, counts));
-  });
-
-  return Array.from(counts.entries())
-    .map(([color, count]) => ({ color, count }))
-    .sort((a, b) => b.count - a.count || a.color.localeCompare(b.color));
 }
 
 type DragState =
@@ -906,10 +816,10 @@ function VisualTemplateStudioPageContent() {
   const selectedPage = useMemo(() => templateSet.pages.find((page) => page.id === selectedPageId) || templateSet.pages[0], [selectedPageId, templateSet.pages]);
   const selectedElements = useMemo(() => selectedPage?.elements.filter((element) => selectedIds.includes(element.id)) || [], [selectedIds, selectedPage]);
   const selectedElement = selectedElements.length === 1 ? selectedElements[0] : null;
+  const hasInspectorSelection = selectedElements.length > 0;
   const selectedCornerRadiusMax = selectedElement ? maxVisualCornerRadius(selectedElement) : 0;
   const selectedCornerRadius = selectedElement ? visualCornerRadius(selectedElement) : 0;
   const dynamicPreviewPages = useMemo(() => createDynamicPreviewPages(templateSet), [templateSet]);
-  const templateColors = useMemo(() => collectTemplateColors(templateSet), [templateSet]);
   const autoSaveLabel = useMemo(() => {
     if (saving || autoSaveStatus === "saving") return "저장 중";
     if (autoSaveStatus === "pending") return "자동 저장 대기";
@@ -981,23 +891,6 @@ function VisualTemplateStudioPageContent() {
     },
     [selectedCornerRadiusMax, updateSelectedElement]
   );
-
-  function replaceTemplateColor(fromColor: string, toColor: string) {
-    const from = normalizeHexColor(fromColor);
-    const to = normalizeHexColor(toColor);
-    if (!from || !to || from === to) return;
-
-    updateTemplateSet((draft) => {
-      draft.theme.primary = replaceColorValue(draft.theme.primary, from, to) || draft.theme.primary;
-      draft.theme.graphite = replaceColorValue(draft.theme.graphite, from, to) || draft.theme.graphite;
-      draft.theme.muted = replaceColorValue(draft.theme.muted, from, to) || draft.theme.muted;
-      draft.pages.forEach((page) => {
-        page.background.color = replaceColorValue(page.background.color, from, to) || page.background.color;
-        page.elements = page.elements.map((element) => replaceElementColors(element, from, to));
-      });
-    });
-    setNotice(`${from.toUpperCase()} 색상을 ${to.toUpperCase()}로 일괄 변경했습니다.`);
-  }
 
   useEffect(() => {
     if (editingTextElementId && (!selectedIds.includes(editingTextElementId) || selectedIds.length !== 1)) {
@@ -2084,7 +1977,7 @@ function VisualTemplateStudioPageContent() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[56px_minmax(0,1fr)_300px]">
+      <div className={cls("grid min-h-0 flex-1", hasInspectorSelection ? "grid-cols-[56px_minmax(0,1fr)_300px]" : "grid-cols-[56px_minmax(0,1fr)]")}>
         <div className="group/sidebar relative z-40 h-full min-h-0">
           <nav className="relative z-40 flex h-full min-h-0 flex-col items-center gap-1 bg-white/80 px-1.5 py-2">
             {panelTabs.map((tab) => {
@@ -2167,30 +2060,9 @@ function VisualTemplateStudioPageContent() {
           </div>
         </main>
 
+        {hasInspectorSelection ? (
         <aside className="min-h-0 overflow-y-auto bg-white p-3 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
           <div className="space-y-3">
-            <InspectorSection title="문서 색상" compact>
-              <div className="grid grid-cols-2 gap-2">
-                {templateColors.slice(0, 10).map((token) => (
-                  <label
-                    key={token.color}
-                    className="relative flex h-9 cursor-pointer items-center gap-2 overflow-hidden rounded-[9px] border border-white/10 bg-white/[0.035] px-2 transition hover:border-zinc-300/45 hover:bg-zinc-500/10"
-                    title={`${token.color.toUpperCase()} · ${token.count}곳`}
-                  >
-                    <span className="h-5 w-5 shrink-0 rounded-[5px] border border-white/20 shadow-inner" style={{ backgroundColor: token.color }} />
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-300">{token.color.toUpperCase()}</span>
-                    <span className="text-[10px] text-slate-500">{token.count}</span>
-                    <input
-                      type="color"
-                      value={token.color}
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      onChange={(event) => replaceTemplateColor(token.color, event.target.value)}
-                    />
-                  </label>
-                ))}
-              </div>
-            </InspectorSection>
-
             <InspectorSection title="빠른 작업" compact>
               <div className="grid grid-cols-3 gap-2">
                 <Button variant="outline" size="sm" onClick={() => alignSelected("left")} title="왼쪽 정렬" aria-label="왼쪽 정렬"><AlignStartHorizontal className="h-4 w-4" />좌</Button>
@@ -2510,26 +2382,11 @@ function VisualTemplateStudioPageContent() {
                   ) : null}
                 </InspectorSection>
               </>
-            ) : (
-              <InspectorSection title="페이지 설정">
-                <div className="space-y-3">
-                  <FieldLabel label="이름"><Input className="h-8" value={selectedPage?.name || ""} onChange={(event) => updateTemplateSet((draft) => { const page = draft.pages.find((item) => item.id === selectedPage?.id); if (page) page.name = event.target.value; })} /></FieldLabel>
-                  <FieldLabel label="역할">
-                    <select className="h-9 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-white outline-none" value={selectedPage?.role || "custom"} onChange={(event) => updateTemplateSet((draft) => { const page = draft.pages.find((item) => item.id === selectedPage?.id); if (page) page.role = event.target.value as PageRole; })}>
-                      {(Object.keys(pageRoleLabels) as PageRole[]).map((role) => <option key={role} value={role}>{pageRoleLabels[role]}</option>)}
-                    </select>
-                  </FieldLabel>
-                  <FieldLabel label="페이지 크기">
-                    <select className="h-9 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-white outline-none" value={(selectedPage?.pageSize || templateSet.defaultPageSize).preset} onChange={(event) => updateTemplateSet((draft) => { const page = draft.pages.find((item) => item.id === selectedPage?.id); if (page) page.pageSize = PAGE_SIZES[event.target.value as PageSizePreset]; })}>
-                      {(Object.keys(PAGE_SIZES) as PageSizePreset[]).map((preset) => <option key={preset} value={preset}>{preset.replaceAll("_", " ")}</option>)}
-                    </select>
-                  </FieldLabel>
-                </div>
-              </InspectorSection>
-            )}
+            ) : null}
 
           </div>
         </aside>
+        ) : null}
       </div>
 
       {notice ? (
