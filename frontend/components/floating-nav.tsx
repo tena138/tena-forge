@@ -114,9 +114,9 @@ const sections = [
     ],
   },
   {
-    title: "Admin",
-    shortTitle: "AD",
-    description: "계정 및 정책",
+    title: "My Info",
+    shortTitle: "MI",
+    description: "Profile and settings",
     accent: "bg-zinc-700",
     panel: "bg-[#f3f3f3]",
     header: "text-zinc-950",
