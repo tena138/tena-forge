@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, joinedload
 from database import SessionLocal, get_settings
 from models import Batch, BatchStatus, KoreanExtractionDocument, KoreanPassageGroup, KoreanQuestion, Problem, Tag
 from services.document_type_hints import (
+    DOCUMENT_TYPE_MIXED,
     apply_document_type_hints_to_metadata,
     document_type_for_page,
     document_type_hints_allow_embedded_solutions,
@@ -983,7 +984,40 @@ def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
 def _normalize_page_type(value: Any, fallback: str) -> str:
     text = str(value or "").strip().lower()
     allowed = {"problem_page", "solution_page", "toc", "cover", "log", "blank", "unknown"}
-    return text if text in allowed else fallback
+    aliases = {
+        "problem": "problem_page",
+        "problems": "problem_page",
+        "question": "problem_page",
+        "questions": "problem_page",
+        "body": "problem_page",
+        "main": "problem_page",
+        "본문": "problem_page",
+        "문제": "problem_page",
+        "solution": "solution_page",
+        "solutions": "solution_page",
+        "answer": "solution_page",
+        "answers": "solution_page",
+        "answer_key": "solution_page",
+        "answer key": "solution_page",
+        "explanation": "solution_page",
+        "explanations": "solution_page",
+        "해설": "solution_page",
+        "풀이": "solution_page",
+        "정답": "solution_page",
+        "답안": "solution_page",
+        "답지": "solution_page",
+        "contents": "toc",
+        "table_of_contents": "toc",
+        "table of contents": "toc",
+        "목차": "toc",
+        "차례": "toc",
+        "cover_page": "cover",
+        "front_cover": "cover",
+        "표지": "cover",
+        "empty": "blank",
+        "공백": "blank",
+    }
+    return text if text in allowed else aliases.get(text, fallback)
 
 
 def _normalize_layout(value: Any) -> str:
@@ -992,7 +1026,7 @@ def _normalize_layout(value: Any) -> str:
 
 
 def _normalize_page_metadata(raw: dict[str, Any], page: RenderedPage, doc_kind: str) -> dict[str, Any]:
-    fallback_type = "solution_page" if doc_kind == "solution" else "problem_page"
+    fallback_type = "solution_page" if doc_kind == "solution" else "unknown"
     try:
         confidence = float(raw.get("section_confidence", 0.0) or 0.0)
     except (TypeError, ValueError):
@@ -1500,6 +1534,9 @@ def _embedded_solution_page_indexes(metadata: list[dict[str, Any]]) -> list[int]
         problem_headers = item.get("detected_problem_headers") or []
         solution_headers = item.get("detected_solution_headers") or []
         if page_type == "solution_page":
+            indexes.append(page_index)
+            continue
+        if item.get("document_type_hint") == DOCUMENT_TYPE_MIXED and solution_headers and not problem_headers:
             indexes.append(page_index)
             continue
         if solution_headers and not problem_headers and page_type in {"unknown", ""}:

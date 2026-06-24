@@ -9,6 +9,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 from services.pipeline import (  # noqa: E402
     RenderedPage,
     _apply_section_ranges_to_items,
+    _embedded_solution_page_indexes,
     _extracted_problem_merge_key,
     _is_structural_section_label,
     _normalize_extracted_items,
@@ -54,6 +55,40 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertEqual(normalized["toc_entries"][0]["section_id"], "DAY 02")
         self.assertEqual(normalized["toc_entries"][0]["page_number"], 7)
         self.assertEqual(normalized["page_type"], "toc")
+
+    def test_page_metadata_accepts_solution_type_aliases(self):
+        page = RenderedPage(page_index=2, base64_png="", png_bytes=b"")
+        normalized = _normalize_page_metadata(
+            {
+                "page_type": "answer",
+                "detected_solution_headers": ["01", "02"],
+            },
+            page,
+            "problem",
+        )
+
+        self.assertEqual(normalized["page_type"], "solution_page")
+
+    def test_problem_metadata_falls_back_to_unknown_for_mixed_detection(self):
+        page = RenderedPage(page_index=3, base64_png="", png_bytes=b"")
+        normalized = _normalize_page_metadata({}, page, "problem")
+
+        self.assertEqual(normalized["page_type"], "unknown")
+
+    def test_mixed_hint_with_solution_headers_marks_embedded_solution_page(self):
+        indexes = _embedded_solution_page_indexes(
+            [
+                {
+                    "page_index": 5,
+                    "page_type": "problem_page",
+                    "document_type_hint": "mixed",
+                    "detected_problem_headers": [],
+                    "detected_solution_headers": ["01", "02", "03"],
+                }
+            ]
+        )
+
+        self.assertEqual(indexes, [5])
 
     def test_page_metadata_prefers_exam_round_over_single_connection_title(self):
         page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
