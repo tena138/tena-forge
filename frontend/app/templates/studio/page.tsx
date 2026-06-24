@@ -63,13 +63,14 @@ function withReturnTo(path: string, returnTo: string) {
   return `${path}${path.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(returnTo)}`;
 }
 
-type StudioPanel = "elements" | "pages" | "variables" | "search" | "layers";
+type StudioPanel = "elements" | "pdfImport" | "pages" | "variables" | "search" | "layers";
 type PaletteGroup = "자동 영역";
 type SaveMode = "manual" | "auto";
 type AutoSaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
 
 const panelTabs: Array<{ key: StudioPanel; label: string; icon: typeof Type }> = [
   { key: "elements", label: "요소", icon: BoxSelect },
+  { key: "pdfImport", label: "PDF 불러오기", icon: FileText },
   { key: "pages", label: "페이지", icon: FileStack },
   { key: "variables", label: "변수", icon: Braces },
   { key: "search", label: "검색", icon: Search },
@@ -1485,22 +1486,22 @@ function VisualTemplateStudioPageContent() {
       return;
     }
     const hasCurrentWork = templateSet.pages.some((page) => page.elements.length > 0);
-    if (hasCurrentWork && !window.confirm("PDF 디자인을 새 템플릿 초안으로 가져오면 현재 스튜디오 문서가 교체됩니다. 계속할까요?")) {
+    if (hasCurrentWork && !window.confirm("PDF 양식을 새 템플릿 초안으로 불러오면 현재 스튜디오 문서가 교체됩니다. 계속할까요?")) {
       return;
     }
 
     setImportingPdf(true);
     setPdfImportProgress(0);
     setPdfImportFileName(file.name);
-    setPdfImportMessage("PDF 파일을 업로드하는 중입니다.");
-    setNotice("PDF 디자인을 분석하는 중입니다.");
+    setPdfImportMessage("PDF 양식을 업로드하는 중입니다.");
+    setNotice("PDF 양식을 불러오는 중입니다.");
     try {
       const imported = await importPdfTemplate(file, (progress) => {
         setPdfImportProgress(progress);
-        setPdfImportMessage(progress >= 100 ? "업로드 완료. 대표 디자인 페이지를 분석하는 중입니다." : `PDF 파일을 업로드하는 중입니다. ${progress}%`);
+        setPdfImportMessage(progress >= 100 ? "업로드 완료. 대표 양식 페이지를 확인하는 중입니다." : `PDF 양식을 업로드하는 중입니다. ${progress}%`);
       });
       setPdfImportProgress(100);
-      setPdfImportMessage("분석 결과를 편집 가능한 템플릿으로 적용하는 중입니다.");
+      setPdfImportMessage("불러온 PDF 양식을 템플릿으로 적용하는 중입니다.");
       const next = imported.templateSet;
       if (!next?.pages?.length) {
         setNotice("PDF에서 템플릿 페이지를 만들지 못했습니다.");
@@ -1519,7 +1520,7 @@ function VisualTemplateStudioPageContent() {
       const warningText = imported.warnings.length ? ` ${imported.warnings.length}개의 확인사항이 있습니다.` : "";
       setNotice(`${imported.source_file}에서 ${imported.imported_page_count}개 페이지를 템플릿 초안으로 만들었습니다.${warningText}`);
     } catch (error: any) {
-      setNotice(error?.response?.data?.detail || error?.message || "PDF 디자인을 가져오지 못했습니다.");
+      setNotice(error?.response?.data?.detail || error?.message || "PDF 양식을 불러오지 못했습니다.");
     } finally {
       setImportingPdf(false);
       setPdfImportProgress(null);
@@ -1553,13 +1554,13 @@ function VisualTemplateStudioPageContent() {
           if (handled) return;
           if (clipboardImages.length) {
             void addClipboardDesignImages(clipboardImages, selectedPage.id, x, y).then(() => {
-              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. 안정적인 양식 반영은 PDF 디자인 추출을 사용해주세요.");
+              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. 안정적인 양식 반영은 PDF 불러오기를 사용해주세요.");
             });
             return;
           }
           if (imageFiles.length) {
             void addImageFiles(imageFiles, selectedPage.id, x, y).then(() => {
-              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. 안정적인 양식 반영은 PDF 디자인 추출을 사용해주세요.");
+              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. 안정적인 양식 반영은 PDF 불러오기를 사용해주세요.");
             });
             return;
           }
@@ -1804,24 +1805,6 @@ function VisualTemplateStudioPageContent() {
         <div className="space-y-3">
           <h2 className="text-sm font-bold text-zinc-950">요소</h2>
 
-          <div className="rounded-[14px] border border-dashed border-zinc-300/35 bg-zinc-500/[0.08] p-3">
-            <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handlePdfInput} />
-            <button
-              type="button"
-              className="flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => pdfInputRef.current?.click()}
-              disabled={importingPdf}
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-zinc-700 ring-1 ring-zinc-200">
-                <FileText className="h-5 w-5" />
-              </span>
-              <span className="block min-w-0">
-                <span className="block text-sm font-bold text-zinc-950">{importingPdf ? "PDF 분석 중" : "PDF 디자인 추출"}</span>
-                <span className="mt-0.5 block text-xs text-zinc-500">PDF 레이아웃을 템플릿 초안으로 변환</span>
-              </span>
-            </button>
-          </div>
-
           {groups.map((group) => {
             const items = elementPalette.filter((item) => item.group === group);
             if (!items.length) return null;
@@ -1851,6 +1834,32 @@ function VisualTemplateStudioPageContent() {
               </div>
             );
           })}
+        </div>
+      );
+    }
+
+    if (leftPanel === "pdfImport") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold text-zinc-950">PDF 불러오기</h2>
+          <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handlePdfInput} />
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-[12px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => pdfInputRef.current?.click()}
+            disabled={importingPdf}
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-zinc-800 ring-1 ring-zinc-200">
+              <FileText className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-zinc-950">{importingPdf ? "불러오는 중" : "PDF 양식 불러오기"}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-zinc-500">외부에서 디자인한 PDF 양식을 템플릿 배경으로 가져옵니다.</span>
+            </span>
+          </button>
+          <div className="rounded-[12px] bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
+            불러온 양식 위에 문항 영역과 답안 영역만 배치해서 시험지 제작 흐름에 사용합니다.
+          </div>
         </div>
       );
     }
@@ -2537,9 +2546,9 @@ function VisualTemplateStudioPageContent() {
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-black" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-bold text-zinc-950">PDF 디자인 추출 중</div>
+                <div className="text-base font-bold text-zinc-950">PDF 양식 불러오는 중</div>
                 <div className="mt-1 truncate text-xs font-semibold text-zinc-500">{pdfImportFileName}</div>
-                <div className="mt-3 text-sm leading-6 text-zinc-700">{pdfImportMessage || "PDF 레이아웃을 분석하는 중입니다."}</div>
+                <div className="mt-3 text-sm leading-6 text-zinc-700">{pdfImportMessage || "PDF 양식을 확인하는 중입니다."}</div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-100">
                   <div
                     className="h-full rounded-full bg-black transition-all duration-300"
@@ -2547,7 +2556,7 @@ function VisualTemplateStudioPageContent() {
                   />
                 </div>
                 <div className="mt-3 text-xs leading-5 text-zinc-500">
-                  여러 페이지 PDF는 전체 구조를 훑어 표지, 내지, 단원 구분 같은 대표 디자인을 고르는 중입니다.
+                  여러 페이지 PDF는 대표 양식 페이지와 배경 요소를 확인하는 중입니다.
                 </div>
               </div>
             </div>
