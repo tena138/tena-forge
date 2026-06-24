@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "refresh_token"
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: str = "strict"
-    admin_emails: str = "admin@tenaforge.com,admin@tena.local"
+    admin_emails: str = "admin@tenaforge.com,admin@tena-forge.com,admin2@tena-forge.com,admin@tena.local"
     ai_model: str = "gpt-5.4-mini"
     ai_model_pool: str = "gpt-5.4-mini,gpt-5-mini"
     ai_solution_model_pool: str = "gpt-5.4-mini,gpt-5-mini"

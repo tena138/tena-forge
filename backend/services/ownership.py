@@ -10,7 +10,7 @@ from models import Academy, AcademyStaffMembership, ArchiveFolder, Batch, HubTem
 LOCAL_OWNER_ID = "local_user"
 WORKSPACE_HEADER = "x-tena-workspace-id"
 ADMIN_ROLES = {"admin", "super_admin"}
-BUILTIN_ADMIN_EMAILS = {"admin@tenaforge.com", "admin@tena-forge.com", "admin@tena.local"}
+BUILTIN_ADMIN_EMAILS = {"admin@tenaforge.com", "admin@tena-forge.com", "admin2@tena-forge.com", "admin@tena.local"}
 LEGACY_ARCHIVE_GUARD_MODELS = (ArchiveFolder, Batch, Problem, ProblemSet)
 LEGACY_ARCHIVE_CLAIM_MODELS = (ArchiveFolder, Batch, Problem, ProblemSet, HubTemplate)
 STAFF_PERMISSION_FIELDS = {
