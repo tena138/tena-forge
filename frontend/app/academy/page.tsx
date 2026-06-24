@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { AcademyProfile } from "@/lib/auth-api";
 import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
@@ -979,6 +980,8 @@ function AcademySchedulePanel() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleEvent | null>(null);
+  const [deletingEventId, setDeletingEventId] = useState("");
   const [form, setForm] = useState({
     class_id: "",
     title: "",
@@ -1053,6 +1056,7 @@ function AcademySchedulePanel() {
     return grouped;
   }, [monthEvents]);
   const studentCount = useMemo(() => classes.reduce((sum, classRow) => sum + classRow.student_count, 0), [classes]);
+  const deleteTargetClass = deleteTarget ? classById.get(deleteTarget.class_id) : null;
   const academyStartDateTime = `${form.date}T${form.starts_at || "00:00"}`;
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
@@ -1147,13 +1151,21 @@ function AcademySchedulePanel() {
     });
   }
 
-  async function removeEvent(eventId: string) {
+  async function confirmRemoveEvent() {
+    if (!deleteTarget) return;
+    const eventId = deleteTarget.id;
     setError("");
+    setNotice("");
+    setDeletingEventId(eventId);
     try {
       await deleteScheduleEvent(eventId);
       setEvents((current) => current.filter((event) => event.id !== eventId));
+      setDeleteTarget(null);
+      setNotice("일정이 삭제되었습니다.");
     } catch {
       setError("일정을 삭제하지 못했습니다.");
+    } finally {
+      setDeletingEventId("");
     }
   }
 
@@ -1204,7 +1216,17 @@ function AcademySchedulePanel() {
                                     <p className="truncate text-[10px] font-black text-zinc-950 sm:text-[11px]">{event.title}</p>
                                     <p className="hidden truncate text-[10px] text-zinc-600 sm:block">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
                                   </div>
-                                  <button type="button" onClick={() => removeEvent(event.id)} className="absolute right-1 top-1 hidden rounded p-0.5 text-zinc-400 opacity-0 transition hover:bg-white hover:text-zinc-950 group-hover:opacity-100 sm:block" aria-label="삭제">
+                                  <button
+                                    type="button"
+                                    onClick={(clickEvent) => {
+                                      clickEvent.stopPropagation();
+                                      setError("");
+                                      setDeleteTarget(event);
+                                    }}
+                                    className="absolute right-1 top-1 hidden rounded p-0.5 text-zinc-400 opacity-0 transition hover:bg-white hover:text-zinc-950 group-hover:opacity-100 sm:block"
+                                    aria-label={`${event.title} 일정 삭제`}
+                                    title="일정 삭제"
+                                  >
                                     <Trash2 className="h-3 w-3" />
                                   </button>
                                 </div>
@@ -1396,6 +1418,35 @@ function AcademySchedulePanel() {
           </div>
         </div>
       ) : null}
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !deletingEventId && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md bg-white text-zinc-950">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-xl font-black text-zinc-950">일정 삭제</h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                이 일정을 삭제하면 해당 클래스 학생들의 모바일 앱 캘린더에서도 함께 사라집니다. 삭제할까요?
+              </p>
+            </div>
+            {deleteTarget ? (
+              <div className="rounded-[12px] bg-zinc-100 p-3 text-sm">
+                <div className="font-black text-zinc-950">{deleteTarget.title}</div>
+                <div className="mt-1 text-xs font-semibold text-zinc-600">
+                  {academyTimeLabel(deleteTarget.starts_at)} · {deleteTargetClass?.name || "클래스"}
+                </div>
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={Boolean(deletingEventId)} onClick={() => setDeleteTarget(null)}>
+                취소
+              </Button>
+              <Button type="button" variant="destructive" disabled={Boolean(deletingEventId)} onClick={confirmRemoveEvent}>
+                {deletingEventId ? "삭제 중" : "삭제"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
