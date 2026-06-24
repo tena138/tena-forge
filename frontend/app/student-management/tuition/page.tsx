@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Loader2, MessageSquareText, RefreshCw, UserX, WalletCards, XCircle } from "lucide-react";
+import { Check, Loader2, MessageSquareText, RefreshCw, UserX, WalletCards, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -172,10 +171,6 @@ export default function TuitionManagementPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <div className="flex flex-col gap-4 pb-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <Link href="/student-management" className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-950">
-              <ArrowLeft className="h-4 w-4" />
-              학생 관리
-            </Link>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-[7px] bg-zinc-100 text-zinc-950">
                 <WalletCards className="h-5 w-5" />
