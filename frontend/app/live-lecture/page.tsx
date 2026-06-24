@@ -499,7 +499,7 @@ function LiveLectureContent() {
             <Copy className="h-4 w-4" />
             공유 URL
           </button>
-          <button type="button" onClick={startSharing} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-violet-700 px-3 text-xs font-black text-white transition hover:bg-violet-800">
+          <button type="button" onClick={startSharing} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800">
             <MonitorUp className="h-4 w-4" />
             슬라이드 공유
           </button>
