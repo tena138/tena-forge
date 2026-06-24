@@ -62,14 +62,6 @@ function timeText(date: Date | null) {
   return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function durationText(ms: number) {
-  const totalMinutes = Math.max(0, Math.round(ms / 60000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours}시간 ${minutes}분`;
-  return `${minutes}분`;
-}
-
 function fileSizeText(size: number) {
   if (!Number.isFinite(size) || size <= 0) return "";
   const mb = size / (1024 * 1024);
@@ -153,27 +145,13 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
   const progressRatio = Math.max(0, Math.min(1, elapsedMs / totalMs));
   const progress = Math.round(progressRatio * 100);
   const progressPercent = progressRatio * 100;
-  const remainingMs = Math.max(0, endsAt.getTime() - now);
   const lectureDurationMinutes = Math.max(1, Math.round(totalMs / 60000));
   const elapsedMinutes = Math.max(0, Math.min(lectureDurationMinutes, Math.floor(elapsedMs / 60000)));
   const ticks = useMemo(() => buildMinuteTicks(lectureDurationMinutes), [lectureDurationMinutes]);
 
   return (
     <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">Timeline</div>
-          <div className="mt-1 truncate text-lg font-black text-zinc-950">{event?.title || "즉시 강의"}</div>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-bold text-zinc-600">
-          <span>{timeText(startsAt)}</span>
-          <span className="h-1 w-1 rounded-full bg-zinc-300" />
-          <span>{lectureDurationMinutes}분 블록</span>
-          <span className="h-1 w-1 rounded-full bg-zinc-300" />
-          <span>{remainingMs <= 0 ? "종료 시간 지남" : `${durationText(remainingMs)} 남음`}</span>
-        </div>
-      </div>
-      <div className="relative mt-3 h-24 overflow-hidden rounded-[8px] bg-zinc-100 ring-1 ring-black/5">
+      <div className="relative h-24 overflow-hidden rounded-[8px] bg-zinc-100 ring-1 ring-black/5">
         <div className="absolute inset-y-0 left-0 bg-black transition-[width] duration-700" style={{ width: `${progressPercent}%` }} />
         <div className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-zinc-950 shadow-sm">
           {elapsedMinutes}분 진행 · {progress}%
