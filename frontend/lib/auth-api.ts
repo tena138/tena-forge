@@ -1,5 +1,7 @@
 import { authHttp, clearAuthState, setAccessToken, storeAuthProfile } from "@/lib/auth-client";
 
+const PROFILE_REQUEST_TIMEOUT_MS = 5000;
+
 export type AcademyProfile = {
   id: string;
   email: string;
@@ -221,7 +223,7 @@ export async function fetchMe() {
   if (fetchMeCache && fetchMeCache.expiresAt > now) return fetchMeCache.profile;
   if (fetchMePromise) return fetchMePromise;
   fetchMePromise = authHttp
-    .get("/api/auth/me")
+    .get("/api/auth/me", { timeout: PROFILE_REQUEST_TIMEOUT_MS })
     .then((response) => {
       const profile = response.data as AcademyProfile;
       fetchMeCache = { profile, expiresAt: Date.now() + 15000 };

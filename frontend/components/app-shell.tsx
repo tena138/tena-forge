@@ -11,13 +11,14 @@ import { FloatingNav } from "@/components/floating-nav";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
-import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, clearAuthState, ensureAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, clearAuthState, ensureAccessToken, getAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
 const marketingRoutes = ["/", "/plan", "/checkout", "/pricing", "/terms", "/privacy", "/refund-policy", "/copyright-policy"];
 const billingAllowedRoutes = ["/billing", "/plan", "/checkout", "/account/profile", "/account/security"];
 const marketplaceAdminRoutes = ["/marketplace", "/stores", "/creator", "/purchases"];
+const SESSION_READY_FALLBACK_MS = 1500;
 
 function isAdminProfile(profile: { plan?: string | null; roles?: string[] | null }) {
   const roles = profile.roles || [];
@@ -91,6 +92,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
     let active = true;
     setSessionReady(false);
+    const hasCachedSession = Boolean(getAccessToken() || readStoredAuthProfile());
+    const readyFallback = hasCachedSession
+      ? window.setTimeout(() => {
+          if (active) setSessionReady(true);
+        }, SESSION_READY_FALLBACK_MS)
+      : null;
     ensureAccessToken()
       .then(async (token) => {
         if (!active) return;
@@ -141,6 +148,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       });
     return () => {
       active = false;
+      if (readyFallback !== null) window.clearTimeout(readyFallback);
     };
   }, [isAuthRoute, isMarketingRoute, pathname, router]);
 

@@ -7,6 +7,7 @@ export const WORKSPACE_CHANGED_EVENT = "tena-workspace-changed";
 const PROFILE_STORAGE_KEY = "tena-auth-profile";
 const ACCESS_TOKEN_STORAGE_KEY = "tena-access-token";
 const ACTIVE_WORKSPACE_STORAGE_KEY = "tena-active-workspace";
+const AUTH_RECOVERY_TIMEOUT_MS = 5000;
 
 function readStoredAccessToken() {
   if (typeof window === "undefined") return null;
@@ -54,7 +55,7 @@ export function getAccessToken() {
 export async function refreshAccessToken() {
   if (!refreshPromise) {
     refreshPromise = axios
-      .post(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true })
+      .post(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true, timeout: AUTH_RECOVERY_TIMEOUT_MS })
       .then((response) => {
         const token = response.data?.access_token || null;
         setAccessToken(token);
