@@ -26,6 +26,8 @@ from services.pipeline import (  # noqa: E402
     _normalize_page_metadata,
     _problem_page_indexes_from_metadata,
     _quick_answer_candidate_page_indexes,
+    _select_quick_answer_table_page_indexes,
+    _overlay_quick_answer_solutions,
     _should_run_mixed_answer_recovery,
     _sort_number_keys,
     answer_for_subject,
@@ -58,6 +60,39 @@ class PipelineMergeKeyTests(unittest.TestCase):
         indexes = _quick_answer_candidate_page_indexes(14)
 
         self.assertIn(7, indexes)
+
+    def test_quick_answer_selection_keeps_low_count_elective_tables(self):
+        selected = _select_quick_answer_table_page_indexes(
+            [
+                {
+                    "page_index": 9,
+                    "is_quick_answer_table": True,
+                    "confidence": 0.92,
+                    "answer_count_estimate": 8,
+                    "strong_candidate": True,
+                    "weak_candidate": True,
+                },
+                {
+                    "page_index": 13,
+                    "is_quick_answer_table": True,
+                    "confidence": 0.86,
+                    "answer_count_estimate": 2,
+                    "strong_candidate": False,
+                    "weak_candidate": False,
+                    "section_labels": ["elective calculus"],
+                },
+                {
+                    "page_index": 15,
+                    "is_quick_answer_table": False,
+                    "confidence": 0.1,
+                    "answer_count_estimate": 0,
+                    "strong_candidate": False,
+                    "weak_candidate": False,
+                },
+            ]
+        )
+
+        self.assertEqual(selected, [9, 13])
 
     def test_solution_reprocess_distinguishes_structural_section_from_unit_tag(self):
         self.assertTrue(_is_structural_section_label("DAY 03"))
@@ -299,6 +334,38 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertIs(chosen, recovered)
         self.assertEqual(report["chosen"], "recovered")
         self.assertGreater(report["recovered"]["matched_count"], report["current"]["matched_count"])
+
+    def test_quick_answer_overlay_precedes_duplicate_recovered_solution(self):
+        combined = _overlay_quick_answer_solutions(
+            [
+                {
+                    "problem_number": "28",
+                    "answer": "30",
+                    "section_label": "선택과목 / 미적분",
+                    "page_idx": 15,
+                    "_source_order": 10,
+                }
+            ],
+            [
+                {
+                    "problem_number": "28",
+                    "answer": "h(t)=...",
+                    "section_label": "선택과목 / 미적분",
+                    "page_idx": 15,
+                    "_source_order": 1,
+                },
+                {
+                    "problem_number": "29",
+                    "answer": "30",
+                    "section_label": "선택과목 / 미적분",
+                    "page_idx": 15,
+                    "_source_order": 2,
+                },
+            ],
+        )
+
+        self.assertEqual([(item["problem_number"], item["answer"]) for item in combined], [("28", "30"), ("29", "30")])
+        self.assertEqual(combined[0]["extraction_source"], "quick_answer_table")
 
     def test_answer_inventory_prompt_keeps_choice_markers_out_of_problem_number(self):
         note = _answer_inventory_prompt_note(

@@ -2182,6 +2182,7 @@ QUICK_ANSWER_MIN_ANSWER_COUNT = 5
 QUICK_ANSWER_STRONG_CONFIDENCE = 0.68
 QUICK_ANSWER_WEAK_CONFIDENCE = 0.55
 QUICK_ANSWER_EXPECTED_COVERAGE = 0.9
+QUICK_ANSWER_LOW_COUNT_MIN_ANSWER_COUNT = 1
 
 
 def _quick_answer_candidate_page_indexes(page_count: int, edge_count: int = QUICK_ANSWER_EDGE_PAGE_COUNT) -> list[int]:
@@ -2306,6 +2307,32 @@ def _quick_answers_cover_expected_count(answer_count: int, expected_count: int |
     return answer_count >= max(QUICK_ANSWER_MIN_ANSWER_COUNT, math.ceil(expected_count * QUICK_ANSWER_EXPECTED_COVERAGE))
 
 
+def _quick_answer_compact_candidate(item: dict[str, Any]) -> bool:
+    if not item.get("is_quick_answer_table"):
+        return False
+    answer_count = _quick_answer_count(item.get("answer_count_estimate"))
+    if answer_count < QUICK_ANSWER_LOW_COUNT_MIN_ANSWER_COUNT:
+        return False
+    return _quick_answer_float(item.get("confidence")) >= QUICK_ANSWER_STRONG_CONFIDENCE
+
+
+def _select_quick_answer_table_page_indexes(page_reports: list[dict[str, Any]]) -> list[int]:
+    compact_reports = [item for item in page_reports if _quick_answer_compact_candidate(item)]
+    if compact_reports:
+        selected = [int(item["page_index"]) for item in compact_reports]
+        compact_indexes = set(selected)
+        for item in page_reports:
+            page_index = int(item["page_index"])
+            if item.get("weak_candidate") and any(abs(page_index - compact_index) <= 1 for compact_index in compact_indexes):
+                selected.append(page_index)
+        return sorted(set(selected))
+
+    weak_reports = [item for item in page_reports if item.get("weak_candidate")]
+    if sum(int(item.get("answer_count_estimate") or 0) for item in weak_reports) >= QUICK_ANSWER_MIN_ANSWER_COUNT * 2:
+        return sorted({int(item["page_index"]) for item in weak_reports})
+    return []
+
+
 def scan_quick_answer_table_pages(
     path: str,
     page_count: int,
@@ -2415,19 +2442,7 @@ def scan_quick_answer_table_pages(
                     total_units,
                 )
 
-    strong_indexes = {int(item["page_index"]) for item in page_reports if item.get("strong_candidate")}
-    selected_indexes: list[int] = []
-    if strong_indexes:
-        for item in page_reports:
-            page_index = int(item["page_index"])
-            if item.get("strong_candidate") or (item.get("weak_candidate") and any(abs(page_index - strong) <= 1 for strong in strong_indexes)):
-                selected_indexes.append(page_index)
-    else:
-        weak_reports = [item for item in page_reports if item.get("weak_candidate")]
-        if sum(int(item.get("answer_count_estimate") or 0) for item in weak_reports) >= QUICK_ANSWER_MIN_ANSWER_COUNT * 2:
-            selected_indexes = [int(item["page_index"]) for item in weak_reports]
-
-    selected_indexes = sorted(set(selected_indexes))
+    selected_indexes = _select_quick_answer_table_page_indexes(page_reports)
     report["pages"] = sorted(page_reports, key=lambda item: int(item.get("page_index") or 0))
     report["selected_page_indexes"] = selected_indexes
     report["selected_page_numbers"] = [index + 1 for index in selected_indexes]
@@ -2674,6 +2689,39 @@ def _choose_solution_candidates(
         "chosen": "recovered" if choose_recovered else "current",
     }
     return (recovered_solutions if choose_recovered else current_solutions), report
+
+
+def _solution_candidate_identity(solution: dict[str, Any]) -> tuple[str | None, str] | None:
+    number = _number_key_or_none(solution.get("problem_number") or solution.get("problem_no"))
+    if not number:
+        return None
+    return (_structure_label(solution), number)
+
+
+def _overlay_quick_answer_solutions(
+    quick_solutions: list[dict[str, Any]],
+    fallback_solutions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not quick_solutions:
+        return fallback_solutions
+    prioritized: list[dict[str, Any]] = []
+    quick_identities: set[tuple[str | None, str]] = set()
+    for index, solution in enumerate(quick_solutions):
+        copied = dict(solution)
+        copied["extraction_source"] = "quick_answer_table"
+        copied["_source_order"] = -1_000_000 + index
+        identity = _solution_candidate_identity(copied)
+        if identity:
+            quick_identities.add(identity)
+        prioritized.append(copied)
+
+    for solution in fallback_solutions:
+        copied = dict(solution)
+        identity = _solution_candidate_identity(copied)
+        if identity and identity in quick_identities:
+            continue
+        prioritized.append(copied)
+    return _apply_structure_indexes(prioritized, page_key="page_idx")
 
 
 def extract_mixed_pdf_answer_recovery(
@@ -3629,6 +3677,7 @@ def process_batch(batch_id: UUID) -> None:
 
         page_metadata: list[dict[str, Any]] = []
         solutions: list[dict[str, Any]] = []
+        quick_solutions: list[dict[str, Any]] = []
         quick_answer_report: dict[str, Any] | None = None
         quick_answers_used = False
         if should_extract_solutions:
@@ -3773,8 +3822,9 @@ def process_batch(batch_id: UUID) -> None:
                 problem_inventory=problem_inventory,
             )
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
-            if _solution_answer_count(recovered_solutions) >= _solution_answer_count(solutions):
-                solutions = recovered_solutions
+            recovered_candidates = _overlay_quick_answer_solutions(quick_solutions, recovered_solutions)
+            if _solution_answer_count(recovered_candidates) >= _solution_answer_count(solutions):
+                solutions = recovered_candidates
             total_units = recovery_total_units
             problem_extraction_offset += recovery_units
             problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
@@ -3786,6 +3836,7 @@ def process_batch(batch_id: UUID) -> None:
                     "candidate_page_indexes": recovery_page_indexes,
                     "candidate_page_numbers": [index + 1 for index in recovery_page_indexes],
                     "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                    "recovered_overlay_answer_count": _solution_answer_count(recovered_candidates),
                     "chosen_answer_count": _solution_answer_count(solutions),
                     "inventory_expected_problem_count": inventory_expected_count,
                 },
@@ -3953,12 +4004,30 @@ def process_batch(batch_id: UUID) -> None:
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if solution_sections:
                 _apply_section_ranges_to_items(recovered_solutions, solution_sections, "page_idx")
-            chosen_solutions, recovery_report = _choose_solution_candidates(all_extracted, solutions, recovered_solutions)
+            recovered_candidates = _overlay_quick_answer_solutions(quick_solutions, recovered_solutions)
+            if quick_answers_used:
+                current_score = _candidate_solution_score(all_extracted, solutions)
+                recovered_score = _candidate_solution_score(all_extracted, recovered_candidates)
+                if int(recovered_score["matched_count"]) > int(current_score["matched_count"]):
+                    chosen_solutions = recovered_candidates
+                    chosen_source = "recovered"
+                else:
+                    chosen_solutions = solutions
+                    chosen_source = "current"
+                recovery_report = {
+                    "current": current_score,
+                    "recovered": recovered_score,
+                    "chosen": chosen_source,
+                    "quick_answer_table_locked": chosen_source == "current",
+                }
+            else:
+                chosen_solutions, recovery_report = _choose_solution_candidates(all_extracted, solutions, recovered_candidates)
             recovery_report.update(
                 {
                     "candidate_page_indexes": recovery_page_indexes,
                     "candidate_page_numbers": [index + 1 for index in recovery_page_indexes],
                     "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                    "recovered_overlay_answer_count": _solution_answer_count(recovered_candidates),
                 }
             )
             solutions = chosen_solutions
@@ -4201,13 +4270,30 @@ def process_solutions_only(batch_id: UUID) -> None:
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if solution_sections:
                 _apply_section_ranges_to_items(recovered_solutions, solution_sections, "page_idx")
-            solutions, recovery_report = _choose_solution_candidates(existing_problem_payloads, solutions, recovered_solutions)
+            recovered_candidates = _overlay_quick_answer_solutions(quick_solutions, recovered_solutions)
+            if quick_answers_used:
+                current_score = _candidate_solution_score(existing_problem_payloads, solutions)
+                recovered_score = _candidate_solution_score(existing_problem_payloads, recovered_candidates)
+                if int(recovered_score["matched_count"]) > int(current_score["matched_count"]):
+                    solutions = recovered_candidates
+                    chosen_source = "recovered"
+                else:
+                    chosen_source = "current"
+                recovery_report = {
+                    "current": current_score,
+                    "recovered": recovered_score,
+                    "chosen": chosen_source,
+                    "quick_answer_table_locked": chosen_source == "current",
+                }
+            else:
+                solutions, recovery_report = _choose_solution_candidates(existing_problem_payloads, solutions, recovered_candidates)
             recovery_report.update(
                 {
                     "strategy": "solution_only_mixed_pdf_recovery",
                     "candidate_page_indexes": recovery_page_indexes,
                     "candidate_page_numbers": [index + 1 for index in recovery_page_indexes],
                     "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                    "recovered_overlay_answer_count": _solution_answer_count(recovered_candidates),
                     "quick_answer_count": quick_answer_count,
                 }
             )
