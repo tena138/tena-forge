@@ -14,29 +14,18 @@ import {
   Braces,
   BringToFront,
   Copy,
-  Droplets,
   Eye,
   EyeOff,
   FileStack,
   FileText,
-  Grid3X3,
-  Hash,
-  ImageIcon,
   Layers,
   LineChart,
   Lock,
-  MessageSquareText,
-  PanelBottom,
-  PanelTop,
   Plus,
-  QrCode,
   Redo2,
   Save,
   Search,
   SendToBack,
-  Shapes,
-  SlidersHorizontal,
-  Table2,
   Trash2,
   Type,
   Undo2,
@@ -49,7 +38,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget, readFileAsDataUrl } from "@/lib/clipboardImages";
 import { ClipboardDesignImage, createClipboardEditableElements, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
-import { importPowerPointFile } from "@/lib/powerpointPptxImport";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createBlankTemplateSet, createElement, createProblemRegion, pageRoleLabels } from "@/lib/visualTemplatePresets";
 import { ElementStyle, ExamStatsDataSource, ExamStatsMetricKey, PAGE_SIZES, PageRole, PageSizePreset, TemplateCategory, TemplateElement, TemplateElementType, TemplatePage, TemplateSet } from "@/lib/visualTemplateTypes";
@@ -76,7 +64,7 @@ function withReturnTo(path: string, returnTo: string) {
 }
 
 type StudioPanel = "elements" | "pages" | "variables" | "search" | "layers";
-type PaletteGroup = "기본 요소" | "문서 블록" | "동적 영역" | "시스템";
+type PaletteGroup = "자동 영역";
 type SaveMode = "manual" | "auto";
 type AutoSaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
 
@@ -91,23 +79,8 @@ const panelTabs: Array<{ key: StudioPanel; label: string; icon: typeof Type }> =
 const pageRoleOptions = Object.keys(pageRoleLabels) as PageRole[];
 
 const elementPalette: Array<{ type: TemplateElementType; label: string; description: string; group: PaletteGroup; icon: typeof Type }> = [
-  { type: "counselingRegion", label: "상담 항목 영역", description: "상담 항목 자동 배치", group: "?숈쟻 ?곸뿭" as PaletteGroup, icon: MessageSquareText },
-  { type: "text", label: "텍스트", description: "자유 텍스트 박스", group: "기본 요소", icon: Type },
-  { type: "richText", label: "리치 텍스트", description: "강조와 줄바꿈 텍스트", group: "기본 요소", icon: FileText },
-  { type: "image", label: "이미지", description: "로고, 표지, 사진", group: "기본 요소", icon: ImageIcon },
-  { type: "shape", label: "도형", description: "상자, 원, 별", group: "기본 요소", icon: Shapes },
-  { type: "line", label: "선", description: "구분선과 밑줄", group: "기본 요소", icon: SlidersHorizontal },
-  { type: "table", label: "표", description: "채점표, 진도표", group: "문서 블록", icon: Table2 },
-  { type: "headerBlock", label: "헤더", description: "제목과 브랜드 블록", group: "문서 블록", icon: PanelTop },
-  { type: "footerBlock", label: "푸터", description: "하단 정보 블록", group: "문서 블록", icon: PanelBottom },
-  { type: "problemRegion", label: "문항 영역", description: "문항 자동 배치", group: "동적 영역", icon: FileStack },
-  { type: "solutionRegion", label: "답안 영역", description: "답안 자동 배치", group: "동적 영역", icon: FileText },
-  { type: "answerRegion", label: "답안 영역", description: "답안 자동 배치", group: "동적 영역", icon: Grid3X3 },
-  { type: "contentRegion", label: "콘텐츠 영역", description: "범용 동적 영역", group: "동적 영역", icon: BoxSelect },
-  { type: "examStatsChart", label: "시험 통계 차트", description: "평균, 최고/최저, 분위수 추이", group: "동적 영역", icon: LineChart },
-  { type: "pageNumber", label: "페이지 번호", description: "자동 페이지 표시", group: "시스템", icon: Hash },
-  { type: "qr", label: "QR 코드", description: "QR 자리 표시자", group: "시스템", icon: QrCode },
-  { type: "watermark", label: "워터마크", description: "보안과 브랜드 표시", group: "시스템", icon: Droplets },
+  { type: "problemRegion", label: "문항 영역", description: "문항 자동 배치", group: "자동 영역", icon: FileStack },
+  { type: "solutionRegion", label: "답안 영역", description: "답안 자동 배치", group: "자동 영역", icon: FileText },
 ];
 
 function cloneTemplateSet(templateSet: TemplateSet): TemplateSet {
@@ -905,7 +878,6 @@ function VisualTemplateStudioPageContent() {
   const [selectionBox, setSelectionBox] = useState<(TemplateSelectionBox & { pageId: string }) | null>(null);
   const [zoom, setZoom] = useState(0.84);
   const [leftPanel, setLeftPanel] = useState<StudioPanel>("elements");
-  const [paletteQuery, setPaletteQuery] = useState("");
   const [elementSearchQuery, setElementSearchQuery] = useState("");
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -922,8 +894,6 @@ function VisualTemplateStudioPageContent() {
   const dragRef = useRef<DragState | null>(null);
   const marqueeSelectionRef = useRef<MarqueeSelectionState | null>(null);
   const templateSetRef = useRef(templateSet);
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const pptxInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const persistedTemplateIdRef = useRef<string | null>(requestedId);
   const lastServerSavedSnapshotRef = useRef(templateSnapshot(templateSet));
@@ -938,7 +908,6 @@ function VisualTemplateStudioPageContent() {
   const selectedCornerRadiusMax = selectedElement ? maxVisualCornerRadius(selectedElement) : 0;
   const selectedCornerRadius = selectedElement ? visualCornerRadius(selectedElement) : 0;
   const dynamicPreviewPages = useMemo(() => createDynamicPreviewPages(templateSet), [templateSet]);
-  const imageAssets = useMemo(() => templateSet.assets.filter((asset) => asset.type === "image" || asset.type === "logo"), [templateSet.assets]);
   const templateColors = useMemo(() => collectTemplateColors(templateSet), [templateSet]);
   const autoSaveLabel = useMemo(() => {
     if (saving || autoSaveStatus === "saving") return "저장 중";
@@ -954,12 +923,6 @@ function VisualTemplateStudioPageContent() {
   useEffect(() => {
     templateSetRef.current = templateSet;
   }, [templateSet]);
-
-  const filteredPalette = useMemo(() => {
-    const query = paletteQuery.trim().toLowerCase();
-    if (!query) return elementPalette;
-    return elementPalette.filter((item) => `${item.label} ${item.description} ${item.group}`.toLowerCase().includes(query));
-  }, [paletteQuery]);
 
   const pageElementsByLayer = useMemo(() => [...(selectedPage?.elements || [])].sort((a, b) => b.zIndex - a.zIndex), [selectedPage]);
 
@@ -1511,48 +1474,6 @@ function VisualTemplateStudioPageContent() {
     setSelectedIds([insertedId]);
   }
 
-  function handleImageInput(event: ReactChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || []);
-    void addImageFiles(files);
-    event.target.value = "";
-  }
-
-  async function importPptxFile(file: File, pageId = selectedPage?.id) {
-    if (!pageId || !file) return;
-    if (!file.name.toLowerCase().endsWith(".pptx")) {
-      setNotice("PPTX 파일만 가져올 수 있습니다.");
-      return;
-    }
-    const pageForImport = templateSet.pages.find((item) => item.id === pageId);
-    if (!pageForImport) return;
-
-    try {
-      const imported = await importPowerPointFile(file, pageForImport);
-      if (!imported.elements.length) {
-        setNotice("첫 번째 슬라이드에서 편집 가능한 요소를 찾지 못했습니다.");
-        return;
-      }
-      updateTemplateSet((draft) => {
-        const page = draft.pages.find((item) => item.id === pageId);
-        if (!page) return;
-        draft.assets.push(...imported.assets);
-        page.elements.push(...imported.elements);
-      });
-      setSelectedPageId(pageId);
-      setSelectedIds(imported.elements.map((element) => element.id));
-      setEditingTextElementId(imported.elements.length === 1 && imported.elements[0].type === "text" ? imported.elements[0].id : null);
-      setNotice(`${imported.slideName} 첫 슬라이드를 ${imported.elements.length}개의 편집 가능한 요소로 가져왔습니다.`);
-    } catch (error: any) {
-      setNotice(error?.message || "PPTX를 가져오지 못했습니다.");
-    }
-  }
-
-  function handlePptxInput(event: ReactChangeEvent<HTMLInputElement>) {
-    const file = Array.from(event.target.files || [])[0];
-    if (file) void importPptxFile(file);
-    event.target.value = "";
-  }
-
   async function importPdfFile(file: File) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
@@ -1632,13 +1553,13 @@ function VisualTemplateStudioPageContent() {
           if (handled) return;
           if (clipboardImages.length) {
             void addClipboardDesignImages(clipboardImages, selectedPage.id, x, y).then(() => {
-              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. PPTX 가져오기를 사용하면 더 안정적으로 요소화할 수 있습니다.");
+              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. 안정적인 양식 반영은 PDF 디자인 추출을 사용해주세요.");
             });
             return;
           }
           if (imageFiles.length) {
             void addImageFiles(imageFiles, selectedPage.id, x, y).then(() => {
-              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. PPTX 가져오기를 사용하면 더 안정적으로 요소화할 수 있습니다.");
+              setNotice("클립보드 구조를 분해하지 못해 이미지로 붙여넣었습니다. 안정적인 양식 반영은 PDF 디자인 추출을 사용해주세요.");
             });
             return;
           }
@@ -1653,7 +1574,7 @@ function VisualTemplateStudioPageContent() {
       if (imageFiles.length) {
         event.preventDefault();
         void addImageFiles(imageFiles, selectedPage?.id, x, y).then(() => {
-          setNotice("PowerPoint가 클립보드에는 이미지만 제공했습니다. 요소 편집이 필요하면 PPTX 가져오기를 사용하세요.");
+          setNotice("클립보드에는 이미지만 포함되어 이미지로 붙여넣었습니다.");
         });
         return;
       }
@@ -1661,7 +1582,7 @@ function VisualTemplateStudioPageContent() {
       if (clipboardImages.length) {
         event.preventDefault();
         void addClipboardDesignImages(clipboardImages, selectedPage?.id, x, y).then(() => {
-          setNotice("PowerPoint가 클립보드에는 이미지만 제공했습니다. 요소 편집이 필요하면 PPTX 가져오기를 사용하세요.");
+          setNotice("클립보드에는 이미지만 포함되어 이미지로 붙여넣었습니다.");
         });
         return;
       }
@@ -1878,45 +1799,16 @@ function VisualTemplateStudioPageContent() {
 
   function renderLeftPanel() {
     if (leftPanel === "elements") {
-      const groups: PaletteGroup[] = ["기본 요소", "문서 블록", "동적 영역", "시스템"];
+      const groups: PaletteGroup[] = ["자동 영역"];
       return (
         <div className="space-y-3">
           <h2 className="text-sm font-bold text-zinc-950">요소</h2>
-          <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-            <Input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="요소 검색" className="h-9 bg-white/[0.035] pl-9 text-sm" />
-          </label>
 
           <div className="rounded-[14px] border border-dashed border-zinc-300/35 bg-zinc-500/[0.08] p-3">
-            <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml" multiple className="hidden" onChange={handleImageInput} />
-            <input ref={pptxInputRef} type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={handlePptxInput} />
             <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handlePdfInput} />
             <button
               type="button"
-              className="flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200"
-              onClick={() => imageInputRef.current?.click()}
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-zinc-700 ring-1 ring-zinc-200">
-                <ImageIcon className="h-5 w-5" />
-              </span>
-              <span className="block text-sm font-bold text-zinc-950">이미지 업로드</span>
-            </button>
-            <button
-              type="button"
-              className="mt-2 flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200"
-              onClick={() => pptxInputRef.current?.click()}
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white text-zinc-700 ring-1 ring-zinc-200">
-                <FileStack className="h-5 w-5" />
-              </span>
-              <span className="block min-w-0">
-                <span className="block text-sm font-bold text-zinc-950">PPTX 가져오기</span>
-                <span className="mt-0.5 block text-xs text-zinc-500">첫 슬라이드를 편집 가능한 요소로 변환</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              className="mt-2 flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center gap-3 rounded-[10px] bg-zinc-100 p-3 text-left transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => pdfInputRef.current?.click()}
               disabled={importingPdf}
             >
@@ -1928,27 +1820,10 @@ function VisualTemplateStudioPageContent() {
                 <span className="mt-0.5 block text-xs text-zinc-500">PDF 레이아웃을 템플릿 초안으로 변환</span>
               </span>
             </button>
-            {imageAssets.length ? (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {imageAssets.slice(-9).map((asset) => (
-                  <button
-                    key={asset.id}
-                    draggable
-                    className="group relative aspect-square overflow-hidden rounded-[9px] border border-white/10 bg-white/[0.04]"
-                    onClick={() => insertImageAsset(asset.id)}
-                    onDragStart={(event) => event.dataTransfer.setData("application/x-template-asset", asset.id)}
-                    title={asset.name}
-                  >
-                    {asset.url ? <img src={asset.url} alt="" className="h-full w-full object-cover" /> : null}
-                    <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100">{asset.name}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </div>
 
           {groups.map((group) => {
-            const items = filteredPalette.filter((item) => item.group === group);
+            const items = elementPalette.filter((item) => item.group === group);
             if (!items.length) return null;
             return (
               <div key={group} className="space-y-2">
