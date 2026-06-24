@@ -1486,26 +1486,20 @@ function ProblemsBrowser() {
       </section>
 
       <section className="forge-panel rounded-lg p-4">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-zinc-950">문항 보관</h2>
-            <p className="mt-1 text-xs font-semibold text-zinc-500">추출 배치가 저장된 보관 트리 기준으로 문항을 탐색합니다.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {SUBJECT_ENGINES.map((engine) => (
-              <button
-                key={engine.code}
-                type="button"
-                className={cn(
-                  "h-9 rounded-[9px] px-3 text-sm font-bold transition-colors",
-                  archiveEngine === engine.code ? "bg-black text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
-                )}
-                onClick={() => setArchiveEngine(engine.code)}
-              >
-                {subjectEngineLabel(engine.code)}
-              </button>
-            ))}
-          </div>
+        <div className="mb-4 flex flex-wrap gap-2" aria-label="문항 보관 Subject Engine">
+          {SUBJECT_ENGINES.map((engine) => (
+            <button
+              key={engine.code}
+              type="button"
+              className={cn(
+                "h-9 rounded-[9px] px-3 text-sm font-bold transition-colors",
+                archiveEngine === engine.code ? "bg-black text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950"
+              )}
+              onClick={() => setArchiveEngine(engine.code)}
+            >
+              {subjectEngineLabel(engine.code)}
+            </button>
+          ))}
         </div>
         <ArchiveFolderExplorer
           folders={archiveFolders}
