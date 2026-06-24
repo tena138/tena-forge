@@ -338,15 +338,16 @@ def _attach_existing_problem_numbers_to_inventory(
     problem_payloads: list[dict[str, Any]],
 ) -> dict[str, Any]:
     report = dict(problem_inventory or {})
-    existing_numbers = _sort_number_keys(
-        [item.get("problem_no") or item.get("problem_number") for item in problem_payloads]
-    )
+    existing_slots = _problem_slots_from_payloads(problem_payloads)
+    existing_sequence = _number_key_sequence([item.get("problem_number") for item in existing_slots])
+    existing_numbers = _sort_number_keys(existing_sequence)
     if not existing_numbers:
         return report
     current_numbers = _sort_number_keys(report.get("expected_problem_numbers") or [])
-    if len(existing_numbers) >= len(current_numbers):
+    if len(existing_sequence) >= len(current_numbers):
         report["expected_problem_numbers"] = existing_numbers
-        report["expected_problem_count"] = len(existing_numbers)
+        report["expected_problem_slots"] = existing_slots
+        report["expected_problem_count"] = len(existing_sequence)
         report["expected_problem_source"] = "existing_problem_records"
     return report
 
@@ -476,6 +477,7 @@ problem_number must always be a string. Preserve original labels such as "1", "1
 referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
+When the same problem number appears in multiple elective/section blocks, such as Korean CSAT math 28 and 29 for "확률과 통계", "미적분", and "기하", return one answer object per occurrence. Preserve the nearest elective or section label in section_label when visible, and never collapse repeated 28/29 answers into a single object.
 Do not transcribe, summarize, or return explanations. Keep solution_steps and key_concept null.
 Convert every mathematical expression in answer into LaTeX.
 Use inline LaTeX delimiters like $x=2$ inside Korean sentences.
@@ -515,6 +517,7 @@ Rules for matching metadata:
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 - section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 - Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
+- When the same problem number appears in multiple elective/section blocks, such as Korean CSAT math 28 and 29 for "확률과 통계", "미적분", and "기하", return one answer object per occurrence. Preserve the nearest elective or section label in section_label when visible, and never collapse repeated 28/29 answers into a single object.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 - solution_first_line must be the first visible sentence or line of the solution explanation.
 
@@ -548,6 +551,7 @@ Rules:
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 - section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 - Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
+- When the same problem number appears in multiple elective/section blocks, such as Korean CSAT math 28 and 29 for "확률과 통계", "미적분", and "기하", return one answer object per occurrence. Preserve the nearest elective or section label in section_label when visible, and never collapse repeated 28/29 answers into a single object.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
@@ -605,6 +609,7 @@ Rules:
 - Convert mathematical expressions in answer into LaTeX.
 - Preserve original problem labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 - When multiple answer sections are visible on the same page, set section_label to the nearest table/list header for that pair. Preserve full elective labels such as "선택과목(확률과 통계)", "선택과목(미적분)", or "선택과목(기하)" so repeated problem numbers like 28 and 29 can be matched to the correct section.
+- When repeated problem numbers appear in different elective/section blocks, return every occurrence in visible reading order. Do not deduplicate repeated 28/29 answer rows.
 - Read table/list order top-to-bottom and left-to-right unless the page clearly shows another order.
 - page_idx must be the exact 0-based solution PDF page index supplied by the system.
 
@@ -635,6 +640,7 @@ Rules:
 - For math, if an objective answer is shown only as a choice number or symbol, return that marker. If the actual choice value is visible, return the actual value.
 - problem_number is the problem/question number only. Never put circled choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols belong in answer.
 - Preserve original problem labels such as "1", "01", "1-1", "23-(가)", or "[보기 5]".
+- When the same problem number appears in multiple elective/section blocks, such as Korean CSAT math 28 and 29 for "확률과 통계", "미적분", and "기하", return one answer object per occurrence. Preserve the nearest elective or section label in section_label when visible, and never collapse repeated 28/29 answers into a single object.
 - Convert mathematical expressions in answer into LaTeX.
 - page_idx must be the exact 0-based PDF page index supplied by the system.
 
@@ -1459,6 +1465,50 @@ def _sort_number_keys(values: list[Any]) -> list[str]:
     return sorted(keys, key=lambda item: (0, int(item)) if re.fullmatch(r"[0-9]+", item) else (1, item))
 
 
+def _number_key_sequence(values: list[Any]) -> list[str]:
+    keys: list[str] = []
+    for value in values:
+        key = _number_key_or_none(value)
+        if key:
+            keys.append(key)
+    return keys
+
+
+def _problem_slots_from_payloads(problem_payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    slots: list[dict[str, Any]] = []
+    ordered = sorted(
+        problem_payloads,
+        key=lambda item: (
+            int(item.get("global_index") or 10**9),
+            int(item.get("page_index") or 0),
+            int(item.get("local_index") or 10**9),
+            str(item.get("problem_no") or item.get("problem_number") or ""),
+        ),
+    )
+    for item in ordered:
+        number = _number_key_or_none(item.get("problem_no") or item.get("problem_number"))
+        if not number:
+            continue
+        page_index = _int_or_none(item.get("page_index"))
+        slots.append(
+            {
+                "slot_index": len(slots) + 1,
+                "problem_number": number,
+                "page_number": (page_index + 1) if page_index is not None else None,
+                "section_label": item.get("section_label") or item.get("section_id") or None,
+            }
+        )
+    return slots
+
+
+def _expected_problem_number_sequence(problem_inventory: dict[str, Any] | None) -> list[str]:
+    slots = (problem_inventory or {}).get("expected_problem_slots") or []
+    slot_numbers = _number_key_sequence([item.get("problem_number") for item in slots if isinstance(item, dict)])
+    if slot_numbers:
+        return slot_numbers
+    return _sort_number_keys((problem_inventory or {}).get("expected_problem_numbers") or [])
+
+
 def _number_range_from_bounds(start: Any, end: Any) -> list[str]:
     left = _int_or_none(start)
     right = _int_or_none(end)
@@ -1576,10 +1626,36 @@ def _compact_inventory_numbers(numbers: list[Any], *, limit: int = 80) -> str:
     return rendered
 
 
+def _compact_problem_slots(slots: list[dict[str, Any]], *, limit: int = 40) -> str:
+    parts: list[str] = []
+    occurrences: dict[str, int] = defaultdict(int)
+    for slot in slots:
+        if not isinstance(slot, dict):
+            continue
+        number = _number_key_or_none(slot.get("problem_number"))
+        if not number:
+            continue
+        occurrences[number] += 1
+        label = number
+        if occurrences[number] > 1:
+            label = f"{number}#{occurrences[number]}"
+        page = slot.get("page_number")
+        if page:
+            label += f"(p.{page})"
+        parts.append(label)
+    if not parts:
+        return "none"
+    rendered = ", ".join(parts[:limit])
+    if len(parts) > limit:
+        rendered += f", ... (+{len(parts) - limit} more)"
+    return rendered
+
+
 def _problem_inventory_prompt_note(problem_inventory: dict[str, Any] | None, page_index: int | None = None) -> str:
     if not problem_inventory:
         return ""
     expected_numbers = problem_inventory.get("expected_problem_numbers") or []
+    expected_slots = problem_inventory.get("expected_problem_slots") or []
     answer_numbers = problem_inventory.get("answer_candidate_numbers") or []
     page_numbers: list[Any] = []
     page_solution_numbers: list[Any] = []
@@ -1597,6 +1673,7 @@ def _problem_inventory_prompt_note(problem_inventory: dict[str, Any] | None, pag
         "First-pass PDF inventory scaffold for this second-pass extraction:\n"
         f"- Expected total problem slots: {problem_inventory.get('expected_problem_count') or 'unknown'}.\n"
         f"- Expected problem numbers across the PDF: {_compact_inventory_numbers(expected_numbers)}.\n"
+        f"- Expected problem slots in source order, preserving repeated numbers: {_compact_problem_slots(expected_slots)}.\n"
         f"- Current page first-pass problem numbers: {_compact_inventory_numbers(page_numbers)}.\n"
         f"- Current page first-pass answer/solution numbers: {_compact_inventory_numbers(page_solution_numbers)}.\n"
         f"- Answer candidate numbers already found before full text extraction: {_compact_inventory_numbers(answer_numbers)}.\n"
@@ -1609,6 +1686,7 @@ def _answer_inventory_prompt_note(problem_inventory: dict[str, Any] | None, page
     if not problem_inventory:
         return ""
     expected_numbers = problem_inventory.get("expected_problem_numbers") or []
+    expected_slots = problem_inventory.get("expected_problem_slots") or []
     page_solution_numbers: list[Any] = []
     if page_index is not None:
         for entry in problem_inventory.get("pages") or []:
@@ -1622,10 +1700,12 @@ def _answer_inventory_prompt_note(problem_inventory: dict[str, Any] | None, page
         "First-pass PDF inventory scaffold for this answer recovery pass:\n"
         f"- Expected total problem slots: {problem_inventory.get('expected_problem_count') or 'unknown'}.\n"
         f"- Expected problem numbers across the PDF: {_compact_inventory_numbers(expected_numbers)}.\n"
+        f"- Expected problem slots in source order, preserving repeated numbers: {_compact_problem_slots(expected_slots)}.\n"
         f"- Current page first-pass answer/solution numbers: {_compact_inventory_numbers(page_solution_numbers)}.\n"
         "Use this inventory to keep answer rows aligned with the existing problem records. "
         "Never put circled choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols are answers. "
-        "If a compact answer list/table is clearly ordered but omits repeated problem numbers, assign the answers to the expected problem numbers in visible reading order. "
+        "If a compact answer list/table is clearly ordered but omits repeated problem numbers, assign the answers to the expected problem slots in visible reading order. "
+        "When a number repeats, such as elective 28 and 29 appearing several times, return one answer object for each occurrence instead of collapsing them into one. "
         "Do not invent answers that are not explicitly visible."
     )
 
@@ -1647,8 +1727,8 @@ def repair_solution_numbers_from_inventory(
     solutions: list[dict[str, Any]],
     problem_inventory: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    expected_numbers = _sort_number_keys((problem_inventory or {}).get("expected_problem_numbers") or [])
-    if not expected_numbers or not solutions:
+    expected_sequence = _expected_problem_number_sequence(problem_inventory)
+    if not expected_sequence or not solutions:
         return solutions
     answerful = [solution for solution in solutions if has_solution_content(solution)]
     if not answerful:
@@ -1657,26 +1737,25 @@ def repair_solution_numbers_from_inventory(
     current_numbers = [_number_key_or_none(solution.get("problem_number") or solution.get("problem_no")) for solution in answerful]
     nonempty_numbers = [number for number in current_numbers if number]
     current_set = set(nonempty_numbers)
-    expected_set = set(expected_numbers)
+    expected_set = set(expected_sequence)
     duplicate_count = len(nonempty_numbers) - len(current_set)
     missing_count = len([number for number in current_numbers if not number])
     off_inventory_count = len([number for number in nonempty_numbers if number not in expected_set])
     already_covers_inventory = (
         len(nonempty_numbers) == len(answerful)
-        and len(answerful) == len(expected_numbers)
-        and current_set == expected_set
-        and duplicate_count == 0
+        and len(answerful) == len(expected_sequence)
+        and nonempty_numbers == expected_sequence
     )
     if already_covers_inventory:
         return solutions
 
     should_repair_by_order = (
-        len(answerful) <= len(expected_numbers)
+        len(answerful) <= len(expected_sequence)
         and (
             missing_count > 0
             or duplicate_count > 0
             or off_inventory_count > 0
-            or len(current_set & expected_set) < max(1, min(len(answerful), len(expected_numbers)) // 2)
+            or len(current_set & expected_set) < max(1, min(len(answerful), len(expected_sequence)) // 2)
         )
     )
     if not should_repair_by_order:
@@ -1686,8 +1765,8 @@ def repair_solution_numbers_from_inventory(
     answer_index = 0
     for solution in solutions:
         copied = dict(solution)
-        if has_solution_content(copied) and answer_index < len(expected_numbers):
-            expected_number = expected_numbers[answer_index]
+        if has_solution_content(copied) and answer_index < len(expected_sequence):
+            expected_number = expected_sequence[answer_index]
             current_number = _number_key_or_none(copied.get("problem_number") or copied.get("problem_no"))
             if current_number != expected_number:
                 copied["problem_number_repaired_from"] = copied.get("problem_number") if "problem_number" in copied else copied.get("problem_no")

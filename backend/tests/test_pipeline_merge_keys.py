@@ -313,6 +313,49 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertIn("Never put circled choice markers", note)
         self.assertIn("those symbols are answers", note)
 
+    def test_answer_inventory_prompt_preserves_repeated_problem_slots(self):
+        note = _answer_inventory_prompt_note(
+            {
+                "expected_problem_count": 6,
+                "expected_problem_numbers": ["28", "29"],
+                "expected_problem_slots": [
+                    {"problem_number": "28", "page_number": 7},
+                    {"problem_number": "29", "page_number": 7},
+                    {"problem_number": "28", "page_number": 8},
+                    {"problem_number": "29", "page_number": 8},
+                    {"problem_number": "28", "page_number": 9},
+                    {"problem_number": "29", "page_number": 9},
+                ],
+            }
+        )
+
+        self.assertIn("28(p.7), 29(p.7), 28#2(p.8), 29#2(p.8), 28#3(p.9), 29#3(p.9)", note)
+        self.assertIn("return one answer object for each occurrence", note)
+
+    def test_solution_number_repair_uses_duplicate_inventory_slots(self):
+        repaired = repair_solution_numbers_from_inventory(
+            [
+                {"problem_number": "", "answer": "A"},
+                {"problem_number": "", "answer": "B"},
+                {"problem_number": "", "answer": "C"},
+                {"problem_number": "", "answer": "D"},
+                {"problem_number": "", "answer": "E"},
+                {"problem_number": "", "answer": "F"},
+            ],
+            {
+                "expected_problem_slots": [
+                    {"problem_number": "28"},
+                    {"problem_number": "29"},
+                    {"problem_number": "28"},
+                    {"problem_number": "29"},
+                    {"problem_number": "28"},
+                    {"problem_number": "29"},
+                ]
+            },
+        )
+
+        self.assertEqual([item["problem_number"] for item in repaired], ["28", "29", "28", "29", "28", "29"])
+
     def test_page_metadata_prefers_exam_round_over_single_connection_title(self):
         page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
         normalized = _normalize_page_metadata(
