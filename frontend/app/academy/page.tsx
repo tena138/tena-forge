@@ -913,8 +913,38 @@ function AcademyOperationsPanel() {
 function academyDateKey(value: Date | string) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const pad = (number: number) => String(number).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${date.getFullYear()}-${academyPad(date.getMonth() + 1)}-${academyPad(date.getDate())}`;
+}
+
+function academyPad(number: number) {
+  return String(number).padStart(2, "0");
+}
+
+function academyDateTimeWithSourceTime(dateKey: string, sourceDateTime: string) {
+  const source = new Date(sourceDateTime);
+  if (Number.isNaN(source.getTime())) return `${dateKey}T00:00:00`;
+  return `${dateKey}T${academyPad(source.getHours())}:${academyPad(source.getMinutes())}:${academyPad(source.getSeconds())}`;
+}
+
+function academyLocalDateTimeWithSeconds(value: Date) {
+  return `${academyDateKey(value)}T${academyPad(value.getHours())}:${academyPad(value.getMinutes())}:${academyPad(value.getSeconds())}`;
+}
+
+function academyEndDateTimeForCopiedEvent(source: ScheduleEvent, nextStartsAt: string) {
+  if (!source.ends_at) return null;
+  const sourceStart = new Date(source.starts_at);
+  const sourceEnd = new Date(source.ends_at);
+  const nextStart = new Date(nextStartsAt);
+  if (Number.isNaN(sourceStart.getTime()) || Number.isNaN(sourceEnd.getTime()) || Number.isNaN(nextStart.getTime())) return null;
+  const duration = sourceEnd.getTime() - sourceStart.getTime();
+  if (duration <= 0) return null;
+  return academyLocalDateTimeWithSeconds(new Date(nextStart.getTime() + duration));
+}
+
+function academyShortcutTargetIsEditable(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName.toLowerCase();
+  return target.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select";
 }
 
 function academyAddDays(value: Date, days: number) {
@@ -982,6 +1012,10 @@ function AcademySchedulePanel() {
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ScheduleEvent | null>(null);
   const [deletingEventId, setDeletingEventId] = useState("");
+  const [selectedDateKey, setSelectedDateKey] = useState(() => academyDateKey(new Date()));
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [copiedEvent, setCopiedEvent] = useState<ScheduleEvent | null>(null);
+  const [pastingEvent, setPastingEvent] = useState(false);
   const [form, setForm] = useState({
     class_id: "",
     title: "",
@@ -1057,6 +1091,7 @@ function AcademySchedulePanel() {
   }, [monthEvents]);
   const studentCount = useMemo(() => classes.reduce((sum, classRow) => sum + classRow.student_count, 0), [classes]);
   const deleteTargetClass = deleteTarget ? classById.get(deleteTarget.class_id) : null;
+  const selectedEvent = useMemo(() => events.find((event) => event.id === selectedEventId) || null, [events, selectedEventId]);
   const academyStartDateTime = `${form.date}T${form.starts_at || "00:00"}`;
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
@@ -1068,6 +1103,12 @@ function AcademySchedulePanel() {
       return { ...current, class_id: classes[0].id };
     });
   }, [classes]);
+
+  useEffect(() => {
+    if (selectedEventId && !events.some((event) => event.id === selectedEventId)) {
+      setSelectedEventId("");
+    }
+  }, [events, selectedEventId]);
 
   const academyModeActive = Boolean(activeWorkspaceId && activeWorkspaceId !== "student") || profile?.account_type === "academy";
 
@@ -1169,6 +1210,58 @@ function AcademySchedulePanel() {
     }
   }
 
+  async function pasteCopiedEvent(targetDateKey = selectedDateKey) {
+    if (!copiedEvent || !targetDateKey || pastingEvent) return;
+    setError("");
+    setNotice("");
+    setPastingEvent(true);
+    try {
+      const startsAt = academyDateTimeWithSourceTime(targetDateKey, copiedEvent.starts_at);
+      const created = await createScheduleEvent({
+        class_id: copiedEvent.class_id,
+        title: copiedEvent.title,
+        description: copiedEvent.description || null,
+        event_type: copiedEvent.event_type,
+        starts_at: startsAt,
+        ends_at: academyEndDateTimeForCopiedEvent(copiedEvent, startsAt),
+        linked_paper_session_id: copiedEvent.linked_paper_session_id || null,
+        counts_for_tuition: copiedEvent.counts_for_tuition,
+      });
+      setEvents((current) => [...current.filter((event) => event.id !== created.id), created]);
+      setSelectedDateKey(targetDateKey);
+      setSelectedEventId(created.id);
+      setNotice(`"${created.title}" 일정을 ${targetDateKey}에 붙여넣었습니다.`);
+    } catch {
+      setError("일정을 붙여넣지 못했습니다.");
+    } finally {
+      setPastingEvent(false);
+    }
+  }
+
+  useEffect(() => {
+    function handleScheduleShortcut(event: KeyboardEvent) {
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey) return;
+      if (formOpen || deleteTarget || academyShortcutTargetIsEditable(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === "c") {
+        if (!selectedEvent) return;
+        event.preventDefault();
+        setCopiedEvent({ ...selectedEvent });
+        setNotice(`"${selectedEvent.title}" 일정을 복사했습니다.`);
+        setError("");
+        return;
+      }
+      if (key === "v") {
+        if (!copiedEvent || !selectedDateKey || pastingEvent) return;
+        event.preventDefault();
+        void pasteCopiedEvent(selectedDateKey);
+      }
+    }
+
+    window.addEventListener("keydown", handleScheduleShortcut);
+    return () => window.removeEventListener("keydown", handleScheduleShortcut);
+  }, [copiedEvent, deleteTarget, formOpen, pastingEvent, selectedDateKey, selectedEvent]);
+
   return (
     <div className="relative space-y-4">
       {(notice || error) ? (
@@ -1198,8 +1291,14 @@ function AcademySchedulePanel() {
                     const dayEvents = eventsByDate[key] || [];
                     const inMonth = day.getMonth() === monthCursor.getMonth();
                     const isToday = key === academyDateKey(new Date());
+                    const isSelectedDate = key === selectedDateKey;
                     return (
-                      <div key={key} className={`min-h-[118px] p-2 ${inMonth ? "bg-white" : "bg-zinc-50 text-zinc-400"}`}>
+                      <div
+                        key={key}
+                        className={`min-h-[118px] cursor-pointer p-2 transition ${inMonth ? "bg-white" : "bg-zinc-50 text-zinc-400"} ${isSelectedDate ? "ring-1 ring-inset ring-black/15" : "hover:bg-zinc-50"}`}
+                        onClick={() => setSelectedDateKey(key)}
+                        title={copiedEvent ? "Ctrl+V로 복사한 일정을 이 날짜에 붙여넣기" : "붙여넣기 대상 날짜 선택"}
+                      >
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <span className={`grid h-6 min-w-6 place-items-center rounded-full text-xs font-black ${isToday ? "bg-black text-white" : inMonth ? "text-zinc-950" : "text-zinc-400"}`}>
                             {day.getDate()}
@@ -1209,8 +1308,29 @@ function AcademySchedulePanel() {
                         <div className="space-y-1.5">
                           {dayEvents.slice(0, 3).map((event) => {
                             const classRow = classById.get(event.class_id);
+                            const isSelectedEvent = event.id === selectedEventId;
+                            const isCopiedEvent = copiedEvent?.id === event.id;
                             return (
-                              <div key={event.id} className="group relative rounded-[6px] bg-zinc-100 px-1.5 py-1.5 sm:px-2">
+                              <div
+                                key={event.id}
+                                role="button"
+                                tabIndex={0}
+                                className={`group relative rounded-[6px] px-1.5 py-1.5 text-left transition sm:px-2 ${isSelectedEvent ? "bg-white ring-1 ring-black/20 shadow-sm" : "bg-zinc-100 hover:bg-zinc-50"} ${isCopiedEvent ? "outline outline-1 outline-offset-1 outline-zinc-300" : ""}`}
+                                onClick={(clickEvent) => {
+                                  clickEvent.stopPropagation();
+                                  setSelectedDateKey(key);
+                                  setSelectedEventId(event.id);
+                                  setError("");
+                                }}
+                                onKeyDown={(keyEvent) => {
+                                  if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+                                  keyEvent.preventDefault();
+                                  setSelectedDateKey(key);
+                                  setSelectedEventId(event.id);
+                                  setError("");
+                                }}
+                                title="선택 후 Ctrl+C로 복사"
+                              >
                                 <div className="flex items-start justify-between gap-1.5">
                                   <div className="min-w-0">
                                     <p className="truncate text-[10px] font-black text-zinc-950 sm:text-[11px]">{event.title}</p>
