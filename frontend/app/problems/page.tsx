@@ -1185,13 +1185,13 @@ function ProblemsBrowser() {
         onClick={() => handleProblemBlockClick(problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "group relative min-h-[215px] cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
+          "group relative min-h-[198px] cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
           selected ? "bg-zinc-100" : ""
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
         <Link
-          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20"
+          className="absolute right-2.5 top-2.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20"
           href={detailHref}
           draggable={false}
           onPointerDown={stopInteractiveEvent}
@@ -1201,11 +1201,11 @@ function ProblemsBrowser() {
           }}
           aria-label={`${problem.problem_number}번 상세 보기`}
         >
-          <ArrowUpRight className="h-4 w-4" />
+          <ArrowUpRight className="h-3.5 w-3.5" />
         </Link>
         <button
           type="button"
-          className="absolute right-3 top-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:cursor-wait disabled:opacity-60"
+          className="absolute right-2.5 top-10 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:cursor-wait disabled:opacity-60"
           onPointerDown={stopInteractiveEvent}
           onClick={(event) => {
             stopInteractiveEvent(event);
@@ -1215,19 +1215,19 @@ function ProblemsBrowser() {
           aria-label={`${problem.problem_number}번 문항 복제`}
           title="문항 복제"
         >
-          <Copy className="h-4 w-4" />
+          <Copy className="h-3.5 w-3.5" />
         </button>
-        <div className="flex h-full flex-col px-4 pb-4 pl-6 pr-12 pt-3">
+        <div className="flex h-full flex-col px-3 pb-3 pl-5 pr-10 pt-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="line-clamp-1 text-[11px] font-medium leading-4 text-muted-foreground">{sourceLabel(problem)}</div>
+              <div className="line-clamp-1 text-[10px] font-medium leading-[14px] text-muted-foreground">{sourceLabel(problem)}</div>
             </div>
-            {!problem.tags?.difficulty ? <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold", tone.badge)}>미지정</span> : null}
+            {!problem.tags?.difficulty ? <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold", tone.badge)}>미지정</span> : null}
           </div>
 
-          <MathText className="mt-3 line-clamp-4 text-[15px] font-medium leading-[1.62] text-foreground" value={problem.problem_text} />
+          <MathText className="mt-2.5 line-clamp-5 text-[13.5px] font-medium leading-[1.55] text-foreground" value={problem.problem_text} />
 
-          <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 text-[11px] font-medium text-muted-foreground">
+          <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3 text-[10px] font-medium text-muted-foreground">
             {showSubject ? <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-700">{problem.tags?.subject}</span> : null}
             <span>{pageLabel(problem)}</span>
             <span className="text-zinc-400">·</span>
@@ -1559,7 +1559,7 @@ function ProblemsBrowser() {
               {visibleKoreanPassages.map(renderKoreanPassageCard)}
             </div>
           ) : null}
-          <div className={cn(viewMode === "grid" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2")}>
+          <div className={cn(viewMode === "grid" ? "grid gap-2.5 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5" : "space-y-2")}>
             {data.items.map((problem) => viewMode === "grid" ? renderProblemCard(problem) : renderProblemRow(problem))}
           </div>
         </div>
