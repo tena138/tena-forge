@@ -15,7 +15,7 @@ from models import Batch, BatchStatus
 _scheduler_lock = threading.Lock()
 _SCHEDULER_LOCK_NAMESPACE = 1413828161
 _SCHEDULER_LOCK_ID = 1
-_STALE_PROCESSING_MINUTES = 30
+_STALE_PROCESSING_MINUTES = 5
 
 
 def _try_database_scheduler_lock(db) -> bool:
@@ -70,7 +70,7 @@ def mark_stale_processing_batches(db, *, batch_id: UUID | None = None) -> int:
         batch.status = BatchStatus.error
         batch.progress_message = "처리 작업이 중단되었습니다."
         batch.failure_stage = previous_stage
-        batch.failure_reason = "작업 진행 상태가 30분 이상 갱신되지 않아 중단된 것으로 판단했습니다."
+        batch.failure_reason = f"작업 진행 상태가 {_STALE_PROCESSING_MINUTES}분 이상 갱신되지 않아 중단된 것으로 판단했습니다."
         batch.failure_hint = "배치를 다시 처리해 주세요. 같은 구간에서 반복되면 원본 PDF와 답안 PDF 매칭 상태를 확인해 주세요."
         batch.failed_at = now
         batch.progress_updated_at = now

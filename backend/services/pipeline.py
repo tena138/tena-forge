@@ -2292,18 +2292,30 @@ def extract_solution_page_indexes(
 
 
 def _mixed_answer_recovery_page_indexes(metadata: list[dict[str, Any]], page_count: int) -> list[int]:
-    indexes: list[int] = []
+    strong_candidates: list[int] = []
+    weak_candidates: list[int] = []
     for item in metadata:
         page_index = int(item.get("page_index") or 0)
         if page_index < 0 or page_index >= page_count:
             continue
         page_type = str(item.get("page_type") or "").strip()
-        if page_type in {"toc", "skip_page"}:
+        if page_type in NON_EXTRACTABLE_PAGE_TYPES:
             continue
-        indexes.append(page_index)
-    if indexes:
-        return sorted(set(indexes))
-    return list(range(page_count))
+        problem_headers = item.get("detected_problem_headers") or []
+        solution_headers = item.get("detected_solution_headers") or []
+        if page_type == "solution_page" or solution_headers:
+            strong_candidates.append(page_index)
+            continue
+        if not problem_headers and page_type in {"unknown", ""}:
+            weak_candidates.append(page_index)
+    if strong_candidates:
+        return sorted(set(strong_candidates))
+    if weak_candidates:
+        return sorted(set(weak_candidates))
+    if page_count <= 6:
+        return list(range(page_count))
+    tail_start = max(0, math.floor(page_count * 0.65))
+    return list(range(tail_start, page_count))
 
 
 def _candidate_solution_score(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> dict[str, Any]:

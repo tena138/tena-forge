@@ -114,19 +114,27 @@ class PipelineMergeKeyTests(unittest.TestCase):
 
         self.assertEqual(indexes, [5])
 
-    def test_mixed_answer_recovery_scans_extractable_pages(self):
+    def test_mixed_answer_recovery_prefers_answer_candidate_pages(self):
         indexes = _mixed_answer_recovery_page_indexes(
             [
-                {"page_index": 0, "page_type": "toc"},
-                {"page_index": 1, "page_type": "problem_page"},
-                {"page_index": 2, "page_type": "unknown"},
-                {"page_index": 3, "page_type": "solution_page"},
-                {"page_index": 4, "page_type": "skip_page"},
+                {"page_index": 0, "page_type": "toc", "detected_solution_headers": ["0"]},
+                {"page_index": 1, "page_type": "problem_page", "detected_problem_headers": ["1"], "detected_solution_headers": []},
+                {"page_index": 2, "page_type": "unknown", "detected_problem_headers": [], "detected_solution_headers": []},
+                {"page_index": 3, "page_type": "solution_page", "detected_problem_headers": [], "detected_solution_headers": ["1", "2"]},
+                {"page_index": 4, "page_type": "skip_page", "detected_solution_headers": ["3"]},
             ],
             5,
         )
 
-        self.assertEqual(indexes, [1, 2, 3])
+        self.assertEqual(indexes, [3])
+
+    def test_mixed_answer_recovery_uses_tail_when_no_answer_candidate_exists(self):
+        metadata = [
+            {"page_index": index, "page_type": "problem_page", "detected_problem_headers": [str(index + 1)], "detected_solution_headers": []}
+            for index in range(10)
+        ]
+
+        self.assertEqual(_mixed_answer_recovery_page_indexes(metadata, 10), [6, 7, 8, 9])
 
     def test_mixed_answer_recovery_runs_when_answers_do_not_cover_problems(self):
         problems = [
