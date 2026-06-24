@@ -39,6 +39,7 @@ def test_problem_visual_schema_renders_structured_table():
         {
             "type": "structured_table",
             "caption": "values",
+            "source": "visual_and_problem_text",
             "headerRows": 1,
             "rows": [
                 [{"text": "x", "header": True}, {"text": "$f(x)$", "header": True}],
@@ -50,6 +51,7 @@ def test_problem_visual_schema_renders_structured_table():
     html = problem_visual_schema_to_svg(schema)
 
     assert schema is not None
+    assert schema["source"] == "visual_and_problem_text"
     assert 'class="problem-structured-table"' in html
     assert "<th" in html
     assert "$f(x)$" in html
@@ -59,6 +61,7 @@ def test_problem_visual_schema_renders_shape_diagram():
     schema = normalize_problem_visual_schema(
         {
             "type": "shape_diagram",
+            "source_basis": "visual_and_problem_text",
             "viewport": {"width": 100, "height": 100},
             "objects": [
                 {"kind": "segment", "x1": 10, "y1": 80, "x2": 90, "y2": 80, "label": "AB"},
@@ -70,6 +73,7 @@ def test_problem_visual_schema_renders_shape_diagram():
     svg = problem_visual_schema_to_svg(schema)
 
     assert schema is not None
+    assert schema["source"] == "visual_and_problem_text"
     assert 'class="problem-shape-visual"' in svg
     assert "<line" in svg
     assert "<circle" in svg

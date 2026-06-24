@@ -63,6 +63,13 @@ def _clean_string_map(value: Any, *, max_items: int = 32, max_value_length: int 
     return cleaned
 
 
+def _normalize_schema_source(value: dict[str, Any]) -> str | None:
+    source = _clean_text(value.get("source") or value.get("source_basis"), 80)
+    if source in {"visual_only", "visual_and_problem_text"}:
+        return source
+    return source
+
+
 def normalize_math_model(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
@@ -357,6 +364,9 @@ def _normalize_structured_table(value: dict[str, Any]) -> dict[str, Any] | None:
     confidence = _num(value.get("confidence"))
     if confidence is not None:
         result["confidence"] = max(0.0, min(confidence, 1.0))
+    source = _normalize_schema_source(value)
+    if source:
+        result["source"] = source
     return result
 
 
@@ -381,7 +391,7 @@ def _normalize_cartesian_graph(value: dict[str, Any]) -> dict[str, Any] | None:
     confidence = _num(value.get("confidence"))
     if confidence is not None:
         result["confidence"] = max(0.0, min(confidence, 1.0))
-    source = _clean_text(value.get("source"), 80)
+    source = _normalize_schema_source(value)
     if source:
         result["source"] = source
     return result
@@ -404,6 +414,9 @@ def _normalize_shape_diagram(value: dict[str, Any]) -> dict[str, Any] | None:
     confidence = _num(value.get("confidence"))
     if confidence is not None:
         result["confidence"] = max(0.0, min(confidence, 1.0))
+    source = _normalize_schema_source(value)
+    if source:
+        result["source"] = source
     return result
 
 

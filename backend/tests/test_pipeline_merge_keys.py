@@ -7,6 +7,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from services.pipeline import (  # noqa: E402
+    EXTRACTION_PROMPT,
+    PROBLEM_PREVIEW_QA_PROMPT,
+    RESCUE_EXTRACTION_PROMPT,
     RenderedPage,
     _apply_section_ranges_to_items,
     _choose_solution_candidates,
@@ -27,6 +30,12 @@ from services.pipeline import (  # noqa: E402
 
 
 class PipelineMergeKeyTests(unittest.TestCase):
+    def test_math_visual_prompts_reconstruct_from_problem_text(self):
+        for prompt in (EXTRACTION_PROMPT, RESCUE_EXTRACTION_PROMPT, PROBLEM_PREVIEW_QA_PROMPT):
+            self.assertIn("Do not merely trace pixels", prompt)
+            self.assertIn("visual_and_problem_text", prompt)
+            self.assertIn("problem_text supplies explicit constraints", prompt)
+
     def test_solution_reprocess_distinguishes_structural_section_from_unit_tag(self):
         self.assertTrue(_is_structural_section_label("DAY 03"))
         self.assertTrue(_is_structural_section_label("UNIT 12"))
