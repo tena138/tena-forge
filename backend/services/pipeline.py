@@ -3410,7 +3410,6 @@ def process_batch(batch_id: UUID) -> None:
         _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
         _write_batch_artifact(batch_id, "problem_inventory_report.json", problem_inventory)
 
-        mixed_answer_recovery_ran = False
         problem_extraction_offset = structure_units + solution_units
         if (
             should_detect_embedded_solutions
@@ -3440,7 +3439,6 @@ def process_batch(batch_id: UUID) -> None:
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if _solution_answer_count(recovered_solutions) >= _solution_answer_count(solutions):
                 solutions = recovered_solutions
-            mixed_answer_recovery_ran = True
             total_units = recovery_total_units
             problem_extraction_offset += recovery_units
             problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
@@ -3592,8 +3590,7 @@ def process_batch(batch_id: UUID) -> None:
                 _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         should_run_answer_recovery = (
             should_detect_embedded_solutions
-            and not mixed_answer_recovery_ran
-            and (_document_type_hints_include_mixed(document_type_hints) or _should_run_mixed_answer_recovery(all_extracted, solutions))
+            and _should_run_mixed_answer_recovery(all_extracted, solutions)
         )
         if should_run_answer_recovery:
             recovery_page_indexes = _mixed_answer_recovery_page_indexes(page_metadata, problem_page_count)
