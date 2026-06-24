@@ -14,6 +14,7 @@ from services.pipeline import (  # noqa: E402
     _is_structural_section_label,
     _normalize_extracted_items,
     _normalize_page_metadata,
+    _problem_page_indexes_from_metadata,
     answer_for_subject,
     build_section_ranges_from_metadata,
     build_structure_validation_report,
@@ -74,6 +75,13 @@ class PipelineMergeKeyTests(unittest.TestCase):
         normalized = _normalize_page_metadata({}, page, "problem")
 
         self.assertEqual(normalized["page_type"], "unknown")
+
+    def test_problem_extraction_uses_skip_page_instead_of_design_roles(self):
+        page = RenderedPage(page_index=4, base64_png="", png_bytes=b"")
+        normalized = _normalize_page_metadata({"page_type": "cover"}, page, "problem")
+
+        self.assertEqual(normalized["page_type"], "skip_page")
+        self.assertEqual(_problem_page_indexes_from_metadata([normalized], 5), [])
 
     def test_mixed_hint_with_solution_headers_marks_embedded_solution_page(self):
         indexes = _embedded_solution_page_indexes(

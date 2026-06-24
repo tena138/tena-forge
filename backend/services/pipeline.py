@@ -62,7 +62,7 @@ EXTRACTION_PROMPT = r"""You are extracting standalone student exercises from a K
 
 First decide whether this page contains any standalone problems that a student is expected to solve.
 Extract valid problems even when the same page also contains concept notes, formulas, hints, examples, answer choices, or short commentary.
-Return [] only when the page has no independent student task at all, or when it is purely a table of contents, cover, index, answer key, solution page, or teacher-facing explanation.
+Return [] only when the page has no independent student task at all, or when it is purely table of contents, title/index material, answer key, solution page, or teacher-facing explanation.
 
 Extract items that have a clear problem number/label and a question/instruction for the student to solve.
 Do not extract standalone definitions, formulas, or commentary paragraphs as separate problems, but do not let them block extraction of nearby problems.
@@ -111,7 +111,7 @@ Extract every visible standalone student exercise from this single page.
 Use a more inclusive rule than the first pass:
 - Extract numbered problems even when the page also contains answer choices, short hints, or a small amount of adjacent commentary.
 - Do not skip a page merely because it has a diagram, table, graph, or dense math.
-- Still return [] for pure solution pages, answer keys, concept explanations, table of contents, covers, indexes, or pages with no independent student question.
+- Still return [] for pure solution pages, answer keys, concept explanations, table of contents, title/index material, or pages with no independent student question.
 
 For each problem return a JSON object with:
 {
@@ -556,7 +556,8 @@ Rules:
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
 PAGE_STRUCTURE_PROMPT = r"""You are reading one page from a Korean problem book or solution book.
-Extract page-level structure metadata only. Do not extract full problems or full solutions.
+Extract page-level structure metadata only for problem/answer extraction. Do not extract full problems or full solutions.
+Do not classify visual-template roles here. Non-question title, separator, publisher-log, decorative, and other irrelevant pages are simply skip_page.
 
 Return exactly one JSON object inside a JSON array:
 [
@@ -572,7 +573,7 @@ Return exactly one JSON object inside a JSON array:
     "section_pattern": "subject_unit" | "day" | "round" | "mixed" | "unknown",
     "detected_problem_headers": ["01", "02"],
     "detected_solution_headers": ["01", "02"],
-    "page_type": "problem_page" | "solution_page" | "toc" | "cover" | "log" | "blank" | "unknown",
+    "page_type": "problem_page" | "solution_page" | "toc" | "skip_page" | "unknown",
     "layout": "single_column" | "two_column" | "unknown",
     "section_confidence": <0.0 to 1.0>
   }
@@ -581,6 +582,7 @@ Return exactly one JSON object inside a JSON array:
 Rules:
 - Only report metadata visible on this page.
 - If this page is a table of contents / 목차 / 차례, set page_type to "toc" and extract toc_entries.
+- If this page is not useful for extracting problems, answers, solutions, or section anchors, set page_type to "skip_page".
 - Common structures are:
   1. subject + unit sections, e.g. "수학Ⅰ / 지수함수와 로그함수", "수학Ⅱ / 수열".
   2. DAY-based sections, e.g. "DAY 1", "Day 02", "DAY 03".
@@ -605,6 +607,7 @@ PAGE_CHUNK_SIZE = 16
 LARGE_FILE_DPI = 160
 DEFAULT_RENDER_DPI = 180
 CANCEL_FAILURE_STAGE = "사용자 중단"
+NON_EXTRACTABLE_PAGE_TYPES = {"toc", "skip_page", "cover", "blank", "log"}
 
 
 class BatchCancelled(RuntimeError):
@@ -983,7 +986,7 @@ def _normalize_toc_entries(value: Any) -> list[dict[str, Any]]:
 
 def _normalize_page_type(value: Any, fallback: str) -> str:
     text = str(value or "").strip().lower()
-    allowed = {"problem_page", "solution_page", "toc", "cover", "log", "blank", "unknown"}
+    allowed = {"problem_page", "solution_page", "toc", "skip_page", "unknown"}
     aliases = {
         "problem": "problem_page",
         "problems": "problem_page",
@@ -1011,11 +1014,21 @@ def _normalize_page_type(value: Any, fallback: str) -> str:
         "table of contents": "toc",
         "목차": "toc",
         "차례": "toc",
-        "cover_page": "cover",
-        "front_cover": "cover",
-        "표지": "cover",
-        "empty": "blank",
-        "공백": "blank",
+        "cover": "skip_page",
+        "cover_page": "skip_page",
+        "front_cover": "skip_page",
+        "title_page": "skip_page",
+        "index": "skip_page",
+        "log": "skip_page",
+        "blank": "skip_page",
+        "empty": "skip_page",
+        "separator": "skip_page",
+        "skip": "skip_page",
+        "non_content": "skip_page",
+        "non-content": "skip_page",
+        "표지": "skip_page",
+        "간지": "skip_page",
+        "공백": "skip_page",
     }
     return text if text in allowed else aliases.get(text, fallback)
 
@@ -1222,7 +1235,7 @@ def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind:
     starts: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in relevant:
-        if item.get("page_type") in {"toc", "cover", "blank", "log"}:
+        if item.get("page_type") in NON_EXTRACTABLE_PAGE_TYPES:
             continue
         section = _primary_section_id(item)
         if not section or section in seen:
@@ -1269,7 +1282,7 @@ def build_section_ranges_from_metadata(metadata: list[dict[str, Any]], doc_kind:
                 int(item.get("page_number") or 1)
                 for item in relevant
                 if int(item.get("page_number") or 1) >= page_start
-                and item.get("page_type") not in {"cover", "blank", "log", "toc"}
+                and item.get("page_type") not in NON_EXTRACTABLE_PAGE_TYPES
             ]
             page_end = max(following_pages) if following_pages else page_count
         sections.append(
@@ -1545,7 +1558,7 @@ def _embedded_solution_page_indexes(metadata: list[dict[str, Any]]) -> list[int]
 
 
 def _problem_page_indexes_from_metadata(metadata: list[dict[str, Any]], page_count: int) -> list[int]:
-    excluded_types = {"solution_page", "toc", "cover", "blank", "log"}
+    excluded_types = {"solution_page", *NON_EXTRACTABLE_PAGE_TYPES}
     indexes = [
         int(item.get("page_index") or 0)
         for item in metadata
