@@ -1554,6 +1554,65 @@ def _attach_extraction_inventory_gaps(problem_inventory: dict[str, Any], extract
     return report
 
 
+def repair_solution_numbers_from_inventory(
+    solutions: list[dict[str, Any]],
+    problem_inventory: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    expected_numbers = _sort_number_keys((problem_inventory or {}).get("expected_problem_numbers") or [])
+    if not expected_numbers or not solutions:
+        return solutions
+    answerful = [solution for solution in solutions if has_solution_content(solution)]
+    if not answerful:
+        return solutions
+
+    current_numbers = [_number_key_or_none(solution.get("problem_number") or solution.get("problem_no")) for solution in answerful]
+    nonempty_numbers = [number for number in current_numbers if number]
+    current_set = set(nonempty_numbers)
+    expected_set = set(expected_numbers)
+    duplicate_count = len(nonempty_numbers) - len(current_set)
+    missing_count = len([number for number in current_numbers if not number])
+    off_inventory_count = len([number for number in nonempty_numbers if number not in expected_set])
+    already_covers_inventory = (
+        len(nonempty_numbers) == len(answerful)
+        and len(answerful) == len(expected_numbers)
+        and current_set == expected_set
+        and duplicate_count == 0
+    )
+    if already_covers_inventory:
+        return solutions
+
+    should_repair_by_order = (
+        len(answerful) <= len(expected_numbers)
+        and (
+            missing_count > 0
+            or duplicate_count > 0
+            or off_inventory_count > 0
+            or len(current_set & expected_set) < max(1, min(len(answerful), len(expected_numbers)) // 2)
+        )
+    )
+    if not should_repair_by_order:
+        return solutions
+
+    repaired: list[dict[str, Any]] = []
+    answer_index = 0
+    for solution in solutions:
+        copied = dict(solution)
+        if has_solution_content(copied) and answer_index < len(expected_numbers):
+            expected_number = expected_numbers[answer_index]
+            current_number = _number_key_or_none(copied.get("problem_number") or copied.get("problem_no"))
+            if current_number != expected_number:
+                copied["problem_number_repaired_from"] = copied.get("problem_number") if "problem_number" in copied else copied.get("problem_no")
+                copied["problem_number"] = expected_number
+                copied["problem_no"] = expected_number
+                warnings = list(copied.get("matching_warnings") or [])
+                if "problem_number_repaired_from_inventory_order" not in warnings:
+                    warnings.append("problem_number_repaired_from_inventory_order")
+                copied["matching_warnings"] = warnings
+            answer_index += 1
+        repaired.append(copied)
+    return repaired
+
+
 def _numbers_from_values(values: list[Any]) -> list[int]:
     numbers: list[int] = []
     for value in values:
@@ -3299,6 +3358,8 @@ def process_batch(batch_id: UUID) -> None:
             raise RuntimeError("No problem pages were detected in the uploaded PDF set.")
 
         problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
+        solutions = repair_solution_numbers_from_inventory(solutions, problem_inventory)
+        problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
         inventory_expected_count = _int_or_none(problem_inventory.get("expected_problem_count"))
         if should_extract_solutions and quick_answers_used:
             quick_answer_count = _solution_answer_count(solutions)
@@ -3341,6 +3402,7 @@ def process_batch(batch_id: UUID) -> None:
                 solution_page_metadata=solution_page_metadata,
                 document_type_hints=document_type_hints,
             )
+        solutions = repair_solution_numbers_from_inventory(solutions, problem_inventory)
         if quick_answer_report is not None:
             _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
         problem_inventory = build_problem_inventory_report(page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
@@ -3375,6 +3437,7 @@ def process_batch(batch_id: UUID) -> None:
                 solution_page_metadata=recovery_page_metadata,
                 document_type_hints=document_type_hints,
             )
+            recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if _solution_answer_count(recovered_solutions) >= _solution_answer_count(solutions):
                 solutions = recovered_solutions
             mixed_answer_recovery_ran = True
@@ -3496,6 +3559,7 @@ def process_batch(batch_id: UUID) -> None:
                         solution_page_metadata=solution_page_metadata,
                         document_type_hints=None,
                     )
+                    solutions = repair_solution_numbers_from_inventory(solutions, problem_inventory)
                     total_units = fallback_total_units
                     if not any(has_solution_content(solution) for solution in solutions):
                         raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
@@ -3514,6 +3578,7 @@ def process_batch(batch_id: UUID) -> None:
                         solution_page_metadata=solution_page_metadata,
                         document_type_hints=document_type_hints,
                     )
+                    solutions = repair_solution_numbers_from_inventory(solutions, problem_inventory)
                 else:
                     solutions = []
                 if quick_answer_report is not None:
@@ -3551,6 +3616,7 @@ def process_batch(batch_id: UUID) -> None:
                 solution_page_metadata=recovery_page_metadata,
                 document_type_hints=document_type_hints,
             )
+            recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if solution_sections:
                 _apply_section_ranges_to_items(recovered_solutions, solution_sections, "page_idx")
             chosen_solutions, recovery_report = _choose_solution_candidates(all_extracted, solutions, recovered_solutions)
@@ -5325,7 +5391,7 @@ def extract_solutions(
             occurrence_counts: dict[tuple[str | None, str], int] = defaultdict(int)
             for item_order, item in enumerate(items):
                 number = str(item.get("problem_number") or "").strip()
-                if not number:
+                if not number and not has_solution_content(item):
                     continue
                 section_label = str(item.get("section_label") or "").strip() or None
                 occurrence_key = (section_label, number)

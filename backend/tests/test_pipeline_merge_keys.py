@@ -28,6 +28,7 @@ from services.pipeline import (  # noqa: E402
     build_section_ranges_from_metadata,
     build_structure_validation_report,
     clean_solution_answer,
+    repair_solution_numbers_from_inventory,
 )
 
 
@@ -200,6 +201,33 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertIn("Expected total problem slots: 3", prompt)
         self.assertIn("Current page first-pass problem numbers: 1, 2", prompt)
         self.assertIn("do not perform final answer matching in this text extraction pass", prompt)
+
+    def test_solution_number_repair_uses_inventory_when_numbers_are_missing(self):
+        repaired = repair_solution_numbers_from_inventory(
+            [
+                {"problem_number": "1", "answer": "①"},
+                {"problem_number": "", "answer": "②"},
+                {"answer": "③"},
+            ],
+            {"expected_problem_numbers": ["1", "2", "3"]},
+        )
+
+        self.assertEqual([item["problem_number"] for item in repaired], ["1", "2", "3"])
+        self.assertEqual(repaired[1]["problem_number_repaired_from"], "")
+        self.assertIn("problem_number_repaired_from_inventory_order", repaired[2]["matching_warnings"])
+
+    def test_solution_number_repair_corrects_choice_number_misread_as_problem_number(self):
+        repaired = repair_solution_numbers_from_inventory(
+            [
+                {"problem_number": "②", "answer": "②"},
+                {"problem_number": "④", "answer": "④"},
+                {"problem_number": "①", "answer": "①"},
+            ],
+            {"expected_problem_numbers": ["1", "2", "3"]},
+        )
+
+        self.assertEqual([item["problem_number"] for item in repaired], ["1", "2", "3"])
+        self.assertEqual(repaired[0]["problem_number_repaired_from"], "②")
 
     def test_recovered_solution_candidates_replace_weaker_current_set(self):
         problems = [
