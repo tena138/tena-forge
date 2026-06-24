@@ -555,6 +555,35 @@ Rules:
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
+MIXED_PDF_ANSWER_RECOVERY_PROMPT = r"""You are scanning one page from a mixed Korean exam/problem PDF to recover final answers.
+
+Return [] unless this visible page explicitly contains final answers, an answer key/table, worked solutions, teacher explanations, or answer-marked solution content.
+Ordinary student-facing problem pages with answer choices but no marked correct answer must return [].
+
+For every visible final answer return:
+{
+  "problem_number": "<problem or question number exactly as written>",
+  "answer": "<final answer>",
+  "solution_steps": null,
+  "key_concept": null,
+  "section_label": "<visible exam round/day/unit label near this answer, or null>",
+  "page_idx": <0-based PDF page index supplied by the system>,
+  "referenced_problem_snippet": "<quoted problem text visible inside the solution, or null>",
+  "solution_first_line": "<first visible solution/explanation line, or null>"
+}
+
+Rules:
+- Extract final answers even when they are embedded inside 풀이/해설 paragraphs.
+- Do not transcribe explanations. Keep solution_steps and key_concept null.
+- If a page has both problem statements and a separate answer/solution area, extract only the explicit final answers.
+- If the page only shows answer choices ①②③④⑤ without indicating the correct one, return [].
+- For math, if an objective answer is shown only as a choice number or symbol, return that marker. If the actual choice value is visible, return the actual value.
+- Preserve original problem labels such as "1", "01", "1-1", "23-(가)", or "[보기 5]".
+- Convert mathematical expressions in answer into LaTeX.
+- page_idx must be the exact 0-based PDF page index supplied by the system.
+
+Return raw JSON array only. No markdown. No explanation outside JSON."""
+
 PAGE_STRUCTURE_PROMPT = r"""You are reading one page from a Korean problem book or solution book.
 Extract page-level structure metadata only for problem/answer extraction. Do not extract full problems or full solutions.
 Do not classify visual-template roles here. Non-question title, separator, publisher-log, decorative, and other irrelevant pages are simply skip_page.
@@ -2022,6 +2051,121 @@ def extract_solution_page_indexes(
     return _apply_structure_indexes(solutions, page_key="page_idx")
 
 
+def _mixed_answer_recovery_page_indexes(metadata: list[dict[str, Any]], page_count: int) -> list[int]:
+    indexes: list[int] = []
+    for item in metadata:
+        page_index = int(item.get("page_index") or 0)
+        if page_index < 0 or page_index >= page_count:
+            continue
+        page_type = str(item.get("page_type") or "").strip()
+        if page_type in {"toc", "skip_page"}:
+            continue
+        indexes.append(page_index)
+    if indexes:
+        return sorted(set(indexes))
+    return list(range(page_count))
+
+
+def _candidate_solution_score(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> dict[str, Any]:
+    if not solutions:
+        return {"matched_count": 0, "answer_count": 0, "warning_count": 999, "warnings": ["no_solutions"]}
+    result = match_with_summary(deepcopy(problems), deepcopy(solutions))
+    summary = result.get("summary") or {}
+    warnings = list(summary.get("warnings") or [])
+    return {
+        "matched_count": int(summary.get("matched_count") or 0),
+        "answer_count": _solution_answer_count(solutions),
+        "warning_count": len(warnings),
+        "warnings": warnings,
+    }
+
+
+def _should_run_mixed_answer_recovery(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> bool:
+    expected_count = len(problems)
+    if expected_count <= 0:
+        return False
+    answer_count = _solution_answer_count(solutions)
+    if not _quick_answers_cover_expected_count(answer_count, expected_count):
+        return True
+    score = _candidate_solution_score(problems, solutions)
+    return int(score.get("matched_count") or 0) < expected_count
+
+
+def _document_type_hints_include_mixed(hints: list[dict[str, Any]] | None) -> bool:
+    return any(str(item.get("type") or "").strip() == DOCUMENT_TYPE_MIXED for item in (hints or []))
+
+
+def _choose_solution_candidates(
+    problems: list[dict[str, Any]],
+    current_solutions: list[dict[str, Any]],
+    recovered_solutions: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    current_score = _candidate_solution_score(problems, current_solutions)
+    recovered_score = _candidate_solution_score(problems, recovered_solutions)
+    choose_recovered = (
+        bool(recovered_solutions)
+        and int(recovered_score["matched_count"]) >= int(current_score["matched_count"])
+        and int(recovered_score["answer_count"]) >= int(current_score["answer_count"])
+        and int(recovered_score["warning_count"]) <= int(current_score["warning_count"])
+    )
+    report = {
+        "current": current_score,
+        "recovered": recovered_score,
+        "chosen": "recovered" if choose_recovered else "current",
+    }
+    return (recovered_solutions if choose_recovered else current_solutions), report
+
+
+def extract_mixed_pdf_answer_recovery(
+    path: str,
+    page_indexes: list[int],
+    page_count: int,
+    dpi: int,
+    batch_id: UUID,
+    offset: int,
+    total_units: int,
+    units_per_page: int,
+    solution_page_metadata: dict[int, dict[str, Any]] | None = None,
+    document_type_hints: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    selected = sorted(set(index for index in page_indexes if 0 <= index < page_count))
+    if not selected:
+        return []
+    settings = get_settings()
+    solutions: list[dict[str, Any]] = []
+    processed_pages = 0
+    for page_index_chunk in iter_page_index_chunks(selected):
+        chunk_len = len(page_index_chunk)
+        base = offset + processed_pages * units_per_page
+        pages = render_pdf_page_indexes(
+            path,
+            page_index_chunk,
+            batch_id=batch_id,
+            label="혼합 PDF 정답 복구용 렌더링 중",
+            dpi=dpi,
+            progress_offset=base,
+            progress_total=total_units,
+        )
+        if solution_page_metadata:
+            pages = split_two_column_solution_pages(pages, solution_page_metadata)
+        extracted = extract_solutions(
+            pages,
+            batch_id=batch_id,
+            offset=base + chunk_len,
+            total=total_units,
+            display_total_pages=page_count,
+            prompt_override=MIXED_PDF_ANSWER_RECOVERY_PROMPT,
+            mode_label_override="혼합 PDF 정답 복구",
+            max_output_tokens_override=max(settings.ai_solution_max_output_tokens, settings.ai_max_output_tokens, 4096),
+            document_type_hints=document_type_hints,
+        )
+        for solution in extracted:
+            solution["extraction_source"] = "mixed_pdf_answer_recovery"
+        solutions.extend(extracted)
+        processed_pages += chunk_len
+    return _apply_structure_indexes(solutions, page_key="page_idx")
+
+
 KOREAN_RANGE_RECOVERY_PROMPT = r"""You are repairing a Korean Language extraction where a visible passage range was incomplete.
 
 Return raw JSON array only. The array must contain exactly one object:
@@ -3131,6 +3275,45 @@ def process_batch(batch_id: UUID) -> None:
                 quick_answer_report["used"] = True
                 quick_answer_report["final_used_source"] = "quick_answer_table"
                 _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
+        should_run_answer_recovery = (
+            should_detect_embedded_solutions
+            and (_document_type_hints_include_mixed(document_type_hints) or _should_run_mixed_answer_recovery(all_extracted, solutions))
+        )
+        if should_run_answer_recovery:
+            recovery_page_indexes = _mixed_answer_recovery_page_indexes(page_metadata, problem_page_count)
+            recovery_units = max(len(recovery_page_indexes) * units_per_page, 1)
+            recovery_total_units = total_units + recovery_units
+            set_progress(batch_id, "혼합 PDF 전체 정답 복구 중", total_units, recovery_total_units)
+            recovery_page_metadata = _metadata_by_page(
+                _metadata_with_document_kind(page_metadata, "solution", set(recovery_page_indexes)),
+                "solution",
+            )
+            recovered_solutions = extract_mixed_pdf_answer_recovery(
+                batch.problem_pdf_filename,
+                recovery_page_indexes,
+                problem_page_count,
+                solution_dpi,
+                batch_id,
+                offset=total_units,
+                total_units=recovery_total_units,
+                units_per_page=units_per_page,
+                solution_page_metadata=recovery_page_metadata,
+                document_type_hints=document_type_hints,
+            )
+            if solution_sections:
+                _apply_section_ranges_to_items(recovered_solutions, solution_sections, "page_idx")
+            chosen_solutions, recovery_report = _choose_solution_candidates(all_extracted, solutions, recovered_solutions)
+            recovery_report.update(
+                {
+                    "candidate_page_indexes": recovery_page_indexes,
+                    "candidate_page_numbers": [index + 1 for index in recovery_page_indexes],
+                    "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                }
+            )
+            solutions = chosen_solutions
+            total_units = recovery_total_units
+            _write_batch_artifact(batch_id, "mixed_answer_recovery_report.json", recovery_report)
+            _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
         structure_report = build_structure_validation_report(page_metadata, problem_sections, solution_sections, all_extracted, solutions)
         _mark_section_validation_warnings(all_extracted, structure_report)
         _write_batch_artifact(batch_id, "structure_validation_report.json", structure_report)

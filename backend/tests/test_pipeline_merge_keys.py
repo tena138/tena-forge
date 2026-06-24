@@ -9,12 +9,16 @@ sys.path.insert(0, str(BACKEND_DIR))
 from services.pipeline import (  # noqa: E402
     RenderedPage,
     _apply_section_ranges_to_items,
+    _choose_solution_candidates,
+    _document_type_hints_include_mixed,
     _embedded_solution_page_indexes,
     _extracted_problem_merge_key,
     _is_structural_section_label,
+    _mixed_answer_recovery_page_indexes,
     _normalize_extracted_items,
     _normalize_page_metadata,
     _problem_page_indexes_from_metadata,
+    _should_run_mixed_answer_recovery,
     answer_for_subject,
     build_section_ranges_from_metadata,
     build_structure_validation_report,
@@ -97,6 +101,49 @@ class PipelineMergeKeyTests(unittest.TestCase):
         )
 
         self.assertEqual(indexes, [5])
+
+    def test_mixed_answer_recovery_scans_extractable_pages(self):
+        indexes = _mixed_answer_recovery_page_indexes(
+            [
+                {"page_index": 0, "page_type": "toc"},
+                {"page_index": 1, "page_type": "problem_page"},
+                {"page_index": 2, "page_type": "unknown"},
+                {"page_index": 3, "page_type": "solution_page"},
+                {"page_index": 4, "page_type": "skip_page"},
+            ],
+            5,
+        )
+
+        self.assertEqual(indexes, [1, 2, 3])
+
+    def test_mixed_answer_recovery_runs_when_answers_do_not_cover_problems(self):
+        problems = [
+            {"problem_number": "1", "problem_text": "first", "page_index": 0},
+            {"problem_number": "2", "problem_text": "second", "page_index": 0},
+        ]
+        solutions = [{"problem_number": "1", "answer": "A", "page_idx": 3}]
+
+        self.assertTrue(_should_run_mixed_answer_recovery(problems, solutions))
+
+    def test_document_type_hints_include_mixed(self):
+        self.assertTrue(_document_type_hints_include_mixed([{"type": "mixed"}]))
+        self.assertFalse(_document_type_hints_include_mixed([{"type": "problem"}, {"type": "solution"}]))
+
+    def test_recovered_solution_candidates_replace_weaker_current_set(self):
+        problems = [
+            {"problem_number": "1", "problem_text": "first", "page_index": 0},
+            {"problem_number": "2", "problem_text": "second", "page_index": 0},
+        ]
+        current = [{"problem_number": "1", "answer": "A", "page_idx": 3}]
+        recovered = [
+            {"problem_number": "1", "answer": "A", "page_idx": 3},
+            {"problem_number": "2", "answer": "B", "page_idx": 3},
+        ]
+
+        chosen, report = _choose_solution_candidates(problems, current, recovered)
+
+        self.assertIs(chosen, recovered)
+        self.assertEqual(report["chosen"], "recovered")
 
     def test_page_metadata_prefers_exam_round_over_single_connection_title(self):
         page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
