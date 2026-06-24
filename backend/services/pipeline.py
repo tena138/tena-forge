@@ -933,8 +933,18 @@ def _normalize_detected_sections(value: Any) -> list[str]:
     return sections
 
 
+CHOICE_NUMBER_MARKERS = {"①", "②", "③", "④", "⑤"}
+
+
+def _ascii_number_match(value: Any) -> re.Match[str] | None:
+    text = str(value or "").strip()
+    if text in CHOICE_NUMBER_MARKERS:
+        return None
+    return re.search(r"[0-9]+", unicodedata.normalize("NFKC", text))
+
+
 def _int_or_none(value: Any) -> int | None:
-    match = re.search(r"\d+", str(value or ""))
+    match = _ascii_number_match(value)
     return int(match.group(0)) if match else None
 
 
@@ -1383,6 +1393,8 @@ def _items_by_section(items: list[dict[str, Any]], page_key: str) -> dict[str, l
 
 
 def _number_key_or_none(value: Any) -> str | None:
+    if str(value or "").strip() in CHOICE_NUMBER_MARKERS:
+        return None
     key = _question_number_key(value)
     return key if key else None
 
@@ -1396,7 +1408,7 @@ def _sort_number_keys(values: list[Any]) -> list[str]:
             continue
         seen.add(key)
         keys.append(key)
-    return sorted(keys, key=lambda item: (0, int(item)) if item.isdigit() else (1, item))
+    return sorted(keys, key=lambda item: (0, int(item)) if re.fullmatch(r"[0-9]+", item) else (1, item))
 
 
 def _number_range_from_bounds(start: Any, end: Any) -> list[str]:
@@ -2511,8 +2523,11 @@ Rules:
 
 
 def _question_number_key(value: Any) -> str:
-    match = re.search(r"\d+", str(value or ""))
-    return str(int(match.group(0))) if match else str(value or "").strip()
+    text = str(value or "").strip()
+    if text in CHOICE_NUMBER_MARKERS:
+        return ""
+    match = _ascii_number_match(text)
+    return str(int(match.group(0))) if match else text
 
 
 def _korean_range_recovery_prompt(

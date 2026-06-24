@@ -25,6 +25,7 @@ from services.pipeline import (  # noqa: E402
     _problem_page_indexes_from_metadata,
     _quick_answer_candidate_page_indexes,
     _should_run_mixed_answer_recovery,
+    _sort_number_keys,
     answer_for_subject,
     build_extraction_prompt,
     build_problem_inventory_report,
@@ -47,6 +48,9 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertIn("visible anywhere on the page", QUICK_ANSWER_TABLE_SCAN_PROMPT)
         self.assertIn("ignore those areas", QUICK_ANSWER_TABLE_EXTRACTION_PROMPT)
         self.assertIn("Preserve full elective labels", QUICK_ANSWER_TABLE_EXTRACTION_PROMPT)
+
+    def test_number_sort_ignores_choice_markers(self):
+        self.assertEqual(_sort_number_keys(["1", "①", "2", "②", "10"]), ["1", "2", "10"])
 
     def test_quick_answer_candidates_include_middle_boundary_pages(self):
         indexes = _quick_answer_candidate_page_indexes(14)
