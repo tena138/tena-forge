@@ -30,7 +30,11 @@ from schemas import (
 )
 from services.batch_jobs import mark_stale_processing_batches, schedule_next_batch
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
-from services.document_type_hints import normalize_document_type_hint, normalize_document_type_hint_items
+from services.document_type_hints import (
+    document_type_hints_allow_embedded_solutions,
+    normalize_document_type_hint,
+    normalize_document_type_hint_items,
+)
 from services.korean_extraction import parse_passage_question_range
 from services.ownership import current_academy_id, current_owner_id, current_owner_ids, current_workspace_id
 from services.pipeline import CANCEL_FAILURE_STAGE, count_pdf_pages, get_progress_detail
@@ -910,8 +914,13 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
         raise HTTPException(status_code=404, detail="배치를 찾을 수 없습니다.")
     if batch.status == BatchStatus.processing:
         raise HTTPException(status_code=400, detail="처리 중인 배치는 답안만 재처리할 수 없습니다.")
-    if not batch.solution_pdf_filename:
-        raise HTTPException(status_code=400, detail="답안 PDF가 있는 배치만 답안 재처리할 수 있습니다.")
+    can_reprocess_embedded_answers = bool(
+        not batch.solution_pdf_filename
+        and batch.problem_pdf_filename
+        and document_type_hints_allow_embedded_solutions(batch.document_type_hints or [])
+    )
+    if not batch.solution_pdf_filename and not can_reprocess_embedded_answers:
+        raise HTTPException(status_code=400, detail="답안 PDF가 있거나 본문/정답이 섞인 mixed PDF 배치만 답안 재처리할 수 있습니다.")
     problem_count = db.scalar(
         select(func.count(Problem.id)).where(
             Problem.source_batch_id == batch.id,
@@ -922,8 +931,9 @@ def reprocess_batch_solutions(batch_id: UUID, request: Request, db: Session = De
     if problem_count <= 0:
         raise HTTPException(status_code=400, detail="기존 문항이 있어야 답안만 재처리할 수 있습니다.")
 
-    solution_pages = count_pdf_pages(batch.solution_pdf_filename)
-    solution_file_mb = _file_size_mb(batch.solution_pdf_filename)
+    solution_source_path = batch.solution_pdf_filename or batch.problem_pdf_filename
+    solution_pages = count_pdf_pages(solution_source_path)
+    solution_file_mb = _file_size_mb(solution_source_path)
     estimate = estimate_extraction(
         subject_engine=batch.subject_engine or "math",
         problem_pages=0,

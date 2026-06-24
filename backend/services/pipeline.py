@@ -305,6 +305,52 @@ def _problem_match_payload(problem: Problem) -> dict[str, Any]:
     }
 
 
+def _existing_problem_match_payloads(
+    db: Session,
+    batch: Batch,
+    problem_sections: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    problems = (
+        db.query(Problem)
+        .filter(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None))
+        .options(joinedload(Problem.tags))
+        .order_by(
+            Problem.review_page_number.is_(None).asc(),
+            Problem.review_page_number.asc(),
+            Problem.problem_number.asc(),
+            Problem.created_at.asc(),
+            Problem.id.asc(),
+        )
+        .all()
+    )
+    payloads = [_problem_match_payload(problem) for problem in problems]
+    for global_index, payload in enumerate(payloads, start=1):
+        payload["global_index"] = global_index
+        payload["local_index"] = global_index
+    if problem_sections:
+        _apply_section_ranges_to_items(payloads, problem_sections, "page_index")
+        payloads = _apply_structure_indexes(payloads, page_key="page_index")
+    return payloads
+
+
+def _attach_existing_problem_numbers_to_inventory(
+    problem_inventory: dict[str, Any],
+    problem_payloads: list[dict[str, Any]],
+) -> dict[str, Any]:
+    report = dict(problem_inventory or {})
+    existing_numbers = _sort_number_keys(
+        [item.get("problem_no") or item.get("problem_number") for item in problem_payloads]
+    )
+    if not existing_numbers:
+        return report
+    current_numbers = _sort_number_keys(report.get("expected_problem_numbers") or [])
+    if len(existing_numbers) >= len(current_numbers):
+        report["expected_problem_numbers"] = existing_numbers
+        report["expected_problem_count"] = len(existing_numbers)
+        report["expected_problem_source"] = "existing_problem_records"
+    return report
+
+
 def apply_solutions_to_existing_problems(
     db: Session,
     batch: Batch,
@@ -555,6 +601,7 @@ Rules:
 - Keep solution_steps, key_concept, referenced_problem_snippet, and solution_first_line null.
 - For math, if an objective answer is shown only as a choice number or symbol, return that marker so the matcher can resolve it from the stored choices. If the actual choice value is visible, return the actual value.
 - For Korean Language and English, keep objective answers as the visible choice label or number.
+- problem_number is the problem/question number only. Never put circled choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols belong in answer.
 - Convert mathematical expressions in answer into LaTeX.
 - Preserve original problem labels such as "1", "1-1", "23-(가)", or "[보기 5]".
 - When multiple answer sections are visible on the same page, set section_label to the nearest table/list header for that pair. Preserve full elective labels such as "선택과목(확률과 통계)", "선택과목(미적분)", or "선택과목(기하)" so repeated problem numbers like 28 and 29 can be matched to the correct section.
@@ -586,6 +633,7 @@ Rules:
 - If a page has both problem statements and a separate answer/solution area, extract only the explicit final answers.
 - If the page only shows answer choices ①②③④⑤ without indicating the correct one, return [].
 - For math, if an objective answer is shown only as a choice number or symbol, return that marker. If the actual choice value is visible, return the actual value.
+- problem_number is the problem/question number only. Never put circled choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols belong in answer.
 - Preserve original problem labels such as "1", "01", "1-1", "23-(가)", or "[보기 5]".
 - Convert mathematical expressions in answer into LaTeX.
 - page_idx must be the exact 0-based PDF page index supplied by the system.
@@ -1557,6 +1605,31 @@ def _problem_inventory_prompt_note(problem_inventory: dict[str, Any] | None, pag
     )
 
 
+def _answer_inventory_prompt_note(problem_inventory: dict[str, Any] | None, page_index: int | None = None) -> str:
+    if not problem_inventory:
+        return ""
+    expected_numbers = problem_inventory.get("expected_problem_numbers") or []
+    page_solution_numbers: list[Any] = []
+    if page_index is not None:
+        for entry in problem_inventory.get("pages") or []:
+            try:
+                entry_page_index = int(entry.get("page_index"))
+            except (TypeError, ValueError):
+                continue
+            if entry_page_index == int(page_index):
+                page_solution_numbers.extend(entry.get("solution_numbers") or [])
+    return (
+        "First-pass PDF inventory scaffold for this answer recovery pass:\n"
+        f"- Expected total problem slots: {problem_inventory.get('expected_problem_count') or 'unknown'}.\n"
+        f"- Expected problem numbers across the PDF: {_compact_inventory_numbers(expected_numbers)}.\n"
+        f"- Current page first-pass answer/solution numbers: {_compact_inventory_numbers(page_solution_numbers)}.\n"
+        "Use this inventory to keep answer rows aligned with the existing problem records. "
+        "Never put circled choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols are answers. "
+        "If a compact answer list/table is clearly ordered but omits repeated problem numbers, assign the answers to the expected problem numbers in visible reading order. "
+        "Do not invent answers that are not explicitly visible."
+    )
+
+
 def _attach_extraction_inventory_gaps(problem_inventory: dict[str, Any], extracted: list[dict[str, Any]]) -> dict[str, Any]:
     report = dict(problem_inventory or {})
     extracted_numbers = _sort_number_keys([item.get("problem_number") or item.get("problem_no") for item in extracted])
@@ -2422,9 +2495,18 @@ def _choose_solution_candidates(
     recovered_score = _candidate_solution_score(problems, recovered_solutions)
     choose_recovered = (
         bool(recovered_solutions)
-        and int(recovered_score["matched_count"]) >= int(current_score["matched_count"])
-        and int(recovered_score["answer_count"]) >= int(current_score["answer_count"])
-        and int(recovered_score["warning_count"]) <= int(current_score["warning_count"])
+        and (
+            int(recovered_score["matched_count"]) > int(current_score["matched_count"])
+            or (
+                int(recovered_score["matched_count"]) == int(current_score["matched_count"])
+                and int(recovered_score["answer_count"]) > int(current_score["answer_count"])
+            )
+            or (
+                int(recovered_score["matched_count"]) == int(current_score["matched_count"])
+                and int(recovered_score["answer_count"]) == int(current_score["answer_count"])
+                and int(recovered_score["warning_count"]) <= int(current_score["warning_count"])
+            )
+        )
     )
     report = {
         "current": current_score,
@@ -2445,6 +2527,7 @@ def extract_mixed_pdf_answer_recovery(
     units_per_page: int,
     solution_page_metadata: dict[int, dict[str, Any]] | None = None,
     document_type_hints: list[dict[str, Any]] | None = None,
+    problem_inventory: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     selected = sorted(set(index for index in page_indexes if 0 <= index < page_count))
     if not selected:
@@ -2472,7 +2555,15 @@ def extract_mixed_pdf_answer_recovery(
             offset=base + chunk_len,
             total=total_units,
             display_total_pages=page_count,
-            prompt_override=MIXED_PDF_ANSWER_RECOVERY_PROMPT,
+            prompt_override=(
+                MIXED_PDF_ANSWER_RECOVERY_PROMPT
+                + (
+                    "\n\n"
+                    + _answer_inventory_prompt_note(problem_inventory, page_index_chunk[0] if len(page_index_chunk) == 1 else None)
+                    if problem_inventory
+                    else ""
+                )
+            ),
             mode_label_override="혼합 PDF 정답 복구",
             max_output_tokens_override=max(settings.ai_solution_max_output_tokens, settings.ai_max_output_tokens, 4096),
             document_type_hints=document_type_hints,
@@ -3164,6 +3255,9 @@ def process_language_solutions_only(
     existing_problem_count: int,
     settings: Any,
     solution_mode: str,
+    solution_source_path: str,
+    document_type_hints: list[dict[str, Any]] | None = None,
+    solution_source_label: str = "answer_pdf",
 ) -> None:
     engine = normalize_subject_engine(batch.subject_engine)
     subject_label = language_engine_label(engine)
@@ -3171,24 +3265,25 @@ def process_language_solutions_only(
     if not document:
         raise RuntimeError(f"Existing {subject_label} extraction document is required before reprocessing answers.")
 
-    solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
-    solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
+    solution_page_count = count_pdf_pages(solution_source_path)
+    solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(solution_source_path, solution_page_count)
     total_units = max(solution_page_count * 2, 1)
-    set_progress(batch_id, f"{subject_label} 답안 PDF 페이지 수 확인 완료", 0, total_units)
+    set_progress(batch_id, f"{subject_label} 답안 소스 페이지 수 확인 완료", 0, total_units)
 
     answer_items: list[dict[str, Any]] = []
     quick_answer_report = scan_quick_answer_table_pages(
-        batch.solution_pdf_filename,
+        solution_source_path,
         solution_page_count,
         solution_dpi,
         batch_id,
         progress_offset=0,
         total_units=total_units,
+        document_type_hints=document_type_hints,
     )
     selected_quick_pages = [int(index) for index in quick_answer_report.get("selected_page_indexes") or []]
     if selected_quick_pages:
         answer_items = _extract_korean_solution_items(
-            batch.solution_pdf_filename,
+            solution_source_path,
             batch_id,
             solution_page_count,
             solution_dpi,
@@ -3196,6 +3291,7 @@ def process_language_solutions_only(
             total_units=total_units,
             subject_engine=engine,
             page_indexes=selected_quick_pages,
+            document_type_hints=document_type_hints,
         )
 
     quick_answer_count = len(_language_answer_items_by_number(answer_items))
@@ -3208,20 +3304,21 @@ def process_language_solutions_only(
     else:
         quick_answer_report["used"] = False
         quick_answer_report.setdefault("fallback_reason", "quick_answer_count_below_existing_problem_count")
-        quick_answer_report["final_used_source"] = "full_solution_pdf"
+        quick_answer_report["final_used_source"] = "full_solution_pdf" if solution_source_label == "answer_pdf" else "embedded_problem_pdf_scan"
         answer_items = _extract_korean_solution_items(
-            batch.solution_pdf_filename,
+            solution_source_path,
             batch_id,
             solution_page_count,
             solution_dpi,
             offset=0,
             total_units=total_units,
             subject_engine=engine,
+            document_type_hints=document_type_hints,
         )
         quick_answer_report["full_fallback_answer_count"] = len(_language_answer_items_by_number(answer_items))
 
     if not answer_items:
-        raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+        raise RuntimeError("Answer source was provided, but no answer content was extracted.")
 
     base_document = _language_document_without_answers(document.payload or {})
     mapped_document = map_korean_answers(base_document, answer_items)
@@ -3239,6 +3336,7 @@ def process_language_solutions_only(
             "ai_solution_image_detail": settings.ai_solution_image_detail,
             "subject_engine": engine,
             "solution_page_count": solution_page_count,
+            "solution_source": solution_source_label,
             "quick_answer_table": quick_answer_report,
             "quick_answer_table_used": bool(quick_answer_report.get("used")),
             "stats": stats,
@@ -3512,6 +3610,7 @@ def process_batch(batch_id: UUID) -> None:
                 units_per_page=units_per_page,
                 solution_page_metadata=recovery_page_metadata,
                 document_type_hints=document_type_hints,
+                problem_inventory=problem_inventory,
             )
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if _solution_answer_count(recovered_solutions) >= _solution_answer_count(solutions):
@@ -3689,6 +3788,7 @@ def process_batch(batch_id: UUID) -> None:
                 units_per_page=units_per_page,
                 solution_page_metadata=recovery_page_metadata,
                 document_type_hints=document_type_hints,
+                problem_inventory=problem_inventory,
             )
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if solution_sections:
@@ -3763,8 +3863,15 @@ def process_solutions_only(batch_id: UUID) -> None:
         batch = db.get(Batch, batch_id)
         if not batch:
             return
-        if not batch.solution_pdf_filename:
-            raise RuntimeError("Answer PDF is required for answer-only reprocessing.")
+        document_type_hints = batch.document_type_hints or []
+        has_separate_solution_pdf = bool(batch.solution_pdf_filename)
+        has_embedded_solution_source = bool(
+            not has_separate_solution_pdf
+            and batch.problem_pdf_filename
+            and document_type_hints_allow_embedded_solutions(document_type_hints)
+        )
+        if not has_separate_solution_pdf and not has_embedded_solution_source:
+            raise RuntimeError("Answer reprocessing requires either an answer PDF or a mixed PDF with embedded answers.")
         existing_problem_count = db.query(Problem).filter(Problem.source_batch_id == batch.id, Problem.deleted_at.is_(None)).count()
         if existing_problem_count <= 0:
             raise RuntimeError("Existing problems are required before reprocessing answers.")
@@ -3789,6 +3896,9 @@ def process_solutions_only(batch_id: UUID) -> None:
         solution_mode = str(settings.ai_solution_mode or "skip").strip().lower()
         if solution_mode == "skip":
             raise RuntimeError("AI solution extraction is disabled.")
+        solution_source_path = batch.solution_pdf_filename if has_separate_solution_pdf else batch.problem_pdf_filename
+        solution_document_type_hints = None if has_separate_solution_pdf else document_type_hints
+        solution_source_label = "answer_pdf" if has_separate_solution_pdf else "embedded_mixed_pdf"
         if is_language_passage_engine(batch.subject_engine):
             process_language_solutions_only(
                 db,
@@ -3797,12 +3907,15 @@ def process_solutions_only(batch_id: UUID) -> None:
                 existing_problem_count,
                 settings,
                 solution_mode,
+                solution_source_path=solution_source_path,
+                document_type_hints=solution_document_type_hints,
+                solution_source_label=solution_source_label,
             )
             return
         extraction_passes = max(settings.ai_extraction_passes, 1)
         units_per_page = 1 + extraction_passes
         problem_page_count = count_pdf_pages(batch.problem_pdf_filename)
-        solution_page_count = count_pdf_pages(batch.solution_pdf_filename)
+        solution_page_count = count_pdf_pages(solution_source_path)
         stored_problem_sections = _read_batch_artifact(batch_id, "problem_sections.json")
         existing_pages_metadata = _read_batch_artifact(batch_id, "pages_metadata.json")
         problem_page_metadata = [
@@ -3815,14 +3928,14 @@ def process_solutions_only(batch_id: UUID) -> None:
         ]
         reuse_problem_sections = bool(problem_sections) and _section_ranges_are_usable(problem_sections)
         problem_structure_units = 0 if reuse_problem_sections else 2 * problem_page_count
-        solution_structure_units = 2 * solution_page_count
+        solution_structure_units = 2 * solution_page_count if has_separate_solution_pdf else 0
         structure_units = problem_structure_units + solution_structure_units
         solution_units = solution_page_count * units_per_page
         total_units = max(structure_units + solution_units, 1)
         problem_dpi = choose_render_dpi(batch.problem_pdf_filename, problem_page_count)
-        solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(batch.solution_pdf_filename, solution_page_count)
+        solution_dpi = settings.pdf_solution_render_dpi or choose_render_dpi(solution_source_path, solution_page_count)
         solution_model_pool = _ai_model_pool(settings.ai_solution_model_pool, settings.ai_model)
-        set_progress(batch_id, "답안 PDF 페이지 수 확인 완료", 0, total_units)
+        set_progress(batch_id, "답안 소스 페이지 수 확인 완료", 0, total_units)
 
         if reuse_problem_sections:
             set_progress(batch_id, "기존 문제 섹션맵 재사용 중", 0, total_units)
@@ -3835,23 +3948,30 @@ def process_solutions_only(batch_id: UUID) -> None:
                 batch_id,
                 offset=0,
                 total_units=total_units,
+                document_type_hints=document_type_hints,
             )
             problem_sections = build_section_ranges_from_metadata(problem_page_metadata, "problem", problem_page_count)
             _write_batch_artifact(batch_id, "problem_sections.json", problem_sections)
 
+        existing_problem_payloads = _existing_problem_match_payloads(db, batch, problem_sections)
+        problem_inventory = build_problem_inventory_report(problem_page_metadata, problem_sections, [], [], problem_page_count)
+        problem_inventory = _attach_existing_problem_numbers_to_inventory(problem_inventory, existing_problem_payloads)
+        _write_batch_artifact(batch_id, "problem_inventory_report.json", problem_inventory)
         solutions: list[dict[str, Any]] = []
         page_metadata: list[dict[str, Any]] = []
         solution_sections: list[dict[str, Any]] = []
         quick_answer_report: dict[str, Any] | None = None
         quick_answers_used = False
         quick_solutions, quick_answer_report = extract_quick_answer_table_solutions(
-            batch.solution_pdf_filename,
+            solution_source_path,
             solution_page_count,
             solution_dpi,
             batch_id,
             progress_offset=problem_structure_units,
             total_units=total_units,
+            document_type_hints=solution_document_type_hints,
         )
+        quick_solutions = repair_solution_numbers_from_inventory(quick_solutions, problem_inventory)
         quick_answer_count = _solution_answer_count(quick_solutions)
         if _quick_answers_cover_expected_count(quick_answer_count, existing_problem_count):
             solutions = quick_solutions
@@ -3868,37 +3988,91 @@ def process_solutions_only(batch_id: UUID) -> None:
                 quick_answer_report["expected_problem_count"] = existing_problem_count
                 quick_answer_report["coverage_threshold_met"] = False
                 quick_answer_report.setdefault("fallback_reason", "quick_answer_count_below_existing_problem_count")
-                quick_answer_report["final_used_source"] = "full_solution_pdf"
-            page_metadata = collect_page_metadata_for_pdf(
-                batch.solution_pdf_filename,
-                solution_page_count,
+                quick_answer_report["final_used_source"] = "full_solution_pdf" if has_separate_solution_pdf else "mixed_pdf_answer_recovery"
+            if has_separate_solution_pdf:
+                page_metadata = collect_page_metadata_for_pdf(
+                    solution_source_path,
+                    solution_page_count,
+                    solution_dpi,
+                    "solution",
+                    batch_id,
+                    offset=problem_structure_units,
+                    total_units=total_units,
+                )
+                _write_batch_artifact(batch_id, "pages_metadata.json", problem_page_metadata + page_metadata)
+                solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count)
+                _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
+                solution_page_metadata = _metadata_by_page(page_metadata, "solution")
+                solutions = extract_full_solution_pdf(
+                    solution_source_path,
+                    solution_page_count,
+                    solution_dpi,
+                    batch_id,
+                    offset=structure_units,
+                    total_units=total_units,
+                    units_per_page=units_per_page,
+                    solution_sections=solution_sections,
+                    solution_page_metadata=solution_page_metadata,
+                )
+                solutions = repair_solution_numbers_from_inventory(solutions, problem_inventory)
+                if quick_answer_report is not None:
+                    quick_answer_report["full_fallback_answer_count"] = _solution_answer_count(solutions)
+        if has_embedded_solution_source:
+            recovery_page_indexes = _mixed_answer_recovery_page_indexes(problem_page_metadata, problem_page_count)
+            recovery_units = max(len(recovery_page_indexes) * units_per_page, 1)
+            recovery_total_units = total_units + recovery_units
+            set_progress(batch_id, "혼합 PDF 답안 재처리 중", total_units, recovery_total_units)
+            recovery_metadata = _metadata_with_document_kind(problem_page_metadata, "solution", set(recovery_page_indexes))
+            solution_sections = build_section_ranges_from_metadata(recovery_metadata, "solution", problem_page_count)
+            recovery_page_metadata = _metadata_by_page(recovery_metadata, "solution")
+            recovered_solutions = extract_mixed_pdf_answer_recovery(
+                solution_source_path,
+                recovery_page_indexes,
+                problem_page_count,
                 solution_dpi,
-                "solution",
                 batch_id,
-                offset=problem_structure_units,
-                total_units=total_units,
-            )
-            _write_batch_artifact(batch_id, "pages_metadata.json", problem_page_metadata + page_metadata)
-            solution_sections = build_section_ranges_from_metadata(page_metadata, "solution", solution_page_count)
-            _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
-            solution_page_metadata = _metadata_by_page(page_metadata, "solution")
-            solutions = extract_full_solution_pdf(
-                batch.solution_pdf_filename,
-                solution_page_count,
-                solution_dpi,
-                batch_id,
-                offset=structure_units,
-                total_units=total_units,
+                offset=total_units,
+                total_units=recovery_total_units,
                 units_per_page=units_per_page,
-                solution_sections=solution_sections,
-                solution_page_metadata=solution_page_metadata,
+                solution_page_metadata=recovery_page_metadata,
+                document_type_hints=solution_document_type_hints,
+                problem_inventory=problem_inventory,
             )
+            recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
+            if solution_sections:
+                _apply_section_ranges_to_items(recovered_solutions, solution_sections, "page_idx")
+            solutions, recovery_report = _choose_solution_candidates(existing_problem_payloads, solutions, recovered_solutions)
+            recovery_report.update(
+                {
+                    "strategy": "solution_only_mixed_pdf_recovery",
+                    "candidate_page_indexes": recovery_page_indexes,
+                    "candidate_page_numbers": [index + 1 for index in recovery_page_indexes],
+                    "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                    "quick_answer_count": quick_answer_count,
+                }
+            )
+            page_metadata = recovery_metadata
+            total_units = recovery_total_units
+            _write_batch_artifact(batch_id, "mixed_answer_recovery_report.json", recovery_report)
+            _write_batch_artifact(batch_id, "pages_metadata.json", problem_page_metadata + page_metadata)
+            _write_batch_artifact(batch_id, "solution_sections.json", solution_sections)
             if quick_answer_report is not None:
-                quick_answer_report["full_fallback_answer_count"] = _solution_answer_count(solutions)
+                quick_answer_report["final_used_source"] = (
+                    "mixed_pdf_answer_recovery"
+                    if recovery_report.get("chosen") == "recovered"
+                    else "quick_answer_table"
+                    if quick_answers_used
+                    else "current_candidate"
+                )
+                quick_answer_report["mixed_recovery_chosen"] = recovery_report.get("chosen")
+                quick_answer_report["mixed_recovery_answer_count"] = _solution_answer_count(recovered_solutions)
         if not any(has_solution_content(solution) for solution in solutions):
-            raise RuntimeError("Answer PDF was provided, but no answer content was extracted.")
+            raise RuntimeError("Answer source was provided, but no answer content was extracted.")
         if quick_answer_report is not None:
             _write_batch_artifact(batch_id, "quick_answer_table_report.json", quick_answer_report)
+        problem_inventory = build_problem_inventory_report(problem_page_metadata + page_metadata, problem_sections, solution_sections, solutions, problem_page_count)
+        problem_inventory = _attach_existing_problem_numbers_to_inventory(problem_inventory, existing_problem_payloads)
+        _write_batch_artifact(batch_id, "problem_inventory_report.json", problem_inventory)
 
         set_progress(batch_id, "기존 문항과 답안 재매칭 중", total_units, total_units)
         ensure_batch_active(batch_id)
@@ -3920,6 +4094,7 @@ def process_solutions_only(batch_id: UUID) -> None:
                 "ai_solution_image_detail": settings.ai_solution_image_detail,
                 "problem_page_count": problem_page_count,
                 "solution_page_count": solution_page_count,
+                "solution_source": solution_source_label,
                 "reused_problem_sections": reuse_problem_sections,
                 "quick_answer_table": quick_answer_report,
                 "quick_answer_table_used": quick_answers_used,

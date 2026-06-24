@@ -14,6 +14,7 @@ from services.pipeline import (  # noqa: E402
     RESCUE_EXTRACTION_PROMPT,
     RenderedPage,
     _apply_section_ranges_to_items,
+    _answer_inventory_prompt_note,
     _choose_solution_candidates,
     _document_type_hints_include_mixed,
     _embedded_solution_page_indexes,
@@ -270,6 +271,47 @@ class PipelineMergeKeyTests(unittest.TestCase):
 
         self.assertIs(chosen, recovered)
         self.assertEqual(report["chosen"], "recovered")
+
+    def test_recovered_solution_candidates_prefer_more_matches_over_warning_count(self):
+        problems = [
+            {
+                "problem_number": "1",
+                "problem_text": "first",
+                "page_index": 0,
+                "choices": [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}],
+            },
+            {
+                "problem_number": "2",
+                "problem_text": "second",
+                "page_index": 0,
+                "choices": [{"label": "①", "text": "$y=1$"}, {"label": "②", "text": "$y=2$"}],
+            },
+        ]
+        current = [{"problem_number": "1", "answer": "$x=1$", "page_idx": 3}]
+        recovered = [
+            {"problem_number": "1", "answer": "①", "page_idx": 3},
+            {"problem_number": "2", "answer": "②", "page_idx": 3},
+        ]
+
+        chosen, report = _choose_solution_candidates(problems, current, recovered)
+
+        self.assertIs(chosen, recovered)
+        self.assertEqual(report["chosen"], "recovered")
+        self.assertGreater(report["recovered"]["matched_count"], report["current"]["matched_count"])
+
+    def test_answer_inventory_prompt_keeps_choice_markers_out_of_problem_number(self):
+        note = _answer_inventory_prompt_note(
+            {
+                "expected_problem_count": 3,
+                "expected_problem_numbers": ["1", "2", "3"],
+                "pages": [{"page_index": 1, "solution_numbers": ["1", "2"]}],
+            },
+            1,
+        )
+
+        self.assertIn("Expected problem numbers across the PDF: 1, 2, 3", note)
+        self.assertIn("Never put circled choice markers", note)
+        self.assertIn("those symbols are answers", note)
 
     def test_page_metadata_prefers_exam_round_over_single_connection_title(self):
         page = RenderedPage(page_index=0, base64_png="", png_bytes=b"")
