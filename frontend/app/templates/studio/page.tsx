@@ -31,7 +31,7 @@ import {
   Undo2,
   Unlock,
 } from "lucide-react";
-import { CSSProperties, ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AlignmentGuide, ResizeHandleDirection, TemplatePageView, TemplateSelectionBox } from "@/components/templates/visual-template-renderer";
 import { Button } from "@/components/ui/button";
@@ -796,6 +796,7 @@ function VisualTemplateStudioPageContent() {
   const [editingTextElementId, setEditingTextElementId] = useState<string | null>(null);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const [selectionBox, setSelectionBox] = useState<(TemplateSelectionBox & { pageId: string }) | null>(null);
+  const [elementContextMenu, setElementContextMenu] = useState<{ pageId: string; elementId: string; x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState(0.84);
   const [leftPanel, setLeftPanel] = useState<StudioPanel>("elements");
   const [elementSearchQuery, setElementSearchQuery] = useState("");
@@ -826,6 +827,7 @@ function VisualTemplateStudioPageContent() {
   const selectedElements = useMemo(() => selectedPage?.elements.filter((element) => selectedIds.includes(element.id)) || [], [selectedIds, selectedPage]);
   const selectedElement = selectedElements.length === 1 ? selectedElements[0] : null;
   const hasInspectorSelection = selectedElements.length > 0;
+  const selectedHasGroup = selectedElements.some((element) => Boolean(element.groupId));
   const selectedCornerRadiusMax = selectedElement ? maxVisualCornerRadius(selectedElement) : 0;
   const selectedCornerRadius = selectedElement ? visualCornerRadius(selectedElement) : 0;
   const dynamicPreviewPages = useMemo(() => createDynamicPreviewPages(templateSet), [templateSet]);
@@ -843,6 +845,26 @@ function VisualTemplateStudioPageContent() {
   useEffect(() => {
     templateSetRef.current = templateSet;
   }, [templateSet]);
+
+  useEffect(() => {
+    if (!elementContextMenu) return;
+    function closeMenu() {
+      setElementContextMenu(null);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") closeMenu();
+    }
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [elementContextMenu]);
 
   const pageElementsByLayer = useMemo(() => [...(selectedPage?.elements || [])].sort((a, b) => b.zIndex - a.zIndex), [selectedPage]);
 
@@ -1228,6 +1250,18 @@ function VisualTemplateStudioPageContent() {
       startY: event.clientY,
       startElements: selectedStarts,
     };
+  }
+
+  function openElementContextMenu(event: ReactMouseEvent<HTMLDivElement>, element: TemplateElement, page: TemplatePage) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedPageId(page.id);
+    setEditingTextElementId(null);
+    setAlignmentGuides([]);
+    if (page.id !== selectedPageId || !selectedIds.includes(element.id)) {
+      setSelectedIds([element.id]);
+    }
+    setElementContextMenu({ pageId: page.id, elementId: element.id, x: event.clientX, y: event.clientY });
   }
 
   function startResize(event: ReactPointerEvent<HTMLDivElement>, element: TemplateElement, direction: ResizeHandleDirection) {
@@ -2062,6 +2096,7 @@ function VisualTemplateStudioPageContent() {
                         setSelectedPageId(page.id);
                         selectElement(event, element, page);
                       }}
+                      onElementContextMenu={(event, element) => openElementContextMenu(event, element, page)}
                       onResizePointerDown={startResize}
                       onRotatePointerDown={startRotate}
                     />
@@ -2072,26 +2107,67 @@ function VisualTemplateStudioPageContent() {
           </div>
         </main>
 
+        {elementContextMenu ? (
+          <div
+            className="fixed z-[2200] w-56 rounded-[10px] border border-zinc-200 bg-white p-1.5 text-sm font-semibold text-zinc-800 shadow-[0_18px_48px_rgba(15,23,42,0.18)]"
+            style={{ left: elementContextMenu.x, top: elementContextMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <div className="grid grid-cols-3 gap-1">
+              <button type="button" className="flex h-9 items-center justify-center gap-1 rounded-[7px] hover:bg-zinc-100" onClick={() => { alignSelected("left"); setElementContextMenu(null); }} title="왼쪽 정렬">
+                <AlignStartHorizontal className="h-4 w-4" />좌
+              </button>
+              <button type="button" className="flex h-9 items-center justify-center gap-1 rounded-[7px] hover:bg-zinc-100" onClick={() => { alignSelected("center"); setElementContextMenu(null); }} title="가로 가운데 정렬">
+                <AlignHorizontalJustifyCenter className="h-4 w-4" />중
+              </button>
+              <button type="button" className="flex h-9 items-center justify-center gap-1 rounded-[7px] hover:bg-zinc-100" onClick={() => { alignSelected("right"); setElementContextMenu(null); }} title="오른쪽 정렬">
+                <AlignEndHorizontal className="h-4 w-4" />우
+              </button>
+              <button type="button" className="h-9 rounded-[7px] hover:bg-zinc-100" onClick={() => { alignSelected("top"); setElementContextMenu(null); }} title="위쪽 정렬">상</button>
+              <button type="button" className="flex h-9 items-center justify-center gap-1 rounded-[7px] hover:bg-zinc-100" onClick={() => { alignSelected("middle"); setElementContextMenu(null); }} title="세로 가운데 정렬">
+                <AlignCenter className="h-4 w-4" />중
+              </button>
+              <button type="button" className="h-9 rounded-[7px] hover:bg-zinc-100" onClick={() => { alignSelected("bottom"); setElementContextMenu(null); }} title="아래쪽 정렬">하</button>
+            </div>
+            <div className="my-1 h-px bg-zinc-100" />
+            <button type="button" className="flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left hover:bg-zinc-100" onClick={() => { updateLayer("front"); setElementContextMenu(null); }}>
+              <BringToFront className="h-4 w-4" /> 앞으로 가져오기
+            </button>
+            <button type="button" className="flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left hover:bg-zinc-100" onClick={() => { updateLayer("back"); setElementContextMenu(null); }}>
+              <SendToBack className="h-4 w-4" /> 뒤로 보내기
+            </button>
+            <button type="button" className="flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left hover:bg-zinc-100" onClick={() => { duplicateSelected(); setElementContextMenu(null); }}>
+              <Copy className="h-4 w-4" /> 복제
+            </button>
+            <div className="my-1 h-px bg-zinc-100" />
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                className="h-9 rounded-[7px] hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent"
+                disabled={selectedIds.length < 2}
+                onClick={() => { groupSelected(); setElementContextMenu(null); }}
+              >
+                그룹
+              </button>
+              <button
+                type="button"
+                className="h-9 rounded-[7px] hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent"
+                disabled={!selectedHasGroup}
+                onClick={() => { ungroupSelected(); setElementContextMenu(null); }}
+              >
+                해제
+              </button>
+            </div>
+            <button type="button" className="mt-1 flex h-9 w-full items-center gap-2 rounded-[7px] bg-black px-2 text-left text-white hover:bg-zinc-800" onClick={() => { deleteSelected(); setElementContextMenu(null); }}>
+              <Trash2 className="h-4 w-4" /> 삭제
+            </button>
+          </div>
+        ) : null}
+
         {hasInspectorSelection ? (
         <aside className="min-h-0 overflow-y-auto bg-white p-3 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
           <div className="space-y-3">
-            <InspectorSection title="빠른 작업" compact>
-              <div className="grid grid-cols-3 gap-2">
-                <Button variant="outline" size="sm" onClick={() => alignSelected("left")} title="왼쪽 정렬" aria-label="왼쪽 정렬"><AlignStartHorizontal className="h-4 w-4" />좌</Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("center")} title="가로 가운데 정렬" aria-label="가로 가운데 정렬"><AlignHorizontalJustifyCenter className="h-4 w-4" />중</Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("right")} title="오른쪽 정렬" aria-label="오른쪽 정렬"><AlignEndHorizontal className="h-4 w-4" />우</Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("top")} title="위쪽 정렬">상</Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("middle")} title="세로 가운데 정렬" aria-label="세로 가운데 정렬"><AlignCenter className="h-4 w-4" />중</Button>
-                <Button variant="outline" size="sm" onClick={() => alignSelected("bottom")} title="아래쪽 정렬">하</Button>
-                <Button variant="outline" size="sm" onClick={() => updateLayer("front")} title="앞으로 가져오기" aria-label="앞으로 가져오기"><BringToFront className="h-4 w-4" />앞</Button>
-                <Button variant="outline" size="sm" onClick={() => updateLayer("back")} title="뒤로 보내기" aria-label="뒤로 보내기"><SendToBack className="h-4 w-4" />뒤</Button>
-                <Button variant="outline" size="sm" onClick={duplicateSelected} title="복제" aria-label="복제"><Copy className="h-4 w-4" />복제</Button>
-                <Button variant="outline" size="sm" onClick={groupSelected}>그룹</Button>
-                <Button variant="outline" size="sm" onClick={ungroupSelected}>해제</Button>
-                <Button variant="destructive" size="sm" onClick={deleteSelected} title="삭제" aria-label="삭제"><Trash2 className="h-4 w-4" />삭제</Button>
-              </div>
-            </InspectorSection>
-
             {selectedElement ? (
               <>
                 <InspectorSection title="위치와 크기">

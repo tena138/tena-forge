@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, PointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { CSSProperties, MouseEvent, PointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react";
 
 import { MathText } from "@/components/math-text";
 import { ProblemVisualRenderer, shouldPreferProblemVisualSchema } from "@/components/problem-visual-renderer";
@@ -717,6 +717,7 @@ type TemplatePageViewProps = {
   alignmentGuides?: AlignmentGuide[];
   renderElementContent?: (element: TemplateElement, defaultContent: ReactNode) => ReactNode;
   onElementPointerDown?: (event: PointerEvent<HTMLDivElement>, element: TemplateElement) => void;
+  onElementContextMenu?: (event: MouseEvent<HTMLDivElement>, element: TemplateElement) => void;
   onResizePointerDown?: (event: PointerEvent<HTMLDivElement>, element: TemplateElement, direction: ResizeHandleDirection) => void;
   onRotatePointerDown?: (event: PointerEvent<HTMLDivElement>, element: TemplateElement) => void;
   onSelectPage?: () => void;
@@ -745,6 +746,7 @@ export function TemplatePageView({
   alignmentGuides = [],
   renderElementContent,
   onElementPointerDown,
+  onElementContextMenu,
   onResizePointerDown,
   onRotatePointerDown,
   onSelectPage,
@@ -807,6 +809,10 @@ export function TemplatePageView({
               if (!interactive || element.locked) return;
               event.currentTarget.focus({ preventScroll: true });
               onElementPointerDown?.(event, element);
+            }}
+            onContextMenu={(event) => {
+              if (!interactive) return;
+              onElementContextMenu?.(event, element);
             }}
           >
             <div className="h-full w-full overflow-hidden">{renderElementContent ? renderElementContent(element, defaultContent) : defaultContent}</div>
