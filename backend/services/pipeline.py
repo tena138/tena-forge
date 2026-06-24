@@ -3432,13 +3432,9 @@ def process_batch(batch_id: UUID) -> None:
             if quick_answer_report is not None:
                 quick_answer_report["inventory_expected_problem_count"] = inventory_expected_count
                 quick_answer_report["inventory_expected_problem_numbers"] = problem_inventory.get("expected_problem_numbers") or []
-                quick_answer_report["coverage_threshold_met"] = _quick_answers_cover_expected_count(quick_answer_count, inventory_expected_count)
-            if not _quick_answers_cover_expected_count(quick_answer_count, inventory_expected_count):
-                quick_answers_used = False
-                solutions = []
-                if quick_answer_report is not None:
-                    quick_answer_report["used"] = False
-                    quick_answer_report["fallback_reason"] = "quick_answer_count_below_first_pass_inventory"
+                quick_answer_report["inventory_coverage_threshold_met"] = _quick_answers_cover_expected_count(quick_answer_count, inventory_expected_count)
+                if not quick_answer_report["inventory_coverage_threshold_met"]:
+                    quick_answer_report["inventory_coverage_note"] = "first_pass_inventory_not_used_as_quick_answer_veto"
 
         if should_extract_separate_solutions and not quick_answers_used:
             solutions = extract_full_solution_pdf(
