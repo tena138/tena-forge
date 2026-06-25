@@ -41,7 +41,7 @@ export function SidebarNavItem({
       className={cn(
         "group relative inline-flex items-center overflow-visible border text-sm font-medium transition-all duration-150",
         mobile
-          ? "h-9 shrink-0 gap-2.5 rounded-full border-black/10 bg-[#f3f3f3] px-3 text-zinc-700 hover:border-black/20 hover:bg-zinc-200 hover:text-zinc-950"
+          ? "h-10 shrink-0 touch-manipulation gap-2.5 rounded-full border-black/10 bg-[#f3f3f3] px-3.5 text-zinc-700 hover:border-black/20 hover:bg-zinc-200 hover:text-zinc-950"
           : collapsed
             ? "mx-auto flex h-10 w-10 justify-center rounded-[8px] border-transparent px-0 text-zinc-500 hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
             : "flex h-10 w-full gap-2 rounded-[7px] border-transparent px-2.5 text-zinc-600 hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950",
