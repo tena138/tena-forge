@@ -386,11 +386,9 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                       value={scheduleForm.event_type}
                       onChange={(event) => setScheduleForm((current) => ({ ...current, event_type: event.target.value }))}
                     >
-                      <option value="class">정규 수업</option>
+                      <option value="class">수업</option>
                       <option value="homework">과제</option>
-                      <option value="test">테스트</option>
-                      <option value="review">복습</option>
-                      <option value="mock_exam">모의고사</option>
+                      <option value="test">시험</option>
                       <option value="other">기타</option>
                     </select>
                     <select

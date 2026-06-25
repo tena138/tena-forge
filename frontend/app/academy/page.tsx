@@ -1099,8 +1099,8 @@ function academyEventTypeLabel(value: string) {
     class: "수업",
     homework: "과제",
     test: "시험",
-    review: "복습",
-    mock_exam: "모의고사",
+    review: "기타",
+    mock_exam: "기타",
     other: "기타",
   };
   return labels[value] || value;
@@ -1241,17 +1241,6 @@ function AcademySchedulePanel() {
   }, [error, notice]);
 
   const academyModeActive = Boolean(activeWorkspaceId && activeWorkspaceId !== "student") || profile?.account_type === "academy";
-
-  if (!academyModeActive && profile?.account_type === "student") {
-    return (
-      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center">
-        <h1 className="text-xl font-bold text-zinc-950">학생 계정에서는 Student App을 사용합니다.</h1>
-        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white hover:bg-zinc-800">
-          Student App
-        </a>
-      </div>
-    );
-  }
 
   async function submitSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1519,6 +1508,17 @@ function AcademySchedulePanel() {
       window.removeEventListener("pointerup", handlePointerUp);
     };
   }, [timeEditor?.mode]);
+
+  if (!academyModeActive && profile?.account_type === "student") {
+    return (
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center">
+        <h1 className="text-xl font-bold text-zinc-950">학생 계정에서는 Student App을 사용합니다.</h1>
+        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white hover:bg-zinc-800">
+          Student App
+        </a>
+      </div>
+    );
+  }
 
   const timeEditorTimelineHeight = (ACADEMY_TIMELINE_END_MINUTES - ACADEMY_TIMELINE_START_MINUTES) * ACADEMY_TIMELINE_PX_PER_MINUTE;
   const timeEditorStartMinutes = timeEditor ? academyMinutesOfDay(timeEditor.startsAt) : ACADEMY_TIMELINE_START_MINUTES;
@@ -1822,8 +1822,6 @@ function AcademySchedulePanel() {
                 <option value="class">수업</option>
                 <option value="homework">과제</option>
                 <option value="test">시험</option>
-                <option value="review">복습</option>
-                <option value="mock_exam">모의고사</option>
                 <option value="other">기타</option>
               </select>
               <Input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
