@@ -1975,7 +1975,7 @@ function AcademySchedulePanel() {
 function AcademyPageContent() {
   const searchParams = useSearchParams();
   const panel = searchParams.get("panel");
-  if (panel === "seats" || panel === "classes" || panel === "assignments" || searchParams.get("tab") === "assignments") return <AcademyOperationsPanel />;
+  if (panel === "seats" || panel === "classes") return <AcademyOperationsPanel />;
   if (panel === "operations") return <AcademySchedulePanel />;
   return <AcademyConsoleHome />;
 }

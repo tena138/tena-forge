@@ -4,7 +4,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
-  BookOpenCheck,
   BookOpen,
   CalendarDays,
   FileUp,
@@ -60,7 +59,7 @@ const sections = [
   {
     title: "Academy OS",
     shortTitle: "AO",
-    description: "Seats, classes, assignments",
+    description: "Seats, classes, calendar",
     accountTypes: ["academy"],
     accent: "bg-zinc-950",
     panel: "bg-[#f3f3f3]",
@@ -69,8 +68,7 @@ const sections = [
     activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
-      { href: "/academy?panel=operations", label: "학원 운영", icon: GraduationCap },
-      { href: "/academy?panel=assignments", label: "과제", icon: BookOpenCheck },
+      { href: "/academy?panel=operations", label: "캘린더", icon: CalendarDays },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
       { href: "/student-management/tuition", label: "수강료", icon: ReceiptText },
       { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
