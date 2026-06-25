@@ -118,11 +118,12 @@ function formatUsageNumber(value: number, suffix = "") {
   return `${rounded.toLocaleString("ko-KR")}${suffix}`;
 }
 
-function formatCapacityMb(value: number) {
-  const safe = Number.isFinite(value) ? value : 0;
-  if (safe >= 1024 * 1024) return formatUsageNumber(safe / (1024 * 1024), "TB");
-  if (safe >= 1024) return formatUsageNumber(safe / 1024, "GB");
-  return formatUsageNumber(safe, "MB");
+function formatUsagePercent(remaining: number, limit: number) {
+  const safeLimit = Number.isFinite(limit) ? limit : 0;
+  if (safeLimit <= 0) return "0%";
+  const safeRemaining = Number.isFinite(remaining) ? remaining : 0;
+  const percent = Math.round((Math.max(0, Math.min(safeRemaining, safeLimit)) / safeLimit) * 100);
+  return `${percent}%`;
 }
 
 function buildUsageRows(summary: UsageSummary | null, billing: AcademyBilling | null, profile: AcademyProfile) {
@@ -139,9 +140,9 @@ function buildUsageRows(summary: UsageSummary | null, billing: AcademyBilling | 
     const storageLimit = summary.plan?.storage_quota_mb || 0;
     const storageRemaining = Math.max(storageLimit - storageUsed, 0);
 
-    rows.push({ label: "AI credits", value: `${formatUsageNumber(creditsRemaining)} / ${formatUsageNumber(creditsLimit)} 남음` });
-    rows.push({ label: "업로드", value: `${formatCapacityMb(uploadRemaining)} / ${formatCapacityMb(uploadLimit)} 남음` });
-    rows.push({ label: "보관", value: `${formatCapacityMb(storageRemaining)} / ${formatCapacityMb(storageLimit)} 남음` });
+    rows.push({ label: "AI credits", value: formatUsagePercent(creditsRemaining, creditsLimit) });
+    rows.push({ label: "업로드", value: formatUsagePercent(uploadRemaining, uploadLimit) });
+    rows.push({ label: "보관", value: formatUsagePercent(storageRemaining, storageLimit) });
   }
 
   if (billing) {
