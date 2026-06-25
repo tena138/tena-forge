@@ -1713,7 +1713,7 @@ function AcademySchedulePanel() {
           style={{ left: timeEditorLeft, top: timeEditorTop, width: timeEditorWidth }}
         >
           <div className="mb-2 flex items-center justify-end gap-2">
-            <span className="text-xs font-bold text-zinc-500">{savingTimeEdit ? "저장 중" : "10분 단위"}</span>
+            {savingTimeEdit ? <span className="text-xs font-bold text-zinc-500">저장 중</span> : null}
             <button
               type="button"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950"
@@ -1740,7 +1740,7 @@ function AcademySchedulePanel() {
               </div>
             ))}
             <div
-              className="absolute left-14 right-3 cursor-grab rounded-[10px] bg-black px-3 py-2 text-white shadow-lg active:cursor-grabbing"
+              className="absolute left-10 right-2 cursor-grab rounded-[10px] bg-black px-2.5 py-2 text-white shadow-lg active:cursor-grabbing"
               style={{ top: timeEditorBlockTop, height: timeEditorBlockHeight }}
               onPointerDown={(event) => {
                 if (event.button !== 0) return;
@@ -1771,7 +1771,7 @@ function AcademySchedulePanel() {
               />
               <div className="pointer-events-none flex h-full min-h-0 flex-col justify-center">
                 <span className="truncate text-xs font-black">{timeEditorEvent.title}</span>
-                <span className="mt-0.5 text-[11px] font-semibold text-white/70">
+                <span className="mt-0.5 truncate whitespace-nowrap text-[10px] font-semibold text-white/70 sm:text-[11px]">
                   {academyTimeRangeLabel(timeEditor.startsAt, timeEditor.endsAt)}
                 </span>
               </div>
