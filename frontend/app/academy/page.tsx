@@ -1525,9 +1525,9 @@ function AcademySchedulePanel() {
   const timeEditorEndMinutes = timeEditor ? academyEndMinutesForEditor(timeEditor.startsAt, timeEditor.endsAt) : timeEditorStartMinutes + 60;
   const timeEditorBlockTop = Math.max(0, (timeEditorStartMinutes - ACADEMY_TIMELINE_START_MINUTES) * ACADEMY_TIMELINE_PX_PER_MINUTE);
   const timeEditorBlockHeight = Math.max(30, (timeEditorEndMinutes - timeEditorStartMinutes) * ACADEMY_TIMELINE_PX_PER_MINUTE);
-  const timeEditorViewportWidth = typeof window === "undefined" ? 1200 : window.innerWidth;
   const timeEditorViewportHeight = typeof window === "undefined" ? 900 : window.innerHeight;
-  const timeEditorLeft = timeEditorCellRect ? Math.max(16, Math.min(timeEditorCellRect.left + timeEditorCellRect.width / 2 - 170, timeEditorViewportWidth - 356)) : 96;
+  const timeEditorWidth = timeEditorCellRect ? timeEditorCellRect.width : 340;
+  const timeEditorLeft = timeEditorCellRect ? timeEditorCellRect.left : 96;
   const timeEditorTop = timeEditorCellRect ? Math.max(16, Math.min(timeEditorCellRect.top - 26, timeEditorViewportHeight - 620)) : 96;
 
   return (
@@ -1697,8 +1697,8 @@ function AcademySchedulePanel() {
 
       {timeEditor && timeEditorEvent ? (
         <div
-          className="fixed z-[110] w-[340px] rounded-[14px] bg-white p-3 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)] ring-1 ring-black/10"
-          style={{ left: timeEditorLeft, top: timeEditorTop }}
+          className="fixed z-[110] rounded-[14px] bg-white p-3 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)] ring-1 ring-black/10"
+          style={{ left: timeEditorLeft, top: timeEditorTop, width: timeEditorWidth }}
         >
           <div className="mb-2 flex items-center justify-end gap-2">
             <span className="text-xs font-bold text-zinc-500">{savingTimeEdit ? "저장 중" : "10분 단위"}</span>
