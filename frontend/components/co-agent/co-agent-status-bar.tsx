@@ -121,6 +121,40 @@ function chatErrorMessage(error: unknown) {
   return candidate.message || "AI 응답을 만들지 못했습니다.";
 }
 
+function PixelCoAgentFace({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      data-coagent-command-slot
+      className={cn(
+        "relative z-[1] grid shrink-0 place-items-center rounded-[9px] bg-white text-black ring-1 ring-black/10",
+        "shadow-[0_6px_16px_rgba(24,24,27,0.08)]",
+        compact ? "h-8 w-8" : "h-9 w-9"
+      )}
+      role="img"
+      aria-label="코에이전트"
+    >
+      <svg
+        viewBox="0 0 18 18"
+        className="h-[26px] w-[26px] [image-rendering:pixelated]"
+        shapeRendering="crispEdges"
+        aria-hidden="true"
+      >
+        <rect x="8" y="1" width="2" height="2" fill="currentColor" />
+        <rect x="7" y="3" width="4" height="1" fill="currentColor" />
+        <rect x="4" y="4" width="10" height="2" fill="currentColor" />
+        <rect x="3" y="6" width="12" height="8" fill="currentColor" />
+        <rect x="2" y="8" width="1" height="4" fill="currentColor" />
+        <rect x="15" y="8" width="1" height="4" fill="currentColor" />
+        <rect x="5" y="6" width="8" height="6" fill="white" />
+        <rect x="6" y="8" width="2" height="2" fill="currentColor" />
+        <rect x="10" y="8" width="2" height="2" fill="currentColor" />
+        <rect x="7" y="11" width="4" height="1" fill="currentColor" />
+        <rect x="5" y="14" width="8" height="1" fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
 export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -506,11 +540,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           "flex items-center gap-3"
         )}
       >
-        <span
-          data-coagent-command-slot
-          className="pointer-events-none absolute left-4 top-1/2 h-6 w-8 -translate-y-1/2"
-          aria-hidden="true"
-        />
+        <PixelCoAgentFace compact={compact} />
         {chatOpen && !sidebarBubbleOwnsInput ? (
           <form
             data-coagent-chat-form
