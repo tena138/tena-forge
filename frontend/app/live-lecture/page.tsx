@@ -15,6 +15,8 @@ import {
   ScreenShare,
   ScreenShareOff,
   Square,
+  TrendingUp,
+  UsersRound,
   Video,
 } from "lucide-react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
@@ -28,6 +30,7 @@ import {
   uploadLiveLectureSlide,
 } from "@/lib/auth-api";
 import { assetUrl } from "@/lib/api";
+import { getClassDetail, type ClassCard, type PaperSessionSummary, type StudentCard } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 type RecordingMode = "audio" | "video";
@@ -523,6 +526,152 @@ function ShareOnlyView({ eventId, classId }: { eventId: string; classId: string 
   );
 }
 
+function compactDate(value?: string | null) {
+  if (!value) return "";
+  const date = parseDate(value);
+  if (!date) return "";
+  return date.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+}
+
+function scoreText(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return `${Math.round(value)}점`;
+}
+
+function sessionTypeText(value?: string | null) {
+  if (value === "homework") return "과제";
+  if (value === "test" || value === "exam") return "테스트";
+  if (value === "review") return "복습";
+  return "기록";
+}
+
+function sessionDateText(session: PaperSessionSummary) {
+  return compactDate(session.due_at || session.scheduled_at || session.updated_at || session.created_at);
+}
+
+function topRecentScoreStudents(students: StudentCard[]) {
+  return [...students]
+    .sort((left, right) => {
+      const rightScore = typeof right.recent_score === "number" ? right.recent_score : -1;
+      const leftScore = typeof left.recent_score === "number" ? left.recent_score : -1;
+      return rightScore - leftScore || left.name.localeCompare(right.name);
+    })
+    .slice(0, 5);
+}
+
+function ClassLearningSnapshot({ classId }: { classId: string }) {
+  const [classDetail, setClassDetail] = useState<ClassCard | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!classId) {
+      setClassDetail(null);
+      setLoading(false);
+      setFailed(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setFailed(false);
+    getClassDetail(classId)
+      .then((detail) => {
+        if (!cancelled) setClassDetail(detail);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setClassDetail(null);
+          setFailed(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [classId]);
+
+  const recentSessions = useMemo(() => (classDetail?.paper_sessions || []).slice(0, 3), [classDetail?.paper_sessions]);
+  const scoreStudents = useMemo(() => topRecentScoreStudents(classDetail?.students || []), [classDetail?.students]);
+  const scoredStudentCount = (classDetail?.students || []).filter((student) => typeof student.recent_score === "number").length;
+
+  return (
+    <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-zinc-950">클래스 학습 현황</p>
+          <p className="mt-0.5 text-xs font-semibold text-zinc-500">{classDetail?.name || "현재 강의 클래스"}</p>
+        </div>
+        <div className="grid h-9 w-9 place-items-center rounded-[8px] bg-zinc-100 text-zinc-800">
+          <TrendingUp className="h-4 w-4" />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="mt-3 rounded-[8px] bg-zinc-50 px-3 py-4 text-xs font-bold text-zinc-500">학습 기록을 불러오는 중입니다.</div>
+      ) : failed ? (
+        <div className="mt-3 rounded-[8px] bg-zinc-50 px-3 py-4 text-xs font-bold text-zinc-500">학습 기록을 불러오지 못했습니다.</div>
+      ) : !classDetail ? (
+        <div className="mt-3 rounded-[8px] bg-zinc-50 px-3 py-4 text-xs font-bold text-zinc-500">연결된 클래스가 없습니다.</div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-[8px] bg-zinc-50 p-2">
+              <p className="text-[11px] font-black text-zinc-500">학생</p>
+              <p className="mt-1 text-base font-black text-zinc-950">{classDetail.student_count}</p>
+            </div>
+            <div className="rounded-[8px] bg-zinc-50 p-2">
+              <p className="text-[11px] font-black text-zinc-500">최근 평균</p>
+              <p className="mt-1 text-base font-black text-zinc-950">{scoreText(classDetail.average_recent_score)}</p>
+            </div>
+            <div className="rounded-[8px] bg-zinc-50 p-2">
+              <p className="text-[11px] font-black text-zinc-500">점수 입력</p>
+              <p className="mt-1 text-base font-black text-zinc-950">{scoredStudentCount}</p>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-black text-zinc-700">
+              <UsersRound className="h-3.5 w-3.5" />
+              최근 과제/테스트
+            </div>
+            <div className="space-y-1.5">
+              {recentSessions.length ? recentSessions.map((session) => (
+                <div key={session.id} className="rounded-[8px] bg-zinc-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 truncate text-xs font-black text-zinc-950">{session.title}</p>
+                    <span className="shrink-0 text-[11px] font-black text-zinc-500">{scoreText(session.average_score)}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] font-bold text-zinc-500">
+                    {sessionTypeText(session.session_type)} · {session.graded_count}/{session.assigned_count} 채점{sessionDateText(session) ? ` · ${sessionDateText(session)}` : ""}
+                  </p>
+                </div>
+              )) : (
+                <div className="rounded-[8px] bg-zinc-50 px-3 py-3 text-xs font-bold text-zinc-500">최근 과제나 테스트 기록이 없습니다.</div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1.5 text-xs font-black text-zinc-700">학생별 최근 점수</div>
+            <div className="space-y-1">
+              {scoreStudents.length ? scoreStudents.map((student) => (
+                <div key={student.id} className="flex items-center justify-between gap-2 rounded-[7px] px-2 py-1.5 text-xs">
+                  <span className="min-w-0 truncate font-bold text-zinc-800">{student.name}</span>
+                  <span className={cn("shrink-0 font-black", typeof student.recent_score === "number" ? "text-zinc-950" : "text-zinc-400")}>{scoreText(student.recent_score)}</span>
+                </div>
+              )) : (
+                <div className="rounded-[8px] bg-zinc-50 px-3 py-3 text-xs font-bold text-zinc-500">학생 기록이 없습니다.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function LiveLectureContent() {
   const searchParams = useSearchParams();
   const eventId = searchParams.get("eventId") || "";
@@ -811,6 +960,7 @@ function LiveLectureContent() {
               className="min-h-[18rem] w-full resize-none rounded-[8px] bg-zinc-100 p-3 text-sm font-medium leading-6 text-zinc-800 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
             />
           </div>
+          <ClassLearningSnapshot classId={classId || activeEvent?.class_id || ""} />
         </aside>
       </section>
 
