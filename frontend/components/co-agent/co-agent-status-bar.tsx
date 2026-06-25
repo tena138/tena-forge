@@ -514,7 +514,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         {chatOpen && !sidebarBubbleOwnsInput ? (
           <form
             data-coagent-chat-form
-            className="z-50 flex h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[12px] bg-zinc-100/90 px-2 ring-1 ring-black/10"
+            className="z-50 flex h-10 min-w-0 flex-1 items-center gap-1.5 px-0"
             onSubmit={submitChat}
           >
             <input
