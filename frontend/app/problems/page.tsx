@@ -1222,11 +1222,11 @@ function ProblemsBrowser() {
         onContextMenu={(event) => handleProblemContextMenu(event, problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "group relative min-h-[198px] cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
-          selected ? "bg-zinc-100" : ""
+          "group relative min-h-[198px] cursor-pointer overflow-hidden rounded-lg bg-white ring-1 ring-transparent transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
+          selected ? "bg-zinc-50 ring-2 ring-black/25 shadow-[0_8px_24px_rgba(15,15,15,0.08)]" : ""
         )}
       >
-        <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
+        <span className={cn("absolute inset-y-0 left-0 transition-[width]", selected ? "w-[5px]" : "w-[3px]")} style={{ backgroundColor: accentColor }} />
         <div className="flex h-full flex-col px-3 pb-3 pl-5 pt-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1271,11 +1271,11 @@ function ProblemsBrowser() {
         onContextMenu={(event) => handleProblemContextMenu(event, problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
-          "relative cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
-          selected ? "bg-zinc-100" : ""
+          "relative cursor-pointer overflow-hidden rounded-lg bg-white ring-1 ring-transparent transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
+          selected ? "bg-zinc-50 ring-2 ring-black/25 shadow-[0_8px_24px_rgba(15,15,15,0.08)]" : ""
         )}
       >
-        <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
+        <span className={cn("absolute inset-y-0 left-0 transition-[width]", selected ? "w-[5px]" : "w-[3px]")} style={{ backgroundColor: accentColor }} />
         <div className="grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-3 py-3 pl-6 pr-3">
           <div className="min-w-0">
             <div className="mb-0.5 line-clamp-1 text-[11px] font-medium text-muted-foreground">{sourceLabel(problem)}</div>
@@ -1545,20 +1545,20 @@ function ProblemsBrowser() {
       </section>
 
       {selectedIds.length > 0 ? (
-        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-col items-stretch gap-3 rounded-[16px] bg-white px-4 py-3 text-zinc-950 shadow-[0_18px_50px_rgba(15,15,15,0.08)] sm:flex-row sm:items-center sm:justify-between lg:top-[65px]">
-          <div className="flex min-w-0 items-center gap-3 text-[15px] font-black text-zinc-950">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white">
+        <div className="selection-action-bar sticky top-[121px] z-30 flex flex-col items-stretch gap-3 rounded-[16px] bg-black px-4 py-3 text-white shadow-[0_18px_50px_rgba(15,15,15,0.22)] sm:flex-row sm:items-center sm:justify-between lg:top-[65px]">
+          <div className="flex min-w-0 items-center gap-3 text-[15px] font-black text-white">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-white text-black">
               <CheckSquare className="h-4 w-4" />
             </span>
             <span className="truncate">{selectedIds.length}개 선택됨</span>
           </div>
           <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap sm:justify-end">
-            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</button>
-            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</button>
-            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</button>
-            <span className="hidden h-6 w-px bg-zinc-200 sm:block" />
-            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-black px-3 text-sm font-black text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 disabled:cursor-wait disabled:bg-zinc-300 disabled:text-zinc-500 sm:h-9 sm:w-auto" disabled={deleting} onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-4 w-4" />삭제</button>
-            <button type="button" className="selection-action-clear inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-zinc-100 px-3 text-sm font-black text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10 sm:h-9 sm:w-auto" onClick={() => setSelectedIds([])}>선택 해제</button>
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-white/10 px-3 text-sm font-black text-white transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 sm:h-9 sm:w-auto" onClick={() => setAddModalOpen(true)}><FolderPlus className="h-4 w-4" />세트에 담기</button>
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-white/10 px-3 text-sm font-black text-white transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 sm:h-9 sm:w-auto" onClick={() => setQuickExportOpen(true)}><Send className="h-4 w-4" />바로 내보내기</button>
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-white/10 px-3 text-sm font-black text-white transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 sm:h-9 sm:w-auto" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4" />미리보기</button>
+            <span className="hidden h-6 w-px bg-white/20 sm:block" />
+            <button type="button" className="selection-action-button inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-white px-3 text-sm font-black text-black transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35 disabled:cursor-wait disabled:bg-zinc-300 disabled:text-zinc-500 sm:h-9 sm:w-auto" disabled={deleting} onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-4 w-4" />삭제</button>
+            <button type="button" className="selection-action-clear inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-white/10 px-3 text-sm font-black text-white transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 sm:h-9 sm:w-auto" onClick={() => setSelectedIds([])}>선택 해제</button>
           </div>
         </div>
       ) : null}
