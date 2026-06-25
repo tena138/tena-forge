@@ -27,6 +27,7 @@ type ArchiveFolderExplorerProps = {
   mode?: "browse" | "select";
   title?: string;
   kicker?: string;
+  compactCreateFolder?: boolean;
   showBatches?: boolean;
   destinationPicker?: boolean;
   loading?: boolean;
@@ -56,6 +57,7 @@ export function ArchiveFolderExplorer({
   mode = "browse",
   title = "문항 아카이브 폴더",
   kicker = "Batch folders",
+  compactCreateFolder = false,
   showBatches = true,
   destinationPicker = false,
   loading = false,
@@ -88,6 +90,7 @@ export function ArchiveFolderExplorer({
     [batches, currentFolderId, showBatches],
   );
   const selectedPathLabel = useMemo(() => archiveFolderPathLabel(selectedFolderId || null, folders), [folders, selectedFolderId]);
+  const showGridCreateFolder = destinationPicker || compactCreateFolder;
 
   async function createFolder() {
     const name = draft.replace(/\s+/g, " ").trim();
@@ -140,7 +143,7 @@ export function ArchiveFolderExplorer({
 
   return (
     <section className="rounded-[12px] bg-white p-3">
-      {!destinationPicker ? (
+      {!destinationPicker && !compactCreateFolder ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{kicker}</div>
@@ -326,7 +329,7 @@ export function ArchiveFolderExplorer({
           );
         })}
 
-        {destinationPicker ? (
+        {showGridCreateFolder ? (
           creatingFolder ? (
             <div className="flex h-11 min-h-0 items-center gap-1.5 self-start rounded-[10px] bg-zinc-50 px-2">
               <Input

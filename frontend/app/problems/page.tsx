@@ -1507,8 +1507,7 @@ function ProblemsBrowser() {
           currentFolderId={currentArchiveFolderId}
           selectedFolderId={selectedBatchFolderId || null}
           selectedBatchId={selectedBatchId || null}
-          title="문항 보관 트리"
-          kicker="Archive folders"
+          compactCreateFolder
           loading={!archiveFoldersLoaded || !batchesLoaded}
           onOpenFolder={openArchiveFolder}
           onSelectFolder={selectArchiveFolderForProblems}
