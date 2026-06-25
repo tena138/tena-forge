@@ -95,13 +95,6 @@ function timeText(date: Date | null) {
   return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function fileSizeText(size: number) {
-  if (!Number.isFinite(size) || size <= 0) return "";
-  const mb = size / (1024 * 1024);
-  if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1)}MB`;
-  return `${Math.max(1, Math.round(size / 1024))}KB`;
-}
-
 function isPdfFile(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
@@ -805,24 +798,7 @@ function LiveLectureContent() {
             onPageChange={setSlidePage}
             onDragStateChange={setSlideDragActive}
           />
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] bg-white p-2 ring-1 ring-black/5">
-            <input ref={slidePdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleSlidePdfInput} />
-            <div className="min-w-0">
-              <div className="text-xs font-black text-zinc-500">슬라이드 PDF</div>
-              <div className="mt-0.5 truncate text-sm font-bold text-zinc-950">
-                {slidePdf ? `${slidePdf.name}${fileSizeText(slidePdf.size) ? ` · ${fileSizeText(slidePdf.size)}` : ""}` : "선택된 PDF 없음"}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => slidePdfInputRef.current?.click()}
-              disabled={Boolean(slideUploadProgress)}
-              className="inline-flex h-9 items-center gap-2 rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
-            >
-              <FileUp className="h-3.5 w-3.5" />
-              {slideUploadProgress ? `${slideUploadProgress}%` : "PDF 업로드"}
-            </button>
-          </div>
+          <input ref={slidePdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleSlidePdfInput} />
         </div>
 
         <aside className="flex min-w-0 flex-col gap-3">
