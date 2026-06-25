@@ -13,7 +13,6 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Library,
-  Megaphone,
   NotebookPen,
   ReceiptText,
   Settings,
@@ -121,7 +120,6 @@ const sections = [
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/account/profile", label: "프로필", icon: UserCircle },
-      { href: "/admin/announcements", label: "소식 관리", icon: Megaphone, adminOnly: true },
       { href: "/account/rights-policy", label: "권리 및 업로드 정책", icon: ShieldCheck },
       { href: "/settings", label: "설정", icon: Settings },
     ],
