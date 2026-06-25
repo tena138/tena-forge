@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ColorPicker } from "@/components/editor/color-picker";
+import { formatLocalTime } from "@/lib/datetime";
 import { CanvasElement, DrawingTool } from "@/lib/editorTypes";
 import { useEditorStore } from "@/store/editorStore";
 
@@ -59,7 +60,7 @@ function bounds(elements: CanvasElement[]) {
 }
 
 function timeLabel(value: string) {
-  return new Date(value).toLocaleTimeString("ko-KR", { hour12: false });
+  return formatLocalTime(value);
 }
 
 function actionIcon(name: string) {

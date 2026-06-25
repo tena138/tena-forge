@@ -38,6 +38,7 @@ import { AlignmentGuide, ResizeHandleDirection, TemplatePageView, TemplateSelect
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getClipboardImageFiles, imageFileDisplayName, isEditableClipboardTarget, readFileAsDataUrl } from "@/lib/clipboardImages";
+import { formatLocalTime } from "@/lib/datetime";
 import { ClipboardDesignImage, createClipboardEditableElements, createClipboardImageElements, createClipboardRichTextElement, createClipboardTextElement, getClipboardDesignImages, getClipboardPlainText, getClipboardRichTextHtml } from "@/lib/powerpointClipboard";
 import { createDynamicPreviewPages, isRegionElement, visualTemplateVariableTokens } from "@/lib/visualTemplateEngine";
 import { createBlankTemplateSet, createElement, createProblemRegion, pageRoleLabels } from "@/lib/visualTemplatePresets";
@@ -910,7 +911,7 @@ function VisualTemplateStudioPageContent() {
     if (autoSaveStatus === "error") return "자동 저장 실패";
     if (autoSaveStatus === "saved") {
       if (!lastSavedAt) return "저장됨";
-      return `저장됨 ${new Date(lastSavedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`;
+      return `저장됨 ${formatLocalTime(lastSavedAt)}`;
     }
     return "변경 시 자동 저장";
   }, [autoSaveStatus, lastSavedAt, saving]);

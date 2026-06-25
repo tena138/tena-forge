@@ -34,6 +34,7 @@ import {
   startLearningAssignment,
   submitLearningAssignment,
 } from "@/lib/academyStudent";
+import { formatLocalDateTime } from "@/lib/datetime";
 
 type TabKey = "today" | "archive" | "wrong" | "stats" | "profile";
 
@@ -47,7 +48,7 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof BookOpenCheck }> = 
 
 function formatDate(value?: string | null) {
   if (!value) return "마감 없음";
-  return new Date(value).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatLocalDateTime(value, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }, value);
 }
 
 function percent(value: number | null | undefined) {

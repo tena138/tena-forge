@@ -28,17 +28,16 @@ import {
   shouldForgetActiveBatchAfterStatusError,
 } from "@/lib/batch-progress";
 import type { BatchStatusResponse } from "@/lib/batch-progress";
+import { formatKstDateTime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 
 function formatTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return formatKstDateTime(value, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  });
 }
 
 function safeProgressDetail(statusData: BatchStatusResponse) {

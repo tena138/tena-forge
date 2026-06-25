@@ -25,6 +25,7 @@ import {
   type LoginHistoryItem,
   type OAuthAccountItem,
 } from "@/lib/auth-api";
+import { formatKstDateTime } from "@/lib/datetime";
 
 function actionErrorMessage(error: unknown, fallback: string) {
   const response = (error as { response?: { data?: { detail?: unknown } }; message?: string }).response;
@@ -32,6 +33,10 @@ function actionErrorMessage(error: unknown, fallback: string) {
   if (typeof detail === "string") return detail;
   if (typeof detail === "object" && detail && "message" in detail && typeof detail.message === "string") return detail.message;
   return (error as { message?: string }).message || fallback;
+}
+
+function formatSecurityDateTime(value?: string | null) {
+  return formatKstDateTime(value, { dateStyle: "short", timeStyle: "short" }, "-");
 }
 
 export default function AccountSecurityPage() {
@@ -290,12 +295,12 @@ export default function AccountSecurityPage() {
                       <div className="mt-1 space-y-0.5 text-xs text-zinc-500 md:hidden">
                         <div>{session.browser} / {session.os}</div>
                         <div>{session.ip_address}</div>
-                        <div>{new Date(session.last_active_at).toLocaleString("ko-KR")}</div>
+                        <div>{formatSecurityDateTime(session.last_active_at)}</div>
                       </div>
                     </td>
                     <td className="hidden p-2 md:table-cell">{session.browser} / {session.os}</td>
                     <td className="hidden p-2 md:table-cell">{session.ip_address}</td>
-                    <td className="hidden p-2 md:table-cell">{new Date(session.last_active_at).toLocaleString("ko-KR")}</td>
+                    <td className="hidden p-2 md:table-cell">{formatSecurityDateTime(session.last_active_at)}</td>
                     <td className="p-2 text-right md:text-left">
                       {session.is_current ? "현재" : (
                         <Button variant="outline" size="sm" disabled={action === `session:${session.id}`} onClick={() => endSession(session.id)}>
@@ -326,7 +331,7 @@ export default function AccountSecurityPage() {
                 {history.slice(0, 30).map((item) => (
                   <tr key={item.id} className="odd:bg-white even:bg-zinc-50">
                     <td className="p-2">
-                      <div>{new Date(item.login_at).toLocaleString("ko-KR")}</div>
+                      <div>{formatSecurityDateTime(item.login_at)}</div>
                       <div className="mt-1 space-y-0.5 text-xs text-zinc-500 md:hidden">
                         <div>{item.browser} on {item.os}</div>
                         <div>{item.ip_address}</div>

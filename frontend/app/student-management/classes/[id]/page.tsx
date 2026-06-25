@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { formatLocalDateTime } from "@/lib/datetime";
 import {
   ScheduleRecurrenceUnit,
   buildRecurringDateTimes,
@@ -34,16 +35,13 @@ function tone(status?: string) {
 }
 
 function dateLabel(value?: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ko-KR", {
+  return formatLocalDateTime(value, {
     month: "short",
     day: "numeric",
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  }, value || "-");
 }
 
 function composeScheduleDescription(lessonPlan: string, assignmentNote: string) {

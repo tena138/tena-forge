@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { AcademyBilling, getAcademyBilling } from "@/lib/academyStudent";
 import { AcademyProfile, fetchMe, logout, updateMe } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, authHttp, getAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { formatKstDateTime } from "@/lib/datetime";
 import { UsageSummary, getUsageSummary } from "@/lib/saas";
 import { cn } from "@/lib/utils";
 
@@ -57,16 +58,13 @@ function cleanOptional(value: string) {
 }
 
 function formatDateTime(value?: string | null) {
-  if (!value) return "기록 없음";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "기록 없음";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return formatKstDateTime(value, {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  }, "기록 없음");
 }
 
 function isFutureDate(value?: string | null) {

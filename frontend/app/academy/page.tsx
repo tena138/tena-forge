@@ -30,7 +30,7 @@ import { AcademyProfile } from "@/lib/auth-api";
 import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
 import { publishCoAgentStatusMessage } from "@/lib/coAgentStatus";
-import { formatKstDateTime } from "@/lib/datetime";
+import { formatKstDateTime, formatLocalTime } from "@/lib/datetime";
 import {
   ScheduleRecurrenceUnit,
   buildRecurringDateTimes,
@@ -1092,10 +1092,7 @@ function academyMonthTitle(value: Date) {
 }
 
 function academyTimeLabel(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" }).format(date);
+  return formatLocalTime(value);
 }
 
 function academyEventTypeLabel(value: string) {

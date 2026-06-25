@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ExamTemplate, TemplateVersion, api, duplicateTemplate, listTemplateVersions, restoreTemplateVersion } from "@/lib/api";
+import { formatKstDateTime } from "@/lib/datetime";
 import { CanvasDocument, EMPTY_DOCUMENT, getCanvasDocumentPages } from "@/lib/editorTypes";
 import { legacyTemplateDocument } from "@/lib/templateFallback";
 import { useEditorStore } from "@/store/editorStore";
@@ -35,8 +36,7 @@ function formatDate(value?: string | null) {
 }
 
 function formatDateTime(value?: string | null) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return formatKstDateTime(value, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }, "-");
 }
 
 function relativeTime(value?: string | null) {

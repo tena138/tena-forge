@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatLocalDateTime } from "@/lib/datetime";
 import {
   type TuitionDashboard,
   type TuitionPayment,
@@ -33,16 +34,13 @@ const statusClass: Record<string, string> = {
 };
 
 function formatDate(value?: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return formatLocalDateTime(value, {
     month: "2-digit",
     day: "2-digit",
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  }, "-");
 }
 
 function formatAmount(value?: number | null) {

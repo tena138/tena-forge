@@ -30,6 +30,7 @@ import {
   uploadLiveLectureSlide,
 } from "@/lib/auth-api";
 import { assetUrl } from "@/lib/api";
+import { formatLocalTime } from "@/lib/datetime";
 import { getClassDetail, type ClassCard, type PaperSessionSummary, type StudentCard } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
@@ -94,8 +95,7 @@ function parseDate(value?: string | null) {
 }
 
 function timeText(date: Date | null) {
-  if (!date) return "--:--";
-  return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  return formatLocalTime(date, "--:--");
 }
 
 function isPdfFile(file: File) {
