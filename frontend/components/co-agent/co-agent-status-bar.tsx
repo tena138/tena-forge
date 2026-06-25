@@ -174,7 +174,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     }
     return {
       tone: "idle" as const,
-      message: "필요한 Tena Forge 업무를 입력해 주세요.",
+      message: "필요한 업무를 입력해 주세요.",
     };
   }, [activeStatusData, primaryLiveEvent, progress, statusNotification?.status]);
 
@@ -494,7 +494,11 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   return (
     <div
       data-coagent-anchor="command"
-      className={cn("relative min-w-0", compact ? "w-full" : "w-full max-w-[760px]")}
+      className={cn(
+        "relative min-w-0",
+        chatOpen && !sidebarBubbleOwnsInput ? "flex flex-col-reverse gap-1.5" : "",
+        compact ? "w-full" : "w-full max-w-[760px]"
+      )}
     >
       <div
         className={cn(
@@ -569,7 +573,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       {chatOpen && !sidebarBubbleOwnsInput ? (
         <form
           data-coagent-chat-form
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-white px-2 shadow-[0_14px_34px_rgba(0,0,0,0.14)] ring-1 ring-black/10"
+          className="z-50 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-white px-2 shadow-[0_14px_34px_rgba(0,0,0,0.14)] ring-1 ring-black/10"
           onSubmit={submitChat}
         >
           <input
@@ -577,7 +581,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
             value={chatInput}
             onChange={(event) => setChatInput(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500"
-            placeholder={workflow?.status === "needs_input" ? workflowBubble?.placeholder || "답변 입력" : "Tena Forge 업무 입력"}
+            placeholder={workflow?.status === "needs_input" ? workflowBubble?.placeholder || "답변 입력" : "업무 입력"}
             disabled={chatLoading}
           />
           <button
