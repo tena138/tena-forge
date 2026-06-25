@@ -42,7 +42,7 @@ const sections = [
     shortTitle: "PS",
     description: "내 자료 제작",
     accent: "bg-black",
-    panel: "bg-[#f3f3f3]",
+    panel: "bg-transparent",
     header: "text-zinc-950",
     activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
@@ -61,7 +61,7 @@ const sections = [
     description: "Seats, classes, calendar",
     accountTypes: ["academy"],
     accent: "bg-zinc-950",
-    panel: "bg-[#f3f3f3]",
+    panel: "bg-transparent",
     header: "text-zinc-950",
     activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
@@ -78,7 +78,7 @@ const sections = [
     description: "공개 허브",
     adminOnly: true,
     accent: "bg-zinc-700",
-    panel: "bg-[#f3f3f3]",
+    panel: "bg-transparent",
     header: "text-zinc-950",
     activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
@@ -96,7 +96,7 @@ const sections = [
     description: "Student learning access",
     accountTypes: ["student"],
     accent: "bg-zinc-950",
-    panel: "bg-[#f3f3f3]",
+    panel: "bg-transparent",
     header: "text-zinc-950",
     activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
@@ -113,7 +113,7 @@ const sections = [
     shortTitle: "MI",
     description: "Profile and settings",
     accent: "bg-zinc-700",
-    panel: "bg-[#f3f3f3]",
+    panel: "bg-transparent",
     header: "text-zinc-950",
     activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
     activeIndicator: "bg-black",
@@ -258,7 +258,7 @@ export function FloatingNav({
     <nav
       ref={navRef}
       className={cn(
-        "fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto bg-[#fbfbfa] py-4 shadow-none transition-[width,padding] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex",
+        "fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto bg-transparent py-4 shadow-none transition-[width,padding] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex",
         isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
       )}
       data-coagent-sidebar-nav="desktop"
