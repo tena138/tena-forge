@@ -16,7 +16,6 @@ import {
   Copy,
   GripVertical,
   KeyRound,
-  LineChart,
   Loader2,
   Plus,
   RotateCcw,
@@ -86,7 +85,6 @@ function normalizeListResponse<T>(value: unknown): T[] {
 type TabKey = "routine" | "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ClassStudentAddMode = "existing" | "new";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
-type TrendChartMode = "line" | "bar";
 type TrendMetricKey = "selected" | "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
 type ClassSessionMetricPoint = {
   id: string;
@@ -386,7 +384,6 @@ function ClassTrendChart({
   selectedPointId?: string | null;
   onSelectPoint?: (pointId: string) => void;
 }) {
-  const [mode, setMode] = useState<TrendChartMode>("line");
   const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(defaultTrendMetrics);
   const visibleMetrics = trendMetricOptions.filter((metric) => selectedMetrics.includes(metric.key));
   const latestPoint = [...points].reverse().find((point) => point.respondents > 0);
@@ -412,54 +409,32 @@ function ClassTrendChart({
 
   return (
     <div className="rounded-lg bg-white p-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-        <div>
-          <p className="text-sm font-black text-slate-950 dark:text-white">시험 통계 추이</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">평균, 최고/최저, 분위수를 선택해서 시간 흐름으로 비교합니다.</p>
-        </div>
-        <div className="flex w-fit rounded-md bg-slate-50 p-1">
-          <button
-            type="button"
-            aria-label="선 그래프"
-            title="선 그래프"
-            onClick={() => setMode("line")}
-            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "line" && "bg-zinc-100 text-zinc-800 dark:bg-zinc-500/25 dark:text-white")}
-          >
-            <LineChart className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="막대 그래프"
-            title="막대 그래프"
-            onClick={() => setMode("bar")}
-            className={cn("flex h-8 w-8 items-center justify-center rounded text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-white", mode === "bar" && "bg-zinc-100 text-zinc-800 dark:bg-zinc-500/25 dark:text-white")}
-          >
-            <BarChart3 className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {trendMetricOptions.map((metric) => {
           const active = selectedMetrics.includes(metric.key);
           return (
-            <button
+            <label
               key={metric.key}
-              type="button"
-              onClick={() => toggleMetric(metric.key)}
               className={cn(
-                "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-bold transition",
-                active
-                  ? "border-slate-300 bg-slate-100 text-slate-950 dark:border-white/20 dark:bg-white/[0.08] dark:text-white"
-                  : "border-slate-200 bg-transparent text-slate-500 hover:text-slate-900 dark:border-white/10 dark:text-slate-500 dark:hover:text-slate-200"
+                "inline-flex cursor-pointer select-none items-center gap-1.5 text-[11px] font-bold transition",
+                active ? "text-slate-950 dark:text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-200"
               )}
             >
-              <span
-                className={cn("h-2.5 w-2.5 rounded-full", metric.key === "selected" && "border border-slate-300")}
-                style={{ backgroundColor: active ? metric.color : "rgba(148, 163, 184, 0.35)" }}
+              <input
+                type="checkbox"
+                checked={active}
+                onChange={() => toggleMetric(metric.key)}
+                className="h-3 w-3 shrink-0 rounded border-slate-300"
+                style={{ accentColor: metric.color }}
+                aria-label={`${metric.label} 표시`}
               />
-              {metric.label}
-            </button>
+              <span
+                className={cn("h-2 w-2 shrink-0 rounded-full", metric.key === "selected" && "border border-slate-300")}
+                style={{ backgroundColor: active ? metric.color : "rgba(148, 163, 184, 0.35)" }}
+                aria-hidden="true"
+              />
+              <span>{metric.label}</span>
+            </label>
           );
         })}
       </div>
@@ -479,7 +454,7 @@ function ClassTrendChart({
             <line x1={padding.left} x2={padding.left} y1={padding.top} y2={baseline} stroke="rgba(113, 113, 122, 0.32)" />
             <line x1={padding.left} x2={chartWidth - padding.right} y1={baseline} y2={baseline} stroke="rgba(113, 113, 122, 0.32)" />
 
-            {mode === "line" ? visibleMetrics.map((metric) => {
+            {visibleMetrics.map((metric) => {
               const linePoints = points
                 .map((point, index) => ({ x: xFor(index), y: typeof point[metric.key] === "number" ? yFor(point[metric.key] as number) : null }))
                 .filter((point): point is { x: number; y: number } => point.y != null);
@@ -493,23 +468,7 @@ function ClassTrendChart({
                   ))}
                 </g>
               );
-            }) : null}
-
-            {mode === "bar" ? points.map((point, pointIndex) => {
-              const groupWidth = Math.min(78, Math.max(24, visibleMetrics.length * 12));
-              const barWidth = Math.max(5, Math.min(10, (groupWidth - visibleMetrics.length * 3) / Math.max(1, visibleMetrics.length)));
-              return (
-                <g key={point.id}>
-                  {visibleMetrics.map((metric, metricIndex) => {
-                    const value = point[metric.key];
-                    if (typeof value !== "number" || !Number.isFinite(value)) return null;
-                    const y = yFor(value);
-                    const x = xFor(pointIndex) - groupWidth / 2 + metricIndex * (barWidth + 3);
-                    return <rect key={metric.key} x={x} y={y} width={barWidth} height={Math.max(2, baseline - y)} rx="2" fill={metric.color} opacity="0.88" />;
-                  })}
-                </g>
-              );
-            }) : null}
+            })}
 
             {points.map((point, index) => (
               <g
