@@ -10,12 +10,12 @@ export const metadata: Metadata = {
   title: "Tena Forge",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=6", sizes: "any" },
-      { url: "/icon-192.png?v=6", type: "image/png", sizes: "192x192" },
-      { url: "/tenaforge-favicon.png?v=6", type: "image/png", sizes: "512x512" },
+      { url: "/favicon.ico?v=7", sizes: "any" },
+      { url: "/icon-192.png?v=7", type: "image/png", sizes: "192x192" },
+      { url: "/tenaforge-favicon.png?v=7", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: "/favicon.ico?v=6",
-    apple: "/apple-touch-icon.png?v=6",
+    shortcut: "/favicon.ico?v=7",
+    apple: "/apple-touch-icon.png?v=7",
   },
   description: "가장 강력한 교육 컨텐츠 툴",
   openGraph: {
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     description: "가장 강력한 교육 컨텐츠 툴",
     url: "https://www.tena-forge.com",
     siteName: "Tena Forge",
-    images: [{ url: "/og-image.png?v=4", width: 1200, height: 630, alt: "Tena Forge" }],
+    images: [{ url: "/og-image.png?v=5", width: 1200, height: 630, alt: "Tena Forge" }],
     locale: "ko_KR",
     type: "website",
   },
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Tena Forge",
     description: "가장 강력한 교육 컨텐츠 툴",
-    images: ["/og-image.png?v=4"],
+    images: ["/og-image.png?v=5"],
   },
 };
 
