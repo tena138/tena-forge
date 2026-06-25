@@ -88,6 +88,7 @@ const sections = [
       { href: "/marketplace/problem-sets", label: "문항 세트 마켓", icon: Store },
       { href: "/marketplace/books", label: "교재 마켓", icon: BookOpen },
       { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
+      { href: "/marketplace/rights-policy", label: "권리 및 업로드 정책", icon: ShieldCheck },
     ],
   },
   {
@@ -120,7 +121,6 @@ const sections = [
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/account/profile", label: "프로필", icon: UserCircle },
-      { href: "/account/rights-policy", label: "권리 및 업로드 정책", icon: ShieldCheck },
       { href: "/settings", label: "설정", icon: Settings },
     ],
   },
