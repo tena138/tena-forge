@@ -74,6 +74,9 @@ ROUTINE_RECENT_DAYS = 14
 ROUTINE_MAX_NEW_PER_REFRESH = 8
 TUITION_LOOKAHEAD_DAYS = 14
 TUITION_OVERDUE_DAYS = 30
+SCHEDULE_SERIES_METADATA_KEY = "schedule_series_id"
+SCHEDULE_SERIES_POSITION_METADATA_KEY = "schedule_series_position"
+SCHEDULE_SERIES_SIZE_METADATA_KEY = "schedule_series_size"
 EXPORTED_REVIEW_SOURCE_STUDENT = "\uc774\uc6b0\ub178"
 EXPORTED_REVIEW_TARGET_STUDENTS = {"\uc774\uc6b0\ub178", "\uc774\ub098\uc740", "\uc774\uc218\ud604", "\ud669\uc9c0\uc724"}
 EXPORTED_REVIEW_TITLE_KEYWORDS = ("\ubbf8\uce5c\uac1c\ub150", "\uc2182", "\ubcf5\uc2b5", "(2)")
@@ -360,6 +363,7 @@ def _ordered_classes_for_academies(db: Session, academy_ids: set[str], primary_a
 
 
 def _schedule_event_payload(row: ClassScheduleEvent) -> dict:
+    metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
     return {
         "id": str(row.id),
         "class_id": str(row.class_id),
@@ -370,7 +374,18 @@ def _schedule_event_payload(row: ClassScheduleEvent) -> dict:
         "ends_at": row.ends_at.isoformat() if row.ends_at else None,
         "linked_paper_session_id": str(row.linked_paper_session_id) if row.linked_paper_session_id else None,
         "counts_for_tuition": bool(row.counts_for_tuition),
+        "series_id": metadata.get(SCHEDULE_SERIES_METADATA_KEY) if isinstance(metadata.get(SCHEDULE_SERIES_METADATA_KEY), str) else None,
+        "series_position": metadata.get(SCHEDULE_SERIES_POSITION_METADATA_KEY) if isinstance(metadata.get(SCHEDULE_SERIES_POSITION_METADATA_KEY), int) else None,
+        "series_size": metadata.get(SCHEDULE_SERIES_SIZE_METADATA_KEY) if isinstance(metadata.get(SCHEDULE_SERIES_SIZE_METADATA_KEY), int) else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
+
+
+def _schedule_event_series_id(row: ClassScheduleEvent) -> str | None:
+    metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+    value = metadata.get(SCHEDULE_SERIES_METADATA_KEY)
+    return value if isinstance(value, str) and value else None
 
 
 def _tuition_settings_from_metadata(metadata: dict | None) -> dict:
@@ -1678,6 +1693,9 @@ class ScheduleEventPayload(BaseModel):
     ends_at: datetime | None = None
     linked_paper_session_id: UUID | None = None
     counts_for_tuition: bool = True
+    series_id: str | None = Field(default=None, max_length=80)
+    series_position: int | None = None
+    series_size: int | None = None
 
 
 class ScheduleEventUpdatePayload(BaseModel):
@@ -1689,6 +1707,7 @@ class ScheduleEventUpdatePayload(BaseModel):
     ends_at: datetime | None = None
     linked_paper_session_id: UUID | None = None
     counts_for_tuition: bool | None = None
+    update_scope: str | None = "single"
 
 
 class TuitionEventCountPayload(BaseModel):
@@ -4148,6 +4167,13 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
     class_row = _get_class(db, academy_id, payload.class_id, visible_academy_ids)
     if payload.linked_paper_session_id:
         _get_visible_session(db, visible_academy_ids, payload.linked_paper_session_id)
+    metadata: dict = {}
+    if payload.series_id:
+        metadata[SCHEDULE_SERIES_METADATA_KEY] = payload.series_id.strip()
+        if payload.series_position is not None:
+            metadata[SCHEDULE_SERIES_POSITION_METADATA_KEY] = payload.series_position
+        if payload.series_size is not None:
+            metadata[SCHEDULE_SERIES_SIZE_METADATA_KEY] = payload.series_size
     row = ClassScheduleEvent(
         academy_id=class_row.academy_id,
         class_id=payload.class_id,
@@ -4158,6 +4184,7 @@ def create_schedule_event(payload: ScheduleEventPayload, request: Request, db: S
         ends_at=payload.ends_at,
         linked_paper_session_id=payload.linked_paper_session_id,
         counts_for_tuition=payload.counts_for_tuition,
+        metadata_json=metadata,
     )
     db.add(row)
     db.commit()
@@ -4172,38 +4199,93 @@ def update_schedule_event(event_id: UUID, payload: ScheduleEventUpdatePayload, r
     if not row or row.academy_id not in visible_academy_ids:
         raise HTTPException(status_code=404, detail="Schedule event not found.")
 
-    if payload.class_id is not None:
-        class_row = _get_class(db, academy_id, payload.class_id, visible_academy_ids)
-        row.academy_id = class_row.academy_id
-        row.class_id = payload.class_id
-    if payload.linked_paper_session_id is not None:
-        _get_visible_session(db, visible_academy_ids, payload.linked_paper_session_id)
-        row.linked_paper_session_id = payload.linked_paper_session_id
-    if payload.title is not None:
-        row.title = payload.title.strip()
-    if "description" in payload.model_fields_set:
-        row.description = payload.description
-    if payload.event_type is not None:
-        row.event_type = payload.event_type
-    if payload.starts_at is not None:
-        row.starts_at = payload.starts_at
-    if "ends_at" in payload.model_fields_set:
-        row.ends_at = payload.ends_at
-    if payload.counts_for_tuition is not None:
-        row.counts_for_tuition = payload.counts_for_tuition
-
-    if row.ends_at and row.ends_at <= row.starts_at:
+    update_scope = payload.update_scope or "single"
+    if update_scope not in {"single", "future"}:
+        raise HTTPException(status_code=400, detail="Invalid schedule update scope.")
+    original_starts_at = row.starts_at
+    original_ends_at = row.ends_at
+    next_selected_start = payload.starts_at or original_starts_at
+    if "ends_at" in payload.model_fields_set and payload.ends_at and payload.ends_at <= next_selected_start:
         raise HTTPException(status_code=400, detail="Schedule event end time must be after start time.")
 
-    if row.linked_paper_session_id:
-        session = db.get(PaperSession, row.linked_paper_session_id)
-        if session and session.academy_id in visible_academy_ids:
-            session.scheduled_at = row.starts_at
-            if row.ends_at:
-                session.due_at = row.ends_at
-            session.updated_at = _now()
+    target_class_row = None
+    if payload.class_id is not None:
+        target_class_row = _get_class(db, academy_id, payload.class_id, visible_academy_ids)
+    if payload.linked_paper_session_id is not None:
+        _get_visible_session(db, visible_academy_ids, payload.linked_paper_session_id)
 
-    row.updated_at = _now()
+    targets = [row]
+    if update_scope == "future":
+        series_id = _schedule_event_series_id(row)
+        if series_id:
+            candidates = db.scalars(
+                select(ClassScheduleEvent)
+                .where(
+                    ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)),
+                    ClassScheduleEvent.starts_at >= original_starts_at,
+                )
+                .order_by(ClassScheduleEvent.starts_at.asc())
+            ).all()
+            targets = [candidate for candidate in candidates if _schedule_event_series_id(candidate) == series_id]
+        else:
+            created_floor = row.created_at - timedelta(minutes=5)
+            created_ceiling = row.created_at + timedelta(minutes=5)
+            targets = db.scalars(
+                select(ClassScheduleEvent)
+                .where(
+                    ClassScheduleEvent.academy_id.in_(list(visible_academy_ids)),
+                    ClassScheduleEvent.class_id == row.class_id,
+                    ClassScheduleEvent.title == row.title,
+                    ClassScheduleEvent.event_type == row.event_type,
+                    ClassScheduleEvent.starts_at >= original_starts_at,
+                    ClassScheduleEvent.created_at >= created_floor,
+                    ClassScheduleEvent.created_at <= created_ceiling,
+                )
+                .order_by(ClassScheduleEvent.starts_at.asc())
+            ).all()
+            targets = [target for target in targets if target.description == row.description]
+        if not targets:
+            targets = [row]
+
+    start_delta = payload.starts_at - original_starts_at if payload.starts_at is not None else None
+    next_duration = None
+    if "ends_at" in payload.model_fields_set and payload.ends_at is not None:
+        next_duration = payload.ends_at - next_selected_start
+
+    for target in targets:
+        if target_class_row is not None:
+            target.academy_id = target_class_row.academy_id
+            target.class_id = payload.class_id
+        if payload.linked_paper_session_id is not None and target.id == row.id:
+            target.linked_paper_session_id = payload.linked_paper_session_id
+        if payload.title is not None:
+            target.title = payload.title.strip()
+        if "description" in payload.model_fields_set:
+            target.description = payload.description
+        if payload.event_type is not None:
+            target.event_type = payload.event_type
+        if start_delta is not None:
+            target.starts_at = payload.starts_at if target.id == row.id else target.starts_at + start_delta
+        if "ends_at" in payload.model_fields_set:
+            if payload.ends_at is None:
+                target.ends_at = None
+            elif next_duration is not None:
+                target.ends_at = target.starts_at + next_duration
+        elif start_delta is not None and target.ends_at is not None:
+            target.ends_at = target.ends_at + start_delta
+        if payload.counts_for_tuition is not None:
+            target.counts_for_tuition = payload.counts_for_tuition
+        if target.ends_at and target.ends_at <= target.starts_at:
+            raise HTTPException(status_code=400, detail="Schedule event end time must be after start time.")
+        if target.linked_paper_session_id:
+            session = db.get(PaperSession, target.linked_paper_session_id)
+            if session and session.academy_id in visible_academy_ids:
+                session.scheduled_at = target.starts_at
+                if target.ends_at:
+                    session.due_at = target.ends_at
+                session.updated_at = _now()
+        target.updated_at = _now()
+
     db.commit()
     db.refresh(row)
     return _schedule_event_payload(row)

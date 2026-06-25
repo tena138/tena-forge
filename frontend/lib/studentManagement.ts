@@ -145,6 +145,11 @@ export type ScheduleEvent = {
   ends_at?: string | null;
   linked_paper_session_id?: string | null;
   counts_for_tuition?: boolean;
+  series_id?: string | null;
+  series_position?: number | null;
+  series_size?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type TuitionPayment = {
@@ -485,6 +490,9 @@ export function createScheduleEvent(payload: {
   ends_at?: string | null;
   linked_paper_session_id?: string | null;
   counts_for_tuition?: boolean;
+  series_id?: string | null;
+  series_position?: number | null;
+  series_size?: number | null;
 }) {
   return api<ScheduleEvent>("/api/student-management/schedule-events", {
     method: "POST",
@@ -502,6 +510,7 @@ export function updateScheduleEvent(id: string, payload: Partial<{
   ends_at: string | null;
   linked_paper_session_id: string | null;
   counts_for_tuition: boolean;
+  update_scope: "single" | "future";
 }>) {
   return api<ScheduleEvent>(`/api/student-management/schedule-events/${id}`, {
     method: "PATCH",

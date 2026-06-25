@@ -955,6 +955,7 @@ const ACADEMY_TIMELINE_PX_PER_MINUTE = 0.48;
 const ACADEMY_MIN_EVENT_DURATION_MINUTES = 10;
 
 type AcademyTimeDragMode = "move" | "resize-start" | "resize-end";
+type AcademyTimeEditScope = "single" | "future";
 type AcademyTimeEditorState = {
   eventId: string;
   dateKey: string;
@@ -1017,6 +1018,38 @@ function academyTimeRangeLabel(startsAt: string, endsAt?: string | null) {
 function academyTimelineMinutesFromPointer(clientY: number, rect: DOMRect) {
   const offset = clientY - rect.top;
   return academySnapMinutes(ACADEMY_TIMELINE_START_MINUTES + offset / ACADEMY_TIMELINE_PX_PER_MINUTE);
+}
+
+function academyCreateScheduleSeriesId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `schedule-series-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function academyScheduleEventDurationMs(event: ScheduleEvent) {
+  const start = new Date(event.starts_at).getTime();
+  const end = event.ends_at ? new Date(event.ends_at).getTime() : NaN;
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return null;
+  return end - start;
+}
+
+function academyIsLegacyScheduleSeriesCandidate(base: ScheduleEvent, candidate: ScheduleEvent) {
+  if (base.id === candidate.id) return false;
+  if (base.series_id || candidate.series_id) return false;
+  if (!base.created_at || !candidate.created_at) return false;
+  if (base.class_id !== candidate.class_id || base.title !== candidate.title || base.event_type !== candidate.event_type) return false;
+  if ((base.description || "") !== (candidate.description || "")) return false;
+  const baseStart = new Date(base.starts_at).getTime();
+  const candidateStart = new Date(candidate.starts_at).getTime();
+  if (Number.isNaN(baseStart) || Number.isNaN(candidateStart) || candidateStart < baseStart) return false;
+  const baseCreated = new Date(base.created_at).getTime();
+  const candidateCreated = new Date(candidate.created_at).getTime();
+  if (Number.isNaN(baseCreated) || Number.isNaN(candidateCreated) || Math.abs(candidateCreated - baseCreated) > 5 * 60 * 1000) return false;
+  return academyScheduleEventDurationMs(base) === academyScheduleEventDurationMs(candidate);
+}
+
+function academyShouldAskScheduleSeriesScope(event: ScheduleEvent, events: ScheduleEvent[]) {
+  if (event.series_id) return true;
+  return events.some((candidate) => academyIsLegacyScheduleSeriesCandidate(event, candidate));
 }
 
 function academyAddDays(value: Date, days: number) {
@@ -1090,6 +1123,7 @@ function AcademySchedulePanel() {
   const [pastingEvent, setPastingEvent] = useState(false);
   const [timeEditor, setTimeEditor] = useState<AcademyTimeEditorState | null>(null);
   const [savingTimeEdit, setSavingTimeEdit] = useState(false);
+  const [pendingSeriesTimeEdit, setPendingSeriesTimeEdit] = useState<AcademyTimeEditorState | null>(null);
   const dateCellRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const activeTimeEditRef = useRef<AcademyTimeEditorState | null>(null);
@@ -1170,8 +1204,9 @@ function AcademySchedulePanel() {
   const deleteTargetClass = deleteTarget ? classById.get(deleteTarget.class_id) : null;
   const selectedEvent = useMemo(() => events.find((event) => event.id === selectedEventId) || null, [events, selectedEventId]);
   const timeEditorEvent = useMemo(() => (timeEditor ? events.find((event) => event.id === timeEditor.eventId) || null : null), [events, timeEditor]);
-  const timeEditorClass = timeEditorEvent ? classById.get(timeEditorEvent.class_id) : null;
   const timeEditorCellRect = timeEditor?.dateKey ? dateCellRefs.current[timeEditor.dateKey]?.getBoundingClientRect() || null : null;
+  const pendingSeriesEvent = pendingSeriesTimeEdit ? events.find((event) => event.id === pendingSeriesTimeEdit.eventId) || null : null;
+  const pendingSeriesClass = pendingSeriesEvent ? classById.get(pendingSeriesEvent.class_id) : null;
   const academyStartDateTime = `${form.date}T${form.starts_at || "00:00"}`;
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
@@ -1236,7 +1271,8 @@ function AcademySchedulePanel() {
         until: form.repeat_until,
         maxOccurrences: 160,
       });
-      for (const start of starts) {
+      const seriesId = starts.length > 1 ? academyCreateScheduleSeriesId() : "";
+      for (const [index, start] of starts.entries()) {
         const end = endOffset && endOffset > 0 ? localDateTimeInputValue(new Date(new Date(start).getTime() + endOffset)) : null;
         await createScheduleEvent({
           class_id: targetClassId,
@@ -1245,6 +1281,9 @@ function AcademySchedulePanel() {
           event_type: form.event_type,
           starts_at: start,
           ends_at: end,
+          series_id: seriesId || null,
+          series_position: seriesId ? index + 1 : null,
+          series_size: seriesId ? starts.length : null,
         });
       }
       if (autoCreatedClass) {
@@ -1353,23 +1392,34 @@ function AcademySchedulePanel() {
     });
   }
 
-  async function saveTimeEditor(edit: AcademyTimeEditorState | null) {
+  async function saveTimeEditor(edit: AcademyTimeEditorState | null, scope?: AcademyTimeEditScope) {
     if (!edit) return;
     if (!edit.dirty) return;
     const existing = events.find((event) => event.id === edit.eventId);
     if (existing && existing.starts_at === edit.startsAt && (existing.ends_at || null) === (edit.endsAt || null)) return;
+    if (!scope && existing && academyShouldAskScheduleSeriesScope(existing, events)) {
+      setPendingSeriesTimeEdit(edit);
+      return;
+    }
+    const updateScope = scope || "single";
+    setPendingSeriesTimeEdit(null);
     setSavingTimeEdit(true);
     setError("");
     try {
       const updated = await updateScheduleEvent(edit.eventId, {
         starts_at: edit.startsAt,
         ends_at: edit.endsAt,
+        update_scope: updateScope,
       });
-      setEvents((current) => [...current.filter((event) => event.id !== updated.id), updated]);
+      if (updateScope === "future") {
+        await load();
+      } else {
+        setEvents((current) => [...current.filter((event) => event.id !== updated.id), updated]);
+      }
       setSelectedDateKey(academyDateKey(updated.starts_at));
       setSelectedEventId(updated.id);
       setTimeEditor((current) => current?.eventId === updated.id ? { ...current, startsAt: updated.starts_at, endsAt: updated.ends_at || null, dateKey: academyDateKey(updated.starts_at), mode: null, dirty: false } : current);
-      setNotice(`"${updated.title}" 일정 시간이 변경되었습니다.`);
+      setNotice(updateScope === "future" ? `"${updated.title}" 일정과 이후 반복 일정 시간이 변경되었습니다.` : `"${updated.title}" 일정 시간이 변경되었습니다.`);
     } catch {
       setError("일정 시간을 변경하지 못했습니다.");
     } finally {
@@ -1408,7 +1458,7 @@ function AcademySchedulePanel() {
   useEffect(() => {
     function handleScheduleShortcut(event: KeyboardEvent) {
       if ((!event.ctrlKey && !event.metaKey) || event.altKey) return;
-      if (formOpen || deleteTarget || academyShortcutTargetIsEditable(event.target)) return;
+      if (formOpen || deleteTarget || pendingSeriesTimeEdit || academyShortcutTargetIsEditable(event.target)) return;
       const key = event.key.toLowerCase();
       if (key === "c") {
         if (!selectedEvent) return;
@@ -1427,7 +1477,7 @@ function AcademySchedulePanel() {
 
     window.addEventListener("keydown", handleScheduleShortcut);
     return () => window.removeEventListener("keydown", handleScheduleShortcut);
-  }, [copiedEvent, deleteTarget, formOpen, pastingEvent, selectedDateKey, selectedEvent]);
+  }, [copiedEvent, deleteTarget, formOpen, pastingEvent, pendingSeriesTimeEdit, selectedDateKey, selectedEvent]);
 
   useEffect(() => {
     activeTimeEditRef.current = timeEditor;
@@ -1642,13 +1692,8 @@ function AcademySchedulePanel() {
           className="fixed z-[110] w-[340px] rounded-[14px] bg-white p-3 text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.18)] ring-1 ring-black/10"
           style={{ left: timeEditorLeft, top: timeEditorTop }}
         >
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-black">{timeEditorEvent.title}</div>
-              <div className="mt-0.5 text-xs font-semibold text-zinc-500">
-                {timeEditor.dateKey} · {timeEditorClass?.name || "클래스"}
-              </div>
-            </div>
+          <div className="mb-2 flex items-center justify-end gap-2">
+            <span className="text-xs font-bold text-zinc-500">{savingTimeEdit ? "저장 중" : "10분 단위"}</span>
             <button
               type="button"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950"
@@ -1657,10 +1702,6 @@ function AcademySchedulePanel() {
             >
               <X className="h-4 w-4" />
             </button>
-          </div>
-          <div className="mb-2 flex items-center justify-between text-xs font-bold text-zinc-500">
-            <span>{academyTimeRangeLabel(timeEditor.startsAt, timeEditor.endsAt)}</span>
-            <span>{savingTimeEdit ? "저장 중" : "10분 단위"}</span>
           </div>
           <div
             ref={timelineRef}
@@ -1843,6 +1884,44 @@ function AcademySchedulePanel() {
           </div>
         </div>
       ) : null}
+
+      <Dialog open={!!pendingSeriesTimeEdit} onOpenChange={(open) => !open && !savingTimeEdit && setPendingSeriesTimeEdit(null)}>
+        <DialogContent className="max-w-md bg-white text-zinc-950">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-xl font-black text-zinc-950">변경 범위 선택</h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                반복으로 등록된 일정입니다. 이 변경을 어느 범위에 적용할까요?
+              </p>
+            </div>
+            {pendingSeriesEvent ? (
+              <div className="rounded-[12px] bg-zinc-100 p-3 text-sm">
+                <div className="font-black text-zinc-950">{pendingSeriesEvent.title}</div>
+                <div className="mt-1 text-xs font-semibold text-zinc-600">
+                  {academyDateKey(pendingSeriesEvent.starts_at)} · {academyTimeRangeLabel(pendingSeriesTimeEdit?.startsAt || pendingSeriesEvent.starts_at, pendingSeriesTimeEdit?.endsAt || pendingSeriesEvent.ends_at)} · {pendingSeriesClass?.name || "클래스"}
+                </div>
+              </div>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={savingTimeEdit || !pendingSeriesTimeEdit}
+                onClick={() => void saveTimeEditor(pendingSeriesTimeEdit, "single")}
+              >
+                이 일정만
+              </Button>
+              <Button
+                type="button"
+                disabled={savingTimeEdit || !pendingSeriesTimeEdit}
+                onClick={() => void saveTimeEditor(pendingSeriesTimeEdit, "future")}
+              >
+                이 날짜부터 이후 일정
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !deletingEventId && setDeleteTarget(null)}>
         <DialogContent className="max-w-md bg-white text-zinc-950">
