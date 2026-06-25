@@ -196,22 +196,29 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
 
   return (
     <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-      <div className="relative h-24 overflow-hidden rounded-[8px] bg-zinc-100 ring-1 ring-black/5">
-        <div className="absolute inset-y-0 left-0 bg-black transition-[width] duration-700" style={{ width: `${progressPercent}%` }} />
-        <div className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-zinc-950 shadow-sm">
+      <div className="relative h-20 overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
+        <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-zinc-300" />
+        <div
+          className="absolute top-3 z-30 -translate-x-1/2 rounded-full bg-black px-2.5 py-1 text-[11px] font-black text-white shadow-sm transition-[left] duration-700"
+          style={{ left: `clamp(3.5rem, ${progressPercent}%, calc(100% - 3.5rem))` }}
+        >
           {elapsedMinutes}분 진행 · {progress}%
         </div>
         {ticks.map((minute) => {
           const left = (minute / lectureDurationMinutes) * 100;
-          const passed = left <= progressPercent + 0.5;
           const labelAlign = minute === 0 ? "translate-x-0" : minute === lectureDurationMinutes ? "-translate-x-full" : "-translate-x-1/2";
           return (
             <div key={minute} className="absolute top-0 z-10 h-full" style={{ left: `${left}%` }}>
-              <span className={cn("absolute top-0 h-12 border-l", passed ? "border-white/75" : "border-zinc-500/55")} />
-              <span className={cn("absolute bottom-3 whitespace-nowrap text-[10px] font-black", labelAlign, passed ? "text-white" : "text-zinc-600")}>{minute}분</span>
+              <span className="absolute left-0 top-1/2 h-3 -translate-y-1/2 border-l border-zinc-400/70" />
+              <span className={cn("absolute bottom-3 whitespace-nowrap text-[10px] font-black text-zinc-600", labelAlign)}>{minute}분</span>
             </div>
           );
         })}
+        <div
+          className="absolute bottom-3 top-3 z-20 w-[3px] -translate-x-1/2 rounded-full bg-black shadow-[0_0_0_4px_rgba(0,0,0,0.08)] transition-[left] duration-700"
+          style={{ left: `${progressPercent}%` }}
+          aria-hidden="true"
+        />
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px] font-bold text-zinc-500">
         <span>수업 시작 {timeText(startsAt)}</span>
