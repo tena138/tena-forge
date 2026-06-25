@@ -496,7 +496,6 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       data-coagent-anchor="command"
       className={cn(
         "relative min-w-0",
-        chatOpen && !sidebarBubbleOwnsInput ? "flex flex-col-reverse gap-1.5" : "",
         compact ? "w-full" : "w-full max-w-[760px]"
       )}
     >
@@ -512,28 +511,61 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           className="pointer-events-none absolute left-4 top-1/2 h-6 w-8 -translate-y-1/2"
           aria-hidden="true"
         />
-        <button
-          type="button"
-          data-coagent-status-message
-          className={cn(
-            "flex min-w-0 max-w-full overflow-hidden rounded-[10px] pl-1.5 pr-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
-            "flex-1 items-center py-1"
-          )}
-          onClick={() => setChatOpen(true)}
-          title={statusMessage}
-          aria-live="polite"
-        >
-          <span className="min-w-0 flex-1 overflow-hidden">
-            <span
-              className={cn(
-                "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
-                "truncate whitespace-nowrap text-[16px] leading-[1.45]"
-              )}
+        {chatOpen && !sidebarBubbleOwnsInput ? (
+          <form
+            data-coagent-chat-form
+            className="z-50 flex h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[12px] bg-zinc-100/90 px-2 ring-1 ring-black/10"
+            onSubmit={submitChat}
+          >
+            <input
+              ref={inputRef}
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500"
+              placeholder={workflow?.status === "needs_input" ? workflowBubble?.placeholder || "답변 입력" : "업무 입력"}
+              disabled={chatLoading}
+            />
+            <button
+              type="submit"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+              disabled={chatLoading || !chatInput.trim()}
+              aria-label="AI에게 보내기"
             >
-              {typedReportMessage || "\u00A0"}
+              {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-zinc-500 transition hover:bg-zinc-200 hover:text-black"
+              onClick={() => setChatOpen(false)}
+              aria-label="입력 닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            data-coagent-status-message
+            className={cn(
+              "flex min-w-0 max-w-full overflow-hidden rounded-[10px] pl-1.5 pr-1.5 text-left transition hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
+              "flex-1 items-center py-1"
+            )}
+            onClick={() => setChatOpen(true)}
+            title={statusMessage}
+            aria-live="polite"
+          >
+            <span className="min-w-0 flex-1 overflow-hidden">
+              <span
+                className={cn(
+                  "block max-w-full overflow-hidden font-medium tracking-normal text-zinc-800",
+                  "truncate whitespace-nowrap text-[16px] leading-[1.45]"
+                )}
+              >
+                {typedReportMessage || "\u00A0"}
+              </span>
             </span>
-          </span>
-        </button>
+          </button>
+        )}
 
         {activeStatusData ? (
           <span className="pointer-events-none absolute inset-x-3 bottom-1 h-1 overflow-hidden rounded-full bg-zinc-100">
@@ -541,7 +573,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           </span>
         ) : null}
 
-        {chatOpen && primaryChatAction?.href ? (
+        {!chatOpen && primaryChatAction?.href ? (
           <button
             type="button"
             className={cn(
@@ -570,38 +602,6 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         ) : null}
       </div>
 
-      {chatOpen && !sidebarBubbleOwnsInput ? (
-        <form
-          data-coagent-chat-form
-          className="z-50 flex h-11 min-w-0 items-center gap-1.5 rounded-[12px] bg-white px-2 shadow-[0_14px_34px_rgba(0,0,0,0.14)] ring-1 ring-black/10"
-          onSubmit={submitChat}
-        >
-          <input
-            ref={inputRef}
-            value={chatInput}
-            onChange={(event) => setChatInput(event.target.value)}
-            className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-500"
-            placeholder={workflow?.status === "needs_input" ? workflowBubble?.placeholder || "답변 입력" : "업무 입력"}
-            disabled={chatLoading}
-          />
-          <button
-            type="submit"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
-            disabled={chatLoading || !chatInput.trim()}
-            aria-label="AI에게 보내기"
-          >
-            {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
-          <button
-            type="button"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-zinc-500 transition hover:bg-zinc-200 hover:text-black"
-            onClick={() => setChatOpen(false)}
-            aria-label="입력 닫기"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </form>
-      ) : null}
     </div>
   );
 }
