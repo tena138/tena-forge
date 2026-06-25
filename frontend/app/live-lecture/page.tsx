@@ -191,22 +191,14 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
   const totalMs = Math.max(1, endsAt.getTime() - startsAt.getTime());
   const elapsedMs = Math.max(0, Math.min(totalMs, now - startsAt.getTime()));
   const progressRatio = Math.max(0, Math.min(1, elapsedMs / totalMs));
-  const progress = Math.round(progressRatio * 100);
   const progressPercent = progressRatio * 100;
   const lectureDurationMinutes = Math.max(1, Math.round(totalMs / 60000));
-  const elapsedMinutes = Math.max(0, Math.min(lectureDurationMinutes, Math.floor(elapsedMs / 60000)));
   const ticks = useMemo(() => buildMinuteTicks(lectureDurationMinutes), [lectureDurationMinutes]);
 
   return (
     <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
       <div className="relative h-20 overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
         <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-zinc-300" />
-        <div
-          className="absolute top-3 z-30 -translate-x-1/2 rounded-full bg-black px-2.5 py-1 text-[11px] font-black text-white shadow-sm transition-[left] duration-700"
-          style={{ left: `clamp(3.5rem, ${progressPercent}%, calc(100% - 3.5rem))` }}
-        >
-          {elapsedMinutes}분 진행 · {progress}%
-        </div>
         {ticks.map((minute) => {
           const left = (minute / lectureDurationMinutes) * 100;
           const labelAlign = minute === 0 ? "translate-x-0" : minute === lectureDurationMinutes ? "-translate-x-full" : "-translate-x-1/2";
