@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { authHttp } from "@/lib/auth-client";
 
 export type StudentCard = {
   id: string;
@@ -226,6 +227,34 @@ export type CounselingLogPayload = {
 };
 
 export type CounselingCleanPreview = {
+  sections: Array<{
+    field_id: string;
+    label: string;
+    value: string;
+    include_in_report?: boolean;
+  }>;
+};
+
+export type CounselingTranscriptionResponse = {
+  text: string;
+  model: string;
+};
+
+export type CounselingIntakeProfile = {
+  name: string;
+  school: string;
+  grade_level: string;
+  guardian_name: string;
+  guardian_phone: string;
+  memo: string;
+  recommended_class: string;
+  pending_reason: string;
+};
+
+export type CounselingIntakePreview = {
+  title: string;
+  summary: string;
+  student_profile: CounselingIntakeProfile;
   sections: Array<{
     field_id: string;
     label: string;
@@ -557,6 +586,26 @@ export function updateCounselingLog(
 
 export function cleanCounselingDraft(studentId: string, payload: CounselingLogPayload) {
   return api<CounselingCleanPreview>(`/api/student-management/students/${studentId}/counseling-logs/clean-preview`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function transcribeCounselingAudio(file: Blob) {
+  const form = new FormData();
+  const extension = file.type.includes("mp4") ? "m4a" : file.type.includes("mpeg") ? "mp3" : "webm";
+  form.append("file", file, `counseling-audio.${extension}`);
+  const response = await authHttp.post<CounselingTranscriptionResponse>("/api/student-management/counseling/transcribe", form);
+  return response.data;
+}
+
+export function previewCounselingIntake(payload: {
+  mode: "new" | "existing";
+  transcript: string;
+  student_id?: string | null;
+  student_name?: string | null;
+}) {
+  return api<CounselingIntakePreview>("/api/student-management/counseling/intake-preview", {
     method: "POST",
     body: JSON.stringify(payload),
   });

@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import math
@@ -8,7 +9,7 @@ from decimal import Decimal
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -1775,6 +1776,36 @@ class CounselingCleanPreviewResponse(BaseModel):
     sections: list[CounselingCleanPreviewSection]
 
 
+class CounselingTranscriptionResponse(BaseModel):
+    text: str
+    model: str
+
+
+class CounselingIntakePayload(BaseModel):
+    mode: str = Field(default="new", max_length=20)
+    transcript: str = Field(min_length=1, max_length=30000)
+    student_id: UUID | None = None
+    student_name: str | None = Field(default=None, max_length=120)
+
+
+class CounselingIntakeProfile(BaseModel):
+    name: str = ""
+    school: str = ""
+    grade_level: str = ""
+    guardian_name: str = ""
+    guardian_phone: str = ""
+    memo: str = ""
+    recommended_class: str = ""
+    pending_reason: str = ""
+
+
+class CounselingIntakeResponse(BaseModel):
+    title: str
+    summary: str
+    student_profile: CounselingIntakeProfile
+    sections: list[CounselingCleanPreviewSection]
+
+
 class RoutineMessagePatchPayload(BaseModel):
     message_body: str | None = Field(default=None, max_length=4000)
     status: str | None = Field(default=None, max_length=40)
@@ -1905,6 +1936,136 @@ def _counseling_chat_completion_json(client: OpenAI, model_name: str, prompt: st
             if not any(token in message for token in ("max_tokens", "max_completion_tokens", "response_format")):
                 raise
     raise last_error or ValueError("AI response parsing failed.")
+
+
+def _audio_transcription_text(response: object) -> str:
+    text = getattr(response, "text", None)
+    if isinstance(text, str):
+        return text.strip()
+    if isinstance(response, dict):
+        return str(response.get("text") or "").strip()
+    return ""
+
+
+def _transcribe_audio_bytes(client: OpenAI, filename: str, content: bytes) -> tuple[str, str]:
+    last_error: Exception | None = None
+    for model_name in ("gpt-4o-mini-transcribe", "whisper-1"):
+        try:
+            audio_stream = io.BytesIO(content)
+            audio_stream.name = filename or "counseling-audio.webm"
+            response = client.audio.transcriptions.create(
+                model=model_name,
+                file=audio_stream,
+                language="ko",
+            )
+            text = _audio_transcription_text(response)
+            if not text:
+                raise ValueError("Transcription response did not include text.")
+            return text, model_name
+        except Exception as exc:
+            last_error = exc
+            continue
+    raise last_error or ValueError("Audio transcription failed.")
+
+
+def _counseling_intake_prompt(
+    payload: CounselingIntakePayload,
+    membership: StudentAcademyMembership | None,
+    class_names: list[str],
+) -> str:
+    mode = "existing" if payload.mode == "existing" else "new"
+    source = {
+        "mode": mode,
+        "student": {
+            "name": _student_name(membership) if membership else (payload.student_name or ""),
+            "school": (membership.metadata_json or {}).get("school") if membership and isinstance(membership.metadata_json, dict) else "",
+            "grade_level": (membership.metadata_json or {}).get("grade_level") if membership and isinstance(membership.metadata_json, dict) else "",
+            "classes": class_names,
+        },
+        "transcript": payload.transcript.strip(),
+    }
+    return f"""
+You are Tena Forge's Korean academy counseling intake assistant.
+
+Return only a JSON object in this exact shape:
+{{
+  "title": "short Korean counseling title",
+  "summary": "concise Korean summary for the teacher",
+  "student_profile": {{
+    "name": "",
+    "school": "",
+    "grade_level": "",
+    "guardian_name": "",
+    "guardian_phone": "",
+    "memo": "",
+    "recommended_class": "",
+    "pending_reason": ""
+  }},
+  "sections": [
+    {{"field_id":"notes","label":"상담 내용","value":"..."}},
+    {{"field_id":"learning_status","label":"학습 상태","value":"..."}},
+    {{"field_id":"next_plan","label":"다음 지도 계획","value":"..."}}
+  ]
+}}
+
+Rules:
+- Use Korean.
+- Use only facts explicitly present in the transcript or student context.
+- For new-student intake, fill student_profile fields from the transcript and set pending_reason to a short reason why this should stay as a pending candidate until registration is confirmed.
+- For existing-student counseling, keep student_profile mostly empty except useful memo/recommended_class facts; focus on sections that can be saved to the student's counseling log.
+- Do not invent phone numbers, schools, scores, diagnoses, family details, promises, or payment facts.
+- If a field is unknown, return an empty string.
+- Keep sections concise, factual, and suitable for a teacher's record.
+- No Markdown and no text outside JSON.
+
+Input:
+{json.dumps(source, ensure_ascii=False)}
+""".strip()
+
+
+def _fallback_counseling_intake(payload: CounselingIntakePayload) -> dict:
+    transcript = payload.transcript.strip()
+    first_line = next((line.strip() for line in transcript.splitlines() if line.strip()), "")
+    return {
+        "title": "신입 상담" if payload.mode != "existing" else "학습 상담",
+        "summary": first_line[:240] or transcript[:240],
+        "student_profile": {
+            "name": payload.student_name or "",
+            "school": "",
+            "grade_level": "",
+            "guardian_name": "",
+            "guardian_phone": "",
+            "memo": transcript[:1200],
+            "recommended_class": "",
+            "pending_reason": "등록 여부가 확정되기 전까지 대기 후보로 보관합니다." if payload.mode != "existing" else "",
+        },
+        "sections": [
+            {"field_id": "notes", "label": "상담 내용", "value": transcript, "include_in_report": True},
+            {"field_id": "learning_status", "label": "학습 상태", "value": "", "include_in_report": True},
+            {"field_id": "next_plan", "label": "다음 지도 계획", "value": "", "include_in_report": True},
+        ],
+    }
+
+
+def _coerce_counseling_intake_response(parsed: dict, payload: CounselingIntakePayload) -> dict:
+    fallback = _fallback_counseling_intake(payload)
+    profile = parsed.get("student_profile") if isinstance(parsed.get("student_profile"), dict) else {}
+    sections = _normalize_counseling_sections(parsed.get("sections") if isinstance(parsed.get("sections"), list) else fallback["sections"])
+    return {
+        "title": str(parsed.get("title") or fallback["title"]).strip()[:255] or fallback["title"],
+        "summary": str(parsed.get("summary") or fallback["summary"]).strip(),
+        "student_profile": {
+            "name": str(profile.get("name") or fallback["student_profile"]["name"]).strip()[:120],
+            "school": str(profile.get("school") or "").strip()[:120],
+            "grade_level": str(profile.get("grade_level") or "").strip()[:80],
+            "guardian_name": str(profile.get("guardian_name") or "").strip()[:120],
+            "guardian_phone": str(profile.get("guardian_phone") or "").strip()[:80],
+            "memo": str(profile.get("memo") or fallback["student_profile"]["memo"]).strip()[:2000],
+            "recommended_class": str(profile.get("recommended_class") or "").strip()[:160],
+            "pending_reason": str(profile.get("pending_reason") or fallback["student_profile"]["pending_reason"]).strip()[:240],
+        },
+        "sections": sections or fallback["sections"],
+    }
 
 
 def _align_cleaned_counseling_sections(original_sections: list[dict], ai_sections: object) -> list[dict]:
@@ -3409,6 +3570,64 @@ def student_exam_stats_series(student_id: UUID, request: Request, start_date: st
             }
         )
     return points[:200]
+
+
+@router.post("/counseling/transcribe", response_model=CounselingTranscriptionResponse)
+async def transcribe_counseling_audio(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    _student_management_academy_id(request, db)
+    content_type = (file.content_type or "").lower()
+    if content_type and not (content_type.startswith("audio/") or content_type in {"video/webm", "application/octet-stream"}):
+        raise HTTPException(status_code=400, detail="상담 녹음 파일만 전사할 수 있습니다.")
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="전사할 녹음 파일이 없습니다.")
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="녹음 파일은 50MB 이하만 전사할 수 있습니다.")
+
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=503, detail="AI 음성 전사를 위한 OPENAI_API_KEY가 설정되어 있지 않습니다.")
+
+    client = OpenAI(api_key=settings.openai_api_key, timeout=max(settings.ai_request_timeout_seconds, 120))
+    try:
+        text, model_name = _transcribe_audio_bytes(client, file.filename or "counseling-audio.webm", content)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 음성 전사에 실패했습니다: {exc}") from exc
+    return {"text": text, "model": model_name}
+
+
+@router.post("/counseling/intake-preview", response_model=CounselingIntakeResponse)
+def preview_counseling_intake(payload: CounselingIntakePayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    membership: StudentAcademyMembership | None = None
+    class_names: list[str] = []
+    if payload.student_id:
+        membership = _get_membership(db, academy_id, payload.student_id, visible_academy_ids)
+        class_names = [
+            row.name
+            for row in db.scalars(
+                select(AcademyClass)
+                .join(ClassStudent, _id_columns_equal(ClassStudent.class_id, AcademyClass.id))
+                .where(
+                    _id_equals(ClassStudent.student_membership_id, membership.id),
+                    ClassStudent.left_at.is_(None),
+                    AcademyClass.academy_id.in_(list(visible_academy_ids)),
+                )
+                .order_by(AcademyClass.name)
+            ).all()
+        ]
+
+    settings = get_settings()
+    if not settings.openai_api_key:
+        return _coerce_counseling_intake_response(_fallback_counseling_intake(payload), payload)
+
+    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
+    try:
+        parsed = _counseling_chat_completion_json(client, settings.ai_model, _counseling_intake_prompt(payload, membership, class_names), max_output_tokens=2048)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 상담 정보 추출에 실패했습니다: {exc}") from exc
+    return _coerce_counseling_intake_response(parsed, payload)
 
 
 @router.post("/students/{student_id}/counseling-logs/clean-preview", response_model=CounselingCleanPreviewResponse)

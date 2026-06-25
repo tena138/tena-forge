@@ -3,24 +3,26 @@
 import Link from "next/link";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive,
   BarChart3,
-  BellRing,
   BookOpenCheck,
-  CalendarDays,
   Check,
   CheckSquare,
   ChevronDown,
   ChevronRight,
   ClipboardList,
   Copy,
+  FileText,
   GripVertical,
   KeyRound,
   Loader2,
+  MessageSquare,
+  Mic,
   Plus,
   RotateCcw,
+  Save,
   Send,
   Sparkles,
+  Square,
   UsersRound,
   UserMinus,
   UserPlus,
@@ -54,6 +56,7 @@ import {
   WrongAnswer,
   addStudentToClass,
   createClass,
+  createCounselingLog,
   createPaperSession,
   createReviewSet,
   createStudent,
@@ -64,12 +67,15 @@ import {
   listRoutineActions,
   listWrongAnswers,
   mergeStudents,
+  previewCounselingIntake,
   refreshRoutineAi,
   savePaperSessionGrade,
   sendRoutineAction,
+  transcribeCounselingAudio,
   updateClassOrder,
   updateRoutineMessage,
 } from "@/lib/studentManagement";
+import type { CounselingIntakePreview } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 function resolveActiveManagementAcademyId(profile?: AcademyProfile | null) {
@@ -82,8 +88,9 @@ function normalizeListResponse<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-type TabKey = "routine" | "classes" | "students" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
+type TabKey = "routine" | "classes" | "students" | "counseling" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 type ClassStudentAddMode = "existing" | "new";
+type CounselingMode = "new" | "existing";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type TrendMetricKey = "selected" | "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
 type ClassSessionMetricPoint = {
@@ -107,6 +114,15 @@ type ProblemPageGroup = {
   problems: SessionProblem[];
 };
 type StudentMergeMenuState = { student: StudentCard; classId: string; x: number; y: number };
+type PendingCounselingCandidate = {
+  id: string;
+  created_at: string;
+  title: string;
+  transcript: string;
+  summary: string;
+  profile: CounselingIntakePreview["student_profile"];
+  sections: CounselingIntakePreview["sections"];
+};
 
 const emptyStudentForm = {
   name: "",
@@ -120,6 +136,22 @@ const emptyStudentForm = {
   tuition_cycle_sessions: "4",
   tuition_amount: "",
 };
+const COUNSELING_PENDING_STORAGE_KEY = "tena.student-management.pending-counseling";
+
+function readPendingCounselingCandidates(): PendingCounselingCandidate[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(COUNSELING_PENDING_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingCounselingCandidates(items: PendingCounselingCandidate[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(COUNSELING_PENDING_STORAGE_KEY, JSON.stringify(items.slice(0, 20)));
+}
 
 function mergeStudentCard(existing: StudentCard, next: StudentCard): StudentCard {
   const classIds = [...existing.class_ids];
@@ -1006,6 +1038,20 @@ export default function StudentManagementPage() {
     due_at: "",
   });
   const [sessionStudentIds, setSessionStudentIds] = useState<string[]>([]);
+  const [counselingMode, setCounselingMode] = useState<CounselingMode>("new");
+  const [counselingStudentId, setCounselingStudentId] = useState("");
+  const [counselingClassId, setCounselingClassId] = useState("");
+  const [counselingDate, setCounselingDate] = useState(todayInput());
+  const [counselingTitle, setCounselingTitle] = useState("신입 상담");
+  const [counselingTranscript, setCounselingTranscript] = useState("");
+  const [counselingAudioBlob, setCounselingAudioBlob] = useState<Blob | null>(null);
+  const [counselingRecording, setCounselingRecording] = useState(false);
+  const [counselingBusy, setCounselingBusy] = useState<"" | "transcribing" | "analyzing" | "saving">("");
+  const [counselingPreview, setCounselingPreview] = useState<CounselingIntakePreview | null>(null);
+  const [pendingCounselingCandidates, setPendingCounselingCandidates] = useState<PendingCounselingCandidate[]>([]);
+  const counselingRecorderRef = useRef<MediaRecorder | null>(null);
+  const counselingStreamRef = useRef<MediaStream | null>(null);
+  const counselingChunksRef = useRef<BlobPart[]>([]);
   const classOrderRef = useRef<ClassCard[]>([]);
 
   const allStudents = useMemo(() => {
@@ -1035,11 +1081,20 @@ export default function StudentManagementPage() {
     () => routines.find((routine) => routine.id === selectedRoutineId) || routines[0] || null,
     [routines, selectedRoutineId]
   );
-  const pendingRoutineCount = useMemo(() => routines.filter((routine) => routine.status !== "sent").length, [routines]);
 
   useEffect(() => {
     classOrderRef.current = classes;
   }, [classes]);
+
+  useEffect(() => {
+    setPendingCounselingCandidates(readPendingCounselingCandidates());
+    return () => {
+      if (counselingRecorderRef.current && counselingRecorderRef.current.state !== "inactive") {
+        counselingRecorderRef.current.stop();
+      }
+      counselingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   useEffect(() => {
     if (!studentMergeMenu) return;
@@ -1639,21 +1694,193 @@ export default function StudentManagementPage() {
     }
   }
 
+  function resetCounselingDraft(options: { keepTranscript?: boolean } = {}) {
+    setCounselingPreview(null);
+    setCounselingAudioBlob(null);
+    if (!options.keepTranscript) setCounselingTranscript("");
+    setCounselingTitle(counselingMode === "new" ? "신입 상담" : "학습 상담");
+    setCounselingDate(todayInput());
+    setCounselingClassId("");
+  }
+
+  function switchCounselingMode(mode: CounselingMode) {
+    setCounselingMode(mode);
+    setCounselingTitle(mode === "new" ? "신입 상담" : "학습 상담");
+    setCounselingPreview(null);
+    setCounselingClassId("");
+  }
+
+  async function startCounselingRecording() {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMessage("이 브라우저에서는 상담 녹음을 시작할 수 없습니다.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      counselingChunksRef.current = [];
+      counselingStreamRef.current = stream;
+      counselingRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) counselingChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(counselingChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        setCounselingAudioBlob(blob.size > 0 ? blob : null);
+        setCounselingRecording(false);
+        stream.getTracks().forEach((track) => track.stop());
+        counselingStreamRef.current = null;
+        counselingRecorderRef.current = null;
+      };
+      setCounselingAudioBlob(null);
+      setCounselingRecording(true);
+      recorder.start();
+    } catch (error) {
+      setMessage(errorMessage(error, "마이크 권한을 확인해 주세요."));
+    }
+  }
+
+  function stopCounselingRecording() {
+    const recorder = counselingRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+  }
+
+  async function transcribeCounselingRecording() {
+    if (!counselingAudioBlob) {
+      setMessage("먼저 상담 녹음을 완료해 주세요.");
+      return;
+    }
+    setCounselingBusy("transcribing");
+    try {
+      const result = await transcribeCounselingAudio(counselingAudioBlob);
+      setCounselingTranscript((current) => [current.trim(), result.text].filter(Boolean).join("\n\n"));
+      setMessage("상담 녹음을 전사했습니다. 필요한 경우 내용을 다듬은 뒤 AI 추출을 실행하세요.");
+    } catch (error) {
+      setMessage(errorMessage(error, "상담 녹음을 전사하지 못했습니다."));
+    } finally {
+      setCounselingBusy("");
+    }
+  }
+
+  async function analyzeCounselingTranscript() {
+    const transcript = counselingTranscript.trim();
+    if (!transcript) {
+      setMessage("전사 텍스트나 상담 메모를 먼저 입력해 주세요.");
+      return;
+    }
+    const student = allStudents.find((item) => item.id === counselingStudentId) || null;
+    if (counselingMode === "existing" && !student) {
+      setMessage("기존 학생 상담은 학생을 먼저 선택해야 합니다.");
+      return;
+    }
+    setCounselingBusy("analyzing");
+    try {
+      const preview = await previewCounselingIntake({
+        mode: counselingMode,
+        transcript,
+        student_id: counselingMode === "existing" ? student?.id || null : null,
+        student_name: student?.name || null,
+      });
+      setCounselingPreview(preview);
+      setCounselingTitle(preview.title || (counselingMode === "new" ? "신입 상담" : "학습 상담"));
+      setMessage(counselingMode === "new" ? "신입 상담 정보를 대기 후보로 저장할 수 있게 정리했습니다." : "기존 학생 상담 기록으로 저장할 내용을 정리했습니다.");
+    } catch (error) {
+      setMessage(errorMessage(error, "상담 내용을 AI로 정리하지 못했습니다."));
+    } finally {
+      setCounselingBusy("");
+    }
+  }
+
+  function updateCounselingProfile(field: keyof CounselingIntakePreview["student_profile"], value: string) {
+    setCounselingPreview((current) =>
+      current
+        ? {
+            ...current,
+            student_profile: { ...current.student_profile, [field]: value },
+          }
+        : current
+    );
+  }
+
+  function updateCounselingSection(fieldId: string, value: string) {
+    setCounselingPreview((current) =>
+      current
+        ? {
+            ...current,
+            sections: current.sections.map((section) => (section.field_id === fieldId ? { ...section, value } : section)),
+          }
+        : current
+    );
+  }
+
+  function counselingSectionValue(fieldId: string) {
+    return counselingPreview?.sections.find((section) => section.field_id === fieldId)?.value || "";
+  }
+
+  function savePendingCounselingCandidate() {
+    if (!counselingPreview) {
+      setMessage("먼저 상담 내용을 AI로 정리해 주세요.");
+      return;
+    }
+    const next: PendingCounselingCandidate = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`,
+      created_at: new Date().toISOString(),
+      title: counselingTitle.trim() || counselingPreview.title || "신입 상담",
+      transcript: counselingTranscript.trim(),
+      summary: counselingPreview.summary,
+      profile: counselingPreview.student_profile,
+      sections: counselingPreview.sections,
+    };
+    const items = [next, ...pendingCounselingCandidates].slice(0, 20);
+    setPendingCounselingCandidates(items);
+    writePendingCounselingCandidates(items);
+    resetCounselingDraft();
+    setMessage("신입 상담 후보를 대기 상태로 저장했습니다. 등록이 확정되면 학생 추가에서 연결할 수 있습니다.");
+  }
+
+  async function saveExistingCounselingLog() {
+    const student = allStudents.find((item) => item.id === counselingStudentId) || null;
+    if (!student || !counselingPreview) {
+      setMessage("학생을 선택하고 상담 내용을 AI로 정리해 주세요.");
+      return;
+    }
+    setCounselingBusy("saving");
+    try {
+      await createCounselingLog(student.id, {
+        counseling_date: counselingDate,
+        title: counselingTitle.trim() || counselingPreview.title || "학습 상담",
+        class_id: counselingClassId || null,
+        notes: counselingSectionValue("notes") || counselingPreview.summary || counselingTranscript,
+        weekly_report: counselingSectionValue("weekly_report"),
+        next_plan: counselingSectionValue("next_plan"),
+        sections: counselingPreview.sections,
+      });
+      resetCounselingDraft();
+      setMessage(`${student.name} 학생 상담 기록에 저장했습니다.`);
+    } catch (error) {
+      setMessage(errorMessage(error, "상담 기록 저장에 실패했습니다."));
+    } finally {
+      setCounselingBusy("");
+    }
+  }
+
   const selectedStudent = sessionDetail?.students.find((student) => student.id === selectedStudentId);
+  const selectedCounselingStudent = allStudents.find((student) => student.id === counselingStudentId) || null;
+  const counselingClassOptions = selectedCounselingStudent
+    ? classes.filter((classRow) => selectedCounselingStudent.class_ids.includes(classRow.id))
+    : classes;
   const activeStudentCount = allStudents.filter(
     (student) => student.status === "active" || student.status_chip === "Active" || student.status_chip === "active"
   ).length;
   const scoredStudentCount = allStudents.filter((student) => typeof student.recent_score === "number").length;
   const unresolvedStudentWrongs = allStudents.reduce((total, student) => total + student.unresolved_wrong_count, 0);
-  const tabItems: Array<{ id: TabKey; label: string; icon: typeof BellRing; count?: number }> = [
-    { id: "routine", label: "루틴", icon: BellRing, count: pendingRoutineCount || undefined },
+  const tabItems: Array<{ id: TabKey; label: string; icon: typeof BookOpenCheck; count?: number }> = [
     { id: "classes", label: "클래스", icon: BookOpenCheck },
     { id: "students", label: "학생", icon: UsersRound },
+    { id: "counseling", label: "상담", icon: MessageSquare },
     { id: "sessions", label: "세트", icon: ClipboardList },
     { id: "grading", label: "채점", icon: CheckSquare },
-    { id: "wrong", label: "오답", icon: Archive, count: unresolvedStudentWrongs || undefined },
-    { id: "calendar", label: "캘린더", icon: CalendarDays },
-    { id: "analytics", label: "분석", icon: BarChart3 },
   ];
 
   return (
@@ -2145,6 +2372,234 @@ export default function StudentManagementPage() {
                 </form>
               </aside>
             </div>
+          </section>
+        ) : null}
+
+        {!loading && activeTab === "counseling" ? (
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="space-y-4">
+              <div className="rounded-lg bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h2 className="text-xl font-black text-zinc-950">상담</h2>
+                    <p className="mt-1 text-sm text-zinc-500">상담 녹음을 전사하고, AI가 필요한 학생 정보와 상담 기록만 정리합니다.</p>
+                  </div>
+                  <div className="inline-flex shrink-0 rounded-md bg-zinc-100 p-1">
+                    {[
+                      ["new", "신입 상담"] as const,
+                      ["existing", "기존 학생"] as const,
+                    ].map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => switchCounselingMode(mode)}
+                        className={cn(
+                          "h-9 rounded px-3 text-sm font-black transition",
+                          counselingMode === mode ? "bg-black text-white" : "text-zinc-500 hover:bg-white hover:text-zinc-950"
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+                <section className="rounded-lg bg-white p-4">
+                  <h3 className="text-sm font-black text-zinc-950">녹음</h3>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">마이크로 상담을 녹음한 뒤 AI 전사를 실행합니다.</p>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <Button type="button" onClick={startCounselingRecording} disabled={counselingRecording || Boolean(counselingBusy)} className="h-11">
+                      <Mic className="h-4 w-4" />
+                      시작
+                    </Button>
+                    <Button type="button" variant="outline" onClick={stopCounselingRecording} disabled={!counselingRecording} className="h-11">
+                      <Square className="h-4 w-4" />
+                      중지
+                    </Button>
+                  </div>
+                  <div className="mt-3 rounded-md bg-zinc-100 p-3 text-xs font-semibold text-zinc-600">
+                    {counselingRecording
+                      ? "녹음 중입니다."
+                      : counselingAudioBlob
+                        ? `녹음 완료 · ${Math.max(1, Math.round(counselingAudioBlob.size / 1024))}KB`
+                        : "녹음 대기"}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={transcribeCounselingRecording}
+                    disabled={!counselingAudioBlob || counselingBusy === "transcribing"}
+                    className="mt-3 w-full"
+                  >
+                    {counselingBusy === "transcribing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    AI 전사
+                  </Button>
+                </section>
+
+                <section className="rounded-lg bg-white p-4">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
+                    <Input value={counselingTitle} onChange={(event) => setCounselingTitle(event.target.value)} placeholder="상담 제목" />
+                    <Input type="date" value={counselingDate} onChange={(event) => setCounselingDate(event.target.value)} />
+                  </div>
+                  {counselingMode === "existing" ? (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <Select value={counselingStudentId} onChange={(event) => { setCounselingStudentId(event.target.value); setCounselingClassId(""); setCounselingPreview(null); }}>
+                        <option value="">학생 선택</option>
+                        {allStudents.map((student) => (
+                          <option key={student.id} value={student.id}>
+                            {student.name} · {studentMetaText(student)}
+                          </option>
+                        ))}
+                      </Select>
+                      <Select value={counselingClassId} onChange={(event) => setCounselingClassId(event.target.value)} disabled={!selectedCounselingStudent}>
+                        <option value="">클래스 선택 안 함</option>
+                        {counselingClassOptions.map((classRow) => (
+                          <option key={classRow.id} value={classRow.id}>{classRow.name}</option>
+                        ))}
+                      </Select>
+                    </div>
+                  ) : null}
+                  <textarea
+                    className="mt-3 min-h-[260px] w-full rounded-md border-0 bg-zinc-100 p-3 text-sm leading-6 text-zinc-950 outline-none placeholder:text-zinc-500 ring-1 ring-zinc-200 focus:ring-2 focus:ring-black/10"
+                    value={counselingTranscript}
+                    onChange={(event) => {
+                      setCounselingTranscript(event.target.value);
+                      setCounselingPreview(null);
+                    }}
+                    placeholder="녹음 전사 내용이 여기에 들어옵니다. 직접 메모를 입력해도 AI가 학생 정보와 상담 기록을 정리합니다."
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" onClick={analyzeCounselingTranscript} disabled={counselingBusy === "analyzing" || !counselingTranscript.trim()}>
+                      {counselingBusy === "analyzing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      AI 정보 추출
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => resetCounselingDraft()}>
+                      초기화
+                    </Button>
+                  </div>
+                </section>
+              </div>
+
+              {counselingPreview ? (
+                <section className="rounded-lg bg-white p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-zinc-950">AI 정리 결과</h3>
+                      <p className="mt-1 text-sm leading-6 text-zinc-600">{counselingPreview.summary || "요약 없음"}</p>
+                    </div>
+                    {counselingMode === "new" ? (
+                      <Button type="button" onClick={savePendingCounselingCandidate} disabled={counselingBusy === "saving"}>
+                        <Save className="h-4 w-4" />
+                        대기 저장
+                      </Button>
+                    ) : (
+                      <Button type="button" onClick={saveExistingCounselingLog} disabled={counselingBusy === "saving" || !selectedCounselingStudent}>
+                        {counselingBusy === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        상담 기록 저장
+                      </Button>
+                    )}
+                  </div>
+
+                  {counselingMode === "new" ? (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      {[
+                        ["name", "학생 이름"],
+                        ["school", "학교"],
+                        ["grade_level", "학년"],
+                        ["guardian_name", "보호자 이름"],
+                        ["guardian_phone", "보호자 연락처"],
+                        ["recommended_class", "추천 클래스"],
+                      ].map(([field, label]) => (
+                        <label key={field} className="text-xs font-bold text-zinc-500">
+                          {label}
+                          <Input
+                            className="mt-1"
+                            value={counselingPreview.student_profile[field as keyof CounselingIntakePreview["student_profile"]] || ""}
+                            onChange={(event) => updateCounselingProfile(field as keyof CounselingIntakePreview["student_profile"], event.target.value)}
+                          />
+                        </label>
+                      ))}
+                      <label className="text-xs font-bold text-zinc-500 md:col-span-2">
+                        메모
+                        <textarea
+                          className="mt-1 min-h-24 w-full rounded-md border-0 bg-zinc-100 p-3 text-sm leading-6 text-zinc-950 outline-none ring-1 ring-zinc-200 focus:ring-2 focus:ring-black/10"
+                          value={counselingPreview.student_profile.memo || ""}
+                          onChange={(event) => updateCounselingProfile("memo", event.target.value)}
+                        />
+                      </label>
+                      <label className="text-xs font-bold text-zinc-500 md:col-span-2">
+                        대기 사유
+                        <Input
+                          className="mt-1"
+                          value={counselingPreview.student_profile.pending_reason || ""}
+                          onChange={(event) => updateCounselingProfile("pending_reason", event.target.value)}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    {counselingPreview.sections.map((section) => (
+                      <label key={section.field_id} className="text-xs font-bold text-zinc-500">
+                        {section.label}
+                        <textarea
+                          className="mt-1 min-h-32 w-full rounded-md border-0 bg-zinc-100 p-3 text-sm leading-6 text-zinc-950 outline-none ring-1 ring-zinc-200 focus:ring-2 focus:ring-black/10"
+                          value={section.value || ""}
+                          onChange={(event) => updateCounselingSection(section.field_id, event.target.value)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+
+            <aside className="space-y-4">
+              <section className="rounded-lg bg-white p-4">
+                <h3 className="text-sm font-black text-zinc-950">신입 상담 대기</h3>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">등록이 확정되기 전까지 학생 키와 연결하지 않고 후보로 보관합니다.</p>
+                <div className="mt-3 space-y-2">
+                  {pendingCounselingCandidates.map((candidate) => (
+                    <article key={candidate.id} className="rounded-md bg-zinc-100 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-zinc-950">{candidate.profile.name || candidate.title}</p>
+                          <p className="mt-1 truncate text-xs text-zinc-500">{[candidate.profile.school, candidate.profile.grade_level, candidate.profile.recommended_class].filter(Boolean).join(" · ") || "정보 확인 대기"}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded p-1 text-zinc-400 hover:bg-white hover:text-zinc-950"
+                          onClick={() => {
+                            const items = pendingCounselingCandidates.filter((item) => item.id !== candidate.id);
+                            setPendingCounselingCandidates(items);
+                            writePendingCounselingCandidates(items);
+                          }}
+                          aria-label="대기 후보 삭제"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="mt-2 line-clamp-3 text-xs leading-5 text-zinc-600">{candidate.summary || candidate.profile.memo}</p>
+                    </article>
+                  ))}
+                  {!pendingCounselingCandidates.length ? (
+                    <div className="rounded-md border border-dashed border-zinc-200 p-6 text-center text-sm text-zinc-500">대기 중인 신입 상담 후보가 없습니다.</div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="rounded-lg bg-white p-4">
+                <h3 className="text-sm font-black text-zinc-950">저장 흐름</h3>
+                <div className="mt-3 space-y-2 text-sm text-zinc-600">
+                  <p className="rounded-md bg-zinc-100 px-3 py-2">1. 상담 녹음 시작 후 중지</p>
+                  <p className="rounded-md bg-zinc-100 px-3 py-2">2. AI 전사로 텍스트 생성</p>
+                  <p className="rounded-md bg-zinc-100 px-3 py-2">3. AI 정보 추출로 필요한 항목만 정리</p>
+                  <p className="rounded-md bg-zinc-100 px-3 py-2">4. 신입은 대기 저장, 기존 학생은 상담 기록 저장</p>
+                </div>
+              </section>
+            </aside>
           </section>
         ) : null}
 
