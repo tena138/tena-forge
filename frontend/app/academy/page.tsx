@@ -1589,28 +1589,29 @@ function AcademySchedulePanel() {
                                 key={event.id}
                                 role="button"
                                 tabIndex={0}
-                                className={`group relative rounded-[6px] bg-zinc-100 px-1.5 py-1.5 text-left transition hover:bg-zinc-100 active:bg-zinc-100 focus-visible:bg-zinc-100 sm:px-2 ${isSelectedEvent ? "ring-1 ring-inset ring-black/25" : ""} ${isCopiedEvent ? "outline outline-1 outline-offset-1 outline-zinc-300" : ""}`}
+                                className={`group relative cursor-pointer rounded-[6px] bg-zinc-100 px-1.5 py-1.5 text-left transition hover:bg-zinc-100 active:bg-zinc-100 focus-visible:bg-zinc-100 sm:px-2 ${isSelectedEvent ? "ring-1 ring-inset ring-black/25" : ""} ${isCopiedEvent ? "outline outline-1 outline-offset-1 outline-zinc-300" : ""}`}
                                 onClick={(clickEvent) => {
                                   clickEvent.stopPropagation();
                                   setSelectedDateKey(key);
                                   setSelectedEventId(event.id);
+                                  setTimeEditor(null);
                                   setError("");
                                 }}
-                                onPointerDown={(pointerEvent) => {
-                                  if (pointerEvent.button !== 0) return;
-                                  pointerEvent.preventDefault();
-                                  pointerEvent.stopPropagation();
+                                onDoubleClick={(doubleClickEvent) => {
+                                  doubleClickEvent.preventDefault();
+                                  doubleClickEvent.stopPropagation();
                                   setError("");
-                                  openTimeEditor(event, key, "move", Math.min(academyEventDurationMinutes(event) / 2, 60), { x: pointerEvent.clientX, y: pointerEvent.clientY });
+                                  openTimeEditor(event, key);
                                 }}
                                 onKeyDown={(keyEvent) => {
                                   if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
                                   keyEvent.preventDefault();
                                   setSelectedDateKey(key);
                                   setSelectedEventId(event.id);
+                                  setTimeEditor(null);
                                   setError("");
                                 }}
-                                title="선택 후 Ctrl+C로 복사"
+                                title="더블 클릭으로 시간 조정 · 선택 후 Ctrl+C로 복사"
                               >
                                 <div className="flex items-start justify-between gap-1.5">
                                   <div className="min-w-0">
