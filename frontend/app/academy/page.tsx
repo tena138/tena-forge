@@ -1574,7 +1574,7 @@ function AcademySchedulePanel() {
                                 key={event.id}
                                 role="button"
                                 tabIndex={0}
-                                className={`group relative rounded-[6px] bg-zinc-100 px-1.5 py-1.5 text-left transition hover:bg-zinc-50 sm:px-2 ${isSelectedEvent ? "ring-1 ring-inset ring-black/25 shadow-sm" : ""} ${isCopiedEvent ? "outline outline-1 outline-offset-1 outline-zinc-300" : ""}`}
+                                className={`group relative rounded-[6px] bg-zinc-100 px-1.5 py-1.5 text-left transition hover:bg-zinc-100 active:bg-zinc-100 focus-visible:bg-zinc-100 sm:px-2 ${isSelectedEvent ? "ring-1 ring-inset ring-black/25" : ""} ${isCopiedEvent ? "outline outline-1 outline-offset-1 outline-zinc-300" : ""}`}
                                 onClick={(clickEvent) => {
                                   clickEvent.stopPropagation();
                                   setSelectedDateKey(key);
