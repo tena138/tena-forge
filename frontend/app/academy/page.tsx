@@ -13,6 +13,7 @@ import {
   LineChart,
   PackageCheck,
   Plus,
+  Radio,
   ScanText,
   ShieldCheck,
   Trash2,
@@ -1208,6 +1209,11 @@ function AcademySchedulePanel() {
   const timeEditorCellRect = timeEditor?.dateKey ? dateCellRefs.current[timeEditor.dateKey]?.getBoundingClientRect() || null : null;
   const pendingSeriesEvent = pendingSeriesTimeEdit ? events.find((event) => event.id === pendingSeriesTimeEdit.eventId) || null : null;
   const pendingSeriesClass = pendingSeriesEvent ? classById.get(pendingSeriesEvent.class_id) : null;
+  const selectedLiveLectureEvent = selectedEvent?.event_type === "class" ? selectedEvent : null;
+  const selectedLiveLectureClass = selectedLiveLectureEvent ? classById.get(selectedLiveLectureEvent.class_id) : null;
+  const selectedLiveLectureHref = selectedLiveLectureEvent
+    ? `/live-lecture?eventId=${encodeURIComponent(selectedLiveLectureEvent.id)}&classId=${encodeURIComponent(selectedLiveLectureEvent.class_id)}`
+    : "";
   const academyStartDateTime = `${form.date}T${form.starts_at || "00:00"}`;
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
@@ -1768,6 +1774,17 @@ function AcademySchedulePanel() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {selectedLiveLectureEvent ? (
+        <Link
+          href={selectedLiveLectureHref}
+          className="fixed bottom-20 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition hover:bg-zinc-800"
+          aria-label={`${selectedLiveLectureEvent.title} 실시간 강의 열기`}
+          title={`${selectedLiveLectureClass?.name || "클래스"} 실시간 강의`}
+        >
+          <Radio className="h-5 w-5" />
+        </Link>
       ) : null}
 
       <button

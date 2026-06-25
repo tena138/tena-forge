@@ -133,6 +133,33 @@ export type LiveInteractionEvent = {
   live_href: string;
 };
 
+export type LiveLectureSlidePdf = {
+  url: string;
+  name: string;
+  size: number;
+  content_type?: string | null;
+};
+
+export type LiveLectureSession = {
+  event: LiveInteractionEvent;
+  source: "event" | "class_default" | "empty" | string;
+  event_initialized: boolean;
+  class_default_initialized: boolean;
+  created_class_default?: boolean;
+  lecture: {
+    notes: string;
+    slide_pdf?: LiveLectureSlidePdf | null;
+    page_number: number;
+    updated_at?: string | null;
+  };
+};
+
+export type LiveLectureSessionSavePayload = Partial<{
+  notes: string | null;
+  page_number: number | null;
+  slide_pdf: LiveLectureSlidePdf | null;
+}>;
+
 export type LoginResult = {
   access_token?: string;
   token_type?: "bearer";
@@ -288,6 +315,29 @@ export async function updateLiveInteractionSettings(payload: Pick<LiveInteractio
 export async function listUpcomingLiveInteractions() {
   const response = await authHttp.get("/api/live-interactions/upcoming");
   return response.data as { settings: LiveInteractionSettings; events: LiveInteractionEvent[] };
+}
+
+export async function getLiveLectureSession(eventId: string) {
+  const response = await authHttp.get(`/api/live-interactions/events/${eventId}/session`);
+  return response.data as LiveLectureSession;
+}
+
+export async function saveLiveLectureSession(eventId: string, payload: LiveLectureSessionSavePayload) {
+  const response = await authHttp.patch(`/api/live-interactions/events/${eventId}/session`, payload);
+  return response.data as LiveLectureSession;
+}
+
+export async function uploadLiveLectureSlide(eventId: string, file: File, onProgress?: (progress: number) => void) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await authHttp.post(`/api/live-interactions/events/${eventId}/slide`, form, {
+    onUploadProgress: (event) => {
+      if (!event.total) return;
+      onProgress?.(Math.round((event.loaded / event.total) * 100));
+    },
+  });
+  onProgress?.(100);
+  return response.data as LiveLectureSession;
 }
 
 export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "account_type" | "phone" | "address" | "business_number">>) {

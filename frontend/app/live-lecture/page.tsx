@@ -19,7 +19,15 @@ import {
 } from "lucide-react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
-import { LiveInteractionEvent, listUpcomingLiveInteractions } from "@/lib/auth-api";
+import {
+  getLiveLectureSession,
+  listUpcomingLiveInteractions,
+  saveLiveLectureSession,
+  type LiveInteractionEvent,
+  type LiveLectureSession,
+  uploadLiveLectureSlide,
+} from "@/lib/auth-api";
+import { assetUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type RecordingMode = "audio" | "video";
@@ -94,6 +102,20 @@ function fileSizeText(size: number) {
 
 function isPdfFile(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function isBlobUrl(value?: string | null) {
+  return Boolean(value && value.startsWith("blob:"));
+}
+
+function slidePdfFromSession(session: LiveLectureSession): SlidePdf | null {
+  const slide = session.lecture.slide_pdf;
+  if (!slide?.url) return null;
+  return {
+    url: assetUrl(slide.url),
+    name: slide.name || "lecture.pdf",
+    size: slide.size || 0,
+  };
 }
 
 function minuteTickStep(totalMinutes: number) {
@@ -501,6 +523,11 @@ function LiveLectureContent() {
   const shareOnly = searchParams.get("share") === "1";
   const { event } = useLectureEvent(eventId || null);
   const [now, setNow] = useState(() => Date.now());
+  const [sessionEvent, setSessionEvent] = useState<LiveInteractionEvent | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [sessionSaving, setSessionSaving] = useState(false);
+  const [sessionNotice, setSessionNotice] = useState("");
+  const [slideUploadProgress, setSlideUploadProgress] = useState(0);
   const [slidePdf, setSlidePdf] = useState<SlidePdf | null>(null);
   const [notes, setNotes] = useState("수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리");
   const [sharing, setSharing] = useState(false);
@@ -514,16 +541,84 @@ function LiveLectureContent() {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const slidePdfInputRef = useRef<HTMLInputElement | null>(null);
+  const savedSessionRef = useRef({ notes: "", pageNumber: 1 });
 
-  const sessionTitle = event?.title || "즉시 강의";
-  const sessionClassName = event?.class_name || "클래스 선택 없음";
+  const activeEvent = sessionEvent || event;
+  const sessionTitle = activeEvent?.title || "즉시 강의";
+  const sessionClassName = activeEvent?.class_name || "클래스 선택 없음";
   const storageKey = liveShareKey(eventId, classId);
   const shareUrl = slideShareUrl(eventId, classId);
+
+  function applyLectureSession(session: LiveLectureSession) {
+    const nextSlide = slidePdfFromSession(session);
+    setSessionEvent(session.event);
+    setNotes(session.lecture.notes);
+    setSlidePage(session.lecture.page_number || 1);
+    setSlidePdf((current) => {
+      if (current?.url && isBlobUrl(current.url)) URL.revokeObjectURL(current.url);
+      return nextSlide;
+    });
+    savedSessionRef.current = {
+      notes: session.lecture.notes,
+      pageNumber: session.lecture.page_number || 1,
+    };
+    setSessionLoaded(true);
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (shareOnly) return;
+    if (!eventId) {
+      setSessionEvent(null);
+      setSessionLoaded(true);
+      savedSessionRef.current = { notes, pageNumber: slidePage };
+      return;
+    }
+    let cancelled = false;
+    setSessionLoaded(false);
+    setSessionNotice("");
+    async function loadSession() {
+      try {
+        const session = await getLiveLectureSession(eventId);
+        if (!cancelled) applyLectureSession(session);
+      } catch {
+        if (!cancelled) {
+          setSessionLoaded(true);
+          setSessionNotice("강의 자료를 불러오지 못했습니다.");
+        }
+      }
+    }
+    void loadSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, shareOnly]);
+
+  useEffect(() => {
+    if (!eventId || !sessionLoaded || shareOnly) return;
+    if (notes === savedSessionRef.current.notes && slidePage === savedSessionRef.current.pageNumber) return;
+    const timer = window.setTimeout(async () => {
+      setSessionSaving(true);
+      try {
+        const session = await saveLiveLectureSession(eventId, { notes, page_number: slidePage });
+        savedSessionRef.current = {
+          notes: session.lecture.notes,
+          pageNumber: session.lecture.page_number || slidePage,
+        };
+        setSessionEvent(session.event);
+        setSessionNotice(session.created_class_default ? "클래스 기본 강의 포맷이 저장되었습니다." : "강의 자료가 저장되었습니다.");
+      } catch {
+        setSessionNotice("강의 자료를 저장하지 못했습니다.");
+      } finally {
+        setSessionSaving(false);
+      }
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [eventId, notes, sessionLoaded, shareOnly, slidePage]);
 
   useEffect(() => {
     if (!sharing) return;
@@ -541,7 +636,7 @@ function LiveLectureContent() {
 
   useEffect(() => {
     return () => {
-      if (slidePdf?.url) URL.revokeObjectURL(slidePdf.url);
+      if (slidePdf?.url && isBlobUrl(slidePdf.url)) URL.revokeObjectURL(slidePdf.url);
     };
   }, [slidePdf?.url]);
 
@@ -626,14 +721,28 @@ function LiveLectureContent() {
     await navigator.clipboard?.writeText(absoluteUrl);
   }
 
-  function applySlidePdfFile(file: File) {
+  async function applySlidePdfFile(file: File) {
     if (!isPdfFile(file)) {
       window.alert("PDF 파일만 업로드할 수 있습니다.");
       return;
     }
+    if (eventId) {
+      setSlideUploadProgress(1);
+      setSessionNotice("");
+      try {
+        const session = await uploadLiveLectureSlide(eventId, file, setSlideUploadProgress);
+        applyLectureSession(session);
+        setSessionNotice("슬라이드가 저장되었습니다.");
+      } catch {
+        setSessionNotice("슬라이드를 업로드하지 못했습니다.");
+      } finally {
+        setSlideUploadProgress(0);
+      }
+      return;
+    }
     const url = URL.createObjectURL(file);
     setSlidePdf((current) => {
-      if (current?.url) URL.revokeObjectURL(current.url);
+      if (current?.url && isBlobUrl(current.url)) URL.revokeObjectURL(current.url);
       return { url, name: file.name, size: file.size };
     });
     setSlidePage(1);
@@ -643,12 +752,19 @@ function LiveLectureContent() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    applySlidePdfFile(file);
+    void applySlidePdfFile(file);
   }
 
   return (
     <div className="space-y-4">
-      <LectureTimeline event={event} now={now} />
+      <LectureTimeline event={activeEvent} now={now} />
+
+      {(!sessionLoaded || sessionSaving || sessionNotice) && !shareOnly ? (
+        <section className="flex items-center justify-between rounded-[8px] bg-white px-4 py-2 text-xs font-black text-zinc-600 ring-1 ring-black/5">
+          <span>{!sessionLoaded ? "강의 자료를 불러오는 중" : sessionSaving ? "강의 자료 저장 중" : sessionNotice}</span>
+          {slideUploadProgress ? <span>{slideUploadProgress}%</span> : null}
+        </section>
+      ) : null}
 
       {sharing ? (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] bg-black px-4 py-3 text-white">
@@ -682,16 +798,24 @@ function LiveLectureContent() {
                 {slidePdf ? `${slidePdf.name}${fileSizeText(slidePdf.size) ? ` · ${fileSizeText(slidePdf.size)}` : ""}` : "선택된 PDF 없음"}
               </div>
             </div>
-            <button type="button" onClick={() => slidePdfInputRef.current?.click()} className="inline-flex h-9 items-center gap-2 rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800">
+            <button
+              type="button"
+              onClick={() => slidePdfInputRef.current?.click()}
+              disabled={Boolean(slideUploadProgress)}
+              className="inline-flex h-9 items-center gap-2 rounded-[7px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
+            >
               <FileUp className="h-3.5 w-3.5" />
-              PDF 업로드
+              {slideUploadProgress ? `${slideUploadProgress}%` : "PDF 업로드"}
             </button>
           </div>
         </div>
 
         <aside className="flex min-w-0 flex-col gap-3">
           <div className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-            <div className="text-sm font-black text-zinc-950">발표자 메모</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-black text-zinc-950">발표자 메모</div>
+              {sessionSaving ? <span className="text-[11px] font-black text-zinc-400">저장 중</span> : null}
+            </div>
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
