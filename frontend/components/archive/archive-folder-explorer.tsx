@@ -68,6 +68,7 @@ export function ArchiveFolderExplorer({
   onMoveBatch,
 }: ArchiveFolderExplorerProps) {
   const [draft, setDraft] = useState("");
+  const [creatingFolder, setCreatingFolder] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [dragItem, setDragItem] = useState<DragItem>(null);
@@ -93,6 +94,7 @@ export function ArchiveFolderExplorer({
     if (!name) return;
     await onCreateFolder({ name, parent_id: currentFolderId, color: defaultArchiveFolderColor(`${archiveFolderPathLabel(currentFolderId, folders)} > ${name}`) });
     setDraft("");
+    setCreatingFolder(false);
   }
 
   async function commitRename(folder: ArchiveFolder) {
@@ -226,12 +228,12 @@ export function ArchiveFolderExplorer({
         {destinationPicker && currentFolderId ? (
           <button
             type="button"
-            className="grid min-h-[82px] place-items-center rounded-[10px] bg-zinc-50 p-3 text-zinc-800 transition-colors hover:bg-zinc-100"
+            className="grid h-11 min-h-0 place-items-center self-start rounded-[10px] bg-zinc-50 px-3 text-zinc-800 transition-colors hover:bg-zinc-100"
             onClick={() => onOpenFolder(parentFolderId)}
             aria-label="상위 폴더로 이동"
             title="상위 폴더로 이동"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-4 w-4" />
           </button>
         ) : null}
 
@@ -325,31 +327,64 @@ export function ArchiveFolderExplorer({
         })}
 
         {destinationPicker ? (
-          <div className="flex min-h-[82px] items-center gap-2 rounded-[10px] bg-zinc-50 p-3">
-            <Input
-              className="h-9 min-w-0 flex-1 border-0 bg-white text-sm font-semibold text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  createFolder();
-                }
-              }}
-              placeholder="새 폴더"
-            />
+          creatingFolder ? (
+            <div className="flex h-11 min-h-0 items-center gap-1.5 self-start rounded-[10px] bg-zinc-50 px-2">
+              <Input
+                className="h-8 min-w-0 flex-1 border-0 bg-white text-xs font-semibold text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    createFolder();
+                  }
+                  if (event.key === "Escape") {
+                    setDraft("");
+                    setCreatingFolder(false);
+                  }
+                }}
+                placeholder="폴더명"
+                autoFocus
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={createFolder}
+                disabled={!draft.trim()}
+                aria-label="새 폴더 만들기"
+                title="새 폴더 만들기"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-950"
+                onClick={() => {
+                  setDraft("");
+                  setCreatingFolder(false);
+                }}
+                aria-label="새 폴더 입력 닫기"
+                title="닫기"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : (
             <Button
               type="button"
               size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={createFolder}
-              disabled={!draft.trim()}
+              variant="outline"
+              className="h-11 w-11 self-start border-0 bg-zinc-50 text-zinc-900 hover:bg-zinc-100"
+              onClick={() => setCreatingFolder(true)}
               aria-label="새 폴더 만들기"
               title="새 폴더 만들기"
             >
               <Plus className="h-4 w-4" />
             </Button>
-          </div>
+          )
         ) : null}
 
         {visibleBatches.map((batch) => {
