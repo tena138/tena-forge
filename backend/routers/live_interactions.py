@@ -21,7 +21,8 @@ router = APIRouter(prefix="/api/live-interactions", tags=["live-interactions"])
 LIVE_LECTURE_EVENT_METADATA_KEY = "live_lecture"
 LIVE_LECTURE_CLASS_DEFAULTS_METADATA_KEY = "live_lecture_class_defaults"
 MAX_LIVE_SLIDE_BYTES = 80 * 1024 * 1024
-DEFAULT_LIVE_NOTES = "수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리"
+LEGACY_DEFAULT_LIVE_NOTES = "수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리"
+DEFAULT_LIVE_NOTES = ""
 
 
 class LiveInteractionSettingsPayload(BaseModel):
@@ -74,7 +75,8 @@ def _live_slide_root(academy_id: str, event_id: UUID) -> Path:
 def _clean_live_notes(value: str | None) -> str:
     if value is None:
         return ""
-    return str(value).replace("\r\n", "\n").replace("\r", "\n")[:10000]
+    cleaned = str(value).replace("\r\n", "\n").replace("\r", "\n")[:10000]
+    return "" if cleaned.strip() == LEGACY_DEFAULT_LIVE_NOTES.strip() else cleaned
 
 
 def _normalize_slide(slide: dict | LiveLectureSlidePayload | None) -> dict | None:
@@ -222,7 +224,7 @@ def _live_session_payload(db: Session, academy_id: str, event: ClassScheduleEven
         "class_default_initialized": has_class_default or created_class_default,
         "created_class_default": created_class_default,
         "lecture": {
-            "notes": notes,
+            "notes": _clean_live_notes(notes),
             "slide_pdf": _public_slide(event_live.get("slide_pdf") if isinstance(event_live, dict) else None, academy_id),
             "page_number": max(1, int(page_number or 1)),
             "updated_at": event_live.get("updated_at") if isinstance(event_live.get("updated_at"), str) else class_default.get("updated_at") if isinstance(class_default.get("updated_at"), str) else None,

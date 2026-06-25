@@ -39,6 +39,8 @@ type SlidePdf = {
   size: number;
 };
 
+const LEGACY_DEFAULT_LIVE_NOTES = "수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리";
+
 type PdfPageSize = {
   width: number;
   height: number;
@@ -106,6 +108,11 @@ function isPdfFile(file: File) {
 
 function isBlobUrl(value?: string | null) {
   return Boolean(value && value.startsWith("blob:"));
+}
+
+function normalizeLectureNotes(value?: string | null) {
+  const text = value || "";
+  return text.trim() === LEGACY_DEFAULT_LIVE_NOTES.trim() ? "" : text;
 }
 
 function slidePdfFromSession(session: LiveLectureSession): SlidePdf | null {
@@ -536,7 +543,7 @@ function LiveLectureContent() {
   const [sessionNotice, setSessionNotice] = useState("");
   const [slideUploadProgress, setSlideUploadProgress] = useState(0);
   const [slidePdf, setSlidePdf] = useState<SlidePdf | null>(null);
-  const [notes, setNotes] = useState("수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리");
+  const [notes, setNotes] = useState("");
   const [sharing, setSharing] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [recordingMode, setRecordingMode] = useState<RecordingMode>("audio");
@@ -558,15 +565,16 @@ function LiveLectureContent() {
 
   function applyLectureSession(session: LiveLectureSession) {
     const nextSlide = slidePdfFromSession(session);
+    const nextNotes = normalizeLectureNotes(session.lecture.notes);
     setSessionEvent(session.event);
-    setNotes(session.lecture.notes);
+    setNotes(nextNotes);
     setSlidePage(session.lecture.page_number || 1);
     setSlidePdf((current) => {
       if (current?.url && isBlobUrl(current.url)) URL.revokeObjectURL(current.url);
       return nextSlide;
     });
     savedSessionRef.current = {
-      notes: session.lecture.notes,
+      notes: nextNotes,
       pageNumber: session.lecture.page_number || 1,
     };
     setSessionLoaded(true);
@@ -819,14 +827,12 @@ function LiveLectureContent() {
 
         <aside className="flex min-w-0 flex-col gap-3">
           <div className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-black text-zinc-950">발표자 메모</div>
-              {sessionSaving ? <span className="text-[11px] font-black text-zinc-400">저장 중</span> : null}
-            </div>
+            {sessionSaving ? <div className="mb-2 text-right text-[11px] font-black text-zinc-400">저장 중</div> : null}
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              className="mt-3 min-h-[18rem] w-full resize-none rounded-[8px] bg-zinc-100 p-3 text-sm font-medium leading-6 text-zinc-800 outline-none focus:ring-2 focus:ring-black/10"
+              placeholder="발표자 메모"
+              className="min-h-[18rem] w-full resize-none rounded-[8px] bg-zinc-100 p-3 text-sm font-medium leading-6 text-zinc-800 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
             />
           </div>
         </aside>
