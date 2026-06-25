@@ -955,6 +955,7 @@ const ACADEMY_TIMELINE_END_MINUTES = 24 * 60;
 const ACADEMY_TIMELINE_STEP_MINUTES = 10;
 const ACADEMY_TIMELINE_PX_PER_MINUTE = 0.48;
 const ACADEMY_MIN_EVENT_DURATION_MINUTES = 10;
+const ACADEMY_TIME_DRAG_THRESHOLD_PX = 6;
 
 type AcademyTimeDragMode = "move" | "resize-start" | "resize-end";
 type AcademyTimeEditScope = "single" | "future";
@@ -965,6 +966,9 @@ type AcademyTimeEditorState = {
   endsAt: string | null;
   mode: AcademyTimeDragMode | null;
   pointerOffsetMinutes: number;
+  pointerStartX?: number;
+  pointerStartY?: number;
+  dragActive?: boolean;
   dirty: boolean;
 };
 
@@ -1333,7 +1337,7 @@ function AcademySchedulePanel() {
     }
   }
 
-  function openTimeEditor(event: ScheduleEvent, dateKey: string, mode: AcademyTimeDragMode | null = null, pointerOffsetMinutes?: number) {
+  function openTimeEditor(event: ScheduleEvent, dateKey: string, mode: AcademyTimeDragMode | null = null, pointerOffsetMinutes?: number, pointerStart?: { x: number; y: number }) {
     const duration = academyEventDurationMinutes(event);
     const sourceStart = academyMinutesOfDay(event.starts_at);
     const startMinutes = academyClampMinutes(
@@ -1351,6 +1355,9 @@ function AcademySchedulePanel() {
       endsAt: academyDateTimeFromMinutes(dateKey, endMinutes),
       mode,
       pointerOffsetMinutes: pointerOffsetMinutes ?? Math.min(duration / 2, 60),
+      pointerStartX: pointerStart?.x,
+      pointerStartY: pointerStart?.y,
+      dragActive: !pointerStart,
       dirty: false,
     });
   }
@@ -1358,6 +1365,10 @@ function AcademySchedulePanel() {
   function updateTimeEditorFromPointer(clientX: number, clientY: number) {
     setTimeEditor((current) => {
       if (!current?.mode) return current;
+      const thresholdApplies = current.mode === "move" && current.pointerStartX != null && current.pointerStartY != null && !current.dragActive;
+      const dragDistance = thresholdApplies ? Math.hypot(clientX - current.pointerStartX!, clientY - current.pointerStartY!) : ACADEMY_TIME_DRAG_THRESHOLD_PX;
+      if (thresholdApplies && dragDistance < ACADEMY_TIME_DRAG_THRESHOLD_PX) return current;
+
       let dateKey = current.dateKey;
       const target = document.elementFromPoint(clientX, clientY);
       const dateTarget = target instanceof HTMLElement ? target.closest<HTMLElement>("[data-academy-date]") : null;
@@ -1388,6 +1399,7 @@ function AcademySchedulePanel() {
 
       return {
         ...current,
+        dragActive: true,
         dateKey,
         startsAt: nextStartsAt,
         endsAt: nextEndsAt,
@@ -1592,7 +1604,7 @@ function AcademySchedulePanel() {
                                   pointerEvent.preventDefault();
                                   pointerEvent.stopPropagation();
                                   setError("");
-                                  openTimeEditor(event, key, "move", Math.min(academyEventDurationMinutes(event) / 2, 60));
+                                  openTimeEditor(event, key, "move", Math.min(academyEventDurationMinutes(event) / 2, 60), { x: pointerEvent.clientX, y: pointerEvent.clientY });
                                 }}
                                 onKeyDown={(keyEvent) => {
                                   if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
@@ -1740,6 +1752,9 @@ function AcademySchedulePanel() {
                   ...current,
                   mode: "move",
                   pointerOffsetMinutes: Math.max(0, pointerMinutes - academyMinutesOfDay(current.startsAt)),
+                  pointerStartX: event.clientX,
+                  pointerStartY: event.clientY,
+                  dragActive: false,
                 } : current);
               }}
             >
