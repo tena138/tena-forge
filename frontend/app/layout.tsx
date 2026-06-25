@@ -10,12 +10,12 @@ export const metadata: Metadata = {
   title: "Tena Forge",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=5", sizes: "any" },
-      { url: "/icon-192.png?v=5", type: "image/png", sizes: "192x192" },
-      { url: "/tenaforge-favicon.png?v=5", type: "image/png", sizes: "512x512" },
+      { url: "/favicon.ico?v=6", sizes: "any" },
+      { url: "/icon-192.png?v=6", type: "image/png", sizes: "192x192" },
+      { url: "/tenaforge-favicon.png?v=6", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: "/favicon.ico?v=5",
-    apple: "/apple-touch-icon.png?v=5",
+    shortcut: "/favicon.ico?v=6",
+    apple: "/apple-touch-icon.png?v=6",
   },
   description: "가장 강력한 교육 컨텐츠 툴",
   openGraph: {

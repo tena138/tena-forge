@@ -71,7 +71,6 @@ const sections = [
       { href: "/academy?panel=operations", label: "캘린더", icon: CalendarDays },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
       { href: "/student-management/tuition", label: "수강료", icon: ReceiptText },
-      { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
     ],
   },
   {
@@ -89,6 +88,7 @@ const sections = [
       { href: "/templates", label: "템플릿 허브", icon: LayoutTemplate },
       { href: "/marketplace/problem-sets", label: "문항 세트 마켓", icon: Store },
       { href: "/marketplace/books", label: "교재 마켓", icon: BookOpen },
+      { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
     ],
   },
   {
