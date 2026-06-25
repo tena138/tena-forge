@@ -148,6 +148,7 @@ export type LiveLectureSession = {
   created_class_default?: boolean;
   lecture: {
     notes: string;
+    page_notes?: Record<string, string> | null;
     slide_pdf?: LiveLectureSlidePdf | null;
     page_number: number;
     updated_at?: string | null;
@@ -156,6 +157,7 @@ export type LiveLectureSession = {
 
 export type LiveLectureSessionSavePayload = Partial<{
   notes: string | null;
+  page_notes: Record<string, string> | null;
   page_number: number | null;
   slide_pdf: LiveLectureSlidePdf | null;
 }>;

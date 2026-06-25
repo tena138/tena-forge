@@ -38,6 +38,7 @@ class LiveLectureSlidePayload(BaseModel):
 
 class LiveLectureSessionPayload(BaseModel):
     notes: str | None = None
+    page_notes: dict[str, str] | None = None
     page_number: int | None = Field(default=None, ge=1, le=10000)
     slide_pdf: LiveLectureSlidePayload | None = None
 
@@ -77,6 +78,23 @@ def _clean_live_notes(value: str | None) -> str:
         return ""
     cleaned = str(value).replace("\r\n", "\n").replace("\r", "\n")[:10000]
     return "" if cleaned.strip() == LEGACY_DEFAULT_LIVE_NOTES.strip() else cleaned
+
+
+def _clean_live_page_notes(value: dict | None) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, str] = {}
+    for raw_page, raw_note in value.items():
+        try:
+            page = int(raw_page)
+        except (TypeError, ValueError):
+            continue
+        if page < 1 or page > 10000:
+            continue
+        note = _clean_live_notes(str(raw_note or ""))
+        if note.strip():
+            cleaned[str(page)] = note
+    return cleaned
 
 
 def _normalize_slide(slide: dict | LiveLectureSlidePayload | None) -> dict | None:
@@ -216,6 +234,7 @@ def _live_session_payload(db: Session, academy_id: str, event: ClassScheduleEven
     has_class_default = bool(class_default)
     source = "event" if has_event_live else "class_default" if has_class_default else "empty"
     notes = event_live.get("notes") if isinstance(event_live.get("notes"), str) else class_default.get("notes") if isinstance(class_default.get("notes"), str) else DEFAULT_LIVE_NOTES
+    page_notes = event_live.get("page_notes") if isinstance(event_live.get("page_notes"), dict) else class_default.get("page_notes") if isinstance(class_default.get("page_notes"), dict) else {}
     page_number = event_live.get("page_number") if isinstance(event_live.get("page_number"), int) else 1
     return {
         "event": _event_payload(event, class_row, datetime.utcnow()),
@@ -225,6 +244,7 @@ def _live_session_payload(db: Session, academy_id: str, event: ClassScheduleEven
         "created_class_default": created_class_default,
         "lecture": {
             "notes": _clean_live_notes(notes),
+            "page_notes": _clean_live_page_notes(page_notes),
             "slide_pdf": _public_slide(event_live.get("slide_pdf") if isinstance(event_live, dict) else None, academy_id),
             "page_number": max(1, int(page_number or 1)),
             "updated_at": event_live.get("updated_at") if isinstance(event_live.get("updated_at"), str) else class_default.get("updated_at") if isinstance(class_default.get("updated_at"), str) else None,
@@ -315,6 +335,8 @@ def update_live_lecture_session(event_id: UUID, payload: LiveLectureSessionPaylo
 
     if "notes" in fields:
         live["notes"] = _clean_live_notes(payload.notes)
+    if "page_notes" in fields:
+        live["page_notes"] = _clean_live_page_notes(payload.page_notes)
     if "page_number" in fields and payload.page_number:
         live["page_number"] = payload.page_number
     if "slide_pdf" in fields:
@@ -336,6 +358,7 @@ def update_live_lecture_session(event_id: UUID, payload: LiveLectureSessionPaylo
     if class_id not in class_defaults and "notes" in fields:
         class_defaults[class_id] = {
             "notes": _clean_live_notes(payload.notes) or DEFAULT_LIVE_NOTES,
+            "page_notes": _clean_live_page_notes(payload.page_notes) if "page_notes" in fields else {},
             "updated_by": current_user_id(request),
             "updated_at": now,
         }

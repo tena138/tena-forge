@@ -43,6 +43,8 @@ type SlidePdf = {
   size: number;
 };
 
+type LecturePageNotes = Record<string, string>;
+
 const LEGACY_DEFAULT_LIVE_NOTES = "수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리";
 
 type PdfPageSize = {
@@ -109,6 +111,28 @@ function isBlobUrl(value?: string | null) {
 function normalizeLectureNotes(value?: string | null) {
   const text = value || "";
   return text.trim() === LEGACY_DEFAULT_LIVE_NOTES.trim() ? "" : text;
+}
+
+function normalizeLecturePageNotes(value?: Record<string, string> | null, legacyNotes?: string | null): LecturePageNotes {
+  const normalized: LecturePageNotes = {};
+  if (value && typeof value === "object") {
+    Object.entries(value).forEach(([rawPage, rawNote]) => {
+      const page = Number(rawPage);
+      if (!Number.isInteger(page) || page < 1) return;
+      const note = normalizeLectureNotes(String(rawNote || ""));
+      if (note.trim()) normalized[String(page)] = note;
+    });
+    return normalized;
+  }
+  const legacy = normalizeLectureNotes(legacyNotes);
+  return legacy.trim() ? { "1": legacy } : normalized;
+}
+
+function lecturePageNotesEqual(a: LecturePageNotes, b: LecturePageNotes) {
+  const aKeys = Object.keys(a).sort((left, right) => Number(left) - Number(right));
+  const bKeys = Object.keys(b).sort((left, right) => Number(left) - Number(right));
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key, index) => key === bKeys[index] && a[key] === b[key]);
 }
 
 function slidePdfFromSession(session: LiveLectureSession): SlidePdf | null {
@@ -677,7 +701,7 @@ function LiveLectureContent() {
   const [sessionNotice, setSessionNotice] = useState("");
   const [slideUploadProgress, setSlideUploadProgress] = useState(0);
   const [slidePdf, setSlidePdf] = useState<SlidePdf | null>(null);
-  const [notes, setNotes] = useState("");
+  const [pageNotes, setPageNotes] = useState<LecturePageNotes>({});
   const [sharing, setSharing] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [recordingMode, setRecordingMode] = useState<RecordingMode>("audio");
@@ -689,26 +713,27 @@ function LiveLectureContent() {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const slidePdfInputRef = useRef<HTMLInputElement | null>(null);
-  const savedSessionRef = useRef({ notes: "", pageNumber: 1 });
+  const savedSessionRef = useRef<{ pageNotes: LecturePageNotes; pageNumber: number }>({ pageNotes: {}, pageNumber: 1 });
 
   const activeEvent = sessionEvent || event;
   const sessionTitle = activeEvent?.title || "즉시 강의";
   const sessionClassName = activeEvent?.class_name || "클래스 선택 없음";
   const storageKey = liveShareKey(eventId, classId);
   const shareUrl = slideShareUrl(eventId, classId);
+  const currentPageNote = pageNotes[String(slidePage)] || "";
 
   function applyLectureSession(session: LiveLectureSession) {
     const nextSlide = slidePdfFromSession(session);
-    const nextNotes = normalizeLectureNotes(session.lecture.notes);
+    const nextPageNotes = normalizeLecturePageNotes(session.lecture.page_notes, session.lecture.notes);
     setSessionEvent(session.event);
-    setNotes(nextNotes);
+    setPageNotes(nextPageNotes);
     setSlidePage(session.lecture.page_number || 1);
     setSlidePdf((current) => {
       if (current?.url && isBlobUrl(current.url)) URL.revokeObjectURL(current.url);
       return nextSlide;
     });
     savedSessionRef.current = {
-      notes: nextNotes,
+      pageNotes: nextPageNotes,
       pageNumber: session.lecture.page_number || 1,
     };
     setSessionLoaded(true);
@@ -724,7 +749,7 @@ function LiveLectureContent() {
     if (!eventId) {
       setSessionEvent(null);
       setSessionLoaded(true);
-      savedSessionRef.current = { notes, pageNumber: slidePage };
+      savedSessionRef.current = { pageNotes: {}, pageNumber: 1 };
       return;
     }
     let cancelled = false;
@@ -749,13 +774,14 @@ function LiveLectureContent() {
 
   useEffect(() => {
     if (!eventId || !sessionLoaded || shareOnly) return;
-    if (notes === savedSessionRef.current.notes && slidePage === savedSessionRef.current.pageNumber) return;
+    if (lecturePageNotesEqual(pageNotes, savedSessionRef.current.pageNotes) && slidePage === savedSessionRef.current.pageNumber) return;
     const timer = window.setTimeout(async () => {
       setSessionSaving(true);
       try {
-        const session = await saveLiveLectureSession(eventId, { notes, page_number: slidePage });
+        const session = await saveLiveLectureSession(eventId, { notes: pageNotes[String(slidePage)] || "", page_notes: pageNotes, page_number: slidePage });
+        const nextPageNotes = normalizeLecturePageNotes(session.lecture.page_notes, session.lecture.notes);
         savedSessionRef.current = {
-          notes: session.lecture.notes,
+          pageNotes: nextPageNotes,
           pageNumber: session.lecture.page_number || slidePage,
         };
         setSessionEvent(session.event);
@@ -767,7 +793,7 @@ function LiveLectureContent() {
       }
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [eventId, notes, sessionLoaded, shareOnly, slidePage]);
+  }, [eventId, pageNotes, sessionLoaded, shareOnly, slidePage]);
 
   useEffect(() => {
     if (!sharing) return;
@@ -940,18 +966,36 @@ function LiveLectureContent() {
             onDragStateChange={setSlideDragActive}
           />
           <input ref={slidePdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleSlidePdfInput} />
+          <div className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="text-sm font-black text-zinc-950">발표자 메모</div>
+              <div className="flex items-center gap-2 text-[11px] font-black text-zinc-400">
+                {sessionSaving ? <span>저장 중</span> : null}
+                <span>{slidePage}p</span>
+              </div>
+            </div>
+            <textarea
+              value={currentPageNote}
+              onChange={(event) => {
+                const value = event.target.value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+                setPageNotes((current) => {
+                  const key = String(slidePage);
+                  const next = { ...current };
+                  if (value.trim()) {
+                    next[key] = value;
+                  } else {
+                    delete next[key];
+                  }
+                  return next;
+                });
+              }}
+              placeholder={`${slidePage}페이지 메모`}
+              className="min-h-[10rem] w-full resize-none rounded-[8px] bg-zinc-100 p-3 text-sm font-medium leading-6 text-zinc-800 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
+            />
+          </div>
         </div>
 
         <aside className="flex min-w-0 flex-col gap-3">
-          <div className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-            {sessionSaving ? <div className="mb-2 text-right text-[11px] font-black text-zinc-400">저장 중</div> : null}
-            <textarea
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="발표자 메모"
-              className="min-h-[18rem] w-full resize-none rounded-[8px] bg-zinc-100 p-3 text-sm font-medium leading-6 text-zinc-800 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
-            />
-          </div>
           <ClassLearningSnapshot classId={classId || activeEvent?.class_id || ""} />
         </aside>
       </section>
