@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { AcademyProfile } from "@/lib/auth-api";
 import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
+import { publishCoAgentStatusMessage } from "@/lib/coAgentStatus";
 import { formatKstDateTime } from "@/lib/datetime";
 import {
   ScheduleRecurrenceUnit,
@@ -1225,6 +1226,14 @@ function AcademySchedulePanel() {
     }
   }, [events, selectedEventId]);
 
+  useEffect(() => {
+    if (error) {
+      publishCoAgentStatusMessage(error, { tone: "error" });
+      return;
+    }
+    if (notice) publishCoAgentStatusMessage(notice, { tone: "done" });
+  }, [error, notice]);
+
   const academyModeActive = Boolean(activeWorkspaceId && activeWorkspaceId !== "student") || profile?.account_type === "academy";
 
   if (!academyModeActive && profile?.account_type === "student") {
@@ -1517,13 +1526,6 @@ function AcademySchedulePanel() {
 
   return (
     <div className="relative space-y-4">
-      {(notice || error) ? (
-        <div className="rounded-[10px] bg-zinc-100 px-4 py-3 text-sm font-semibold">
-          {notice ? <span className="text-zinc-800">{notice}</span> : null}
-          {error ? <span className="text-zinc-700">{error}</span> : null}
-        </div>
-      ) : null}
-
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
         <Card className="bg-white">
           <CardContent className="p-3 sm:p-4">

@@ -35,6 +35,7 @@ import {
   writeStoredCoAgentChatMessages,
 } from "@/lib/coAgentChatHistory";
 import type { CoAgentWorkflow } from "@/lib/coAgent";
+import { CO_AGENT_STATUS_MESSAGE_EVENT, type CoAgentStatusMessage } from "@/lib/coAgentStatus";
 import {
   areCoAgentWorkflowsEqual,
   buildErrorCoAgentWorkflow,
@@ -137,6 +138,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
   const [chatError, setChatError] = useState("");
   const [assistantTypingKey, setAssistantTypingKey] = useState(0);
   const [workflow, setWorkflow] = useState<CoAgentWorkflow | null>(() => readStoredCoAgentWorkflow());
+  const [transientStatus, setTransientStatus] = useState<CoAgentStatusMessage | null>(null);
   const lastNeedsInputOpenKeyRef = useRef<string | null>(null);
 
   const activeStatusData = activeStatus && (activeStatus.status === "pending" || activeStatus.status === "processing") ? activeStatus : null;
@@ -206,8 +208,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
         : workflow?.status === "created"
           ? "작업 결과를 말풍선에 정리했습니다."
           : workflow?.status === "running"
-            ? "코파일럿이 작업 중입니다."
-            : report.message;
+          ? "코파일럿이 작업 중입니다."
+          : transientStatus?.message || report.message;
   const shouldAnimateAssistantMessage = chatOpen && !chatLoading && Boolean(latestAssistantMessage) && workflow?.status === "created";
   const typedReportMessage = useTypewriterText(statusMessage, assistantTypingKey, !prefersReducedMotion && shouldAnimateAssistantMessage);
   const primaryChatAction = chatActions.find((action) => action.href);
@@ -267,6 +269,8 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     setNotifications(readBatchNotifications());
     setActiveBatchId(readActiveBatch());
 
+    let transientTimer: number | null = null;
+
     function handleNotificationChange() {
       setNotifications(readBatchNotifications());
     }
@@ -287,12 +291,31 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
       }
     }
 
+    function handleTransientStatus(event: Event) {
+      const customEvent = event as CustomEvent<CoAgentStatusMessage>;
+      const message = customEvent.detail?.message?.trim();
+      if (!message) return;
+      setTransientStatus({
+        message,
+        tone: customEvent.detail?.tone || "idle",
+        durationMs: customEvent.detail?.durationMs,
+      });
+      if (transientTimer) window.clearTimeout(transientTimer);
+      transientTimer = window.setTimeout(() => {
+        setTransientStatus(null);
+        transientTimer = null;
+      }, customEvent.detail?.durationMs || 7000);
+    }
+
     window.addEventListener(BATCH_NOTIFICATION_EVENT, handleNotificationChange);
     window.addEventListener(ACTIVE_BATCH_EVENT, handleActiveBatchChange);
+    window.addEventListener(CO_AGENT_STATUS_MESSAGE_EVENT, handleTransientStatus);
     window.addEventListener("storage", handleStorage);
     return () => {
+      if (transientTimer) window.clearTimeout(transientTimer);
       window.removeEventListener(BATCH_NOTIFICATION_EVENT, handleNotificationChange);
       window.removeEventListener(ACTIVE_BATCH_EVENT, handleActiveBatchChange);
+      window.removeEventListener(CO_AGENT_STATUS_MESSAGE_EVENT, handleTransientStatus);
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
