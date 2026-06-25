@@ -1,10 +1,9 @@
 "use client";
 
-import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type KeyboardEvent, type MouseEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowUpRight,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
@@ -43,6 +42,7 @@ type ViewMode = "grid" | "list";
 type ProblemSort = "source_order" | "newest" | "oldest" | "number_asc" | "number_desc";
 type BatchFolder = { id: string; name: string; batchIds: string[]; createdAt: string; parentId: string | null; order: number };
 type BatchFolderContextMenu = { folderId: string; x: number; y: number } | null;
+type ProblemContextMenu = { problem: Problem; x: number; y: number } | null;
 type BatchFolderDragState = {
   kind: "folder" | "batch";
   folderId: string;
@@ -265,11 +265,8 @@ function sourceLabel(problem: Problem) {
   return problem.tags?.source || problem.source_label || "출처 없음";
 }
 
-function stopInteractiveEvent(event: SyntheticEvent) {
-  event.stopPropagation();
-}
-
 function ProblemsBrowser() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const paramsKey = searchParams.toString();
   const [data, setData] = useState<ProblemPage>({ items: [], total: 0, page: 1, limit: 24, pages: 1 });
@@ -291,6 +288,7 @@ function ProblemsBrowser() {
   const [batchFolders, setBatchFolders] = useState<BatchFolder[]>([]);
   const [folderNameDraft, setFolderNameDraft] = useState("");
   const [batchFolderContextMenu, setBatchFolderContextMenu] = useState<BatchFolderContextMenu>(null);
+  const [problemContextMenu, setProblemContextMenu] = useState<ProblemContextMenu>(null);
   const [batchFolderDrag, setBatchFolderDrag] = useState<BatchFolderDragState | null>(null);
   const batchFolderDragRef = useRef<BatchFolderDragState | null>(null);
   const folderDragSuppressClickRef = useRef(false);
@@ -475,6 +473,19 @@ function ProblemsBrowser() {
       window.removeEventListener("scroll", closeMenu, true);
     };
   }, [batchFolderContextMenu]);
+
+  useEffect(() => {
+    if (!problemContextMenu) return;
+    const closeMenu = () => setProblemContextMenu(null);
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("keydown", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("keydown", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [problemContextMenu]);
 
   useEffect(() => {
     setSearch(searchParams.get("search") || "");
@@ -726,6 +737,7 @@ function ProblemsBrowser() {
 
   function handleBatchFolderContextMenu(event: MouseEvent, folderId: string) {
     event.preventDefault();
+    setProblemContextMenu(null);
     setBatchFolderContextMenu({ folderId, x: event.clientX, y: event.clientY });
   }
 
@@ -984,6 +996,30 @@ function ProblemsBrowser() {
     toggleProblemSelection(problem);
   }
 
+  function problemDetailHref(problem: Problem) {
+    return `/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`;
+  }
+
+  function openProblemDetail(problem: Problem) {
+    router.push(problemDetailHref(problem));
+  }
+
+  function handleProblemContextMenu(event: MouseEvent<HTMLElement>, problem: Problem) {
+    event.preventDefault();
+    event.stopPropagation();
+    setBatchFolderContextMenu(null);
+    setSelectedProblemCache((current) => (current[problem.id] ? current : { ...current, [problem.id]: problem }));
+    setProblemContextMenu({ problem, x: event.clientX, y: event.clientY });
+  }
+
+  function requestDeleteProblem(problem: Problem) {
+    setSelectedProblemCache((current) => (current[problem.id] ? current : { ...current, [problem.id]: problem }));
+    setSelectedIds([problem.id]);
+    setDeleteError("");
+    setDeleteConfirmOpen(true);
+    setProblemContextMenu(null);
+  }
+
   function handleProblemBlockKeyDown(event: KeyboardEvent<HTMLElement>, problem: Problem) {
     if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") return;
@@ -1173,7 +1209,6 @@ function ProblemsBrowser() {
     const tone = difficultyTone(problem.tags?.difficulty);
     const accentColor = problemAccentColor(problem, tone.color);
     const showSubject = subjects.length === 0 && problem.tags?.subject;
-    const detailHref = `/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`;
     return (
       <article
         key={problem.id}
@@ -1183,6 +1218,8 @@ function ProblemsBrowser() {
         aria-pressed={selected}
         aria-label={`${problem.problem_number}번 문항 ${selected ? "선택 해제" : "선택"}`}
         onClick={() => handleProblemBlockClick(problem)}
+        onDoubleClick={() => openProblemDetail(problem)}
+        onContextMenu={(event) => handleProblemContextMenu(event, problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
           "group relative min-h-[198px] cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
@@ -1190,34 +1227,7 @@ function ProblemsBrowser() {
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-        <Link
-          className="absolute right-2.5 top-2.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20"
-          href={detailHref}
-          draggable={false}
-          onPointerDown={stopInteractiveEvent}
-          onClick={(event) => {
-            stopInteractiveEvent(event);
-            if (suppressClick) event.preventDefault();
-          }}
-          aria-label={`${problem.problem_number}번 상세 보기`}
-        >
-          <ArrowUpRight className="h-3.5 w-3.5" />
-        </Link>
-        <button
-          type="button"
-          className="absolute right-2.5 top-10 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:cursor-wait disabled:opacity-60"
-          onPointerDown={stopInteractiveEvent}
-          onClick={(event) => {
-            stopInteractiveEvent(event);
-            void duplicateProblem(problem);
-          }}
-          disabled={duplicatingId === problem.id}
-          aria-label={`${problem.problem_number}번 문항 복제`}
-          title="문항 복제"
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-        <div className="flex h-full flex-col px-3 pb-3 pl-5 pr-10 pt-3">
+        <div className="flex h-full flex-col px-3 pb-3 pl-5 pt-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="line-clamp-1 text-[10px] font-medium leading-[14px] text-muted-foreground">{sourceLabel(problem)}</div>
@@ -1225,7 +1235,7 @@ function ProblemsBrowser() {
             {!problem.tags?.difficulty ? <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold", tone.badge)}>미지정</span> : null}
           </div>
 
-          <MathText className="mt-2.5 line-clamp-5 text-[13.5px] font-medium leading-[1.55] text-foreground" value={problem.problem_text} />
+          <MathText className="mt-2.5 line-clamp-6 text-[13.5px] font-medium leading-[1.55] text-foreground" value={problem.problem_text} />
 
           <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3 text-[10px] font-medium text-muted-foreground">
             {showSubject ? <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-700">{problem.tags?.subject}</span> : null}
@@ -1248,7 +1258,6 @@ function ProblemsBrowser() {
     const selected = selectedIds.includes(problem.id);
     const tone = difficultyTone(problem.tags?.difficulty);
     const accentColor = problemAccentColor(problem, tone.color);
-    const detailHref = `/problems/${problem.id}${detailContextQuery ? `?${detailContextQuery}` : ""}`;
     return (
       <article
         key={problem.id}
@@ -1258,6 +1267,8 @@ function ProblemsBrowser() {
         aria-pressed={selected}
         aria-label={`${problem.problem_number}번 문항 ${selected ? "선택 해제" : "선택"}`}
         onClick={() => handleProblemBlockClick(problem)}
+        onDoubleClick={() => openProblemDetail(problem)}
+        onContextMenu={(event) => handleProblemContextMenu(event, problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
         className={cn(
           "relative cursor-pointer overflow-hidden rounded-lg bg-white transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20",
@@ -1265,7 +1276,7 @@ function ProblemsBrowser() {
         )}
       >
         <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-        <div className="grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto_auto_36px_36px] items-start gap-3 py-3 pl-6 pr-3">
+        <div className="grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-3 py-3 pl-6 pr-3">
           <div className="min-w-0">
             <div className="mb-0.5 line-clamp-1 text-[11px] font-medium text-muted-foreground">{sourceLabel(problem)}</div>
             <MathText className="line-clamp-1 text-[15px] font-medium leading-[1.5] text-foreground" value={problem.problem_text} />
@@ -1274,33 +1285,6 @@ function ProblemsBrowser() {
             {pageLabel(problem)} · {problemTypeLabel(problem)}{problem.has_visual ? " · 이미지" : ""}
           </div>
           <span className={cn("whitespace-nowrap rounded border px-2 py-1 text-[11px] font-semibold", tone.badge)}>{tone.label}</span>
-          <Link
-            href={detailHref}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/20"
-            draggable={false}
-            onPointerDown={stopInteractiveEvent}
-            onClick={(event) => {
-              stopInteractiveEvent(event);
-              if (suppressClick) event.preventDefault();
-            }}
-            aria-label={`${problem.problem_number}번 상세 보기`}
-          >
-            <ArrowUpRight className="h-4 w-4" />
-          </Link>
-          <button
-            type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 disabled:cursor-wait disabled:opacity-60"
-            onPointerDown={stopInteractiveEvent}
-            onClick={(event) => {
-              stopInteractiveEvent(event);
-              void duplicateProblem(problem);
-            }}
-            disabled={duplicatingId === problem.id}
-            aria-label={`${problem.problem_number}번 문항 복제`}
-            title="문항 복제"
-          >
-            <Copy className="h-4 w-4" />
-          </button>
         </div>
       </article>
     );
@@ -1479,6 +1463,47 @@ function ProblemsBrowser() {
             >
               <Trash2 className="h-4 w-4" />
               폴더 삭제
+            </button>
+          </div>
+        ) : null}
+
+        {problemContextMenu ? (
+          <div
+            className="fixed z-50 w-44 overflow-hidden rounded-lg bg-white p-1 shadow-[0_18px_44px_rgba(15,15,15,0.14)] ring-1 ring-black/5"
+            style={{ left: problemContextMenu.x, top: problemContextMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 hover:text-zinc-950"
+              onClick={() => {
+                openProblemDetail(problemContextMenu.problem);
+                setProblemContextMenu(null);
+              }}
+            >
+              <Eye className="h-4 w-4 text-zinc-700" />
+              상세 보기
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:cursor-wait disabled:text-zinc-400"
+              disabled={duplicatingId === problemContextMenu.problem.id}
+              onClick={() => {
+                const problem = problemContextMenu.problem;
+                setProblemContextMenu(null);
+                void duplicateProblem(problem);
+              }}
+            >
+              <Copy className="h-4 w-4 text-zinc-700" />
+              복제
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100"
+              onClick={() => requestDeleteProblem(problemContextMenu.problem)}
+            >
+              <Trash2 className="h-4 w-4" />
+              삭제
             </button>
           </div>
         ) : null}
