@@ -216,9 +216,9 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
         />
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px] font-bold text-zinc-500">
-        <span>수업 시작 {timeText(startsAt)}</span>
-        <span>캘린더 기준 {lectureDurationMinutes}분</span>
-        <span>수업 종료 {timeText(endsAt)}</span>
+        <span>{timeText(startsAt)}</span>
+        <span>{lectureDurationMinutes}분</span>
+        <span>{timeText(endsAt)}</span>
       </div>
     </section>
   );
