@@ -1833,6 +1833,8 @@ def _targeted_answer_repair_page_indexes(
     metadata: list[dict[str, Any]],
     page_count: int,
     missing_problem_numbers: list[str],
+    neighbor_radius: int = 1,
+    fallback_tail_pages: int = 4,
 ) -> list[int]:
     target_numbers = {_number_key_or_none(number) for number in missing_problem_numbers}
     target_numbers.discard(None)
@@ -1856,8 +1858,9 @@ def _targeted_answer_repair_page_indexes(
 
     if exact_pages:
         expanded: set[int] = set()
+        radius = max(1, int(neighbor_radius or 1))
         for page_index in exact_pages:
-            for candidate in (page_index - 1, page_index, page_index + 1):
+            for candidate in range(page_index - radius, page_index + radius + 1):
                 if 0 <= candidate < page_count:
                     expanded.add(candidate)
         return sorted(expanded)
@@ -1865,12 +1868,15 @@ def _targeted_answer_repair_page_indexes(
     fallback = _mixed_answer_recovery_page_indexes(metadata, page_count)
     if page_count <= 6:
         return fallback
-    return sorted(set(fallback[-4:] or fallback))
+    tail_count = max(1, int(fallback_tail_pages or 4))
+    return sorted(set(fallback[-tail_count:] or fallback))
 
 
 def _targeted_answer_repair_prompt_note(
     missing_problem_payloads: list[dict[str, Any]],
     page_index: int | None = None,
+    attempt: int = 1,
+    max_attempts: int = 1,
 ) -> str:
     missing_numbers = [str(item.get("problem_number") or "").strip() for item in missing_problem_payloads if item.get("problem_number")]
     context_lines: list[str] = []
@@ -1889,10 +1895,12 @@ def _targeted_answer_repair_prompt_note(
     return (
         "Targeted missing-answer repair pass:\n"
         f"{page_scope}"
+        f"- Repair attempt {max(1, attempt)} of {max(1, max_attempts)}. Previous extraction and recovery passes still left these answers blank.\n"
         f"- Recover answers only for these still-unmatched problem numbers: {_compact_inventory_numbers(missing_numbers)}.\n"
         "- Return [] if this page does not explicitly show a final answer for one of those requested numbers.\n"
         "- Do not return answers for already matched problem numbers unless they are necessary to disambiguate a repeated number in the requested list.\n"
         "- If the requested number is the last visible solution on the page, inspect the bottom and continuation areas carefully before returning [].\n"
+        "- Check compact answer tables, answer-only rows, worked-solution final lines, and continuation text from the previous or next page before deciding the answer is absent.\n"
         "- If a worked solution contains the answer only in the final line, extract that final value as answer.\n"
         "- If the answer is an objective choice marker, keep the marker in answer and keep problem_number as the requested problem number.\n"
         "Requested problem context:\n"
@@ -2810,6 +2818,7 @@ def _solution_candidate_identity(solution: dict[str, Any]) -> tuple[str | None, 
 def _overlay_quick_answer_solutions(
     quick_solutions: list[dict[str, Any]],
     fallback_solutions: list[dict[str, Any]],
+    source_label: str = "quick_answer_table",
 ) -> list[dict[str, Any]]:
     if not quick_solutions:
         return fallback_solutions
@@ -2817,7 +2826,7 @@ def _overlay_quick_answer_solutions(
     quick_identities: set[tuple[str | None, str]] = set()
     for index, solution in enumerate(quick_solutions):
         copied = dict(solution)
-        copied["extraction_source"] = "quick_answer_table"
+        copied["extraction_source"] = source_label
         copied["_source_order"] = -1_000_000 + index
         identity = _solution_candidate_identity(copied)
         if identity:
@@ -2846,6 +2855,8 @@ def extract_mixed_pdf_answer_recovery(
     document_type_hints: list[dict[str, Any]] | None = None,
     problem_inventory: dict[str, Any] | None = None,
     target_problem_contexts: list[dict[str, Any]] | None = None,
+    target_repair_attempt: int = 1,
+    target_repair_max_attempts: int = 1,
 ) -> list[dict[str, Any]]:
     selected = sorted(set(index for index in page_indexes if 0 <= index < page_count))
     if not selected:
@@ -2883,7 +2894,12 @@ def extract_mixed_pdf_answer_recovery(
                 )
                 + (
                     "\n\n"
-                    + _targeted_answer_repair_prompt_note(target_problem_contexts, page_index_chunk[0] if len(page_index_chunk) == 1 else None)
+                    + _targeted_answer_repair_prompt_note(
+                        target_problem_contexts,
+                        page_index_chunk[0] if len(page_index_chunk) == 1 else None,
+                        target_repair_attempt,
+                        target_repair_max_attempts,
+                    )
                     if target_problem_contexts
                     else ""
                 )
@@ -2912,65 +2928,128 @@ def repair_missing_answer_matches_with_targeted_recovery(
     document_type_hints: list[dict[str, Any]] | None = None,
     problem_inventory: dict[str, Any] | None = None,
     progress_label: str = "누락 정답 재확인 중",
+    max_attempts: int = 3,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, int]:
-    current_score = _answer_match_score(problems, solutions)
+    initial_score = _answer_match_score(problems, solutions)
+    current_score = initial_score
+    working_solutions = solutions
+    working_total_units = total_units
     missing_contexts = [
-        item for item in (current_score.get("missing_answer_problems") or [])
+        item for item in (initial_score.get("missing_answer_problems") or [])
         if isinstance(item, dict) and item.get("problem_number")
     ]
     if not missing_contexts:
         return solutions, None, total_units
 
-    missing_numbers = [str(item["problem_number"]) for item in missing_contexts]
-    target_page_indexes = _targeted_answer_repair_page_indexes(page_metadata, source_page_count, missing_numbers)
-    if not target_page_indexes:
-        return solutions, {
-            "strategy": "targeted_missing_answer_repair",
-            "chosen": "current",
-            "reason": "no_target_pages",
-            "current": current_score,
-        }, total_units
+    attempt_limit = max(1, int(max_attempts or 1))
+    attempts: list[dict[str, Any]] = []
+    improved_once = False
+    no_target_pages = False
 
-    repair_units = max(len(target_page_indexes) * units_per_page, 1)
-    repair_total_units = total_units + repair_units
-    set_progress(batch_id, progress_label, total_units, repair_total_units)
-    recovery_metadata = _metadata_by_page(
-        _metadata_with_document_kind(page_metadata, "solution", set(target_page_indexes)),
-        "solution",
-    )
-    recovered_solutions = extract_mixed_pdf_answer_recovery(
-        source_path,
-        target_page_indexes,
-        source_page_count,
-        dpi,
-        batch_id,
-        offset=total_units,
-        total_units=repair_total_units,
-        units_per_page=units_per_page,
-        solution_page_metadata=recovery_metadata,
-        document_type_hints=document_type_hints,
-        problem_inventory=problem_inventory,
-        target_problem_contexts=missing_contexts,
-    )
-    recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
-    candidate_solutions = _overlay_quick_answer_solutions(recovered_solutions, solutions)
-    candidate_score = _answer_match_score(problems, candidate_solutions)
-    choose_candidate = (
-        int(candidate_score.get("missing_answer_count") or 0) < int(current_score.get("missing_answer_count") or 0)
-        or int(candidate_score.get("matched_answer_count") or 0) > int(current_score.get("matched_answer_count") or 0)
-    )
+    for attempt in range(1, attempt_limit + 1):
+        missing_contexts = [
+            item for item in (current_score.get("missing_answer_problems") or [])
+            if isinstance(item, dict) and item.get("problem_number")
+        ]
+        if not missing_contexts:
+            break
+
+        missing_numbers = [str(item["problem_number"]) for item in missing_contexts]
+        target_page_indexes = _targeted_answer_repair_page_indexes(
+            page_metadata,
+            source_page_count,
+            missing_numbers,
+            neighbor_radius=attempt,
+            fallback_tail_pages=4 + ((attempt - 1) * 2),
+        )
+        if not target_page_indexes:
+            no_target_pages = True
+            attempts.append(
+                {
+                    "attempt": attempt,
+                    "target_problem_numbers": missing_numbers,
+                    "target_page_indexes": [],
+                    "target_page_numbers": [],
+                    "recovered_answer_count": 0,
+                    "candidate_answer_count": _solution_answer_count(working_solutions),
+                    "candidate": current_score,
+                    "chosen": "current",
+                    "reason": "no_target_pages",
+                }
+            )
+            break
+
+        repair_units = max(len(target_page_indexes) * units_per_page, 1)
+        repair_total_units = working_total_units + repair_units
+        set_progress(batch_id, f"{progress_label} ({attempt}/{attempt_limit})", working_total_units, repair_total_units)
+        recovery_metadata = _metadata_by_page(
+            _metadata_with_document_kind(page_metadata, "solution", set(target_page_indexes)),
+            "solution",
+        )
+        recovered_solutions = extract_mixed_pdf_answer_recovery(
+            source_path,
+            target_page_indexes,
+            source_page_count,
+            dpi,
+            batch_id,
+            offset=working_total_units,
+            total_units=repair_total_units,
+            units_per_page=units_per_page,
+            solution_page_metadata=recovery_metadata,
+            document_type_hints=document_type_hints,
+            problem_inventory=problem_inventory,
+            target_problem_contexts=missing_contexts,
+            target_repair_attempt=attempt,
+            target_repair_max_attempts=attempt_limit,
+        )
+        working_total_units = repair_total_units
+        recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
+        recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
+        candidate_solutions = _overlay_quick_answer_solutions(
+            recovered_solutions,
+            working_solutions,
+            source_label="targeted_answer_repair",
+        )
+        candidate_score = _answer_match_score(problems, candidate_solutions)
+        current_missing = int(current_score.get("missing_answer_count") or 0)
+        candidate_missing = int(candidate_score.get("missing_answer_count") or 0)
+        current_matched = int(current_score.get("matched_answer_count") or 0)
+        candidate_matched = int(candidate_score.get("matched_answer_count") or 0)
+        choose_candidate = candidate_missing < current_missing or candidate_matched > current_matched
+        attempt_report = {
+            "attempt": attempt,
+            "target_problem_numbers": missing_numbers,
+            "target_page_indexes": target_page_indexes,
+            "target_page_numbers": [index + 1 for index in target_page_indexes],
+            "recovered_answer_count": _solution_answer_count(recovered_solutions),
+            "candidate_answer_count": _solution_answer_count(candidate_solutions),
+            "current": current_score,
+            "candidate": candidate_score,
+            "chosen": "targeted_repair" if choose_candidate else "current",
+        }
+        attempts.append(attempt_report)
+        if choose_candidate:
+            improved_once = True
+            working_solutions = candidate_solutions
+            current_score = candidate_score
+            if int(current_score.get("missing_answer_count") or 0) == 0:
+                break
+
     report = {
         "strategy": "targeted_missing_answer_repair",
-        "target_problem_numbers": missing_numbers,
-        "target_page_indexes": target_page_indexes,
-        "target_page_numbers": [index + 1 for index in target_page_indexes],
-        "recovered_answer_count": _solution_answer_count(recovered_solutions),
-        "candidate_answer_count": _solution_answer_count(candidate_solutions),
-        "current": current_score,
-        "candidate": candidate_score,
-        "chosen": "targeted_repair" if choose_candidate else "current",
+        "attempt_count": len(attempts),
+        "max_attempts": attempt_limit,
+        "attempts": attempts,
+        "initial": initial_score,
+        "final": current_score,
+        "fully_matched": int(current_score.get("missing_answer_count") or 0) == 0,
+        "chosen": "targeted_repair" if improved_once else "current",
     }
-    return (candidate_solutions if choose_candidate else solutions), report, repair_total_units
+    if no_target_pages and not improved_once:
+        report["reason"] = "no_target_pages"
+    elif int(current_score.get("missing_answer_count") or 0) > 0 and attempts:
+        report["reason"] = "max_attempts_exhausted" if len(attempts) >= attempt_limit else "no_further_improvement"
+    return working_solutions, report, working_total_units
 
 
 KOREAN_RANGE_RECOVERY_PROMPT = r"""You are repairing a Korean Language extraction where a visible passage range was incomplete.
