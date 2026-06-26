@@ -336,7 +336,7 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
         event.preventDefault();
         onMergeContext(event, student);
       }}
-      className="flex h-full min-h-[136px] w-full flex-col justify-between rounded-md bg-white p-3 transition hover:bg-zinc-50 lg:w-[210px] lg:shrink-0"
+      className="flex h-full min-h-[92px] w-full flex-col justify-between rounded-md bg-white p-2.5 transition hover:bg-zinc-50 lg:min-h-[136px] lg:w-[210px] lg:shrink-0 lg:p-3"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -344,12 +344,12 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
             <p className="mt-1 truncate text-xs text-zinc-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 미입력"}</p>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
-        <div className="rounded-md bg-zinc-100 p-2">
+      <div className="mt-2 grid grid-cols-2 gap-1.5 text-center text-[11px] lg:mt-3 lg:gap-2 lg:text-xs">
+        <div className="rounded bg-zinc-100 px-2 py-1.5 lg:rounded-md lg:p-2">
           <p className="text-zinc-500">최근 점수</p>
           <p className="mt-1 font-semibold text-zinc-950">{student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
         </div>
-        <div className="rounded-md bg-zinc-100 p-2">
+        <div className="rounded bg-zinc-100 px-2 py-1.5 lg:rounded-md lg:p-2">
           <p className="text-zinc-500">오답</p>
           <p className="mt-1 font-semibold text-zinc-950">{student.unresolved_wrong_count}</p>
         </div>
@@ -2076,7 +2076,7 @@ export default function StudentManagementPage() {
                 )}
               >
                 <CardContent className="p-0">
-                  <div className="grid min-h-[168px] grid-cols-[28px_minmax(0,1fr)] lg:grid-cols-[28px_180px_minmax(0,1fr)]">
+                  <div className="grid min-h-0 grid-cols-[22px_minmax(0,1fr)] lg:min-h-[168px] lg:grid-cols-[28px_180px_minmax(0,1fr)]">
                     <button
                       type="button"
                       draggable
@@ -2092,31 +2092,31 @@ export default function StudentManagementPage() {
                         void persistClassOrder();
                       }}
                       className={cn(
-                        "row-span-2 flex h-full min-h-[168px] cursor-grab items-center justify-center bg-zinc-50 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 active:cursor-grabbing lg:row-span-1",
+                        "row-span-2 flex h-full min-h-[112px] cursor-grab items-center justify-center bg-zinc-50 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 active:cursor-grabbing lg:row-span-1 lg:min-h-[168px]",
                         draggingClassId === classRow.id && "text-zinc-950"
                       )}
                     >
                       <GripVertical className="h-5 w-5" />
                     </button>
-                    <aside className="flex flex-col justify-between gap-4 bg-zinc-50 p-4">
+                    <aside className="flex items-center justify-between gap-2 bg-zinc-50 px-3 py-2 lg:flex-col lg:items-stretch lg:gap-4 lg:p-4">
                       <div>
-                        <p className="text-3xl font-black tracking-normal text-zinc-950">{classRow.name}</p>
-                        <p className="mt-2 text-2xl font-black text-zinc-800">{classRow.student_count}</p>
-                        <p className="text-xs text-zinc-500">학생</p>
-                        <p className="mt-3 truncate text-xs text-zinc-500">{[classRow.subject, classRow.grade_level].filter(Boolean).join(" · ") || classRow.description || "클래스 정보 없음"}</p>
+                        <p className="text-lg font-black tracking-normal text-zinc-950 lg:text-3xl">{classRow.name}</p>
+                        <p className="mt-0.5 text-sm font-black text-zinc-800 lg:mt-2 lg:text-2xl">{classRow.student_count}</p>
+                        <p className="text-[11px] text-zinc-500 lg:text-xs">학생</p>
+                        <p className="mt-1 max-w-[150px] truncate text-[11px] text-zinc-500 lg:mt-3 lg:max-w-none lg:text-xs">{[classRow.subject, classRow.grade_level].filter(Boolean).join(" · ") || classRow.description || "클래스 정보 없음"}</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex shrink-0 gap-1.5 lg:gap-2">
                         <button
                           type="button"
                           aria-label={`${classRow.name} 통계`}
                           title={`${classRow.name} 통계`}
                           onClick={() => toggleClassStats(classRow)}
                           className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-md border transition",
+                            "flex h-8 w-8 items-center justify-center rounded-md border transition lg:h-10 lg:w-10",
                             statsOpen[classRow.id] ? "border-black bg-black text-white" : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950"
                           )}
                         >
-                          <BarChart3 className="h-5 w-5" />
+                          <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5" />
                         </button>
                         <button
                           type="button"
@@ -2124,15 +2124,15 @@ export default function StudentManagementPage() {
                           title={`${classRow.name} 인원 추가`}
                           onClick={() => startClassStudentAdd(classRow)}
                           className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-md border transition",
+                            "flex h-8 w-8 items-center justify-center rounded-md border transition lg:h-10 lg:w-10",
                             addingStudentClassId === classRow.id ? "border-black bg-black text-white" : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950"
                           )}
                         >
-                          <UserPlus className="h-5 w-5" />
+                          <UserPlus className="h-4 w-4 lg:h-5 lg:w-5" />
                         </button>
                       </div>
                     </aside>
-                    <div className="col-start-2 flex min-w-0 flex-col gap-3 p-4 lg:col-start-auto">
+                    <div className="col-start-2 flex min-w-0 flex-col gap-2 p-2.5 lg:col-start-auto lg:gap-3 lg:p-4">
                       {addingStudentClassId === classRow.id ? (
                         (() => {
                           const existingStudents = existingStudentsForClass(classRow);
@@ -2244,7 +2244,7 @@ export default function StudentManagementPage() {
                         })()
                       ) : null}
                       {classRow.students.length ? (
-                        <div className="flex min-h-[136px] flex-1 flex-col items-stretch gap-3 pb-1 lg:flex-row lg:overflow-x-auto lg:[scrollbar-color:#d4d4d8_transparent] lg:[scrollbar-width:thin]">
+                        <div className="flex min-h-[92px] flex-1 flex-col items-stretch gap-2 pb-1 lg:min-h-[136px] lg:flex-row lg:gap-3 lg:overflow-x-auto lg:[scrollbar-color:#d4d4d8_transparent] lg:[scrollbar-width:thin]">
                           {classRow.students.map((student) => (
                             <ClassStudentCard
                               key={student.id}
@@ -2261,7 +2261,7 @@ export default function StudentManagementPage() {
                           ))}
                         </div>
                       ) : (
-                        <button type="button" onClick={() => startClassStudentAdd(classRow)} className="flex h-full min-h-[116px] w-full items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-white text-sm font-semibold text-zinc-500 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950">
+                        <button type="button" onClick={() => startClassStudentAdd(classRow)} className="flex h-full min-h-[84px] w-full items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-white text-sm font-semibold text-zinc-500 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950 lg:min-h-[116px]">
                           학생 추가
                         </button>
                       )}
