@@ -3152,6 +3152,8 @@ def repair_missing_answer_matches_with_targeted_recovery(
     no_target_pages = False
     full_document_fallback_attempted = False
     full_document_fallback_attempt_count = 0
+    single_slot_fallback_attempted = False
+    single_slot_fallback_attempt_count = 0
 
     for attempt in range(1, attempt_limit + 1):
         missing_contexts = [
@@ -3346,12 +3348,133 @@ def repair_missing_answer_matches_with_targeted_recovery(
                 if int(current_score.get("missing_answer_count") or 0) == 0:
                     break
 
+    if int(current_score.get("missing_answer_count") or 0) > 0 and source_page_count > 0:
+        single_slot_contexts = [
+            item for item in (current_score.get("missing_answer_problems") or [])
+            if isinstance(item, dict) and item.get("problem_number")
+        ]
+        for slot_round, single_context in enumerate(single_slot_contexts, start=1):
+            missing_contexts = [
+                item for item in (current_score.get("missing_answer_problems") or [])
+                if isinstance(item, dict) and item.get("problem_number")
+            ]
+            if not missing_contexts:
+                break
+            target_number = _number_key_or_none(single_context.get("problem_number"))
+            if not target_number:
+                continue
+            active_context = next(
+                (
+                    item for item in missing_contexts
+                    if _number_key_or_none(item.get("problem_number")) == target_number
+                    and item.get("problem_order") == single_context.get("problem_order")
+                    and item.get("global_index") == single_context.get("global_index")
+                    and item.get("local_index") == single_context.get("local_index")
+                ),
+                next((item for item in missing_contexts if _number_key_or_none(item.get("problem_number")) == target_number), None),
+            )
+            if not active_context:
+                continue
+
+            single_slot_fallback_attempted = True
+            single_slot_fallback_attempt_count += 1
+            fallback_attempt = attempt_limit + full_document_fallback_attempt_count + single_slot_fallback_attempt_count
+            single_page_indexes = _targeted_answer_repair_page_indexes(
+                page_metadata,
+                source_page_count,
+                [target_number],
+                neighbor_radius=attempt_limit + slot_round,
+                fallback_tail_pages=source_page_count,
+                include_all_answer_candidates=True,
+            )
+            if not single_page_indexes:
+                single_page_indexes = list(range(source_page_count))
+
+            repair_units = max(len(single_page_indexes) * units_per_page, 1)
+            repair_total_units = working_total_units + repair_units
+            set_progress(
+                batch_id,
+                f"{progress_label} (단일 문항 재확인 {single_slot_fallback_attempt_count})",
+                working_total_units,
+                repair_total_units,
+            )
+            recovery_metadata = _metadata_by_page(
+                _metadata_with_document_kind(page_metadata, "solution", set(single_page_indexes)),
+                "solution",
+            )
+            single_scope_note = (
+                "Single-slot final fallback after grouped targeted and full-document recovery still left this exact "
+                "problem unanswered. Ignore unrelated numbers unless they are needed only as local anchors; return the "
+                "requested problem_number when the visible final answer belongs to this slot but the printed number is "
+                "cropped, omitted, or misread."
+            )
+            recovered_solutions = extract_mixed_pdf_answer_recovery(
+                source_path,
+                single_page_indexes,
+                source_page_count,
+                dpi,
+                batch_id,
+                offset=working_total_units,
+                total_units=repair_total_units,
+                units_per_page=units_per_page,
+                solution_page_metadata=recovery_metadata,
+                document_type_hints=document_type_hints,
+                problem_inventory=problem_inventory,
+                target_problem_contexts=[active_context],
+                target_repair_attempt=single_slot_fallback_attempt_count,
+                target_repair_max_attempts=max(1, len(single_slot_contexts)),
+                target_repair_scope_note=single_scope_note,
+            )
+            working_total_units = repair_total_units
+            recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
+            recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
+                recovered_solutions,
+                [active_context],
+                working_solutions,
+            )
+            recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
+            candidate_solutions = _overlay_quick_answer_solutions(
+                recovered_solutions,
+                working_solutions,
+                source_label="targeted_answer_repair_single_slot",
+                replace_same_number_blank_fallbacks=True,
+            )
+            candidate_score = _answer_match_score(problems, candidate_solutions)
+            current_missing = int(current_score.get("missing_answer_count") or 0)
+            candidate_missing = int(candidate_score.get("missing_answer_count") or 0)
+            current_matched = int(current_score.get("matched_answer_count") or 0)
+            candidate_matched = int(candidate_score.get("matched_answer_count") or 0)
+            choose_candidate = candidate_missing < current_missing or candidate_matched > current_matched
+            attempts.append(
+                {
+                    "attempt": fallback_attempt,
+                    "mode": "single_slot_fallback",
+                    "single_slot_round": single_slot_fallback_attempt_count,
+                    "target_problem_numbers": [target_number],
+                    "target_page_indexes": single_page_indexes,
+                    "target_page_numbers": [index + 1 for index in single_page_indexes],
+                    "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                    "candidate_answer_count": _solution_answer_count(candidate_solutions),
+                    "current": current_score,
+                    "candidate": candidate_score,
+                    "chosen": "targeted_repair" if choose_candidate else "current",
+                }
+            )
+            if choose_candidate:
+                improved_once = True
+                working_solutions = candidate_solutions
+                current_score = candidate_score
+                if int(current_score.get("missing_answer_count") or 0) == 0:
+                    break
+
     report = {
         "strategy": "targeted_missing_answer_repair",
         "attempt_count": len(attempts),
-        "max_attempts": attempt_limit + full_document_fallback_attempt_count,
+        "max_attempts": attempt_limit + full_document_fallback_attempt_count + single_slot_fallback_attempt_count,
         "full_document_fallback_attempted": full_document_fallback_attempted,
         "full_document_fallback_attempt_count": full_document_fallback_attempt_count,
+        "single_slot_fallback_attempted": single_slot_fallback_attempted,
+        "single_slot_fallback_attempt_count": single_slot_fallback_attempt_count,
         "attempts": attempts,
         "initial": initial_score,
         "final": current_score,
@@ -3359,7 +3482,9 @@ def repair_missing_answer_matches_with_targeted_recovery(
         "chosen": "targeted_repair" if improved_once else "current",
     }
     if int(current_score.get("missing_answer_count") or 0) > 0 and attempts:
-        if full_document_fallback_attempted:
+        if single_slot_fallback_attempted:
+            report["reason"] = "single_slot_fallback_exhausted"
+        elif full_document_fallback_attempted:
             report["reason"] = "full_document_fallback_exhausted"
         elif no_target_pages and not improved_once:
             report["reason"] = "no_target_pages"

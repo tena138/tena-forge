@@ -275,6 +275,55 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(extract_mock.call_count, 3)
         self.assertIn("previous full-document fallback", second_fallback_kwargs["target_repair_scope_note"])
 
+    def test_single_slot_fallback_runs_after_grouped_recovery_is_exhausted(self):
+        problems = [
+            {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},
+            {"problem_number": 2, "problem_no": "2", "problem_text": "Problem 2", "global_index": 2},
+        ]
+        solutions = [{"problem_number": "1", "answer": "3", "solution_steps": None}]
+        metadata = [
+            {"page_index": 0, "page_type": "problem_page", "detected_problem_headers": ["2"]},
+            {"page_index": 1, "page_type": "solution_page", "detected_solution_headers": ["1"]},
+            {"page_index": 2, "page_type": "solution_page", "detected_solution_headers": ["2"]},
+        ]
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                side_effect=[
+                    [],
+                    [],
+                    [],
+                    [{"problem_number": "2", "answer": "7", "solution_steps": "final"}],
+                ],
+            ) as extract_mock,
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                3,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        single_slot_kwargs = extract_mock.call_args_list[3].kwargs
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertTrue(report["single_slot_fallback_attempted"])
+        self.assertEqual(report["single_slot_fallback_attempt_count"], 1)
+        self.assertEqual(report["attempts"][-1]["mode"], "single_slot_fallback")
+        self.assertEqual(report["attempts"][-1]["target_problem_numbers"], ["2"])
+        self.assertEqual(extract_mock.call_count, 4)
+        self.assertIn("Single-slot final fallback", single_slot_kwargs["target_repair_scope_note"])
+
     def test_targeted_repair_replaces_sectioned_blank_candidate_with_answerful_number_candidate(self):
         problems = [
             {

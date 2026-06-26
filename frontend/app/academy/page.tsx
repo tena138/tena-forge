@@ -1610,53 +1610,61 @@ function AcademySchedulePanel() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="w-full max-w-full overflow-x-auto rounded-[14px] bg-zinc-50 p-2 ring-1 ring-zinc-200 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <div className="inline-flex min-w-full gap-1.5">
-                  {mobileMonthDays.map((day) => {
-                    const key = academyDateKey(day);
-                    const dayEvents = eventsByDate[key] || [];
-                    const inMonth = day.getMonth() === monthCursor.getMonth();
-                    const isToday = key === academyDateKey(new Date());
-                    const isSelectedDate = key === selectedDateKey;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        ref={(node) => setAcademyDateCellRef(key, node)}
-                        data-academy-date={key}
-                        onClick={() => {
-                          setSelectedDateKey(key);
-                          setSelectedEventId(dayEvents[0]?.id || "");
-                          setTimeEditor(null);
-                          setError("");
-                        }}
-                        className={`relative flex h-[58px] w-11 shrink-0 flex-col items-center justify-center rounded-[12px] px-1 text-xs transition ${
-                          isSelectedDate
-                            ? "bg-black text-white"
-                            : isToday
-                              ? "bg-zinc-900 text-white"
-                              : dayEvents.length
-                                ? "bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200/80"
-                                : inMonth
-                                  ? "bg-white/70 text-zinc-500"
-                                  : "bg-transparent text-zinc-300"
-                        }`}
-                      >
-                        <span className="text-[10px] font-black leading-none text-current/60">{academyMobileWeekdayLabel(day)}</span>
-                        <span className={`mt-1 grid h-6 min-w-6 place-items-center rounded-full text-[13px] font-black leading-none ${isSelectedDate ? "bg-white text-black" : ""}`}>
-                          {day.getDate()}
-                        </span>
-                        {dayEvents.length ? (
-                          <span className="mt-1 flex max-w-full items-center justify-center gap-0.5">
-                            {dayEvents.slice(0, 3).map((event) => (
-                              <span key={event.id} className="h-1 w-1 rounded-full bg-current" />
-                            ))}
+                <div className="overflow-hidden rounded-[14px] bg-zinc-50 ring-1 ring-zinc-200">
+                  <div className="grid grid-cols-7 bg-zinc-100">
+                    {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+                      <div key={day} className="grid h-8 place-items-center text-[11px] font-black text-zinc-500">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-px bg-zinc-200">
+                    {mobileMonthDays.map((day) => {
+                      const key = academyDateKey(day);
+                      const dayEvents = eventsByDate[key] || [];
+                      const inMonth = day.getMonth() === monthCursor.getMonth();
+                      const isToday = key === academyDateKey(new Date());
+                      const isSelectedDate = key === selectedDateKey;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          ref={(node) => setAcademyDateCellRef(key, node)}
+                          data-academy-date={key}
+                          onClick={() => {
+                            setSelectedDateKey(key);
+                            setSelectedEventId(dayEvents[0]?.id || "");
+                            setTimeEditor(null);
+                            setError("");
+                          }}
+                          className={`relative flex min-h-[58px] min-w-0 flex-col items-center justify-start px-1 py-1.5 text-xs transition ${
+                            inMonth ? "bg-white" : "bg-zinc-50"
+                          } ${isSelectedDate ? "z-10 shadow-[inset_0_0_0_2px_#09090b]" : "hover:bg-zinc-50"}`}
+                        >
+                          <span
+                            className={`grid h-6 min-w-6 place-items-center rounded-full text-[13px] font-black leading-none ${
+                              isToday
+                                ? "bg-black text-white"
+                                : isSelectedDate
+                                  ? "bg-zinc-100 text-zinc-950"
+                                  : inMonth
+                                    ? "text-zinc-950"
+                                    : "text-zinc-300"
+                            }`}
+                          >
+                            {day.getDate()}
                           </span>
-                        ) : null}
-                        {dayEvents.length > 3 ? <span className="absolute bottom-1 right-1 text-[9px] font-black leading-none">+{dayEvents.length - 3}</span> : null}
-                      </button>
-                    );
-                  })}
+                          {dayEvents.length ? (
+                            <span className="mt-auto flex min-h-3 max-w-full items-center justify-center gap-0.5 pb-0.5">
+                              {dayEvents.slice(0, 3).map((event) => (
+                                <span key={event.id} className="h-1.5 w-1.5 rounded-full bg-zinc-950" />
+                              ))}
+                              {dayEvents.length > 3 ? <span className="ml-0.5 text-[9px] font-black leading-none text-zinc-700">+{dayEvents.length - 3}</span> : null}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="space-y-2 rounded-[12px] bg-zinc-50 p-3">
