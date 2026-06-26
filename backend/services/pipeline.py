@@ -1897,6 +1897,18 @@ def _align_targeted_recovered_solutions_to_missing_slots(
         _number_key_or_none(recovered_solutions[index].get("problem_number") or recovered_solutions[index].get("problem_no"))
         for index in answerful_indexes
     ]
+    if len(targets) == 1 and target_numbers[0]:
+        already_contains_target = any(number == target_numbers[0] for number in answer_numbers)
+        unnumbered_indexes = [
+            answer_index
+            for answer_index, number in zip(answerful_indexes, answer_numbers)
+            if not number
+        ]
+        if not already_contains_target and len(unnumbered_indexes) == 1:
+            aligned = list(recovered_solutions)
+            aligned[unnumbered_indexes[0]] = _apply_missing_context_to_solution(aligned[unnumbered_indexes[0]], targets[0])
+            return aligned
+
     invalid_answer_numbers = [number for number in answer_numbers if not number or number not in target_number_set]
     repeated_target_numbers = len(target_numbers) != len(set(target_numbers))
     should_align_by_slot = False
@@ -2014,6 +2026,7 @@ def _targeted_answer_repair_prompt_note(
         "- Check compact answer tables, answer-only rows, worked-solution final lines, and continuation text from the previous or next page before deciding the answer is absent.\n"
         "- When a compact answer table is ordered but does not repeat every problem number, use the supplied source_order/global_index and the first-pass inventory to align the missing row.\n"
         "- If a worked solution contains the answer only in the final line, extract that final value as answer.\n"
+        "- If exactly one requested slot remains and the visible answer is adjacent to it but its printed problem number is missing or cropped, return that answer with the requested problem_number instead of returning [].\n"
         "- If the answer is an objective choice marker, keep the marker in answer and keep problem_number as the requested problem number.\n"
         "Requested problem context:\n"
         f"{context}"

@@ -10,6 +10,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from services.pipeline import (  # noqa: E402
     _answer_match_score,
+    _align_targeted_recovered_solutions_to_missing_slots,
     _overlay_quick_answer_solutions,
     _targeted_answer_repair_page_indexes,
     _targeted_answer_repair_prompt_note,
@@ -365,6 +366,81 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(len(number_twenty_candidates), 1)
         self.assertEqual(number_twenty_candidates[0]["answer"], "②")
         self.assertEqual(number_twenty_candidates[0]["problem_number_repaired_from"], "5")
+        self.assertIn(
+            "problem_number_aligned_to_targeted_missing_slot",
+            number_twenty_candidates[0]["matching_warnings"],
+        )
+
+    def test_targeted_alignment_uses_single_unnumbered_answer_for_last_missing_slot(self):
+        recovered = [
+            {"problem_number": "18", "answer": "①", "solution_steps": None},
+            {"problem_number": "19", "answer": "④", "solution_steps": None},
+            {"problem_number": "", "answer": "②", "solution_steps": None},
+        ]
+        missing_contexts = [
+            {
+                "problem_number": "20",
+                "section_id": "Final",
+                "problem_order": 20,
+                "global_index": 20,
+                "local_index": 20,
+            }
+        ]
+
+        aligned = _align_targeted_recovered_solutions_to_missing_slots(recovered, missing_contexts)
+
+        self.assertEqual(aligned[2]["problem_number"], "20")
+        self.assertEqual(aligned[2]["problem_no"], "20")
+        self.assertEqual(aligned[2]["answer"], "②")
+        self.assertEqual(aligned[2]["section_id"], "Final")
+        self.assertEqual(aligned[2]["global_index"], 20)
+        self.assertIn("problem_number_aligned_to_targeted_missing_slot", aligned[2]["matching_warnings"])
+
+    def test_targeted_repair_aligns_unnumbered_answer_among_page_answers(self):
+        problems = [
+            {"problem_number": 18, "problem_no": "18", "problem_text": "Problem 18", "global_index": 18},
+            {"problem_number": 19, "problem_no": "19", "problem_text": "Problem 19", "global_index": 19},
+            {"problem_number": 20, "problem_no": "20", "problem_text": "Last problem", "global_index": 20},
+        ]
+        solutions = [
+            {"problem_number": "18", "answer": "①", "solution_steps": None},
+            {"problem_number": "19", "answer": "④", "solution_steps": None},
+        ]
+        metadata = [
+            {"page_index": 7, "page_type": "solution_page", "detected_solution_headers": ["18", "19", "20"]},
+        ]
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                return_value=[
+                    {"problem_number": "18", "answer": "①", "solution_steps": None},
+                    {"problem_number": "19", "answer": "④", "solution_steps": None},
+                    {"problem_number": "", "answer": "②", "solution_steps": None},
+                ],
+            ),
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                8,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        number_twenty_candidates = [item for item in repaired if str(item.get("problem_number")) == "20"]
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertEqual(len(number_twenty_candidates), 1)
+        self.assertEqual(number_twenty_candidates[0]["answer"], "②")
         self.assertIn(
             "problem_number_aligned_to_targeted_missing_slot",
             number_twenty_candidates[0]["matching_warnings"],
