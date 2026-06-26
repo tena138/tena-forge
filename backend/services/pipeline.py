@@ -1835,41 +1835,58 @@ def _targeted_answer_repair_page_indexes(
     missing_problem_numbers: list[str],
     neighbor_radius: int = 1,
     fallback_tail_pages: int = 4,
+    include_all_answer_candidates: bool = False,
 ) -> list[int]:
     target_numbers = {_number_key_or_none(number) for number in missing_problem_numbers}
     target_numbers.discard(None)
     if not target_numbers:
         return []
 
-    exact_pages: set[int] = set()
+    exact_solution_pages: set[int] = set()
+    exact_problem_pages: set[int] = set()
     for item in metadata:
         page_index = int(item.get("page_index") or 0)
         if page_index < 0 or page_index >= page_count:
             continue
-        visible_numbers: set[str] = set()
-        for key in ("detected_solution_headers", "detected_problem_headers"):
-            visible_numbers.update(
-                number
-                for number in (_number_key_or_none(value) for value in (item.get(key) or []))
-                if number
-            )
-        if visible_numbers & target_numbers:
-            exact_pages.add(page_index)
+        solution_numbers = {
+            number
+            for number in (_number_key_or_none(value) for value in (item.get("detected_solution_headers") or []))
+            if number
+        }
+        problem_numbers = {
+            number
+            for number in (_number_key_or_none(value) for value in (item.get("detected_problem_headers") or []))
+            if number
+        }
+        if solution_numbers & target_numbers:
+            exact_solution_pages.add(page_index)
+        if problem_numbers & target_numbers:
+            exact_problem_pages.add(page_index)
 
-    if exact_pages:
+    fallback = _mixed_answer_recovery_page_indexes(metadata, page_count)
+    fallback_pages: set[int] = set(fallback)
+    if page_count > 6 and fallback and not include_all_answer_candidates:
+        tail_count = max(1, int(fallback_tail_pages or 4))
+        fallback_pages = set(fallback[-tail_count:])
+
+    if exact_solution_pages or exact_problem_pages:
         expanded: set[int] = set()
         radius = max(1, int(neighbor_radius or 1))
-        for page_index in exact_pages:
+        for page_index in exact_solution_pages:
             for candidate in range(page_index - radius, page_index + radius + 1):
                 if 0 <= candidate < page_count:
                     expanded.add(candidate)
+        for page_index in exact_problem_pages:
+            for candidate in range(page_index - min(radius, 2), page_index + min(radius, 2) + 1):
+                if 0 <= candidate < page_count:
+                    expanded.add(candidate)
+        if exact_problem_pages or include_all_answer_candidates:
+            expanded.update(fallback_pages)
         return sorted(expanded)
 
-    fallback = _mixed_answer_recovery_page_indexes(metadata, page_count)
     if page_count <= 6:
         return fallback
-    tail_count = max(1, int(fallback_tail_pages or 4))
-    return sorted(set(fallback[-tail_count:] or fallback))
+    return sorted(fallback_pages or set(fallback))
 
 
 def _targeted_answer_repair_prompt_note(
@@ -2928,7 +2945,7 @@ def repair_missing_answer_matches_with_targeted_recovery(
     document_type_hints: list[dict[str, Any]] | None = None,
     problem_inventory: dict[str, Any] | None = None,
     progress_label: str = "누락 정답 재확인 중",
-    max_attempts: int = 3,
+    max_attempts: int = 5,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, int]:
     initial_score = _answer_match_score(problems, solutions)
     current_score = initial_score
@@ -2960,7 +2977,8 @@ def repair_missing_answer_matches_with_targeted_recovery(
             source_page_count,
             missing_numbers,
             neighbor_radius=attempt,
-            fallback_tail_pages=4 + ((attempt - 1) * 2),
+            fallback_tail_pages=source_page_count if attempt == attempt_limit else 4 + ((attempt - 1) * 2),
+            include_all_answer_candidates=attempt == attempt_limit,
         )
         if not target_page_indexes:
             no_target_pages = True

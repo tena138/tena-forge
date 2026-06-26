@@ -44,6 +44,34 @@ class TargetedAnswerRepairTests(unittest.TestCase):
 
         self.assertEqual(indexes, [3, 4, 5])
 
+    def test_targeted_page_indexes_include_answer_candidates_when_only_problem_page_matches(self):
+        metadata = [
+            {"page_index": 1, "page_type": "problem_page", "detected_problem_headers": ["20"]},
+            {"page_index": 8, "page_type": "solution_page", "detected_solution_headers": ["1", "2", "3"]},
+        ]
+
+        indexes = _targeted_answer_repair_page_indexes(metadata, 10, ["20"])
+
+        self.assertEqual(indexes, [0, 1, 2, 8])
+
+    def test_final_targeted_page_indexes_can_include_all_answer_candidates(self):
+        metadata = [
+            {"page_index": 1, "page_type": "problem_page", "detected_problem_headers": ["20"]},
+            {"page_index": 6, "page_type": "solution_page", "detected_solution_headers": ["18"]},
+            {"page_index": 8, "page_type": "solution_page", "detected_solution_headers": ["19"]},
+            {"page_index": 9, "page_type": "solution_page", "detected_solution_headers": ["20"]},
+        ]
+
+        indexes = _targeted_answer_repair_page_indexes(
+            metadata,
+            10,
+            ["20"],
+            fallback_tail_pages=1,
+            include_all_answer_candidates=True,
+        )
+
+        self.assertEqual(indexes, [0, 1, 2, 6, 8, 9])
+
     def test_targeted_prompt_mentions_only_missing_numbers(self):
         note = _targeted_answer_repair_prompt_note(
             [
