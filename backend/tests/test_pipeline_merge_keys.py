@@ -292,6 +292,19 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertEqual([item["problem_number"] for item in repaired], ["1", "2", "3"])
         self.assertEqual(repaired[0]["problem_number_repaired_from"], "②")
 
+    def test_solution_number_repair_preserves_anchored_partial_tail_candidates(self):
+        repaired = repair_solution_numbers_from_inventory(
+            [
+                {"problem_number": "18", "answer": "A"},
+                {"problem_number": "19", "answer": "B"},
+                {"problem_number": "21", "answer": "C"},
+            ],
+            {"expected_problem_numbers": [str(index) for index in range(1, 21)]},
+        )
+
+        self.assertEqual([item["problem_number"] for item in repaired], ["18", "19", "21"])
+        self.assertNotIn("problem_number_repaired_from", repaired[2])
+
     def test_recovered_solution_candidates_replace_weaker_current_set(self):
         problems = [
             {"problem_number": "1", "problem_text": "first", "page_index": 0},

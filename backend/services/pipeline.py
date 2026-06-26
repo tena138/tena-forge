@@ -1878,6 +1878,7 @@ def _apply_missing_context_to_solution(solution: dict[str, Any], context: dict[s
 def _align_targeted_recovered_solutions_to_missing_slots(
     recovered_solutions: list[dict[str, Any]],
     missing_contexts: list[dict[str, Any]],
+    existing_solutions: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     targets = [
         context
@@ -1908,6 +1909,29 @@ def _align_targeted_recovered_solutions_to_missing_slots(
             aligned = list(recovered_solutions)
             aligned[unnumbered_indexes[0]] = _apply_missing_context_to_solution(aligned[unnumbered_indexes[0]], targets[0])
             return aligned
+
+        existing_answer_numbers = {
+            number
+            for number in (
+                _number_key_or_none(solution.get("problem_number") or solution.get("problem_no"))
+                for solution in (existing_solutions or [])
+                if isinstance(solution, dict) and has_solution_content(solution)
+            )
+            if number
+        }
+        if existing_answer_numbers:
+            unresolved_candidate_indexes = [
+                answer_index
+                for answer_index, number in zip(answerful_indexes, answer_numbers)
+                if not number or number not in existing_answer_numbers
+            ]
+            if not already_contains_target and len(unresolved_candidate_indexes) == 1:
+                aligned = list(recovered_solutions)
+                aligned[unresolved_candidate_indexes[0]] = _apply_missing_context_to_solution(
+                    aligned[unresolved_candidate_indexes[0]],
+                    targets[0],
+                )
+                return aligned
 
     invalid_answer_numbers = [number for number in answer_numbers if not number or number not in target_number_set]
     repeated_target_numbers = len(target_numbers) != len(set(target_numbers))
@@ -2064,6 +2088,8 @@ def repair_solution_numbers_from_inventory(
     duplicate_count = len(nonempty_numbers) - len(current_set)
     missing_count = len([number for number in current_numbers if not number])
     off_inventory_count = len([number for number in nonempty_numbers if number not in expected_set])
+    reliable_numbers = [number for number in nonempty_numbers if number in expected_set]
+    visible_numbers_follow_inventory_prefix = bool(reliable_numbers) and reliable_numbers == expected_sequence[:len(reliable_numbers)]
     already_covers_inventory = (
         len(nonempty_numbers) == len(answerful)
         and len(answerful) == len(expected_sequence)
@@ -2075,10 +2101,13 @@ def repair_solution_numbers_from_inventory(
     should_repair_by_order = (
         len(answerful) <= len(expected_sequence)
         and (
-            missing_count > 0
-            or duplicate_count > 0
-            or off_inventory_count > 0
-            or len(current_set & expected_set) < max(1, min(len(answerful), len(expected_sequence)) // 2)
+            not reliable_numbers
+            or len(answerful) == len(expected_sequence)
+            or (missing_count > 0 and visible_numbers_follow_inventory_prefix)
+            or (
+                (duplicate_count > 0 or off_inventory_count > 0)
+                and len(current_set & expected_set) < max(1, min(len(answerful), len(expected_sequence)) // 2)
+            )
         )
     )
     if not should_repair_by_order:
@@ -3152,7 +3181,11 @@ def repair_missing_answer_matches_with_targeted_recovery(
         )
         working_total_units = repair_total_units
         recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
-        recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(recovered_solutions, missing_contexts)
+        recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
+            recovered_solutions,
+            missing_contexts,
+            working_solutions,
+        )
         recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
         candidate_solutions = _overlay_quick_answer_solutions(
             recovered_solutions,
@@ -3240,7 +3273,11 @@ def repair_missing_answer_matches_with_targeted_recovery(
             )
             working_total_units = repair_total_units
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
-            recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(recovered_solutions, missing_contexts)
+            recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
+                recovered_solutions,
+                missing_contexts,
+                working_solutions,
+            )
             recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
             candidate_solutions = _overlay_quick_answer_solutions(
                 recovered_solutions,
