@@ -1793,7 +1793,7 @@ def _answer_inventory_prompt_note(problem_inventory: dict[str, Any] | None, page
 
 def _answer_missing_problem_payloads(matched_problems: list[dict[str, Any]]) -> list[dict[str, Any]]:
     missing: list[dict[str, Any]] = []
-    seen: set[tuple[str | None, str, int | None]] = set()
+    seen: set[tuple[str | None, str, int | None, int | None, int | None, int]] = set()
     for order_index, problem in enumerate(matched_problems, start=1):
         if has_solution_content(problem.get("solution")):
             continue
@@ -1801,7 +1801,16 @@ def _answer_missing_problem_payloads(matched_problems: list[dict[str, Any]]) -> 
         if not number:
             continue
         page_index = _int_or_none(problem.get("page_index"))
-        key = (problem.get("section_id") or problem.get("section_label") or None, number, page_index)
+        global_index = _int_or_none(problem.get("global_index"))
+        local_index = _int_or_none(problem.get("local_index"))
+        key = (
+            problem.get("section_id") or problem.get("section_label") or None,
+            number,
+            page_index,
+            global_index,
+            local_index,
+            order_index,
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -1811,7 +1820,8 @@ def _answer_missing_problem_payloads(matched_problems: list[dict[str, Any]]) -> 
                 "section_id": problem.get("section_id") or problem.get("section_label") or None,
                 "page_number": (page_index + 1) if page_index is not None else None,
                 "problem_order": order_index,
-                "global_index": _int_or_none(problem.get("global_index")),
+                "global_index": global_index,
+                "local_index": local_index,
                 "problem_text": str(problem.get("problem_text") or "")[:900],
             }
         )
@@ -1910,6 +1920,8 @@ def _targeted_answer_repair_prompt_note(
             parts.append(f"source_order={item.get('problem_order')}")
         if item.get("global_index") is not None:
             parts.append(f"global_index={item.get('global_index')}")
+        if item.get("local_index") is not None:
+            parts.append(f"local_index={item.get('local_index')}")
         snippet = re.sub(r"\s+", " ", str(item.get("problem_text") or "")).strip()
         if snippet:
             parts.append(f"problem_snippet={json.dumps(snippet[:280], ensure_ascii=False)}")
@@ -1925,6 +1937,7 @@ def _targeted_answer_repair_prompt_note(
         f"- Recover answers only for these still-unmatched problem numbers: {_compact_inventory_numbers(missing_numbers)}.\n"
         "- Return [] if this page does not explicitly show a final answer for one of those requested numbers.\n"
         "- Do not return answers for already matched problem numbers unless they are necessary to disambiguate a repeated number in the requested list.\n"
+        "- If the same requested problem number appears more than once, treat each requested source_order/global_index/local_index as a separate slot and return a separate answer object for each visible slot.\n"
         "- If the requested number is the last visible solution on the page, inspect the bottom and continuation areas carefully before returning [].\n"
         "- Check compact answer tables, answer-only rows, worked-solution final lines, and continuation text from the previous or next page before deciding the answer is absent.\n"
         "- When a compact answer table is ordered but does not repeat every problem number, use the supplied source_order/global_index and the first-pass inventory to align the missing row.\n"
@@ -2851,8 +2864,8 @@ def _overlay_quick_answer_solutions(
     if not quick_solutions:
         return fallback_solutions
     prioritized: list[dict[str, Any]] = []
-    quick_identities: set[tuple[str | None, str]] = set()
-    answerful_quick_numbers: set[str] = set()
+    exact_replacement_budget: dict[tuple[str | None, str], int] = defaultdict(int)
+    blank_number_replacement_budget: dict[str, int] = defaultdict(int)
     answerful_quick_sections_by_number: dict[str, set[str | None]] = defaultdict(set)
     for index, solution in enumerate(quick_solutions):
         copied = dict(solution)
@@ -2860,22 +2873,27 @@ def _overlay_quick_answer_solutions(
         copied["_source_order"] = -1_000_000 + index
         identity = _solution_candidate_identity(copied)
         if identity:
-            quick_identities.add(identity)
+            exact_replacement_budget[identity] += 1
             if has_solution_content(copied):
                 section, number = identity
-                answerful_quick_numbers.add(number)
+                blank_number_replacement_budget[number] += 1
                 answerful_quick_sections_by_number[number].add(section)
         prioritized.append(copied)
 
     for solution in fallback_solutions:
         copied = dict(solution)
         identity = _solution_candidate_identity(copied)
-        if identity and identity in quick_identities:
+        if identity and exact_replacement_budget.get(identity, 0) > 0:
+            exact_replacement_budget[identity] -= 1
             continue
         if replace_same_number_blank_fallbacks and identity and not has_solution_content(copied):
             section, number = identity
             quick_sections = answerful_quick_sections_by_number.get(number) or set()
-            if number in answerful_quick_numbers and (not quick_sections or None in quick_sections or section in quick_sections):
+            if (
+                blank_number_replacement_budget.get(number, 0) > 0
+                and (not quick_sections or None in quick_sections or section in quick_sections)
+            ):
+                blank_number_replacement_budget[number] -= 1
                 continue
         prioritized.append(copied)
     return _apply_structure_indexes(prioritized, page_key="page_idx")

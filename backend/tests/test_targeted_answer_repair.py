@@ -10,6 +10,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from services.pipeline import (  # noqa: E402
     _answer_match_score,
+    _overlay_quick_answer_solutions,
     _targeted_answer_repair_page_indexes,
     _targeted_answer_repair_prompt_note,
     repair_missing_answer_matches_with_targeted_recovery,
@@ -32,6 +33,51 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(score["missing_answer_count"], 1)
         self.assertEqual(score["missing_answer_numbers"], ["2"])
         self.assertEqual(score["missing_answer_problems"][0]["problem_number"], "2")
+
+    def test_answer_match_score_keeps_repeated_missing_numbers_as_separate_slots(self):
+        problems = [
+            {
+                "problem_number": 28,
+                "problem_no": "28",
+                "problem_text": "First elective 28",
+                "page_index": 3,
+                "global_index": 28,
+                "local_index": 1,
+            },
+            {
+                "problem_number": 28,
+                "problem_no": "28",
+                "problem_text": "Second elective 28",
+                "page_index": 3,
+                "global_index": 29,
+                "local_index": 2,
+            },
+        ]
+
+        score = _answer_match_score(problems, [])
+
+        self.assertEqual(score["missing_answer_count"], 2)
+        self.assertEqual(score["missing_answer_numbers"], ["28", "28"])
+        self.assertEqual([item["problem_order"] for item in score["missing_answer_problems"]], [1, 2])
+        self.assertEqual([item["local_index"] for item in score["missing_answer_problems"]], [1, 2])
+
+    def test_overlay_replaces_only_one_blank_slot_for_single_repaired_repeated_number(self):
+        repaired = [{"problem_number": "28", "answer": "5", "solution_steps": "final"}]
+        fallbacks = [
+            {"problem_number": "28", "answer": "", "solution_steps": None, "section_id": "A"},
+            {"problem_number": "28", "answer": "", "solution_steps": None, "section_id": "A"},
+        ]
+
+        overlaid = _overlay_quick_answer_solutions(
+            repaired,
+            fallbacks,
+            source_label="targeted_answer_repair",
+            replace_same_number_blank_fallbacks=True,
+        )
+
+        self.assertEqual(len(overlaid), 2)
+        self.assertEqual(sum(1 for item in overlaid if item.get("answer") == "5"), 1)
+        self.assertEqual(sum(1 for item in overlaid if not item.get("answer")), 1)
 
     def test_targeted_page_indexes_expand_around_visible_missing_number(self):
         metadata = [

@@ -1218,7 +1218,13 @@ function AcademySchedulePanel() {
   const studentCount = useMemo(() => classes.reduce((sum, classRow) => sum + classRow.student_count, 0), [classes]);
   const deleteTargetClass = deleteTarget ? classById.get(deleteTarget.class_id) : null;
   const selectedEvent = useMemo(() => events.find((event) => event.id === selectedEventId) || null, [events, selectedEventId]);
-  const mobileMonthDays = useMemo(() => monthDays.filter((day) => day.getMonth() === monthCursor.getMonth()), [monthCursor, monthDays]);
+  const mobileMonthDays = useMemo(() => {
+    const days = [...monthDays];
+    while (days.length > 35 && days.slice(-7).every((day) => day.getMonth() !== monthCursor.getMonth())) {
+      days.splice(-7);
+    }
+    return days;
+  }, [monthCursor, monthDays]);
   const selectedDateEvents = eventsByDate[selectedDateKey] || [];
   const selectedDateLabel = selectedDateKey ? `${academyMobileDateLabel(`${selectedDateKey}T00:00:00`)} ${academyMobileWeekdayLabel(`${selectedDateKey}T00:00:00`)}` : "";
   const timeEditorEvent = useMemo(() => (timeEditor ? events.find((event) => event.id === timeEditor.eventId) || null : null), [events, timeEditor]);
@@ -1521,6 +1527,14 @@ function AcademySchedulePanel() {
     });
   }
 
+  function openScheduleForm(dateKey = selectedDateKey) {
+    setForm((current) => {
+      const nextClassId = current.class_id || classes[0]?.id || "";
+      return { ...current, class_id: nextClassId, date: dateKey || current.date };
+    });
+    setFormOpen(true);
+  }
+
   useEffect(() => {
     if (!timeEditor?.mode) return;
 
@@ -1566,14 +1580,14 @@ function AcademySchedulePanel() {
 
   return (
     <div className="relative space-y-4">
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
         <Card className="bg-white">
           <CardContent className="p-3 sm:p-4">
             {loading ? (
               <div className="flex min-h-[560px] items-center justify-center text-zinc-500">불러오는 중</div>
             ) : (
               <>
-              <div className="space-y-3 sm:hidden">
+              <div className="space-y-3 lg:hidden">
                 <div className="flex items-center justify-between gap-2">
                   <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(-1)} aria-label="이전 달">
                     <ChevronLeft className="h-4 w-4" />
@@ -1583,10 +1597,17 @@ function AcademySchedulePanel() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="overflow-hidden rounded-[12px] bg-white ring-1 ring-zinc-200">
+                  <div className="grid grid-cols-7 bg-zinc-50">
+                    {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+                      <div key={day} className="py-2 text-center text-[11px] font-black text-zinc-500">{day}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-px bg-zinc-200">
                   {mobileMonthDays.map((day) => {
                     const key = academyDateKey(day);
                     const dayEvents = eventsByDate[key] || [];
+                    const inMonth = day.getMonth() === monthCursor.getMonth();
                     const isToday = key === academyDateKey(new Date());
                     const isSelectedDate = key === selectedDateKey;
                     return (
@@ -1599,27 +1620,48 @@ function AcademySchedulePanel() {
                           setTimeEditor(null);
                           setError("");
                         }}
-                        className={`flex min-w-[52px] flex-col items-center rounded-[10px] px-2 py-2 text-xs transition ${
+                        className={`relative flex aspect-square min-h-[44px] flex-col items-center justify-start p-1.5 text-xs transition ${
                           isSelectedDate
                             ? "bg-black text-white"
                             : isToday
                               ? "bg-zinc-900 text-white"
                               : dayEvents.length
-                                ? "bg-zinc-100 text-zinc-950"
-                                : "bg-white text-zinc-500 ring-1 ring-zinc-100"
+                                ? "bg-white text-zinc-950"
+                                : inMonth
+                                  ? "bg-white text-zinc-500"
+                                  : "bg-zinc-50 text-zinc-300"
                         }`}
                       >
-                        <span className="font-bold">{academyMobileWeekdayLabel(day)}</span>
-                        <span className="mt-1 text-base font-black leading-none">{day.getDate()}</span>
-                        <span className={`mt-1 h-1.5 w-1.5 rounded-full ${dayEvents.length ? "bg-current" : "bg-transparent"}`} />
+                        <span className={`grid h-6 min-w-6 place-items-center rounded-full text-sm font-black leading-none ${isSelectedDate ? "bg-white text-black" : ""}`}>
+                          {day.getDate()}
+                        </span>
+                        {dayEvents.length ? (
+                          <span className="mt-auto flex max-w-full items-center justify-center gap-0.5 pb-0.5">
+                            {dayEvents.slice(0, 3).map((event) => (
+                              <span key={event.id} className="h-1.5 w-1.5 rounded-full bg-current" />
+                            ))}
+                          </span>
+                        ) : null}
+                        {dayEvents.length > 3 ? <span className="absolute bottom-1 right-1 text-[9px] font-black">+{dayEvents.length - 3}</span> : null}
                       </button>
                     );
                   })}
+                  </div>
                 </div>
                 <div className="space-y-2 rounded-[12px] bg-zinc-50 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-black text-zinc-950">{selectedDateLabel}</p>
-                    <p className="text-xs font-bold text-zinc-500">{selectedDateEvents.length}개</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-zinc-500">{selectedDateEvents.length}개</p>
+                      <button
+                        type="button"
+                        onClick={() => openScheduleForm(selectedDateKey)}
+                        className="grid h-8 w-8 place-items-center rounded-full bg-black text-white transition hover:bg-zinc-800"
+                        aria-label="선택한 날짜에 일정 추가"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   {selectedDateEvents.length ? (
                     <div className="space-y-2">
@@ -1656,7 +1698,7 @@ function AcademySchedulePanel() {
                   )}
                 </div>
               </div>
-              <div className="hidden overflow-hidden rounded-[10px] bg-zinc-100 sm:block">
+              <div className="hidden overflow-hidden rounded-[10px] bg-zinc-100 lg:block">
               <div>
                 <div className="grid grid-cols-7 bg-zinc-100">
                   {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
@@ -1770,7 +1812,7 @@ function AcademySchedulePanel() {
           </CardContent>
         </Card>
 
-        <aside className="space-y-3">
+        <aside className="hidden space-y-3 lg:block">
           <Card className="bg-white">
             <CardContent className="flex items-center justify-between gap-2 p-3">
               <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(-1)} aria-label="이전 달">
@@ -1900,7 +1942,7 @@ function AcademySchedulePanel() {
       {selectedLiveLectureEvent ? (
         <Link
           href={selectedLiveLectureHref}
-          className="fixed bottom-36 right-4 z-[80] inline-flex h-11 w-11 items-center justify-center rounded-full bg-black text-white shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition hover:bg-zinc-800 sm:bottom-20 sm:right-6 sm:h-12 sm:w-12"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+8.5rem)] right-5 z-[80] inline-flex h-10 w-10 items-center justify-center rounded-full bg-black text-white shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition hover:bg-zinc-800 lg:bottom-20 lg:right-6 lg:h-12 lg:w-12"
           aria-label={`${selectedLiveLectureEvent.title} 실시간 강의 열기`}
           title={`${selectedLiveLectureClass?.name || "클래스"} 실시간 강의`}
         >
@@ -1910,14 +1952,8 @@ function AcademySchedulePanel() {
 
       <button
         type="button"
-        onClick={() => {
-          setForm((current) => {
-            if (current.class_id || !classes[0]?.id) return current;
-            return { ...current, class_id: classes[0].id };
-          });
-          setFormOpen(true);
-        }}
-        className="fixed bottom-20 right-4 z-[80] inline-flex h-11 w-11 items-center justify-center rounded-full bg-black text-white transition hover:bg-zinc-800 sm:bottom-6 sm:right-6 sm:h-12 sm:w-12"
+        onClick={() => openScheduleForm()}
+        className="fixed bottom-6 right-6 z-[80] hidden h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition hover:bg-zinc-800 lg:inline-flex"
         aria-label="일정 추가"
       >
         <Plus className="h-5 w-5" />
