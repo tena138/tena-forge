@@ -70,7 +70,6 @@ type BatchFolderDropTarget = {
 const defaultReviewFilter: ReviewFilter = "all";
 const viewModeStorageKey = "tena.problemBrowser.viewMode";
 const batchFoldersStorageKey = "tena.problemBrowser.batchFolders";
-const selectedProblemsStorageKey = "tena.problemBrowser.selectedIds";
 const archiveDragHotspotOffset = { x: -32, y: -38 };
 const sortOptions: Array<{ value: ProblemSort; label: string }> = [
   { value: "source_order", label: "원문 순" },
@@ -194,25 +193,6 @@ function flattenBatchFolderTree(folders: BatchFolder[]) {
   return output;
 }
 
-function readSelectedProblemIds() {
-  if (typeof window === "undefined") return [];
-  try {
-    const parsed = JSON.parse(window.sessionStorage.getItem(selectedProblemsStorageKey) || "[]");
-    return Array.isArray(parsed) ? [...new Set(parsed.map((value) => String(value)).filter(Boolean))] : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeSelectedProblemIds(ids: string[]) {
-  if (typeof window === "undefined") return;
-  if (!ids.length) {
-    window.sessionStorage.removeItem(selectedProblemsStorageKey);
-    return;
-  }
-  window.sessionStorage.setItem(selectedProblemsStorageKey, JSON.stringify([...new Set(ids)]));
-}
-
 function readPageParam(value: string | null) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
@@ -298,7 +278,7 @@ function ProblemsBrowser() {
   const [sort, setSort] = useState<ProblemSort>(() => readSort(searchParams.get("sort")));
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
-  const [selectedIds, setSelectedIds] = useState<string[]>(() => readSelectedProblemIds());
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedProblemCache, setSelectedProblemCache] = useState<Record<string, Problem>>({});
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [quickExportOpen, setQuickExportOpen] = useState(false);
@@ -384,15 +364,12 @@ function ProblemsBrowser() {
     const saved = window.localStorage.getItem(viewModeStorageKey);
     if (saved === "grid" || saved === "list") setViewMode(saved);
     setBatchFolders(readBatchFolders());
+    window.sessionStorage.removeItem("tena.problemBrowser.selectedIds");
   }, []);
 
   useEffect(() => {
     window.localStorage.setItem(viewModeStorageKey, viewMode);
   }, [viewMode]);
-
-  useEffect(() => {
-    writeSelectedProblemIds(selectedIds);
-  }, [selectedIds]);
 
   useEffect(() => {
     if (selectedIds.length) return;
@@ -500,6 +477,8 @@ function ProblemsBrowser() {
     setReviewFilter(readReviewFilter(searchParams.get("needs_review")));
     setSort(readSort(searchParams.get("sort")));
     setPage(readPageParam(searchParams.get("page")));
+    setSelectedIds([]);
+    setSelectedProblemCache({});
   }, [paramsKey]);
 
   const selectedBatchFolder = useMemo(() => batchFolders.find((folder) => folder.id === selectedBatchFolderId) || null, [batchFolders, selectedBatchFolderId]);
