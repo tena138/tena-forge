@@ -134,22 +134,21 @@ function PixelCoAgentFace({ compact = false }: { compact?: boolean }) {
       aria-label="코에이전트"
     >
       <svg
-        viewBox="0 0 18 18"
-        className="h-[26px] w-[26px] [image-rendering:pixelated]"
+        viewBox="0 0 20 20"
+        className={cn(compact ? "h-[22px] w-[22px]" : "h-6 w-6", "[image-rendering:pixelated]")}
         shapeRendering="crispEdges"
         aria-hidden="true"
       >
-        <rect x="8" y="1" width="2" height="2" fill="currentColor" />
-        <rect x="7" y="3" width="4" height="1" fill="currentColor" />
-        <rect x="4" y="4" width="10" height="2" fill="currentColor" />
-        <rect x="3" y="6" width="12" height="8" fill="currentColor" />
-        <rect x="2" y="8" width="1" height="4" fill="currentColor" />
-        <rect x="15" y="8" width="1" height="4" fill="currentColor" />
-        <rect x="5" y="6" width="8" height="6" fill="white" />
-        <rect x="6" y="8" width="2" height="2" fill="currentColor" />
-        <rect x="10" y="8" width="2" height="2" fill="currentColor" />
-        <rect x="7" y="11" width="4" height="1" fill="currentColor" />
-        <rect x="5" y="14" width="8" height="1" fill="currentColor" />
+        <rect x="9" y="2" width="2" height="2" fill="currentColor" />
+        <rect x="8" y="4" width="4" height="1" fill="currentColor" />
+        <rect x="5" y="6" width="10" height="1" fill="currentColor" />
+        <rect x="4" y="7" width="1" height="7" fill="currentColor" />
+        <rect x="15" y="7" width="1" height="7" fill="currentColor" />
+        <rect x="5" y="14" width="10" height="1" fill="currentColor" />
+        <rect x="6" y="8" width="8" height="5" fill="white" />
+        <rect x="7" y="9" width="2" height="2" fill="currentColor" />
+        <rect x="11" y="9" width="2" height="2" fill="currentColor" />
+        <rect x="8" y="12" width="4" height="1" fill="currentColor" />
       </svg>
     </span>
   );
