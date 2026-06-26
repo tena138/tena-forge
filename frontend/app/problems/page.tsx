@@ -299,10 +299,17 @@ function ProblemsBrowser() {
   const listRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const problemClickTimerRef = useRef<number | null>(null);
   const loadRequestRef = useRef(0);
   const loadAbortRef = useRef<AbortController | null>(null);
   const archiveEngineInitializedRef = useRef(false);
   const activeBatchFolderDragKey = batchFolderDrag ? `${batchFolderDrag.folderId}:${batchFolderDrag.pointerId}` : "";
+
+  useEffect(() => {
+    return () => {
+      if (problemClickTimerRef.current !== null) window.clearTimeout(problemClickTimerRef.current);
+    };
+  }, []);
 
   function setBatchFolderDragState(nextDrag: BatchFolderDragState | null) {
     batchFolderDragRef.current = nextDrag;
@@ -645,6 +652,7 @@ function ProblemsBrowser() {
   }, [archiveFolders, parsedPageRange, reviewFilter, search, selectedBatch, selectedBatchFolderId, selectedBatchId, selectedDiffs, subjects, unit]);
 
   function resetPageAnd(run: () => void) {
+    clearPendingProblemClick();
     loadRequestRef.current += 1;
     setPage(1);
     setSelectedIds([]);
@@ -970,9 +978,23 @@ function ProblemsBrowser() {
     });
   }
 
-  function handleProblemBlockClick(problem: Problem) {
+  function clearPendingProblemClick() {
+    if (problemClickTimerRef.current === null) return;
+    window.clearTimeout(problemClickTimerRef.current);
+    problemClickTimerRef.current = null;
+  }
+
+  function handleProblemBlockClick(event: MouseEvent<HTMLElement>, problem: Problem) {
     if (suppressClick) return;
-    toggleProblemSelection(problem);
+    if (event.detail > 1) {
+      clearPendingProblemClick();
+      return;
+    }
+    clearPendingProblemClick();
+    problemClickTimerRef.current = window.setTimeout(() => {
+      problemClickTimerRef.current = null;
+      toggleProblemSelection(problem);
+    }, 220);
   }
 
   function problemDetailHref(problem: Problem) {
@@ -980,12 +1002,14 @@ function ProblemsBrowser() {
   }
 
   function openProblemDetail(problem: Problem) {
+    clearPendingProblemClick();
     router.push(problemDetailHref(problem));
   }
 
   function handleProblemContextMenu(event: MouseEvent<HTMLElement>, problem: Problem) {
     event.preventDefault();
     event.stopPropagation();
+    clearPendingProblemClick();
     setBatchFolderContextMenu(null);
     setSelectedProblemCache((current) => (current[problem.id] ? current : { ...current, [problem.id]: problem }));
     setProblemContextMenu({ problem, x: event.clientX, y: event.clientY });
@@ -1003,7 +1027,8 @@ function ProblemsBrowser() {
     if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    handleProblemBlockClick(problem);
+    clearPendingProblemClick();
+    toggleProblemSelection(problem);
   }
 
   async function confirmDeleteSelectedProblems() {
@@ -1196,7 +1221,7 @@ function ProblemsBrowser() {
         tabIndex={0}
         aria-pressed={selected}
         aria-label={`${problem.problem_number}번 문항 ${selected ? "선택 해제" : "선택"}`}
-        onClick={() => handleProblemBlockClick(problem)}
+        onClick={(event) => handleProblemBlockClick(event, problem)}
         onDoubleClick={() => openProblemDetail(problem)}
         onContextMenu={(event) => handleProblemContextMenu(event, problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
@@ -1245,7 +1270,7 @@ function ProblemsBrowser() {
         tabIndex={0}
         aria-pressed={selected}
         aria-label={`${problem.problem_number}번 문항 ${selected ? "선택 해제" : "선택"}`}
-        onClick={() => handleProblemBlockClick(problem)}
+        onClick={(event) => handleProblemBlockClick(event, problem)}
         onDoubleClick={() => openProblemDetail(problem)}
         onContextMenu={(event) => handleProblemContextMenu(event, problem)}
         onKeyDown={(event) => handleProblemBlockKeyDown(event, problem)}
