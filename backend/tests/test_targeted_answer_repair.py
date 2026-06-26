@@ -137,6 +137,27 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertIn("Find the final value", note)
         self.assertIn("Repair attempt 1 of 1", note)
 
+    def test_targeted_prompt_strengthens_single_slot_contract(self):
+        note = _targeted_answer_repair_prompt_note(
+            [
+                {
+                    "problem_number": "20",
+                    "problem_order": 20,
+                    "global_index": 20,
+                    "problem_text": "Last visible problem with a cropped answer key row.",
+                }
+            ],
+            page_index=9,
+            attempt=2,
+            max_attempts=3,
+            scope_note="single slot retry",
+        )
+
+        self.assertIn("Single unresolved slot mode", note)
+        self.assertIn("problem_number exactly \"20\"", note)
+        self.assertIn("cropped, omitted, or visibly misread", note)
+        self.assertIn("Return neighboring answers only when they are needed as local anchors", note)
+
     def test_targeted_repair_retries_until_all_missing_answers_match(self):
         problems = [
             {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},
@@ -322,7 +343,58 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(report["attempts"][-1]["mode"], "single_slot_fallback")
         self.assertEqual(report["attempts"][-1]["target_problem_numbers"], ["2"])
         self.assertEqual(extract_mock.call_count, 4)
-        self.assertIn("Single-slot final fallback", single_slot_kwargs["target_repair_scope_note"])
+        self.assertIn("Single-slot final fallback attempt 1/2", single_slot_kwargs["target_repair_scope_note"])
+
+    def test_single_slot_fallback_retries_same_slot_before_giving_up(self):
+        problems = [
+            {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},
+            {"problem_number": 20, "problem_no": "20", "problem_text": "Tail problem", "global_index": 20},
+        ]
+        solutions = [{"problem_number": "1", "answer": "3", "solution_steps": None}]
+        metadata = [
+            {"page_index": 0, "page_type": "problem_page", "detected_problem_headers": ["20"]},
+            {"page_index": 1, "page_type": "solution_page", "detected_solution_headers": ["1"]},
+            {"page_index": 2, "page_type": "solution_page", "detected_solution_headers": ["20"]},
+        ]
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                side_effect=[
+                    [],
+                    [],
+                    [],
+                    [],
+                    [{"problem_number": "20", "answer": "②", "solution_steps": "final"}],
+                ],
+            ) as extract_mock,
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                3,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        first_single_slot_kwargs = extract_mock.call_args_list[3].kwargs
+        second_single_slot_kwargs = extract_mock.call_args_list[4].kwargs
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertEqual(report["single_slot_fallback_attempt_count"], 2)
+        self.assertEqual(report["attempts"][-2]["single_slot_attempt"], 1)
+        self.assertEqual(report["attempts"][-1]["single_slot_attempt"], 2)
+        self.assertEqual(extract_mock.call_count, 5)
+        self.assertIn("attempt 1/2", first_single_slot_kwargs["target_repair_scope_note"])
+        self.assertIn("attempt 2/2", second_single_slot_kwargs["target_repair_scope_note"])
 
     def test_targeted_repair_replaces_sectioned_blank_candidate_with_answerful_number_candidate(self):
         problems = [

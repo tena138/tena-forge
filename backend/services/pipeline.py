@@ -2069,12 +2069,22 @@ def _targeted_answer_repair_prompt_note(
     context = "\n".join(context_lines) if context_lines else "- no problem snippets supplied"
     page_scope = f"Current rendered page index: {page_index}.\n" if page_index is not None else ""
     scope_line = f"- Scope: {scope_note}\n" if scope_note else ""
+    single_slot_line = ""
+    if len(context_lines) == 1 and missing_numbers:
+        requested_number = missing_numbers[0]
+        single_slot_line = (
+            "- Single unresolved slot mode: decide whether this rendered page contains the final answer for this one exact requested slot. "
+            f"If yes, return one answer object with problem_number exactly {json.dumps(requested_number, ensure_ascii=False)}. "
+            "Use the requested problem_number even when the printed number is cropped, omitted, or visibly misread but the answer is clearly the final answer for this slot from order, adjacency, or the supplied problem snippet. "
+            "Return neighboring answers only when they are needed as local anchors; otherwise return just the requested slot.\n"
+        )
     return (
         "Targeted missing-answer repair pass:\n"
         f"{page_scope}"
         f"{scope_line}"
         f"- Repair attempt {max(1, attempt)} of {max(1, max_attempts)}. Previous extraction and recovery passes still left these answers blank.\n"
         f"- Recover answers only for these still-unmatched problem numbers: {_compact_inventory_numbers(missing_numbers)}.\n"
+        f"{single_slot_line}"
         "- Return [] if this page does not explicitly show a final answer for one of those requested numbers.\n"
         "- Do not return answers for already matched problem numbers unless they are necessary to disambiguate a repeated number in the requested list.\n"
         "- If the same requested problem number appears more than once, treat each requested source_order/global_index/local_index as a separate slot and return a separate answer object for each visible slot.\n"
@@ -3349,6 +3359,7 @@ def repair_missing_answer_matches_with_targeted_recovery(
                     break
 
     if int(current_score.get("missing_answer_count") or 0) > 0 and source_page_count > 0:
+        single_slot_attempt_limit = max(2, min(3, attempt_limit))
         single_slot_contexts = [
             item for item in (current_score.get("missing_answer_problems") or [])
             if isinstance(item, dict) and item.get("problem_number")
@@ -3376,96 +3387,119 @@ def repair_missing_answer_matches_with_targeted_recovery(
             if not active_context:
                 continue
 
-            single_slot_fallback_attempted = True
-            single_slot_fallback_attempt_count += 1
-            fallback_attempt = attempt_limit + full_document_fallback_attempt_count + single_slot_fallback_attempt_count
-            single_page_indexes = _targeted_answer_repair_page_indexes(
-                page_metadata,
-                source_page_count,
-                [target_number],
-                neighbor_radius=attempt_limit + slot_round,
-                fallback_tail_pages=source_page_count,
-                include_all_answer_candidates=True,
-            )
-            if not single_page_indexes:
-                single_page_indexes = list(range(source_page_count))
-
-            repair_units = max(len(single_page_indexes) * units_per_page, 1)
-            repair_total_units = working_total_units + repair_units
-            set_progress(
-                batch_id,
-                f"{progress_label} (단일 문항 재확인 {single_slot_fallback_attempt_count})",
-                working_total_units,
-                repair_total_units,
-            )
-            recovery_metadata = _metadata_by_page(
-                _metadata_with_document_kind(page_metadata, "solution", set(single_page_indexes)),
-                "solution",
-            )
-            single_scope_note = (
-                "Single-slot final fallback after grouped targeted and full-document recovery still left this exact "
-                "problem unanswered. Ignore unrelated numbers unless they are needed only as local anchors; return the "
-                "requested problem_number when the visible final answer belongs to this slot but the printed number is "
-                "cropped, omitted, or misread."
-            )
-            recovered_solutions = extract_mixed_pdf_answer_recovery(
-                source_path,
-                single_page_indexes,
-                source_page_count,
-                dpi,
-                batch_id,
-                offset=working_total_units,
-                total_units=repair_total_units,
-                units_per_page=units_per_page,
-                solution_page_metadata=recovery_metadata,
-                document_type_hints=document_type_hints,
-                problem_inventory=problem_inventory,
-                target_problem_contexts=[active_context],
-                target_repair_attempt=single_slot_fallback_attempt_count,
-                target_repair_max_attempts=max(1, len(single_slot_contexts)),
-                target_repair_scope_note=single_scope_note,
-            )
-            working_total_units = repair_total_units
-            recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
-            recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
-                recovered_solutions,
-                [active_context],
-                working_solutions,
-            )
-            recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
-            candidate_solutions = _overlay_quick_answer_solutions(
-                recovered_solutions,
-                working_solutions,
-                source_label="targeted_answer_repair_single_slot",
-                replace_same_number_blank_fallbacks=True,
-            )
-            candidate_score = _answer_match_score(problems, candidate_solutions)
-            current_missing = int(current_score.get("missing_answer_count") or 0)
-            candidate_missing = int(candidate_score.get("missing_answer_count") or 0)
-            current_matched = int(current_score.get("matched_answer_count") or 0)
-            candidate_matched = int(candidate_score.get("matched_answer_count") or 0)
-            choose_candidate = candidate_missing < current_missing or candidate_matched > current_matched
-            attempts.append(
-                {
-                    "attempt": fallback_attempt,
-                    "mode": "single_slot_fallback",
-                    "single_slot_round": single_slot_fallback_attempt_count,
-                    "target_problem_numbers": [target_number],
-                    "target_page_indexes": single_page_indexes,
-                    "target_page_numbers": [index + 1 for index in single_page_indexes],
-                    "recovered_answer_count": _solution_answer_count(recovered_solutions),
-                    "candidate_answer_count": _solution_answer_count(candidate_solutions),
-                    "current": current_score,
-                    "candidate": candidate_score,
-                    "chosen": "targeted_repair" if choose_candidate else "current",
-                }
-            )
-            if choose_candidate:
-                improved_once = True
-                working_solutions = candidate_solutions
-                current_score = candidate_score
-                if int(current_score.get("missing_answer_count") or 0) == 0:
+            for single_slot_attempt in range(1, single_slot_attempt_limit + 1):
+                missing_contexts = [
+                    item for item in (current_score.get("missing_answer_problems") or [])
+                    if isinstance(item, dict) and item.get("problem_number")
+                ]
+                active_context = next(
+                    (
+                        item for item in missing_contexts
+                        if _number_key_or_none(item.get("problem_number")) == target_number
+                        and item.get("problem_order") == single_context.get("problem_order")
+                        and item.get("global_index") == single_context.get("global_index")
+                        and item.get("local_index") == single_context.get("local_index")
+                    ),
+                    next((item for item in missing_contexts if _number_key_or_none(item.get("problem_number")) == target_number), None),
+                )
+                if not active_context:
                     break
+                single_slot_fallback_attempted = True
+                single_slot_fallback_attempt_count += 1
+                fallback_attempt = attempt_limit + full_document_fallback_attempt_count + single_slot_fallback_attempt_count
+                if single_slot_attempt >= single_slot_attempt_limit:
+                    single_page_indexes = list(range(source_page_count))
+                else:
+                    single_page_indexes = _targeted_answer_repair_page_indexes(
+                        page_metadata,
+                        source_page_count,
+                        [target_number],
+                        neighbor_radius=attempt_limit + slot_round + single_slot_attempt,
+                        fallback_tail_pages=source_page_count,
+                        include_all_answer_candidates=True,
+                    )
+                    if not single_page_indexes:
+                        single_page_indexes = list(range(source_page_count))
+
+                repair_units = max(len(single_page_indexes) * units_per_page, 1)
+                repair_total_units = working_total_units + repair_units
+                set_progress(
+                    batch_id,
+                    f"{progress_label} (단일 문항 재확인 {single_slot_fallback_attempt_count})",
+                    working_total_units,
+                    repair_total_units,
+                )
+                recovery_metadata = _metadata_by_page(
+                    _metadata_with_document_kind(page_metadata, "solution", set(single_page_indexes)),
+                    "solution",
+                )
+                single_scope_note = (
+                    f"Single-slot final fallback attempt {single_slot_attempt}/{single_slot_attempt_limit} after grouped targeted "
+                    "and full-document recovery still left this exact problem unanswered. Treat this as a one-slot repair task: "
+                    "return the requested problem_number when the visible final answer belongs to this slot, even if the printed "
+                    "number is cropped, omitted, or misread. Use neighboring answers only as anchors. On later attempts, re-check "
+                    "the full document context, page bottoms, compact answer keys, and continuation lines before returning []."
+                )
+                recovered_solutions = extract_mixed_pdf_answer_recovery(
+                    source_path,
+                    single_page_indexes,
+                    source_page_count,
+                    dpi,
+                    batch_id,
+                    offset=working_total_units,
+                    total_units=repair_total_units,
+                    units_per_page=units_per_page,
+                    solution_page_metadata=recovery_metadata,
+                    document_type_hints=document_type_hints,
+                    problem_inventory=problem_inventory,
+                    target_problem_contexts=[active_context],
+                    target_repair_attempt=single_slot_attempt,
+                    target_repair_max_attempts=single_slot_attempt_limit,
+                    target_repair_scope_note=single_scope_note,
+                )
+                working_total_units = repair_total_units
+                recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
+                recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
+                    recovered_solutions,
+                    [active_context],
+                    working_solutions,
+                )
+                recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
+                candidate_solutions = _overlay_quick_answer_solutions(
+                    recovered_solutions,
+                    working_solutions,
+                    source_label="targeted_answer_repair_single_slot",
+                    replace_same_number_blank_fallbacks=True,
+                )
+                candidate_score = _answer_match_score(problems, candidate_solutions)
+                current_missing = int(current_score.get("missing_answer_count") or 0)
+                candidate_missing = int(candidate_score.get("missing_answer_count") or 0)
+                current_matched = int(current_score.get("matched_answer_count") or 0)
+                candidate_matched = int(candidate_score.get("matched_answer_count") or 0)
+                choose_candidate = candidate_missing < current_missing or candidate_matched > current_matched
+                attempts.append(
+                    {
+                        "attempt": fallback_attempt,
+                        "mode": "single_slot_fallback",
+                        "single_slot_round": single_slot_fallback_attempt_count,
+                        "single_slot_attempt": single_slot_attempt,
+                        "single_slot_max_attempts": single_slot_attempt_limit,
+                        "target_problem_numbers": [target_number],
+                        "target_page_indexes": single_page_indexes,
+                        "target_page_numbers": [index + 1 for index in single_page_indexes],
+                        "recovered_answer_count": _solution_answer_count(recovered_solutions),
+                        "candidate_answer_count": _solution_answer_count(candidate_solutions),
+                        "current": current_score,
+                        "candidate": candidate_score,
+                        "chosen": "targeted_repair" if choose_candidate else "current",
+                    }
+                )
+                if choose_candidate:
+                    improved_once = True
+                    working_solutions = candidate_solutions
+                    current_score = candidate_score
+                    if int(current_score.get("missing_answer_count") or 0) == 0:
+                        break
 
     report = {
         "strategy": "targeted_missing_answer_repair",
