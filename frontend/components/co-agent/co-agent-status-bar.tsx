@@ -126,8 +126,7 @@ function PixelCoAgentFace({ compact = false }: { compact?: boolean }) {
     <span
       data-coagent-command-slot
       className={cn(
-        "relative z-[1] grid shrink-0 place-items-center rounded-[9px] bg-white text-black ring-1 ring-black/10",
-        "shadow-[0_6px_16px_rgba(24,24,27,0.08)]",
+        "relative z-[1] grid shrink-0 place-items-center text-black",
         compact ? "h-8 w-8" : "h-9 w-9"
       )}
       role="img"
@@ -139,16 +138,9 @@ function PixelCoAgentFace({ compact = false }: { compact?: boolean }) {
         shapeRendering="crispEdges"
         aria-hidden="true"
       >
-        <rect x="9" y="2" width="2" height="2" fill="currentColor" />
-        <rect x="8" y="4" width="4" height="1" fill="currentColor" />
-        <rect x="5" y="6" width="10" height="1" fill="currentColor" />
-        <rect x="4" y="7" width="1" height="7" fill="currentColor" />
-        <rect x="15" y="7" width="1" height="7" fill="currentColor" />
-        <rect x="5" y="14" width="10" height="1" fill="currentColor" />
-        <rect x="6" y="8" width="8" height="5" fill="white" />
-        <rect x="7" y="9" width="2" height="2" fill="currentColor" />
-        <rect x="11" y="9" width="2" height="2" fill="currentColor" />
-        <rect x="8" y="12" width="4" height="1" fill="currentColor" />
+        <rect x="6" y="7" width="3" height="3" fill="currentColor" />
+        <rect x="11" y="7" width="3" height="3" fill="currentColor" />
+        <rect x="8" y="13" width="4" height="2" fill="currentColor" />
       </svg>
     </span>
   );
