@@ -191,9 +191,15 @@ function AccountUsageSummary({
   );
 }
 
-function PlanBadge({ label, tone }: { label: string; tone: PlanTone }) {
+function PlanBadge({ label, tone, compact = false }: { label: string; tone: PlanTone; compact?: boolean }) {
   return (
-    <Badge className={cn("rounded-full border px-2.5 font-black shadow-none", planStyles[tone])}>
+    <Badge
+      className={cn(
+        "rounded-full border font-black leading-none shadow-none",
+        compact ? "h-6 px-2 text-[11px]" : "px-2.5 text-xs",
+        planStyles[tone]
+      )}
+    >
       <span>{label}</span>
     </Badge>
   );
@@ -350,18 +356,18 @@ export function HeaderAccountSummary() {
       <div className="relative">
         <button
           type="button"
-          className="flex min-w-0 items-center gap-2.5 rounded-[8px] border border-transparent bg-transparent px-2.5 py-1.5 text-left shadow-none transition-all hover:border-transparent hover:bg-zinc-100 hover:shadow-none"
+          className="flex min-w-0 items-center gap-1.5 rounded-[8px] border border-transparent bg-transparent px-1 py-1 text-left shadow-none transition-all hover:border-transparent hover:bg-zinc-100 hover:shadow-none sm:gap-2.5 sm:px-2.5 sm:py-1.5"
           onClick={() => setOpen((value) => !value)}
           aria-label="계정 메뉴"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-black text-sm font-bold text-white">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-black text-xs font-bold text-white sm:h-8 sm:w-8 sm:rounded-[7px] sm:text-sm">
             {initials}
           </span>
           <span className="hidden min-w-0 sm:block">
             <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{accountName}</span>
             <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{accountEmail}</span>
           </span>
-          <PlanBadge label={plan.label} tone={plan.tone} />
+          <PlanBadge label={plan.label} tone={plan.tone} compact />
         </button>
 
       {open && (
