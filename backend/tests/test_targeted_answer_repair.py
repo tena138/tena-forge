@@ -226,6 +226,54 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(extract_mock.call_count, 2)
         self.assertIn("Full-document fallback", fallback_kwargs["target_repair_scope_note"])
 
+    def test_full_document_fallback_retries_until_missing_answer_matches(self):
+        problems = [
+            {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},
+            {"problem_number": 2, "problem_no": "2", "problem_text": "Problem 2", "global_index": 2},
+        ]
+        solutions = [{"problem_number": "1", "answer": "3", "solution_steps": None}]
+        metadata = [
+            {"page_index": 0, "page_type": "problem_page", "detected_problem_headers": ["2"]},
+            {"page_index": 1, "page_type": "problem_page", "detected_problem_headers": []},
+            {"page_index": 2, "page_type": "problem_page", "detected_problem_headers": []},
+            {"page_index": 3, "page_type": "problem_page", "detected_problem_headers": []},
+        ]
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                side_effect=[
+                    [],
+                    [],
+                    [{"problem_number": "2", "answer": "7", "solution_steps": "final"}],
+                ],
+            ) as extract_mock,
+        ):
+            repaired, report, total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                4,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        second_fallback_kwargs = extract_mock.call_args_list[2].kwargs
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertEqual(report["full_document_fallback_attempt_count"], 2)
+        self.assertEqual(report["attempts"][-1]["fallback_round"], 2)
+        self.assertEqual(total_units, 12)
+        self.assertEqual(extract_mock.call_count, 3)
+        self.assertIn("previous full-document fallback", second_fallback_kwargs["target_repair_scope_note"])
+
     def test_targeted_repair_replaces_sectioned_blank_candidate_with_answerful_number_candidate(self):
         problems = [
             {

@@ -3005,6 +3005,7 @@ def repair_missing_answer_matches_with_targeted_recovery(
     improved_once = False
     no_target_pages = False
     full_document_fallback_attempted = False
+    full_document_fallback_attempt_count = 0
 
     for attempt in range(1, attempt_limit + 1):
         missing_contexts = [
@@ -3099,22 +3100,41 @@ def repair_missing_answer_matches_with_targeted_recovery(
                 break
 
     if int(current_score.get("missing_answer_count") or 0) > 0 and source_page_count > 0:
-        missing_contexts = [
-            item for item in (current_score.get("missing_answer_problems") or [])
-            if isinstance(item, dict) and item.get("problem_number")
-        ]
-        if missing_contexts:
+        fallback_attempt_limit = max(2, min(3, attempt_limit))
+        for fallback_round in range(1, fallback_attempt_limit + 1):
+            missing_contexts = [
+                item for item in (current_score.get("missing_answer_problems") or [])
+                if isinstance(item, dict) and item.get("problem_number")
+            ]
+            if not missing_contexts:
+                break
             full_document_fallback_attempted = True
-            fallback_attempt = attempt_limit + 1
+            full_document_fallback_attempt_count += 1
+            fallback_attempt = attempt_limit + fallback_round
             fallback_page_indexes = list(range(source_page_count))
             missing_numbers = [str(item["problem_number"]) for item in missing_contexts]
             repair_units = max(len(fallback_page_indexes) * units_per_page, 1)
             repair_total_units = working_total_units + repair_units
-            set_progress(batch_id, f"{progress_label} (전체 재확인)", working_total_units, repair_total_units)
+            set_progress(
+                batch_id,
+                f"{progress_label} (전체 재확인 {fallback_round}/{fallback_attempt_limit})",
+                working_total_units,
+                repair_total_units,
+            )
             recovery_metadata = _metadata_by_page(
                 _metadata_with_document_kind(page_metadata, "solution", set(fallback_page_indexes)),
                 "solution",
             )
+            fallback_scope_note = (
+                f"Full-document fallback round {fallback_round}/{fallback_attempt_limit} for still-missing answers. "
+                "Ignore page-type metadata if needed; scan every rendered page for final answers, compact answer keys, "
+                "worked-solution final lines, and continuation lines."
+            )
+            if fallback_round > 1:
+                fallback_scope_note += (
+                    " A previous full-document fallback still left these exact requested slots blank, so focus only on "
+                    "the unresolved problem context and re-check answer tables, page bottoms, and the final visible solution on each page."
+                )
             recovered_solutions = extract_mixed_pdf_answer_recovery(
                 source_path,
                 fallback_page_indexes,
@@ -3128,12 +3148,9 @@ def repair_missing_answer_matches_with_targeted_recovery(
                 document_type_hints=document_type_hints,
                 problem_inventory=problem_inventory,
                 target_problem_contexts=missing_contexts,
-                target_repair_attempt=fallback_attempt,
-                target_repair_max_attempts=fallback_attempt,
-                target_repair_scope_note=(
-                    "Full-document fallback for still-missing answers. Ignore page-type metadata if needed; "
-                    "scan every rendered page for final answers, compact answer keys, and continuation lines."
-                ),
+                target_repair_attempt=fallback_round,
+                target_repair_max_attempts=fallback_attempt_limit,
+                target_repair_scope_note=fallback_scope_note,
             )
             working_total_units = repair_total_units
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
@@ -3154,6 +3171,8 @@ def repair_missing_answer_matches_with_targeted_recovery(
                 {
                     "attempt": fallback_attempt,
                     "mode": "full_document_fallback",
+                    "fallback_round": fallback_round,
+                    "fallback_max_rounds": fallback_attempt_limit,
                     "target_problem_numbers": missing_numbers,
                     "target_page_indexes": fallback_page_indexes,
                     "target_page_numbers": [index + 1 for index in fallback_page_indexes],
@@ -3168,12 +3187,15 @@ def repair_missing_answer_matches_with_targeted_recovery(
                 improved_once = True
                 working_solutions = candidate_solutions
                 current_score = candidate_score
+                if int(current_score.get("missing_answer_count") or 0) == 0:
+                    break
 
     report = {
         "strategy": "targeted_missing_answer_repair",
         "attempt_count": len(attempts),
-        "max_attempts": attempt_limit + (1 if full_document_fallback_attempted else 0),
+        "max_attempts": attempt_limit + full_document_fallback_attempt_count,
         "full_document_fallback_attempted": full_document_fallback_attempted,
+        "full_document_fallback_attempt_count": full_document_fallback_attempt_count,
         "attempts": attempts,
         "initial": initial_score,
         "final": current_score,
