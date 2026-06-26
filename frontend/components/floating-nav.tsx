@@ -262,7 +262,7 @@ export function FloatingNav({
       ref={navRef}
       className={cn(
         "fixed bottom-0 left-0 top-[65px] z-[2000] hidden flex-col overflow-y-auto bg-transparent py-4 shadow-none transition-[width,padding] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex",
-        isCollapsed ? "w-16 px-1.5" : "w-48 px-2"
+        isCollapsed ? "w-16 px-1.5" : "w-40 px-1.5"
       )}
       data-coagent-sidebar-nav="desktop"
       onMouseEnter={() => hoverExpand && setAutoExpanded(true)}
@@ -280,7 +280,7 @@ export function FloatingNav({
       <div className="space-y-3">
         {visibleSections.map((section) => (
           <section key={section.title} className={cn("overflow-hidden rounded-[12px]", section.panel)}>
-            <div className={cn("flex items-center", isCollapsed ? "justify-center px-1 py-2" : "gap-2 px-2.5 py-2.5")}>
+            <div className={cn("flex items-center", isCollapsed ? "justify-center px-1 py-2" : "gap-1.5 px-2 py-2.5")}>
               <span className={cn("rounded-full", section.accent, isCollapsed ? "h-1.5 w-8" : "h-8 w-1")} />
               {!isCollapsed && (
                 <div className="min-w-0">
@@ -289,7 +289,7 @@ export function FloatingNav({
               )}
               {isCollapsed && <span className="sr-only">{section.title}</span>}
             </div>
-            <div className="space-y-0.5 p-1">
+            <div className="space-y-0.5 p-0.5">
               {section.items.map((item, index) => {
                 const active = isActive(pathname, item.href, searchParams);
                 const coAgentAnchor = coAgentAnchorFor(item);
