@@ -1218,13 +1218,7 @@ function AcademySchedulePanel() {
   const studentCount = useMemo(() => classes.reduce((sum, classRow) => sum + classRow.student_count, 0), [classes]);
   const deleteTargetClass = deleteTarget ? classById.get(deleteTarget.class_id) : null;
   const selectedEvent = useMemo(() => events.find((event) => event.id === selectedEventId) || null, [events, selectedEventId]);
-  const mobileMonthDays = useMemo(() => {
-    const days = [...monthDays];
-    while (days.length > 35 && days.slice(-7).every((day) => day.getMonth() !== monthCursor.getMonth())) {
-      days.splice(-7);
-    }
-    return days;
-  }, [monthCursor, monthDays]);
+  const mobileMonthDays = useMemo(() => monthDays.filter((day) => day.getMonth() === monthCursor.getMonth()), [monthCursor, monthDays]);
   const selectedDateEvents = eventsByDate[selectedDateKey] || [];
   const selectedDateLabel = selectedDateKey ? `${academyMobileDateLabel(`${selectedDateKey}T00:00:00`)} ${academyMobileWeekdayLabel(`${selectedDateKey}T00:00:00`)}` : "";
   const timeEditorEvent = useMemo(() => (timeEditor ? events.find((event) => event.id === timeEditor.eventId) || null : null), [events, timeEditor]);
@@ -1610,19 +1604,11 @@ function AcademySchedulePanel() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-[12px] bg-zinc-50 ring-1 ring-zinc-200">
-                  <div className="grid grid-cols-7 bg-zinc-100">
-                    {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-                      <div key={day} className="grid h-7 place-items-center text-[10px] font-black text-zinc-500">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7 gap-px bg-zinc-200">
+                <div className="rounded-[12px] bg-zinc-50 p-2 ring-1 ring-zinc-200">
+                  <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {mobileMonthDays.map((day) => {
                       const key = academyDateKey(day);
                       const dayEvents = eventsByDate[key] || [];
-                      const inMonth = day.getMonth() === monthCursor.getMonth();
                       const isToday = key === academyDateKey(new Date());
                       const isSelectedDate = key === selectedDateKey;
                       return (
@@ -1638,28 +1624,32 @@ function AcademySchedulePanel() {
                             setError("");
                           }}
                           aria-label={`${day.getDate()}일${dayEvents.length ? `, 일정 ${dayEvents.length}개` : ""}`}
-                          className={`relative flex h-11 min-w-0 flex-col items-center justify-start px-0.5 py-1 text-xs transition ${
-                            inMonth ? "bg-white" : "bg-zinc-50"
-                          } ${isSelectedDate ? "z-10 shadow-[inset_0_0_0_2px_#09090b]" : "hover:bg-zinc-50"}`}
+                          aria-pressed={isSelectedDate}
+                          className={`flex h-[58px] w-[46px] shrink-0 snap-center flex-col items-center justify-center rounded-[10px] px-1 text-xs transition ${
+                            isSelectedDate
+                              ? "bg-black text-white shadow-[0_8px_22px_rgba(0,0,0,0.16)]"
+                              : isToday
+                                ? "bg-white text-zinc-950 ring-1 ring-inset ring-zinc-300"
+                                : "bg-white text-zinc-950 hover:bg-zinc-100"
+                          }`}
                         >
+                          <span className={`text-[10px] font-bold leading-none ${isSelectedDate ? "text-white/70" : "text-zinc-500"}`}>
+                            {academyMobileWeekdayLabel(day)}
+                          </span>
                           <span
-                            className={`grid h-5 min-w-5 place-items-center rounded-full text-[11px] font-black leading-none ${
-                              isToday
-                                ? "bg-black text-white"
-                                : isSelectedDate
-                                  ? "bg-zinc-100 text-zinc-950"
-                                  : inMonth
-                                    ? "text-zinc-950"
-                                    : "text-zinc-300"
-                            }`}
+                            className="mt-1 text-base font-black leading-none"
                           >
                             {day.getDate()}
                           </span>
                           {dayEvents.length ? (
-                            <span className="mt-auto flex h-3 min-w-3 items-center justify-center rounded-full bg-zinc-950 px-1 text-[8px] font-black leading-none text-white">
-                              {dayEvents.length > 1 ? Math.min(dayEvents.length, 9) : ""}
+                            <span className={`mt-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-black leading-none ${
+                              isSelectedDate ? "bg-white text-black" : "bg-zinc-950 text-white"
+                            }`}>
+                              {Math.min(dayEvents.length, 9)}
                             </span>
-                          ) : null}
+                          ) : (
+                            <span className={`mt-1 h-1.5 w-1.5 rounded-full ${isSelectedDate ? "bg-white/45" : "bg-zinc-200"}`} />
+                          )}
                         </button>
                       );
                     })}
