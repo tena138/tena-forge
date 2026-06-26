@@ -1600,7 +1600,7 @@ function AcademySchedulePanel() {
               <div className="flex min-h-[560px] items-center justify-center text-zinc-500">불러오는 중</div>
             ) : (
               <>
-              <div className="min-w-0 space-y-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] lg:hidden">
+              <div className="min-w-0 space-y-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] lg:hidden">
                 <div className="flex items-center justify-between gap-2 px-1">
                   <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(-1)} aria-label="이전 달">
                     <ChevronLeft className="h-4 w-4" />
@@ -1610,10 +1610,10 @@ function AcademySchedulePanel() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-[14px] bg-zinc-50 ring-1 ring-zinc-200">
+                <div className="overflow-hidden rounded-[12px] bg-zinc-50 ring-1 ring-zinc-200">
                   <div className="grid grid-cols-7 bg-zinc-100">
                     {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-                      <div key={day} className="grid h-8 place-items-center text-[11px] font-black text-zinc-500">
+                      <div key={day} className="grid h-7 place-items-center text-[10px] font-black text-zinc-500">
                         {day}
                       </div>
                     ))}
@@ -1637,12 +1637,13 @@ function AcademySchedulePanel() {
                             setTimeEditor(null);
                             setError("");
                           }}
-                          className={`relative flex min-h-[58px] min-w-0 flex-col items-center justify-start px-1 py-1.5 text-xs transition ${
+                          aria-label={`${day.getDate()}일${dayEvents.length ? `, 일정 ${dayEvents.length}개` : ""}`}
+                          className={`relative flex h-11 min-w-0 flex-col items-center justify-start px-0.5 py-1 text-xs transition ${
                             inMonth ? "bg-white" : "bg-zinc-50"
                           } ${isSelectedDate ? "z-10 shadow-[inset_0_0_0_2px_#09090b]" : "hover:bg-zinc-50"}`}
                         >
                           <span
-                            className={`grid h-6 min-w-6 place-items-center rounded-full text-[13px] font-black leading-none ${
+                            className={`grid h-5 min-w-5 place-items-center rounded-full text-[11px] font-black leading-none ${
                               isToday
                                 ? "bg-black text-white"
                                 : isSelectedDate
@@ -1655,11 +1656,8 @@ function AcademySchedulePanel() {
                             {day.getDate()}
                           </span>
                           {dayEvents.length ? (
-                            <span className="mt-auto flex min-h-3 max-w-full items-center justify-center gap-0.5 pb-0.5">
-                              {dayEvents.slice(0, 3).map((event) => (
-                                <span key={event.id} className="h-1.5 w-1.5 rounded-full bg-zinc-950" />
-                              ))}
-                              {dayEvents.length > 3 ? <span className="ml-0.5 text-[9px] font-black leading-none text-zinc-700">+{dayEvents.length - 3}</span> : null}
+                            <span className="mt-auto flex h-3 min-w-3 items-center justify-center rounded-full bg-zinc-950 px-1 text-[8px] font-black leading-none text-white">
+                              {dayEvents.length > 1 ? Math.min(dayEvents.length, 9) : ""}
                             </span>
                           ) : null}
                         </button>
