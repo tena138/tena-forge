@@ -1091,6 +1091,18 @@ function academyMonthTitle(value: Date) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long" }).format(value);
 }
 
+function academyMobileDateLabel(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(date);
+}
+
+function academyMobileWeekdayLabel(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(date);
+}
+
 function academyTimeLabel(value?: string | null) {
   return formatLocalTime(value);
 }
@@ -1206,6 +1218,9 @@ function AcademySchedulePanel() {
   const studentCount = useMemo(() => classes.reduce((sum, classRow) => sum + classRow.student_count, 0), [classes]);
   const deleteTargetClass = deleteTarget ? classById.get(deleteTarget.class_id) : null;
   const selectedEvent = useMemo(() => events.find((event) => event.id === selectedEventId) || null, [events, selectedEventId]);
+  const mobileMonthDays = useMemo(() => monthDays.filter((day) => day.getMonth() === monthCursor.getMonth()), [monthCursor, monthDays]);
+  const selectedDateEvents = eventsByDate[selectedDateKey] || [];
+  const selectedDateLabel = selectedDateKey ? `${academyMobileDateLabel(`${selectedDateKey}T00:00:00`)} ${academyMobileWeekdayLabel(`${selectedDateKey}T00:00:00`)}` : "";
   const timeEditorEvent = useMemo(() => (timeEditor ? events.find((event) => event.id === timeEditor.eventId) || null : null), [events, timeEditor]);
   const timeEditorCellRect = timeEditor?.dateKey ? dateCellRefs.current[timeEditor.dateKey]?.getBoundingClientRect() || null : null;
   const pendingSeriesEvent = pendingSeriesTimeEdit ? events.find((event) => event.id === pendingSeriesTimeEdit.eventId) || null : null;
@@ -1496,6 +1511,16 @@ function AcademySchedulePanel() {
     activeTimeEditRef.current = timeEditor;
   }, [timeEditor]);
 
+  function moveScheduleMonth(delta: number) {
+    setMonthCursor((current) => {
+      const next = new Date(current.getFullYear(), current.getMonth() + delta, 1);
+      setSelectedDateKey(academyDateKey(next));
+      setSelectedEventId("");
+      setTimeEditor(null);
+      return next;
+    });
+  }
+
   useEffect(() => {
     if (!timeEditor?.mode) return;
 
@@ -1548,7 +1573,90 @@ function AcademySchedulePanel() {
               <div className="flex min-h-[560px] items-center justify-center text-zinc-500">불러오는 중</div>
             ) : (
               <>
-              <div className="overflow-hidden rounded-[10px] bg-zinc-100">
+              <div className="space-y-3 sm:hidden">
+                <div className="flex items-center justify-between gap-2">
+                  <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(-1)} aria-label="이전 달">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="min-w-0 flex-1 text-center text-sm font-black text-zinc-950">{academyMonthTitle(monthCursor)}</div>
+                  <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(1)} aria-label="다음 달">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {mobileMonthDays.map((day) => {
+                    const key = academyDateKey(day);
+                    const dayEvents = eventsByDate[key] || [];
+                    const isToday = key === academyDateKey(new Date());
+                    const isSelectedDate = key === selectedDateKey;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDateKey(key);
+                          setSelectedEventId(dayEvents[0]?.id || "");
+                          setTimeEditor(null);
+                          setError("");
+                        }}
+                        className={`flex min-w-[52px] flex-col items-center rounded-[10px] px-2 py-2 text-xs transition ${
+                          isSelectedDate
+                            ? "bg-black text-white"
+                            : isToday
+                              ? "bg-zinc-900 text-white"
+                              : dayEvents.length
+                                ? "bg-zinc-100 text-zinc-950"
+                                : "bg-white text-zinc-500 ring-1 ring-zinc-100"
+                        }`}
+                      >
+                        <span className="font-bold">{academyMobileWeekdayLabel(day)}</span>
+                        <span className="mt-1 text-base font-black leading-none">{day.getDate()}</span>
+                        <span className={`mt-1 h-1.5 w-1.5 rounded-full ${dayEvents.length ? "bg-current" : "bg-transparent"}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="space-y-2 rounded-[12px] bg-zinc-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-black text-zinc-950">{selectedDateLabel}</p>
+                    <p className="text-xs font-bold text-zinc-500">{selectedDateEvents.length}개</p>
+                  </div>
+                  {selectedDateEvents.length ? (
+                    <div className="space-y-2">
+                      {selectedDateEvents.map((event) => {
+                        const classRow = classById.get(event.class_id);
+                        const isSelectedEvent = event.id === selectedEventId;
+                        return (
+                          <button
+                            key={event.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedEventId(event.id);
+                              setTimeEditor(null);
+                              setError("");
+                            }}
+                            onDoubleClick={() => openTimeEditor(event, academyDateKey(event.starts_at))}
+                            className={`w-full rounded-[10px] bg-white px-3 py-3 text-left transition ${
+                              isSelectedEvent ? "ring-1 ring-inset ring-black/30" : "hover:bg-zinc-100"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="min-w-0 flex-1 truncate text-sm font-black text-zinc-950">{event.title}</p>
+                              <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600">{academyEventTypeLabel(event.event_type)}</span>
+                            </div>
+                            <p className="mt-1 truncate text-xs font-semibold text-zinc-600">{academyTimeRangeLabel(event.starts_at, event.ends_at)} · {classRow?.name || "클래스"}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-[10px] border border-dashed border-zinc-200 bg-white p-4 text-center text-sm font-semibold text-zinc-500">
+                      선택한 날짜에 일정이 없습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="hidden overflow-hidden rounded-[10px] bg-zinc-100 sm:block">
               <div>
                 <div className="grid grid-cols-7 bg-zinc-100">
                   {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
@@ -1645,7 +1753,7 @@ function AcademySchedulePanel() {
               </div>
               </div>
               {monthEvents.length ? (
-                <div className="mt-3 space-y-2 sm:hidden">
+                <div className="hidden">
                   {monthEvents.slice(0, 6).map((event) => {
                     const classRow = classById.get(event.class_id);
                     return (
@@ -1665,11 +1773,11 @@ function AcademySchedulePanel() {
         <aside className="space-y-3">
           <Card className="bg-white">
             <CardContent className="flex items-center justify-between gap-2 p-3">
-              <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="이전 달">
+              <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(-1)} aria-label="이전 달">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-0 flex-1 text-center text-sm font-black text-zinc-950">{academyMonthTitle(monthCursor)}</div>
-              <Button type="button" size="icon" variant="outline" onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="다음 달">
+              <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(1)} aria-label="다음 달">
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </CardContent>
@@ -1792,7 +1900,7 @@ function AcademySchedulePanel() {
       {selectedLiveLectureEvent ? (
         <Link
           href={selectedLiveLectureHref}
-          className="fixed bottom-20 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition hover:bg-zinc-800"
+          className="fixed bottom-36 right-4 z-[80] inline-flex h-11 w-11 items-center justify-center rounded-full bg-black text-white shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition hover:bg-zinc-800 sm:bottom-20 sm:right-6 sm:h-12 sm:w-12"
           aria-label={`${selectedLiveLectureEvent.title} 실시간 강의 열기`}
           title={`${selectedLiveLectureClass?.name || "클래스"} 실시간 강의`}
         >
@@ -1809,7 +1917,7 @@ function AcademySchedulePanel() {
           });
           setFormOpen(true);
         }}
-        className="fixed bottom-6 right-6 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white transition hover:bg-zinc-800"
+        className="fixed bottom-20 right-4 z-[80] inline-flex h-11 w-11 items-center justify-center rounded-full bg-black text-white transition hover:bg-zinc-800 sm:bottom-6 sm:right-6 sm:h-12 sm:w-12"
         aria-label="일정 추가"
       >
         <Plus className="h-5 w-5" />
