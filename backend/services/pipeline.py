@@ -1841,6 +1841,78 @@ def _answer_match_score(problems: list[dict[str, Any]], solutions: list[dict[str
     }
 
 
+def _apply_missing_context_to_solution(solution: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    copied = dict(solution)
+    target_number = _number_key_or_none(context.get("problem_number"))
+    original_number = copied.get("problem_number") if "problem_number" in copied else copied.get("problem_no")
+    original_key = _number_key_or_none(original_number)
+    number_repaired = False
+    if target_number and original_key != target_number:
+        copied["problem_number_repaired_from"] = original_number
+        copied["problem_number"] = target_number
+        copied["problem_no"] = target_number
+        number_repaired = True
+    elif target_number:
+        copied["problem_number"] = target_number
+        copied["problem_no"] = target_number
+
+    section_id = context.get("section_id")
+    if section_id:
+        copied["section_id"] = section_id
+        copied.setdefault("section_label", section_id)
+    if context.get("global_index") is not None:
+        copied["global_index"] = context.get("global_index")
+    if context.get("local_index") is not None:
+        copied["local_index"] = context.get("local_index")
+    if context.get("problem_order") is not None:
+        copied["targeted_problem_order"] = context.get("problem_order")
+
+    if number_repaired:
+        warnings = list(copied.get("matching_warnings") or [])
+        if "problem_number_aligned_to_targeted_missing_slot" not in warnings:
+            warnings.append("problem_number_aligned_to_targeted_missing_slot")
+        copied["matching_warnings"] = warnings
+    return copied
+
+
+def _align_targeted_recovered_solutions_to_missing_slots(
+    recovered_solutions: list[dict[str, Any]],
+    missing_contexts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    targets = [
+        context
+        for context in missing_contexts
+        if isinstance(context, dict) and _number_key_or_none(context.get("problem_number"))
+    ]
+    answerful_indexes = [
+        index for index, solution in enumerate(recovered_solutions)
+        if isinstance(solution, dict) and has_solution_content(solution)
+    ]
+    if not targets or not answerful_indexes:
+        return recovered_solutions
+
+    target_numbers = [_number_key_or_none(context.get("problem_number")) for context in targets]
+    target_number_set = {number for number in target_numbers if number}
+    answer_numbers = [
+        _number_key_or_none(recovered_solutions[index].get("problem_number") or recovered_solutions[index].get("problem_no"))
+        for index in answerful_indexes
+    ]
+    invalid_answer_numbers = [number for number in answer_numbers if not number or number not in target_number_set]
+    repeated_target_numbers = len(target_numbers) != len(set(target_numbers))
+    should_align_by_slot = False
+    if len(answerful_indexes) == 1 and len(targets) == 1:
+        should_align_by_slot = True
+    elif len(answerful_indexes) == len(targets) and (invalid_answer_numbers or repeated_target_numbers):
+        should_align_by_slot = True
+    if not should_align_by_slot:
+        return recovered_solutions
+
+    aligned = list(recovered_solutions)
+    for answer_index, target_context in zip(answerful_indexes, targets):
+        aligned[answer_index] = _apply_missing_context_to_solution(aligned[answer_index], target_context)
+    return aligned
+
+
 def _targeted_answer_repair_page_indexes(
     metadata: list[dict[str, Any]],
     page_count: int,
@@ -3067,6 +3139,7 @@ def repair_missing_answer_matches_with_targeted_recovery(
         )
         working_total_units = repair_total_units
         recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
+        recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(recovered_solutions, missing_contexts)
         recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
         candidate_solutions = _overlay_quick_answer_solutions(
             recovered_solutions,
@@ -3154,6 +3227,7 @@ def repair_missing_answer_matches_with_targeted_recovery(
             )
             working_total_units = repair_total_units
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
+            recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(recovered_solutions, missing_contexts)
             recovered_solutions = [solution for solution in recovered_solutions if has_solution_content(solution)]
             candidate_solutions = _overlay_quick_answer_solutions(
                 recovered_solutions,

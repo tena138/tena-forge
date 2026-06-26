@@ -327,6 +327,49 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(len(number_two_candidates), 1)
         self.assertEqual(number_two_candidates[0]["answer"], "7")
 
+    def test_targeted_repair_aligns_single_wrong_number_to_missing_slot(self):
+        problems = [
+            {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},
+            {"problem_number": 20, "problem_no": "20", "problem_text": "Last problem", "global_index": 20},
+        ]
+        solutions = [{"problem_number": "1", "answer": "3", "solution_steps": None}]
+        metadata = [
+            {"page_index": 2, "page_type": "solution_page", "detected_solution_headers": ["20"]},
+        ]
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                return_value=[{"problem_number": "5", "answer": "②", "solution_steps": "final"}],
+            ),
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                4,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        number_twenty_candidates = [item for item in repaired if str(item.get("problem_number")) == "20"]
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertEqual(len(number_twenty_candidates), 1)
+        self.assertEqual(number_twenty_candidates[0]["answer"], "②")
+        self.assertEqual(number_twenty_candidates[0]["problem_number_repaired_from"], "5")
+        self.assertIn(
+            "problem_number_aligned_to_targeted_missing_slot",
+            number_twenty_candidates[0]["matching_warnings"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
