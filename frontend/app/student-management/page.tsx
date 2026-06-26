@@ -59,6 +59,7 @@ import {
   createClass,
   createCounselingLog,
   createPaperSession,
+  createScheduleEvent,
   createReviewSet,
   createStudent,
   ensureStudentInviteCode,
@@ -77,6 +78,7 @@ import {
   updateRoutineMessage,
 } from "@/lib/studentManagement";
 import type { CounselingIntakePreview } from "@/lib/studentManagement";
+import { buildRecurringDateTimes, defaultWeekdayFromDateTime, localDateTimeInputValue } from "@/lib/scheduleRecurrence";
 import { cn } from "@/lib/utils";
 
 function resolveActiveManagementAcademyId(profile?: AcademyProfile | null) {
@@ -204,6 +206,13 @@ const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel
 const defaultTrendMetrics: TrendMetricKey[] = ["selected", "average", "q2"];
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function addMinutesToLocalDateTime(value: string, minutes: number) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setMinutes(date.getMinutes() + Math.max(1, Math.round(minutes)));
+  return `${localDateTimeInputValue(date)}:00`;
 }
 
 function statusTone(status?: string) {
@@ -1030,7 +1039,7 @@ export default function StudentManagementPage() {
   const [mergeTargetStudentId, setMergeTargetStudentId] = useState("");
   const [mergingStudent, setMergingStudent] = useState(false);
 
-  const [classForm, setClassForm] = useState({ name: "", description: "", subject: "", grade_level: "" });
+  const [classForm, setClassForm] = useState({ name: "", description: "", subject: "", grade_level: "", routine_date: "", routine_time: "", routine_duration_minutes: "60", routine_repeat_until: "" });
   const [studentForm, setStudentForm] = useState(emptyStudentForm);
   const [classStudentForm, setClassStudentForm] = useState(emptyStudentForm);
   const [sessionForm, setSessionForm] = useState({
@@ -1304,11 +1313,39 @@ export default function StudentManagementPage() {
     if (!classForm.name.trim()) return;
     setClassSaving(true);
     try {
+      const routineStartDateTime = classForm.routine_date && classForm.routine_time ? `${classForm.routine_date}T${classForm.routine_time}` : "";
+      const routineDurationMinutes = Number(classForm.routine_duration_minutes) || 60;
       const created = await createClass(classForm);
+      let scheduleCount = 0;
+      if (routineStartDateTime) {
+        const starts = buildRecurringDateTimes(routineStartDateTime, {
+          unit: classForm.routine_repeat_until ? "week" : "none",
+          interval: 1,
+          weekdays: [defaultWeekdayFromDateTime(routineStartDateTime)],
+          until: classForm.routine_repeat_until || undefined,
+          maxOccurrences: 80,
+        });
+        const seriesId = starts.length > 1 ? `class-${created.id}-${Date.now()}` : null;
+        for (const [index, startsAt] of starts.entries()) {
+          await createScheduleEvent({
+            class_id: created.id,
+            title: created.name,
+            description: created.description || null,
+            event_type: "class",
+            starts_at: startsAt,
+            ends_at: addMinutesToLocalDateTime(startsAt, routineDurationMinutes),
+            counts_for_tuition: true,
+            series_id: seriesId,
+            series_position: seriesId ? index + 1 : null,
+            series_size: seriesId ? starts.length : null,
+          });
+          scheduleCount += 1;
+        }
+      }
       setClasses((current) => [created, ...current.filter((item) => item.id !== created.id)]);
-      setClassForm({ name: "", description: "", subject: "", grade_level: "" });
+      setClassForm({ name: "", description: "", subject: "", grade_level: "", routine_date: "", routine_time: "", routine_duration_minutes: "60", routine_repeat_until: "" });
       setShowClassCreator(false);
-      setMessage("클래스를 만들었습니다.");
+      setMessage(scheduleCount > 0 ? `클래스와 루틴 일정 ${scheduleCount}개를 만들었습니다.` : "클래스를 만들었습니다.");
       await refresh().catch(() => undefined);
     } catch (error) {
       setMessage(errorMessage(error, "클래스 생성에 실패했습니다. 잠시 후 다시 시도해주세요."));
@@ -3091,6 +3128,16 @@ export default function StudentManagementPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
                     <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
+                  </div>
+                  <div className="rounded-[8px] bg-zinc-50 p-2">
+                    <div className="mb-2 text-xs font-black text-zinc-500">루틴 일정</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="date" value={classForm.routine_date} onChange={(event) => setClassForm((current) => ({ ...current, routine_date: event.target.value }))} />
+                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="time" value={classForm.routine_time} onChange={(event) => setClassForm((current) => ({ ...current, routine_time: event.target.value }))} />
+                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="number" min="1" step="5" placeholder="수업 길이(분)" value={classForm.routine_duration_minutes} onChange={(event) => setClassForm((current) => ({ ...current, routine_duration_minutes: event.target.value }))} />
+                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="date" value={classForm.routine_repeat_until} onChange={(event) => setClassForm((current) => ({ ...current, routine_repeat_until: event.target.value }))} />
+                    </div>
+                    <p className="mt-2 text-[11px] font-semibold text-zinc-500">반복 종료일을 입력하면 같은 요일로 주간 반복됩니다.</p>
                   </div>
                   <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
                     {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
