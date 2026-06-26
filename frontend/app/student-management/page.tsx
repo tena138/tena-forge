@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
@@ -89,6 +90,7 @@ function normalizeListResponse<T>(value: unknown): T[] {
 }
 
 type TabKey = "routine" | "classes" | "students" | "counseling" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
+const STUDENT_MANAGEMENT_TAB_KEYS: TabKey[] = ["routine", "classes", "students", "counseling", "sessions", "grading", "wrong", "calendar", "analytics"];
 type ClassStudentAddMode = "existing" | "new";
 type CounselingMode = "new" | "existing";
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
@@ -982,6 +984,8 @@ function ProblemCell({
 }
 
 export default function StudentManagementPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>("classes");
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<ClassCard[]>([]);
@@ -1081,6 +1085,14 @@ export default function StudentManagementPage() {
     () => routines.find((routine) => routine.id === selectedRoutineId) || routines[0] || null,
     [routines, selectedRoutineId]
   );
+  const requestedTab = searchParams.get("tab");
+
+  useEffect(() => {
+    if (!requestedTab) return;
+    if (STUDENT_MANAGEMENT_TAB_KEYS.includes(requestedTab as TabKey)) {
+      setActiveTab(requestedTab as TabKey);
+    }
+  }, [requestedTab]);
 
   useEffect(() => {
     classOrderRef.current = classes;
@@ -1883,6 +1895,16 @@ export default function StudentManagementPage() {
     { id: "grading", label: "채점", icon: CheckSquare },
   ];
 
+  function openManagementTab(tabId: TabKey) {
+    setActiveTab(tabId);
+    const params = new URLSearchParams(searchParams.toString());
+    if (tabId === "classes") params.delete("tab");
+    else params.set("tab", tabId);
+    const query = params.toString();
+    router.replace(query ? `/student-management?${query}` : "/student-management", { scroll: false });
+    if (tabId === "routine" && !routines.length) void loadRoutines();
+  }
+
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -1911,10 +1933,7 @@ export default function StudentManagementPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => {
-                    setActiveTab(tab.id);
-                    if (tab.id === "routine" && !routines.length) void loadRoutines();
-                  }}
+                  onClick={() => openManagementTab(tab.id)}
                   className={cn(
                     "flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
                     selected ? "bg-black text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"

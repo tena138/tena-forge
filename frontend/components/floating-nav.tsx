@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Library,
+  MessageSquare,
   NotebookPen,
   ReceiptText,
   Settings,
@@ -69,6 +70,7 @@ const sections = [
     items: [
       { href: "/academy?panel=operations", label: "캘린더", icon: CalendarDays },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
+      { href: "/student-management?tab=counseling", label: "상담", icon: MessageSquare },
       { href: "/student-management/tuition", label: "수강료", icon: ReceiptText },
     ],
   },
@@ -135,6 +137,7 @@ function isActive(pathname: string, href: string, searchParams?: URLSearchParams
   }
   if (pathname !== hrefPath) return false;
   if (hrefPath === "/academy") return !searchParams?.get("panel") && !searchParams?.get("tab");
+  if (hrefPath === "/student-management") return !searchParams?.get("tab");
   return pathname === hrefPath;
 }
 
