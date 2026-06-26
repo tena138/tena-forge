@@ -426,6 +426,29 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(aligned[2]["problem_number_repaired_from"], "21")
         self.assertIn("problem_number_aligned_to_targeted_missing_slot", aligned[2]["matching_warnings"])
 
+    def test_targeted_alignment_uses_existing_answers_to_align_multiple_tail_candidates(self):
+        recovered = [
+            {"problem_number": "18", "answer": "A", "solution_steps": None},
+            {"problem_number": "21", "answer": "B", "solution_steps": None},
+            {"problem_number": "22", "answer": "C", "solution_steps": None},
+        ]
+        existing = [
+            {"problem_number": "18", "answer": "A", "solution_steps": None},
+        ]
+        missing_contexts = [
+            {"problem_number": "19", "section_id": "Final", "global_index": 19, "local_index": 19},
+            {"problem_number": "20", "section_id": "Final", "global_index": 20, "local_index": 20},
+        ]
+
+        aligned = _align_targeted_recovered_solutions_to_missing_slots(recovered, missing_contexts, existing)
+
+        self.assertEqual([item["problem_number"] for item in aligned], ["18", "19", "20"])
+        self.assertEqual([item["answer"] for item in aligned], ["A", "B", "C"])
+        self.assertEqual(aligned[1]["problem_number_repaired_from"], "21")
+        self.assertEqual(aligned[2]["problem_number_repaired_from"], "22")
+        self.assertEqual(aligned[1]["global_index"], 19)
+        self.assertEqual(aligned[2]["global_index"], 20)
+
     def test_targeted_repair_aligns_unnumbered_answer_among_page_answers(self):
         problems = [
             {"problem_number": 18, "problem_no": "18", "problem_text": "Problem 18", "global_index": 18},
@@ -528,6 +551,55 @@ class TargetedAnswerRepairTests(unittest.TestCase):
             "problem_number_aligned_to_targeted_missing_slot",
             number_twenty_candidates[0]["matching_warnings"],
         )
+
+    def test_targeted_repair_aligns_multiple_new_wrong_tail_candidates_after_existing_neighbor(self):
+        problems = [
+            {"problem_number": 18, "problem_no": "18", "problem_text": "Problem 18", "global_index": 18},
+            {"problem_number": 19, "problem_no": "19", "problem_text": "Problem 19", "global_index": 19},
+            {"problem_number": 20, "problem_no": "20", "problem_text": "Last problem", "global_index": 20},
+        ]
+        solutions = [
+            {"problem_number": "18", "answer": "A", "solution_steps": None},
+        ]
+        metadata = [
+            {"page_index": 7, "page_type": "solution_page", "detected_solution_headers": ["18", "19", "20"]},
+        ]
+        problem_inventory = {"expected_problem_numbers": [str(index) for index in range(1, 21)]}
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                return_value=[
+                    {"problem_number": "18", "answer": "A", "solution_steps": None},
+                    {"problem_number": "21", "answer": "B", "solution_steps": None},
+                    {"problem_number": "22", "answer": "C", "solution_steps": None},
+                ],
+            ),
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                8,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+                problem_inventory=problem_inventory,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        by_number = {str(item.get("problem_number")): item for item in repaired}
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertEqual(by_number["19"]["answer"], "B")
+        self.assertEqual(by_number["20"]["answer"], "C")
+        self.assertEqual(by_number["19"]["problem_number_repaired_from"], "21")
+        self.assertEqual(by_number["20"]["problem_number_repaired_from"], "22")
 
 
 if __name__ == "__main__":

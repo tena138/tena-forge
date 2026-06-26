@@ -1898,6 +1898,15 @@ def _align_targeted_recovered_solutions_to_missing_slots(
         _number_key_or_none(recovered_solutions[index].get("problem_number") or recovered_solutions[index].get("problem_no"))
         for index in answerful_indexes
     ]
+    existing_answer_numbers = {
+        number
+        for number in (
+            _number_key_or_none(solution.get("problem_number") or solution.get("problem_no"))
+            for solution in (existing_solutions or [])
+            if isinstance(solution, dict) and has_solution_content(solution)
+        )
+        if number
+    }
     if len(targets) == 1 and target_numbers[0]:
         already_contains_target = any(number == target_numbers[0] for number in answer_numbers)
         unnumbered_indexes = [
@@ -1910,15 +1919,6 @@ def _align_targeted_recovered_solutions_to_missing_slots(
             aligned[unnumbered_indexes[0]] = _apply_missing_context_to_solution(aligned[unnumbered_indexes[0]], targets[0])
             return aligned
 
-        existing_answer_numbers = {
-            number
-            for number in (
-                _number_key_or_none(solution.get("problem_number") or solution.get("problem_no"))
-                for solution in (existing_solutions or [])
-                if isinstance(solution, dict) and has_solution_content(solution)
-            )
-            if number
-        }
         if existing_answer_numbers:
             unresolved_candidate_indexes = [
                 answer_index
@@ -1932,6 +1932,38 @@ def _align_targeted_recovered_solutions_to_missing_slots(
                     targets[0],
                 )
                 return aligned
+
+    if existing_answer_numbers and len(targets) > 1:
+        recovered_target_budget: dict[str, int] = {}
+        for number in answer_numbers:
+            if number and number in target_number_set:
+                recovered_target_budget[number] = recovered_target_budget.get(number, 0) + 1
+
+        unresolved_targets: list[dict[str, Any]] = []
+        for context, number in zip(targets, target_numbers):
+            if number and recovered_target_budget.get(number, 0) > 0:
+                recovered_target_budget[number] -= 1
+            else:
+                unresolved_targets.append(context)
+
+        target_keep_budget: dict[str, int] = {}
+        for number in target_numbers:
+            if number:
+                target_keep_budget[number] = target_keep_budget.get(number, 0) + 1
+
+        unresolved_candidate_indexes: list[int] = []
+        for answer_index, number in zip(answerful_indexes, answer_numbers):
+            if number and target_keep_budget.get(number, 0) > 0:
+                target_keep_budget[number] -= 1
+                continue
+            if not number or number not in existing_answer_numbers:
+                unresolved_candidate_indexes.append(answer_index)
+
+        if unresolved_targets and len(unresolved_candidate_indexes) == len(unresolved_targets):
+            aligned = list(recovered_solutions)
+            for answer_index, target_context in zip(unresolved_candidate_indexes, unresolved_targets):
+                aligned[answer_index] = _apply_missing_context_to_solution(aligned[answer_index], target_context)
+            return aligned
 
     invalid_answer_numbers = [number for number in answer_numbers if not number or number not in target_number_set]
     repeated_target_numbers = len(target_numbers) != len(set(target_numbers))
