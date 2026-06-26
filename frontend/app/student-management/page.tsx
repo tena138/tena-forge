@@ -336,7 +336,7 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
         event.preventDefault();
         onMergeContext(event, student);
       }}
-      className="flex h-full min-h-[136px] w-full flex-col justify-between rounded-md bg-white p-3 transition hover:bg-zinc-50 sm:w-[210px] sm:shrink-0"
+      className="flex h-full min-h-[136px] w-full flex-col justify-between rounded-md bg-white p-3 transition hover:bg-zinc-50 lg:w-[210px] lg:shrink-0"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -2244,7 +2244,7 @@ export default function StudentManagementPage() {
                         })()
                       ) : null}
                       {classRow.students.length ? (
-                        <div className="flex min-h-[136px] flex-1 flex-col items-stretch gap-3 pb-1 sm:flex-row sm:overflow-x-auto sm:[scrollbar-color:#d4d4d8_transparent] sm:[scrollbar-width:thin]">
+                        <div className="flex min-h-[136px] flex-1 flex-col items-stretch gap-3 pb-1 lg:flex-row lg:overflow-x-auto lg:[scrollbar-color:#d4d4d8_transparent] lg:[scrollbar-width:thin]">
                           {classRow.students.map((student) => (
                             <ClassStudentCard
                               key={student.id}
