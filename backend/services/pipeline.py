@@ -696,7 +696,7 @@ Rules:
 
 Return raw JSON array only. No markdown. No explanation outside JSON."""
 
-MIXED_PDF_ANSWER_RECOVERY_PROMPT = r"""You are scanning one page from a mixed Korean exam/problem PDF to recover final answers.
+MIXED_PDF_ANSWER_RECOVERY_PROMPT = r"""You are scanning one page from a mixed Korean exam/problem PDF or answer/solution booklet to recover final answers.
 
 Return [] unless this visible page explicitly contains final answers, an answer key/table, worked solutions, teacher explanations, or answer-marked solution content.
 Ordinary student-facing problem pages with answer choices but no marked correct answer must return [].
@@ -1791,6 +1791,115 @@ def _answer_inventory_prompt_note(problem_inventory: dict[str, Any] | None, page
     )
 
 
+def _answer_missing_problem_payloads(matched_problems: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    missing: list[dict[str, Any]] = []
+    seen: set[tuple[str | None, str, int | None]] = set()
+    for problem in matched_problems:
+        if has_solution_content(problem.get("solution")):
+            continue
+        number = _number_key_or_none(problem.get("problem_no") or problem.get("problem_number"))
+        if not number:
+            continue
+        page_index = _int_or_none(problem.get("page_index"))
+        key = (problem.get("section_id") or problem.get("section_label") or None, number, page_index)
+        if key in seen:
+            continue
+        seen.add(key)
+        missing.append(
+            {
+                "problem_number": number,
+                "section_id": problem.get("section_id") or problem.get("section_label") or None,
+                "page_number": (page_index + 1) if page_index is not None else None,
+                "problem_text": str(problem.get("problem_text") or "")[:900],
+            }
+        )
+    return missing
+
+
+def _answer_match_score(problems: list[dict[str, Any]], solutions: list[dict[str, Any]]) -> dict[str, Any]:
+    result = match_with_summary(deepcopy(problems), deepcopy(solutions))
+    matched_problems = result.get("problems") or []
+    missing_payloads = _answer_missing_problem_payloads(matched_problems)
+    return {
+        "matched_answer_count": len(matched_problems) - len(missing_payloads),
+        "missing_answer_count": len(missing_payloads),
+        "missing_answer_numbers": [item["problem_number"] for item in missing_payloads],
+        "missing_answer_problems": missing_payloads,
+        "summary": result.get("summary") or {},
+    }
+
+
+def _targeted_answer_repair_page_indexes(
+    metadata: list[dict[str, Any]],
+    page_count: int,
+    missing_problem_numbers: list[str],
+) -> list[int]:
+    target_numbers = {_number_key_or_none(number) for number in missing_problem_numbers}
+    target_numbers.discard(None)
+    if not target_numbers:
+        return []
+
+    exact_pages: set[int] = set()
+    for item in metadata:
+        page_index = int(item.get("page_index") or 0)
+        if page_index < 0 or page_index >= page_count:
+            continue
+        visible_numbers: set[str] = set()
+        for key in ("detected_solution_headers", "detected_problem_headers"):
+            visible_numbers.update(
+                number
+                for number in (_number_key_or_none(value) for value in (item.get(key) or []))
+                if number
+            )
+        if visible_numbers & target_numbers:
+            exact_pages.add(page_index)
+
+    if exact_pages:
+        expanded: set[int] = set()
+        for page_index in exact_pages:
+            for candidate in (page_index - 1, page_index, page_index + 1):
+                if 0 <= candidate < page_count:
+                    expanded.add(candidate)
+        return sorted(expanded)
+
+    fallback = _mixed_answer_recovery_page_indexes(metadata, page_count)
+    if page_count <= 6:
+        return fallback
+    return sorted(set(fallback[-4:] or fallback))
+
+
+def _targeted_answer_repair_prompt_note(
+    missing_problem_payloads: list[dict[str, Any]],
+    page_index: int | None = None,
+) -> str:
+    missing_numbers = [str(item.get("problem_number") or "").strip() for item in missing_problem_payloads if item.get("problem_number")]
+    context_lines: list[str] = []
+    for item in missing_problem_payloads[:12]:
+        parts = [f"number={item.get('problem_number')}"]
+        if item.get("section_id"):
+            parts.append(f"section={item.get('section_id')}")
+        if item.get("page_number"):
+            parts.append(f"problem_page={item.get('page_number')}")
+        snippet = re.sub(r"\s+", " ", str(item.get("problem_text") or "")).strip()
+        if snippet:
+            parts.append(f"problem_snippet={json.dumps(snippet[:280], ensure_ascii=False)}")
+        context_lines.append("- " + "; ".join(parts))
+    context = "\n".join(context_lines) if context_lines else "- no problem snippets supplied"
+    page_scope = f"Current rendered page index: {page_index}.\n" if page_index is not None else ""
+    return (
+        "Targeted missing-answer repair pass:\n"
+        f"{page_scope}"
+        f"- Recover answers only for these still-unmatched problem numbers: {_compact_inventory_numbers(missing_numbers)}.\n"
+        "- Return [] if this page does not explicitly show a final answer for one of those requested numbers.\n"
+        "- Do not return answers for already matched problem numbers unless they are necessary to disambiguate a repeated number in the requested list.\n"
+        "- If the requested number is the last visible solution on the page, inspect the bottom and continuation areas carefully before returning [].\n"
+        "- If a worked solution contains the answer only in the final line, extract that final value as answer.\n"
+        "- If the answer is an objective choice marker, keep the marker in answer and keep problem_number as the requested problem number.\n"
+        "Requested problem context:\n"
+        f"{context}"
+    )
+
+
 def _attach_extraction_inventory_gaps(problem_inventory: dict[str, Any], extracted: list[dict[str, Any]]) -> dict[str, Any]:
     report = dict(problem_inventory or {})
     extracted_numbers = _sort_number_keys([item.get("problem_number") or item.get("problem_no") for item in extracted])
@@ -2736,6 +2845,7 @@ def extract_mixed_pdf_answer_recovery(
     solution_page_metadata: dict[int, dict[str, Any]] | None = None,
     document_type_hints: list[dict[str, Any]] | None = None,
     problem_inventory: dict[str, Any] | None = None,
+    target_problem_contexts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     selected = sorted(set(index for index in page_indexes if 0 <= index < page_count))
     if not selected:
@@ -2771,6 +2881,12 @@ def extract_mixed_pdf_answer_recovery(
                     if problem_inventory
                     else ""
                 )
+                + (
+                    "\n\n"
+                    + _targeted_answer_repair_prompt_note(target_problem_contexts, page_index_chunk[0] if len(page_index_chunk) == 1 else None)
+                    if target_problem_contexts
+                    else ""
+                )
             ),
             mode_label_override="혼합 PDF 정답 복구",
             max_output_tokens_override=max(settings.ai_solution_max_output_tokens, settings.ai_max_output_tokens, 4096),
@@ -2781,6 +2897,80 @@ def extract_mixed_pdf_answer_recovery(
         solutions.extend(extracted)
         processed_pages += chunk_len
     return _apply_structure_indexes(solutions, page_key="page_idx")
+
+
+def repair_missing_answer_matches_with_targeted_recovery(
+    source_path: str,
+    source_page_count: int,
+    dpi: int,
+    batch_id: UUID,
+    total_units: int,
+    units_per_page: int,
+    page_metadata: list[dict[str, Any]],
+    problems: list[dict[str, Any]],
+    solutions: list[dict[str, Any]],
+    document_type_hints: list[dict[str, Any]] | None = None,
+    problem_inventory: dict[str, Any] | None = None,
+    progress_label: str = "누락 정답 재확인 중",
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None, int]:
+    current_score = _answer_match_score(problems, solutions)
+    missing_contexts = [
+        item for item in (current_score.get("missing_answer_problems") or [])
+        if isinstance(item, dict) and item.get("problem_number")
+    ]
+    if not missing_contexts:
+        return solutions, None, total_units
+
+    missing_numbers = [str(item["problem_number"]) for item in missing_contexts]
+    target_page_indexes = _targeted_answer_repair_page_indexes(page_metadata, source_page_count, missing_numbers)
+    if not target_page_indexes:
+        return solutions, {
+            "strategy": "targeted_missing_answer_repair",
+            "chosen": "current",
+            "reason": "no_target_pages",
+            "current": current_score,
+        }, total_units
+
+    repair_units = max(len(target_page_indexes) * units_per_page, 1)
+    repair_total_units = total_units + repair_units
+    set_progress(batch_id, progress_label, total_units, repair_total_units)
+    recovery_metadata = _metadata_by_page(
+        _metadata_with_document_kind(page_metadata, "solution", set(target_page_indexes)),
+        "solution",
+    )
+    recovered_solutions = extract_mixed_pdf_answer_recovery(
+        source_path,
+        target_page_indexes,
+        source_page_count,
+        dpi,
+        batch_id,
+        offset=total_units,
+        total_units=repair_total_units,
+        units_per_page=units_per_page,
+        solution_page_metadata=recovery_metadata,
+        document_type_hints=document_type_hints,
+        problem_inventory=problem_inventory,
+        target_problem_contexts=missing_contexts,
+    )
+    recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
+    candidate_solutions = _overlay_quick_answer_solutions(recovered_solutions, solutions)
+    candidate_score = _answer_match_score(problems, candidate_solutions)
+    choose_candidate = (
+        int(candidate_score.get("missing_answer_count") or 0) < int(current_score.get("missing_answer_count") or 0)
+        or int(candidate_score.get("matched_answer_count") or 0) > int(current_score.get("matched_answer_count") or 0)
+    )
+    report = {
+        "strategy": "targeted_missing_answer_repair",
+        "target_problem_numbers": missing_numbers,
+        "target_page_indexes": target_page_indexes,
+        "target_page_numbers": [index + 1 for index in target_page_indexes],
+        "recovered_answer_count": _solution_answer_count(recovered_solutions),
+        "candidate_answer_count": _solution_answer_count(candidate_solutions),
+        "current": current_score,
+        "candidate": candidate_score,
+        "chosen": "targeted_repair" if choose_candidate else "current",
+    }
+    return (candidate_solutions if choose_candidate else solutions), report, repair_total_units
 
 
 KOREAN_RANGE_RECOVERY_PROMPT = r"""You are repairing a Korean Language extraction where a visible passage range was incomplete.
@@ -4034,6 +4224,38 @@ def process_batch(batch_id: UUID) -> None:
             total_units = recovery_total_units
             _write_batch_artifact(batch_id, "mixed_answer_recovery_report.json", recovery_report)
             _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
+        targeted_source_path: str | None = None
+        targeted_source_page_count = 0
+        targeted_source_dpi = solution_dpi
+        targeted_source_metadata: list[dict[str, Any]] = []
+        targeted_document_type_hints: list[dict[str, Any]] | None = None
+        if should_extract_separate_solutions and batch.solution_pdf_filename:
+            targeted_source_path = solution_source_path
+            targeted_source_page_count = solution_page_count
+            targeted_source_metadata = [item for item in page_metadata if item.get("document_kind") == "solution"] or page_metadata
+        elif should_detect_embedded_solutions:
+            targeted_source_path = batch.problem_pdf_filename
+            targeted_source_page_count = problem_page_count
+            targeted_source_metadata = page_metadata
+            targeted_document_type_hints = document_type_hints
+        if targeted_source_path and should_extract_solutions:
+            solutions, targeted_repair_report, total_units = repair_missing_answer_matches_with_targeted_recovery(
+                targeted_source_path,
+                targeted_source_page_count,
+                targeted_source_dpi,
+                batch_id,
+                total_units,
+                units_per_page,
+                targeted_source_metadata,
+                all_extracted,
+                solutions,
+                document_type_hints=targeted_document_type_hints,
+                problem_inventory=problem_inventory,
+                progress_label="누락 정답 문항 재확인 중",
+            )
+            if targeted_repair_report is not None:
+                _write_batch_artifact(batch_id, "targeted_answer_repair_report.json", targeted_repair_report)
+                _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
         structure_report = build_structure_validation_report(page_metadata, problem_sections, solution_sections, all_extracted, solutions)
         _mark_section_validation_warnings(all_extracted, structure_report)
         _write_batch_artifact(batch_id, "structure_validation_report.json", structure_report)
@@ -4190,6 +4412,7 @@ def process_solutions_only(batch_id: UUID) -> None:
         page_metadata: list[dict[str, Any]] = []
         solution_sections: list[dict[str, Any]] = []
         quick_answer_report: dict[str, Any] | None = None
+        targeted_repair_report: dict[str, Any] | None = None
         quick_answers_used = False
         quick_solutions, quick_answer_report = extract_quick_answer_table_solutions(
             solution_source_path,
@@ -4312,6 +4535,25 @@ def process_solutions_only(batch_id: UUID) -> None:
                 )
                 quick_answer_report["mixed_recovery_chosen"] = recovery_report.get("chosen")
                 quick_answer_report["mixed_recovery_answer_count"] = _solution_answer_count(recovered_solutions)
+        repair_source_metadata = page_metadata if has_separate_solution_pdf else problem_page_metadata
+        if solutions:
+            solutions, targeted_repair_report, total_units = repair_missing_answer_matches_with_targeted_recovery(
+                solution_source_path,
+                solution_page_count,
+                solution_dpi,
+                batch_id,
+                total_units,
+                units_per_page,
+                repair_source_metadata,
+                existing_problem_payloads,
+                solutions,
+                document_type_hints=solution_document_type_hints,
+                problem_inventory=problem_inventory,
+                progress_label="누락 정답 문항 재확인 중",
+            )
+            if targeted_repair_report is not None:
+                _write_batch_artifact(batch_id, "targeted_answer_repair_report.json", targeted_repair_report)
+                _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
         if not any(has_solution_content(solution) for solution in solutions):
             raise RuntimeError("Answer source was provided, but no answer content was extracted.")
         if quick_answer_report is not None:
@@ -4344,6 +4586,7 @@ def process_solutions_only(batch_id: UUID) -> None:
                 "reused_problem_sections": reuse_problem_sections,
                 "quick_answer_table": quick_answer_report,
                 "quick_answer_table_used": quick_answers_used,
+                "targeted_answer_repair": targeted_repair_report,
                 "problem_sections": problem_sections,
                 "solution_sections": solution_sections,
                 "stats": stats,
