@@ -2846,11 +2846,14 @@ def _overlay_quick_answer_solutions(
     quick_solutions: list[dict[str, Any]],
     fallback_solutions: list[dict[str, Any]],
     source_label: str = "quick_answer_table",
+    replace_same_number_blank_fallbacks: bool = False,
 ) -> list[dict[str, Any]]:
     if not quick_solutions:
         return fallback_solutions
     prioritized: list[dict[str, Any]] = []
     quick_identities: set[tuple[str | None, str]] = set()
+    answerful_quick_numbers: set[str] = set()
+    answerful_quick_sections_by_number: dict[str, set[str | None]] = defaultdict(set)
     for index, solution in enumerate(quick_solutions):
         copied = dict(solution)
         copied["extraction_source"] = source_label
@@ -2858,6 +2861,10 @@ def _overlay_quick_answer_solutions(
         identity = _solution_candidate_identity(copied)
         if identity:
             quick_identities.add(identity)
+            if has_solution_content(copied):
+                section, number = identity
+                answerful_quick_numbers.add(number)
+                answerful_quick_sections_by_number[number].add(section)
         prioritized.append(copied)
 
     for solution in fallback_solutions:
@@ -2865,6 +2872,11 @@ def _overlay_quick_answer_solutions(
         identity = _solution_candidate_identity(copied)
         if identity and identity in quick_identities:
             continue
+        if replace_same_number_blank_fallbacks and identity and not has_solution_content(copied):
+            section, number = identity
+            quick_sections = answerful_quick_sections_by_number.get(number) or set()
+            if number in answerful_quick_numbers and (not quick_sections or None in quick_sections or section in quick_sections):
+                continue
         prioritized.append(copied)
     return _apply_structure_indexes(prioritized, page_key="page_idx")
 
@@ -3041,6 +3053,7 @@ def repair_missing_answer_matches_with_targeted_recovery(
             recovered_solutions,
             working_solutions,
             source_label="targeted_answer_repair",
+            replace_same_number_blank_fallbacks=True,
         )
         candidate_score = _answer_match_score(problems, candidate_solutions)
         current_missing = int(current_score.get("missing_answer_count") or 0)
@@ -3111,6 +3124,7 @@ def repair_missing_answer_matches_with_targeted_recovery(
                 recovered_solutions,
                 working_solutions,
                 source_label="targeted_answer_repair_full_document",
+                replace_same_number_blank_fallbacks=True,
             )
             candidate_score = _answer_match_score(problems, candidate_solutions)
             current_missing = int(current_score.get("missing_answer_count") or 0)

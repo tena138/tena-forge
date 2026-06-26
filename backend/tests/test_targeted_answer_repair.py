@@ -180,6 +180,59 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(extract_mock.call_count, 2)
         self.assertIn("Full-document fallback", fallback_kwargs["target_repair_scope_note"])
 
+    def test_targeted_repair_replaces_sectioned_blank_candidate_with_answerful_number_candidate(self):
+        problems = [
+            {
+                "problem_number": 1,
+                "problem_no": "1",
+                "problem_text": "Problem 1",
+                "section_id": "A",
+                "global_index": 1,
+            },
+            {
+                "problem_number": 2,
+                "problem_no": "2",
+                "problem_text": "Problem 2",
+                "section_id": "A",
+                "global_index": 2,
+            },
+        ]
+        solutions = [
+            {"problem_number": "1", "answer": "3", "solution_steps": None, "section_id": "A"},
+            {"problem_number": "2", "answer": "", "solution_steps": None, "section_id": "A"},
+        ]
+        metadata = [
+            {"page_index": 1, "page_type": "solution_page", "detected_solution_headers": ["2"]},
+        ]
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                return_value=[{"problem_number": "2", "answer": "7", "solution_steps": "final"}],
+            ),
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                3,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        number_two_candidates = [item for item in repaired if str(item.get("problem_number")) == "2"]
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertEqual(len(number_two_candidates), 1)
+        self.assertEqual(number_two_candidates[0]["answer"], "7")
+
 
 if __name__ == "__main__":
     unittest.main()
