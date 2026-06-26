@@ -1139,7 +1139,7 @@ function AcademySchedulePanel() {
   const [timeEditor, setTimeEditor] = useState<AcademyTimeEditorState | null>(null);
   const [savingTimeEdit, setSavingTimeEdit] = useState(false);
   const [pendingSeriesTimeEdit, setPendingSeriesTimeEdit] = useState<AcademyTimeEditorState | null>(null);
-  const dateCellRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const dateCellRefs = useRef<Record<string, HTMLElement | null>>({});
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const activeTimeEditRef = useRef<AcademyTimeEditorState | null>(null);
   const [form, setForm] = useState({
@@ -1535,6 +1535,12 @@ function AcademySchedulePanel() {
     setFormOpen(true);
   }
 
+  function setAcademyDateCellRef(key: string, node: HTMLElement | null) {
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) dateCellRefs.current[key] = node;
+  }
+
   useEffect(() => {
     if (!timeEditor?.mode) return;
 
@@ -1574,9 +1580,11 @@ function AcademySchedulePanel() {
   const timeEditorBlockTop = Math.max(0, (timeEditorStartMinutes - ACADEMY_TIMELINE_START_MINUTES) * ACADEMY_TIMELINE_PX_PER_MINUTE);
   const timeEditorBlockHeight = Math.max(30, (timeEditorEndMinutes - timeEditorStartMinutes) * ACADEMY_TIMELINE_PX_PER_MINUTE);
   const timeEditorViewportHeight = typeof window === "undefined" ? 900 : window.innerHeight;
-  const timeEditorWidth = timeEditorCellRect ? timeEditorCellRect.width : 340;
-  const timeEditorLeft = timeEditorCellRect ? timeEditorCellRect.left : 96;
-  const timeEditorTop = timeEditorCellRect ? Math.max(16, Math.min(timeEditorCellRect.top - 26, timeEditorViewportHeight - 620)) : 96;
+  const timeEditorViewportWidth = typeof window === "undefined" ? 1200 : window.innerWidth;
+  const timeEditorIsCompact = timeEditorViewportWidth < 1024;
+  const timeEditorWidth = timeEditorIsCompact ? Math.max(248, Math.min(360, timeEditorViewportWidth - 32)) : timeEditorCellRect ? timeEditorCellRect.width : 340;
+  const timeEditorLeft = timeEditorIsCompact ? 16 : timeEditorCellRect ? timeEditorCellRect.left : 96;
+  const timeEditorTop = timeEditorIsCompact ? 84 : timeEditorCellRect ? Math.max(16, Math.min(timeEditorCellRect.top - 26, timeEditorViewportHeight - 620)) : 96;
 
   return (
     <div className="relative space-y-4">
@@ -1587,8 +1595,8 @@ function AcademySchedulePanel() {
               <div className="flex min-h-[560px] items-center justify-center text-zinc-500">불러오는 중</div>
             ) : (
               <>
-              <div className="space-y-3 lg:hidden">
-                <div className="flex items-center justify-between gap-2">
+              <div className="space-y-2 lg:hidden">
+                <div className="flex items-center justify-between gap-2 px-1">
                   <Button type="button" size="icon" variant="outline" onClick={() => moveScheduleMonth(-1)} aria-label="이전 달">
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -1600,7 +1608,7 @@ function AcademySchedulePanel() {
                 <div className="overflow-hidden rounded-[12px] bg-white ring-1 ring-zinc-200">
                   <div className="grid grid-cols-7 bg-zinc-50">
                     {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-                      <div key={day} className="py-2 text-center text-[11px] font-black text-zinc-500">{day}</div>
+                      <div key={day} className="py-1.5 text-center text-[10px] font-black text-zinc-500">{day}</div>
                     ))}
                   </div>
                   <div className="grid grid-cols-7 gap-px bg-zinc-200">
@@ -1614,13 +1622,15 @@ function AcademySchedulePanel() {
                       <button
                         key={key}
                         type="button"
+                        ref={(node) => setAcademyDateCellRef(key, node)}
+                        data-academy-date={key}
                         onClick={() => {
                           setSelectedDateKey(key);
                           setSelectedEventId(dayEvents[0]?.id || "");
                           setTimeEditor(null);
                           setError("");
                         }}
-                        className={`relative flex aspect-square min-h-[44px] flex-col items-center justify-start p-1.5 text-xs transition ${
+                        className={`relative flex h-11 min-w-0 flex-col items-center justify-start px-1 py-1 text-xs transition ${
                           isSelectedDate
                             ? "bg-black text-white"
                             : isToday
@@ -1632,13 +1642,13 @@ function AcademySchedulePanel() {
                                   : "bg-zinc-50 text-zinc-300"
                         }`}
                       >
-                        <span className={`grid h-6 min-w-6 place-items-center rounded-full text-sm font-black leading-none ${isSelectedDate ? "bg-white text-black" : ""}`}>
+                        <span className={`grid h-5 min-w-5 place-items-center rounded-full text-[12px] font-black leading-none ${isSelectedDate ? "bg-white text-black" : ""}`}>
                           {day.getDate()}
                         </span>
                         {dayEvents.length ? (
                           <span className="mt-auto flex max-w-full items-center justify-center gap-0.5 pb-0.5">
                             {dayEvents.slice(0, 3).map((event) => (
-                              <span key={event.id} className="h-1.5 w-1.5 rounded-full bg-current" />
+                              <span key={event.id} className="h-1 w-1 rounded-full bg-current" />
                             ))}
                           </span>
                         ) : null}
@@ -1650,7 +1660,7 @@ function AcademySchedulePanel() {
                 </div>
                 <div className="space-y-2 rounded-[12px] bg-zinc-50 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-black text-zinc-950">{selectedDateLabel}</p>
+                    <p className="text-base font-black text-zinc-950">{selectedDateLabel}</p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-bold text-zinc-500">{selectedDateEvents.length}개</p>
                       <button
@@ -1715,9 +1725,7 @@ function AcademySchedulePanel() {
                     return (
                       <div
                         key={key}
-                        ref={(node) => {
-                          dateCellRefs.current[key] = node;
-                        }}
+                        ref={(node) => setAcademyDateCellRef(key, node)}
                         data-academy-date={key}
                         className={`min-h-[118px] cursor-pointer p-2 transition ${inMonth ? "bg-white" : "bg-zinc-50 text-zinc-400"} ${isSelectedDate ? "ring-1 ring-inset ring-black/15" : "hover:bg-zinc-50"}`}
                         onClick={() => setSelectedDateKey(key)}
