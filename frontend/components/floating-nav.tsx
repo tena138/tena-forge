@@ -4,7 +4,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
-  BookOpen,
   CalendarDays,
   FileUp,
   FolderKanban,
@@ -12,12 +11,10 @@ import {
   KeyRound,
   LayoutDashboard,
   LayoutTemplate,
-  Library,
   MessageSquare,
   NotebookPen,
   ReceiptText,
   Settings,
-  ShieldCheck,
   Store,
   UserCircle,
 } from "lucide-react";
@@ -75,9 +72,9 @@ const sections = [
     ],
   },
   {
-    title: "Marketplace",
-    shortTitle: "MP",
-    description: "공개 허브",
+    title: "Hub",
+    shortTitle: "HB",
+    description: "Templates and sets",
     adminOnly: true,
     accent: "bg-zinc-700",
     panel: "bg-transparent",
@@ -86,11 +83,8 @@ const sections = [
     activeIndicator: "bg-black",
     activeIcon: "text-white group-hover:text-white",
     items: [
-      { href: "/templates", label: "템플릿 허브", icon: LayoutTemplate },
-      { href: "/marketplace/problem-sets", label: "문항 세트 마켓", icon: Store },
-      { href: "/marketplace/books", label: "교재 마켓", icon: BookOpen },
-      { href: "/licensed-library", label: "라이선스 보관함", icon: Library },
-      { href: "/marketplace/rights-policy", label: "권리 및 업로드 정책", icon: ShieldCheck },
+      { href: "/templates", label: "템플릿", icon: LayoutTemplate },
+      { href: "/marketplace/problem-sets", label: "세트", icon: Store },
     ],
   },
   {
