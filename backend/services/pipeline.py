@@ -595,6 +595,8 @@ Rules for answer:
 
 Rules for matching metadata:
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
+- problem_number is the exam problem number only. Never put answer choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols belong only in answer.
+- If a compact answer key lists answers in visible order but omits or crops some problem numbers, align the rows to the supplied first-pass problem inventory and return the inferred exam problem number.
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 - section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 - Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
@@ -629,6 +631,8 @@ Rules:
 - For Korean Language and English, keep objective answers as the visible choice label or number.
 - If the answer cannot be found, set answer to null.
 - problem_number must always be a string. Preserve original labels such as "1", "1-1", "23-(가)", or "[보기 5]".
+- problem_number is the exam problem number only. Never put answer choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols belong only in answer.
+- If a compact answer key lists answers in visible order but omits or crops some problem numbers, align the rows to the supplied first-pass problem inventory and return the inferred exam problem number.
 - referenced_problem_snippet must contain only problem text explicitly quoted in the solution. Do not guess. If none is quoted, set it to null.
 - section_label must come only from page headers, footers, visible section titles, unit names, exam round labels such as "제1회", "1회", "DAY 01", or equivalent source text. Do not invent it. Do not use a book title such as "Single Connection/싱글 커넥션" or a subject-only label such as "수학Ⅰ/수1" as section_label.
 - Before extracting content, identify the section/day/chapter structure and solution headers such as "01 정답", "문제 01 해설", or "1번 해설". For two-column pages, read the left column top-to-bottom first, then the right column top-to-bottom, unless the page clearly shows another reading order.
@@ -720,6 +724,8 @@ Rules:
 - If the page only shows answer choices ①②③④⑤ without indicating the correct one, return [].
 - For math, if an objective answer is shown only as a choice number or symbol, return that marker. If the actual choice value is visible, return the actual value.
 - problem_number is the problem/question number only. Never put circled choice markers such as ①, ②, ③, ④, or ⑤ in problem_number; those symbols belong in answer.
+- When a compact answer key/list is ordered but omits or crops some problem numbers, use the first-pass inventory and visible order to assign each answer to the expected problem slot. Return the expected problem number, not the answer choice marker.
+- In targeted repair mode, every returned object for an unresolved slot must use one of the requested problem numbers as problem_number unless it is only a neighboring anchor explicitly needed for disambiguation.
 - Preserve original problem labels such as "1", "01", "1-1", "23-(가)", or "[보기 5]".
 - When the same problem number appears in multiple elective/section blocks, such as Korean CSAT math 28 and 29 for "확률과 통계", "미적분", and "기하", return one answer object per occurrence. Preserve the nearest elective or section label in section_label when visible, and never collapse repeated 28/29 answers into a single object.
 - Convert mathematical expressions in answer into LaTeX.
@@ -1069,11 +1075,12 @@ def _normalize_detected_sections(value: Any) -> list[str]:
 
 
 CHOICE_NUMBER_MARKERS = {"①", "②", "③", "④", "⑤"}
+CHOICE_NUMBER_MARKER_RE = re.compile(r"^(?:정답|답)?\s*[:：]?\s*[①②③④⑤]\s*(?:번|선지)?$")
 
 
 def _ascii_number_match(value: Any) -> re.Match[str] | None:
     text = str(value or "").strip()
-    if text in CHOICE_NUMBER_MARKERS:
+    if text in CHOICE_NUMBER_MARKERS or CHOICE_NUMBER_MARKER_RE.fullmatch(text):
         return None
     return re.search(r"[0-9]+", unicodedata.normalize("NFKC", text))
 
@@ -2094,6 +2101,8 @@ def _targeted_answer_repair_prompt_note(
         "- If a worked solution contains the answer only in the final line, extract that final value as answer.\n"
         "- If exactly one requested slot remains and the visible answer is adjacent to it but its printed problem number is missing or cropped, return that answer with the requested problem_number instead of returning [].\n"
         "- If the answer is an objective choice marker, keep the marker in answer and keep problem_number as the requested problem number.\n"
+        "- Never put objective choice markers such as ①, ②, ③, ④, or ⑤ in problem_number. If the visible value is a choice marker, it belongs in answer only.\n"
+        "- For every returned object that is not a local anchor, problem_number must be one of the requested unresolved problem numbers.\n"
         "Requested problem context:\n"
         f"{context}"
     )
@@ -3569,7 +3578,7 @@ Rules:
 
 def _question_number_key(value: Any) -> str:
     text = str(value or "").strip()
-    if text in CHOICE_NUMBER_MARKERS:
+    if text in CHOICE_NUMBER_MARKERS or CHOICE_NUMBER_MARKER_RE.fullmatch(text):
         return ""
     match = _ascii_number_match(text)
     return str(int(match.group(0))) if match else text
@@ -4568,7 +4577,11 @@ def process_batch(batch_id: UUID) -> None:
                 problem_inventory=problem_inventory,
             )
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
-            recovered_candidates = _overlay_quick_answer_solutions(quick_solutions, recovered_solutions)
+            recovered_candidates = _overlay_quick_answer_solutions(
+                quick_solutions,
+                recovered_solutions,
+                replace_same_number_blank_fallbacks=True,
+            )
             if _solution_answer_count(recovered_candidates) >= _solution_answer_count(solutions):
                 solutions = recovered_candidates
             total_units = recovery_total_units
@@ -4750,7 +4763,11 @@ def process_batch(batch_id: UUID) -> None:
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if solution_sections:
                 _apply_section_ranges_to_items(recovered_solutions, solution_sections, "page_idx")
-            recovered_candidates = _overlay_quick_answer_solutions(quick_solutions, recovered_solutions)
+            recovered_candidates = _overlay_quick_answer_solutions(
+                quick_solutions,
+                recovered_solutions,
+                replace_same_number_blank_fallbacks=True,
+            )
             if quick_answers_used:
                 current_score = _candidate_solution_score(all_extracted, solutions)
                 recovered_score = _candidate_solution_score(all_extracted, recovered_candidates)
@@ -5049,7 +5066,11 @@ def process_solutions_only(batch_id: UUID) -> None:
             recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             if solution_sections:
                 _apply_section_ranges_to_items(recovered_solutions, solution_sections, "page_idx")
-            recovered_candidates = _overlay_quick_answer_solutions(quick_solutions, recovered_solutions)
+            recovered_candidates = _overlay_quick_answer_solutions(
+                quick_solutions,
+                recovered_solutions,
+                replace_same_number_blank_fallbacks=True,
+            )
             if quick_answers_used:
                 current_score = _candidate_solution_score(existing_problem_payloads, solutions)
                 recovered_score = _candidate_solution_score(existing_problem_payloads, recovered_candidates)
@@ -6087,12 +6108,21 @@ def _normalize_extracted_items(
     return normalized_items
 
 
-def _extracted_problem_merge_key(page_index: int, item: dict[str, Any]) -> tuple[int, str | None, int, int]:
+def _extracted_problem_number_merge_key(value: Any) -> str:
+    number = _number_key_or_none(value)
+    if not number:
+        return ""
+    if re.fullmatch(r"[0-9]+", number):
+        return f"{int(number):08d}"
+    return f"~{number}"
+
+
+def _extracted_problem_merge_key(page_index: int, item: dict[str, Any]) -> tuple[int, str | None, str, int]:
     return (
         page_index,
         str(item.get("section_label") or "").strip() or None,
-        int(item.get("problem_number") or 0),
-        int(item.get("page_number_occurrence") or 0),
+        _extracted_problem_number_merge_key(item.get("problem_number")),
+        _int_or_none(item.get("page_number_occurrence")) or 0,
     )
 
 
@@ -6123,7 +6153,7 @@ def extract_and_cross_check(
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required for processing")
     client = _openai_client()
-    by_problem_key: dict[tuple[int, str | None, int, int], list[dict[str, Any]]] = {}
+    by_problem_key: dict[tuple[int, str | None, str, int], list[dict[str, Any]]] = {}
     extraction_passes = max(settings.ai_extraction_passes, 1)
     total_steps = total or len(pages) * extraction_passes
     subjects = _clean_text_candidates(subject_candidates, max_items=24)

@@ -41,6 +41,9 @@ NUMBER_PREFIX_RE = re.compile(
 )
 NUMBER_LABEL_RE = re.compile(r"(?:\uc815\ub2f5|\ub2f5|\ud574\uc124|\ud480\uc774).*$")
 NUMBER_SUFFIX_RE = re.compile(r"(?:\ubc88|\ubb38\uc81c|\ubb38\ud56d)$")
+STANDALONE_CHOICE_NUMBER_RE = re.compile(
+    r"^(?:\uc815\ub2f5|\ub2f5)?\s*[:\uff1a]?\s*[\u2460\u2461\u2462\u2463\u2464]\s*(?:\ubc88|\uc120\uc9c0)?$"
+)
 
 
 @dataclass
@@ -156,11 +159,14 @@ def _source_order_key(item: dict[str, Any], fallback_index: int) -> tuple[int, i
 
 
 def _canonical_number(value: Any) -> str:
+    raw = _text(value)
+    if STANDALONE_CHOICE_NUMBER_RE.fullmatch(raw):
+        return ""
     circled_digits = str.maketrans(
         "\u2460\u2461\u2462\u2463\u2464\u2465\u2466\u2467\u2468",
         "123456789",
     )
-    text = unicodedata.normalize("NFKC", _text(value)).translate(circled_digits)
+    text = unicodedata.normalize("NFKC", raw).translate(circled_digits)
     text = re.sub(r"\s+", "", text)
     text = NUMBER_PREFIX_RE.sub("", text)
     text = NUMBER_LABEL_RE.sub("", text)

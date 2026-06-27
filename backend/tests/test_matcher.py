@@ -15,7 +15,21 @@ class MatcherTests(unittest.TestCase):
         self.assertEqual(_canonical_number("1번"), "1")
         self.assertEqual(_canonical_number("문제 01"), "1")
         self.assertEqual(_canonical_number("#12."), "12")
-        self.assertEqual(_canonical_number("①"), "1")
+        self.assertEqual(_canonical_number("\u2465"), "6")
+
+    def test_canonical_number_rejects_standalone_choice_marker_labels(self):
+        self.assertEqual(_canonical_number("\u2460"), "")
+        self.assertEqual(_canonical_number("\uc815\ub2f5 \u2460"), "")
+
+    def test_standalone_choice_marker_solution_number_does_not_match_problem_one(self):
+        result = match_with_summary(
+            [{"problem_number": "1", "problem_text": "problem one", "page_index": 1}],
+            [{"problem_number": "\u2460", "answer": "A", "solution_steps": None, "page_idx": 2}],
+        )
+
+        matched = result["problems"][0]
+        self.assertIsNone(matched["solution"])
+        self.assertEqual(result["summary"]["matched_count"], 0)
 
     def test_section_label_normalizes_round_and_ignores_source_title(self):
         self.assertEqual(_normalize_section_label("제1회"), "회차 01")

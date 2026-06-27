@@ -56,6 +56,28 @@ class PipelineMergeKeyTests(unittest.TestCase):
     def test_number_sort_ignores_choice_markers(self):
         self.assertEqual(_sort_number_keys(["1", "①", "2", "②", "10"]), ["1", "2", "10"])
 
+    def test_problem_merge_key_treats_standalone_choice_marker_as_missing_number(self):
+        key = _extracted_problem_merge_key(
+            4,
+            {
+                "problem_number": "\u2460",
+                "page_number_occurrence": "\u2461",
+            },
+        )
+
+        self.assertEqual(key, (4, None, "", 0))
+
+    def test_problem_merge_key_treats_answer_prefixed_choice_marker_as_missing_number(self):
+        key = _extracted_problem_merge_key(
+            4,
+            {
+                "problem_number": "\uc815\ub2f5 \u2460",
+                "page_number_occurrence": "0",
+            },
+        )
+
+        self.assertEqual(key, (4, None, "", 0))
+
     def test_quick_answer_candidates_include_middle_boundary_pages(self):
         indexes = _quick_answer_candidate_page_indexes(14)
 
