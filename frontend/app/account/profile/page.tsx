@@ -10,27 +10,25 @@ import { AcademyProfile, fetchMe, updateMe } from "@/lib/auth-api";
 import { authHttp, getAccessToken, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
 
 type ProfileDraft = {
-  academy_name: string;
-  business_number: string;
-  phone: string;
-  address: string;
+  display_name: string;
+  bio: string;
 };
+
+function profileDisplayName(profile: AcademyProfile) {
+  return profile.display_name || profile.academy_name || "";
+}
 
 function toDraft(profile: AcademyProfile): ProfileDraft {
   return {
-    academy_name: profile.academy_name || "",
-    business_number: profile.business_number || "",
-    phone: profile.phone || "",
-    address: profile.address || "",
+    display_name: profileDisplayName(profile),
+    bio: profile.bio || "",
   };
 }
 
 function normalizeDraft(draft: ProfileDraft) {
   return {
-    academy_name: draft.academy_name.trim(),
-    business_number: draft.business_number.trim(),
-    phone: draft.phone.trim(),
-    address: draft.address.trim(),
+    display_name: draft.display_name.trim(),
+    bio: draft.bio.trim(),
   };
 }
 
@@ -68,7 +66,7 @@ export default function AccountProfilePage() {
         }
       } catch {
         if (!cancelled && !readStoredAuthProfile<AcademyProfile>()) {
-          setError("프로필 정보를 불러오지 못했습니다. 다시 로그인해주세요.");
+          setError("프로필을 불러오지 못했습니다. 다시 로그인해주세요.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -84,9 +82,9 @@ export default function AccountProfilePage() {
   async function save() {
     if (!profile || !draft) return;
     const cleaned = normalizeDraft(draft);
-    if (!cleaned.academy_name) {
+    if (!cleaned.display_name) {
       setNotice("");
-      setError("이름 또는 소속명을 입력해주세요.");
+      setError("사용자 표시 이름을 입력해주세요.");
       return;
     }
     if (!isDirty) return;
@@ -95,10 +93,8 @@ export default function AccountProfilePage() {
     setError("");
     try {
       const updated = await updateMe({
-        academy_name: cleaned.academy_name,
-        phone: cleaned.phone || null,
-        address: cleaned.address || null,
-        business_number: cleaned.business_number || null,
+        display_name: cleaned.display_name,
+        bio: cleaned.bio || null,
       });
       setProfile(updated);
       setDraft(toDraft(updated));
@@ -119,43 +115,31 @@ export default function AccountProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-2xl space-y-5">
       <Card>
         <CardHeader>
-          <CardTitle>프로필 편집</CardTitle>
-          <p className="text-sm font-medium text-zinc-500">콘솔과 문서에 표시되는 기본 계정 정보를 관리합니다.</p>
+          <CardTitle>프로필</CardTitle>
+          <p className="text-sm font-medium text-zinc-500">서비스에서 보여줄 이름과 짧은 소개만 관리합니다.</p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 rounded-[10px] bg-zinc-100 p-4 text-sm sm:grid-cols-2">
-            <div>
-              <p className="text-xs font-bold uppercase text-zinc-500">계정</p>
-              <p className="mt-1 truncate font-semibold text-zinc-950">{profile.email}</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase text-zinc-500">상태</p>
-              <p className="mt-1 font-semibold text-zinc-950">{profile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}</p>
-            </div>
-          </div>
-
-          <label className="block text-sm font-semibold">
-            이메일
-            <Input className="mt-1.5" value={profile.email} disabled />
+          <label className="block text-sm font-semibold text-zinc-950">
+            사용자 표시 이름
+            <Input
+              className="mt-1.5"
+              maxLength={120}
+              value={draft?.display_name || ""}
+              onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), display_name: event.target.value }))}
+            />
           </label>
-          <label className="block text-sm font-semibold">
-            이름 또는 소속명
-            <Input className="mt-1.5" value={draft?.academy_name || ""} onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), academy_name: event.target.value }))} />
-          </label>
-          <label className="block text-sm font-semibold">
-            사업자등록번호
-            <Input className="mt-1.5" value={draft?.business_number || ""} onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), business_number: event.target.value }))} />
-          </label>
-          <label className="block text-sm font-semibold">
-            대표 전화
-            <Input className="mt-1.5" value={draft?.phone || ""} onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), phone: event.target.value }))} />
-          </label>
-          <label className="block text-sm font-semibold">
-            주소
-            <Input className="mt-1.5" value={draft?.address || ""} onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), address: event.target.value }))} />
+          <label className="block text-sm font-semibold text-zinc-950">
+            소개글
+            <textarea
+              className="mt-1.5 min-h-28 w-full resize-none rounded-[8px] border-0 bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:bg-white focus:ring-2 focus:ring-black/10"
+              maxLength={500}
+              placeholder="짧은 소개를 입력해주세요."
+              value={draft?.bio || ""}
+              onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), bio: event.target.value }))}
+            />
           </label>
           {notice && <p className="flex items-center gap-2 rounded-md bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-800"><CheckCircle2 className="h-4 w-4" />{notice}</p>}
           {error && <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-950">{error}</p>}

@@ -8,6 +8,8 @@ export type AcademyProfile = {
   email: string;
   email_verified: boolean;
   academy_name: string;
+  display_name?: string | null;
+  bio?: string | null;
   account_type?: "academy" | "student";
   business_number?: string | null;
   phone?: string | null;
@@ -342,7 +344,7 @@ export async function uploadLiveLectureSlide(eventId: string, file: File, onProg
   return response.data as LiveLectureSession;
 }
 
-export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "account_type" | "phone" | "address" | "business_number">>) {
+export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "display_name" | "bio" | "account_type" | "phone" | "address" | "business_number">>) {
   const response = await authHttp.patch("/api/auth/me", payload);
   const profile = response.data as AcademyProfile;
   fetchMeCache = { profile, expiresAt: Date.now() + 15000 };

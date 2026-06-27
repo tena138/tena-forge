@@ -429,6 +429,8 @@ def _ensure_sqlite_columns():
         },
         "academies": {
             "account_type": "VARCHAR(20) DEFAULT 'academy' NOT NULL",
+            "display_name": "VARCHAR(120)",
+            "bio": "TEXT",
         },
         "class_schedule_events": {
             "counts_for_tuition": "BOOLEAN DEFAULT 1 NOT NULL",

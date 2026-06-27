@@ -1312,6 +1312,8 @@ class AcademyProfile(BaseModel):
     email: EmailStr
     email_verified: bool
     academy_name: str
+    display_name: str | None = None
+    bio: str | None = None
     account_type: str = "academy"
     business_number: str | None = None
     phone: str | None = None
@@ -1436,6 +1438,8 @@ class ChangePasswordRequest(BaseModel):
 
 class ProfileUpdateRequest(BaseModel):
     academy_name: str | None = Field(default=None, min_length=1, max_length=255)
+    display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    bio: str | None = Field(default=None, max_length=500)
     account_type: str | None = None
     phone: str | None = Field(default=None, max_length=50)
     address: str | None = Field(default=None, max_length=500)

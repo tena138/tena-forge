@@ -861,6 +861,18 @@ def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_curr
     changes = payload.model_dump(exclude_unset=True)
     if "academy_name" in changes and changes["academy_name"] is not None:
         academy.academy_name = changes["academy_name"].strip()
+    if "display_name" in changes:
+        value = changes["display_name"]
+        if value is None:
+            academy.display_name = None
+        else:
+            cleaned = value.strip()
+            if not cleaned:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="display_name is required")
+            academy.display_name = cleaned
+    if "bio" in changes:
+        value = changes["bio"]
+        academy.bio = value.strip() if isinstance(value, str) and value.strip() else None
     for field in ("phone", "address", "business_number"):
         if field in changes:
             value = changes[field]

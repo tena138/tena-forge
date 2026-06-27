@@ -87,6 +87,8 @@ class Academy(Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     academy_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     account_type: Mapped[str] = mapped_column(String(20), default="academy", nullable=False, index=True)
     business_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)

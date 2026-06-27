@@ -91,6 +91,8 @@ ACADEMY_REQUIRED_COLUMNS = {
     "email_verified_at",
     "password_hash",
     "academy_name",
+    "display_name",
+    "bio",
     "account_type",
     "business_number",
     "phone",

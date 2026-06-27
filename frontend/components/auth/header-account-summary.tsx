@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { AcademyBilling, getAcademyBilling } from "@/lib/academyStudent";
 import { AcademyProfile, fetchMe, logout, updateMe } from "@/lib/auth-api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, authHttp, getAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
-import { formatKstDateTime } from "@/lib/datetime";
 import { UsageSummary, getUsageSummary } from "@/lib/saas";
 import { cn } from "@/lib/utils";
 
@@ -38,33 +37,19 @@ const planNames: Record<string, { label: string; tone: PlanTone }> = {
 };
 
 type ProfileDraft = {
-  academy_name: string;
-  business_number: string;
-  phone: string;
-  address: string;
+  display_name: string;
+  bio: string;
 };
+
+function profileDisplayName(profile: AcademyProfile) {
+  return profile.display_name || profile.academy_name || "";
+}
 
 function toProfileDraft(profile: AcademyProfile): ProfileDraft {
   return {
-    academy_name: profile.academy_name || "",
-    business_number: profile.business_number || "",
-    phone: profile.phone || "",
-    address: profile.address || "",
+    display_name: profileDisplayName(profile),
+    bio: profile.bio || "",
   };
-}
-
-function cleanOptional(value: string) {
-  return value.trim();
-}
-
-function formatDateTime(value?: string | null) {
-  return formatKstDateTime(value, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }, "기록 없음");
 }
 
 function isFutureDate(value?: string | null) {
@@ -296,7 +281,7 @@ export function HeaderAccountSummary() {
 
   const currentProfile = profile;
   const plan = displayPlan(currentProfile);
-  const accountName = currentProfile.academy_name || currentProfile.email || "Tena Forge";
+  const accountName = profileDisplayName(currentProfile) || currentProfile.email || "Tena Forge";
   const accountEmail = currentProfile.email || "";
   const initials = accountName.slice(0, 1).toUpperCase() || "T";
 
@@ -311,8 +296,8 @@ export function HeaderAccountSummary() {
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
-    if (!draft.academy_name.trim()) {
-      setError("이름 또는 소속명을 입력해주세요.");
+    if (!draft.display_name.trim()) {
+      setError("사용자 표시 이름을 입력해주세요.");
       return;
     }
 
@@ -321,10 +306,8 @@ export function HeaderAccountSummary() {
     setNotice("");
     try {
       const updated = await updateMe({
-        academy_name: draft.academy_name.trim(),
-        business_number: cleanOptional(draft.business_number),
-        phone: cleanOptional(draft.phone),
-        address: cleanOptional(draft.address),
+        display_name: draft.display_name.trim(),
+        bio: draft.bio.trim() || null,
       });
       setProfile(updated);
       setDraft(toProfileDraft(updated));
@@ -413,74 +396,25 @@ export function HeaderAccountSummary() {
           </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
-            <div className="rounded-lg bg-zinc-100 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{accountEmail}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{currentProfile.email_verified ? "이메일 인증 완료" : "이메일 인증 필요"}</div>
-                </div>
-                <PlanBadge label={plan.label} tone={plan.tone} />
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-white px-3 py-2">
-                  <div className="font-semibold text-muted-foreground">가입 플랜</div>
-                  <div className="mt-1 font-bold">{plan.label}</div>
-                </div>
-                <div className="rounded-md bg-white px-3 py-2">
-                  <div className="font-semibold text-muted-foreground">계정 상태</div>
-                  <div className={`mt-1 font-bold ${plan.statusClass}`}>{plan.status}</div>
-                </div>
-              </div>
-              <AccountUsageSummary summary={usageSummary} billing={billingSummary} profile={currentProfile} loading={usageLoading} />
-            </div>
-
-            <label className="block text-sm font-semibold">
-              이메일
-              <Input className="mt-1.5" value={accountEmail} disabled />
-            </label>
-            <label className="block text-sm font-semibold">
-              이름 또는 소속명
+            <label className="block text-sm font-semibold text-zinc-950">
+              사용자 표시 이름
               <Input
                 className="mt-1.5"
-                value={draft?.academy_name || ""}
-                onChange={(event) => setDraft((current) => ({ ...(current || toProfileDraft(currentProfile)), academy_name: event.target.value }))}
+                maxLength={120}
+                value={draft?.display_name || ""}
+                onChange={(event) => setDraft((current) => ({ ...(current || toProfileDraft(currentProfile)), display_name: event.target.value }))}
               />
             </label>
-            <label className="block text-sm font-semibold">
-              사업자등록번호
-              <Input
-                className="mt-1.5"
-                value={draft?.business_number || ""}
-                onChange={(event) => setDraft((current) => ({ ...(current || toProfileDraft(currentProfile)), business_number: event.target.value }))}
+            <label className="block text-sm font-semibold text-zinc-950">
+              소개글
+              <textarea
+                className="mt-1.5 min-h-28 w-full resize-none rounded-[8px] border-0 bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:bg-white focus:ring-2 focus:ring-black/10"
+                maxLength={500}
+                placeholder="짧은 소개를 입력해주세요."
+                value={draft?.bio || ""}
+                onChange={(event) => setDraft((current) => ({ ...(current || toProfileDraft(currentProfile)), bio: event.target.value }))}
               />
             </label>
-            <label className="block text-sm font-semibold">
-              대표 전화
-              <Input
-                className="mt-1.5"
-                value={draft?.phone || ""}
-                onChange={(event) => setDraft((current) => ({ ...(current || toProfileDraft(currentProfile)), phone: event.target.value }))}
-              />
-            </label>
-            <label className="block text-sm font-semibold">
-              주소
-              <Input
-                className="mt-1.5"
-                value={draft?.address || ""}
-                onChange={(event) => setDraft((current) => ({ ...(current || toProfileDraft(currentProfile)), address: event.target.value }))}
-              />
-            </label>
-
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-zinc-100 p-3 text-xs text-muted-foreground">
-              <div>
-                <div className="font-semibold">가입일</div>
-                <div className="mt-1">{formatDateTime(currentProfile.created_at)}</div>
-              </div>
-              <div>
-                <div className="font-semibold">최근 로그인</div>
-                <div className="mt-1">{formatDateTime(currentProfile.last_login_at)}</div>
-              </div>
-            </div>
 
             {notice && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{notice}</p>}
             {error && <p className="rounded-md bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">{error}</p>}
