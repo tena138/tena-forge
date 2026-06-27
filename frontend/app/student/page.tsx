@@ -254,7 +254,7 @@ export default function StudentAppPage() {
       <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center">
         <h1 className="text-xl font-bold text-zinc-950">학생 계정 전용 학습 공간입니다</h1>
         <a href="/academy" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white transition hover:bg-zinc-800">
-          Academy OS로 이동
+          Academy로 이동
         </a>
       </div>
     );

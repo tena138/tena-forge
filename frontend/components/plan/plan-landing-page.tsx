@@ -163,9 +163,9 @@ const academyLogoSets: AcademyLogoSlot[][] = [
 const academyLogoRotationMs = 3600;
 
 const storyScenes = [
-  { title: "오프라인 문항들을 한 곳에 전산화", eyebrow: "Private Studio", pageTitle: "문항 보관함", route: "/problems" },
-  { title: "가장 빠르게 컨텐츠 제작", eyebrow: "Private Studio", pageTitle: "세트 제작", route: "/problem-sets/export" },
-  { title: "오답 관리까지 꼼꼼하게", eyebrow: "Academy OS", pageTitle: "학생 관리", route: "/student-management" },
+  { title: "오프라인 문항들을 한 곳에 전산화", eyebrow: "Studio", pageTitle: "문항 보관함", route: "/problems" },
+  { title: "가장 빠르게 컨텐츠 제작", eyebrow: "Studio", pageTitle: "세트 제작", route: "/problem-sets/export" },
+  { title: "오답 관리까지 꼼꼼하게", eyebrow: "Academy", pageTitle: "학생 관리", route: "/student-management" },
 ];
 
 const mobileWorkflow = [
@@ -681,7 +681,7 @@ function ProductPreview() {
           <div className="grid h-[calc(32rem-3.5rem)] min-h-0 grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)]">
             <aside className="border-r border-white/10 bg-black/45 px-1.5 py-3 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-2">
               <SidebarGroup
-                title="Private Studio"
+                title="Studio"
                 accent="bg-zinc-400"
                 panel="border-zinc-400/20 bg-zinc-400/[0.055]"
                 items={[
@@ -693,7 +693,7 @@ function ProductPreview() {
                 ]}
               />
               <SidebarGroup
-                title="Academy OS"
+                title="Academy"
                 accent="bg-zinc-300"
                 panel="border-zinc-300/20 bg-zinc-300/[0.045]"
                 items={[
@@ -706,7 +706,7 @@ function ProductPreview() {
             <section className="min-h-0 min-w-0 overflow-hidden bg-[#090b10]/[0.92]">
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">Private Studio</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">Studio</p>
                   <p className="mt-0.5 text-sm font-black text-slate-100">문항 보관함</p>
                 </div>
                 <div className="hidden items-center gap-2 sm:flex">
@@ -739,7 +739,7 @@ function MobileProductPreview() {
       <div className="relative z-10 border-b border-white/10 px-3.5 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">Private Studio</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-200">Studio</p>
             <h2 className="mt-1 truncate text-sm font-black text-white">오늘 만들 자료</h2>
           </div>
           <span className="rounded-[7px] border border-zinc-300/20 bg-zinc-400/10 px-2 py-1 text-[11px] font-bold text-zinc-100">3단계</span>
@@ -1026,11 +1026,11 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
       <div className="grid min-h-0 flex-1 grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[12rem_minmax(0,1fr)]">
         <aside className="border-r border-white/10 bg-black/45 px-1.5 py-3 shadow-[8px_0_32px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-2">
           <SidebarGroup
-            title="Private Studio"
+            title="Studio"
             accent="bg-zinc-400"
             panel="border-zinc-400/20 bg-zinc-400/[0.055]"
             items={[
-              ["제작 콘솔", LayoutDashboard, scene.eyebrow === "Private Studio" && scene.route === "/problems"],
+              ["제작 콘솔", LayoutDashboard, scene.eyebrow === "Studio" && scene.route === "/problems"],
               ["추출", FileUp, false],
               ["확인", ClipboardCheck, false],
               ["보관", Archive, scene.route === "/problems"],
@@ -1038,7 +1038,7 @@ function StoryConsoleFrame({ scene, children }: { scene: (typeof storyScenes)[nu
             ]}
           />
           <SidebarGroup
-            title="Academy OS"
+            title="Academy"
             accent="bg-zinc-300"
             panel="border-zinc-300/20 bg-zinc-300/[0.045]"
             items={[

@@ -36,8 +36,8 @@ type StoredProfile = { account_type?: AccountType; plan?: string | null; roles?:
 
 const sections = [
   {
-    title: "Private Studio",
-    shortTitle: "PS",
+    title: "Studio",
+    shortTitle: "ST",
     description: "내 자료 제작",
     accent: "bg-black",
     panel: "bg-transparent",
@@ -54,8 +54,8 @@ const sections = [
     ],
   },
   {
-    title: "Academy OS",
-    shortTitle: "AO",
+    title: "Academy",
+    shortTitle: "AC",
     description: "Seats, classes, calendar",
     accountTypes: ["academy"],
     accent: "bg-zinc-950",
