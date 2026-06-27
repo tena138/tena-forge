@@ -15,7 +15,6 @@ import {
   NotebookPen,
   ReceiptText,
   Store,
-  UserCircle,
 } from "lucide-react";
 
 import { SidebarNavItem } from "@/components/sidebar-nav-item";
@@ -102,20 +101,6 @@ const sections = [
       { href: "/student", label: "학원 키 등록", icon: KeyRound },
       { href: "/student", label: "오답노트", icon: NotebookPen },
       { href: "/student", label: "학생 캘린더", icon: CalendarDays },
-    ],
-  },
-  {
-    title: "My Info",
-    shortTitle: "MI",
-    description: "Profile and settings",
-    accent: "bg-zinc-700",
-    panel: "bg-transparent",
-    header: "text-zinc-950",
-    activeItem: "console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none",
-    activeIndicator: "bg-black",
-    activeIcon: "text-white group-hover:text-white",
-    items: [
-      { href: "/account/profile", label: "프로필", icon: UserCircle },
     ],
   },
 ];
