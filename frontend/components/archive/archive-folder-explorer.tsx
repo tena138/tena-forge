@@ -231,7 +231,7 @@ export function ArchiveFolderExplorer({
         {destinationPicker && currentFolderId ? (
           <button
             type="button"
-            className="grid h-11 w-11 min-h-0 flex-none place-items-center self-start rounded-[10px] bg-zinc-50 text-zinc-800 transition-colors hover:bg-zinc-100"
+            className="grid h-10 w-10 min-h-0 max-w-[40px] flex-none basis-[40px] place-items-center self-start rounded-[10px] bg-zinc-50 p-0 text-zinc-800 transition-colors hover:bg-zinc-100"
             onClick={() => onOpenFolder(parentFolderId)}
             aria-label="상위 폴더로 이동"
             title="상위 폴더로 이동"
