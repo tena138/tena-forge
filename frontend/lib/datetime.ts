@@ -41,6 +41,22 @@ export function formatKstTime(value?: string | Date | null, fallback = "") {
   return formatKstDateTime(value, { hour: "2-digit", minute: "2-digit" }, fallback);
 }
 
+export function formatKstMonthDay(value?: string | Date | null, fallback = "") {
+  const date = parseApiDate(value);
+  if (!date) return fallback;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: KST_TIME_ZONE,
+    month: "numeric",
+    day: "numeric",
+  }).format(date);
+}
+
+export function formatKstMonthDayTime(value?: string | Date | null, fallback = "") {
+  const date = formatKstMonthDay(value);
+  const time = formatKstTime(value);
+  return date && time ? `${date} ${time}` : fallback;
+}
+
 export function parseLocalDateTime(value?: string | Date | null) {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;

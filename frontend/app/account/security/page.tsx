@@ -25,7 +25,7 @@ import {
   type LoginHistoryItem,
   type OAuthAccountItem,
 } from "@/lib/auth-api";
-import { formatKstDateTime } from "@/lib/datetime";
+import { formatKstMonthDayTime } from "@/lib/datetime";
 
 function actionErrorMessage(error: unknown, fallback: string) {
   const response = (error as { response?: { data?: { detail?: unknown } }; message?: string }).response;
@@ -36,7 +36,7 @@ function actionErrorMessage(error: unknown, fallback: string) {
 }
 
 function formatSecurityDateTime(value?: string | null) {
-  return formatKstDateTime(value, { dateStyle: "short", timeStyle: "short" }, "-");
+  return formatKstMonthDayTime(value, "-");
 }
 
 export default function AccountSecurityPage() {

@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, Problem, ProblemSet, ProblemSetItem, ProblemUsageHistoryItem, ProblemUsageHistoryResponse } from "@/lib/api";
-import { formatKstDateTime } from "@/lib/datetime";
+import { formatKstMonthDayTime } from "@/lib/datetime";
 import { PROBLEM_SET_EXPORT_HISTORY_EVENT, ProblemSetExportHistoryItem, readProblemSetExportHistory, rememberProblemSetExport } from "@/lib/exportHistory";
 
 type ProblemPage = { items: Problem[]; total: number; page: number; limit: number; pages: number };
@@ -26,7 +26,7 @@ const PICKER_PAGE_LIMIT = 96;
 const difficulties = ["2점", "3점", "4점"];
 
 function exportHistoryTime(value: string) {
-  return formatKstDateTime(value, { dateStyle: "short", timeStyle: "short" }, value);
+  return formatKstMonthDayTime(value, value);
 }
 
 function usageLabel(item: ProblemUsageHistoryItem) {

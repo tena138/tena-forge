@@ -11,11 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, getDashboardAnnouncementAccess, ProblemSet, ProblemSetListItem, sourceTypeLabel, submitProblemSetToMarketplace } from "@/lib/api";
-import { formatKstDateTime } from "@/lib/datetime";
+import { formatKstMonthDayTime } from "@/lib/datetime";
 import { PROBLEM_SET_EXPORT_HISTORY_EVENT, ProblemSetExportHistoryItem, readProblemSetExportHistory, rememberProblemSetExport } from "@/lib/exportHistory";
 
 function exportHistoryTime(value: string) {
-  return formatKstDateTime(value, { dateStyle: "short", timeStyle: "short" }, value);
+  return formatKstMonthDayTime(value, value);
 }
 
 export default function ProblemSetsPage() {
@@ -176,7 +176,7 @@ export default function ProblemSetsPage() {
             >
               <CardHeader>
                 <CardTitle>{set.name}</CardTitle>
-                <p className="text-sm text-muted-foreground">{formatKstDateTime(set.created_at, { dateStyle: "short", timeStyle: "short" }, set.created_at)}</p>
+                <p className="text-sm text-muted-foreground">{formatKstMonthDayTime(set.created_at, set.created_at)}</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="rounded-md bg-accent/50 p-3 text-sm"><b>{set.item_count}</b>개 문항</div>

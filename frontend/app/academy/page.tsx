@@ -30,7 +30,7 @@ import { AcademyProfile } from "@/lib/auth-api";
 import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { api, Batch, ProblemSetListItem } from "@/lib/api";
 import { publishCoAgentStatusMessage } from "@/lib/coAgentStatus";
-import { formatKstDateTime, formatLocalTime } from "@/lib/datetime";
+import { formatKstDateTime, formatKstMonthDayTime, formatLocalTime } from "@/lib/datetime";
 import {
   ScheduleRecurrenceUnit,
   buildRecurringDateTimes,
@@ -106,12 +106,7 @@ function learningSubmissionStatusLabel(status: string) {
 }
 
 function compactDate(value: string) {
-  return formatKstDateTime(value, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatKstMonthDayTime(value, value);
 }
 
 function learningAssignmentWorkloadLabel(assignment: LearningAssignment) {
