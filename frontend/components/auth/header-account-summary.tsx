@@ -380,7 +380,7 @@ export function HeaderAccountSummary() {
             </button>
             <Link href="/account/security" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950" onClick={() => setOpen(false)}>
               <Settings className="h-4 w-4" />
-              보안 설정
+              설정
             </Link>
             <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950" onClick={signOut}>
               <LogOut className="h-4 w-4" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, ShieldOff, X } from "lucide-react";
+import { Loader2, Radio, Save, ShieldCheck, ShieldOff, X } from "lucide-react";
 
 import { PasswordStrength } from "@/components/auth/auth-ui";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   disableTotp,
   enableTotp,
   fetchMe,
+  getLiveInteractionSettings,
   listLoginHistory,
   listOAuthAccounts,
   listSessions,
@@ -22,6 +23,7 @@ import {
   setupTotp,
   unlinkOAuthAccount,
   deleteAccount,
+  updateLiveInteractionSettings,
   type LoginHistoryItem,
   type OAuthAccountItem,
 } from "@/lib/auth-api";
@@ -39,11 +41,14 @@ function formatSecurityDateTime(value?: string | null) {
   return formatKstMonthDayTime(value, "-");
 }
 
+type SettingsSection = "security" | "lecture";
+
 export default function AccountSecurityPage() {
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [history, setHistory] = useState<LoginHistoryItem[]>([]);
   const [oauthAccounts, setOauthAccounts] = useState<OAuthAccountItem[]>([]);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("security");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [action, setAction] = useState<string | null>(null);
@@ -54,6 +59,11 @@ export default function AccountSecurityPage() {
   const [backupSaved, setBackupSaved] = useState(false);
   const [disableForm, setDisableForm] = useState({ password: "", totp_code: "" });
   const [deletePassword, setDeletePassword] = useState("");
+  const [liveMinutes, setLiveMinutes] = useState(5);
+  const [liveLoading, setLiveLoading] = useState(true);
+  const [liveSaving, setLiveSaving] = useState(false);
+  const [liveNotice, setLiveNotice] = useState("");
+  const [liveError, setLiveError] = useState("");
 
   async function load() {
     try {
@@ -64,13 +74,53 @@ export default function AccountSecurityPage() {
       setOauthAccounts(oauthList);
       setError("");
     } catch (err) {
-      setError(actionErrorMessage(err, "보안 설정을 불러오지 못했습니다."));
+      setError(actionErrorMessage(err, "설정을 불러오지 못했습니다."));
     }
   }
 
   useEffect(() => {
     load().catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const readSectionFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      setSettingsSection(params.get("section") === "lecture" ? "lecture" : "security");
+    };
+    readSectionFromUrl();
+    window.addEventListener("popstate", readSectionFromUrl);
+    return () => window.removeEventListener("popstate", readSectionFromUrl);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLiveLoading(true);
+    getLiveInteractionSettings()
+      .then((settings) => {
+        if (!active) return;
+        setLiveMinutes(settings.live_start_lead_minutes);
+        setLiveError("");
+      })
+      .catch((err: any) => {
+        if (!active) return;
+        setLiveError(err?.response?.data?.detail || "수업 설정을 불러오지 못했습니다.");
+      })
+      .finally(() => {
+        if (active) setLiveLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function selectSettingsSection(nextSection: SettingsSection) {
+    setSettingsSection(nextSection);
+    setNotice("");
+    setError("");
+    setLiveNotice("");
+    setLiveError("");
+    window.history.replaceState(null, "", nextSection === "lecture" ? "/account/security?section=lecture" : "/account/security");
+  }
 
   async function submitPassword() {
     if (passwords.next !== passwords.confirm) {
@@ -205,12 +255,97 @@ export default function AccountSecurityPage() {
     }
   }
 
-  if (!profile) return <div className="rounded-lg bg-white p-8 text-sm font-semibold text-zinc-500">{error || "보안 설정을 불러오는 중..."}</div>;
+  async function saveLiveSettings() {
+    const nextMinutes = Math.max(0, Math.min(240, Number(liveMinutes) || 0));
+    setLiveSaving(true);
+    setLiveNotice("");
+    setLiveError("");
+    try {
+      const settings = await updateLiveInteractionSettings({ live_start_lead_minutes: nextMinutes });
+      setLiveMinutes(settings.live_start_lead_minutes);
+      setLiveNotice("실시간 수업 시작 호출 시간이 저장되었습니다.");
+    } catch (err: any) {
+      setLiveError(err?.response?.data?.detail || "수업 설정을 저장하지 못했습니다.");
+    } finally {
+      setLiveSaving(false);
+    }
+  }
+
+  if (!profile) return <div className="rounded-lg bg-white p-8 text-sm font-semibold text-zinc-500">{error || "설정을 불러오는 중..."}</div>;
+
+  const settingsNavItemClass = (section: SettingsSection) =>
+    `flex h-10 w-full items-center rounded-[8px] px-3 text-sm font-black transition ${
+      settingsSection === section ? "bg-black text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+    }`;
+
+  const lectureSettingsContent = (
+    <Card>
+      <CardHeader><CardTitle>수업 설정</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-black text-zinc-950">
+              <Radio className="h-4 w-4 text-zinc-500" />
+              실시간 수업 인터랙션
+            </div>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
+              클래스 일정 시작 몇 분 전부터 담당 강사의 상단 인터랙션 영역에 수업 시작 버튼을 표시할지 정합니다.
+            </p>
+          </div>
+          {liveLoading ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : null}
+        </div>
+
+        <div className="grid gap-3 sm:max-w-sm">
+          <label className="text-xs font-black text-zinc-500" htmlFor="live-start-lead-minutes">
+            시작 버튼 노출 시간
+          </label>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <input
+              id="live-start-lead-minutes"
+              value={liveMinutes}
+              min={0}
+              max={240}
+              type="number"
+              onChange={(event) => setLiveMinutes(Number(event.target.value))}
+              className="h-11 rounded-[8px] border-0 bg-[#f2f2f2] px-3 text-sm font-bold text-zinc-950 outline-none transition focus:bg-[#f2f2f2] focus:ring-2 focus:ring-black/10"
+            />
+            <div className="inline-flex h-11 items-center rounded-[8px] bg-[#f2f2f2] px-3 text-sm font-bold text-zinc-500">분 전</div>
+          </div>
+          <button
+            type="button"
+            onClick={saveLiveSettings}
+            disabled={liveLoading || liveSaving}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-black px-4 text-sm font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          >
+            {liveSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            저장
+          </button>
+          {liveNotice ? <p className="rounded-[7px] bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-900">{liveNotice}</p> : null}
+          {liveError ? <p className="rounded-[7px] bg-zinc-950 px-3 py-2 text-xs font-bold text-white">{liveError}</p> : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      {notice && <div className="rounded-lg bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-800">{notice}</div>}
-      {error && <div className="rounded-lg bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-950">{error}</div>}
+    <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[148px_minmax(0,1fr)]">
+      <aside className="h-fit rounded-[10px] bg-white p-2 lg:sticky lg:top-24">
+        <div className="px-2 pb-2 text-xs font-black uppercase tracking-[0.16em] text-zinc-500">설정</div>
+        <div className="grid gap-1">
+          <button type="button" className={settingsNavItemClass("security")} onClick={() => selectSettingsSection("security")}>
+            보안
+          </button>
+          <button type="button" className={settingsNavItemClass("lecture")} onClick={() => selectSettingsSection("lecture")}>
+            수업 설정
+          </button>
+        </div>
+      </aside>
+
+      <div className="min-w-0 space-y-5">
+        {settingsSection === "security" ? (
+          <>
+            {notice && <div className="rounded-lg bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-800">{notice}</div>}
+            {error && <div className="rounded-lg bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-950">{error}</div>}
 
       <Card>
         <CardHeader><CardTitle>비밀번호 변경</CardTitle></CardHeader>
@@ -359,6 +494,10 @@ export default function AccountSecurityPage() {
           </Button>
         </CardContent>
       </Card>
+          </>
+        ) : (
+          lectureSettingsContent
+        )}
 
       {setup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
@@ -413,6 +552,7 @@ export default function AccountSecurityPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

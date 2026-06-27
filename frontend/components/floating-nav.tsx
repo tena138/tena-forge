@@ -14,7 +14,6 @@ import {
   MessageSquare,
   NotebookPen,
   ReceiptText,
-  Settings,
   Store,
   UserCircle,
 } from "lucide-react";
@@ -117,7 +116,6 @@ const sections = [
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/account/profile", label: "프로필", icon: UserCircle },
-      { href: "/settings", label: "설정", icon: Settings },
     ],
   },
 ];
