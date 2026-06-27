@@ -293,8 +293,8 @@ function AcademyConsoleHome() {
 
   const processingBatches = useMemo(() => batches.filter((batch) => batch.status === "processing"), [batches]);
   const pendingBatches = useMemo(() => batches.filter((batch) => batch.status === "pending"), [batches]);
-  const reviewBatches = useMemo(
-    () => batches.filter((batch) => batch.review_count > 0).sort((a, b) => b.review_count - a.review_count),
+  const historyBatches = useMemo(
+    () => [...batches].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 8),
     [batches]
   );
   const recentSets = useMemo(() => sets.slice(0, 5), [sets]);
@@ -319,30 +319,29 @@ function AcademyConsoleHome() {
           </div>
         </StageCard>
 
-        <StageCard title="문항 확인" icon={Archive} action={{ href: "/problems?needs_review=true", label: "문항 보기" }}>
+        <StageCard title="히스토리" icon={Archive} action={{ href: "/problems", label: "문항 보기" }}>
           <div className="rounded-[8px] bg-zinc-100 p-3">
-            <div className="text-xs font-semibold text-zinc-500">검토 대기 문항</div>
-            <div className="mt-1 text-2xl font-black text-zinc-950">{count(problemStats.needs_review)}</div>
+            <div className="text-xs font-semibold text-zinc-500">추출 히스토리</div>
+            <div className="mt-1 text-2xl font-black text-zinc-950">{count(batches.length)}</div>
           </div>
           <div>
-            <div className="mb-2 text-xs font-semibold text-zinc-600">검토 대기 배치</div>
+            <div className="mb-2 text-xs font-semibold text-zinc-600">최근 추출 배치</div>
             <div className="space-y-2">
-              {reviewBatches.length ? (
-                reviewBatches.map((batch) => (
+              {historyBatches.length ? (
+                historyBatches.map((batch) => (
                   <Link
                     key={batch.id}
-                    href={`/problems?batch_id=${batch.id}&needs_review=true`}
-                    className="flex items-center justify-between gap-3 rounded-[8px] bg-zinc-100 p-3 transition hover:bg-zinc-200"
+                    href={`/problems?batch_id=${batch.id}`}
+                    className="flex min-h-0 items-center justify-between gap-3 rounded-[8px] bg-zinc-100 px-3 py-2 transition hover:bg-zinc-200"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold text-zinc-950">{batch.name}</div>
-                      <div className="mt-1 text-xs text-zinc-500">{compactDate(batch.created_at)}</div>
                     </div>
-                    <Badge variant="warning" className="shrink-0">검토 {count(batch.review_count)}</Badge>
+                    <div className="shrink-0 text-xs font-semibold text-zinc-500">{compactDate(batch.created_at)}</div>
                   </Link>
                 ))
               ) : (
-                <EmptyState>검토 대기 중인 배치가 없습니다.</EmptyState>
+                <EmptyState>아직 추출 히스토리가 없습니다.</EmptyState>
               )}
             </div>
           </div>
