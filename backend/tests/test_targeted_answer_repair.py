@@ -760,6 +760,49 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(by_number["19"]["problem_number_repaired_from"], "21")
         self.assertEqual(by_number["20"]["problem_number_repaired_from"], "22")
 
+    def test_targeted_repair_can_recover_when_initial_solution_list_is_empty(self):
+        problems = [
+            {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},
+            {"problem_number": 2, "problem_no": "2", "problem_text": "Problem 2", "global_index": 2},
+            {"problem_number": 3, "problem_no": "3", "problem_text": "Problem 3", "global_index": 3},
+        ]
+        metadata = [
+            {"page_index": 2, "page_type": "solution_page", "detected_solution_headers": ["1", "2", "3"]},
+        ]
+        problem_inventory = {"expected_problem_numbers": ["1", "2", "3"]}
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                return_value=[
+                    {"problem_number": "", "answer": "A", "solution_steps": None},
+                    {"problem_number": "", "answer": "B", "solution_steps": None},
+                    {"problem_number": "", "answer": "C", "solution_steps": None},
+                ],
+            ),
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                4,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                [],
+                max_attempts=1,
+                problem_inventory=problem_inventory,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        by_number = {str(item.get("problem_number")): item for item in repaired}
+
+        self.assertEqual(score["missing_answer_count"], 0)
+        self.assertTrue(report["fully_matched"])
+        self.assertEqual([by_number[str(index)]["answer"] for index in range(1, 4)], ["A", "B", "C"])
+
     def test_targeted_repair_keeps_partial_ordered_answers_even_when_one_slot_stays_missing(self):
         problems = [
             {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},

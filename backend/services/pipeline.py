@@ -5145,24 +5145,23 @@ def process_solutions_only(batch_id: UUID) -> None:
                 quick_answer_report["mixed_recovery_chosen"] = recovery_report.get("chosen")
                 quick_answer_report["mixed_recovery_answer_count"] = _solution_answer_count(recovered_solutions)
         repair_source_metadata = page_metadata if has_separate_solution_pdf else problem_page_metadata
-        if solutions:
-            solutions, targeted_repair_report, total_units = repair_missing_answer_matches_with_targeted_recovery(
-                solution_source_path,
-                solution_page_count,
-                solution_dpi,
-                batch_id,
-                total_units,
-                units_per_page,
-                repair_source_metadata,
-                existing_problem_payloads,
-                solutions,
-                document_type_hints=solution_document_type_hints,
-                problem_inventory=problem_inventory,
-                progress_label="누락 정답 문항 재확인 중",
-            )
-            if targeted_repair_report is not None:
-                _write_batch_artifact(batch_id, "targeted_answer_repair_report.json", targeted_repair_report)
-                _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
+        solutions, targeted_repair_report, total_units = repair_missing_answer_matches_with_targeted_recovery(
+            solution_source_path,
+            solution_page_count,
+            solution_dpi,
+            batch_id,
+            total_units,
+            units_per_page,
+            repair_source_metadata,
+            existing_problem_payloads,
+            solutions,
+            document_type_hints=solution_document_type_hints,
+            problem_inventory=problem_inventory,
+            progress_label="누락 정답 문항 재확인 중",
+        )
+        if targeted_repair_report is not None:
+            _write_batch_artifact(batch_id, "targeted_answer_repair_report.json", targeted_repair_report)
+            _write_batch_artifact(batch_id, "extracted_solutions_by_section.json", _items_by_section(solutions, "page_idx"))
         if not any(has_solution_content(solution) for solution in solutions):
             raise RuntimeError("Answer source was provided, but no answer content was extracted.")
         if quick_answer_report is not None:
