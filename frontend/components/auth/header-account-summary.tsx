@@ -306,6 +306,7 @@ export function HeaderAccountSummary() {
     setNotice("");
     try {
       const updated = await updateMe({
+        academy_name: draft.display_name.trim(),
         display_name: draft.display_name.trim(),
         bio: draft.bio.trim() || null,
       });

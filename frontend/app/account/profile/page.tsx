@@ -93,6 +93,7 @@ export default function AccountProfilePage() {
     setError("");
     try {
       const updated = await updateMe({
+        academy_name: cleaned.display_name,
         display_name: cleaned.display_name,
         bio: cleaned.bio || null,
       });
