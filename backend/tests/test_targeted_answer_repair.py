@@ -570,6 +570,44 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(aligned[1]["global_index"], 19)
         self.assertEqual(aligned[2]["global_index"], 20)
 
+    def test_targeted_alignment_assigns_partial_unnumbered_answers_to_requested_order(self):
+        recovered = [
+            {"problem_number": "", "answer": "B", "solution_steps": None},
+            {"problem_number": "", "answer": "C", "solution_steps": None},
+        ]
+        missing_contexts = [
+            {"problem_number": "2", "section_id": "Final", "global_index": 2, "local_index": 2},
+            {"problem_number": "3", "section_id": "Final", "global_index": 3, "local_index": 3},
+            {"problem_number": "4", "section_id": "Final", "global_index": 4, "local_index": 4},
+        ]
+
+        aligned = _align_targeted_recovered_solutions_to_missing_slots(recovered, missing_contexts)
+
+        self.assertEqual([item["problem_number"] for item in aligned], ["2", "3"])
+        self.assertEqual([item["answer"] for item in aligned], ["B", "C"])
+        self.assertEqual(aligned[0]["global_index"], 2)
+        self.assertEqual(aligned[1]["global_index"], 3)
+        self.assertIn("problem_number_aligned_to_targeted_missing_slot", aligned[0]["matching_warnings"])
+
+    def test_targeted_alignment_preserves_anchor_and_assigns_partial_unnumbered_tail(self):
+        recovered = [
+            {"problem_number": "2", "answer": "B", "solution_steps": None},
+            {"problem_number": "", "answer": "C", "solution_steps": None},
+        ]
+        missing_contexts = [
+            {"problem_number": "2", "section_id": "Final", "global_index": 2, "local_index": 2},
+            {"problem_number": "3", "section_id": "Final", "global_index": 3, "local_index": 3},
+            {"problem_number": "4", "section_id": "Final", "global_index": 4, "local_index": 4},
+        ]
+
+        aligned = _align_targeted_recovered_solutions_to_missing_slots(recovered, missing_contexts)
+
+        self.assertEqual([item["problem_number"] for item in aligned], ["2", "3"])
+        self.assertEqual([item["answer"] for item in aligned], ["B", "C"])
+        self.assertNotIn("problem_number_repaired_from", aligned[0])
+        self.assertEqual(aligned[1]["problem_number_repaired_from"], "")
+        self.assertEqual(aligned[1]["global_index"], 3)
+
     def test_targeted_repair_aligns_unnumbered_answer_among_page_answers(self):
         problems = [
             {"problem_number": 18, "problem_no": "18", "problem_text": "Problem 18", "global_index": 18},
@@ -721,6 +759,55 @@ class TargetedAnswerRepairTests(unittest.TestCase):
         self.assertEqual(by_number["20"]["answer"], "C")
         self.assertEqual(by_number["19"]["problem_number_repaired_from"], "21")
         self.assertEqual(by_number["20"]["problem_number_repaired_from"], "22")
+
+    def test_targeted_repair_keeps_partial_ordered_answers_even_when_one_slot_stays_missing(self):
+        problems = [
+            {"problem_number": 1, "problem_no": "1", "problem_text": "Problem 1", "global_index": 1},
+            {"problem_number": 2, "problem_no": "2", "problem_text": "Problem 2", "global_index": 2},
+            {"problem_number": 3, "problem_no": "3", "problem_text": "Problem 3", "global_index": 3},
+            {"problem_number": 4, "problem_no": "4", "problem_text": "Problem 4", "global_index": 4},
+        ]
+        solutions = [
+            {"problem_number": "1", "answer": "A", "solution_steps": None},
+        ]
+        metadata = [
+            {"page_index": 1, "page_type": "solution_page", "detected_solution_headers": ["2", "3", "4"]},
+        ]
+        problem_inventory = {"expected_problem_numbers": ["1", "2", "3", "4"]}
+
+        with (
+            patch("services.pipeline.set_progress"),
+            patch(
+                "services.pipeline.extract_mixed_pdf_answer_recovery",
+                return_value=[
+                    {"problem_number": "", "answer": "B", "solution_steps": None},
+                    {"problem_number": "", "answer": "C", "solution_steps": None},
+                ],
+            ),
+        ):
+            repaired, report, _total_units = repair_missing_answer_matches_with_targeted_recovery(
+                "sample.pdf",
+                4,
+                180,
+                uuid4(),
+                0,
+                1,
+                metadata,
+                problems,
+                solutions,
+                max_attempts=1,
+                problem_inventory=problem_inventory,
+            )
+
+        score = _answer_match_score(problems, repaired)
+        by_number = {str(item.get("problem_number")): item for item in repaired}
+
+        self.assertEqual(score["missing_answer_numbers"], ["4"])
+        self.assertFalse(report["fully_matched"])
+        self.assertEqual(by_number["2"]["answer"], "B")
+        self.assertEqual(by_number["3"]["answer"], "C")
+        self.assertEqual(by_number["2"]["targeted_problem_order"], 2)
+        self.assertEqual(by_number["3"]["targeted_problem_order"], 3)
 
 
 if __name__ == "__main__":

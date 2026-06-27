@@ -1972,6 +1972,40 @@ def _align_targeted_recovered_solutions_to_missing_slots(
                 aligned[answer_index] = _apply_missing_context_to_solution(aligned[answer_index], target_context)
             return aligned
 
+    if len(targets) > 1:
+        target_keep_budget: dict[str, int] = {}
+        for number in target_numbers:
+            if number:
+                target_keep_budget[number] = target_keep_budget.get(number, 0) + 1
+
+        unassigned_candidate_indexes: list[int] = []
+        for answer_index, number in zip(answerful_indexes, answer_numbers):
+            if number and target_keep_budget.get(number, 0) > 0:
+                target_keep_budget[number] -= 1
+                continue
+            unassigned_candidate_indexes.append(answer_index)
+
+        unresolved_targets: list[dict[str, Any]] = []
+        for context, number in zip(targets, target_numbers):
+            if number and target_keep_budget.get(number, 0) > 0:
+                unresolved_targets.append(context)
+                target_keep_budget[number] -= 1
+
+        unassigned_numbers = [
+            _number_key_or_none(recovered_solutions[index].get("problem_number") or recovered_solutions[index].get("problem_no"))
+            for index in unassigned_candidate_indexes
+        ]
+        can_align_unassigned_by_requested_slot = (
+            bool(unassigned_candidate_indexes)
+            and len(unassigned_candidate_indexes) <= len(unresolved_targets)
+            and all(not number or number not in target_number_set for number in unassigned_numbers)
+        )
+        if can_align_unassigned_by_requested_slot:
+            aligned = list(recovered_solutions)
+            for answer_index, target_context in zip(unassigned_candidate_indexes, unresolved_targets):
+                aligned[answer_index] = _apply_missing_context_to_solution(aligned[answer_index], target_context)
+            return aligned
+
     invalid_answer_numbers = [number for number in answer_numbers if not number or number not in target_number_set]
     repeated_target_numbers = len(target_numbers) != len(set(target_numbers))
     should_align_by_slot = False
@@ -2098,6 +2132,7 @@ def _targeted_answer_repair_prompt_note(
         "- If the requested number is the last visible solution on the page, inspect the bottom and continuation areas carefully before returning [].\n"
         "- Check compact answer tables, answer-only rows, worked-solution final lines, and continuation text from the previous or next page before deciding the answer is absent.\n"
         "- When a compact answer table is ordered but does not repeat every problem number, use the supplied source_order/global_index and the first-pass inventory to align the missing row.\n"
+        "- If several requested slots are visible only as an ordered answer list/table, return one object per visible requested slot in the same order as Requested problem context.\n"
         "- If a worked solution contains the answer only in the final line, extract that final value as answer.\n"
         "- If exactly one requested slot remains and the visible answer is adjacent to it but its printed problem number is missing or cropped, return that answer with the requested problem_number instead of returning [].\n"
         "- If the answer is an objective choice marker, keep the marker in answer and keep problem_number as the requested problem number.\n"
@@ -3233,7 +3268,6 @@ def repair_missing_answer_matches_with_targeted_recovery(
             target_repair_scope_note="Targeted page sweep from first-pass metadata and answer-page candidates.",
         )
         working_total_units = repair_total_units
-        recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
         recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
             recovered_solutions,
             missing_contexts,
@@ -3325,7 +3359,6 @@ def repair_missing_answer_matches_with_targeted_recovery(
                 target_repair_scope_note=fallback_scope_note,
             )
             working_total_units = repair_total_units
-            recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
             recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
                 recovered_solutions,
                 missing_contexts,
@@ -3467,7 +3500,6 @@ def repair_missing_answer_matches_with_targeted_recovery(
                     target_repair_scope_note=single_scope_note,
                 )
                 working_total_units = repair_total_units
-                recovered_solutions = repair_solution_numbers_from_inventory(recovered_solutions, problem_inventory)
                 recovered_solutions = _align_targeted_recovered_solutions_to_missing_slots(
                     recovered_solutions,
                     [active_context],
