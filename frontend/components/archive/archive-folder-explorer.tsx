@@ -227,11 +227,11 @@ export function ArchiveFolderExplorer({
         </div>
       ) : null}
 
-      <div className={cn("grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]", destinationPicker ? "mt-0" : "mt-3")} onDragOver={allowDrop}>
+      <div className={cn("gap-2", destinationPicker ? "mt-0 flex flex-wrap items-start" : "mt-3 grid [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]")} onDragOver={allowDrop}>
         {destinationPicker && currentFolderId ? (
           <button
             type="button"
-            className="grid h-11 min-h-0 place-items-center self-start rounded-[10px] bg-zinc-50 px-3 text-zinc-800 transition-colors hover:bg-zinc-100"
+            className="grid h-11 w-11 min-h-0 flex-none place-items-center self-start rounded-[10px] bg-zinc-50 text-zinc-800 transition-colors hover:bg-zinc-100"
             onClick={() => onOpenFolder(parentFolderId)}
             aria-label="상위 폴더로 이동"
             title="상위 폴더로 이동"
@@ -259,6 +259,7 @@ export function ArchiveFolderExplorer({
               }}
               className={cn(
                 "group relative flex min-h-[82px] cursor-grab items-start gap-3 rounded-[10px] p-3 text-left transition-colors active:cursor-grabbing",
+                destinationPicker && "min-w-[180px] flex-[1_1_180px]",
                 selected ? "bg-black text-white" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
               )}
               role="button"
@@ -331,7 +332,7 @@ export function ArchiveFolderExplorer({
 
         {showGridCreateFolder ? (
           creatingFolder ? (
-            <div className="flex h-11 min-h-0 items-center gap-1.5 self-start rounded-[10px] bg-zinc-50 px-2">
+            <div className={cn("flex h-11 min-h-0 items-center gap-1.5 self-start rounded-[10px] bg-zinc-50 px-2", destinationPicker && "w-[min(100%,220px)] flex-none")}>
               <Input
                 className="h-8 min-w-0 flex-1 border-0 bg-white text-xs font-semibold text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-black/15"
                 value={draft}
