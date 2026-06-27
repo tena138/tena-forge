@@ -15,7 +15,7 @@ from models import Batch, BatchStatus
 _scheduler_lock = threading.Lock()
 _SCHEDULER_LOCK_NAMESPACE = 1413828161
 _SCHEDULER_LOCK_ID = 1
-_STALE_PROCESSING_MINUTES = 5
+_STALE_PROCESSING_MINUTES = int(os.getenv("STALE_PROCESSING_MINUTES", "30"))
 
 
 def _try_database_scheduler_lock(db) -> bool:
