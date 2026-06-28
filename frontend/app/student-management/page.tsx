@@ -45,6 +45,7 @@ import {
   rotateAcademySeatCode,
 } from "@/lib/academyStudent";
 import type { AcademySeat } from "@/lib/academyStudent";
+import type { StudentKeyRecipient } from "@/lib/academyStudent";
 import { ProblemSetListItem, api } from "@/lib/api";
 import {
   ClassCard,
@@ -54,17 +55,17 @@ import {
   RoutineMessage,
   SessionProblem,
   StudentCard,
+  StudentProfileCollectionSettings,
   WrongAnswer,
-  addStudentToClass,
   createClass,
   createCounselingLog,
   createPaperSession,
   createScheduleEvent,
   createReviewSet,
-  createStudent,
   ensureStudentInviteCode,
   getPaperSessionDetail,
   getStudentManagementDashboard,
+  getStudentProfileCollectionSettings,
   listPaperSessions,
   listRoutineActions,
   listWrongAnswers,
@@ -75,10 +76,22 @@ import {
   sendRoutineAction,
   transcribeCounselingAudio,
   updateClassOrder,
+  updateStudentProfileCollectionSettings,
   updateRoutineMessage,
 } from "@/lib/studentManagement";
 import type { CounselingIntakePreview } from "@/lib/studentManagement";
-import { buildRecurringDateTimes, defaultWeekdayFromDateTime, localDateTimeInputValue } from "@/lib/scheduleRecurrence";
+import {
+  buildRecurringDateTimes,
+  dayIntervalOptions,
+  defaultMonthDayFromDateTime,
+  defaultWeekdayFromDateTime,
+  localDateTimeInputValue,
+  monthDayOptions,
+  monthIntervalOptions,
+  scheduleWeekdays,
+  type ScheduleRecurrenceUnit,
+  weekIntervalOptions,
+} from "@/lib/scheduleRecurrence";
 import { cn } from "@/lib/utils";
 
 function resolveActiveManagementAcademyId(profile?: AcademyProfile | null) {
@@ -93,8 +106,9 @@ function normalizeListResponse<T>(value: unknown): T[] {
 
 type TabKey = "routine" | "classes" | "students" | "counseling" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 const STUDENT_MANAGEMENT_TAB_KEYS: TabKey[] = ["routine", "classes", "students", "counseling", "sessions", "grading", "wrong", "calendar", "analytics"];
-type ClassStudentAddMode = "existing" | "new";
 type CounselingMode = "new" | "existing";
+type BulkKeyChannel = "manual" | "sms" | "student_app";
+type BulkInviteResult = AcademySeat & { key_code: string; status: string };
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type TrendMetricKey = "selected" | "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
 type ClassSessionMetricPoint = {
@@ -128,17 +142,19 @@ type PendingCounselingCandidate = {
   sections: CounselingIntakePreview["sections"];
 };
 
-const emptyStudentForm = {
+const emptyClassForm = {
   name: "",
-  school: "",
+  description: "",
+  subject: "",
   grade_level: "",
-  memo: "",
-  class_id: "",
-  guardian_name: "",
-  guardian_phone: "",
-  tuition_enabled: false,
-  tuition_cycle_sessions: "4",
-  tuition_amount: "",
+  routine_date: "",
+  routine_starts_at: "",
+  routine_ends_at: "",
+  routine_recurrence_unit: "week" as ScheduleRecurrenceUnit,
+  routine_recurrence_interval: "1",
+  routine_recurrence_weekdays: [] as number[],
+  routine_recurrence_month_day: "",
+  routine_repeat_until: "",
 };
 const COUNSELING_PENDING_STORAGE_KEY = "tena.student-management.pending-counseling";
 
@@ -155,6 +171,15 @@ function readPendingCounselingCandidates(): PendingCounselingCandidate[] {
 function writePendingCounselingCandidates(items: PendingCounselingCandidate[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(COUNSELING_PENDING_STORAGE_KEY, JSON.stringify(items.slice(0, 20)));
+}
+
+function mergeInviteCodes(existing: StudentCard["invite_codes"], next: StudentCard["invite_codes"]) {
+  const byKey = new Map<string, NonNullable<StudentCard["invite_codes"]>[number]>();
+  for (const code of [...(existing || []), ...(next || [])]) {
+    const key = code.seat_id || code.membership_id || `${code.class_id || ""}:${code.invite_code_preview || code.invite_code || ""}`;
+    byKey.set(key, { ...byKey.get(key), ...code });
+  }
+  return Array.from(byKey.values());
 }
 
 function mergeStudentCard(existing: StudentCard, next: StudentCard): StudentCard {
@@ -175,6 +200,7 @@ function mergeStudentCard(existing: StudentCard, next: StudentCard): StudentCard
     class_ids: classIds,
     class_names: classNames,
     class_subjects: classSubjects,
+    invite_codes: mergeInviteCodes(existing.invite_codes, next.invite_codes),
   };
 }
 
@@ -186,6 +212,37 @@ function studentMetaText(student: StudentCard) {
   return [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "소속 없음";
 }
 
+function parseBulkInviteRows(value: string): StudentKeyRecipient[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name = "", phone = "", account_user_id = "", memo = ""] = line
+        .split(/\t|,|\//)
+        .map((part) => part.trim());
+      return { name: name || null, phone: phone || null, account_user_id: account_user_id || null, memo: memo || null };
+    });
+}
+
+function bulkInviteLineFromCandidate(candidate: PendingCounselingCandidate) {
+  const profile = candidate.profile || {};
+  const extraProfile = profile as Record<string, string | undefined>;
+  const phone = profile.guardian_phone || extraProfile.student_phone || "";
+  return [profile.name || candidate.title || "", phone].filter(Boolean).join(", ");
+}
+
+function deliveryStatusLabel(status?: string | null) {
+  if (status === "sms_link_ready") return "SMS 준비";
+  if (status === "app_notification_created") return "앱 초대 생성";
+  if (status === "claimed") return "등록 완료";
+  return "직접 전달";
+}
+
+function isPendingKeyCard(student: StudentCard) {
+  return student.card_type === "pending_key" || student.status === "pending_key";
+}
+
 function mergePrimaryPreview(left: StudentCard | null, right: StudentCard | null) {
   if (!left || !right) return left || right;
   const leftTime = left.joined_at ? new Date(left.joined_at).getTime() : Number.MAX_SAFE_INTEGER;
@@ -193,6 +250,21 @@ function mergePrimaryPreview(left: StudentCard | null, right: StudentCard | null
   if (leftTime !== rightTime) return leftTime < rightTime ? left : right;
   return left.id.localeCompare(right.id) <= 0 ? left : right;
 }
+
+function seatKeyStatusLabel(seat: AcademySeat) {
+  if (seat.key_status === "legacy_unassigned") return "클래스 미배정";
+  if (seat.key_status === "revoked") return "비활성";
+  if (seat.key_status === "claimed" || seat.assigned) return "연결됨";
+  return "대기";
+}
+
+function seatKeyStatusVariant(seat: AcademySeat): "success" | "secondary" | "warning" | "error" {
+  if (seat.key_status === "legacy_unassigned") return "warning";
+  if (seat.key_status === "revoked") return "error";
+  if (seat.key_status === "claimed" || seat.assigned) return "success";
+  return "secondary";
+}
+
 const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel: string; color: string }> = [
   { key: "selected", label: "본인 점수", shortLabel: "본인", color: "#111827" },
   { key: "average", label: "응시자 평균", shortLabel: "평균", color: "#525252" },
@@ -206,13 +278,6 @@ const trendMetricOptions: Array<{ key: TrendMetricKey; label: string; shortLabel
 const defaultTrendMetrics: TrendMetricKey[] = ["selected", "average", "q2"];
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function addMinutesToLocalDateTime(value: string, minutes: number) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setMinutes(date.getMinutes() + Math.max(1, Math.round(minutes)));
-  return `${localDateTimeInputValue(date)}:00`;
 }
 
 function statusTone(status?: string) {
@@ -339,6 +404,31 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; onMergeContext?: (event: MouseEvent<HTMLElement>, student: StudentCard) => void }) {
+  if (isPendingKeyCard(student)) {
+    const keyLabel = studentKeyLabel(student);
+    const metadata = (student.invite_metadata || {}) as Record<string, string | null | undefined>;
+    const phone = student.recipient_phone || metadata.recipient_phone;
+    const delivery = student.delivery_status || metadata.delivery_status;
+    return (
+      <article className="flex h-full min-h-[92px] w-full flex-col justify-between rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-2.5 lg:min-h-[136px] lg:w-[210px] lg:shrink-0 lg:p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-zinc-700 ring-1 ring-zinc-200">
+            <KeyRound className="h-4 w-4" />
+          </div>
+          <Badge className="shrink-0 rounded-md bg-zinc-900 text-white hover:bg-zinc-900">{deliveryStatusLabel(delivery)}</Badge>
+        </div>
+        <div className="mt-2 min-w-0">
+          <p className="truncate text-sm font-semibold text-zinc-950">{student.name}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{phone ? `${phone} · ` : ""}학생이 Tena Note에서 키를 등록하면 실제 정보로 채워집니다.</p>
+        </div>
+        <div className="mt-3 rounded bg-white px-2 py-1.5 text-[11px] font-bold text-zinc-700 ring-1 ring-zinc-200 lg:rounded-md lg:text-xs">
+          <span className="text-zinc-500">Key </span>
+          <span className="font-mono">{keyLabel}</span>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <Link
       href={`/student-management/students/${student.id}`}
@@ -369,9 +459,18 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
   );
 }
 
+function studentKeyLabel(student: StudentCard) {
+  const keys = student.invite_codes || [];
+  if (keys.length > 1) return `${keys.length}개 클래스 키`;
+  const key = keys[0];
+  if (key?.invite_code) return key.invite_code;
+  if (key?.invite_code_preview) return `****${key.invite_code_preview}`;
+  return student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "키 없음");
+}
+
 function StudentDirectoryCard({ student, copying, onCopyKey }: { student: StudentCard; copying?: boolean; onCopyKey: (student: StudentCard) => void }) {
   const meta = [student.school, student.grade_level, student.class_names.join(", ")].filter(Boolean).join(" · ") || "학생 정보 미입력";
-  const keyLabel = student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "키 없음");
+  const keyLabel = studentKeyLabel(student);
   return (
     <article className="group min-w-0 rounded-md bg-white p-3 transition hover:bg-zinc-50">
       <div className="flex items-start justify-between gap-3">
@@ -1020,9 +1119,6 @@ export default function StudentManagementPage() {
   const [showClassCreator, setShowClassCreator] = useState(false);
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [addingStudentClassId, setAddingStudentClassId] = useState("");
-  const [classStudentMode, setClassStudentMode] = useState<ClassStudentAddMode>("existing");
-  const [classStudentSearch, setClassStudentSearch] = useState("");
-  const [selectedExistingStudentId, setSelectedExistingStudentId] = useState("");
   const [classStudentSavingId, setClassStudentSavingId] = useState("");
   const [copyingStudentKeyId, setCopyingStudentKeyId] = useState("");
   const [academyId, setAcademyId] = useState("");
@@ -1031,6 +1127,10 @@ export default function StudentManagementPage() {
   const [keyManagerLoading, setKeyManagerLoading] = useState(false);
   const [keyBusySeatId, setKeyBusySeatId] = useState("");
   const [newKeyCodes, setNewKeyCodes] = useState<string[]>([]);
+  const [bulkKeyCount, setBulkKeyCount] = useState("1");
+  const [bulkInviteText, setBulkInviteText] = useState("");
+  const [bulkInviteChannel, setBulkInviteChannel] = useState<BulkKeyChannel>("sms");
+  const [bulkInviteResults, setBulkInviteResults] = useState<BulkInviteResult[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [studentMergeMenu, setStudentMergeMenu] = useState<StudentMergeMenuState | null>(null);
@@ -1038,10 +1138,11 @@ export default function StudentManagementPage() {
   const [mergeSearch, setMergeSearch] = useState("");
   const [mergeTargetStudentId, setMergeTargetStudentId] = useState("");
   const [mergingStudent, setMergingStudent] = useState(false);
+  const [studentProfileSettings, setStudentProfileSettings] = useState<StudentProfileCollectionSettings>({ fields: [] });
+  const [profileSettingsLoading, setProfileSettingsLoading] = useState(false);
+  const [profileSettingsSaving, setProfileSettingsSaving] = useState(false);
 
-  const [classForm, setClassForm] = useState({ name: "", description: "", subject: "", grade_level: "", routine_date: "", routine_time: "", routine_duration_minutes: "60", routine_repeat_until: "" });
-  const [studentForm, setStudentForm] = useState(emptyStudentForm);
-  const [classStudentForm, setClassStudentForm] = useState(emptyStudentForm);
+  const [classForm, setClassForm] = useState(emptyClassForm);
   const [sessionForm, setSessionForm] = useState({
     title: "",
     source_problem_set_id: "",
@@ -1071,12 +1172,15 @@ export default function StudentManagementPage() {
     const map = new Map<string, StudentCard>();
     for (const classRow of classes) {
       for (const student of classRow.students || []) {
-        const existing = map.get(student.id);
-        map.set(student.id, existing ? mergeStudentCard(existing, student) : student);
+        if (isPendingKeyCard(student)) continue;
+        const key = student.student_person_id || student.student_user_id || student.id;
+        const existing = map.get(key);
+        map.set(key, existing ? mergeStudentCard(existing, student) : student);
       }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [classes]);
+  const bulkInviteRecipients = useMemo(() => parseBulkInviteRows(bulkInviteText), [bulkInviteText]);
   const mergeTargetStudent = useMemo(
     () => allStudents.find((student) => student.id === mergeTargetStudentId) || null,
     [allStudents, mergeTargetStudentId]
@@ -1094,6 +1198,11 @@ export default function StudentManagementPage() {
     () => routines.find((routine) => routine.id === selectedRoutineId) || routines[0] || null,
     [routines, selectedRoutineId]
   );
+  const classRoutineStartDateTime = `${classForm.routine_date || todayInput()}T${classForm.routine_starts_at || "00:00"}`;
+  const classRoutineSelectedWeekdays = classForm.routine_recurrence_weekdays.length
+    ? classForm.routine_recurrence_weekdays
+    : [defaultWeekdayFromDateTime(classRoutineStartDateTime)];
+  const classRoutineSelectedMonthDay = Number(classForm.routine_recurrence_month_day) || defaultMonthDayFromDateTime(classRoutineStartDateTime);
   const requestedTab = searchParams.get("tab");
 
   useEffect(() => {
@@ -1146,7 +1255,7 @@ export default function StudentManagementPage() {
   }, []);
 
   useEffect(() => {
-    setKeyClassId((current) => current || classes[0]?.id || "");
+    setKeyClassId((current) => (classes.some((classRow) => classRow.id === current) ? current : classes[0]?.id || ""));
   }, [classes]);
 
   async function refresh() {
@@ -1309,31 +1418,51 @@ export default function StudentManagementPage() {
     );
   }, [sessionDetail, selectedStudentId]);
 
+  function toggleClassRoutineWeekday(day: number) {
+    setClassForm((current) => {
+      const base = current.routine_recurrence_weekdays.length
+        ? current.routine_recurrence_weekdays
+        : [defaultWeekdayFromDateTime(`${current.routine_date || todayInput()}T${current.routine_starts_at || "00:00"}`)];
+      return {
+        ...current,
+        routine_recurrence_weekdays: base.includes(day)
+          ? base.filter((item) => item !== day)
+          : [...base, day].sort((left, right) => left - right),
+      };
+    });
+  }
+
   async function submitClass() {
     if (!classForm.name.trim()) return;
     setClassSaving(true);
     try {
-      const routineStartDateTime = classForm.routine_date && classForm.routine_time ? `${classForm.routine_date}T${classForm.routine_time}` : "";
-      const routineDurationMinutes = Number(classForm.routine_duration_minutes) || 60;
+      const routineStartDateTime = classForm.routine_date && classForm.routine_starts_at ? `${classForm.routine_date}T${classForm.routine_starts_at}:00` : "";
+      const routineEndOffset = routineStartDateTime && classForm.routine_ends_at
+        ? new Date(`${classForm.routine_date}T${classForm.routine_ends_at}:00`).getTime() - new Date(routineStartDateTime).getTime()
+        : null;
       const created = await createClass(classForm);
       let scheduleCount = 0;
       if (routineStartDateTime) {
         const starts = buildRecurringDateTimes(routineStartDateTime, {
-          unit: classForm.routine_repeat_until ? "week" : "none",
-          interval: 1,
-          weekdays: [defaultWeekdayFromDateTime(routineStartDateTime)],
+          unit: classForm.routine_recurrence_unit,
+          interval: Number(classForm.routine_recurrence_interval) || 1,
+          weekdays: classRoutineSelectedWeekdays,
+          monthDay: classRoutineSelectedMonthDay,
           until: classForm.routine_repeat_until || undefined,
-          maxOccurrences: 80,
+          maxOccurrences: 160,
         });
         const seriesId = starts.length > 1 ? `class-${created.id}-${Date.now()}` : null;
         for (const [index, startsAt] of starts.entries()) {
+          const endsAt = routineEndOffset && routineEndOffset > 0
+            ? localDateTimeInputValue(new Date(new Date(startsAt).getTime() + routineEndOffset))
+            : null;
           await createScheduleEvent({
             class_id: created.id,
             title: created.name,
             description: created.description || null,
             event_type: "class",
             starts_at: startsAt,
-            ends_at: addMinutesToLocalDateTime(startsAt, routineDurationMinutes),
+            ends_at: endsAt,
             counts_for_tuition: true,
             series_id: seriesId,
             series_position: seriesId ? index + 1 : null,
@@ -1343,7 +1472,7 @@ export default function StudentManagementPage() {
         }
       }
       setClasses((current) => [created, ...current.filter((item) => item.id !== created.id)]);
-      setClassForm({ name: "", description: "", subject: "", grade_level: "", routine_date: "", routine_time: "", routine_duration_minutes: "60", routine_repeat_until: "" });
+      setClassForm(emptyClassForm);
       setShowClassCreator(false);
       setMessage(scheduleCount > 0 ? `클래스와 루틴 일정 ${scheduleCount}개를 만들었습니다.` : "클래스를 만들었습니다.");
       await refresh().catch(() => undefined);
@@ -1354,41 +1483,33 @@ export default function StudentManagementPage() {
     }
   }
 
-  async function submitStudent() {
-    if (!studentForm.name.trim()) return;
-    const created = await createStudent({
-      name: studentForm.name,
-      school: studentForm.school,
-      grade_level: studentForm.grade_level,
-      memo: studentForm.memo,
-      class_ids: studentForm.class_id ? [studentForm.class_id] : [],
-      guardian_name: studentForm.guardian_name,
-      guardian_phone: studentForm.guardian_phone,
-      tuition_enabled: studentForm.tuition_enabled,
-      tuition_cycle_sessions: studentForm.tuition_cycle_sessions,
-      tuition_amount: studentForm.tuition_amount,
-    });
-    setStudentForm(emptyStudentForm);
-    setMessage(created.invite_code ? `학생을 추가했습니다. 연결 키: ${created.invite_code}` : "학생을 추가했습니다.");
-    await refresh();
-  }
-
   async function copyStudentKey(student: StudentCard) {
+    if (isPendingKeyCard(student)) {
+      setMessage("아직 학생 계정과 연결되지 않은 활성 키입니다. 전체 키는 발급/회전 직후에만 복사할 수 있습니다.");
+      return;
+    }
     setCopyingStudentKeyId(student.id);
     try {
       const response = await ensureStudentInviteCode(student.id);
-      await navigator.clipboard.writeText(response.invite_code);
+      const inviteCodes = response.invite_codes?.length
+        ? response.invite_codes
+        : [{ invite_code: response.invite_code, invite_code_preview: response.invite_code_preview, class_name: student.class_names[0] }];
+      const copyText = inviteCodes
+        .map((entry) => [entry.class_name || "클래스 미지정", entry.invite_code].filter(Boolean).join(": "))
+        .filter(Boolean)
+        .join("\n");
+      await navigator.clipboard.writeText(copyText || response.invite_code || "");
       setClasses((current) =>
         current.map((classRow) => ({
           ...classRow,
           students: classRow.students.map((item) =>
-            item.id === student.id
-              ? { ...item, invite_code: response.invite_code, invite_code_preview: response.invite_code_preview || item.invite_code_preview }
+            item.id === student.id || (!!student.student_person_id && item.student_person_id === student.student_person_id) || item.student_user_id === student.student_user_id
+              ? { ...item, invite_code: response.invite_code, invite_code_preview: response.invite_code_preview || item.invite_code_preview, invite_codes: response.invite_codes || item.invite_codes }
               : item
           ),
         }))
       );
-      setMessage(`${student.name} 학생 키를 복사했습니다.`);
+      setMessage(`${student.name} 학생 키 ${inviteCodes.length}개를 복사했습니다.`);
     } catch (error) {
       setMessage(errorMessage(error, "학생 키를 복사하지 못했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
@@ -1408,12 +1529,53 @@ export default function StudentManagementPage() {
     }
   }
 
+  async function loadStudentProfileSettings() {
+    setProfileSettingsLoading(true);
+    try {
+      setStudentProfileSettings(await getStudentProfileCollectionSettings());
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 정보 수집 설정을 불러오지 못했습니다."));
+    } finally {
+      setProfileSettingsLoading(false);
+    }
+  }
+
+  function updateStudentProfileField(
+    key: string,
+    patch: Partial<StudentProfileCollectionSettings["fields"][number]>
+  ) {
+    setStudentProfileSettings((current) => ({
+      fields: current.fields.map((field) => {
+        if (field.key !== key) return field;
+        const next = { ...field, ...patch };
+        if (patch.enabled === false) {
+          next.required = false;
+          next.real_name = false;
+        }
+        return next;
+      }),
+    }));
+  }
+
+  async function saveStudentProfileSettings() {
+    setProfileSettingsSaving(true);
+    try {
+      setStudentProfileSettings(await updateStudentProfileCollectionSettings(studentProfileSettings));
+      setMessage("학생 정보 수집 설정을 저장했습니다.");
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 정보 수집 설정을 저장하지 못했습니다."));
+    } finally {
+      setProfileSettingsSaving(false);
+    }
+  }
+
   function toggleKeyManager() {
     setShowKeyManager((current) => {
       const next = !current;
       if (next) {
         setShowClassCreator(false);
         void loadKeyManager();
+        void loadStudentProfileSettings();
       }
       return next;
     });
@@ -1427,12 +1589,72 @@ export default function StudentManagementPage() {
       const codes = created.keys.map((seat) => seat.key_code || "").filter(Boolean);
       setNewKeyCodes(codes);
       setMessage(codes[0] ? `학생 키를 발급했습니다: ${codes[0]}` : "학생 키를 발급했습니다.");
-      await loadKeyManager();
+      await Promise.all([loadKeyManager(), refresh().catch(() => undefined)]);
     } catch (error) {
       setMessage(errorMessage(error, "학생 키를 발급하지 못했습니다."));
     } finally {
       setKeyManagerLoading(false);
     }
+  }
+
+  async function issueBulkClassKeys() {
+    if (!academyId || !keyClassId) return;
+    const recipients = bulkInviteRecipients;
+    const count = recipients.length || Math.max(1, Number(bulkKeyCount) || 1);
+    if (bulkInviteChannel === "sms" && !recipients.length) {
+      setMessage("SMS 발송 준비에는 학생 이름과 연락처 목록이 필요합니다.");
+      return;
+    }
+    if (bulkInviteChannel === "sms" && recipients.some((recipient) => !recipient.phone)) {
+      setMessage("SMS 발송 준비 대상에는 연락처가 모두 있어야 합니다.");
+      return;
+    }
+    if (bulkInviteChannel === "student_app" && recipients.some((recipient) => !recipient.account_user_id)) {
+      setMessage("앱 초대 대상에는 Tena 계정 ID가 모두 있어야 합니다.");
+      return;
+    }
+    setKeyManagerLoading(true);
+    try {
+      const created = await issueLearningStudentKeys(academyId, {
+        count,
+        class_id: keyClassId,
+        delivery_channel: bulkInviteChannel,
+        recipients: recipients.length ? recipients : undefined,
+      });
+      setBulkInviteResults(created.keys as BulkInviteResult[]);
+      setNewKeyCodes(created.keys.map((seat) => seat.key_code || "").filter(Boolean));
+      const smsCount = created.keys.filter((seat) => seat.sms_url).length;
+      setMessage(
+        bulkInviteChannel === "sms"
+          ? `${created.keys.length}개의 학생 키를 만들고 SMS 링크 ${smsCount}개를 준비했습니다.`
+          : bulkInviteChannel === "student_app"
+            ? `${created.keys.length}개의 학생 앱 초대를 만들었습니다.`
+            : `${created.keys.length}개의 학생 키를 만들었습니다.`
+      );
+      await Promise.all([loadKeyManager(), refresh().catch(() => undefined)]);
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 키 대량 발급에 실패했습니다."));
+    } finally {
+      setKeyManagerLoading(false);
+    }
+  }
+
+  async function copyBulkInviteResults() {
+    if (!bulkInviteResults.length) return;
+    const text = bulkInviteResults
+      .map((seat) => {
+        const meta = seat.invite_metadata || {};
+        return [meta.recipient_name || seat.display_name || seat.seat_number, meta.recipient_phone || "", seat.key_code, seat.sms_url || ""].filter(Boolean).join("\t");
+      })
+      .join("\n");
+    await navigator.clipboard.writeText(text);
+    setMessage("대량 초대 결과를 클립보드에 복사했습니다.");
+  }
+
+  function loadCounselingCandidatesIntoBulkInvite() {
+    const lines = pendingCounselingCandidates.map(bulkInviteLineFromCandidate).filter(Boolean);
+    setBulkInviteText(lines.join("\n"));
+    setMessage(lines.length ? `상담 대기 후보 ${lines.length}명을 초대 목록에 불러왔습니다.` : "불러올 상담 대기 후보가 없습니다.");
   }
 
   async function copySeatKey(code: string) {
@@ -1503,86 +1725,32 @@ export default function StudentManagementPage() {
   }
 
   function startClassStudentAdd(classRow: ClassCard) {
-    const currentIds = classStudentMembershipIds(classRow);
-    const hasExistingCandidate = allStudents.some((student) => !currentIds.has(student.id));
     setAddingStudentClassId(classRow.id);
-    setClassStudentMode(hasExistingCandidate ? "existing" : "new");
-    setClassStudentSearch("");
-    setSelectedExistingStudentId("");
-    setClassStudentForm({
-      name: "",
-      school: "",
-      grade_level: classRow.grade_level || "",
-      memo: "",
-      class_id: classRow.id,
-      guardian_name: "",
-      guardian_phone: "",
-      tuition_enabled: false,
-      tuition_cycle_sessions: "4",
-      tuition_amount: "",
-    });
   }
 
   function cancelClassStudentAdd() {
     setAddingStudentClassId("");
-    setClassStudentMode("existing");
-    setClassStudentSearch("");
-    setSelectedExistingStudentId("");
-    setClassStudentForm(emptyStudentForm);
+    setClassStudentSavingId("");
   }
 
-  function existingStudentsForClass(classRow: ClassCard) {
-    const currentIds = classStudentMembershipIds(classRow);
-    const query = classStudentSearch.trim().toLowerCase();
-    return allStudents.filter((student) => {
-      if (currentIds.has(student.id)) return false;
-      return !query || studentDirectoryText(student).includes(query);
-    });
-  }
-
-  async function submitExistingClassStudent(classRow: ClassCard) {
-    if (!selectedExistingStudentId) return;
+  async function issueClassKeyForClass(classRow: ClassCard) {
+    if (!academyId) return;
     setClassStudentSavingId(classRow.id);
     try {
-      const selectedStudent = allStudents.find((student) => student.id === selectedExistingStudentId);
-      const updated = await addStudentToClass(classRow.id, selectedExistingStudentId);
-      setClasses((current) => current.map((row) => (row.id === updated.id ? updated : row)));
-      cancelClassStudentAdd();
-      setMessage(`${selectedStudent?.name || "선택한 학생"}을(를) ${classRow.name}에 연결했습니다.`);
-      await refresh();
+      const created = await issueLearningStudentKeys(academyId, { count: 1, class_id: classRow.id });
+      const code = created.keys.map((seat) => seat.key_code || "").find(Boolean) || "";
+      if (code) {
+        await navigator.clipboard.writeText(code);
+        setNewKeyCodes([code]);
+      }
+      setMessage(code ? classRow.name + " 클래스 키를 발급하고 복사했습니다: " + code : classRow.name + " 클래스 키를 발급했습니다.");
+      await Promise.all([refresh(), loadKeyManager().catch(() => undefined)]);
     } catch (error) {
-      setMessage(errorMessage(error, "기존 학생을 클래스에 연결하지 못했습니다. 잠시 후 다시 시도해주세요."));
+      setMessage(errorMessage(error, "클래스 키를 발급하지 못했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
       setClassStudentSavingId("");
     }
   }
-
-  async function submitClassStudent(classRow: ClassCard) {
-    if (!classStudentForm.name.trim()) return;
-    setClassStudentSavingId(classRow.id);
-    try {
-      const created = await createStudent({
-        name: classStudentForm.name.trim(),
-        school: classStudentForm.school.trim(),
-        grade_level: (classStudentForm.grade_level || classRow.grade_level || "").trim(),
-        memo: classStudentForm.memo.trim(),
-        class_ids: [classRow.id],
-        guardian_name: classStudentForm.guardian_name.trim(),
-        guardian_phone: classStudentForm.guardian_phone.trim(),
-        tuition_enabled: classStudentForm.tuition_enabled,
-        tuition_cycle_sessions: classStudentForm.tuition_cycle_sessions,
-        tuition_amount: classStudentForm.tuition_amount,
-      });
-      cancelClassStudentAdd();
-      setMessage(created.invite_code ? `${classRow.name}에 학생을 추가했습니다. 연결 키: ${created.invite_code}` : `${classRow.name}에 학생을 추가했습니다.`);
-      await refresh();
-    } catch (error) {
-      setMessage(errorMessage(error, "학생 추가에 실패했습니다. 잠시 후 다시 시도해주세요."));
-    } finally {
-      setClassStudentSavingId("");
-    }
-  }
-
   async function submitSession() {
     if (!sessionForm.title.trim() || !sessionForm.source_problem_set_id || (!sessionForm.class_id && !sessionStudentIds.length)) return;
     const session = await createPaperSession({
@@ -1669,7 +1837,7 @@ export default function StudentManagementPage() {
   }
 
   function classStudentMembershipIds(classRow: ClassCard) {
-    return new Set([...(classRow.student_membership_ids || []), ...classRow.students.map((student) => student.id)]);
+    return new Set([...(classRow.student_membership_ids || []), ...classRow.students.filter((student) => !isPendingKeyCard(student)).map((student) => student.id)]);
   }
 
   function sessionBelongsToClass(session: PaperSessionSummary, classRow: ClassCard) {
@@ -2190,114 +2358,37 @@ export default function StudentManagementPage() {
                     </aside>
                     <div className="col-start-2 flex min-w-0 flex-col gap-2 p-2.5 lg:col-start-auto lg:gap-3 lg:p-4">
                       {addingStudentClassId === classRow.id ? (
-                        (() => {
-                          const existingStudents = existingStudentsForClass(classRow);
-                          return (
-                            <div className="rounded-lg bg-white p-3">
-                              <div className="mb-3 inline-flex rounded-md bg-zinc-100 p-1">
-                                {[
-                                  ["existing", "기존 학생"] as const,
-                                  ["new", "새 학생"] as const,
-                                ].map(([mode, label]) => (
-                                  <button
-                                    key={mode}
-                                    type="button"
-                                    onClick={() => {
-                                      setClassStudentMode(mode);
-                                      setSelectedExistingStudentId("");
-                                    }}
-                                    className={cn(
-                                      "rounded px-3 py-1.5 text-xs font-bold transition",
-                                      classStudentMode === mode ? "bg-black text-white" : "text-zinc-500 hover:bg-white hover:text-zinc-950"
-                                    )}
-                                  >
-                                    {label}
-                                  </button>
-                                ))}
-                              </div>
-
-                              {classStudentMode === "existing" ? (
-                                <div className="space-y-3">
-                                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(220px,320px)]">
-                                    <Input
-                                      placeholder="이름, 학교, 클래스 검색"
-                                      value={classStudentSearch}
-                                      onChange={(event) => {
-                                        setClassStudentSearch(event.target.value);
-                                        setSelectedExistingStudentId("");
-                                      }}
-                                    />
-                                    <Select value={selectedExistingStudentId} onChange={(event) => setSelectedExistingStudentId(event.target.value)}>
-                                      <option value="">기존 학생 선택</option>
-                                      {existingStudents.map((student) => (
-                                        <option key={student.id} value={student.id}>
-                                          {student.name} · {studentMetaText(student)}
-                                        </option>
-                                      ))}
-                                    </Select>
-                                  </div>
-                                  {!existingStudents.length ? (
-                                    <p className="rounded-md border border-dashed border-zinc-200 px-3 py-2 text-xs text-zinc-500">
-                                      연결할 기존 학생이 없습니다. 새 학생으로 등록하세요.
-                                    </p>
-                                  ) : null}
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button type="button" size="sm" onClick={() => submitExistingClassStudent(classRow)} disabled={classStudentSavingId === classRow.id || !selectedExistingStudentId}>
-                                      {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                                      연결
-                                    </Button>
-                                    <Button type="button" size="sm" variant="outline" onClick={cancelClassStudentAdd}>취소</Button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <form
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    submitClassStudent(classRow);
-                                  }}
-                                >
-                                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                                    <Input placeholder="학생 이름" value={classStudentForm.name} onChange={(event) => setClassStudentForm((current) => ({ ...current, name: event.target.value }))} />
-                                    <Input placeholder="학교" value={classStudentForm.school} onChange={(event) => setClassStudentForm((current) => ({ ...current, school: event.target.value }))} />
-                                    <Input placeholder="학년" value={classStudentForm.grade_level} onChange={(event) => setClassStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
-                                    <Input placeholder="보호자 연락처" value={classStudentForm.guardian_phone} onChange={(event) => setClassStudentForm((current) => ({ ...current, guardian_phone: event.target.value }))} />
-                                    <Input placeholder="보호자 이름" value={classStudentForm.guardian_name} onChange={(event) => setClassStudentForm((current) => ({ ...current, guardian_name: event.target.value }))} />
-                                    <Input
-                                      placeholder="수강료 금액"
-                                      inputMode="numeric"
-                                      value={classStudentForm.tuition_amount}
-                                      disabled={!classStudentForm.tuition_enabled}
-                                      onChange={(event) => setClassStudentForm((current) => ({ ...current, tuition_amount: event.target.value }))}
-                                    />
-                                    <Input
-                                      placeholder="결제 회차 기준"
-                                      inputMode="numeric"
-                                      value={classStudentForm.tuition_cycle_sessions}
-                                      disabled={!classStudentForm.tuition_enabled}
-                                      onChange={(event) => setClassStudentForm((current) => ({ ...current, tuition_cycle_sessions: event.target.value }))}
-                                    />
-                                    <Input placeholder="메모" value={classStudentForm.memo} onChange={(event) => setClassStudentForm((current) => ({ ...current, memo: event.target.value }))} />
-                                  </div>
-                                  <label className="mt-2 flex items-center gap-2 text-xs text-zinc-600">
-                                    <input
-                                      type="checkbox"
-                                      checked={classStudentForm.tuition_enabled}
-                                      onChange={(event) => setClassStudentForm((current) => ({ ...current, tuition_enabled: event.target.checked }))}
-                                    />
-                                    수강료 알림 사용
-                                  </label>
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    <Button type="submit" size="sm" disabled={classStudentSavingId === classRow.id || !classStudentForm.name.trim()}>
-                                      {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                                      생성
-                                    </Button>
-                                    <Button type="button" size="sm" variant="outline" onClick={cancelClassStudentAdd}>취소</Button>
-                                  </div>
-                                </form>
-                              )}
+                        <div className="rounded-lg bg-white p-3 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-100">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-zinc-950">클래스 키로 학생 연결</p>
+                              <p className="mt-1 text-xs leading-5 text-zinc-500">학생에게 키를 전달하면 학생이 Tena Note에서 본인 계정과 인적사항을 확인한 뒤 이 클래스에 자동 연결됩니다.</p>
                             </div>
-                          );
-                        })()
+                            <button type="button" onClick={cancelClassStudentAdd} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="학생 연결 패널 닫기">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button type="button" size="sm" onClick={() => issueClassKeyForClass(classRow)} disabled={classStudentSavingId === classRow.id || !academyId}>
+                              {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                              키 발급 후 복사
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setShowClassCreator(false);
+                                setShowKeyManager(true);
+                                setKeyClassId(classRow.id);
+                                void loadKeyManager();
+                                void loadStudentProfileSettings();
+                              }}
+                            >
+                              키 목록 보기
+                            </Button>
+                          </div>
+                        </div>
                       ) : null}
                       {classRow.students.length ? (
                         <div className="flex min-h-[92px] flex-1 flex-col items-stretch gap-2 pb-1 lg:min-h-[136px] lg:flex-row lg:gap-3 lg:overflow-x-auto lg:[scrollbar-color:#d4d4d8_transparent] lg:[scrollbar-width:thin]">
@@ -2378,54 +2469,41 @@ export default function StudentManagementPage() {
                   ) : null}
                 </div>
               </section>
-              <aside className="rounded-lg bg-white p-4">
-                <div className="mb-4">
-                  <h2 className="text-sm font-black text-zinc-950">학생 추가</h2>
-                  <p className="mt-1 text-xs text-zinc-500">필요한 정보만 빠르게 등록합니다.</p>
+              <aside className="space-y-4 rounded-lg bg-white p-4">
+                <div>
+                  <h2 className="text-sm font-black text-zinc-950">학생 연결</h2>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">
+                    학생은 Tena Note에서 학원 키를 등록하고, 학원이 요구한 개인정보만 본인 계정 정보로 채웁니다.
+                  </p>
                 </div>
-                <form
-                  className="space-y-3"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    submitStudent();
-                  }}
-                >
-                  <Input placeholder="학생 이름" value={studentForm.name} onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))} />
-                  <Input placeholder="학교" value={studentForm.school} onChange={(event) => setStudentForm((current) => ({ ...current, school: event.target.value }))} />
-                  <Input placeholder="학년" value={studentForm.grade_level} onChange={(event) => setStudentForm((current) => ({ ...current, grade_level: event.target.value }))} />
-                  <Input placeholder="보호자 연락처" value={studentForm.guardian_phone} onChange={(event) => setStudentForm((current) => ({ ...current, guardian_phone: event.target.value }))} />
-                  <Input placeholder="보호자 이름" value={studentForm.guardian_name} onChange={(event) => setStudentForm((current) => ({ ...current, guardian_name: event.target.value }))} />
-                  <Select value={studentForm.class_id} onChange={(event) => setStudentForm((current) => ({ ...current, class_id: event.target.value }))}>
-                    <option value="">클래스 선택 안 함</option>
-                    {classes.map((classRow) => <option key={classRow.id} value={classRow.id}>{classRow.name}</option>)}
+                <div className="space-y-2">
+                  <Select value={keyClassId} onChange={(event) => setKeyClassId(event.target.value)}>
+                    <option value="">키를 발급할 클래스 선택</option>
+                    {classes.map((classRow) => (
+                      <option key={classRow.id} value={classRow.id}>{classRow.name}</option>
+                    ))}
                   </Select>
-                  <label className="flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-700">
-                    <input
-                      type="checkbox"
-                      checked={studentForm.tuition_enabled}
-                      onChange={(event) => setStudentForm((current) => ({ ...current, tuition_enabled: event.target.checked }))}
-                    />
-                    수강료 알림 사용
-                  </label>
-                  {studentForm.tuition_enabled ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Input
-                        placeholder="결제 회차 기준"
-                        inputMode="numeric"
-                        value={studentForm.tuition_cycle_sessions}
-                        onChange={(event) => setStudentForm((current) => ({ ...current, tuition_cycle_sessions: event.target.value }))}
-                      />
-                      <Input
-                        placeholder="수강료 금액"
-                        inputMode="numeric"
-                        value={studentForm.tuition_amount}
-                        onChange={(event) => setStudentForm((current) => ({ ...current, tuition_amount: event.target.value }))}
-                      />
-                    </div>
-                  ) : null}
-                  <Input placeholder="메모" value={studentForm.memo} onChange={(event) => setStudentForm((current) => ({ ...current, memo: event.target.value }))} />
-                  <Button type="submit" className="w-full" disabled={!studentForm.name.trim()}>학생 추가</Button>
-                </form>
+                  <Button type="button" className="w-full" onClick={issueClassKey} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length}>
+                    <KeyRound className="h-4 w-4" />
+                    학원 키 발급
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setShowClassCreator(false);
+                      setShowKeyManager(true);
+                      void loadKeyManager();
+                      void loadStudentProfileSettings();
+                    }}
+                  >
+                    키/필수 정보 설정 열기
+                  </Button>
+                </div>
+                <div className="rounded-lg bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
+                  이름, 학교, 학년, 보호자 연락처 같은 항목은 설정에서 켜거나 필수값으로 지정할 수 있습니다. 학생이 키를 등록하면 해당 정보가 학생 카드에 자동 반영됩니다.
+                </div>
               </aside>
             </div>
           </section>
@@ -3051,19 +3129,24 @@ export default function StudentManagementPage() {
                     <select
                       className="h-10 min-w-0 rounded-md border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
                       value={keyClassId}
+                      disabled={!classes.length || keyManagerLoading}
                       onChange={(event) => setKeyClassId(event.target.value)}
                     >
+                      {!classes.length ? <option value="">클래스 없음</option> : null}
                       {classes.map((classRow) => (
                         <option key={classRow.id} value={classRow.id}>
                           {classRow.name}
                         </option>
                       ))}
                     </select>
-                    <Button type="button" onClick={issueClassKey} disabled={!academyId || !keyClassId || keyManagerLoading}>
+                    <Button type="button" onClick={issueClassKey} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length}>
                       {keyManagerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
                       키 발급
                     </Button>
                   </div>
+                  {!classes.length ? (
+                    <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">학생 키를 발급하려면 먼저 클래스를 만들어야 합니다.</p>
+                  ) : null}
                   {newKeyCodes.length ? (
                     <div className="space-y-2 rounded-md bg-zinc-100 p-2">
                       {newKeyCodes.map((code) => (
@@ -3077,6 +3160,135 @@ export default function StudentManagementPage() {
                       ))}
                     </div>
                   ) : null}
+                  <div className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-100">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-zinc-950">대량 학생 키 초대</p>
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">이름, 연락처, Tena 계정 ID 순서로 붙여 넣으면 한 클래스에 여러 키를 한 번에 만들고 SMS 또는 앱 초대를 준비합니다.</p>
+                      </div>
+                      <Badge variant="secondary">{bulkInviteRecipients.length || Math.max(1, Number(bulkKeyCount) || 1)}명</Badge>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={200}
+                        value={bulkKeyCount}
+                        onChange={(event) => setBulkKeyCount(event.target.value)}
+                        className="border-0 bg-white"
+                        aria-label="대량 발급 키 수"
+                      />
+                      <select
+                        className="h-10 rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 focus:ring-2 focus:ring-black/10"
+                        value={bulkInviteChannel}
+                        onChange={(event) => setBulkInviteChannel(event.target.value as BulkKeyChannel)}
+                      >
+                        <option value="sms">SMS 링크 준비</option>
+                        <option value="student_app">Tena Note 앱 초대</option>
+                        <option value="manual">키만 생성</option>
+                      </select>
+                    </div>
+                    <textarea
+                      className="mt-2 min-h-28 w-full rounded-md border-0 bg-white p-3 text-xs leading-5 text-zinc-950 outline-none ring-1 ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-black/10"
+                      value={bulkInviteText}
+                      onChange={(event) => setBulkInviteText(event.target.value)}
+                      placeholder={"김학생, 01012345678\n박학생, 01098765432\n앱초대학생, , tena-account-id"}
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button type="button" size="sm" onClick={issueBulkClassKeys} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length}>
+                        {keyManagerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        대량 생성
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={loadCounselingCandidatesIntoBulkInvite}>
+                        상담 후보 불러오기
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={copyBulkInviteResults} disabled={!bulkInviteResults.length}>
+                        <Copy className="h-4 w-4" />
+                        결과 복사
+                      </Button>
+                    </div>
+                    {bulkInviteResults.length ? (
+                      <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
+                        {bulkInviteResults.map((seat) => {
+                          const meta = seat.invite_metadata || {};
+                          return (
+                            <div key={seat.id} className="rounded-md bg-white p-2 text-xs ring-1 ring-zinc-200">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate font-bold text-zinc-950">{meta.recipient_name || seat.display_name || seat.seat_number}</p>
+                                  <p className="mt-1 truncate text-zinc-500">
+                                    {deliveryStatusLabel(seat.delivery_status || meta.delivery_status)} · Key {seat.key_code}
+                                  </p>
+                                </div>
+                                {seat.sms_url ? (
+                                  <a className="shrink-0 rounded-md bg-zinc-900 px-2 py-1 font-bold text-white" href={seat.sms_url}>
+                                    SMS
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-100">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-zinc-950">학생 정보 수집 설정</p>
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">학생이 학원 키를 등록할 때 확인할 인적사항을 선택합니다. 저장된 기본 정보가 있으면 자동으로 채워집니다.</p>
+                      </div>
+                      <Button type="button" size="sm" onClick={saveStudentProfileSettings} disabled={profileSettingsLoading || profileSettingsSaving}>
+                        {profileSettingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        저장
+                      </Button>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {profileSettingsLoading && !studentProfileSettings.fields.length ? (
+                        <div className="flex items-center rounded-md bg-white px-3 py-2 text-xs text-zinc-500">
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          불러오는 중
+                        </div>
+                      ) : null}
+                      {studentProfileSettings.fields.map((field) => (
+                        <div key={field.key} className="rounded-md bg-white px-3 py-2 shadow-sm shadow-zinc-950/5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-zinc-950">{field.label}</p>
+                            </div>
+                            <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-zinc-600">
+                              <input
+                                type="checkbox"
+                                checked={field.enabled}
+                                onChange={(event) => updateStudentProfileField(field.key, { enabled: event.target.checked })}
+                              />
+                              수집
+                            </label>
+                          </div>
+                          {field.enabled ? (
+                            <div className="mt-2 flex flex-wrap gap-4 text-xs font-semibold text-zinc-600">
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={field.required}
+                                  onChange={(event) => updateStudentProfileField(field.key, { required: event.target.checked })}
+                                />
+                                필수
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={field.real_name}
+                                  onChange={(event) => updateStudentProfileField(field.key, { real_name: event.target.checked })}
+                                />
+                                실명
+                              </label>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                     {keyManagerLoading && !keySeats.length ? (
                       <div className="flex items-center justify-center rounded-md bg-zinc-50 p-4 text-sm text-zinc-500">
@@ -3087,20 +3299,29 @@ export default function StudentManagementPage() {
                     {!keyManagerLoading && !keySeats.length ? (
                       <div className="rounded-md bg-zinc-50 p-4 text-sm text-zinc-500">발급된 학생 키가 없습니다.</div>
                     ) : null}
-                    {keySeats.map((seat) => (
+                    {keySeats.map((seat) => {
+                      const meta = seat.invite_metadata || {};
+                      const inviteStatus = seat.delivery_status || meta.delivery_status;
+                      const recipientPhone = meta.recipient_phone;
+                      return (
                       <div key={seat.id} className="rounded-md bg-zinc-100 p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
-                              <span className="truncate text-sm font-semibold text-zinc-950">{seat.display_name || seat.seat_number}</span>
-                              <Badge variant={seat.assigned ? "success" : "secondary"}>{seat.assigned ? "연결됨" : "대기"}</Badge>
+                              <span className="truncate text-sm font-semibold text-zinc-950">{meta.recipient_name || seat.display_name || seat.seat_number}</span>
+                              <Badge variant={seatKeyStatusVariant(seat)}>{seatKeyStatusLabel(seat)}</Badge>
+                              {inviteStatus ? <Badge variant="secondary">{deliveryStatusLabel(inviteStatus)}</Badge> : null}
                             </div>
                             <p className="mt-1 truncate text-xs text-zinc-500">
-                              {seat.class_name || "반 없음"} · Key ****{seat.invite_code_preview || "-"}
+                              {seat.class_name || "클래스 미배정"} · Key ****{seat.invite_code_preview || "-"}
                             </p>
+                            {recipientPhone ? <p className="mt-1 truncate text-xs text-zinc-500">연락처 {recipientPhone}</p> : null}
+                            {seat.key_status === "legacy_unassigned" ? (
+                              <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">클래스가 없는 기존 키입니다. 학생에게 전달하지 말고 클래스 키를 새로 발급하세요.</p>
+                            ) : null}
                           </div>
                           <div className="flex shrink-0 gap-1.5">
-                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => rotateSeatKey(seat)} disabled={keyBusySeatId === seat.id} aria-label="학생 키 회전">
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => rotateSeatKey(seat)} disabled={keyBusySeatId === seat.id || seat.key_status === "legacy_unassigned"} aria-label="학생 키 회전">
                               {keyBusySeatId === seat.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                             </Button>
                             <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-zinc-500 hover:text-zinc-950" onClick={() => releaseKeySeat(seat)} disabled={!seat.assigned || keyBusySeatId === seat.id} aria-label="좌석 해제">
@@ -3109,13 +3330,14 @@ export default function StudentManagementPage() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             ) : null}
             {showClassCreator ? (
-              <div className="fixed bottom-24 right-6 z-40 w-[min(360px,calc(100vw-48px))] rounded-lg bg-white p-4 text-zinc-950 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
+              <div className="fixed bottom-24 right-6 z-40 max-h-[calc(100vh-160px)] w-[min(460px,calc(100vw-48px))] overflow-y-auto rounded-lg bg-white p-4 text-zinc-950 shadow-2xl shadow-zinc-950/15 ring-1 ring-black/5">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="font-semibold text-zinc-950">클래스 만들기</p>
                   <button type="button" onClick={() => setShowClassCreator(false)} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950">
@@ -3129,15 +3351,82 @@ export default function StudentManagementPage() {
                     <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="과목" value={classForm.subject} onChange={(event) => setClassForm((current) => ({ ...current, subject: event.target.value }))} />
                     <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" placeholder="학년" value={classForm.grade_level} onChange={(event) => setClassForm((current) => ({ ...current, grade_level: event.target.value }))} />
                   </div>
-                  <div className="rounded-[8px] bg-zinc-50 p-2">
-                    <div className="mb-2 text-xs font-black text-zinc-500">루틴 일정</div>
+                  <div className="space-y-3 rounded-[8px] bg-zinc-50 p-3">
+                    <div className="text-xs font-black text-zinc-500">일정</div>
+                    <Input type="date" value={classForm.routine_date} onChange={(event) => setClassForm((current) => ({ ...current, routine_date: event.target.value }))} />
                     <div className="grid grid-cols-2 gap-2">
-                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="date" value={classForm.routine_date} onChange={(event) => setClassForm((current) => ({ ...current, routine_date: event.target.value }))} />
-                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="time" value={classForm.routine_time} onChange={(event) => setClassForm((current) => ({ ...current, routine_time: event.target.value }))} />
-                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="number" min="1" step="5" placeholder="수업 길이(분)" value={classForm.routine_duration_minutes} onChange={(event) => setClassForm((current) => ({ ...current, routine_duration_minutes: event.target.value }))} />
-                      <Input className="border-0 bg-zinc-100 text-zinc-950 placeholder:text-zinc-500 focus-visible:ring-black/10" type="date" value={classForm.routine_repeat_until} onChange={(event) => setClassForm((current) => ({ ...current, routine_repeat_until: event.target.value }))} />
+                      <Input type="time" value={classForm.routine_starts_at} onChange={(event) => setClassForm((current) => ({ ...current, routine_starts_at: event.target.value }))} />
+                      <Input type="time" value={classForm.routine_ends_at} onChange={(event) => setClassForm((current) => ({ ...current, routine_ends_at: event.target.value }))} />
                     </div>
-                    <p className="mt-2 text-[11px] font-semibold text-zinc-500">반복 종료일을 입력하면 같은 요일로 주간 반복됩니다.</p>
+                    <select
+                      className="h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
+                      value={classForm.routine_recurrence_unit}
+                      onChange={(event) => setClassForm((current) => ({ ...current, routine_recurrence_unit: event.target.value as ScheduleRecurrenceUnit, routine_recurrence_interval: "1" }))}
+                    >
+                      <option value="week">주 단위 반복</option>
+                      <option value="none">한 번만</option>
+                      <option value="day">일 단위 반복</option>
+                      <option value="month">월 단위 반복</option>
+                    </select>
+                    {classForm.routine_recurrence_unit !== "none" ? (
+                      <div className="space-y-3 rounded-[10px] bg-white p-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="block text-xs font-semibold text-zinc-600">
+                            반복 간격
+                            <select
+                              className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10"
+                              value={classForm.routine_recurrence_interval}
+                              onChange={(event) => setClassForm((current) => ({ ...current, routine_recurrence_interval: event.target.value }))}
+                            >
+                              {(classForm.routine_recurrence_unit === "day" ? dayIntervalOptions : classForm.routine_recurrence_unit === "week" ? weekIntervalOptions : monthIntervalOptions).map((value) => (
+                                <option key={value} value={value}>
+                                  {classForm.routine_recurrence_unit === "day" ? `${value}일마다` : classForm.routine_recurrence_unit === "week" ? `${value}주마다` : `${value}개월마다`}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block text-xs font-semibold text-zinc-600">
+                            반복 종료일
+                            <Input className="mt-1" type="date" value={classForm.routine_repeat_until} onChange={(event) => setClassForm((current) => ({ ...current, routine_repeat_until: event.target.value }))} />
+                          </label>
+                        </div>
+                        {classForm.routine_recurrence_unit === "week" ? (
+                          <div>
+                            <p className="mb-2 text-xs font-semibold text-zinc-600">요일</p>
+                            <div className="grid grid-cols-7 gap-1.5">
+                              {scheduleWeekdays.map((day) => {
+                                const active = classRoutineSelectedWeekdays.includes(day.value);
+                                return (
+                                  <button
+                                    key={day.value}
+                                    type="button"
+                                    onClick={() => toggleClassRoutineWeekday(day.value)}
+                                    className={cn("h-8 rounded-[7px] text-xs font-bold transition", active ? "bg-black text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950")}
+                                  >
+                                    {day.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                        {classForm.routine_recurrence_unit === "month" ? (
+                          <label className="block text-xs font-semibold text-zinc-600">
+                            반복 날짜
+                            <select
+                              className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10"
+                              value={classRoutineSelectedMonthDay}
+                              onChange={(event) => setClassForm((current) => ({ ...current, routine_recurrence_month_day: event.target.value }))}
+                            >
+                              {monthDayOptions.map((value) => (
+                                <option key={value} value={value}>{value}일</option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+                        <p className="text-xs text-zinc-500">종료일을 비워두면 최대 160개까지 반복 일정을 자동 저장합니다.</p>
+                      </div>
+                    ) : null}
                   </div>
                   <Button type="button" className="w-full" onClick={submitClass} disabled={classSaving || !classForm.name.trim()}>
                     {classSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

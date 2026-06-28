@@ -1,13 +1,16 @@
+import base64
+import binascii
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from openai import OpenAI
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import get_db, get_settings
 from models import (
     AcademyClass,
     AcademyMaterial,
@@ -23,9 +26,14 @@ from models import (
     AssignmentTarget,
     CalendarEvent,
     ClassStudent,
+    ClassScheduleEvent,
     ClassTeacher,
     DailyStudentQuotaUsage,
+    LearningAssignment,
+    LearningAssignmentTarget,
     MaterialDeliveryLog,
+    PaperSession,
+    Problem,
     SeatAssignmentHistory,
     StudentAcademyMembership,
     StudentNotification,
@@ -34,18 +42,28 @@ from models import (
     WrongAnswerAttempt,
     WrongAnswerExport,
     WrongAnswerItem,
+    WrongAnswerRecord,
     WrongAnswerReview,
 )
 from services.academy_student_access import (
+    academy_seat_key_status,
+    apply_student_profile_values,
     audit,
+    build_student_key_invite_message,
+    build_student_key_sms_url,
     can_student_access_academy,
     consume_student_quota,
+    create_student_key_app_notification,
     create_seat,
+    create_unlinked_academy_student_for_seat,
     create_watermark_export_record,
+    ensure_student_seat_capacity,
     ensure_academy_subscription,
     ensure_default_academy_plans,
     get_academy_name,
+    hash_invite_code,
     has_unlimited_seats,
+    normalize_invite_phone,
     real_ip,
     release_seat,
     require_manage_billing,
@@ -58,16 +76,29 @@ from services.academy_student_access import (
     teacher_can_access_class,
     visible_class_ids_for_staff,
     claim_invite_code,
+    student_profile_collection_settings,
+    validate_student_profile_values,
 )
 from services.ownership import current_owner_id
+from services.pipeline import vision_json
 
 router = APIRouter(prefix="/api", tags=["academy-student-app"])
+
+
+class SeatInviteRecipient(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    account_user_id: str | None = None
+    memo: str | None = None
 
 
 class SeatCreate(BaseModel):
     count: int = Field(default=1, ge=1, le=200)
     display_name_prefix: str | None = None
     class_id: UUID | None = None
+    delivery_channel: str = Field(default="manual", pattern="^(manual|sms|student_app)$")
+    message_template: str | None = None
+    recipients: list[SeatInviteRecipient] = Field(default_factory=list, max_length=200)
 
 
 class SeatReleaseRequest(BaseModel):
@@ -77,6 +108,7 @@ class SeatReleaseRequest(BaseModel):
 
 class InviteCodeRequest(BaseModel):
     invite_code: str
+    student_profile: dict[str, Any] = Field(default_factory=dict)
 
 
 class SubscriptionUpdate(BaseModel):
@@ -197,27 +229,42 @@ class WrongAnswerExportPayload(BaseModel):
     academy_id: str | None = None
 
 
+class NoteTextExtractionPayload(BaseModel):
+    image_base64: str = Field(min_length=32, max_length=8_000_000)
+    image_mime: str = "image/png"
+
+
+class NoteTextExtractionResponse(BaseModel):
+    text: str
+
+
 def serialize(obj: Any) -> dict:
     data = {}
     for column in obj.__table__.columns:
-        value = getattr(obj, column.key)
+        attr_name = "metadata_json" if column.name == "metadata" else column.key
+        value = getattr(obj, attr_name)
         if isinstance(value, UUID):
             value = str(value)
         elif isinstance(value, datetime):
             value = value.isoformat()
-        data[column.key] = value
+        data[column.name] = value
     return data
 
 
 def seat_payload(db: Session, seat: AcademySeat) -> dict:
     membership = db.get(StudentAcademyMembership, seat.current_student_membership_id) if seat.current_student_membership_id else None
     class_row = db.get(AcademyClass, seat.class_id) if seat.class_id else None
+    key_status = academy_seat_key_status(db, seat)
+    is_claimed = bool(membership and membership.status == "active" and key_status == "claimed")
     return {
         **serialize(seat),
         "class_name": class_row.name if class_row else None,
-        "assigned": bool(membership and membership.status == "active"),
-        "assigned_student_user_id": membership.student_user_id if membership else None,
+        "assigned": is_claimed,
+        "academy_student_id": str(membership.id) if membership else None,
+        "linked_user_id": membership.student_user_id if is_claimed else None,
+        "assigned_student_user_id": membership.student_user_id if is_claimed else None,
         "assigned_membership_id": str(membership.id) if membership else None,
+        "key_status": key_status,
     }
 
 
@@ -228,6 +275,79 @@ def _class_id_for_seat(db: Session, academy_id: str, class_id: UUID | None) -> U
     if not class_row:
         raise HTTPException(status_code=404, detail="Class not found.")
     return class_row.id
+
+
+def _seat_invite_recipients(payload: SeatCreate) -> list[SeatInviteRecipient]:
+    if payload.recipients:
+        return payload.recipients
+    return [SeatInviteRecipient(name=(f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None)) for index in range(payload.count)]
+
+
+def _create_invited_student_seats(
+    db: Session,
+    academy_id: str,
+    class_row: AcademyClass,
+    payload: SeatCreate,
+    actor_id: str | None = None,
+) -> list[dict]:
+    recipients = _seat_invite_recipients(payload)
+    ensure_student_seat_capacity(db, academy_id, len(recipients))
+    academy_name = get_academy_name(db, academy_id)
+    created: list[dict] = []
+    for index, recipient in enumerate(recipients):
+        recipient_name = (recipient.name or "").strip() or None
+        recipient_phone = normalize_invite_phone(recipient.phone)
+        account_user_id = (recipient.account_user_id or "").strip() or None
+        if payload.delivery_channel == "sms" and not recipient_phone:
+            raise HTTPException(status_code=422, detail={"code": "RECIPIENT_PHONE_REQUIRED", "message": f"{index + 1}번째 학생의 SMS 연락처가 필요합니다."})
+        if payload.delivery_channel == "student_app" and not account_user_id:
+            raise HTTPException(status_code=422, detail={"code": "RECIPIENT_ACCOUNT_REQUIRED", "message": f"{index + 1}번째 학생의 Tena 계정 ID가 필요합니다."})
+
+        display_name = recipient_name or recipient_phone or (f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None)
+        seat, code = create_seat(db, academy_id, display_name, class_id=class_row.id)
+        message_body = build_student_key_invite_message(academy_name, class_row.name, code, payload.message_template)
+        sms_url = build_student_key_sms_url(recipient_phone, message_body) if payload.delivery_channel == "sms" and recipient_phone else None
+        notification_id = None
+        delivery_status = "manual_copy_ready"
+        if payload.delivery_channel == "sms":
+            delivery_status = "sms_link_ready"
+        elif payload.delivery_channel == "student_app" and account_user_id:
+            notification = create_student_key_app_notification(db, account_user_id, academy_id, academy_name, class_row.name, seat.id)
+            notification_id = str(notification.id)
+            delivery_status = "app_notification_created"
+
+        seat.invite_metadata = {
+            "source": "bulk_student_key_invite" if payload.recipients else "single_student_key_invite",
+            "channel": payload.delivery_channel,
+            "recipient_name": recipient_name,
+            "recipient_phone": recipient_phone,
+            "recipient_account_user_id": account_user_id,
+            "recipient_memo": (recipient.memo or "").strip() or None,
+            "message_body": message_body,
+            "sms_url": sms_url,
+            "notification_id": notification_id,
+            "delivery_status": delivery_status,
+            "prepared_at": datetime.utcnow().isoformat(),
+        }
+        create_unlinked_academy_student_for_seat(
+            db,
+            seat,
+            class_id=class_row.id,
+            display_name=display_name,
+            actor_id=actor_id,
+        )
+        created.append(
+            {
+                **seat_payload(db, seat),
+                "invite_code": code,
+                "key_code": code,
+                "message_body": message_body,
+                "sms_url": sms_url,
+                "notification_id": notification_id,
+                "delivery_status": delivery_status,
+            }
+        )
+    return created
 
 
 def _student_membership_for_assignment(db: Session, student_id: str, assignment: Assignment) -> StudentAcademyMembership:
@@ -255,6 +375,156 @@ def _student_membership_for_assignment(db: Session, student_id: str, assignment:
         if target.target_type == "academy" and target.target_id == assignment.academy_id:
             return memberships[0]
     return memberships[0]
+
+
+def _student_class_ids_for_membership(db: Session, membership: StudentAcademyMembership) -> list[UUID]:
+    class_ids: set[UUID] = set(
+        db.scalars(
+            select(ClassStudent.class_id).where(
+                ClassStudent.student_membership_id == membership.id,
+                ClassStudent.left_at.is_(None),
+            )
+        ).all()
+    )
+    seat = db.get(AcademySeat, membership.academy_seat_id)
+    if seat and seat.class_id:
+        class_ids.add(seat.class_id)
+    return list(class_ids)
+
+
+def _student_class_ids(db: Session, memberships: list[StudentAcademyMembership]) -> list[UUID]:
+    class_ids: set[UUID] = set()
+    for membership in memberships:
+        class_ids.update(_student_class_ids_for_membership(db, membership))
+    return list(class_ids)
+
+
+def student_learning_assignment_ids(db: Session, student_id: str, academy_id: str | None = None) -> list[UUID]:
+    ids: set[UUID] = set()
+    for membership in student_memberships(db, student_id):
+        if academy_id and membership.academy_id != academy_id:
+            continue
+        class_ids = _student_class_ids_for_membership(db, membership)
+        targets = [LearningAssignmentTarget.student_id == student_id]
+        if class_ids:
+            targets.append(LearningAssignmentTarget.group_id.in_(class_ids))
+        ids.update(
+            db.scalars(
+                select(LearningAssignmentTarget.assignment_id).where(
+                    LearningAssignmentTarget.academy_id == membership.academy_id,
+                    or_(*targets),
+                )
+            ).all()
+        )
+    return list(ids)
+
+
+def _class_schedule_calendar_payload(event: ClassScheduleEvent, class_names: dict[UUID, str]) -> dict[str, Any]:
+    class_name = class_names.get(event.class_id)
+    title = event.title or class_name or "Class"
+    return {
+        "id": str(event.id),
+        "title": title,
+        "description": event.description,
+        "event_type": "class_schedule",
+        "starts_at": event.starts_at.isoformat(),
+        "ends_at": event.ends_at.isoformat() if event.ends_at else None,
+        "visibility": "class_members",
+        "academy_id": event.academy_id,
+        "class_id": str(event.class_id),
+        "class_name": class_name,
+        "source_type": "forge_class_schedule",
+    }
+
+
+def _wrong_answer_note_payload(db: Session, record: WrongAnswerRecord, membership_by_academy: dict[str, StudentAcademyMembership]) -> dict[str, Any]:
+    problem = db.scalar(select(Problem).where(Problem.id == record.problem_id))
+    tags = problem.tags if problem else None
+    membership = membership_by_academy.get(record.academy_id)
+    status = record.resolved_status or "unresolved"
+    return {
+        "id": str(record.id),
+        "student_user_id": record.student_id,
+        "academy_id": record.academy_id,
+        "student_membership_id": str(membership.id) if membership else None,
+        "source_type": "forge_wrong_answer",
+        "source_ref_id": str(record.problem_id),
+        "original_image_asset_id": None,
+        "original_pdf_page_asset_id": None,
+        "extracted_problem_text": problem.problem_text if problem else None,
+        "extracted_choices": problem.choices if problem else [],
+        "extracted_answer": problem.answer if problem else None,
+        "extracted_explanation": problem.solution_steps if problem else None,
+        "subject": tags.subject if tags else None,
+        "unit": tags.unit if tags else None,
+        "difficulty": tags.difficulty if tags else None,
+        "tags": ["forge", status],
+        "visibility": "academy_linked",
+        "memo": record.student_memo or record.teacher_memo,
+        "created_at": record.latest_wrong_at.isoformat() if record.latest_wrong_at else record.created_at.isoformat(),
+        "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+        "archived_at": None,
+        "wrong_count": record.wrong_count,
+        "retry_count": record.retry_count,
+        "resolved_status": status,
+    }
+
+
+def _wrong_answer_calendar_payloads(records: list[WrongAnswerRecord]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for record in records:
+        if record.resolved_status not in {"unresolved", "reviewing"}:
+            continue
+        base_time = record.latest_wrong_at or record.created_at
+        day_key = base_time.date().isoformat()
+        key = (record.academy_id, day_key)
+        entry = grouped.setdefault(
+            key,
+            {
+                "id": f"wrong-answers:{record.academy_id}:{day_key}",
+                "title": "Wrong answers",
+                "description": None,
+                "event_type": "wrong_answer_review",
+                "starts_at": base_time.replace(hour=20, minute=0, second=0, microsecond=0).isoformat(),
+                "ends_at": None,
+                "visibility": "academy_linked",
+                "academy_id": record.academy_id,
+                "source_type": "forge_wrong_answer_archive",
+                "count": 0,
+            },
+        )
+        entry["count"] += 1
+    payloads = []
+    for entry in grouped.values():
+        count = int(entry.pop("count"))
+        entry["title"] = f"Wrong answers {count}" if count > 1 else "Wrong answer"
+        payloads.append(entry)
+    return payloads
+
+
+def _paper_session_visible_to_student(session: PaperSession, class_ids: list[UUID], membership_ids: list[UUID]) -> bool:
+    session_class_ids = {str(value) for value in (session.class_ids or []) if value}
+    session_membership_ids = {str(value) for value in (session.student_membership_ids or []) if value}
+    return bool(
+        session_class_ids.intersection({str(value) for value in class_ids})
+        or session_membership_ids.intersection({str(value) for value in membership_ids})
+    )
+
+
+def _paper_session_event_payload(session: PaperSession) -> dict[str, Any] | None:
+    if not session.scheduled_at:
+        return None
+    return {
+        "id": f"paper-session:{session.id}",
+        "title": session.title,
+        "description": session.description,
+        "event_type": "paper_session",
+        "starts_at": session.scheduled_at.isoformat(),
+        "ends_at": session.due_at.isoformat() if session.due_at else None,
+        "visibility": "class_members",
+        "academy_id": session.academy_id,
+        "source_type": "forge_paper_session",
+    }
 
 
 @router.get("/academy/plans")
@@ -318,13 +588,22 @@ def list_seats(academy_id: str, request: Request, db: Session = Depends(get_db))
 @router.post("/academy/{academy_id}/seats")
 def create_seats(academy_id: str, payload: SeatCreate, request: Request, db: Session = Depends(get_db)):
     actor = require_manage_seats(db, request, academy_id)
+    if not payload.class_id:
+        raise HTTPException(status_code=422, detail={"code": "CLASS_REQUIRED", "message": "학생 앱용 키는 반드시 클래스를 선택해서 발급해야 합니다."})
     class_id = _class_id_for_seat(db, academy_id, payload.class_id)
-    created = []
-    for index in range(payload.count):
-        display = f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None
-        seat, code = create_seat(db, academy_id, display, class_id=class_id)
-        created.append({**seat_payload(db, seat), "invite_code": code})
-    audit(db, request, actor, "academy.seats_created", "academy", academy_id, {"count": payload.count, "class_id": str(class_id) if class_id else None})
+    class_row = db.get(AcademyClass, class_id)
+    if not class_row:
+        raise HTTPException(status_code=404, detail="Class not found.")
+    created = _create_invited_student_seats(db, academy_id, class_row, payload, actor_id=actor)
+    audit(
+        db,
+        request,
+        actor,
+        "academy.seats_created",
+        "academy",
+        academy_id,
+        {"count": len(created), "class_id": str(class_id) if class_id else None, "delivery_channel": payload.delivery_channel},
+    )
     db.commit()
     return created
 
@@ -359,13 +638,48 @@ def seat_history(academy_id: str, seat_id: UUID, request: Request, db: Session =
     return [serialize(row) for row in rows]
 
 
+@router.get("/student/academy-keys/requirements")
+def academy_key_requirements(invite_code: str, request: Request, db: Session = Depends(get_db)):
+    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(invite_code)))
+    if not seat:
+        raise HTTPException(status_code=404, detail={"code": "KEY_NOT_FOUND", "message": "존재하지 않는 학원 키입니다."})
+    if not seat.is_active:
+        raise HTTPException(status_code=410, detail={"code": "KEY_INACTIVE", "message": "비활성화되었거나 해제된 학원 키입니다."})
+    if not seat.class_id:
+        raise HTTPException(status_code=422, detail={"code": "KEY_MISSING_CLASS", "message": "클래스가 배정되지 않은 학원 키입니다. 학원에서 클래스 키를 다시 발급해야 합니다."})
+    class_row = db.get(AcademyClass, seat.class_id)
+    return {
+        "academy_id": seat.academy_id,
+        "academy_name": get_academy_name(db, seat.academy_id),
+        "class_id": str(class_row.id) if class_row else None,
+        "class_name": class_row.name if class_row else None,
+        **student_profile_collection_settings(db, seat.academy_id),
+    }
+
+
 @router.post("/student/academy-keys/claim")
 def claim_academy_key(payload: InviteCodeRequest, request: Request, db: Session = Depends(get_db)):
+    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(payload.invite_code)))
+    if seat:
+        profile_values = validate_student_profile_values(student_profile_collection_settings(db, seat.academy_id), payload.student_profile)
+    else:
+        profile_values = {}
     membership = claim_invite_code(db, request, payload.invite_code)
+    apply_student_profile_values(membership, profile_values)
     db.commit()
-    seat = db.get(AcademySeat, membership.academy_seat_id)
-    class_row = db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
-    return {**serialize(membership), "academy_name": get_academy_name(db, membership.academy_id), "class_id": str(class_row.id) if class_row else None, "class_name": class_row.name if class_row else None}
+    class_ids = _student_class_ids_for_membership(db, membership)
+    class_rows = db.scalars(select(AcademyClass).where(AcademyClass.id.in_(class_ids))).all() if class_ids else []
+    class_by_id = {str(row.id): row for row in class_rows}
+    ordered_classes = [class_by_id[str(class_id)] for class_id in class_ids if str(class_id) in class_by_id]
+    first_class = ordered_classes[0] if ordered_classes else None
+    return {
+        **serialize(membership),
+        "academy_name": get_academy_name(db, membership.academy_id),
+        "class_id": str(first_class.id) if first_class else None,
+        "class_name": first_class.name if first_class else None,
+        "class_ids": [str(row.id) for row in ordered_classes],
+        "class_names": [row.name for row in ordered_classes],
+    }
 
 
 @router.get("/student/academies")
@@ -374,9 +688,21 @@ def connected_academies(request: Request, db: Session = Depends(get_db)):
     memberships = student_memberships(db, user_id)
     rows = []
     for membership in memberships:
-        seat = db.get(AcademySeat, membership.academy_seat_id)
-        class_row = db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
-        rows.append({**serialize(membership), "academy_name": get_academy_name(db, membership.academy_id), "class_id": str(class_row.id) if class_row else None, "class_name": class_row.name if class_row else None})
+        class_ids = _student_class_ids_for_membership(db, membership)
+        class_rows = db.scalars(select(AcademyClass).where(AcademyClass.id.in_(class_ids))).all() if class_ids else []
+        class_by_id = {str(row.id): row for row in class_rows}
+        ordered_classes = [class_by_id[str(class_id)] for class_id in class_ids if str(class_id) in class_by_id]
+        first_class = ordered_classes[0] if ordered_classes else None
+        rows.append(
+            {
+                **serialize(membership),
+                "academy_name": get_academy_name(db, membership.academy_id),
+                "class_id": str(first_class.id) if first_class else None,
+                "class_name": first_class.name if first_class else None,
+                "class_ids": [str(row.id) for row in ordered_classes],
+                "class_names": [row.name for row in ordered_classes],
+            }
+        )
     return rows
 
 
@@ -521,7 +847,7 @@ def student_assignment_ids(db: Session, student_id: str, academy_id: str | None 
         memberships = [m for m in memberships if m.academy_id == academy_id]
     ids: set[UUID] = set()
     for membership in memberships:
-        class_ids = db.scalars(select(ClassStudent.class_id).where(ClassStudent.student_membership_id == membership.id, ClassStudent.left_at.is_(None))).all()
+        class_ids = _student_class_ids_for_membership(db, membership)
         targets = [
             and_(AssignmentTarget.target_type == "student", AssignmentTarget.target_id == str(membership.id)),
             and_(AssignmentTarget.target_type == "academy", AssignmentTarget.target_id == membership.academy_id),
@@ -681,7 +1007,7 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
     memberships = student_memberships(db, student_id)
     membership_ids = [m.id for m in memberships]
     academy_ids = [m.academy_id for m in memberships]
-    class_ids = db.scalars(select(ClassStudent.class_id).where(ClassStudent.student_membership_id.in_(membership_ids), ClassStudent.left_at.is_(None))).all() if membership_ids else []
+    class_ids = _student_class_ids(db, memberships)
     events = db.scalars(
         select(CalendarEvent).where(
             or_(
@@ -692,14 +1018,138 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
             )
         ).order_by(CalendarEvent.starts_at)
     ).all()
+    schedule_events: list[ClassScheduleEvent] = []
+    class_names: dict[UUID, str] = {}
+    if class_ids:
+        class_rows = db.scalars(select(AcademyClass).where(AcademyClass.id.in_(class_ids))).all()
+        class_names = {row.id: row.name for row in class_rows}
+        schedule_events = db.scalars(
+            select(ClassScheduleEvent)
+            .where(
+                ClassScheduleEvent.class_id.in_(class_ids),
+                ClassScheduleEvent.academy_id.in_(academy_ids),
+            )
+            .order_by(ClassScheduleEvent.starts_at)
+        ).all()
     assignments = []
     ids = student_assignment_ids(db, student_id)
     if ids:
         assignments = db.scalars(select(Assignment).where(Assignment.id.in_(ids), Assignment.due_at.is_not(None))).all()
+    learning_assignments = []
+    learning_ids = student_learning_assignment_ids(db, student_id)
+    if learning_ids:
+        learning_assignments = db.scalars(
+            select(LearningAssignment)
+            .where(
+                LearningAssignment.id.in_(learning_ids),
+                LearningAssignment.status.in_(["published", "closed"]),
+                LearningAssignment.due_at.is_not(None),
+            )
+            .order_by(LearningAssignment.due_at)
+        ).all()
+    paper_sessions = []
+    if academy_ids:
+        paper_session_rows = db.scalars(
+            select(PaperSession)
+            .where(
+                PaperSession.academy_id.in_(academy_ids),
+                PaperSession.status != "draft",
+            )
+            .order_by(PaperSession.scheduled_at, PaperSession.due_at)
+        ).all()
+        paper_sessions = [
+            row
+            for row in paper_session_rows
+            if _paper_session_visible_to_student(row, class_ids, membership_ids)
+        ]
+    wrong_answer_records = db.scalars(
+        select(WrongAnswerRecord).where(
+            WrongAnswerRecord.student_id == student_id,
+            WrongAnswerRecord.academy_id.in_(academy_ids),
+        )
+    ).all() if academy_ids else []
+    event_payloads = [serialize(row) for row in events]
+    event_payloads.extend(_class_schedule_calendar_payload(row, class_names) for row in schedule_events)
+    event_payloads.extend(payload for payload in (_paper_session_event_payload(row) for row in paper_sessions) if payload)
+    event_payloads.extend(_wrong_answer_calendar_payloads(wrong_answer_records))
+    event_payloads.sort(key=lambda row: str(row.get("starts_at") or ""))
+    assignment_due_dates = [
+        {"id": str(a.id), "title": a.title, "due_at": a.due_at.isoformat() if a.due_at else None, "academy_id": a.academy_id, "source_type": "academy_assignment"}
+        for a in assignments
+    ]
+    assignment_due_dates.extend(
+        {
+            "id": f"learning:{a.id}",
+            "title": a.title,
+            "due_at": a.due_at.isoformat() if a.due_at else None,
+            "academy_id": a.academy_id,
+            "source_type": "learning_assignment",
+        }
+        for a in learning_assignments
+    )
+    assignment_due_dates.extend(
+        {
+            "id": f"paper-session:{session.id}",
+            "title": session.title,
+            "due_at": session.due_at.isoformat() if session.due_at else None,
+            "academy_id": session.academy_id,
+            "source_type": "paper_session_due",
+        }
+        for session in paper_sessions
+        if session.due_at
+    )
+    assignment_due_dates.sort(key=lambda row: str(row.get("due_at") or ""))
     return {
-        "events": [serialize(row) for row in events],
-        "assignment_due_dates": [{"id": str(a.id), "title": a.title, "due_at": a.due_at.isoformat() if a.due_at else None, "academy_id": a.academy_id} for a in assignments],
+        "events": event_payloads,
+        "assignment_due_dates": assignment_due_dates,
     }
+
+
+@router.post("/student/notes/extract-text", response_model=NoteTextExtractionResponse)
+def extract_note_selection_text(payload: NoteTextExtractionPayload, request: Request):
+    current_owner_id(request)
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY가 설정되어 있지 않습니다.")
+
+    image_mime = payload.image_mime if payload.image_mime in {"image/png", "image/jpeg", "image/webp"} else "image/png"
+    image_base64 = payload.image_base64.strip()
+    if "," in image_base64[:128]:
+        image_base64 = image_base64.split(",", 1)[1].strip()
+    try:
+        image_bytes = base64.b64decode(image_base64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=400, detail="이미지 데이터가 올바르지 않습니다.")
+    if len(image_bytes) < 80:
+        raise HTTPException(status_code=400, detail="선택 영역 이미지가 너무 작습니다.")
+    if len(image_bytes) > 6 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="선택 영역 이미지가 너무 큽니다.")
+
+    prompt = (
+        "You are an OCR engine for a note-taking app. Extract only the visible text inside this cropped image. "
+        "Preserve Korean, English, numbers, math symbols, line breaks, punctuation, and spacing as accurately as possible. "
+        "Do not explain. Do not infer text that is not visible. If no readable text exists, return an empty string. "
+        "Return JSON only as an array with exactly one object: [{\"text\":\"...\"}]."
+    )
+    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
+    try:
+        result = vision_json(
+            client,
+            image_base64,
+            prompt,
+            model=settings.ai_reextract_model or settings.ai_model,
+            image_mime=image_mime,
+            max_output_tokens=2048,
+            image_detail="high",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"텍스트 추출에 실패했습니다: {exc.__class__.__name__}")
+
+    text = ""
+    if result:
+        first = result[0] if isinstance(result[0], dict) else {}
+        text = str(first.get("text") or first.get("extracted_text") or "").strip()
+    return {"text": text}
 
 
 @router.post("/academy/{academy_id}/materials")
@@ -733,7 +1183,7 @@ def list_student_materials(request: Request, academy_id: str | None = None, db: 
     material_ids: set[UUID] = set()
     now = datetime.utcnow()
     for membership in memberships:
-        class_ids = db.scalars(select(ClassStudent.class_id).where(ClassStudent.student_membership_id == membership.id, ClassStudent.left_at.is_(None))).all()
+        class_ids = _student_class_ids_for_membership(db, membership)
         filters = [
             and_(AcademyMaterialAssignment.target_type == "student", AcademyMaterialAssignment.target_id == str(membership.id)),
             and_(AcademyMaterialAssignment.target_type == "academy", AcademyMaterialAssignment.target_id == membership.academy_id),
@@ -744,7 +1194,7 @@ def list_student_materials(request: Request, academy_id: str | None = None, db: 
     if not material_ids:
         return []
     materials = db.scalars(select(AcademyMaterial).where(AcademyMaterial.id.in_(material_ids), or_(AcademyMaterial.expires_at.is_(None), AcademyMaterial.expires_at > now))).all()
-    return [serialize(row) for row in materials]
+    return [{**serialize(row), "academy_name": get_academy_name(db, row.academy_id)} for row in materials]
 
 
 @router.post("/student/materials/{material_id}/download")
@@ -791,8 +1241,28 @@ def list_wrong_answers(request: Request, academy_id: str | None = None, db: Sess
     student_id = current_owner_id(request)
     query = select(WrongAnswerItem).where(WrongAnswerItem.student_user_id == student_id, WrongAnswerItem.archived_at.is_(None))
     if academy_id:
+        can_student_access_academy(db, student_id, academy_id)
         query = query.where(WrongAnswerItem.academy_id == academy_id)
-    return [serialize(row) for row in db.scalars(query.order_by(WrongAnswerItem.created_at.desc())).all()]
+    note_items = [serialize(row) for row in db.scalars(query.order_by(WrongAnswerItem.created_at.desc())).all()]
+    memberships = student_memberships(db, student_id)
+    if academy_id:
+        memberships = [membership for membership in memberships if membership.academy_id == academy_id]
+    membership_by_academy = {membership.academy_id: membership for membership in memberships}
+    academy_ids = list(membership_by_academy)
+    forge_records = []
+    if academy_ids:
+        forge_records = db.scalars(
+            select(WrongAnswerRecord)
+            .where(
+                WrongAnswerRecord.student_id == student_id,
+                WrongAnswerRecord.academy_id.in_(academy_ids),
+            )
+            .order_by(WrongAnswerRecord.latest_wrong_at.desc())
+        ).all()
+    forge_items = [_wrong_answer_note_payload(db, record, membership_by_academy) for record in forge_records]
+    items = note_items + forge_items
+    items.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+    return items
 
 
 @router.post("/student/wrong-answers/{item_id}/attempts")

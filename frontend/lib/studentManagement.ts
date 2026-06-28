@@ -4,8 +4,16 @@ import { authHttp } from "@/lib/auth-client";
 export type StudentCard = {
   id: string;
   student_user_id: string;
+  student_person_id?: string | null;
   academy_seat_id?: string | null;
+  pending_seat_id?: string | null;
+  card_type?: "student" | "pending_key" | string;
+  key_status?: string | null;
+  invite_metadata?: Record<string, unknown> | null;
+  recipient_phone?: string | null;
+  delivery_status?: string | null;
   invite_code_preview?: string | null;
+  invite_codes?: StudentInviteCode[];
   name: string;
   grade_level?: string | null;
   school?: string | null;
@@ -22,6 +30,27 @@ export type StudentCard = {
   invite_code?: string;
   joined_at?: string | null;
   tuition?: TuitionSettings;
+};
+
+export type StudentInviteCode = {
+  membership_id?: string | null;
+  seat_id: string;
+  class_id?: string | null;
+  class_name?: string | null;
+  invite_code?: string | null;
+  invite_code_preview?: string | null;
+};
+
+export type StudentProfileFieldSetting = {
+  key: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+  real_name: boolean;
+};
+
+export type StudentProfileCollectionSettings = {
+  fields: StudentProfileFieldSetting[];
 };
 
 export type TuitionSettings = {
@@ -440,6 +469,18 @@ export function addStudentToClass(classId: string, studentMembershipId: string) 
   });
 }
 
+export function getStudentProfileCollectionSettings() {
+  return api<StudentProfileCollectionSettings>("/api/student-management/student-profile-settings");
+}
+
+export function updateStudentProfileCollectionSettings(payload: StudentProfileCollectionSettings) {
+  return api<StudentProfileCollectionSettings>("/api/student-management/student-profile-settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function mergeStudents(studentId: string, otherStudentId: string) {
   return api<{
     primary_student_id: string;
@@ -454,7 +495,7 @@ export function mergeStudents(studentId: string, otherStudentId: string) {
 }
 
 export function ensureStudentInviteCode(id: string) {
-  return api<{ invite_code: string; invite_code_preview?: string | null }>(`/api/student-management/students/${id}/invite-code`, {
+  return api<{ invite_code: string; invite_code_preview?: string | null; invite_codes?: StudentInviteCode[] }>(`/api/student-management/students/${id}/invite-code`, {
     method: "POST",
   });
 }

@@ -59,7 +59,16 @@ from models import (
     WrongAnswerReview,
 )
 from services.export_service import generate_hub_context_pdf
-from services.academy_student_access import create_seat, ensure_academy_subscription, hash_invite_code, rotate_seat_code
+from services.academy_student_access import (
+    academy_seat_key_status,
+    create_seat,
+    ensure_academy_subscription,
+    hash_invite_code,
+    is_unlinked_academy_student,
+    rotate_seat_code,
+    save_student_profile_collection_settings,
+    student_profile_collection_settings,
+)
 from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_user_id, current_workspace_id
 from services.problem_usage_history import record_problem_set_usage
 from services.template_renderer import render_hub_template_for_context
@@ -78,6 +87,7 @@ TUITION_OVERDUE_DAYS = 30
 SCHEDULE_SERIES_METADATA_KEY = "schedule_series_id"
 SCHEDULE_SERIES_POSITION_METADATA_KEY = "schedule_series_position"
 SCHEDULE_SERIES_SIZE_METADATA_KEY = "schedule_series_size"
+STUDENT_PERSON_METADATA_KEY = "student_person_id"
 EXPORTED_REVIEW_SOURCE_STUDENT = "\uc774\uc6b0\ub178"
 EXPORTED_REVIEW_TARGET_STUDENTS = {"\uc774\uc6b0\ub178", "\uc774\ub098\uc740", "\uc774\uc218\ud604", "\ud669\uc9c0\uc724"}
 EXPORTED_REVIEW_TITLE_KEYWORDS = ("\ubbf8\uce5c\uac1c\ub150", "\uc2182", "\ubcf5\uc2b5", "(2)")
@@ -455,6 +465,173 @@ def _student_name(membership: StudentAcademyMembership) -> str:
     return membership.display_name_in_academy or metadata.get("name") or metadata.get("display_name") or "Unnamed student"
 
 
+def _student_person_id(membership: StudentAcademyMembership) -> str:
+    metadata = membership.metadata_json or {}
+    return str(metadata.get(STUDENT_PERSON_METADATA_KEY) or membership.student_user_id or membership.id)
+
+
+def _seat_class_row(db: Session, seat: AcademySeat | None) -> AcademyClass | None:
+    return db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
+
+
+def _invite_code_entry(
+    db: Session,
+    membership: StudentAcademyMembership,
+    seat: AcademySeat | None = None,
+    invite_code: str | None = None,
+) -> dict | None:
+    seat = seat or (db.get(AcademySeat, membership.academy_seat_id) if membership.academy_seat_id else None)
+    if not seat:
+        return None
+    class_row = _seat_class_row(db, seat)
+    metadata = membership.metadata_json or {}
+    return {
+        "membership_id": str(membership.id),
+        "seat_id": str(seat.id),
+        "class_id": str(class_row.id) if class_row else None,
+        "class_name": class_row.name if class_row else None,
+        "invite_code": invite_code if invite_code is not None else metadata.get("invite_code"),
+        "invite_code_preview": seat.invite_code_preview,
+    }
+
+
+def _related_student_key_memberships(
+    db: Session,
+    visible_academy_ids: set[str],
+    membership: StudentAcademyMembership,
+) -> list[StudentAcademyMembership]:
+    person_id = _student_person_id(membership)
+    rows = _visible_student_memberships(db, visible_academy_ids)
+    related = [
+        row
+        for row in rows
+        if (row.status or "active") == "active"
+        and (_student_person_id(row) == person_id or row.student_user_id == membership.student_user_id)
+    ]
+    return sorted(related, key=lambda row: (row.joined_at or datetime.min, str(row.id)))
+
+
+def _ensure_membership_invite_code(
+    db: Session,
+    visible_academy_ids: set[str],
+    membership: StudentAcademyMembership,
+) -> dict | None:
+    seat = db.scalar(
+        select(AcademySeat).where(
+            AcademySeat.academy_id.in_(list(visible_academy_ids)),
+            AcademySeat.id == membership.academy_seat_id,
+            AcademySeat.is_active.is_(True),
+        )
+    )
+    if not seat:
+        return None
+    metadata = dict(membership.metadata_json or {})
+    code = metadata.get("invite_code")
+    if not code or hash_invite_code(code) != seat.invite_code_hash:
+        code = rotate_seat_code(db, seat)
+        metadata["invite_code"] = code
+        metadata[STUDENT_PERSON_METADATA_KEY] = metadata.get(STUDENT_PERSON_METADATA_KEY) or _student_person_id(membership)
+        membership.metadata_json = metadata
+    return _invite_code_entry(db, membership, seat, code)
+
+
+def _create_class_membership_for_existing_student(
+    db: Session,
+    academy_id: str,
+    source: StudentAcademyMembership,
+    class_row: AcademyClass,
+    actor_id: str,
+) -> tuple[StudentAcademyMembership, str]:
+    seat, invite_code = create_seat(db, academy_id, _student_name(source), class_id=class_row.id)
+    source_metadata = dict(source.metadata_json or {})
+    person_id = source_metadata.get(STUDENT_PERSON_METADATA_KEY) or _student_person_id(source)
+    source_metadata[STUDENT_PERSON_METADATA_KEY] = person_id
+    source.metadata_json = source_metadata
+    metadata = dict(source_metadata)
+    metadata["invite_code"] = invite_code
+    metadata[STUDENT_PERSON_METADATA_KEY] = person_id
+    membership = StudentAcademyMembership(
+        student_user_id=source.student_user_id,
+        academy_id=academy_id,
+        academy_seat_id=seat.id,
+        display_name_in_academy=source.display_name_in_academy,
+        status=source.status or "active",
+        created_by=actor_id,
+        claimed_by=source.claimed_by,
+        metadata_json=metadata,
+    )
+    db.add(membership)
+    db.flush()
+    seat.current_student_membership_id = membership.id
+    db.add(SeatAssignmentHistory(academy_seat_id=seat.id, academy_id=academy_id, student_user_id=membership.student_user_id, membership_id=membership.id))
+    db.add(ClassStudent(class_id=class_row.id, student_membership_id=membership.id))
+    return membership, invite_code
+
+
+def _split_legacy_multiclass_memberships(
+    db: Session,
+    academy_id: str,
+    visible_academy_ids: set[str],
+    actor_id: str,
+) -> bool:
+    changed = False
+    for membership in _visible_student_memberships(db, visible_academy_ids):
+        if (membership.status or "active") != "active":
+            continue
+        links = db.scalars(
+            select(ClassStudent)
+            .where(
+                _id_equals(ClassStudent.student_membership_id, membership.id),
+                ClassStudent.left_at.is_(None),
+            )
+            .order_by(ClassStudent.joined_at.asc())
+        ).all()
+        unique_links: list[ClassStudent] = []
+        seen_class_ids: set[str] = set()
+        for link in links:
+            class_id = str(link.class_id)
+            if class_id in seen_class_ids:
+                link.left_at = _now()
+                changed = True
+                continue
+            seen_class_ids.add(class_id)
+            unique_links.append(link)
+        if len(unique_links) <= 1:
+            continue
+
+        seat = db.get(AcademySeat, membership.academy_seat_id) if membership.academy_seat_id else None
+        primary_class_id = str(seat.class_id) if seat and seat.class_id and str(seat.class_id) in seen_class_ids else str(unique_links[0].class_id)
+        metadata = dict(membership.metadata_json or {})
+        metadata[STUDENT_PERSON_METADATA_KEY] = metadata.get(STUDENT_PERSON_METADATA_KEY) or _student_person_id(membership)
+        membership.metadata_json = metadata
+        if seat and not seat.class_id:
+            seat.class_id = UUID(primary_class_id)
+            changed = True
+
+        for link in unique_links:
+            if str(link.class_id) == primary_class_id:
+                continue
+            class_row = db.get(AcademyClass, link.class_id)
+            if not class_row or class_row.academy_id not in visible_academy_ids:
+                continue
+            _create_class_membership_for_existing_student(db, membership.academy_id, membership, class_row, actor_id)
+            link.left_at = _now()
+            changed = True
+    return changed
+
+
+def _normalize_legacy_student_keys(db: Session, academy_id: str, visible_academy_ids: set[str], actor_id: str) -> None:
+    try:
+        if _split_legacy_multiclass_memberships(db, academy_id, visible_academy_ids, actor_id):
+            db.commit()
+    except HTTPException as exc:
+        db.rollback()
+        logger.warning("Legacy student key normalization skipped: %s", exc.detail)
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("Legacy student key normalization failed")
+
+
 def _safe_scalar(db: Session, statement, fallback=None):
     try:
         return db.scalar(statement)
@@ -512,12 +689,15 @@ def _student_payload(db: Session, academy_id: str, membership: StudentAcademyMem
     else:
         status_chip = "Active"
     seat = db.get(AcademySeat, membership.academy_seat_id) if membership.academy_seat_id else None
+    invite_entry = _invite_code_entry(db, membership, seat)
     return {
         "id": str(membership.id),
         "student_user_id": membership.student_user_id,
+        "student_person_id": _student_person_id(membership),
         "academy_seat_id": str(membership.academy_seat_id),
         "invite_code": metadata.get("invite_code"),
         "invite_code_preview": seat.invite_code_preview if seat else None,
+        "invite_codes": [invite_entry] if invite_entry else [],
         "name": _student_name(membership),
         "grade_level": metadata.get("grade_level") or metadata.get("grade"),
         "school": metadata.get("school"),
@@ -550,9 +730,11 @@ def _safe_student_payload(
         return {
             "id": str(membership.id),
             "student_user_id": membership.student_user_id,
+            "student_person_id": _student_person_id(membership),
             "academy_seat_id": str(membership.academy_seat_id) if membership.academy_seat_id else None,
             "invite_code": metadata.get("invite_code"),
             "invite_code_preview": None,
+            "invite_codes": [],
             "name": _student_name(membership),
             "grade_level": metadata.get("grade_level") or metadata.get("grade"),
             "school": metadata.get("school"),
@@ -571,8 +753,67 @@ def _safe_student_payload(
         }
 
 
+def _unclaimed_seats_for_class(db: Session, academy_id: str, class_id: UUID) -> list[AcademySeat]:
+    seats = _safe_scalars(
+        db,
+        select(AcademySeat)
+        .where(
+            AcademySeat.academy_id == academy_id,
+            _id_equals(AcademySeat.class_id, class_id),
+            AcademySeat.is_active.is_(True),
+        )
+        .order_by(AcademySeat.created_at.asc(), AcademySeat.seat_number.asc()),
+    )
+    return [seat for seat in seats if academy_seat_key_status(db, seat) == "unclaimed"]
+
+
+def _pending_student_card_for_seat(seat: AcademySeat, class_row: AcademyClass) -> dict:
+    seat_id = str(seat.id)
+    invitation = dict(seat.invite_metadata or {})
+    recipient_name = str(invitation.get("recipient_name") or seat.display_name or "").strip()
+    return {
+        "id": f"pending-seat-{seat_id}",
+        "student_user_id": f"pending-seat-{seat_id}",
+        "student_person_id": None,
+        "academy_seat_id": seat_id,
+        "pending_seat_id": seat_id,
+        "invite_metadata": invitation,
+        "invite_code": None,
+        "invite_code_preview": seat.invite_code_preview,
+        "invite_codes": [
+            {
+                "membership_id": None,
+                "seat_id": seat_id,
+                "class_id": str(class_row.id),
+                "class_name": class_row.name,
+                "invite_code": None,
+                "invite_code_preview": seat.invite_code_preview,
+            }
+        ],
+        "name": f"{recipient_name} \ub300\uae30 \uc911" if recipient_name else "\ud559\uc0dd \ub300\uae30 \uc911",
+        "grade_level": None,
+        "school": None,
+        "status": "pending_key",
+        "status_chip": "\ub300\uae30",
+        "memo": None,
+        "tuition": None,
+        "class_ids": [str(class_row.id)],
+        "class_names": [class_row.name],
+        "class_subjects": [class_row.subject],
+        "recent_score": None,
+        "recent_completion_status": "pending_key",
+        "unresolved_wrong_count": 0,
+        "recent_weakness_label": None,
+        "joined_at": seat.created_at.isoformat() if seat.created_at else None,
+        "card_type": "pending_key",
+        "key_status": "unclaimed",
+        "recipient_phone": invitation.get("recipient_phone"),
+        "delivery_status": invitation.get("delivery_status"),
+    }
+
+
 def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) -> list[StudentAcademyMembership]:
-    return _safe_scalars(
+    rows = _safe_scalars(
         db,
         select(StudentAcademyMembership)
         .join(ClassStudent, _id_columns_equal(ClassStudent.student_membership_id, StudentAcademyMembership.id))
@@ -583,6 +824,7 @@ def _active_memberships_for_class(db: Session, academy_id: str, class_id: UUID) 
         )
         .order_by(StudentAcademyMembership.display_name_in_academy)
     )
+    return [row for row in rows if not is_unlinked_academy_student(row)]
 
 
 def _visible_student_memberships(db: Session, academy_ids: set[str], linked_student_ids: list[UUID] | None = None) -> list[StudentAcademyMembership]:
@@ -660,7 +902,10 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
         and ((session.scheduled_at and session.scheduled_at >= now) or (session.due_at and session.due_at >= now))
     )
     recent_session = class_sessions[0] if class_sessions else None
-    students = [_safe_student_payload(db, academy_id, membership, [row]) for membership in memberships] if include_students else []
+    students = []
+    if include_students:
+        students = [_safe_student_payload(db, academy_id, membership, [row]) for membership in memberships]
+        students.extend(_pending_student_card_for_seat(seat, row) for seat in _unclaimed_seats_for_class(db, row.academy_id, row.id))
     return {
         "id": str(row.id),
         "name": row.name,
@@ -1606,6 +1851,17 @@ class ClassPayload(BaseModel):
     description: str | None = None
     subject: str | None = None
     grade_level: str | None = None
+
+
+class StudentProfileFieldSetting(BaseModel):
+    key: str
+    enabled: bool = False
+    required: bool = False
+    real_name: bool = False
+
+
+class StudentProfileCollectionPayload(BaseModel):
+    fields: list[StudentProfileFieldSetting] = Field(default_factory=list)
 
 
 class ClassUpdatePayload(BaseModel):
@@ -2694,10 +2950,25 @@ class ReviewSetPayload(BaseModel):
     unresolved_only: bool = True
 
 
+@router.get("/student-profile-settings")
+def get_student_profile_settings(request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    return student_profile_collection_settings(db, academy_id)
+
+
+@router.put("/student-profile-settings")
+def update_student_profile_settings(payload: StudentProfileCollectionPayload, request: Request, db: Session = Depends(get_db)):
+    academy_id = _student_management_academy_id(request, db)
+    settings = save_student_profile_collection_settings(db, academy_id, payload.model_dump())
+    db.commit()
+    return settings
+
+
 @router.get("/dashboard")
 def dashboard(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    _normalize_legacy_student_keys(db, academy_id, visible_academy_ids, current_user_id(request))
     classes = _ordered_classes_for_academies(db, visible_academy_ids, academy_id)
     sessions = db.scalars(
         select(PaperSession)
@@ -2719,27 +2990,10 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         )
     ) or 0
     class_payloads = [_safe_class_payload(db, academy_id, row, include_students=True) for row in classes]
-    attached_student_ids = {
-        str(student.get("id"))
-        for class_row in class_payloads
-        for student in (class_row.get("students") or [])
-        if student.get("id")
-    }
-    visible_students = _visible_student_memberships(db, visible_academy_ids)
-    recovered_students = [
-        _safe_student_payload(db, academy_id, membership)
-        for membership in visible_students
-        if str(membership.id) not in attached_student_ids and (membership.status or "active") == "active"
-    ]
-    if recovered_students and class_payloads:
-        class_payloads[0]["students"] = [*(class_payloads[0].get("students") or []), *recovered_students]
-        class_payloads[0]["student_count"] = len(class_payloads[0]["students"])
-        class_payloads[0]["student_membership_ids"] = [student["id"] for student in class_payloads[0]["students"]]
-    student_count = max(students, len(attached_student_ids) + len(recovered_students))
     return {
         "summary": {
             "class_count": len(classes),
-            "student_count": student_count,
+            "student_count": students,
             "active_session_count": len([session for session in sessions if session.status in {"scheduled", "exported", "grading"}]),
             "unresolved_wrong_count": unresolved,
         },
@@ -2751,7 +3005,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 @router.get("/classes")
 def list_classes(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
-    rows = _ordered_classes_for_academies(db, _student_management_academy_ids(request, db, academy_id), academy_id)
+    visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    _normalize_legacy_student_keys(db, academy_id, visible_academy_ids, current_user_id(request))
+    rows = _ordered_classes_for_academies(db, visible_academy_ids, academy_id)
     return [_safe_class_payload(db, academy_id, row, include_students=True) for row in rows]
 
 
@@ -2906,18 +3162,36 @@ def delete_class(class_id: UUID, request: Request, db: Session = Depends(get_db)
 def add_student_to_class(class_id: UUID, payload: ClassStudentPayload, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    actor_id = current_user_id(request)
     class_row = _get_class(db, academy_id, class_id, visible_academy_ids)
     membership = _get_membership(db, academy_id, payload.student_membership_id, visible_academy_ids)
-    link = db.scalar(
-        select(ClassStudent).where(
-            ClassStudent.class_id == class_id,
-            ClassStudent.student_membership_id == membership.id,
+
+    for candidate in _related_student_key_memberships(db, visible_academy_ids, membership):
+        link = db.scalar(
+            select(ClassStudent).where(
+                _id_equals(ClassStudent.class_id, class_id),
+                _id_equals(ClassStudent.student_membership_id, candidate.id),
+            )
         )
-    )
-    if link:
-        link.left_at = None
+        if link:
+            link.left_at = None
+            db.commit()
+            return _class_payload(db, academy_id, class_row, include_students=True)
+
+    seat = db.get(AcademySeat, membership.academy_seat_id) if membership.academy_seat_id else None
+    if seat and not seat.class_id:
+        seat.class_id = class_row.id
+        metadata = dict(membership.metadata_json or {})
+        metadata[STUDENT_PERSON_METADATA_KEY] = metadata.get(STUDENT_PERSON_METADATA_KEY) or _student_person_id(membership)
+        membership.metadata_json = metadata
+        db.add(ClassStudent(class_id=class_row.id, student_membership_id=membership.id))
+    elif seat and str(seat.class_id) == str(class_row.id):
+        metadata = dict(membership.metadata_json or {})
+        metadata[STUDENT_PERSON_METADATA_KEY] = metadata.get(STUDENT_PERSON_METADATA_KEY) or _student_person_id(membership)
+        membership.metadata_json = metadata
+        db.add(ClassStudent(class_id=class_row.id, student_membership_id=membership.id))
     else:
-        db.add(ClassStudent(class_id=class_id, student_membership_id=membership.id))
+        _create_class_membership_for_existing_student(db, academy_id, membership, class_row, actor_id)
     db.commit()
     return _class_payload(db, academy_id, class_row, include_students=True)
 
@@ -3225,6 +3499,7 @@ def send_routine_action(routine_id: UUID, request: Request, db: Session = Depend
 def list_students(request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    _normalize_legacy_student_keys(db, academy_id, visible_academy_ids, current_user_id(request))
     linked_student_ids = db.scalars(
         select(ClassStudent.student_membership_id)
         .join(AcademyClass, AcademyClass.id == ClassStudent.class_id)
@@ -3243,41 +3518,65 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Student name is required.")
-    seat, invite_code = create_seat(db, academy_id, name)
     student_user_id = f"manual-{uuid.uuid4().hex[:24]}"
-    metadata = {
-        "grade_level": _clean_optional_text(payload.grade_level),
-        "school": _clean_optional_text(payload.school),
-        "memo": _clean_optional_text(payload.memo),
-        "invite_code": invite_code,
-    }
-    metadata = _set_tuition_metadata(
-        metadata,
-        guardian_name=payload.guardian_name,
-        guardian_phone=payload.guardian_phone,
-        enabled=payload.tuition_enabled,
-        cycle_sessions=payload.tuition_cycle_sessions,
-        amount=payload.tuition_amount,
-    )
-    membership = StudentAcademyMembership(
-        student_user_id=student_user_id,
-        academy_id=academy_id,
-        academy_seat_id=seat.id,
-        display_name_in_academy=name,
-        status=payload.status,
-        created_by=actor_id,
-        metadata_json=metadata,
-    )
-    db.add(membership)
-    db.flush()
-    seat.current_student_membership_id = membership.id
-    db.add(SeatAssignmentHistory(academy_seat_id=seat.id, academy_id=academy_id, student_user_id=student_user_id, membership_id=membership.id))
+    person_id = str(uuid.uuid4())
+    class_rows: list[AcademyClass | None] = []
+    seen_class_ids: set[str] = set()
     for class_id in payload.class_ids:
-        _get_class(db, academy_id, class_id)
-        db.add(ClassStudent(class_id=class_id, student_membership_id=membership.id))
+        class_row = _get_class(db, academy_id, class_id)
+        if str(class_row.id) in seen_class_ids:
+            continue
+        seen_class_ids.add(str(class_row.id))
+        class_rows.append(class_row)
+    if not class_rows:
+        class_rows.append(None)
+
+    created: list[tuple[StudentAcademyMembership, AcademySeat, str]] = []
+    for class_row in class_rows:
+        seat, invite_code = create_seat(db, academy_id, name, class_id=class_row.id if class_row else None)
+        metadata = {
+            "grade_level": _clean_optional_text(payload.grade_level),
+            "school": _clean_optional_text(payload.school),
+            "memo": _clean_optional_text(payload.memo),
+            "invite_code": invite_code,
+            STUDENT_PERSON_METADATA_KEY: person_id,
+        }
+        metadata = _set_tuition_metadata(
+            metadata,
+            guardian_name=payload.guardian_name,
+            guardian_phone=payload.guardian_phone,
+            enabled=payload.tuition_enabled,
+            cycle_sessions=payload.tuition_cycle_sessions,
+            amount=payload.tuition_amount,
+        )
+        membership = StudentAcademyMembership(
+            student_user_id=student_user_id,
+            academy_id=academy_id,
+            academy_seat_id=seat.id,
+            display_name_in_academy=name,
+            status=payload.status,
+            created_by=actor_id,
+            metadata_json=metadata,
+        )
+        db.add(membership)
+        db.flush()
+        seat.current_student_membership_id = membership.id
+        db.add(SeatAssignmentHistory(academy_seat_id=seat.id, academy_id=academy_id, student_user_id=student_user_id, membership_id=membership.id))
+        if class_row:
+            db.add(ClassStudent(class_id=class_row.id, student_membership_id=membership.id))
+        created.append((membership, seat, invite_code))
     db.commit()
+    membership, _, invite_code = created[0]
     data = _student_payload(db, academy_id, membership)
     data["invite_code"] = invite_code
+    data["invite_codes"] = [
+        entry
+        for entry in (
+            _invite_code_entry(db, created_membership, created_seat, created_code)
+            for created_membership, created_seat, created_code in created
+        )
+        if entry
+    ]
     return data
 
 
@@ -3285,24 +3584,22 @@ def create_student(payload: StudentPayload, request: Request, db: Session = Depe
 def ensure_student_invite_code(student_id: UUID, request: Request, db: Session = Depends(get_db)):
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
+    _normalize_legacy_student_keys(db, academy_id, visible_academy_ids, current_user_id(request))
     membership = _get_membership(db, academy_id, student_id, visible_academy_ids)
-    seat = db.scalar(
-        select(AcademySeat).where(
-            AcademySeat.academy_id.in_(list(visible_academy_ids)),
-            AcademySeat.id == membership.academy_seat_id,
-            AcademySeat.is_active.is_(True),
-        )
-    )
-    if not seat:
+    entries = [
+        entry
+        for entry in (_ensure_membership_invite_code(db, visible_academy_ids, row) for row in _related_student_key_memberships(db, visible_academy_ids, membership))
+        if entry
+    ]
+    if not entries:
         raise HTTPException(status_code=404, detail="Student key seat not found.")
-    metadata = dict(membership.metadata_json or {})
-    code = metadata.get("invite_code")
-    if not code or hash_invite_code(code) != seat.invite_code_hash:
-        code = rotate_seat_code(db, seat)
-        metadata["invite_code"] = code
-        membership.metadata_json = metadata
-        db.commit()
-    return {"invite_code": code, "invite_code_preview": seat.invite_code_preview}
+    db.commit()
+    first = entries[0]
+    return {
+        "invite_code": first.get("invite_code"),
+        "invite_code_preview": first.get("invite_code_preview"),
+        "invite_codes": entries,
+    }
 
 
 @router.get("/students/{student_id}")
@@ -3326,9 +3623,11 @@ def get_student(student_id: UUID, request: Request, db: Session = Depends(get_db
         data = {
             "id": str(membership.id),
             "student_user_id": membership.student_user_id,
+            "student_person_id": _student_person_id(membership),
             "academy_seat_id": str(membership.academy_seat_id),
             "invite_code": metadata.get("invite_code"),
             "invite_code_preview": None,
+            "invite_codes": [],
             "name": _student_name(membership),
             "grade_level": metadata.get("grade_level") or metadata.get("grade"),
             "school": metadata.get("school"),

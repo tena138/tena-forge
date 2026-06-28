@@ -49,7 +49,8 @@ def _is_admin_user(db: Session, user_id: str) -> bool:
 
 
 def requested_workspace_id(request: Request) -> str | None:
-    value = request.headers.get(WORKSPACE_HEADER) or request.headers.get("X-Tena-Workspace-Id")
+    headers = getattr(request, "headers", {}) or {}
+    value = headers.get(WORKSPACE_HEADER) or headers.get("X-Tena-Workspace-Id")
     clean = str(value or "").strip()
     if not clean or clean.lower() == "student":
         return None

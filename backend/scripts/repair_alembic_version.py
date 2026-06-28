@@ -64,6 +64,7 @@ CLASS_SCHEDULE_EVENT_REQUIRED_COLUMNS = {
 }
 ACADEMY_SEAT_REQUIRED_COLUMNS = {
     "class_id",
+    "invite_metadata",
 }
 ACADEMY_STUDENT_SUBSCRIPTION_REQUIRED_COLUMNS = {
     "purchased_staff_seats",
@@ -369,6 +370,11 @@ def _ensure_academy_seat_columns(connection, inspector) -> bool:
     if _add_column_if_missing(connection, inspector, "academy_seats", "class_id", class_id_definition):
         changed = True
         inspector = inspect(connection)
+    json_definition = "JSONB NOT NULL DEFAULT '{}'" if connection.dialect.name == "postgresql" else "JSON NOT NULL DEFAULT '{}'"
+    if _add_column_if_missing(connection, inspector, "academy_seats", "invite_metadata", json_definition):
+        changed = True
+        inspector = inspect(connection)
+    connection.execute(text("UPDATE academy_seats SET invite_metadata = '{}' WHERE invite_metadata IS NULL"))
     if "ix_academy_seats_class_id" not in _index_names(inspector, "academy_seats"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_academy_seats_class_id ON academy_seats (class_id)"))
         changed = True

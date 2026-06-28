@@ -33,10 +33,16 @@ from models import (
     WrongAnswerRecord,
 )
 from services.academy_student_access import (
+    academy_seat_key_status,
+    build_student_key_invite_message,
+    build_student_key_sms_url,
     can_student_access_academy,
     claim_invite_code,
+    create_student_key_app_notification,
     create_seat,
+    ensure_student_seat_capacity,
     get_academy_name,
+    normalize_invite_phone,
     release_seat,
     require_manage_seats,
     require_staff,
@@ -60,10 +66,20 @@ CHOICE_MAP = {
 }
 
 
+class StudentKeyRecipient(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    account_user_id: str | None = None
+    memo: str | None = None
+
+
 class StudentKeyCreate(BaseModel):
     count: int = Field(default=1, ge=1, le=200)
     display_name_prefix: str | None = None
     class_id: UUID | None = None
+    delivery_channel: str = Field(default="manual", pattern="^(manual|sms|student_app)$")
+    message_template: str | None = None
+    recipients: list[StudentKeyRecipient] = Field(default_factory=list, max_length=200)
 
 
 class AcademyKeyActivate(BaseModel):
@@ -1090,7 +1106,7 @@ def academy_students(academy_id: str, request: Request, db: Session = Depends(ge
                 **_serialize(membership),
                 "student_name": membership.display_name_in_academy or _student_name(db, membership.student_user_id),
                 "groups": [_serialize(group) for group in group_rows],
-                "key_status": "active" if seat and seat.is_active and seat.current_student_membership_id == membership.id else "inactive",
+                "key_status": academy_seat_key_status(db, seat) if seat else "revoked",
                 "recent_assignment_completion": int(recent_submissions),
                 "recent_correct_rate": correct / len(attempts) if attempts else None,
                 "unresolved_wrong_answer_count": int(unresolved),
@@ -1099,22 +1115,77 @@ def academy_students(academy_id: str, request: Request, db: Session = Depends(ge
     return rows
 
 
+def _student_key_recipients(payload: StudentKeyCreate) -> list[StudentKeyRecipient]:
+    if payload.recipients:
+        return payload.recipients
+    return [StudentKeyRecipient(name=(f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None)) for index in range(payload.count)]
+
+
+def _issue_student_key_seats(db: Session, academy_id: str, class_row: AcademyClass, payload: StudentKeyCreate) -> list[dict]:
+    recipients = _student_key_recipients(payload)
+    ensure_student_seat_capacity(db, academy_id, len(recipients))
+    academy_name = get_academy_name(db, academy_id)
+    created: list[dict] = []
+    for index, recipient in enumerate(recipients):
+        recipient_name = (recipient.name or "").strip() or None
+        recipient_phone = normalize_invite_phone(recipient.phone)
+        account_user_id = (recipient.account_user_id or "").strip() or None
+        if payload.delivery_channel == "sms" and not recipient_phone:
+            raise HTTPException(status_code=422, detail={"code": "RECIPIENT_PHONE_REQUIRED", "message": f"{index + 1}번째 학생의 SMS 연락처가 필요합니다."})
+        if payload.delivery_channel == "student_app" and not account_user_id:
+            raise HTTPException(status_code=422, detail={"code": "RECIPIENT_ACCOUNT_REQUIRED", "message": f"{index + 1}번째 학생의 Tena 계정 ID가 필요합니다."})
+
+        display_name = recipient_name or recipient_phone or (f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None)
+        seat, code = create_seat(db, academy_id, display_name, class_id=class_row.id)
+        message_body = build_student_key_invite_message(academy_name, class_row.name, code, payload.message_template)
+        sms_url = build_student_key_sms_url(recipient_phone, message_body) if payload.delivery_channel == "sms" and recipient_phone else None
+        notification_id = None
+        delivery_status = "manual_copy_ready"
+        if payload.delivery_channel == "sms":
+            delivery_status = "sms_link_ready"
+        elif payload.delivery_channel == "student_app" and account_user_id:
+            notification = create_student_key_app_notification(db, account_user_id, academy_id, academy_name, class_row.name, seat.id)
+            notification_id = str(notification.id)
+            delivery_status = "app_notification_created"
+
+        seat.invite_metadata = {
+            "source": "bulk_student_key_invite" if payload.recipients else "single_student_key_invite",
+            "channel": payload.delivery_channel,
+            "recipient_name": recipient_name,
+            "recipient_phone": recipient_phone,
+            "recipient_account_user_id": account_user_id,
+            "recipient_memo": (recipient.memo or "").strip() or None,
+            "message_body": message_body,
+            "sms_url": sms_url,
+            "notification_id": notification_id,
+            "delivery_status": delivery_status,
+            "prepared_at": datetime.utcnow().isoformat(),
+        }
+        created.append(
+            {
+                **_serialize(seat),
+                "class_name": class_row.name,
+                "key_code": code,
+                "status": "unused",
+                "key_status": academy_seat_key_status(db, seat),
+                "message_body": message_body,
+                "sms_url": sms_url,
+                "notification_id": notification_id,
+                "delivery_status": delivery_status,
+            }
+        )
+    return created
+
+
 @router.post("/academy/{academy_id}/student-keys")
 def issue_student_keys(academy_id: str, payload: StudentKeyCreate, request: Request, db: Session = Depends(get_db)):
     actor = require_manage_seats(db, request, academy_id)
-    class_id = None
-    class_name = None
-    if payload.class_id:
-        class_row = db.scalar(select(AcademyClass).where(AcademyClass.id == payload.class_id, AcademyClass.academy_id == academy_id, AcademyClass.is_active.is_(True)))
-        if not class_row:
-            raise HTTPException(status_code=404, detail="Class not found.")
-        class_id = class_row.id
-        class_name = class_row.name
-    created = []
-    for index in range(payload.count):
-        display = f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None
-        seat, code = create_seat(db, academy_id, display, class_id=class_id)
-        created.append({**_serialize(seat), "class_name": class_name, "key_code": code, "status": "unused"})
+    if not payload.class_id:
+        raise HTTPException(status_code=422, detail={"code": "CLASS_REQUIRED", "message": "학생 앱용 키는 반드시 클래스를 선택해서 발급해야 합니다."})
+    class_row = db.scalar(select(AcademyClass).where(AcademyClass.id == payload.class_id, AcademyClass.academy_id == academy_id, AcademyClass.is_active.is_(True)))
+    if not class_row:
+        raise HTTPException(status_code=404, detail="Class not found.")
+    created = _issue_student_key_seats(db, academy_id, class_row, payload)
     db.commit()
     return {"created_by": actor, "keys": created}
 

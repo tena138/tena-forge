@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Check, ClipboardCheck, Clock, Loader2, Plus, RotateCcw, Trash2, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, ClipboardCheck, Clock, KeyRound, Loader2, Plus, RotateCcw, Trash2, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,24 @@ function dateLabel(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }, value || "-");
+}
+
+function isPendingKeyCard(student: ClassCard["students"][number]) {
+  return student.card_type === "pending_key" || student.status === "pending_key";
+}
+
+function studentKeyLabel(student: ClassCard["students"][number]) {
+  const key = student.invite_codes?.[0];
+  if (key?.invite_code) return key.invite_code;
+  if (key?.invite_code_preview) return `****${key.invite_code_preview}`;
+  return student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "-");
+}
+
+function deliveryStatusLabel(status?: string | null) {
+  if (status === "sms_link_ready") return "SMS 준비";
+  if (status === "app_notification_created") return "앱 초대 생성";
+  if (status === "claimed") return "등록 완료";
+  return "키 대기";
 }
 
 function composeScheduleDescription(lessonPlan: string, assignmentNote: string) {
@@ -86,7 +104,9 @@ export default function StudentManagementClassPage({ params }: { params: Promise
   const selectedEvent = events.find((event) => event.id === selectedEventId) || events[0] || null;
   const selectedWeekdays = recurrenceWeekdays.length ? recurrenceWeekdays : [defaultWeekdayFromDateTime(scheduleForm.starts_at)];
   const selectedMonthDay = Number(recurrenceMonthDay) || defaultMonthDayFromDateTime(scheduleForm.starts_at);
-  const classStudents = data?.students || [];
+  const classStudentCards = data?.students || [];
+  const classStudents = classStudentCards.filter((student) => !isPendingKeyCard(student));
+  const pendingKeyCount = classStudentCards.length - classStudents.length;
   const paperSessions = data?.paper_sessions || [];
   const scoredStudentCount = classStudents.filter((student) => typeof student.recent_score === "number").length;
   const studentWrongTotal = classStudents.reduce((total, student) => total + student.unresolved_wrong_count, 0);
@@ -288,34 +308,53 @@ export default function StudentManagementClassPage({ params }: { params: Promise
               <section className="min-w-0 rounded-[10px] bg-white">
                 <div className="flex items-center justify-between px-4 py-3">
                   <h2 className="flex items-center gap-2 text-sm font-black text-zinc-950"><Users className="h-4 w-4" />학생</h2>
-                  <span className="text-xs font-semibold text-zinc-500">{classStudents.length}명</span>
+                  <span className="text-xs font-semibold text-zinc-500">
+                    {classStudents.length}명{pendingKeyCount ? ` · 대기 키 ${pendingKeyCount}개` : ""}
+                  </span>
                 </div>
                 <div className="grid gap-2 p-3 md:grid-cols-2">
-                  {classStudents.map((student) => (
-                    <Link
-                      key={student.id}
-                      href={`/student-management/students/${student.id}`}
-                      className="min-w-0 rounded-[8px] bg-zinc-100 p-3 transition hover:bg-zinc-200"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-black text-zinc-950">{student.name}</p>
-                          <p className="mt-1 truncate text-xs text-zinc-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
+                  {classStudentCards.map((student) =>
+                    isPendingKeyCard(student) ? (
+                      <article key={student.id} className="min-w-0 rounded-[8px] border border-dashed border-zinc-300 bg-zinc-50 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-zinc-700 ring-1 ring-zinc-200">
+                            <KeyRound className="h-4 w-4" />
+                          </div>
+                          <Badge className="rounded-md bg-zinc-900 text-white hover:bg-zinc-900">{deliveryStatusLabel(student.delivery_status)}</Badge>
                         </div>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-[7px] bg-white px-2 py-2">
-                          <p className="text-zinc-500">최근</p>
-                          <p className="mt-1 font-bold text-zinc-950">{student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
+                        <p className="mt-3 truncate text-sm font-black text-zinc-950">{student.name}</p>
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">학생이 Tena Note에서 학원 키를 등록하면 이 카드가 실제 학생 정보로 채워집니다.</p>
+                        <div className="mt-3 rounded-[7px] bg-white px-2 py-2 text-xs font-bold text-zinc-700 ring-1 ring-zinc-200">
+                          <span className="text-zinc-500">Key </span>
+                          <span className="font-mono">{studentKeyLabel(student)}</span>
                         </div>
-                        <div className="rounded-[7px] bg-white px-2 py-2">
-                          <p className="text-zinc-500">오답</p>
-                          <p className="mt-1 font-bold text-zinc-950">{student.unresolved_wrong_count}</p>
+                      </article>
+                    ) : (
+                      <Link
+                        key={student.id}
+                        href={`/student-management/students/${student.id}`}
+                        className="min-w-0 rounded-[8px] bg-zinc-100 p-3 transition hover:bg-zinc-200"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-zinc-950">{student.name}</p>
+                            <p className="mt-1 truncate text-xs text-zinc-500">{[student.school, student.grade_level].filter(Boolean).join(" · ") || "학생 정보 없음"}</p>
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                  ))}
-                  {!classStudents.length ? (
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-[7px] bg-white px-2 py-2">
+                            <p className="text-zinc-500">최근</p>
+                            <p className="mt-1 font-bold text-zinc-950">{student.recent_score == null ? "-" : `${Math.round(student.recent_score)}점`}</p>
+                          </div>
+                          <div className="rounded-[7px] bg-white px-2 py-2">
+                            <p className="text-zinc-500">오답</p>
+                            <p className="mt-1 font-bold text-zinc-950">{student.unresolved_wrong_count}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  )}
+                  {!classStudentCards.length ? (
                     <p className="rounded-[8px] bg-zinc-100 p-6 text-center text-sm text-zinc-500 md:col-span-2">아직 이 클래스에 연결된 학생이 없습니다.</p>
                   ) : null}
                 </div>

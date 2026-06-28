@@ -52,8 +52,18 @@ allowed_origins = _origin_values(
     "https://tena-forge-frontend.onrender.com",
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:53100",
+    "http://localhost:53101",
+    "http://localhost:53102",
+    "http://localhost:53103",
+    "http://localhost:53104",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
+    "http://127.0.0.1:53100",
+    "http://127.0.0.1:53101",
+    "http://127.0.0.1:53102",
+    "http://127.0.0.1:53103",
+    "http://127.0.0.1:53104",
 )
 
 
@@ -435,6 +445,9 @@ def _ensure_sqlite_columns():
         "class_schedule_events": {
             "counts_for_tuition": "BOOLEAN DEFAULT 1 NOT NULL",
             "metadata": "JSON DEFAULT '{}' NOT NULL",
+        },
+        "academy_seats": {
+            "invite_metadata": "JSON DEFAULT '{}' NOT NULL",
         },
         "academy_student_subscriptions": {
             "purchased_staff_seats": "INTEGER DEFAULT 0 NOT NULL",

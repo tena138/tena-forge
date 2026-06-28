@@ -1,6 +1,8 @@
 import hashlib
 import secrets
+import uuid
 from datetime import date, datetime, timedelta
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -17,10 +19,14 @@ from models import (
     AcademyStudentPlan,
     AcademyStudentSubscription,
     AuditLog,
+    ArchiveAccessGrant,
     ClassStudent,
     ClassTeacher,
     DailyStudentQuotaUsage,
+    LearningAssignmentTarget,
+    LearningSubmission,
     PaperSessionResult,
+    ProblemAttempt,
     ProblemResult,
     SeatAssignmentHistory,
     StudentAcademyMembership,
@@ -34,6 +40,25 @@ BASE_STUDENT_QUOTA = {"upload": 5, "extraction": 5, "export": 5}
 ACADEMY_OWNER_ROLES = {"owner", "admin"}
 STAFF_ROLES = {"owner", "admin", "teacher", "assistant"}
 SYSTEM_STUDENT_PLAN_CODES = {"free", "basic", "pro", "enterprise", "tutor"}
+STUDENT_PROFILE_COLLECTION_METADATA_KEY = "student_profile_collection"
+STUDENT_PROFILE_FIELD_KEYS = {
+    "name",
+    "school",
+    "grade_level",
+    "student_phone",
+    "guardian_name",
+    "guardian_phone",
+    "birthdate",
+}
+DEFAULT_STUDENT_PROFILE_FIELDS = [
+    {"key": "name", "label": "학생 실명", "enabled": True, "required": False, "real_name": True},
+    {"key": "school", "label": "학교", "enabled": True, "required": False, "real_name": False},
+    {"key": "grade_level", "label": "학년", "enabled": True, "required": False, "real_name": False},
+    {"key": "student_phone", "label": "학생 연락처", "enabled": False, "required": False, "real_name": False},
+    {"key": "guardian_name", "label": "보호자 이름", "enabled": False, "required": False, "real_name": True},
+    {"key": "guardian_phone", "label": "보호자 연락처", "enabled": False, "required": False, "real_name": False},
+    {"key": "birthdate", "label": "생년월일", "enabled": False, "required": False, "real_name": False},
+]
 ACADEMY_PLAN_TO_STUDENT_PLAN = {
     "free": "free",
     "basic": "basic",
@@ -50,6 +75,92 @@ def generate_invite_code() -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     chunks = ["".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3)]
     return "-".join(chunks)
+
+
+def _clean_student_profile_value(value) -> str:
+    return str(value or "").strip()[:160]
+
+
+def normalize_student_profile_collection(value: dict | None = None) -> dict:
+    source = value if isinstance(value, dict) else {}
+    source_fields = source.get("fields") if isinstance(source.get("fields"), list) else []
+    by_key = {str(item.get("key")): item for item in source_fields if isinstance(item, dict) and item.get("key") in STUDENT_PROFILE_FIELD_KEYS}
+    fields = []
+    for default in DEFAULT_STUDENT_PROFILE_FIELDS:
+        override = by_key.get(default["key"], {})
+        enabled = bool(override.get("enabled", default["enabled"]))
+        required = bool(override.get("required", default["required"])) and enabled
+        fields.append(
+            {
+                "key": default["key"],
+                "label": default["label"],
+                "enabled": enabled,
+                "required": required,
+                "real_name": bool(override.get("real_name", default["real_name"])) and enabled,
+            }
+        )
+    return {"fields": fields}
+
+
+def student_profile_collection_settings(db: Session, academy_id: str) -> dict:
+    subscription = ensure_academy_subscription(db, academy_id)
+    metadata = dict(subscription.billing_metadata or {})
+    return normalize_student_profile_collection(metadata.get(STUDENT_PROFILE_COLLECTION_METADATA_KEY))
+
+
+def save_student_profile_collection_settings(db: Session, academy_id: str, settings: dict) -> dict:
+    subscription = ensure_academy_subscription(db, academy_id)
+    normalized = normalize_student_profile_collection(settings)
+    metadata = dict(subscription.billing_metadata or {})
+    metadata[STUDENT_PROFILE_COLLECTION_METADATA_KEY] = normalized
+    subscription.billing_metadata = metadata
+    subscription.updated_at = datetime.utcnow()
+    return normalized
+
+
+def normalize_student_profile_values(values: dict | None) -> dict[str, str]:
+    source = values if isinstance(values, dict) else {}
+    return {
+        key: cleaned
+        for key in STUDENT_PROFILE_FIELD_KEYS
+        if (cleaned := _clean_student_profile_value(source.get(key)))
+    }
+
+
+def validate_student_profile_values(settings: dict, values: dict | None) -> dict[str, str]:
+    normalized = normalize_student_profile_values(values)
+    missing = [
+        field
+        for field in normalize_student_profile_collection(settings)["fields"]
+        if field["enabled"] and field["required"] and not normalized.get(field["key"])
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "STUDENT_PROFILE_REQUIRED",
+                "message": "학원에서 요구한 학생 정보를 입력해야 합니다.",
+                "missing_fields": [field["key"] for field in missing],
+                "fields": missing,
+            },
+        )
+    return normalized
+
+
+def apply_student_profile_values(membership: StudentAcademyMembership, values: dict[str, str]) -> None:
+    if not values:
+        return
+    metadata = dict(membership.metadata_json or {})
+    student_profile = dict(metadata.get("student_profile") or {})
+    student_profile.update(values)
+    metadata["student_profile"] = student_profile
+    for key in ("name", "school", "grade_level", "guardian_name", "guardian_phone"):
+        if values.get(key):
+            metadata[key] = values[key]
+    if values.get("name"):
+        metadata["display_name"] = values["name"]
+        membership.display_name_in_academy = values["name"]
+    membership.metadata_json = metadata
 
 
 def _admin_email_set() -> set[str]:
@@ -153,6 +264,84 @@ def get_academy_name(db: Session, academy_id: str) -> str:
         return "Academy"
 
 
+def normalize_invite_phone(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = "".join(ch for ch in str(value).strip() if ch.isdigit() or ch == "+")
+    return cleaned or None
+
+
+def academy_student_seat_capacity(db: Session, academy_id: str) -> dict:
+    subscription = ensure_academy_subscription(db, academy_id)
+    plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == subscription.plan_code))
+    active_seats = db.scalar(select(func.count(AcademySeat.id)).where(AcademySeat.academy_id == academy_id, AcademySeat.is_active.is_(True))) or 0
+    entitled = (plan.included_seats if plan else 0) + int(subscription.purchased_additional_seats or 0)
+    unlimited = has_unlimited_seats(db, academy_id) or subscription.overage_policy != "BLOCK_AT_LIMIT"
+    return {
+        "plan_code": subscription.plan_code,
+        "active_seats": int(active_seats),
+        "entitled_seats": int(entitled),
+        "remaining_seats": None if unlimited else max(int(entitled) - int(active_seats), 0),
+        "unlimited": unlimited,
+        "overage_policy": subscription.overage_policy,
+    }
+
+
+def ensure_student_seat_capacity(db: Session, academy_id: str, requested_count: int) -> dict:
+    capacity = academy_student_seat_capacity(db, academy_id)
+    remaining = capacity["remaining_seats"]
+    if remaining is not None and requested_count > remaining:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "SEAT_LIMIT_EXCEEDED",
+                "message": f"학생 키 {requested_count}개를 만들 수 없습니다. 남은 좌석은 {remaining}개입니다.",
+                "remaining_seats": remaining,
+                "requested_count": requested_count,
+            },
+        )
+    return capacity
+
+
+def build_student_key_invite_message(
+    academy_name: str,
+    class_name: str | None,
+    key_code: str,
+    template: str | None = None,
+) -> str:
+    base = template or "{academy_name} {class_name} 클래스 초대 키입니다.\nTena Note에서 학원 키 추가하기에 입력하세요: {key_code}"
+    return (
+        base.replace("{academy_name}", academy_name or "Tena Forge")
+        .replace("{class_name}", class_name or "클래스")
+        .replace("{key_code}", key_code)
+    )
+
+
+def build_student_key_sms_url(phone: str, message_body: str) -> str:
+    return f"sms:{phone}?body={quote(message_body)}"
+
+
+def create_student_key_app_notification(
+    db: Session,
+    student_user_id: str,
+    academy_id: str,
+    academy_name: str,
+    class_name: str | None,
+    seat_id: UUID,
+) -> StudentNotification:
+    row = StudentNotification(
+        student_user_id=student_user_id,
+        academy_id=academy_id,
+        notification_type="academy_key_invite",
+        title=f"{academy_name} 학원 초대",
+        body=f"{class_name or '클래스'} 초대가 도착했습니다. Tena Note에서 수락해 주세요.",
+        metadata_json={"academy_seat_id": str(seat_id), "class_name": class_name},
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
 def staff_role(db: Session, user_id: str, academy_id: str) -> str | None:
     if user_id == academy_id:
         return "owner"
@@ -217,7 +406,13 @@ def teacher_can_access_class(db: Session, user_id: str, academy_id: str, class_i
     return False
 
 
-def create_seat(db: Session, academy_id: str, display_name: str | None = None, class_id: UUID | None = None) -> tuple[AcademySeat, str]:
+def create_seat(
+    db: Session,
+    academy_id: str,
+    display_name: str | None = None,
+    class_id: UUID | None = None,
+    invite_metadata: dict | None = None,
+) -> tuple[AcademySeat, str]:
     subscription = ensure_academy_subscription(db, academy_id)
     plan = db.scalar(select(AcademyStudentPlan).where(AcademyStudentPlan.code == subscription.plan_code))
     entitled = (plan.included_seats if plan else 0) + subscription.purchased_additional_seats
@@ -230,6 +425,7 @@ def create_seat(db: Session, academy_id: str, display_name: str | None = None, c
         class_id=class_id,
         seat_number=f"S-{active_seats + 1:03d}",
         display_name=display_name,
+        invite_metadata=invite_metadata or {},
         invite_code_hash=hash_invite_code(code),
         invite_code_preview=code[-4:],
         last_rotated_at=datetime.utcnow(),
@@ -237,6 +433,114 @@ def create_seat(db: Session, academy_id: str, display_name: str | None = None, c
     db.add(seat)
     db.flush()
     return seat, code
+
+
+def is_unlinked_academy_student(membership: StudentAcademyMembership | None) -> bool:
+    if not membership:
+        return False
+    return str(membership.student_user_id or "").startswith(("manual-", "pending-"))
+
+
+def create_unlinked_academy_student_for_seat(
+    db: Session,
+    seat: AcademySeat,
+    *,
+    class_id: UUID | None = None,
+    display_name: str | None = None,
+    actor_id: str | None = None,
+) -> StudentAcademyMembership:
+    existing = db.get(StudentAcademyMembership, seat.current_student_membership_id) if seat.current_student_membership_id else None
+    if existing:
+        return existing
+
+    invitation = dict(seat.invite_metadata or {})
+    profile: dict[str, str] = {}
+    metadata: dict = {
+        "seat_invitation": invitation,
+        "student_profile": profile,
+        "invite_code_preview": seat.invite_code_preview,
+        "invite_status": "pending",
+    }
+    recipient_name = str(invitation.get("recipient_name") or display_name or seat.display_name or "").strip()
+    recipient_phone = normalize_invite_phone(invitation.get("recipient_phone"))
+    if recipient_name:
+        profile["name"] = recipient_name
+        metadata["name"] = recipient_name
+        metadata["display_name"] = recipient_name
+    if recipient_phone:
+        profile["guardian_phone"] = recipient_phone
+        metadata["guardian_phone"] = recipient_phone
+
+    membership = StudentAcademyMembership(
+        student_user_id=f"manual-{uuid.uuid4().hex[:24]}",
+        academy_id=seat.academy_id,
+        academy_seat_id=seat.id,
+        display_name_in_academy=recipient_name or display_name or seat.display_name,
+        status="active",
+        created_by=actor_id,
+        metadata_json=metadata,
+    )
+    db.add(membership)
+    db.flush()
+    seat.current_student_membership_id = membership.id
+    seat.updated_at = datetime.utcnow()
+
+    if class_id:
+        link = db.scalar(
+            select(ClassStudent).where(
+                ClassStudent.class_id == class_id,
+                ClassStudent.student_membership_id == membership.id,
+                ClassStudent.left_at.is_(None),
+            )
+        )
+        if not link:
+            db.add(ClassStudent(class_id=class_id, student_membership_id=membership.id))
+
+    db.add(
+        SeatAssignmentHistory(
+            academy_seat_id=seat.id,
+            academy_id=seat.academy_id,
+            student_user_id=membership.student_user_id,
+            membership_id=membership.id,
+        )
+    )
+    return membership
+
+
+def academy_seat_key_status(db: Session, seat: AcademySeat) -> str:
+    if not seat.is_active:
+        return "revoked"
+    if not seat.class_id:
+        return "legacy_unassigned"
+    membership = db.get(StudentAcademyMembership, seat.current_student_membership_id) if seat.current_student_membership_id else None
+    if membership and membership.status == "active":
+        if is_unlinked_academy_student(membership):
+            return "unclaimed"
+        return "claimed"
+    return "unclaimed"
+
+
+def student_has_active_class(db: Session, student_id: str, academy_id: str, class_id: UUID) -> bool:
+    membership_ids = list(
+        db.scalars(
+            select(StudentAcademyMembership.id).where(
+                StudentAcademyMembership.student_user_id == student_id,
+                StudentAcademyMembership.academy_id == academy_id,
+                StudentAcademyMembership.status == "active",
+            )
+        )
+    )
+    if not membership_ids:
+        return False
+    return bool(
+        db.scalar(
+            select(ClassStudent.id).where(
+                ClassStudent.class_id == class_id,
+                ClassStudent.left_at.is_(None),
+                ClassStudent.student_membership_id.in_(membership_ids),
+            )
+        )
+    )
 
 
 def rotate_seat_code(db: Session, seat: AcademySeat) -> str:
@@ -248,20 +552,54 @@ def rotate_seat_code(db: Session, seat: AcademySeat) -> str:
     return code
 
 
+def apply_seat_invitation_to_membership(membership: StudentAcademyMembership, seat: AcademySeat) -> None:
+    invitation = dict(seat.invite_metadata or {})
+    if not invitation:
+        return
+    metadata = dict(membership.metadata_json or {})
+    metadata["seat_invitation"] = invitation
+    student_profile = dict(metadata.get("student_profile") or {})
+    recipient_name = str(invitation.get("recipient_name") or "").strip()
+    recipient_phone = normalize_invite_phone(invitation.get("recipient_phone"))
+    if recipient_name:
+        student_profile.setdefault("name", recipient_name)
+        metadata.setdefault("name", recipient_name)
+        metadata.setdefault("display_name", recipient_name)
+        if not membership.display_name_in_academy:
+            membership.display_name_in_academy = recipient_name
+    if recipient_phone:
+        student_profile.setdefault("guardian_phone", recipient_phone)
+        metadata.setdefault("guardian_phone", recipient_phone)
+    metadata["student_profile"] = student_profile
+    metadata["invite_status"] = "claimed"
+    membership.metadata_json = metadata
+
+    invitation["claimed_at"] = datetime.utcnow().isoformat()
+    invitation["delivery_status"] = "claimed"
+    seat.invite_metadata = invitation
+    seat.updated_at = datetime.utcnow()
+
+
 def claim_invite_code(db: Session, request: Request, code: str) -> StudentAcademyMembership:
     student_id = current_owner_id(request)
-    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(code), AcademySeat.is_active.is_(True)))
+    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(code)).with_for_update())
     if not seat:
-        raise HTTPException(status_code=404, detail="Invalid or inactive academy key.")
+        raise HTTPException(status_code=404, detail={"code": "KEY_NOT_FOUND", "message": "존재하지 않는 학원 키입니다."})
+    if not seat.is_active:
+        raise HTTPException(status_code=410, detail={"code": "KEY_INACTIVE", "message": "비활성화되었거나 해제된 학원 키입니다."})
+    if not seat.class_id:
+        raise HTTPException(status_code=422, detail={"code": "KEY_MISSING_CLASS", "message": "클래스가 배정되지 않은 학원 키입니다. 학원에서 클래스 키를 다시 발급해야 합니다."})
     if seat.current_student_membership_id:
         assigned = db.get(StudentAcademyMembership, seat.current_student_membership_id)
         if assigned and assigned.status == "active":
-            if assigned.student_user_id == student_id:
-                return assigned
-            if str(assigned.student_user_id).startswith("manual-"):
+            if is_unlinked_academy_student(assigned):
+                if student_has_active_class(db, student_id, seat.academy_id, seat.class_id):
+                    raise HTTPException(status_code=409, detail={"code": "CLASS_ALREADY_CONNECTED", "message": "이미 이 클래스가 계정에 연결되어 있습니다."})
                 previous_student_id = assigned.student_user_id
                 assigned.student_user_id = student_id
                 assigned.claimed_by = student_id
+                assigned.status = "active"
+                apply_seat_invitation_to_membership(assigned, seat)
                 if seat.class_id:
                     existing_link = db.scalar(
                         select(ClassStudent).where(
@@ -279,6 +617,26 @@ def claim_invite_code(db: Session, request: Request, code: str) -> StudentAcadem
                     .values(student_id=student_id, updated_at=datetime.utcnow())
                 )
                 db.execute(
+                    update(ArchiveAccessGrant)
+                    .where(ArchiveAccessGrant.academy_id == seat.academy_id, ArchiveAccessGrant.student_id == previous_student_id)
+                    .values(student_id=student_id, updated_at=datetime.utcnow())
+                )
+                db.execute(
+                    update(LearningAssignmentTarget)
+                    .where(LearningAssignmentTarget.academy_id == seat.academy_id, LearningAssignmentTarget.student_id == previous_student_id)
+                    .values(student_id=student_id)
+                )
+                db.execute(
+                    update(LearningSubmission)
+                    .where(LearningSubmission.academy_id == seat.academy_id, LearningSubmission.student_id == previous_student_id)
+                    .values(student_id=student_id, updated_at=datetime.utcnow())
+                )
+                db.execute(
+                    update(ProblemAttempt)
+                    .where(ProblemAttempt.academy_id == seat.academy_id, ProblemAttempt.student_id == previous_student_id)
+                    .values(student_id=student_id)
+                )
+                db.execute(
                     update(ProblemResult)
                     .where(ProblemResult.academy_id == seat.academy_id, ProblemResult.student_membership_id == assigned.id)
                     .values(student_user_id=student_id, updated_at=datetime.utcnow())
@@ -290,35 +648,16 @@ def claim_invite_code(db: Session, request: Request, code: str) -> StudentAcadem
                 )
                 audit(db, request, student_id, "student.academy_key_claimed", "academy_seat", str(seat.id), {"academy_id": seat.academy_id, "manual_membership": True})
                 return assigned
-            raise HTTPException(status_code=409, detail="This academy key is already assigned to another student.")
-    existing_same = list(
-        db.scalars(
-            select(StudentAcademyMembership).where(
-                StudentAcademyMembership.student_user_id == student_id,
-                StudentAcademyMembership.academy_id == seat.academy_id,
-                StudentAcademyMembership.status == "active",
-            )
-        )
-    )
-    if seat.class_id:
-        already_in_class = db.scalar(
-            select(ClassStudent)
-            .where(
-                ClassStudent.class_id == seat.class_id,
-                ClassStudent.left_at.is_(None),
-                ClassStudent.student_membership_id.in_([membership.id for membership in existing_same] or [UUID(int=0)]),
-            )
-        )
-        if already_in_class:
-            raise HTTPException(status_code=409, detail="This class is already connected to your account.")
-    elif existing_same:
-        raise HTTPException(status_code=409, detail="This academy is already connected to your account.")
+            raise HTTPException(status_code=409, detail={"code": "KEY_ALREADY_CLAIMED", "message": "이미 다른 학생 계정에 연결된 학원 키입니다."})
+    if student_has_active_class(db, student_id, seat.academy_id, seat.class_id):
+        raise HTTPException(status_code=409, detail={"code": "CLASS_ALREADY_CONNECTED", "message": "이미 이 클래스가 계정에 연결되어 있습니다."})
     membership = StudentAcademyMembership(
         student_user_id=student_id,
         academy_id=seat.academy_id,
         academy_seat_id=seat.id,
         claimed_by=student_id,
     )
+    apply_seat_invitation_to_membership(membership, seat)
     db.add(membership)
     db.flush()
     seat.current_student_membership_id = membership.id

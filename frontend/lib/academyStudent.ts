@@ -11,9 +11,38 @@ export type AcademySeat = {
   current_student_membership_id: string | null;
   is_active: boolean;
   assigned: boolean;
+  key_status: "unclaimed" | "claimed" | "revoked" | "legacy_unassigned" | string;
   assigned_student_user_id: string | null;
   assigned_membership_id: string | null;
   invite_code?: string | null;
+  key_code?: string | null;
+  invite_metadata?: StudentKeyInviteMetadata | null;
+  message_body?: string | null;
+  sms_url?: string | null;
+  notification_id?: string | null;
+  delivery_status?: string | null;
+};
+
+export type StudentKeyInviteMetadata = {
+  source?: string | null;
+  channel?: "manual" | "sms" | "student_app" | string | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  recipient_account_user_id?: string | null;
+  recipient_memo?: string | null;
+  message_body?: string | null;
+  sms_url?: string | null;
+  notification_id?: string | null;
+  delivery_status?: string | null;
+  prepared_at?: string | null;
+  claimed_at?: string | null;
+};
+
+export type StudentKeyRecipient = {
+  name?: string | null;
+  phone?: string | null;
+  account_user_id?: string | null;
+  memo?: string | null;
 };
 
 export type StudentMembership = {
@@ -115,11 +144,16 @@ export function listAcademySeats(academyId: string) {
   return api<AcademySeat[]>(`/api/academy/${academyId}/seats`);
 }
 
-export function createAcademySeats(academyId: string, count = 1, classId?: string) {
+export function createAcademySeats(
+  academyId: string,
+  count = 1,
+  classId?: string,
+  options: { delivery_channel?: "manual" | "sms" | "student_app"; recipients?: StudentKeyRecipient[]; message_template?: string | null } = {}
+) {
   return api<AcademySeat[]>(`/api/academy/${academyId}/seats`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ count, class_id: classId || null }),
+    body: JSON.stringify({ count, class_id: classId || null, ...options }),
   });
 }
 
@@ -517,7 +551,17 @@ export function listAcademyLearningStudents(academyId: string) {
   return api<AcademyLearningStudent[]>(`/api/learning/academy/${academyId}/students`);
 }
 
-export function issueLearningStudentKeys(academyId: string, payload: { count: number; display_name_prefix?: string; class_id?: string | null }) {
+export function issueLearningStudentKeys(
+  academyId: string,
+  payload: {
+    count: number;
+    display_name_prefix?: string;
+    class_id?: string | null;
+    delivery_channel?: "manual" | "sms" | "student_app";
+    message_template?: string | null;
+    recipients?: StudentKeyRecipient[];
+  }
+) {
   return api<{ created_by: string; keys: Array<AcademySeat & { key_code: string; status: string }> }>(`/api/learning/academy/${academyId}/student-keys`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

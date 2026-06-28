@@ -1167,6 +1167,7 @@ class AcademySeat(Base):
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     invite_code_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     invite_code_preview: Mapped[str] = mapped_column(String(12), nullable=False)
+    invite_metadata: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict, nullable=False)
     current_student_membership_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
