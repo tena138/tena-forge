@@ -40,6 +40,8 @@ dependencies:
   intl: ^0.20.2
   provider: ^6.1.5+1
   table_calendar: ^3.2.0
+  url_launcher: ^6.3.2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +64,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/tenaforge-mark-dark.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

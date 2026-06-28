@@ -22,26 +22,32 @@ class AssignmentsScreen extends StatelessWidget {
           ListItemCard(
             title: assignment.title,
             subtitle: assignment.dueAt == null
-                ? [assignment.description, assignment.materialScope].whereType<String>().join(' · ')
+                ? [
+                    assignment.description,
+                    assignment.materialScope,
+                  ].whereType<String>().join(' · ')
                 : '마감 ${assignment.dueAt!.toLocal()}',
             badge: assignment.badgeLabel,
             trailing: Icon(
               assignment.isCompleted
                   ? Icons.check_circle
                   : assignment.isAwaitingTeacherConfirmation
-                      ? Icons.pending_actions
-                      : Icons.chevron_right,
+                  ? Icons.pending_actions
+                  : Icons.chevron_right,
               color: assignment.isCompleted
                   ? AppColors.success
                   : assignment.isAwaitingTeacherConfirmation
-                      ? AppColors.warning
-                      : AppColors.muted,
+                  ? AppColors.warning
+                  : AppColors.muted,
             ),
             onTap: () => context.push('/assignment/${assignment.id}'),
           ),
-        if (assignments.isEmpty) const EmptyState(title: '과제가 없습니다', body: '학원 키를 등록하면 학원별 과제가 여기에 표시됩니다.'),
+        if (assignments.isEmpty)
+          const EmptyState(
+            title: '과제가 없습니다',
+            body: '학원 초대 링크나 앱 알림을 수락하면 연결된 학원의 과제가 여기에 표시됩니다.',
+          ),
       ],
     );
   }
 }
-

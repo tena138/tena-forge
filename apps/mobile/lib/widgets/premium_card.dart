@@ -24,9 +24,13 @@ class PremiumCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.panel,
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: const [
-          BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 16)),
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
         ],
       ),
       child: Padding(
@@ -43,10 +47,25 @@ class PremiumCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (eyebrow != null)
-                          Text(eyebrow!, style: const TextStyle(color: AppColors.violet, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: .4)),
+                          Text(
+                            eyebrow!,
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: .4,
+                            ),
+                          ),
                         if (title != null) ...[
                           if (eyebrow != null) const SizedBox(height: 5),
-                          Text(title!, style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
+                          Text(
+                            title!,
+                            style: const TextStyle(
+                              color: AppColors.text,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ],
                       ],
                     ),
@@ -54,7 +73,8 @@ class PremiumCard extends StatelessWidget {
                   ?trailing,
                 ],
               ),
-            if (eyebrow != null || title != null || trailing != null) const SizedBox(height: 14),
+            if (eyebrow != null || title != null || trailing != null)
+              const SizedBox(height: 14),
             child,
           ],
         ),

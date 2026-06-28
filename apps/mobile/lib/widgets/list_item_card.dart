@@ -21,14 +21,14 @@ class ListItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Ink(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: const Color(0x0DFFFFFF),
+          color: AppColors.panelSoft,
           border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
@@ -38,33 +38,53 @@ class ListItemCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
                       if (badge != null)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.cyan.withValues(alpha: .12),
                             borderRadius: BorderRadius.circular(999),
                           ),
-                          child: Text(badge!, style: const TextStyle(color: AppColors.cyan, fontSize: 11, fontWeight: FontWeight.w900)),
+                          child: Text(
+                            badge!,
+                            style: const TextStyle(
+                              color: AppColors.cyan,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
                     ],
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 6),
-                    Text(subtitle!, style: const TextStyle(color: AppColors.muted, height: 1.35)),
+                    Text(
+                      subtitle!,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        height: 1.35,
+                      ),
+                    ),
                   ],
                 ],
               ),
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 12),
-              trailing!,
-            ],
+            if (trailing != null) ...[const SizedBox(width: 12), trailing!],
           ],
         ),
       ),
     );
   }
 }
-

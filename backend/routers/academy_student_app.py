@@ -49,6 +49,7 @@ from services.academy_student_access import (
     academy_seat_key_status,
     apply_student_profile_values,
     audit,
+    build_student_invite_link,
     build_student_key_invite_message,
     build_student_key_sms_url,
     can_student_access_academy,
@@ -108,6 +109,10 @@ class SeatReleaseRequest(BaseModel):
 
 class InviteCodeRequest(BaseModel):
     invite_code: str
+    student_profile: dict[str, Any] = Field(default_factory=dict)
+
+
+class StudentInviteClaimRequest(BaseModel):
     student_profile: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -305,14 +310,15 @@ def _create_invited_student_seats(
 
         display_name = recipient_name or recipient_phone or (f"{payload.display_name_prefix} {index + 1}" if payload.display_name_prefix else None)
         seat, code = create_seat(db, academy_id, display_name, class_id=class_row.id)
-        message_body = build_student_key_invite_message(academy_name, class_row.name, code, payload.message_template)
+        invite_url = build_student_invite_link(code)
+        message_body = build_student_key_invite_message(academy_name, class_row.name, code, payload.message_template, invite_url)
         sms_url = build_student_key_sms_url(recipient_phone, message_body) if payload.delivery_channel == "sms" and recipient_phone else None
         notification_id = None
         delivery_status = "manual_copy_ready"
         if payload.delivery_channel == "sms":
             delivery_status = "sms_link_ready"
         elif payload.delivery_channel == "student_app" and account_user_id:
-            notification = create_student_key_app_notification(db, account_user_id, academy_id, academy_name, class_row.name, seat.id)
+            notification = create_student_key_app_notification(db, account_user_id, academy_id, academy_name, class_row.name, seat.id, invite_url)
             notification_id = str(notification.id)
             delivery_status = "app_notification_created"
 
@@ -324,6 +330,7 @@ def _create_invited_student_seats(
             "recipient_account_user_id": account_user_id,
             "recipient_memo": (recipient.memo or "").strip() or None,
             "message_body": message_body,
+            "invite_url": invite_url,
             "sms_url": sms_url,
             "notification_id": notification_id,
             "delivery_status": delivery_status,
@@ -341,6 +348,7 @@ def _create_invited_student_seats(
                 **seat_payload(db, seat),
                 "invite_code": code,
                 "key_code": code,
+                "invite_url": invite_url,
                 "message_body": message_body,
                 "sms_url": sms_url,
                 "notification_id": notification_id,
@@ -397,6 +405,59 @@ def _student_class_ids(db: Session, memberships: list[StudentAcademyMembership])
     for membership in memberships:
         class_ids.update(_student_class_ids_for_membership(db, membership))
     return list(class_ids)
+
+
+def _student_membership_payload(db: Session, membership: StudentAcademyMembership) -> dict[str, Any]:
+    class_ids = _student_class_ids_for_membership(db, membership)
+    class_rows = db.scalars(select(AcademyClass).where(AcademyClass.id.in_(class_ids))).all() if class_ids else []
+    class_by_id = {str(row.id): row for row in class_rows}
+    ordered_classes = [class_by_id[str(class_id)] for class_id in class_ids if str(class_id) in class_by_id]
+    first_class = ordered_classes[0] if ordered_classes else None
+    return {
+        **serialize(membership),
+        "academy_student_id": str(membership.id),
+        "academy_name": get_academy_name(db, membership.academy_id),
+        "class_id": str(first_class.id) if first_class else None,
+        "class_name": first_class.name if first_class else None,
+        "class_ids": [str(row.id) for row in ordered_classes],
+        "class_names": [row.name for row in ordered_classes],
+    }
+
+
+def _student_invite_payload(db: Session, seat: AcademySeat) -> dict[str, Any]:
+    membership = db.get(StudentAcademyMembership, seat.current_student_membership_id) if seat.current_student_membership_id else None
+    class_row = db.get(AcademyClass, seat.class_id) if seat.class_id else None
+    key_status = academy_seat_key_status(db, seat)
+    invitation = dict(seat.invite_metadata or {})
+    metadata = dict(membership.metadata_json or {}) if membership else {}
+    student_name = (
+        (membership.display_name_in_academy if membership else None)
+        or metadata.get("display_name")
+        or metadata.get("name")
+        or invitation.get("recipient_name")
+        or seat.display_name
+    )
+    status = {
+        "unclaimed": "pending",
+        "claimed": "claimed",
+        "revoked": "revoked",
+        "legacy_unassigned": "invalid",
+    }.get(key_status, key_status)
+    return {
+        "invite_id": str(seat.id),
+        "academy_id": seat.academy_id,
+        "academy_name": get_academy_name(db, seat.academy_id),
+        "academy_student_id": str(membership.id) if membership else None,
+        "student_name": student_name,
+        "class_id": str(class_row.id) if class_row else None,
+        "class_name": class_row.name if class_row else None,
+        "status": status,
+        "key_status": key_status,
+        "invite_code_preview": seat.invite_code_preview,
+        "linked_user_id": membership.student_user_id if key_status == "claimed" and membership else None,
+        "claimed_at": invitation.get("claimed_at"),
+        "expires_at": None,
+    }
 
 
 def student_learning_assignment_ids(db: Session, student_id: str, academy_id: str | None = None) -> list[UUID]:
@@ -617,7 +678,7 @@ def rotate_code(academy_id: str, seat_id: UUID, request: Request, db: Session = 
     code = rotate_seat_code(db, seat)
     audit(db, request, actor, "academy.seat_code_rotated", "academy_seat", str(seat.id))
     db.commit()
-    return {**seat_payload(db, seat), "invite_code": code}
+    return {**seat_payload(db, seat), "invite_code": code, "invite_url": build_student_invite_link(code)}
 
 
 @router.post("/academy/{academy_id}/seats/{seat_id}/release")
@@ -628,7 +689,7 @@ def release_student_seat(academy_id: str, seat_id: UUID, payload: SeatReleaseReq
         raise HTTPException(status_code=404, detail="Seat not found.")
     new_code = release_seat(db, request, seat, reason=payload.reason, rotate_code=payload.rotate_code)
     db.commit()
-    return {**seat_payload(db, seat), "invite_code": new_code}
+    return {**seat_payload(db, seat), "invite_code": new_code, "invite_url": build_student_invite_link(new_code) if new_code else None}
 
 
 @router.get("/academy/{academy_id}/seats/{seat_id}/history")
@@ -636,6 +697,30 @@ def seat_history(academy_id: str, seat_id: UUID, request: Request, db: Session =
     require_manage_seats(db, request, academy_id)
     rows = db.scalars(select(SeatAssignmentHistory).where(SeatAssignmentHistory.academy_seat_id == seat_id, SeatAssignmentHistory.academy_id == academy_id).order_by(SeatAssignmentHistory.assigned_at.desc())).all()
     return [serialize(row) for row in rows]
+
+
+@router.get("/student/invites/{invite_token}")
+def student_invite_preview(invite_token: str, request: Request, db: Session = Depends(get_db)):
+    current_owner_id(request)
+    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(invite_token)))
+    if not seat:
+        raise HTTPException(status_code=404, detail={"code": "INVITE_NOT_FOUND", "message": "Invite link was not found."})
+    if not seat.is_active:
+        raise HTTPException(status_code=410, detail={"code": "INVITE_REVOKED", "message": "Invite link is no longer active."})
+    return _student_invite_payload(db, seat)
+
+
+@router.post("/student/invites/{invite_token}/claim")
+def claim_student_invite(invite_token: str, payload: StudentInviteClaimRequest, request: Request, db: Session = Depends(get_db)):
+    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(invite_token)))
+    if seat:
+        profile_values = validate_student_profile_values(student_profile_collection_settings(db, seat.academy_id), payload.student_profile)
+    else:
+        profile_values = {}
+    membership = claim_invite_code(db, request, invite_token)
+    apply_student_profile_values(membership, profile_values)
+    db.commit()
+    return _student_membership_payload(db, membership)
 
 
 @router.get("/student/academy-keys/requirements")
@@ -667,19 +752,7 @@ def claim_academy_key(payload: InviteCodeRequest, request: Request, db: Session 
     membership = claim_invite_code(db, request, payload.invite_code)
     apply_student_profile_values(membership, profile_values)
     db.commit()
-    class_ids = _student_class_ids_for_membership(db, membership)
-    class_rows = db.scalars(select(AcademyClass).where(AcademyClass.id.in_(class_ids))).all() if class_ids else []
-    class_by_id = {str(row.id): row for row in class_rows}
-    ordered_classes = [class_by_id[str(class_id)] for class_id in class_ids if str(class_id) in class_by_id]
-    first_class = ordered_classes[0] if ordered_classes else None
-    return {
-        **serialize(membership),
-        "academy_name": get_academy_name(db, membership.academy_id),
-        "class_id": str(first_class.id) if first_class else None,
-        "class_name": first_class.name if first_class else None,
-        "class_ids": [str(row.id) for row in ordered_classes],
-        "class_names": [row.name for row in ordered_classes],
-    }
+    return _student_membership_payload(db, membership)
 
 
 @router.get("/student/academies")
@@ -688,21 +761,7 @@ def connected_academies(request: Request, db: Session = Depends(get_db)):
     memberships = student_memberships(db, user_id)
     rows = []
     for membership in memberships:
-        class_ids = _student_class_ids_for_membership(db, membership)
-        class_rows = db.scalars(select(AcademyClass).where(AcademyClass.id.in_(class_ids))).all() if class_ids else []
-        class_by_id = {str(row.id): row for row in class_rows}
-        ordered_classes = [class_by_id[str(class_id)] for class_id in class_ids if str(class_id) in class_by_id]
-        first_class = ordered_classes[0] if ordered_classes else None
-        rows.append(
-            {
-                **serialize(membership),
-                "academy_name": get_academy_name(db, membership.academy_id),
-                "class_id": str(first_class.id) if first_class else None,
-                "class_name": first_class.name if first_class else None,
-                "class_ids": [str(row.id) for row in ordered_classes],
-                "class_names": [row.name for row in ordered_classes],
-            }
-        )
+        rows.append(_student_membership_payload(db, membership))
     return rows
 
 
@@ -1008,6 +1067,7 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
     membership_ids = [m.id for m in memberships]
     academy_ids = [m.academy_id for m in memberships]
     class_ids = _student_class_ids(db, memberships)
+    academy_names = {academy_id: get_academy_name(db, academy_id) for academy_id in academy_ids}
     events = db.scalars(
         select(CalendarEvent).where(
             or_(
@@ -1072,9 +1132,16 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
     event_payloads.extend(_class_schedule_calendar_payload(row, class_names) for row in schedule_events)
     event_payloads.extend(payload for payload in (_paper_session_event_payload(row) for row in paper_sessions) if payload)
     event_payloads.extend(_wrong_answer_calendar_payloads(wrong_answer_records))
+    for payload in event_payloads:
+        academy_id = payload.get("academy_id")
+        class_id = payload.get("class_id")
+        if academy_id:
+            payload.setdefault("academy_name", academy_names.get(str(academy_id)))
+        if class_id:
+            payload.setdefault("class_name", class_names.get(UUID(str(class_id))) if str(class_id) else None)
     event_payloads.sort(key=lambda row: str(row.get("starts_at") or ""))
     assignment_due_dates = [
-        {"id": str(a.id), "title": a.title, "due_at": a.due_at.isoformat() if a.due_at else None, "academy_id": a.academy_id, "source_type": "academy_assignment"}
+        {"id": str(a.id), "title": a.title, "due_at": a.due_at.isoformat() if a.due_at else None, "academy_id": a.academy_id, "academy_name": academy_names.get(a.academy_id), "source_type": "academy_assignment"}
         for a in assignments
     ]
     assignment_due_dates.extend(
@@ -1083,6 +1150,7 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
             "title": a.title,
             "due_at": a.due_at.isoformat() if a.due_at else None,
             "academy_id": a.academy_id,
+            "academy_name": academy_names.get(a.academy_id),
             "source_type": "learning_assignment",
         }
         for a in learning_assignments
@@ -1093,6 +1161,7 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
             "title": session.title,
             "due_at": session.due_at.isoformat() if session.due_at else None,
             "academy_id": session.academy_id,
+            "academy_name": academy_names.get(session.academy_id),
             "source_type": "paper_session_due",
         }
         for session in paper_sessions

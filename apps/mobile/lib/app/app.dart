@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../state/note_library_state.dart';
 import '../state/student_app_state.dart';
 import 'router.dart';
 import 'theme.dart';
@@ -17,6 +18,15 @@ class _TenaForgeStudentAppState extends State<TenaForgeStudentApp> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<StudentAppState>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<NoteLibraryState>().syncAcademyMaterials(
+        academies: appState.academies,
+        materials: appState.materials,
+      );
+    });
+
     return MaterialApp.router(
       title: 'Tena Forge Student',
       debugShowCheckedModeBanner: false,
@@ -25,4 +35,3 @@ class _TenaForgeStudentAppState extends State<TenaForgeStudentApp> {
     );
   }
 }
-

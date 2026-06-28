@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const bg = Color(0xFF070910);
-  static const panel = Color(0xFF10131D);
-  static const panelSoft = Color(0xFF151927);
-  static const border = Color(0x1AFFFFFF);
-  static const text = Color(0xFFF8FAFC);
-  static const muted = Color(0xFF94A3B8);
-  static const subtle = Color(0xFF64748B);
-  static const violet = Color(0xFF8B5CF6);
-  static const cyan = Color(0xFF22D3EE);
-  static const success = Color(0xFF34D399);
-  static const warning = Color(0xFFFBBF24);
-  static const danger = Color(0xFFFB7185);
+  static const bg = Color(0xFFFBFBFA);
+  static const panel = Color(0xFFFFFFFF);
+  static const panelSoft = Color(0xFFF4F4F5);
+  static const border = Color(0xFFE4E4E7);
+  static const text = Color(0xFF18181B);
+  static const muted = Color(0xFF71717A);
+  static const subtle = Color(0xFFA1A1AA);
+  static const violet = Color(0xFF18181B);
+  static const cyan = Color(0xFF2563EB);
+  static const success = Color(0xFF16A34A);
+  static const warning = Color(0xFFD97706);
+  static const danger = Color(0xFFDC2626);
 }
 
 ThemeData buildTenaTheme() {
   final scheme = ColorScheme.fromSeed(
     seedColor: AppColors.violet,
-    brightness: Brightness.dark,
+    brightness: Brightness.light,
     surface: AppColors.panel,
   );
   return ThemeData(
@@ -42,34 +42,107 @@ ThemeData buildTenaTheme() {
       elevation: 0,
       shape: RoundedRectangleBorder(
         side: const BorderSide(color: AppColors.border),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(10),
       ),
       margin: EdgeInsets.zero,
     ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: AppColors.panel,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      titleTextStyle: const TextStyle(
+        color: AppColors.text,
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+      ),
+      contentTextStyle: const TextStyle(color: AppColors.muted, height: 1.45),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: AppColors.panel,
+      surfaceTintColor: Colors.transparent,
+      dragHandleColor: AppColors.border,
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: AppColors.panel,
+      surfaceTintColor: Colors.transparent,
+      textStyle: const TextStyle(
+        color: AppColors.text,
+        fontWeight: FontWeight.w600,
+      ),
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: AppColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: AppColors.text,
+      contentTextStyle: const TextStyle(color: AppColors.panel),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      behavior: SnackBarBehavior.floating,
+    ),
+    iconTheme: const IconThemeData(color: AppColors.text),
+    listTileTheme: const ListTileThemeData(
+      iconColor: AppColors.text,
+      textColor: AppColors.text,
+      subtitleTextStyle: TextStyle(color: AppColors.muted),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.text,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        foregroundColor: AppColors.text,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: AppColors.panel,
+      indicatorColor: AppColors.panelSoft,
+      surfaceTintColor: Colors.transparent,
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => TextStyle(
+          color: states.contains(WidgetState.selected)
+              ? AppColors.text
+              : AppColors.muted,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      iconTheme: WidgetStateProperty.resolveWith(
+        (states) => IconThemeData(
+          color: states.contains(WidgetState.selected)
+              ? AppColors.text
+              : AppColors.muted,
+        ),
+      ),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0x0FFFFFFF),
+      fillColor: AppColors.panelSoft,
       hintStyle: const TextStyle(color: AppColors.subtle),
       labelStyle: const TextStyle(color: AppColors.muted),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: AppColors.violet),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.violet,
-        foregroundColor: AppColors.text,
+        foregroundColor: AppColors.panel,
         minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontWeight: FontWeight.w800),
       ),
     ),
@@ -78,10 +151,9 @@ ThemeData buildTenaTheme() {
         foregroundColor: AppColors.text,
         side: const BorderSide(color: AppColors.border),
         minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontWeight: FontWeight.w800),
       ),
     ),
   );
 }
-

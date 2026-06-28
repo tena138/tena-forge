@@ -20,7 +20,10 @@ class DashboardScreen extends StatelessWidget {
       title: '오늘의 학습 운영',
       subtitle: '사진으로 저장한 개인 오답과 학원별 과제, 복습 흐름을 한 화면에서 확인합니다.',
       actions: [
-        IconButton(onPressed: () => context.push('/profile'), icon: const Icon(Icons.person_outline)),
+        IconButton(
+          onPressed: () => context.push('/profile'),
+          icon: const Icon(Icons.person_outline),
+        ),
       ],
       children: [
         const ContextSwitcher(),
@@ -29,13 +32,13 @@ class DashboardScreen extends StatelessWidget {
           eyebrow: state.selectedContextLabel,
           child: Column(
             children: [
-              FilledButton.icon(
-                onPressed: () => context.push('/register-academy-key'),
-                icon: const Icon(Icons.key),
-                label: const Text('학원 키 등록'),
+              const ListItemCard(
+                title: '학원 초대',
+                subtitle: '학원에서 보낸 초대 링크를 열거나 앱 알림에서 수락하면 학원 컨텍스트가 자동으로 연결됩니다.',
+                badge: 'invite',
               ),
               const SizedBox(height: 10),
-              OutlinedButton.icon(
+              FilledButton.icon(
                 onPressed: () => context.push('/add-wrong-answer'),
                 icon: const Icon(Icons.camera_alt_outlined),
                 label: const Text('사진으로 오답 추가'),
@@ -50,25 +53,31 @@ class DashboardScreen extends StatelessWidget {
               for (final assignment in assignments) ...[
                 ListItemCard(
                   title: assignment.title,
-                  subtitle: assignment.dueAt == null ? assignment.description : '마감 ${MaterialLocalizations.of(context).formatFullDate(assignment.dueAt!)}',
+                  subtitle: assignment.dueAt == null
+                      ? assignment.description
+                      : '마감 ${MaterialLocalizations.of(context).formatFullDate(assignment.dueAt!)}',
                   badge: assignment.badgeLabel,
                   trailing: Icon(
                     assignment.isCompleted
                         ? Icons.check_circle
                         : assignment.isAwaitingTeacherConfirmation
-                            ? Icons.pending_actions
-                            : Icons.chevron_right,
+                        ? Icons.pending_actions
+                        : Icons.chevron_right,
                     color: assignment.isCompleted
                         ? AppColors.success
                         : assignment.isAwaitingTeacherConfirmation
-                            ? AppColors.warning
-                            : AppColors.muted,
+                        ? AppColors.warning
+                        : AppColors.muted,
                   ),
                   onTap: () => context.push('/assignment/${assignment.id}'),
                 ),
                 if (assignment != assignments.last) const SizedBox(height: 10),
               ],
-              if (assignments.isEmpty) const Text('표시할 과제가 없습니다.', style: TextStyle(color: AppColors.muted)),
+              if (assignments.isEmpty)
+                const Text(
+                  '표시할 과제가 없습니다.',
+                  style: TextStyle(color: AppColors.muted),
+                ),
             ],
           ),
         ),
@@ -82,7 +91,10 @@ class DashboardScreen extends StatelessWidget {
                   style: const TextStyle(color: AppColors.muted),
                 ),
               ),
-              TextButton(onPressed: () => context.go('/wrong-answers'), child: const Text('열기')),
+              TextButton(
+                onPressed: () => context.go('/wrong-answers'),
+                child: const Text('열기'),
+              ),
             ],
           ),
         ),

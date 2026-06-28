@@ -29,15 +29,18 @@ class _AddWrongAnswerScreenState extends State<AddWrongAnswerScreen> {
 
   Future<void> capture() async {
     final picker = ImagePicker();
-    final result = await picker.pickImage(source: ImageSource.camera, imageQuality: 88);
+    final result = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 88,
+    );
     if (result != null) setState(() => image = result);
   }
 
   Future<void> save() async {
     if (image == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('오답 사진을 먼저 촬영해주세요.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('오답 사진을 먼저 촬영해주세요.')));
       return;
     }
 
@@ -45,16 +48,16 @@ class _AddWrongAnswerScreenState extends State<AddWrongAnswerScreen> {
     try {
       final memo = memoController.text.trim();
       await context.read<StudentAppState>().addWrongAnswer(
-            sourceType: 'personal_photo',
-            problemText: memo.isEmpty ? '사진 오답 - OCR 대기' : memo,
-            memo: memo,
-            imagePath: image!.path,
-            imageName: image!.name,
-          );
+        sourceType: 'personal_photo',
+        problemText: memo.isEmpty ? '사진 오답 - OCR 대기' : memo,
+        memo: memo,
+        imagePath: image!.path,
+        imageName: image!.name,
+      );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('개인 오답 아카이브에 저장했습니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('개인 오답 아카이브에 저장했습니다.')));
         Navigator.of(context).pop();
       }
     } finally {
@@ -77,13 +80,16 @@ class _AddWrongAnswerScreenState extends State<AddWrongAnswerScreen> {
                 width: double.infinity,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: const Color(0x0DFFFFFF),
+                  color: AppColors.panelSoft,
                   border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: image == null
                     ? const Center(
-                        child: Text('촬영한 이미지가 없습니다', style: TextStyle(color: AppColors.muted)),
+                        child: Text(
+                          '촬영한 이미지가 없습니다',
+                          style: TextStyle(color: AppColors.muted),
+                        ),
                       )
                     : Image.file(File(image!.path), fit: BoxFit.cover),
               ),
@@ -102,7 +108,9 @@ class _AddWrongAnswerScreenState extends State<AddWrongAnswerScreen> {
             controller: memoController,
             minLines: 4,
             maxLines: 8,
-            decoration: const InputDecoration(hintText: '틀린 이유, 풀이 포인트, 다시 볼 단원을 적어두세요'),
+            decoration: const InputDecoration(
+              hintText: '틀린 이유, 풀이 포인트, 다시 볼 단원을 적어두세요',
+            ),
           ),
         ),
         FilledButton.icon(

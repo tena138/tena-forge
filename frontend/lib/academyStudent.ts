@@ -16,6 +16,7 @@ export type AcademySeat = {
   assigned_membership_id: string | null;
   invite_code?: string | null;
   key_code?: string | null;
+  invite_url?: string | null;
   invite_metadata?: StudentKeyInviteMetadata | null;
   message_body?: string | null;
   sms_url?: string | null;
@@ -34,6 +35,7 @@ export type StudentKeyInviteMetadata = {
   sms_url?: string | null;
   notification_id?: string | null;
   delivery_status?: string | null;
+  invite_url?: string | null;
   prepared_at?: string | null;
   claimed_at?: string | null;
 };
@@ -55,6 +57,22 @@ export type StudentMembership = {
   status: "active" | "ended" | "suspended";
   academy_name?: string;
   joined_at: string;
+};
+
+export type StudentInvitePreview = {
+  invite_id: string;
+  academy_id: string;
+  academy_name: string;
+  academy_student_id?: string | null;
+  student_name?: string | null;
+  class_id?: string | null;
+  class_name?: string | null;
+  status: "pending" | "claimed" | "revoked" | "invalid" | string;
+  key_status: string;
+  invite_code_preview?: string | null;
+  linked_user_id?: string | null;
+  claimed_at?: string | null;
+  expires_at?: string | null;
 };
 
 export type StudentQuota = {
@@ -174,6 +192,18 @@ export function claimAcademyKey(inviteCode: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ invite_code: inviteCode }),
+  });
+}
+
+export function getStudentInvite(token: string) {
+  return api<StudentInvitePreview>(`/api/student/invites/${encodeURIComponent(token)}`);
+}
+
+export function claimStudentInvite(token: string) {
+  return api<StudentMembership>(`/api/student/invites/${encodeURIComponent(token)}/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ student_profile: {} }),
   });
 }
 

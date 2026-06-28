@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Archive, BarChart3, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, KeyRound, Lock, NotebookTabs, Plus, RotateCcw, UserRound } from "lucide-react";
+import { Archive, BarChart3, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, Link2, Lock, NotebookTabs, Plus, RotateCcw, UserRound } from "lucide-react";
 
 import { MathText } from "@/components/math-text";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,6 @@ import {
   LearningWrongAnswer,
   StudentMembership,
   StudentPersonalSet,
-  activateLearningAcademyKey,
   addStudentPersonalSetItem,
   createStudentPersonalSet,
   getLearningStats,
@@ -125,7 +124,6 @@ export default function StudentAppPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [archiveAnswers, setArchiveAnswers] = useState<Record<string, string>>({});
   const [collapsedAssignmentPages, setCollapsedAssignmentPages] = useState<Record<string, boolean>>({});
-  const [keyCode, setKeyCode] = useState("");
   const [newSetTitle, setNewSetTitle] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -181,15 +179,6 @@ export default function StudentAppPage() {
   async function applyAcademyFilter(value: string) {
     setAcademyFilter(value);
     await load(value);
-  }
-
-  async function activateKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!keyCode.trim()) return;
-    await activateLearningAcademyKey(keyCode.trim());
-    setKeyCode("");
-    setNotice("학원 키가 연결되었습니다. Today와 Archive에 해당 학원 콘텐츠가 표시됩니다.");
-    await load();
   }
 
   async function openAssignment(item: LearningAssignment) {
@@ -461,12 +450,11 @@ export default function StudentAppPage() {
       {tab === "profile" && (
         <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> Add Academy Key</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> Academy Invites</CardTitle></CardHeader>
             <CardContent>
-              <form className="flex gap-2" onSubmit={activateKey}>
-                <Input value={keyCode} onChange={(event) => setKeyCode(event.target.value.toUpperCase())} placeholder="XXXX-XXXX-XXXX" />
-                <Button type="submit">등록</Button>
-              </form>
+              <p className="text-sm font-medium text-zinc-600">
+                학원 등록은 학원에서 보낸 초대 링크를 열어 진행합니다. 링크를 수락하면 이 계정에 학원이 추가되고 Today와 Archive가 다시 갱신됩니다.
+              </p>
             </CardContent>
           </Card>
           <Card>

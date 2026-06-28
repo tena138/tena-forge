@@ -1,15 +1,80 @@
 enum StudentContextType { personal, academy }
 
+class StudentPersonalInfo {
+  const StudentPersonalInfo({this.values = const {}});
+
+  final Map<String, String> values;
+
+  factory StudentPersonalInfo.fromJson(Map<String, dynamic>? json) {
+    final source = json ?? const <String, dynamic>{};
+    return StudentPersonalInfo(
+      values: source.map(
+        (key, value) => MapEntry(key.toString(), '${value ?? ''}'.trim()),
+      )..removeWhere((_, value) => value.isEmpty),
+    );
+  }
+
+  Map<String, String> toJson() => Map.unmodifiable(values);
+
+  String value(String key) => values[key] ?? '';
+
+  StudentPersonalInfo copyWithValue(String key, String value) {
+    final next = Map<String, String>.from(values);
+    final cleaned = value.trim();
+    if (cleaned.isEmpty) {
+      next.remove(key);
+    } else {
+      next[key] = cleaned;
+    }
+    return StudentPersonalInfo(values: next);
+  }
+}
+
 class StudentProfile {
   const StudentProfile({
     required this.id,
     required this.email,
     this.displayName,
+    this.accountType = 'academy',
+    this.personalInfo = const StudentPersonalInfo(),
   });
 
   final String id;
   final String email;
   final String? displayName;
+  final String accountType;
+  final StudentPersonalInfo personalInfo;
+
+  factory StudentProfile.fromAuthProfile(
+    Map<String, dynamic> json, {
+    String? fallbackEmail,
+    StudentPersonalInfo personalInfo = const StudentPersonalInfo(),
+  }) {
+    return StudentProfile(
+      id: '${json['id'] ?? ''}',
+      email: '${json['email'] ?? fallbackEmail ?? ''}',
+      displayName:
+          json['academy_name']?.toString() ??
+          json['display_name']?.toString() ??
+          json['name']?.toString(),
+      accountType: json['account_type']?.toString() ?? 'academy',
+      personalInfo: personalInfo,
+    );
+  }
+
+  StudentProfile copyWith({
+    String? displayName,
+    String? accountType,
+    StudentPersonalInfo? personalInfo,
+  }) {
+    return StudentProfile(
+      id: id,
+      email: email,
+      displayName: displayName ?? this.displayName,
+      accountType: accountType ?? this.accountType,
+      personalInfo: personalInfo ?? this.personalInfo,
+    );
+  }
 }
 
 class AcademyMembership {
@@ -23,6 +88,8 @@ class AcademyMembership {
     this.academyName,
     this.classId,
     this.className,
+    this.classIds = const [],
+    this.classNames = const [],
   });
 
   final String id;
@@ -34,8 +101,16 @@ class AcademyMembership {
   final String? academyName;
   final String? classId;
   final String? className;
+  final List<String> classIds;
+  final List<String> classNames;
 
   factory AcademyMembership.fromJson(Map<String, dynamic> json) {
+    final classIds = (json['class_ids'] as List? ?? const [])
+        .map((item) => '$item')
+        .toList(growable: false);
+    final classNames = (json['class_names'] as List? ?? const [])
+        .map((item) => '$item')
+        .toList(growable: false);
     return AcademyMembership(
       id: '${json['id']}',
       studentUserId: '${json['student_user_id']}',
@@ -43,9 +118,64 @@ class AcademyMembership {
       academySeatId: '${json['academy_seat_id']}',
       status: '${json['status'] ?? 'active'}',
       academyName: json['academy_name']?.toString(),
+      classId:
+          json['class_id']?.toString() ??
+          (classIds.isNotEmpty ? classIds.first : null),
+      className:
+          json['class_name']?.toString() ??
+          (classNames.isNotEmpty ? classNames.first : null),
+      classIds: classIds,
+      classNames: classNames,
+      joinedAt: DateTime.tryParse('${json['joined_at']}') ?? DateTime.now(),
+    );
+  }
+}
+
+class StudentInvitePreview {
+  const StudentInvitePreview({
+    required this.inviteId,
+    required this.academyId,
+    required this.academyName,
+    required this.status,
+    required this.keyStatus,
+    this.academyStudentId,
+    this.studentName,
+    this.classId,
+    this.className,
+    this.linkedUserId,
+    this.claimedAt,
+    this.expiresAt,
+  });
+
+  final String inviteId;
+  final String academyId;
+  final String academyName;
+  final String status;
+  final String keyStatus;
+  final String? academyStudentId;
+  final String? studentName;
+  final String? classId;
+  final String? className;
+  final String? linkedUserId;
+  final DateTime? claimedAt;
+  final DateTime? expiresAt;
+
+  bool get canClaim => status == 'pending' || keyStatus == 'unclaimed';
+
+  factory StudentInvitePreview.fromJson(Map<String, dynamic> json) {
+    return StudentInvitePreview(
+      inviteId: '${json['invite_id']}',
+      academyId: '${json['academy_id']}',
+      academyName: json['academy_name']?.toString() ?? 'Academy',
+      status: json['status']?.toString() ?? 'pending',
+      keyStatus: json['key_status']?.toString() ?? 'unclaimed',
+      academyStudentId: json['academy_student_id']?.toString(),
+      studentName: json['student_name']?.toString(),
       classId: json['class_id']?.toString(),
       className: json['class_name']?.toString(),
-      joinedAt: DateTime.tryParse('${json['joined_at']}') ?? DateTime.now(),
+      linkedUserId: json['linked_user_id']?.toString(),
+      claimedAt: DateTime.tryParse('${json['claimed_at'] ?? ''}'),
+      expiresAt: DateTime.tryParse('${json['expires_at'] ?? ''}'),
     );
   }
 }
@@ -79,7 +209,10 @@ class StudentQuota {
       remaining: readMap(json['remaining']),
       contributions: (json['contributions'] as List? ?? const [])
           .whereType<Map>()
-          .map((item) => QuotaContribution.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                QuotaContribution.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(),
     );
   }
@@ -184,9 +317,11 @@ class Assignment {
         ? Map<String, dynamic>.from(json['submission'] as Map)
         : const <String, dynamic>{};
     final timeLimitSeconds = (json['time_limit_seconds'] as num?)?.toInt();
-    final timeLimitMinutes = (json['time_limit_minutes'] as num?)?.toInt() ??
+    final timeLimitMinutes =
+        (json['time_limit_minutes'] as num?)?.toInt() ??
         (timeLimitSeconds == null ? null : (timeLimitSeconds / 60).ceil());
-    final problemCount = (snapshot['problem_count'] as num?)?.toInt() ??
+    final problemCount =
+        (snapshot['problem_count'] as num?)?.toInt() ??
         (snapshot['problems'] as List?)?.length ??
         0;
     return Assignment(
@@ -194,8 +329,10 @@ class Assignment {
       academyId: '${json['academy_id']}',
       title: '${json['title'] ?? 'Untitled'}',
       description: json['description']?.toString(),
-      assignmentType: '${json['assignment_type'] ?? (timeLimitSeconds == null ? 'homework' : 'test')}',
-      submissionMode: '${json['submission_mode'] ?? (problemCount > 0 ? 'problem_set' : 'completion')}',
+      assignmentType:
+          '${json['assignment_type'] ?? (timeLimitSeconds == null ? 'homework' : 'test')}',
+      submissionMode:
+          '${json['submission_mode'] ?? (problemCount > 0 ? 'problem_set' : 'completion')}',
       openAt: DateTime.tryParse('${json['open_at'] ?? json['start_at']}'),
       dueAt: DateTime.tryParse('${json['due_at']}'),
       closeAt: DateTime.tryParse('${json['close_at']}'),
@@ -219,28 +356,40 @@ class StudentMaterial {
     required this.title,
     required this.materialType,
     required this.permissions,
+    this.academyName,
     this.expiresAt,
+    this.updatedAt,
   });
 
   final String id;
   final String academyId;
+  final String? academyName;
   final String title;
   final String materialType;
   final Map<String, bool> permissions;
   final DateTime? expiresAt;
+  final DateTime? updatedAt;
 
   bool get canDownload => permissions['download'] ?? false;
   bool get canAddToWrongAnswer => permissions['add_to_wrong_answer'] ?? false;
 
   factory StudentMaterial.fromJson(Map<String, dynamic> json) {
-    final rawPermissions = json['permissions'] is Map ? json['permissions'] as Map : const {};
+    final rawPermissions = json['permissions'] is Map
+        ? json['permissions'] as Map
+        : const {};
     return StudentMaterial(
       id: '${json['id']}',
       academyId: '${json['academy_id']}',
+      academyName: json['academy_name']?.toString(),
       title: '${json['title'] ?? 'Untitled'}',
       materialType: '${json['material_type'] ?? 'pdf'}',
-      permissions: rawPermissions.map((key, value) => MapEntry('$key', value == true)),
+      permissions: rawPermissions.map(
+        (key, value) => MapEntry('$key', value == true),
+      ),
       expiresAt: DateTime.tryParse('${json['expires_at']}'),
+      updatedAt: DateTime.tryParse(
+        '${json['updated_at'] ?? json['created_at']}',
+      ),
     );
   }
 }
@@ -254,6 +403,8 @@ class CalendarItem {
     required this.endsAt,
     required this.visibility,
     this.academyId,
+    this.className,
+    this.sourceType,
     this.description,
   });
 
@@ -262,9 +413,11 @@ class CalendarItem {
   final String? description;
   final String eventType;
   final DateTime startsAt;
-  final DateTime endsAt;
+  final DateTime? endsAt;
   final String visibility;
   final String? academyId;
+  final String? className;
+  final String? sourceType;
 
   factory CalendarItem.fromJson(Map<String, dynamic> json) {
     return CalendarItem(
@@ -273,9 +426,11 @@ class CalendarItem {
       description: json['description']?.toString(),
       eventType: '${json['event_type'] ?? 'custom'}',
       startsAt: DateTime.tryParse('${json['starts_at']}') ?? DateTime.now(),
-      endsAt: DateTime.tryParse('${json['ends_at']}') ?? DateTime.now(),
+      endsAt: DateTime.tryParse('${json['ends_at']}'),
       visibility: '${json['visibility'] ?? 'personal_private'}',
       academyId: json['academy_id']?.toString(),
+      className: json['class_name']?.toString(),
+      sourceType: json['source_type']?.toString(),
     );
   }
 }
@@ -337,7 +492,10 @@ class WrongAnswerItem {
 }
 
 class CalendarResponse {
-  const CalendarResponse({required this.events, required this.assignmentDueDates});
+  const CalendarResponse({
+    required this.events,
+    required this.assignmentDueDates,
+  });
 
   final List<CalendarItem> events;
   final List<AssignmentDueDate> assignmentDueDates;
@@ -350,7 +508,10 @@ class CalendarResponse {
           .toList(),
       assignmentDueDates: (json['assignment_due_dates'] as List? ?? const [])
           .whereType<Map>()
-          .map((item) => AssignmentDueDate.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                AssignmentDueDate.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(),
     );
   }

@@ -13,21 +13,26 @@ class EmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0x0DFFFFFF),
+        color: AppColors.panelSoft,
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          ),
           if (body != null) ...[
             const SizedBox(height: 8),
-            Text(body!, style: const TextStyle(color: AppColors.muted, height: 1.45)),
+            Text(
+              body!,
+              style: const TextStyle(color: AppColors.muted, height: 1.45),
+            ),
           ],
         ],
       ),
     );
   }
 }
-

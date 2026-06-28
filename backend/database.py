@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = ""
     cors_origin: str = "http://localhost:3000"
     frontend_url: str = "http://localhost:3001"
+    student_app_url: str = ""
     public_api_url: str = ""
     portone_store_id: str = ""
     portone_channel_key: str = ""

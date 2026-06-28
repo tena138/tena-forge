@@ -77,6 +77,15 @@ def generate_invite_code() -> str:
     return "-".join(chunks)
 
 
+def build_student_invite_link(invite_token: str) -> str:
+    settings = get_settings()
+    base_url = (settings.student_app_url or settings.frontend_url).strip().rstrip("/")
+    encoded_token = quote(invite_token.strip(), safe="")
+    if base_url.endswith("#") or "/#" in base_url:
+        return f"{base_url}/invite/{encoded_token}"
+    return f"{base_url}/student/invite/{encoded_token}"
+
+
 def _clean_student_profile_value(value) -> str:
     return str(value or "").strip()[:160]
 
@@ -336,6 +345,45 @@ def create_student_key_app_notification(
         title=f"{academy_name} 학원 초대",
         body=f"{class_name or '클래스'} 초대가 도착했습니다. Tena Note에서 수락해 주세요.",
         metadata_json={"academy_seat_id": str(seat_id), "class_name": class_name},
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def build_student_key_invite_message(
+    academy_name: str,
+    class_name: str | None,
+    key_code: str,
+    template: str | None = None,
+    invite_url: str | None = None,
+) -> str:
+    link = invite_url or build_student_invite_link(key_code)
+    base = template or "{academy_name} {class_name} 초대 링크입니다.\nTena Note에서 아래 링크를 열어 학생 계정을 연결하세요: {invite_url}"
+    return (
+        base.replace("{academy_name}", academy_name or "Tena Forge")
+        .replace("{class_name}", class_name or "Class")
+        .replace("{key_code}", key_code)
+        .replace("{invite_url}", link)
+    )
+
+
+def create_student_key_app_notification(
+    db: Session,
+    student_user_id: str,
+    academy_id: str,
+    academy_name: str,
+    class_name: str | None,
+    seat_id: UUID,
+    invite_url: str | None = None,
+) -> StudentNotification:
+    row = StudentNotification(
+        student_user_id=student_user_id,
+        academy_id=academy_id,
+        notification_type="academy_invite",
+        title=f"{academy_name} 초대",
+        body=f"{class_name or '클래스'} 초대가 도착했습니다. Tena Note에서 초대 링크를 열어 계정을 연결하세요.",
+        metadata_json={"academy_seat_id": str(seat_id), "class_name": class_name, "invite_url": invite_url},
     )
     db.add(row)
     db.flush()

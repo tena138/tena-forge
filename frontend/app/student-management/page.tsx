@@ -419,10 +419,10 @@ function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; o
         </div>
         <div className="mt-2 min-w-0">
           <p className="truncate text-sm font-semibold text-zinc-950">{student.name}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{phone ? `${phone} · ` : ""}학생이 Tena Note에서 키를 등록하면 실제 정보로 채워집니다.</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{phone ? `${phone} · ` : ""}학생이 Tena Note에서 초대 링크를 수락하면 실제 정보로 채워집니다.</p>
         </div>
         <div className="mt-3 rounded bg-white px-2 py-1.5 text-[11px] font-bold text-zinc-700 ring-1 ring-zinc-200 lg:rounded-md lg:text-xs">
-          <span className="text-zinc-500">Key </span>
+          <span className="text-zinc-500">Invite </span>
           <span className="font-mono">{keyLabel}</span>
         </div>
       </article>
@@ -2473,7 +2473,7 @@ export default function StudentManagementPage() {
                 <div>
                   <h2 className="text-sm font-black text-zinc-950">학생 연결</h2>
                   <p className="mt-1 text-xs leading-5 text-zinc-500">
-                    학생은 Tena Note에서 학원 키를 등록하고, 학원이 요구한 개인정보만 본인 계정 정보로 채웁니다.
+                    학생은 학원에서 받은 초대 링크를 열고, 학원이 요구한 개인정보만 본인 계정 정보로 채웁니다.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -2485,7 +2485,7 @@ export default function StudentManagementPage() {
                   </Select>
                   <Button type="button" className="w-full" onClick={issueClassKey} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length}>
                     <KeyRound className="h-4 w-4" />
-                    학원 키 발급
+                    초대 링크 발급
                   </Button>
                   <Button
                     type="button"
@@ -2502,7 +2502,7 @@ export default function StudentManagementPage() {
                   </Button>
                 </div>
                 <div className="rounded-lg bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
-                  이름, 학교, 학년, 보호자 연락처 같은 항목은 설정에서 켜거나 필수값으로 지정할 수 있습니다. 학생이 키를 등록하면 해당 정보가 학생 카드에 자동 반영됩니다.
+                  이름, 학교, 학년, 보호자 연락처 같은 항목은 설정에서 켜거나 필수값으로 지정할 수 있습니다. 학생이 초대 링크를 수락하면 해당 정보가 학생 카드에 자동 반영됩니다.
                 </div>
               </aside>
             </div>
@@ -3236,7 +3236,7 @@ export default function StudentManagementPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-black text-zinc-950">학생 정보 수집 설정</p>
-                        <p className="mt-1 text-xs leading-5 text-zinc-500">학생이 학원 키를 등록할 때 확인할 인적사항을 선택합니다. 저장된 기본 정보가 있으면 자동으로 채워집니다.</p>
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">학생이 초대 링크를 수락할 때 확인할 인적사항을 선택합니다. 저장된 기본 정보가 있으면 자동으로 채워집니다.</p>
                       </div>
                       <Button type="button" size="sm" onClick={saveStudentProfileSettings} disabled={profileSettingsLoading || profileSettingsSaving}>
                         {profileSettingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

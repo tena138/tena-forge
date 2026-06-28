@@ -323,9 +323,9 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                           <Badge className="rounded-md bg-zinc-900 text-white hover:bg-zinc-900">{deliveryStatusLabel(student.delivery_status)}</Badge>
                         </div>
                         <p className="mt-3 truncate text-sm font-black text-zinc-950">{student.name}</p>
-                        <p className="mt-1 text-xs leading-5 text-zinc-500">학생이 Tena Note에서 학원 키를 등록하면 이 카드가 실제 학생 정보로 채워집니다.</p>
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">학생이 Tena Note에서 초대 링크를 수락하면 이 카드가 실제 학생 정보로 채워집니다.</p>
                         <div className="mt-3 rounded-[7px] bg-white px-2 py-2 text-xs font-bold text-zinc-700 ring-1 ring-zinc-200">
-                          <span className="text-zinc-500">Key </span>
+                          <span className="text-zinc-500">Invite </span>
                           <span className="font-mono">{studentKeyLabel(student)}</span>
                         </div>
                       </article>

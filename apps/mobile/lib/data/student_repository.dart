@@ -9,45 +9,143 @@ class StudentRepository {
   final ApiClient apiClient;
   final SessionStore sessionStore;
 
-  Future<StudentProfile?> restoreProfile() => sessionStore.readProfile();
+  bool _canUseMock(Object exception) {
+    return exception is! ApiException ||
+        (exception.statusCode != 401 && exception.statusCode != 403);
+  }
 
-  Future<StudentProfile> login(String email, String password) async {
-    final json = await apiClient.post<Map<String, dynamic>>(
-      '/api/auth/login',
-      {'email': email, 'password': password, 'remember': true},
-      (json) => Map<String, dynamic>.from(json as Map),
-    );
+  Future<StudentProfile?> restoreProfile() async {
+    final token = await sessionStore.readAccessToken();
+    final profile = await sessionStore.readProfile();
+    if (token != null && profile != null) {
+      return profile;
+    }
+
+    final refreshed = await apiClient.refreshAccessToken();
+    if (refreshed) {
+      try {
+        return await fetchMe();
+      } catch (_) {
+        await sessionStore.clear();
+        return null;
+      }
+    }
+
+    await sessionStore.clear();
+    return null;
+  }
+
+  Future<StudentProfile> login(
+    String identifier,
+    String password, {
+    bool remember = true,
+  }) async {
+    final json = await apiClient.post<Map<String, dynamic>>('/api/auth/login', {
+      'email': identifier,
+      'password': password,
+      'remember': remember,
+    }, (json) => Map<String, dynamic>.from(json as Map));
+    if (json['requires_totp'] == true) {
+      throw const ApiException('2단계 인증 계정은 현재 웹 로그인에서 계속 진행해 주세요.');
+    }
+
     final token = json['access_token']?.toString();
-    final academy = Map<String, dynamic>.from(json['academy'] as Map? ?? const {});
-    if (token != null) await sessionStore.writeAccessToken(token);
-    final profile = StudentProfile(
-      id: '${academy['id']}',
-      email: '${academy['email'] ?? email}',
-      displayName: academy['academy_name']?.toString(),
+    final academy = Map<String, dynamic>.from(
+      json['academy'] as Map? ?? const {},
     );
+    if (token == null || token.isEmpty || academy.isEmpty) {
+      throw const ApiException('로그인 응답이 올바르지 않습니다.');
+    }
+
+    final previousProfile = await sessionStore.readProfile();
+    await sessionStore.writeAccessToken(token);
+    final profile = StudentProfile.fromAuthProfile(
+      academy,
+      fallbackEmail: identifier,
+      personalInfo:
+          previousProfile?.personalInfo ?? const StudentPersonalInfo(),
+    );
+    if (profile.id.isEmpty || profile.email.isEmpty) {
+      throw const ApiException('프로필 응답이 올바르지 않습니다.');
+    }
     await sessionStore.writeProfile(profile);
     return profile;
   }
 
-  Future<void> logout() => sessionStore.clear();
+  Future<StudentProfile> fetchMe() async {
+    final previousProfile = await sessionStore.readProfile();
+    final profile = await apiClient.get<StudentProfile>(
+      '/api/auth/me',
+      (json) => StudentProfile.fromAuthProfile(
+        Map<String, dynamic>.from(json as Map),
+        personalInfo:
+            previousProfile?.personalInfo ?? const StudentPersonalInfo(),
+      ),
+    );
+    if (profile.id.isEmpty || profile.email.isEmpty) {
+      throw const ApiException('프로필 응답이 올바르지 않습니다.');
+    }
+    await sessionStore.writeProfile(profile);
+    return profile;
+  }
+
+  Future<StudentProfile> savePersonalInfo(
+    StudentPersonalInfo personalInfo,
+  ) async {
+    final current = await sessionStore.readProfile();
+    if (current == null) {
+      throw const ApiException('로그인이 필요합니다.');
+    }
+    final next = current.copyWith(personalInfo: personalInfo);
+    await sessionStore.writeProfile(next);
+    return next;
+  }
+
+  Future<void> logout() async {
+    try {
+      await apiClient.post<void>('/api/auth/logout', null, (_) {});
+    } catch (_) {
+      // Local logout should still succeed when the server session is already
+      // expired, revoked, or unreachable.
+    } finally {
+      await sessionStore.clear();
+    }
+  }
 
   Future<List<AcademyMembership>> listAcademies({bool allowMock = true}) async {
     try {
       return apiClient.get<List<AcademyMembership>>(
         '/api/student/academies',
-        (json) => (json as List).map((item) => AcademyMembership.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
+        (json) => (json as List)
+            .map(
+              (item) => AcademyMembership.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
+            .toList(),
       );
-    } catch (_) {
-      if (allowMock) return mockAcademies;
+    } catch (exception) {
+      if (allowMock && _canUseMock(exception)) return mockAcademies;
       rethrow;
     }
   }
 
-  Future<AcademyMembership> claimAcademyKey(String inviteCode) {
+  Future<StudentInvitePreview> getStudentInvite(String token) {
+    final encoded = Uri.encodeComponent(token.trim());
+    return apiClient.get<StudentInvitePreview>(
+      '/api/student/invites/$encoded',
+      (json) =>
+          StudentInvitePreview.fromJson(Map<String, dynamic>.from(json as Map)),
+    );
+  }
+
+  Future<AcademyMembership> claimStudentInvite(String token) {
+    final encoded = Uri.encodeComponent(token.trim());
     return apiClient.post<AcademyMembership>(
-      '/api/student/academy-keys/claim',
-      {'invite_code': inviteCode},
-      (json) => AcademyMembership.fromJson(Map<String, dynamic>.from(json as Map)),
+      '/api/student/invites/$encoded/claim',
+      {'student_profile': const <String, String>{}},
+      (json) =>
+          AcademyMembership.fromJson(Map<String, dynamic>.from(json as Map)),
     );
   }
 
@@ -57,20 +155,28 @@ class StudentRepository {
         '/api/student/quotas',
         (json) => StudentQuota.fromJson(Map<String, dynamic>.from(json as Map)),
       );
-    } catch (_) {
-      if (allowMock) return mockQuota;
+    } catch (exception) {
+      if (allowMock && _canUseMock(exception)) return mockQuota;
       rethrow;
     }
   }
 
-  Future<List<Assignment>> listAssignments({String? academyId, bool allowMock = true}) async {
+  Future<List<Assignment>> listAssignments({
+    String? academyId,
+    bool allowMock = true,
+  }) async {
     try {
       return apiClient.get<List<Assignment>>(
         '/api/learning/student/assignments${academyId == null ? '' : '?academy_id=$academyId'}',
-        (json) => (json as List).map((item) => Assignment.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
+        (json) => (json as List)
+            .map(
+              (item) =>
+                  Assignment.fromJson(Map<String, dynamic>.from(item as Map)),
+            )
+            .toList(),
       );
-    } catch (_) {
-      if (allowMock) return mockAssignments;
+    } catch (exception) {
+      if (allowMock && _canUseMock(exception)) return mockAssignments;
       rethrow;
     }
   }
@@ -84,33 +190,55 @@ class StudentRepository {
   }
 
   Future<void> startTest(String assignmentId) {
-    return apiClient.post<void>('/api/learning/student/assignments/$assignmentId/start', null, (_) {});
+    return apiClient.post<void>(
+      '/api/learning/student/assignments/$assignmentId/start',
+      null,
+      (_) {},
+    );
   }
 
   Future<List<StudentMaterial>> listMaterials({bool allowMock = true}) async {
     try {
       return apiClient.get<List<StudentMaterial>>(
         '/api/student/materials',
-        (json) => (json as List).map((item) => StudentMaterial.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
+        (json) => (json as List)
+            .map(
+              (item) => StudentMaterial.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
+            .toList(),
       );
-    } catch (_) {
-      if (allowMock) return mockMaterials;
+    } catch (exception) {
+      if (allowMock && _canUseMock(exception)) return mockMaterials;
       rethrow;
     }
   }
 
   Future<void> requestMaterialDownload(String materialId) {
-    return apiClient.post<void>('/api/student/materials/$materialId/download', null, (_) {});
+    return apiClient.post<void>(
+      '/api/student/materials/$materialId/download',
+      null,
+      (_) {},
+    );
   }
 
-  Future<List<WrongAnswerItem>> listWrongAnswers({bool allowMock = true}) async {
+  Future<List<WrongAnswerItem>> listWrongAnswers({
+    bool allowMock = true,
+  }) async {
     try {
       return apiClient.get<List<WrongAnswerItem>>(
         '/api/student/wrong-answers',
-        (json) => (json as List).map((item) => WrongAnswerItem.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
+        (json) => (json as List)
+            .map(
+              (item) => WrongAnswerItem.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
+            .toList(),
       );
-    } catch (_) {
-      if (allowMock) return mockWrongAnswers;
+    } catch (exception) {
+      if (allowMock && _canUseMock(exception)) return mockWrongAnswers;
       rethrow;
     }
   }
@@ -119,11 +247,15 @@ class StudentRepository {
     return apiClient.post<WrongAnswerItem>(
       '/api/student/wrong-answers',
       payload,
-      (json) => WrongAnswerItem.fromJson(Map<String, dynamic>.from(json as Map)),
+      (json) =>
+          WrongAnswerItem.fromJson(Map<String, dynamic>.from(json as Map)),
     );
   }
 
-  Future<String> uploadWrongAnswerImage({required String filePath, String? filename}) async {
+  Future<String> uploadWrongAnswerImage({
+    required String filePath,
+    String? filename,
+  }) async {
     final asset = await apiClient.uploadFile<Map<String, dynamic>>(
       '/api/assets',
       fieldName: 'file',
@@ -135,21 +267,30 @@ class StudentRepository {
   }
 
   Future<void> exportWrongAnswers(List<String> itemIds, {String? academyId}) {
-    return apiClient.post<void>(
-      '/api/student/wrong-answers/export',
-      {'item_ids': itemIds, 'academy_id': academyId},
-      (_) {},
+    return apiClient.post<void>('/api/student/wrong-answers/export', {
+      'item_ids': itemIds,
+      'academy_id': academyId,
+    }, (_) {});
+  }
+
+  Future<String> extractNoteSelectionText(String imageBase64) async {
+    final result = await apiClient.post<Map<String, dynamic>>(
+      '/api/student/notes/extract-text',
+      {'image_base64': imageBase64, 'image_mime': 'image/png'},
+      (json) => Map<String, dynamic>.from(json as Map),
     );
+    return (result['text'] ?? '').toString().trim();
   }
 
   Future<CalendarResponse> listCalendar({bool allowMock = true}) async {
     try {
       return apiClient.get<CalendarResponse>(
         '/api/student/calendar',
-        (json) => CalendarResponse.fromJson(Map<String, dynamic>.from(json as Map)),
+        (json) =>
+            CalendarResponse.fromJson(Map<String, dynamic>.from(json as Map)),
       );
-    } catch (_) {
-      if (allowMock) return mockCalendar;
+    } catch (exception) {
+      if (allowMock && _canUseMock(exception)) return mockCalendar;
       rethrow;
     }
   }
