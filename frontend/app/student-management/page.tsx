@@ -150,7 +150,39 @@ const emptyClassForm = {
   routine_recurrence_month_day: "",
   routine_repeat_until: "",
 };
+const CLASS_TIME_STEP_MINUTES = 10;
+const CLASS_TIME_OPTIONS = Array.from({ length: (24 * 60) / CLASS_TIME_STEP_MINUTES }, (_, index) => {
+  const minutes = index * CLASS_TIME_STEP_MINUTES;
+  const hours = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  const value = `${String(hours).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return { value, label: value, minutes };
+});
+const CLASS_TIME_QUICK_STARTS = ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
+const CLASS_DURATION_PRESETS = [
+  { label: "50분", minutes: 50 },
+  { label: "1시간", minutes: 60 },
+  { label: "1시간 30분", minutes: 90 },
+  { label: "2시간", minutes: 120 },
+];
 const COUNSELING_PENDING_STORAGE_KEY = "tena.student-management.pending-counseling";
+
+function minutesFromTimeValue(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function timeValueFromMinutes(value: number) {
+  const rounded = Math.round(value / CLASS_TIME_STEP_MINUTES) * CLASS_TIME_STEP_MINUTES;
+  const minutes = Math.max(0, Math.min(24 * 60 - CLASS_TIME_STEP_MINUTES, rounded));
+  const hours = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
 
 function readPendingCounselingCandidates(): PendingCounselingCandidate[] {
   if (typeof window === "undefined") return [];
@@ -1195,6 +1227,15 @@ export default function StudentManagementPage() {
     ? classForm.routine_recurrence_weekdays
     : [defaultWeekdayFromDateTime(classRoutineStartDateTime)];
   const classRoutineSelectedMonthDay = Number(classForm.routine_recurrence_month_day) || defaultMonthDayFromDateTime(classRoutineStartDateTime);
+  const classRoutineEndTimeOptions = useMemo(() => {
+    const startMinutes = minutesFromTimeValue(classForm.routine_starts_at);
+    return startMinutes === null ? CLASS_TIME_OPTIONS : CLASS_TIME_OPTIONS.filter((option) => option.minutes > startMinutes);
+  }, [classForm.routine_starts_at]);
+  const classRoutineDurationMinutes = useMemo(() => {
+    const startMinutes = minutesFromTimeValue(classForm.routine_starts_at);
+    const endMinutes = minutesFromTimeValue(classForm.routine_ends_at);
+    return startMinutes !== null && endMinutes !== null && endMinutes > startMinutes ? endMinutes - startMinutes : null;
+  }, [classForm.routine_starts_at, classForm.routine_ends_at]);
   const requestedTab = searchParams.get("tab");
 
   useEffect(() => {
@@ -1423,6 +1464,37 @@ export default function StudentManagementPage() {
         routine_recurrence_weekdays: base.includes(day)
           ? base.filter((item) => item !== day)
           : [...base, day].sort((left, right) => left - right),
+      };
+    });
+  }
+
+  function updateClassRoutineStartTime(value: string) {
+    setClassForm((current) => {
+      const nextStartMinutes = minutesFromTimeValue(value);
+      const currentStartMinutes = minutesFromTimeValue(current.routine_starts_at);
+      const currentEndMinutes = minutesFromTimeValue(current.routine_ends_at);
+      const durationMinutes = currentStartMinutes !== null && currentEndMinutes !== null && currentEndMinutes > currentStartMinutes ? currentEndMinutes - currentStartMinutes : 60;
+      const nextEnd = nextStartMinutes !== null ? timeValueFromMinutes(nextStartMinutes + durationMinutes) : "";
+
+      return {
+        ...current,
+        routine_starts_at: value,
+        routine_ends_at: nextEnd,
+      };
+    });
+  }
+
+  function updateClassRoutineEndTime(value: string) {
+    setClassForm((current) => ({ ...current, routine_ends_at: value }));
+  }
+
+  function applyClassRoutineDuration(minutes: number) {
+    setClassForm((current) => {
+      const startMinutes = minutesFromTimeValue(current.routine_starts_at);
+      if (startMinutes === null) return current;
+      return {
+        ...current,
+        routine_ends_at: timeValueFromMinutes(startMinutes + minutes),
       };
     });
   }
@@ -3285,9 +3357,68 @@ export default function StudentManagementPage() {
                   <div className="space-y-3 rounded-[8px] bg-zinc-50 p-3">
                     <div className="text-xs font-black text-zinc-500">일정</div>
                     <Input type="date" value={classForm.routine_date} onChange={(event) => setClassForm((current) => ({ ...current, routine_date: event.target.value }))} />
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input type="time" value={classForm.routine_starts_at} onChange={(event) => setClassForm((current) => ({ ...current, routine_starts_at: event.target.value }))} />
-                      <Input type="time" value={classForm.routine_ends_at} onChange={(event) => setClassForm((current) => ({ ...current, routine_ends_at: event.target.value }))} />
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="block text-xs font-semibold text-zinc-600">
+                          시작
+                          <select
+                            className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
+                            value={classForm.routine_starts_at}
+                            onChange={(event) => updateClassRoutineStartTime(event.target.value)}
+                          >
+                            <option value="">시작 시간</option>
+                            {CLASS_TIME_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block text-xs font-semibold text-zinc-600">
+                          종료
+                          <select
+                            className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10 disabled:opacity-55"
+                            value={classForm.routine_ends_at}
+                            onChange={(event) => updateClassRoutineEndTime(event.target.value)}
+                            disabled={!classForm.routine_starts_at}
+                          >
+                            <option value="">종료 시간</option>
+                            {classRoutineEndTimeOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1.5">
+                        {CLASS_TIME_QUICK_STARTS.map((time) => (
+                          <button
+                            key={time}
+                            type="button"
+                            onClick={() => updateClassRoutineStartTime(time)}
+                            className={cn("h-8 rounded-[7px] text-xs font-bold transition", classForm.routine_starts_at === time ? "bg-black text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950")}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {CLASS_DURATION_PRESETS.map((preset) => (
+                          <button
+                            key={preset.minutes}
+                            type="button"
+                            onClick={() => applyClassRoutineDuration(preset.minutes)}
+                            disabled={!classForm.routine_starts_at}
+                            className={cn(
+                              "h-8 rounded-[7px] text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-45",
+                              classRoutineDurationMinutes === preset.minutes ? "bg-black text-white" : "bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-100 hover:text-zinc-950"
+                            )}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <select
                       className="h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
