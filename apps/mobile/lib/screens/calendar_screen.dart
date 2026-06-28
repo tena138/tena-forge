@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -49,6 +50,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => context.push('/academies'),
+                    icon: const Icon(Icons.key_outlined, size: 18),
+                    label: const Text('학원 키'),
                   ),
                 ],
               ),

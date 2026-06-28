@@ -100,6 +100,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 '개인 캘린더와 개인 오답은 기본적으로 비공개입니다. 학원 컨텍스트의 자료와 과제는 해당 학원 멤버십이 활성 상태일 때만 표시됩니다.',
                 style: TextStyle(color: AppColors.muted, height: 1.5),
               ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () => context.push('/academies'),
+                icon: const Icon(Icons.key_outlined),
+                label: const Text('학원 키 추가'),
+              ),
             ],
           ),
         ),
@@ -109,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '학원 초대를 수락할 때 학원이 요구한 항목만 자동으로 채워집니다.',
+                '학원 키를 등록할 때 학원이 요구한 항목만 자동으로 채워집니다.',
                 style: TextStyle(color: AppColors.muted, height: 1.5),
               ),
               const SizedBox(height: 12),

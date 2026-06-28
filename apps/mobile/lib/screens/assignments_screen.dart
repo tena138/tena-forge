@@ -45,7 +45,7 @@ class AssignmentsScreen extends StatelessWidget {
         if (assignments.isEmpty)
           const EmptyState(
             title: '과제가 없습니다',
-            body: '학원 초대 링크나 앱 알림을 수락하면 연결된 학원의 과제가 여기에 표시됩니다.',
+            body: '학원에서 받은 키를 등록하면 연결된 클래스의 과제가 여기에 표시됩니다.',
           ),
       ],
     );

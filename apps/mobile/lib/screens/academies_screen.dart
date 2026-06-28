@@ -142,6 +142,14 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
         studentProfile: _profilePayload(),
       );
       if (!mounted) return;
+      _keyController.clear();
+      for (final controller in _profileControllers.values) {
+        controller.clear();
+      }
+      setState(() {
+        _requirements = null;
+        _checkedCode = null;
+      });
       _showMessage('학원 키가 등록되었습니다.');
       context.go('/calendar');
     } catch (error) {
@@ -212,43 +220,6 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
             ],
           ),
         ),
-        if (state.academyInvites.isNotEmpty)
-          PremiumCard(
-            title: '받은 앱 초대',
-            child: Column(
-              children: [
-                for (final invite in state.academyInvites) ...[
-                  ListItemCard(
-                    title: invite.academyName,
-                    subtitle: [invite.className, invite.studentName]
-                        .whereType<String>()
-                        .where((value) => value.isNotEmpty)
-                        .join(' · '),
-                    badge: 'pending',
-                    trailing: Wrap(
-                      spacing: 6,
-                      children: [
-                        FilledButton(
-                          onPressed: () {
-                            state.acceptAcademyInvite(invite);
-                          },
-                          child: const Text('수락'),
-                        ),
-                        OutlinedButton(
-                          onPressed: () {
-                            state.declineAcademyInvite(invite);
-                          },
-                          child: const Text('거절'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (invite != state.academyInvites.last)
-                    const SizedBox(height: 10),
-                ],
-              ],
-            ),
-          ),
         PremiumCard(
           title: '학원 연결',
           child: Column(
