@@ -1599,21 +1599,36 @@ export default function StudentManagementPage() {
     if (!classForm.name.trim()) return;
     setClassSaving(true);
     try {
-      const routineStartDateTime = classForm.routine_date && classForm.routine_starts_at ? `${classForm.routine_date}T${classForm.routine_starts_at}:00` : "";
-      const routineEndOffset = routineStartDateTime && classForm.routine_ends_at
-        ? new Date(`${classForm.routine_date}T${classForm.routine_ends_at}:00`).getTime() - new Date(routineStartDateTime).getTime()
+      const submittedClassForm = classForm;
+      const routineStartDateTime = submittedClassForm.routine_date && submittedClassForm.routine_starts_at ? `${submittedClassForm.routine_date}T${submittedClassForm.routine_starts_at}:00` : "";
+      const routineEndOffset = routineStartDateTime && submittedClassForm.routine_ends_at
+        ? new Date(`${submittedClassForm.routine_date}T${submittedClassForm.routine_ends_at}:00`).getTime() - new Date(routineStartDateTime).getTime()
         : null;
-      const created = await createClass(classForm);
-      let scheduleCount = 0;
-      if (routineStartDateTime) {
-        const starts = buildRecurringDateTimes(routineStartDateTime, {
-          unit: classForm.routine_recurrence_unit,
-          interval: Number(classForm.routine_recurrence_interval) || 1,
-          weekdays: classRoutineSelectedWeekdays,
-          monthDay: classRoutineSelectedMonthDay,
-          until: classForm.routine_repeat_until || undefined,
-          maxOccurrences: 160,
-        });
+      const selectedWeekdays = classRoutineSelectedWeekdays;
+      const selectedMonthDay = classRoutineSelectedMonthDay;
+      const created = await createClass(submittedClassForm);
+      setClasses((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      setClassForm(emptyClassForm);
+      setShowClassCreator(false);
+
+      if (!routineStartDateTime) {
+        setMessage("클래스를 만들었습니다.");
+        await refresh().catch(() => undefined);
+        return;
+      }
+
+      const starts = buildRecurringDateTimes(routineStartDateTime, {
+        unit: submittedClassForm.routine_recurrence_unit,
+        interval: Number(submittedClassForm.routine_recurrence_interval) || 1,
+        weekdays: selectedWeekdays,
+        monthDay: selectedMonthDay,
+        until: submittedClassForm.routine_repeat_until || undefined,
+        maxOccurrences: 160,
+      });
+      setMessage(`클래스를 만들었습니다. 일정 ${starts.length}개를 저장하는 중입니다.`);
+
+      void (async () => {
+        let scheduleCount = 0;
         const seriesId = starts.length > 1 ? `class-${created.id}-${Date.now()}` : null;
         for (const [index, startsAt] of starts.entries()) {
           const endsAt = routineEndOffset && routineEndOffset > 0
@@ -1633,12 +1648,12 @@ export default function StudentManagementPage() {
           });
           scheduleCount += 1;
         }
-      }
-      setClasses((current) => [created, ...current.filter((item) => item.id !== created.id)]);
-      setClassForm(emptyClassForm);
-      setShowClassCreator(false);
-      setMessage(scheduleCount > 0 ? `클래스와 루틴 일정 ${scheduleCount}개를 만들었습니다.` : "클래스를 만들었습니다.");
-      await refresh().catch(() => undefined);
+        setMessage(`클래스와 루틴 일정 ${scheduleCount}개를 만들었습니다.`);
+        await refresh().catch(() => undefined);
+      })().catch((error) => {
+        setMessage(errorMessage(error, "클래스는 만들었지만 일정 저장에 실패했습니다. 클래스 상세에서 일정을 다시 추가해 주세요."));
+        void refresh().catch(() => undefined);
+      });
     } catch (error) {
       setMessage(errorMessage(error, "클래스 생성에 실패했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
