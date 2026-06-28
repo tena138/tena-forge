@@ -149,6 +149,40 @@ class StudentRepository {
     );
   }
 
+  Future<List<StudentAcademyInvite>> listAcademyInvites() {
+    return apiClient.get<List<StudentAcademyInvite>>(
+      '/api/student/academy-invites',
+      (json) => (json as List)
+          .map(
+            (item) => StudentAcademyInvite.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Future<AcademyMembership> acceptAcademyInvite(String inviteId) {
+    final encoded = Uri.encodeComponent(inviteId.trim());
+    return apiClient.post<AcademyMembership>(
+      '/api/student/academy-invites/$encoded/accept',
+      null,
+      (json) =>
+          AcademyMembership.fromJson(Map<String, dynamic>.from(json as Map)),
+    );
+  }
+
+  Future<StudentAcademyInvite> declineAcademyInvite(String inviteId) {
+    final encoded = Uri.encodeComponent(inviteId.trim());
+    return apiClient.post<StudentAcademyInvite>(
+      '/api/student/academy-invites/$encoded/decline',
+      null,
+      (json) => StudentAcademyInvite.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      ),
+    );
+  }
+
   Future<StudentQuota> getQuota({bool allowMock = true}) async {
     try {
       return apiClient.get<StudentQuota>(

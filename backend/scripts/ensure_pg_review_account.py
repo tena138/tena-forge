@@ -30,6 +30,8 @@ def ensure_review_account(db, *, email: str, password: str, name: str, now: date
             email=email,
             password_hash=hash_password(password),
             academy_name=name,
+            display_name=name,
+            profile_name="pg_review",
             account_type="academy",
             plan=AcademyPlan.free,
             plan_expires_at=None,
@@ -46,6 +48,7 @@ def ensure_review_account(db, *, email: str, password: str, name: str, now: date
     else:
         account.password_hash = hash_password(password)
         account.academy_name = name
+        account.profile_name = account.profile_name or "pg_review"
         account.account_type = "academy"
         account.plan = AcademyPlan.free
         account.plan_expires_at = None

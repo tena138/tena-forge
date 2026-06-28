@@ -36,8 +36,8 @@ class LiveInteractionTests(unittest.TestCase):
         now = datetime.utcnow()
         db.add_all(
             [
-                Academy(id=uuid.UUID(self.owner_id), email="owner@example.com", academy_name="Owner Academy", account_type="academy"),
-                Academy(id=uuid.UUID(self.staff_id), email="staff@example.com", academy_name="Staff User", account_type="student"),
+                Academy(id=uuid.UUID(self.owner_id), email="owner@example.com", academy_name="Owner Academy", profile_name="owner_academy", account_type="academy"),
+                Academy(id=uuid.UUID(self.staff_id), email="staff@example.com", academy_name="Staff User", profile_name="staff_user", account_type="student"),
                 AcademyClass(id=self.class_a_id, academy_id=self.owner_id, name="Assigned Class", subject="Math", grade_level="G3"),
                 AcademyClass(id=self.class_b_id, academy_id=self.owner_id, name="Other Class", subject="Math", grade_level="G3"),
                 AcademyStaffMembership(academy_id=self.owner_id, user_id=self.staff_id, role="teacher"),

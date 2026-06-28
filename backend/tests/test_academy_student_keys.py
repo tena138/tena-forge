@@ -73,6 +73,7 @@ class AcademyStudentKeyTests(unittest.TestCase):
                     id=uuid.UUID(self.academy_id),
                     email="academy@example.com",
                     academy_name="Academy",
+                    profile_name="academy_test",
                     account_type="academy",
                     plan=AcademyPlan.basic,
                 ),
@@ -80,12 +81,14 @@ class AcademyStudentKeyTests(unittest.TestCase):
                     id=uuid.UUID(self.student_id),
                     email="student@example.com",
                     academy_name="Student",
+                    profile_name="student_test",
                     account_type="student",
                 ),
                 Academy(
                     id=uuid.UUID(self.other_student_id),
                     email="other@example.com",
                     academy_name="Other Student",
+                    profile_name="other_student_test",
                     account_type="student",
                 ),
                 AcademyClass(

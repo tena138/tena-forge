@@ -35,6 +35,7 @@ class StudentProfile {
     required this.id,
     required this.email,
     this.displayName,
+    this.profileName,
     this.accountType = 'academy',
     this.personalInfo = const StudentPersonalInfo(),
   });
@@ -42,6 +43,7 @@ class StudentProfile {
   final String id;
   final String email;
   final String? displayName;
+  final String? profileName;
   final String accountType;
   final StudentPersonalInfo personalInfo;
 
@@ -57,6 +59,7 @@ class StudentProfile {
           json['academy_name']?.toString() ??
           json['display_name']?.toString() ??
           json['name']?.toString(),
+      profileName: json['profile_name']?.toString(),
       accountType: json['account_type']?.toString() ?? 'academy',
       personalInfo: personalInfo,
     );
@@ -64,6 +67,7 @@ class StudentProfile {
 
   StudentProfile copyWith({
     String? displayName,
+    String? profileName,
     String? accountType,
     StudentPersonalInfo? personalInfo,
   }) {
@@ -71,6 +75,7 @@ class StudentProfile {
       id: id,
       email: email,
       displayName: displayName ?? this.displayName,
+      profileName: profileName ?? this.profileName,
       accountType: accountType ?? this.accountType,
       personalInfo: personalInfo ?? this.personalInfo,
     );
@@ -176,6 +181,56 @@ class StudentInvitePreview {
       linkedUserId: json['linked_user_id']?.toString(),
       claimedAt: DateTime.tryParse('${json['claimed_at'] ?? ''}'),
       expiresAt: DateTime.tryParse('${json['expires_at'] ?? ''}'),
+    );
+  }
+}
+
+class StudentAcademyInvite {
+  const StudentAcademyInvite({
+    required this.id,
+    required this.academyId,
+    required this.academyName,
+    required this.targetProfileName,
+    required this.status,
+    this.academySeatId,
+    this.academyStudentId,
+    this.studentName,
+    this.classId,
+    this.className,
+    this.createdAt,
+    this.acceptedAt,
+    this.declinedAt,
+  });
+
+  final String id;
+  final String academyId;
+  final String academyName;
+  final String targetProfileName;
+  final String status;
+  final String? academySeatId;
+  final String? academyStudentId;
+  final String? studentName;
+  final String? classId;
+  final String? className;
+  final DateTime? createdAt;
+  final DateTime? acceptedAt;
+  final DateTime? declinedAt;
+
+  factory StudentAcademyInvite.fromJson(Map<String, dynamic> json) {
+    return StudentAcademyInvite(
+      id: '${json['id']}',
+      academyId: '${json['academy_id']}',
+      academyName: json['academy_name']?.toString() ?? 'Academy',
+      academySeatId: json['academy_seat_id']?.toString(),
+      academyStudentId: json['academy_student_id']?.toString(),
+      studentName: json['student_name']?.toString(),
+      classId: json['class_id']?.toString(),
+      className: json['class_name']?.toString(),
+      targetProfileName: json['target_profile_name']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'pending',
+      createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
+      acceptedAt: DateTime.tryParse('${json['accepted_at'] ?? ''}'),
+      declinedAt: DateTime.tryParse('${json['declined_at'] ?? ''}'),
     );
   }
 }

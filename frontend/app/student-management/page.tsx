@@ -39,6 +39,7 @@ import { Select } from "@/components/ui/select";
 import type { AcademyProfile } from "@/lib/auth-api";
 import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import {
+  createStudentInviteByProfileName,
   issueLearningStudentKeys,
   listAcademySeats,
   releaseAcademySeat,
@@ -1127,6 +1128,9 @@ export default function StudentManagementPage() {
   const [keyManagerLoading, setKeyManagerLoading] = useState(false);
   const [keyBusySeatId, setKeyBusySeatId] = useState("");
   const [newKeyCodes, setNewKeyCodes] = useState<string[]>([]);
+  const [profileInviteName, setProfileInviteName] = useState("");
+  const [profileInviteDisplayName, setProfileInviteDisplayName] = useState("");
+  const [profileInviteMemo, setProfileInviteMemo] = useState("");
   const [bulkKeyCount, setBulkKeyCount] = useState("1");
   const [bulkInviteText, setBulkInviteText] = useState("");
   const [bulkInviteChannel, setBulkInviteChannel] = useState<BulkKeyChannel>("sms");
@@ -1581,6 +1585,41 @@ export default function StudentManagementPage() {
     });
   }
 
+  function normalizedProfileInviteName() {
+    return profileInviteName.trim().replace(/^@+/, "").toLowerCase();
+  }
+
+  async function sendProfileNameInvite(classId = keyClassId) {
+    if (!academyId || !classId) return;
+    const profileName = normalizedProfileInviteName();
+    if (!/^[a-z0-9][a-z0-9_]{2,31}$/.test(profileName)) {
+      setMessage("공개 프로필 이름은 @ 없이 영문 소문자, 숫자, _로 정확히 입력해 주세요.");
+      return;
+    }
+    setKeyManagerLoading(true);
+    setClassStudentSavingId(classId);
+    try {
+      await createStudentInviteByProfileName(academyId, {
+        class_id: classId,
+        profile_name: profileName,
+        display_name: profileInviteDisplayName.trim() || null,
+        memo: profileInviteMemo.trim() || null,
+      });
+      setProfileInviteName("");
+      setProfileInviteDisplayName("");
+      setProfileInviteMemo("");
+      setNewKeyCodes([]);
+      setAddingStudentClassId("");
+      setMessage(`@${profileName} 학생에게 초대를 보냈습니다. 학생이 수락하면 클래스에 연결됩니다.`);
+      await Promise.all([loadKeyManager().catch(() => undefined), refresh().catch(() => undefined)]);
+    } catch (error) {
+      setMessage(errorMessage(error, "학생 프로필 초대를 보내지 못했습니다. 프로필 이름을 확인해 주세요."));
+    } finally {
+      setClassStudentSavingId("");
+      setKeyManagerLoading(false);
+    }
+  }
+
   async function issueClassKey() {
     if (!academyId || !keyClassId) return;
     setKeyManagerLoading(true);
@@ -1726,6 +1765,7 @@ export default function StudentManagementPage() {
 
   function startClassStudentAdd(classRow: ClassCard) {
     setAddingStudentClassId(classRow.id);
+    setKeyClassId(classRow.id);
   }
 
   function cancelClassStudentAdd() {
@@ -2367,6 +2407,29 @@ export default function StudentManagementPage() {
                             <button type="button" onClick={cancelClassStudentAdd} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="학생 연결 패널 닫기">
                               <X className="h-4 w-4" />
                             </button>
+                          </div>
+                          <div className="mt-3 grid gap-2">
+                            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                              <div className="flex h-9 items-center rounded-md bg-zinc-100 px-2 ring-1 ring-zinc-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/10">
+                                <span className="text-xs font-black text-zinc-500">@</span>
+                                <input
+                                  className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none"
+                                  placeholder="profile_name"
+                                  value={profileInviteName}
+                                  onChange={(event) => setProfileInviteName(event.target.value.replace(/^@+/, "").toLowerCase())}
+                                />
+                              </div>
+                              <Button type="button" size="sm" onClick={() => sendProfileNameInvite(classRow.id)} disabled={classStudentSavingId === classRow.id || !academyId || !profileInviteName.trim()}>
+                                {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                초대
+                              </Button>
+                            </div>
+                            <Input
+                              className="h-9 border-0 bg-zinc-100 text-sm"
+                              placeholder="학원 학생 표시명 (선택)"
+                              value={profileInviteDisplayName}
+                              onChange={(event) => setProfileInviteDisplayName(event.target.value)}
+                            />
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Button type="button" size="sm" onClick={() => issueClassKeyForClass(classRow)} disabled={classStudentSavingId === classRow.id || !academyId}>
@@ -3125,6 +3188,51 @@ export default function StudentManagementPage() {
                   </button>
                 </div>
                 <div className="space-y-3">
+                  <div className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-100">
+                    <p className="text-sm font-black text-zinc-950">공개 프로필 이름으로 초대</p>
+                    <div className="mt-3 grid gap-2">
+                      <select
+                        className="h-10 min-w-0 rounded-md border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 focus:ring-2 focus:ring-black/10"
+                        value={keyClassId}
+                        disabled={!classes.length || keyManagerLoading}
+                        onChange={(event) => setKeyClassId(event.target.value)}
+                      >
+                        {!classes.length ? <option value="">클래스 없음</option> : null}
+                        {classes.map((classRow) => (
+                          <option key={classRow.id} value={classRow.id}>
+                            {classRow.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                        <div className="flex h-10 items-center rounded-md bg-white px-3 ring-1 ring-zinc-200 focus-within:ring-2 focus-within:ring-black/10">
+                          <span className="text-sm font-black text-zinc-500">@</span>
+                          <input
+                            className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none"
+                            placeholder="profile_name"
+                            value={profileInviteName}
+                            onChange={(event) => setProfileInviteName(event.target.value.replace(/^@+/, "").toLowerCase())}
+                          />
+                        </div>
+                        <Button type="button" onClick={() => sendProfileNameInvite()} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length || !profileInviteName.trim()}>
+                          {keyManagerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                          초대 보내기
+                        </Button>
+                      </div>
+                      <Input
+                        className="border-0 bg-white"
+                        placeholder="학원 학생 표시명 (선택)"
+                        value={profileInviteDisplayName}
+                        onChange={(event) => setProfileInviteDisplayName(event.target.value)}
+                      />
+                      <Input
+                        className="border-0 bg-white"
+                        placeholder="메모 (선택)"
+                        value={profileInviteMemo}
+                        onChange={(event) => setProfileInviteMemo(event.target.value)}
+                      />
+                    </div>
+                  </div>
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <select
                       className="h-10 min-w-0 rounded-md border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Suspense, useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Eye, EyeOff, GraduationCap } from "lucide-react";
@@ -8,8 +9,11 @@ import { z } from "zod";
 
 import { AuthCard, FieldError, FullWidthButton } from "@/components/auth/auth-ui";
 import { Input } from "@/components/ui/input";
-import { checkLoginIdAvailability, completeSocialSignup, updateMe } from "@/lib/auth-api";
+import { checkLoginIdAvailability, checkProfileNameAvailability, completeSocialSignup, updateMe } from "@/lib/auth-api";
 import { workspaceHome } from "@/lib/auth-redirect";
+
+const loginIdPattern = /^[a-z0-9][a-z0-9_.-]{2,31}$/;
+const profileNamePattern = /^[a-z0-9][a-z0-9_]{2,31}$/;
 
 const schema = z
   .object({
@@ -17,10 +21,15 @@ const schema = z
       .string()
       .min(3, "아이디는 3자 이상이어야 합니다.")
       .max(32, "아이디는 32자 이하여야 합니다.")
-      .regex(/^[a-z0-9][a-z0-9_.-]*$/, "영문 소문자, 숫자, ., _, - 만 사용할 수 있습니다."),
-    nickname: z.string().min(2, "닉네임을 입력해주세요.").max(80, "닉네임은 80자 이하여야 합니다."),
-    password: z.string().min(8, "8자 이상 입력해주세요."),
-    confirmPassword: z.string().min(1, "비밀번호 확인을 입력해주세요."),
+      .regex(loginIdPattern, "영문 소문자, 숫자, ., _, -만 사용할 수 있습니다."),
+    nickname: z.string().min(2, "닉네임을 입력해 주세요.").max(80, "닉네임은 80자 이하여야 합니다."),
+    profile_name: z
+      .string()
+      .min(3, "공개 프로필 이름은 3자 이상이어야 합니다.")
+      .max(32, "공개 프로필 이름은 32자 이하여야 합니다.")
+      .regex(profileNamePattern, "영문 소문자, 숫자, _만 사용할 수 있습니다."),
+    password: z.string().min(8, "8자 이상 입력해 주세요."),
+    confirmPassword: z.string().min(1, "비밀번호 확인을 입력해 주세요."),
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.confirmPassword) {
@@ -30,34 +39,68 @@ const schema = z
 
 type CompleteForm = z.infer<typeof schema>;
 type AccountType = "academy" | "student";
-type LoginIdStatus = "idle" | "checking" | "available" | "taken" | "error";
-const loginIdPattern = /^[a-z0-9][a-z0-9_.-]{2,31}$/;
+type NameStatus = "idle" | "checking" | "available" | "taken" | "error";
+
+function normalizeLoginId(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizeProfileName(value: string) {
+  return value.trim().replace(/^@+/, "").toLowerCase();
+}
+
+function profileNameFromNickname(value: string) {
+  return normalizeProfileName(value)
+    .normalize("NFKD")
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32);
+}
+
+function detailMessage(error: any, fallback: string) {
+  const detail = error.response?.data?.detail;
+  if (Array.isArray(detail)) return detail.map((item) => item?.msg).filter(Boolean).join("\n") || fallback;
+  if (detail && typeof detail === "object") return detail.message || detail.code || fallback;
+  return typeof detail === "string" ? detail : fallback;
+}
 
 function RegisterCompleteContent() {
   const [signupToken, setSignupToken] = useState("");
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [readyForSetup, setReadyForSetup] = useState(false);
-  const [loginIdStatus, setLoginIdStatus] = useState<LoginIdStatus>("idle");
+  const [loginIdStatus, setLoginIdStatus] = useState<NameStatus>("idle");
+  const [profileNameStatus, setProfileNameStatus] = useState<NameStatus>("idle");
   const [setupSaving, setSetupSaving] = useState<AccountType | null>(null);
   const [setupError, setSetupError] = useState("");
   const form = useForm<CompleteForm>({
     resolver: zodResolver(schema),
-    defaultValues: { login_id: "", nickname: "", password: "", confirmPassword: "" },
+    defaultValues: { login_id: "", nickname: "", profile_name: "", password: "", confirmPassword: "" },
   });
   const loginId = useWatch({ control: form.control, name: "login_id" });
+  const profileName = useWatch({ control: form.control, name: "profile_name" });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.slice(1));
     const token = params.get("signup_token") || "";
     const nickname = params.get("nickname") || "";
     setSignupToken(token);
-    if (nickname) form.setValue("nickname", nickname.slice(0, 80), { shouldValidate: true });
+    if (nickname) {
+      form.setValue("nickname", nickname.slice(0, 80), { shouldValidate: true });
+      const suggestedProfileName = profileNameFromNickname(nickname);
+      if (suggestedProfileName.length >= 3) {
+        form.setValue("profile_name", suggestedProfileName, { shouldValidate: true });
+      }
+    }
     window.history.replaceState(null, "", window.location.pathname);
   }, [form]);
 
   useEffect(() => {
-    const normalized = (loginId || "").trim().toLowerCase();
+    const normalized = normalizeLoginId(loginId || "");
+    if (normalized !== loginId) {
+      form.setValue("login_id", normalized, { shouldValidate: true });
+      return;
+    }
     if (!normalized || !loginIdPattern.test(normalized)) {
       setLoginIdStatus("idle");
       return;
@@ -76,7 +119,33 @@ function RegisterCompleteContent() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [loginId]);
+  }, [form, loginId]);
+
+  useEffect(() => {
+    const normalized = normalizeProfileName(profileName || "");
+    if (normalized !== profileName) {
+      form.setValue("profile_name", normalized, { shouldValidate: true });
+      return;
+    }
+    if (!normalized || !profileNamePattern.test(normalized)) {
+      setProfileNameStatus("idle");
+      return;
+    }
+    setProfileNameStatus("checking");
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await checkProfileNameAvailability(normalized);
+        if (!cancelled) setProfileNameStatus(result.valid && result.available ? "available" : "taken");
+      } catch {
+        if (!cancelled) setProfileNameStatus("error");
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [form, profileName]);
 
   async function submit(values: CompleteForm) {
     setServerError("");
@@ -88,22 +157,29 @@ function RegisterCompleteContent() {
       setServerError("아이디 중복 확인 중입니다.");
       return;
     }
+    if (profileNameStatus === "taken") {
+      setServerError("이미 사용 중인 공개 프로필 이름입니다.");
+      return;
+    }
+    if (profileNameStatus === "checking") {
+      setServerError("공개 프로필 이름 중복 확인 중입니다.");
+      return;
+    }
     if (!signupToken) {
-      setServerError("소셜 인증이 만료되었습니다. 회원가입을 다시 시작해주세요.");
+      setServerError("소셜 인증이 만료되었습니다. 회원가입을 다시 시작해 주세요.");
       return;
     }
     try {
       await completeSocialSignup({
         signup_token: signupToken,
-        login_id: values.login_id,
-        nickname: values.nickname,
+        login_id: normalizeLoginId(values.login_id),
+        nickname: values.nickname.trim(),
+        profile_name: normalizeProfileName(values.profile_name),
         password: values.password,
       });
       setReadyForSetup(true);
     } catch (error: any) {
-      const detail = error.response?.data?.detail;
-      if (Array.isArray(detail)) setServerError(detail.map((item) => item?.msg).filter(Boolean).join("\n") || "회원가입에 실패했습니다.");
-      else setServerError(typeof detail === "string" ? detail : "회원가입에 실패했습니다.");
+      setServerError(detailMessage(error, "회원가입에 실패했습니다."));
     }
   }
 
@@ -116,27 +192,38 @@ function RegisterCompleteContent() {
       const destination = workspaceHome(profile.account_type || accountType);
       window.location.assign(destination);
     } catch (error: any) {
-      const detail = error.response?.data?.detail;
-      const message = typeof detail === "string" ? detail : "시작 공간을 저장하지 못했습니다. 다시 선택해주세요.";
-      setSetupError(message);
+      setSetupError(detailMessage(error, "시작 공간을 저장하지 못했습니다. 다시 선택해 주세요."));
       setSetupSaving(null);
     }
   }
 
   return (
     <>
-      <AuthCard title="계정 만들기" subtitle="다음 로그인부터는 아이디/비밀번호 또는 소셜 로그인 중 편한 방식을 사용할 수 있습니다.">
+      <AuthCard title="계정 만들기" subtitle="로그인 아이디와 공개 프로필 이름을 분리해서 만듭니다. 공개 프로필 이름은 초대에 사용됩니다.">
         <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
           <label className="block text-sm font-semibold text-zinc-800">
-            아이디
+            로그인 아이디
             <Input autoComplete="username" className="mt-1.5 h-11" {...form.register("login_id")} />
             <FieldError message={form.formState.errors.login_id?.message} />
-            <LoginIdStatusMessage status={loginIdStatus} />
+            <NameStatusMessage status={loginIdStatus} kind="login" />
           </label>
           <label className="block text-sm font-semibold text-zinc-800">
-            닉네임
+            표시 이름
             <Input autoComplete="nickname" className="mt-1.5 h-11" {...form.register("nickname")} />
             <FieldError message={form.formState.errors.nickname?.message} />
+          </label>
+          <label className="block text-sm font-semibold text-zinc-800">
+            공개 프로필 이름
+            <div className="mt-1.5 flex h-11 items-center rounded-md bg-zinc-100 px-3 transition focus-within:bg-white focus-within:ring-2 focus-within:ring-black/10">
+              <span className="text-sm font-bold text-zinc-500">@</span>
+              <input
+                autoComplete="off"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none"
+                {...form.register("profile_name")}
+              />
+            </div>
+            <FieldError message={form.formState.errors.profile_name?.message} />
+            <NameStatusMessage status={profileNameStatus} kind="profile" />
           </label>
           <label className="block text-sm font-semibold text-zinc-800">
             비밀번호
@@ -154,7 +241,7 @@ function RegisterCompleteContent() {
             <FieldError message={form.formState.errors.confirmPassword?.message} />
           </label>
           {serverError ? <p className="whitespace-pre-line rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-800">{serverError}</p> : null}
-          <FullWidthButton loading={form.formState.isSubmitting} disabled={loginIdStatus === "checking" || loginIdStatus === "taken"}>
+          <FullWidthButton loading={form.formState.isSubmitting} disabled={loginIdStatus === "checking" || loginIdStatus === "taken" || profileNameStatus === "checking" || profileNameStatus === "taken"}>
             회원가입 완료
           </FullWidthButton>
         </form>
@@ -167,15 +254,15 @@ function RegisterCompleteContent() {
             <div className="mt-5 grid gap-2">
               <SetupButton
                 icon={<Building2 className="h-4 w-4" />}
-                title="학원 / 연구실 / 과외 교습자"
-                detail={setupSaving === "academy" ? "저장 중..." : "무료 콘솔로 시작"}
+                title="학원 / 연구소 / 과외 교습소"
+                detail={setupSaving === "academy" ? "저장 중..." : "운영 콘솔로 시작"}
                 disabled={Boolean(setupSaving)}
                 onClick={() => finishSetup("academy")}
               />
               <SetupButton
                 icon={<GraduationCap className="h-4 w-4" />}
                 title="학생 / 학부모"
-                detail={setupSaving === "student" ? "저장 중..." : "학생용 학습 공간으로 이동"}
+                detail={setupSaving === "student" ? "저장 중..." : "학생 학습 공간으로 이동"}
                 disabled={Boolean(setupSaving)}
                 onClick={() => finishSetup("student")}
               />
@@ -188,26 +275,35 @@ function RegisterCompleteContent() {
   );
 }
 
-function LoginIdStatusMessage({ status }: { status: LoginIdStatus }) {
+function NameStatusMessage({ status, kind }: { status: NameStatus; kind: "login" | "profile" }) {
   if (status === "idle") return null;
-  const styles: Record<LoginIdStatus, string> = {
+  const styles: Record<NameStatus, string> = {
     idle: "",
     checking: "text-zinc-500",
     available: "text-zinc-800",
     taken: "text-zinc-800",
     error: "text-zinc-800",
   };
-  const messages: Record<LoginIdStatus, string> = {
-    idle: "",
-    checking: "확인 중...",
-    available: "사용 가능한 아이디입니다.",
-    taken: "이미 사용 중인 아이디입니다.",
-    error: "중복 확인에 실패했습니다.",
+  const messages: Record<"login" | "profile", Record<NameStatus, string>> = {
+    login: {
+      idle: "",
+      checking: "확인 중...",
+      available: "사용 가능한 아이디입니다.",
+      taken: "이미 사용 중인 아이디입니다.",
+      error: "중복 확인에 실패했습니다.",
+    },
+    profile: {
+      idle: "",
+      checking: "확인 중...",
+      available: "사용 가능한 공개 프로필 이름입니다.",
+      taken: "이미 사용 중인 공개 프로필 이름입니다.",
+      error: "중복 확인에 실패했습니다.",
+    },
   };
-  return <p className={`mt-1.5 text-xs font-semibold ${styles[status]}`}>{messages[status]}</p>;
+  return <p className={`mt-1.5 text-xs font-semibold ${styles[status]}`}>{messages[kind][status]}</p>;
 }
 
-function SetupButton({ icon, title, detail, disabled, onClick }: { icon: React.ReactNode; title: string; detail: string; disabled?: boolean; onClick: () => void }) {
+function SetupButton({ icon, title, detail, disabled, onClick }: { icon: ReactNode; title: string; detail: string; disabled?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"

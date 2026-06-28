@@ -88,6 +88,7 @@ class Academy(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     academy_name: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    profile_name: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     account_type: Mapped[str] = mapped_column(String(20), default="academy", nullable=False, index=True)
     business_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -1881,6 +1882,24 @@ class RoutineMessage(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     action: Mapped[RoutineAction] = relationship("RoutineAction", back_populates="messages")
+
+
+class StudentInvite(Base):
+    __tablename__ = "student_invites"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    academy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    academy_seat_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("academy_seats.id"), nullable=False, index=True)
+    academy_student_membership_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("student_academy_memberships.id"), nullable=False, index=True)
+    target_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    target_profile_name: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False, index=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    notification_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    declined_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class StudentNotification(Base):

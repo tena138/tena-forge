@@ -35,9 +35,9 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
     def seed_accounts(self, db, purchased_staff_seats: int = 1):
         db.add_all(
             [
-                Academy(id=uuid.UUID(self.owner_id), email="owner@example.com", academy_name="Owner Academy", account_type="academy"),
-                Academy(id=uuid.UUID(self.staff_id), email="staff@example.com", academy_name="Staff User", account_type="student"),
-                Academy(id=uuid.UUID(self.other_id), email="other@example.com", academy_name="Other User", account_type="student"),
+                Academy(id=uuid.UUID(self.owner_id), email="owner@example.com", academy_name="Owner Academy", profile_name="owner_academy", account_type="academy"),
+                Academy(id=uuid.UUID(self.staff_id), email="staff@example.com", academy_name="Staff User", profile_name="staff_user", account_type="student"),
+                Academy(id=uuid.UUID(self.other_id), email="other@example.com", academy_name="Other User", profile_name="other_user", account_type="student"),
                 AcademyStudentSubscription(academy_id=self.owner_id, plan_code="basic", purchased_staff_seats=purchased_staff_seats),
                 AcademyClass(id=self.class_id, academy_id=self.owner_id, name="Algebra A", subject="Math", grade_level="G3"),
             ]
@@ -121,7 +121,7 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
     def test_workspace_listing_does_not_create_free_subscription(self):
         db = self.Session()
         try:
-            db.add(Academy(id=uuid.UUID(self.owner_id), email="owner@example.com", academy_name="Owner Academy", account_type="academy"))
+            db.add(Academy(id=uuid.UUID(self.owner_id), email="owner@example.com", academy_name="Owner Academy", profile_name="owner_academy", account_type="academy"))
             db.commit()
 
             visible = list_workspaces(request_for(self.owner_id), db)

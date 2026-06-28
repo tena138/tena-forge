@@ -15,6 +15,7 @@ class PlatformSessionStore implements SessionStore {
   static const _profileIdKey = 'tena.student.profile.id';
   static const _profileEmailKey = 'tena.student.profile.email';
   static const _profileNameKey = 'tena.student.profile.name';
+  static const _profilePublicNameKey = 'tena.student.profile.public_name';
   static const _profileAccountTypeKey = 'tena.student.profile.account_type';
   static const _profilePersonalInfoKey = 'tena.student.profile.personal_info';
 
@@ -47,6 +48,7 @@ class PlatformSessionStore implements SessionStore {
     final id = await _storage.read(key: _profileIdKey);
     final email = await _storage.read(key: _profileEmailKey);
     final displayName = await _storage.read(key: _profileNameKey);
+    final profileName = await _storage.read(key: _profilePublicNameKey);
     final accountType = await _storage.read(key: _profileAccountTypeKey);
     final personalInfoJson = await _storage.read(key: _profilePersonalInfoKey);
     if (id == null || email == null) return null;
@@ -54,6 +56,7 @@ class PlatformSessionStore implements SessionStore {
       id: id,
       email: email,
       displayName: displayName,
+      profileName: profileName,
       accountType: accountType ?? 'academy',
       personalInfo: StudentPersonalInfo.fromJson(
         jsonDecode(personalInfoJson ?? '{}') as Map<String, dynamic>,
@@ -67,6 +70,7 @@ class PlatformSessionStore implements SessionStore {
       await _storage.delete(key: _profileIdKey);
       await _storage.delete(key: _profileEmailKey);
       await _storage.delete(key: _profileNameKey);
+      await _storage.delete(key: _profilePublicNameKey);
       await _storage.delete(key: _profileAccountTypeKey);
       await _storage.delete(key: _profilePersonalInfoKey);
       return;
@@ -76,6 +80,10 @@ class PlatformSessionStore implements SessionStore {
     await _storage.write(
       key: _profileNameKey,
       value: profile.displayName ?? '',
+    );
+    await _storage.write(
+      key: _profilePublicNameKey,
+      value: profile.profileName ?? '',
     );
     await _storage.write(
       key: _profileAccountTypeKey,

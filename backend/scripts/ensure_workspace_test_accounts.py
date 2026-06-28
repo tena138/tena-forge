@@ -11,6 +11,7 @@ from database import SessionLocal
 from models import Academy, AcademyPlan, AcademyStudentSubscription, Plan, Subscription
 from services.academy_student_access import ensure_academy_subscription, ensure_default_academy_plans
 from services.auth_security import hash_password, validate_password_policy
+from services.profile_names import profile_name_seed
 from services.subject_engines import subject_engine_pricing
 from services.subscription_pricing import calculate_subscription_price
 
@@ -51,6 +52,8 @@ def _upsert_academy(db, *, email: str, name: str, plan: AcademyPlan, now: dateti
             email=email,
             password_hash=hash_password(TEST_PASSWORD),
             academy_name=name,
+            display_name=name,
+            profile_name=profile_name_seed(email.split("@", 1)[0]),
             account_type="academy",
             email_verified=True,
             email_verified_at=now,
@@ -65,6 +68,7 @@ def _upsert_academy(db, *, email: str, name: str, plan: AcademyPlan, now: dateti
         print(f"Updated test academy account: {email}")
     account.password_hash = hash_password(TEST_PASSWORD)
     account.academy_name = name
+    account.profile_name = account.profile_name or profile_name_seed(email.split("@", 1)[0])
     account.account_type = "academy"
     account.email_verified = True
     account.email_verified_at = account.email_verified_at or now

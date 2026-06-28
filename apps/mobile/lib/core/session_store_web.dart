@@ -11,6 +11,7 @@ class PlatformSessionStore implements SessionStore {
   static const _profileIdKey = 'tena.student.profile.id';
   static const _profileEmailKey = 'tena.student.profile.email';
   static const _profileNameKey = 'tena.student.profile.name';
+  static const _profilePublicNameKey = 'tena.student.profile.public_name';
   static const _profileAccountTypeKey = 'tena.student.profile.account_type';
   static const _profilePersonalInfoKey = 'tena.student.profile.personal_info';
 
@@ -49,6 +50,7 @@ class PlatformSessionStore implements SessionStore {
       id: id,
       email: email,
       displayName: _read(_profileNameKey),
+      profileName: _read(_profilePublicNameKey),
       accountType: _read(_profileAccountTypeKey) ?? 'academy',
       personalInfo: StudentPersonalInfo.fromJson(
         jsonDecode(_read(_profilePersonalInfoKey) ?? '{}')
@@ -63,6 +65,7 @@ class PlatformSessionStore implements SessionStore {
       _write(_profileIdKey, null);
       _write(_profileEmailKey, null);
       _write(_profileNameKey, null);
+      _write(_profilePublicNameKey, null);
       _write(_profileAccountTypeKey, null);
       _write(_profilePersonalInfoKey, null);
       return;
@@ -70,6 +73,7 @@ class PlatformSessionStore implements SessionStore {
     _write(_profileIdKey, profile.id);
     _write(_profileEmailKey, profile.email);
     _write(_profileNameKey, profile.displayName ?? '');
+    _write(_profilePublicNameKey, profile.profileName ?? '');
     _write(_profileAccountTypeKey, profile.accountType);
     _write(_profilePersonalInfoKey, jsonEncode(profile.personalInfo.toJson()));
   }

@@ -96,6 +96,7 @@ from services.auth_security import (
 )
 from services.account_data_reset import reset_account_data as reset_account_operational_data
 from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id, require_workspace_owner
+from services.profile_names import normalize_profile_name, valid_profile_name
 
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -237,6 +238,26 @@ def _normalize_login_id(login_id: str) -> str:
 
 def _valid_login_id(login_id: str) -> bool:
     return bool(LOGIN_ID_RE.fullmatch(_normalize_login_id(login_id)))
+
+
+def _normalize_required_profile_name(profile_name: str) -> str:
+    normalized = normalize_profile_name(profile_name)
+    if not valid_profile_name(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "PROFILE_NAME_INVALID", "message": "Profile name must be 3-32 lowercase letters, numbers, or underscores."},
+        )
+    return normalized
+
+
+def _ensure_profile_name_available(db: Session, profile_name: str, *, except_academy_id: uuid.UUID | None = None) -> None:
+    query = select(Academy.id).where(Academy.profile_name == profile_name)
+    existing = db.scalar(query)
+    if existing and (except_academy_id is None or str(existing) != str(except_academy_id)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "PROFILE_NAME_TAKEN", "message": "This profile name is already in use."},
+        )
 
 
 def _create_social_signup_token(provider: str, provider_account_id: str, nickname: str) -> str:
@@ -458,14 +479,18 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     email = payload.email.lower()
     _verify_registration_code(email, payload.verification_code, payload.verification_session)
     academy_name = (payload.academy_name or _default_academy_name(email)).strip()
+    profile_name = _normalize_required_profile_name(payload.profile_name)
     validate_password_policy(payload.password, email, academy_name)
     existing = db.scalar(select(Academy).where(Academy.email == email))
     if existing:
         raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
+    _ensure_profile_name_available(db, profile_name)
     academy = Academy(
         email=email,
         password_hash=hash_password(payload.password),
         academy_name=academy_name,
+        display_name=academy_name,
+        profile_name=profile_name,
         account_type=payload.account_type,
         business_number=payload.business_number,
         phone=payload.phone,
@@ -496,6 +521,21 @@ def check_login_id_availability(request: Request, login_id: str = Query(..., min
     }
 
 
+@router.get("/profile-name/availability")
+@limiter.limit("30/minute")
+def check_profile_name_availability(request: Request, profile_name: str = Query(..., min_length=1, max_length=64), db: Session = Depends(get_db)):
+    normalized = normalize_profile_name(profile_name)
+    valid = valid_profile_name(normalized)
+    available = False
+    if valid:
+        available = db.scalar(select(Academy.id).where(Academy.profile_name == normalized)) is None
+    return {
+        "profile_name": normalized,
+        "valid": valid,
+        "available": bool(valid and available),
+    }
+
+
 @router.post("/register/social-complete", response_model=TokenResponse)
 @limiter.limit("5/hour")
 def complete_social_signup(payload: SocialSignupCompleteRequest, request: Request, response: Response, db: Session = Depends(get_db)):
@@ -516,11 +556,15 @@ def complete_social_signup(payload: SocialSignupCompleteRequest, request: Reques
         raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다.")
 
     nickname = payload.nickname.strip()
+    profile_name = _normalize_required_profile_name(payload.profile_name)
+    _ensure_profile_name_available(db, profile_name)
     validate_password_policy(payload.password, login_email, nickname)
     academy = Academy(
         email=login_email,
         password_hash=hash_password(payload.password),
         academy_name=nickname,
+        display_name=nickname,
+        profile_name=profile_name,
         account_type="academy",
         plan=AcademyPlan.free,
         email_verified=True,
@@ -873,6 +917,10 @@ def update_me(payload: ProfileUpdateRequest, academy: Academy = Depends(get_curr
             if not cleaned:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="display_name is required")
             academy.display_name = cleaned
+    if "profile_name" in changes and changes["profile_name"] is not None:
+        profile_name = _normalize_required_profile_name(changes["profile_name"])
+        _ensure_profile_name_available(db, profile_name, except_academy_id=academy.id)
+        academy.profile_name = profile_name
     if "bio" in changes:
         value = changes["bio"]
         academy.bio = value.strip() if isinstance(value, str) and value.strip() else None
@@ -1041,9 +1089,13 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
         if not academy and mode == "login":
             return _oauth_error_redirect("signup_required", mode=mode)
         if not academy:
+            profile_name = _normalize_required_profile_name(f"{provider}_{provider_account_id[:20]}")
+            _ensure_profile_name_available(db, profile_name)
             academy = Academy(
                 email=_oauth_internal_email(provider, provider_account_id),
                 academy_name=name,
+                display_name=name,
+                profile_name=profile_name,
                 account_type=requested_account_type or "academy",
                 email_verified=True,
                 email_verified_at=now_utc(),

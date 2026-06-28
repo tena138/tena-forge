@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db, get_settings
 from models import (
+    Academy,
     AcademyClass,
     AcademyMaterial,
     AcademyMaterialAssignment,
@@ -36,6 +37,7 @@ from models import (
     Problem,
     SeatAssignmentHistory,
     StudentAcademyMembership,
+    StudentInvite,
     StudentNotification,
     TestSession,
     TestSessionEvent,
@@ -48,6 +50,7 @@ from models import (
 from services.academy_student_access import (
     academy_seat_key_status,
     apply_student_profile_values,
+    apply_seat_invitation_to_membership,
     audit,
     build_student_invite_link,
     build_student_key_invite_message,
@@ -64,6 +67,7 @@ from services.academy_student_access import (
     get_academy_name,
     hash_invite_code,
     has_unlimited_seats,
+    is_unlinked_academy_student,
     normalize_invite_phone,
     real_ip,
     release_seat,
@@ -74,6 +78,7 @@ from services.academy_student_access import (
     staff_role,
     student_memberships,
     student_quota,
+    student_has_active_class,
     teacher_can_access_class,
     visible_class_ids_for_staff,
     claim_invite_code,
@@ -82,6 +87,7 @@ from services.academy_student_access import (
 )
 from services.ownership import current_owner_id
 from services.pipeline import vision_json
+from services.profile_names import normalize_profile_name, valid_profile_name
 
 router = APIRouter(prefix="/api", tags=["academy-student-app"])
 
@@ -114,6 +120,13 @@ class InviteCodeRequest(BaseModel):
 
 class StudentInviteClaimRequest(BaseModel):
     student_profile: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProfileNameInviteRequest(BaseModel):
+    class_id: UUID
+    profile_name: str = Field(min_length=1, max_length=64)
+    display_name: str | None = Field(default=None, max_length=120)
+    memo: str | None = Field(default=None, max_length=500)
 
 
 class SubscriptionUpdate(BaseModel):
@@ -460,6 +473,37 @@ def _student_invite_payload(db: Session, seat: AcademySeat) -> dict[str, Any]:
     }
 
 
+def _academy_invite_payload(db: Session, invite: StudentInvite) -> dict[str, Any]:
+    seat = db.get(AcademySeat, invite.academy_seat_id)
+    membership = db.get(StudentAcademyMembership, invite.academy_student_membership_id)
+    class_row = db.get(AcademyClass, seat.class_id) if seat and seat.class_id else None
+    metadata = dict(membership.metadata_json or {}) if membership else {}
+    invitation = dict((seat.invite_metadata if seat else {}) or {})
+    student_name = (
+        (membership.display_name_in_academy if membership else None)
+        or metadata.get("display_name")
+        or metadata.get("name")
+        or invitation.get("recipient_name")
+        or (seat.display_name if seat else None)
+    )
+    return {
+        "id": str(invite.id),
+        "academy_id": invite.academy_id,
+        "academy_name": get_academy_name(db, invite.academy_id),
+        "academy_seat_id": str(invite.academy_seat_id),
+        "academy_student_id": str(invite.academy_student_membership_id),
+        "student_name": student_name,
+        "class_id": str(class_row.id) if class_row else None,
+        "class_name": class_row.name if class_row else None,
+        "target_profile_name": invite.target_profile_name,
+        "status": invite.status,
+        "created_at": invite.created_at.isoformat() if invite.created_at else None,
+        "accepted_at": invite.accepted_at.isoformat() if invite.accepted_at else None,
+        "declined_at": invite.declined_at.isoformat() if invite.declined_at else None,
+        "revoked_at": invite.revoked_at.isoformat() if invite.revoked_at else None,
+    }
+
+
 def student_learning_assignment_ids(db: Session, student_id: str, academy_id: str | None = None) -> list[UUID]:
     ids: set[UUID] = set()
     for membership in student_memberships(db, student_id):
@@ -669,6 +713,90 @@ def create_seats(academy_id: str, payload: SeatCreate, request: Request, db: Ses
     return created
 
 
+@router.post("/academy/{academy_id}/student-invites/by-profile-name")
+def create_student_invite_by_profile_name(academy_id: str, payload: ProfileNameInviteRequest, request: Request, db: Session = Depends(get_db)):
+    actor = require_manage_seats(db, request, academy_id)
+    profile_name = normalize_profile_name(payload.profile_name)
+    if not valid_profile_name(profile_name):
+        raise HTTPException(status_code=422, detail={"code": "PROFILE_NAME_INVALID", "message": "Profile name is invalid."})
+    class_row = db.scalar(
+        select(AcademyClass).where(
+            AcademyClass.id == payload.class_id,
+            AcademyClass.academy_id == academy_id,
+            AcademyClass.is_active.is_(True),
+        )
+    )
+    if not class_row:
+        raise HTTPException(status_code=404, detail="Class not found.")
+    target = db.scalar(select(Academy).where(Academy.profile_name == profile_name, Academy.account_type == "student", Academy.is_active.is_(True)))
+    if not target:
+        raise HTTPException(status_code=404, detail={"code": "PROFILE_NAME_NOT_FOUND", "message": "Student profile was not found."})
+    target_user_id = str(target.id)
+    if student_has_active_class(db, target_user_id, academy_id, class_row.id):
+        raise HTTPException(status_code=409, detail={"code": "CLASS_ALREADY_CONNECTED", "message": "This student is already connected to the class."})
+
+    pending_invites = db.scalars(
+        select(StudentInvite).where(
+            StudentInvite.academy_id == academy_id,
+            StudentInvite.target_user_id == target_user_id,
+            StudentInvite.status == "pending",
+        )
+    ).all()
+    for pending in pending_invites:
+        pending_seat = db.get(AcademySeat, pending.academy_seat_id)
+        if pending_seat and pending_seat.class_id == class_row.id:
+            raise HTTPException(status_code=409, detail={"code": "INVITE_ALREADY_PENDING", "message": "This student already has a pending invite for the class."})
+
+    display_name = (payload.display_name or target.display_name or target.academy_name or f"@{profile_name}").strip()
+    seat, _ = create_seat(
+        db,
+        academy_id,
+        display_name,
+        class_id=class_row.id,
+        invite_metadata={
+            "source": "profile_name_invite",
+            "channel": "student_app",
+            "target_profile_name": profile_name,
+            "recipient_name": display_name,
+            "memo": (payload.memo or "").strip() or None,
+            "delivery_status": "pending_acceptance",
+            "prepared_at": datetime.utcnow().isoformat(),
+        },
+    )
+    membership = create_unlinked_academy_student_for_seat(db, seat, class_id=class_row.id, display_name=display_name, actor_id=actor)
+    notification = StudentNotification(
+        student_user_id=target_user_id,
+        academy_id=academy_id,
+        notification_type="academy_profile_invite",
+        title=f"{get_academy_name(db, academy_id)} 초대",
+        body=f"{class_row.name} 클래스 초대가 도착했습니다.",
+        metadata_json={
+            "academy_seat_id": str(seat.id),
+            "academy_student_id": str(membership.id),
+            "class_id": str(class_row.id),
+            "class_name": class_row.name,
+            "target_profile_name": profile_name,
+        },
+    )
+    db.add(notification)
+    db.flush()
+    invite = StudentInvite(
+        academy_id=academy_id,
+        academy_seat_id=seat.id,
+        academy_student_membership_id=membership.id,
+        target_user_id=target_user_id,
+        target_profile_name=profile_name,
+        created_by=actor,
+        notification_id=notification.id,
+    )
+    db.add(invite)
+    db.flush()
+    notification.metadata_json = {**dict(notification.metadata_json or {}), "student_invite_id": str(invite.id)}
+    audit(db, request, actor, "academy.student_profile_invite_created", "student_invite", str(invite.id), {"academy_id": academy_id, "class_id": str(class_row.id), "target_profile_name": profile_name})
+    db.commit()
+    return _academy_invite_payload(db, invite)
+
+
 @router.post("/academy/{academy_id}/seats/{seat_id}/rotate-code")
 def rotate_code(academy_id: str, seat_id: UUID, request: Request, db: Session = Depends(get_db)):
     actor = require_manage_seats(db, request, academy_id)
@@ -708,6 +836,92 @@ def student_invite_preview(invite_token: str, request: Request, db: Session = De
     if not seat.is_active:
         raise HTTPException(status_code=410, detail={"code": "INVITE_REVOKED", "message": "Invite link is no longer active."})
     return _student_invite_payload(db, seat)
+
+
+@router.get("/student/academy-invites")
+def student_academy_invites(request: Request, db: Session = Depends(get_db)):
+    student_id = current_owner_id(request)
+    rows = db.scalars(
+        select(StudentInvite)
+        .where(StudentInvite.target_user_id == student_id, StudentInvite.status == "pending")
+        .order_by(StudentInvite.created_at.desc())
+    ).all()
+    return [_academy_invite_payload(db, row) for row in rows]
+
+
+@router.post("/student/academy-invites/{invite_id}/accept")
+def accept_student_academy_invite(invite_id: UUID, request: Request, db: Session = Depends(get_db)):
+    student_id = current_owner_id(request)
+    invite = db.scalar(select(StudentInvite).where(StudentInvite.id == invite_id).with_for_update())
+    if not invite or invite.target_user_id != student_id:
+        raise HTTPException(status_code=404, detail="Invite not found.")
+    if invite.status != "pending":
+        raise HTTPException(status_code=409, detail={"code": "INVITE_NOT_PENDING", "message": "Invite is no longer pending."})
+    seat = db.scalar(select(AcademySeat).where(AcademySeat.id == invite.academy_seat_id).with_for_update())
+    membership = db.scalar(select(StudentAcademyMembership).where(StudentAcademyMembership.id == invite.academy_student_membership_id).with_for_update())
+    if not seat or not membership:
+        raise HTTPException(status_code=404, detail="Invite target was not found.")
+    if not seat.is_active:
+        raise HTTPException(status_code=410, detail={"code": "INVITE_REVOKED", "message": "Invite is no longer active."})
+    if not is_unlinked_academy_student(membership):
+        raise HTTPException(status_code=409, detail={"code": "ACADEMY_STUDENT_ALREADY_LINKED", "message": "This academy student is already connected."})
+    if seat.class_id and student_has_active_class(db, student_id, seat.academy_id, seat.class_id):
+        raise HTTPException(status_code=409, detail={"code": "CLASS_ALREADY_CONNECTED", "message": "This account is already connected to the class."})
+
+    previous_student_id = membership.student_user_id
+    membership.student_user_id = student_id
+    membership.claimed_by = student_id
+    membership.status = "active"
+    apply_seat_invitation_to_membership(membership, seat)
+    if seat.class_id:
+        existing_link = db.scalar(
+            select(ClassStudent).where(
+                ClassStudent.class_id == seat.class_id,
+                ClassStudent.student_membership_id == membership.id,
+                ClassStudent.left_at.is_(None),
+            )
+        )
+        if not existing_link:
+            db.add(ClassStudent(class_id=seat.class_id, student_membership_id=membership.id))
+    db.add(SeatAssignmentHistory(academy_seat_id=seat.id, academy_id=seat.academy_id, student_user_id=student_id, membership_id=membership.id))
+    invite.status = "accepted"
+    invite.accepted_at = datetime.utcnow()
+    if invite.notification_id:
+        notification = db.get(StudentNotification, invite.notification_id)
+        if notification:
+            notification.read_at = notification.read_at or invite.accepted_at
+    db.add(
+        StudentNotification(
+            student_user_id=student_id,
+            academy_id=seat.academy_id,
+            notification_type="academy_connected",
+            title="Academy connected",
+            body=f"{get_academy_name(db, seat.academy_id)} is now available in your student app.",
+            metadata_json={"student_invite_id": str(invite.id), "previous_student_id": previous_student_id},
+        )
+    )
+    audit(db, request, student_id, "student.profile_invite_accepted", "student_invite", str(invite.id), {"academy_id": seat.academy_id})
+    db.commit()
+    return _student_membership_payload(db, membership)
+
+
+@router.post("/student/academy-invites/{invite_id}/decline")
+def decline_student_academy_invite(invite_id: UUID, request: Request, db: Session = Depends(get_db)):
+    student_id = current_owner_id(request)
+    invite = db.scalar(select(StudentInvite).where(StudentInvite.id == invite_id).with_for_update())
+    if not invite or invite.target_user_id != student_id:
+        raise HTTPException(status_code=404, detail="Invite not found.")
+    if invite.status != "pending":
+        raise HTTPException(status_code=409, detail={"code": "INVITE_NOT_PENDING", "message": "Invite is no longer pending."})
+    invite.status = "declined"
+    invite.declined_at = datetime.utcnow()
+    if invite.notification_id:
+        notification = db.get(StudentNotification, invite.notification_id)
+        if notification:
+            notification.read_at = notification.read_at or invite.declined_at
+    audit(db, request, student_id, "student.profile_invite_declined", "student_invite", str(invite.id), {"academy_id": invite.academy_id})
+    db.commit()
+    return _academy_invite_payload(db, invite)
 
 
 @router.post("/student/invites/{invite_token}/claim")

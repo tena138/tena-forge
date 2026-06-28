@@ -48,6 +48,8 @@ def _ensure_admin(db, *, email: str, password: str, name: str, claim_legacy: boo
             email=email,
             password_hash=hash_password(password),
             academy_name=name,
+            display_name=name,
+            profile_name="tena_admin",
             account_type="academy",
             email_verified=True,
             email_verified_at=now,
@@ -61,6 +63,7 @@ def _ensure_admin(db, *, email: str, password: str, name: str, claim_legacy: boo
     else:
         admin.password_hash = hash_password(password)
         admin.academy_name = admin.academy_name or name
+        admin.profile_name = admin.profile_name or "tena_admin"
         admin.account_type = admin.account_type or "academy"
         admin.email_verified = True
         admin.email_verified_at = admin.email_verified_at or now

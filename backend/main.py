@@ -440,6 +440,7 @@ def _ensure_sqlite_columns():
         "academies": {
             "account_type": "VARCHAR(20) DEFAULT 'academy' NOT NULL",
             "display_name": "VARCHAR(120)",
+            "profile_name": "VARCHAR(32)",
             "bio": "TEXT",
         },
         "class_schedule_events": {
@@ -508,6 +509,23 @@ def _ensure_sqlite_columns():
                 if column_name not in existing:
                     connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {sql_type}"))
                     existing.add(column_name)
+        academy_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(academies)")).fetchall()}
+        if "profile_name" in academy_columns:
+            from services.profile_names import profile_name_seed, unique_profile_name_seed
+
+            rows = connection.execute(text("SELECT id, email, display_name, academy_name, profile_name FROM academies")).mappings().all()
+            used = {str(row["profile_name"]).lower() for row in rows if row["profile_name"]}
+            for row in rows:
+                if row["profile_name"]:
+                    continue
+                email_local = str(row["email"] or "").split("@", 1)[0]
+                seed = profile_name_seed(row["display_name"], row["academy_name"], email_local)
+                profile_name = unique_profile_name_seed(seed, str(row["id"]), used)
+                connection.execute(
+                    text("UPDATE academies SET profile_name = :profile_name WHERE id = :id"),
+                    {"profile_name": profile_name, "id": row["id"]},
+                )
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_academies_profile_name ON academies (profile_name)"))
 
 
 def _mark_interrupted_batches():
@@ -590,6 +608,8 @@ def _seed_saas_foundation():
                 email="admin@tenaforge.com",
                 password_hash=hash_password("AdminTest!2026"),
                 academy_name="Tena Admin",
+                display_name="Tena Admin",
+                profile_name="tena_admin",
                 email_verified=True,
                 email_verified_at=datetime.utcnow(),
                 is_active=True,
@@ -602,12 +622,14 @@ def _seed_saas_foundation():
             admin.email_verified = True
             admin.email_verified_at = admin.email_verified_at or datetime.utcnow()
             admin.is_active = True
+            admin.profile_name = admin.profile_name or "tena_admin"
         if admin and not db.scalar(select(UserRole).where(UserRole.user_id == str(admin.id), UserRole.role == "admin")):
             db.add(UserRole(user_id=str(admin.id), role="admin", granted_by="seed"))
         normal_user = db.scalar(select(Academy).where(Academy.email == "user@tenaforge.com"))
         if not normal_user:
             normal_user = Academy(
                 email="user@tenaforge.com",
+                profile_name="tena_user",
                 password_hash=hash_password("UserTest!2026"),
                 academy_name="일반 사용자",
                 email_verified=True,
@@ -621,9 +643,11 @@ def _seed_saas_foundation():
             normal_user.email_verified = True
             normal_user.email_verified_at = normal_user.email_verified_at or datetime.utcnow()
             normal_user.is_active = True
+            normal_user.profile_name = normal_user.profile_name or "tena_user"
         creator_user = db.scalar(select(Academy).where(Academy.email == "creator@tenaforge.com"))
         if not creator_user:
             creator_user = Academy(email="creator@tenaforge.com", password_hash=hash_password("CreatorTest!2026"), academy_name="샘플 크리에이터", email_verified=True, email_verified_at=datetime.utcnow(), is_active=True)
+            creator_user.profile_name = "tena_creator"
             db.add(creator_user)
             db.flush()
         else:
@@ -631,6 +655,7 @@ def _seed_saas_foundation():
             creator_user.email_verified = True
             creator_user.email_verified_at = creator_user.email_verified_at or datetime.utcnow()
             creator_user.is_active = True
+            creator_user.profile_name = creator_user.profile_name or "tena_creator"
         creator_id = str(creator_user.id)
         if not db.scalar(select(UserRole).where(UserRole.user_id == creator_id, UserRole.role == "creator")):
             db.add(UserRole(user_id=creator_id, role="creator", granted_by="seed"))

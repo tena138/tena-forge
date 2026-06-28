@@ -1313,6 +1313,7 @@ class AcademyProfile(BaseModel):
     email_verified: bool
     academy_name: str
     display_name: str | None = None
+    profile_name: str
     bio: str | None = None
     account_type: str = "academy"
     business_number: str | None = None
@@ -1339,6 +1340,7 @@ class RegisterRequest(BaseModel):
     verification_code: str = Field(min_length=6, max_length=6)
     verification_session: str = Field(min_length=16)
     academy_name: str | None = Field(default=None, min_length=2, max_length=255)
+    profile_name: str = Field(min_length=3, max_length=32)
     account_type: str = "academy"
     business_number: str | None = Field(default=None, max_length=50)
     phone: str | None = Field(default=None, max_length=50)
@@ -1391,6 +1393,7 @@ class SocialSignupCompleteRequest(BaseModel):
     signup_token: str = Field(min_length=16)
     login_id: str = Field(min_length=3, max_length=32)
     nickname: str = Field(min_length=2, max_length=80)
+    profile_name: str = Field(min_length=3, max_length=32)
     password: str = Field(min_length=8, max_length=128)
 
     @field_validator("login_id")
@@ -1439,6 +1442,7 @@ class ChangePasswordRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     academy_name: str | None = Field(default=None, min_length=1, max_length=255)
     display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    profile_name: str | None = Field(default=None, min_length=3, max_length=32)
     bio: str | None = Field(default=None, max_length=500)
     account_type: str | None = None
     phone: str | None = Field(default=None, max_length=50)

@@ -11,6 +11,7 @@ class StudentAppState extends ChangeNotifier {
 
   StudentProfile? profile;
   List<AcademyMembership> academies = [];
+  List<StudentAcademyInvite> academyInvites = [];
   List<Assignment> assignments = [];
   List<StudentMaterial> materials = [];
   List<WrongAnswerItem> wrongAnswers = [];
@@ -64,6 +65,7 @@ class StudentAppState extends ChangeNotifier {
       }
       profile = null;
       academies = [];
+      academyInvites = [];
       assignments = [];
       materials = [];
       wrongAnswers = [];
@@ -103,6 +105,7 @@ class StudentAppState extends ChangeNotifier {
   Future<void> logout() async {
     await repository.logout();
     profile = null;
+    academyInvites = [];
     selectedContextId = 'personal';
     bootstrapped = true;
     notifyListeners();
@@ -115,6 +118,7 @@ class StudentAppState extends ChangeNotifier {
     try {
       final results = await Future.wait<Object>([
         repository.listAcademies(allowMock: false),
+        repository.listAcademyInvites(),
         repository.listAssignments(
           academyId: selectedAcademyId,
           allowMock: false,
@@ -123,9 +127,10 @@ class StudentAppState extends ChangeNotifier {
         repository.listMaterials(allowMock: false),
       ]);
       academies = results[0] as List<AcademyMembership>;
-      assignments = results[1] as List<Assignment>;
-      calendar = results[2] as CalendarResponse;
-      materials = results[3] as List<StudentMaterial>;
+      academyInvites = results[1] as List<StudentAcademyInvite>;
+      assignments = results[2] as List<Assignment>;
+      calendar = results[3] as CalendarResponse;
+      materials = results[4] as List<StudentMaterial>;
       quota = null;
       notifyListeners();
 
@@ -144,6 +149,7 @@ class StudentAppState extends ChangeNotifier {
           (exception.statusCode == 401 || exception.statusCode == 403)) {
         await repository.logout();
         profile = null;
+        academyInvites = [];
         selectedContextId = 'personal';
         error = '세션이 만료되었습니다. 다시 로그인해 주세요.';
       } else {
@@ -167,6 +173,23 @@ class StudentAppState extends ChangeNotifier {
       academyId: membership.academyId,
     );
     return membership;
+  }
+
+  Future<AcademyMembership> acceptAcademyInvite(
+    StudentAcademyInvite invite,
+  ) async {
+    final membership = await repository.acceptAcademyInvite(invite.id);
+    await handleStudentInviteClaimSuccess(
+      userId: profile?.id,
+      academyStudentId: membership.id,
+      academyId: membership.academyId,
+    );
+    return membership;
+  }
+
+  Future<void> declineAcademyInvite(StudentAcademyInvite invite) async {
+    await repository.declineAcademyInvite(invite.id);
+    await refresh();
   }
 
   Future<void> handleStudentInviteClaimSuccess({

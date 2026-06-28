@@ -75,6 +75,23 @@ export type StudentInvitePreview = {
   expires_at?: string | null;
 };
 
+export type StudentAcademyInvite = {
+  id: string;
+  academy_id: string;
+  academy_name: string;
+  academy_seat_id: string;
+  academy_student_id: string;
+  student_name?: string | null;
+  class_id?: string | null;
+  class_name?: string | null;
+  target_profile_name: string;
+  status: "pending" | "accepted" | "declined" | "revoked" | string;
+  created_at?: string | null;
+  accepted_at?: string | null;
+  declined_at?: string | null;
+  revoked_at?: string | null;
+};
+
 export type StudentQuota = {
   total: { upload: number; extraction: number; export: number };
   used: { upload: number; extraction: number; export: number };
@@ -205,6 +222,29 @@ export function claimStudentInvite(token: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ student_profile: {} }),
   });
+}
+
+export function createStudentInviteByProfileName(
+  academyId: string,
+  payload: { class_id: string; profile_name: string; display_name?: string | null; memo?: string | null }
+) {
+  return api<StudentAcademyInvite>(`/api/academy/${academyId}/student-invites/by-profile-name`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listStudentAcademyInvites() {
+  return api<StudentAcademyInvite[]>("/api/student/academy-invites");
+}
+
+export function acceptStudentAcademyInvite(inviteId: string) {
+  return api<StudentMembership>(`/api/student/academy-invites/${inviteId}/accept`, { method: "POST" });
+}
+
+export function declineStudentAcademyInvite(inviteId: string) {
+  return api<StudentAcademyInvite>(`/api/student/academy-invites/${inviteId}/decline`, { method: "POST" });
 }
 
 export function listStudentAcademies() {

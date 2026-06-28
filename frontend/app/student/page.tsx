@@ -17,12 +17,16 @@ import {
   LearningProblem,
   LearningStats,
   LearningWrongAnswer,
+  StudentAcademyInvite,
   StudentMembership,
   StudentPersonalSet,
   addStudentPersonalSetItem,
+  acceptStudentAcademyInvite,
   createStudentPersonalSet,
+  declineStudentAcademyInvite,
   getLearningStats,
   getLearningToday,
+  listStudentAcademyInvites,
   listLearningArchives,
   listLearningWrongAnswers,
   listStudentPersonalSets,
@@ -114,6 +118,7 @@ export default function StudentAppPage() {
   const [tab, setTab] = useState<TabKey>("today");
   const [academyFilter, setAcademyFilter] = useState("all");
   const [academies, setAcademies] = useState<StudentMembership[]>([]);
+  const [academyInvites, setAcademyInvites] = useState<StudentAcademyInvite[]>([]);
   const [assignments, setAssignments] = useState<LearningAssignment[]>([]);
   const [archives, setArchives] = useState<LearningArchiveGrant[]>([]);
   const [wrongAnswers, setWrongAnswers] = useState<LearningWrongAnswer[]>([]);
@@ -143,12 +148,13 @@ export default function StudentAppPage() {
 
   async function load(filter = academyFilter) {
     const academyId = filter === "all" ? undefined : filter;
-    const [today, archiveData, wrongData, setData, statsData] = await Promise.all([
+    const [today, archiveData, wrongData, setData, statsData, inviteData] = await Promise.all([
       getLearningToday(academyId),
       listLearningArchives(academyId),
       listLearningWrongAnswers({ academyId }),
       listStudentPersonalSets(),
       getLearningStats(academyId),
+      listStudentAcademyInvites(),
     ]);
     setAcademies(today.academies);
     setAssignments(today.assignments);
@@ -156,6 +162,7 @@ export default function StudentAppPage() {
     setWrongAnswers(wrongData);
     setPersonalSets(setData);
     setStats(statsData);
+    setAcademyInvites(inviteData);
   }
 
   useEffect(() => {
@@ -236,6 +243,30 @@ export default function StudentAppPage() {
     await retryLearningWrongAnswer(item.id, { answer });
     setNotice("오답 재시도 기록을 저장했습니다.");
     await load();
+  }
+
+  async function acceptAcademyInvite(invite: StudentAcademyInvite) {
+    setNotice("");
+    setError("");
+    try {
+      await acceptStudentAcademyInvite(invite.id);
+      await load();
+      setNotice(`${invite.academy_name} 초대를 수락했습니다.`);
+    } catch {
+      setError("초대를 수락하지 못했습니다. 이미 처리된 초대인지 확인해 주세요.");
+    }
+  }
+
+  async function declineAcademyInvite(invite: StudentAcademyInvite) {
+    setNotice("");
+    setError("");
+    try {
+      await declineStudentAcademyInvite(invite.id);
+      await load();
+      setNotice(`${invite.academy_name} 초대를 거절했습니다.`);
+    } catch {
+      setError("초대를 거절하지 못했습니다.");
+    }
   }
 
   if (profile?.account_type !== "student") {
@@ -452,7 +483,32 @@ export default function StudentAppPage() {
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> Academy Invites</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-sm font-medium text-zinc-600">
+              <div className="space-y-3">
+                {academyInvites.map((invite) => (
+                  <div key={invite.id} className="rounded-[10px] bg-zinc-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-zinc-950">{invite.academy_name}</div>
+                        <div className="mt-1 text-xs font-medium text-zinc-500">
+                          {[invite.class_name, invite.student_name].filter(Boolean).join(" · ") || "학생 초대"}
+                        </div>
+                      </div>
+                      <StatusChip>pending</StatusChip>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <Button size="sm" onClick={() => void acceptAcademyInvite(invite)}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        수락
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => void declineAcademyInvite(invite)}>
+                        거절
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {!academyInvites.length ? <p className="text-sm font-medium text-zinc-600">받은 초대가 없습니다.</p> : null}
+              </div>
+              <p className="hidden text-sm font-medium text-zinc-600">
                 학원 등록은 학원에서 보낸 초대 링크를 열어 진행합니다. 링크를 수락하면 이 계정에 학원이 추가되고 Today와 Archive가 다시 갱신됩니다.
               </p>
             </CardContent>

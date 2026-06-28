@@ -25,6 +25,44 @@ class AcademiesScreen extends StatelessWidget {
         ),
       ],
       children: [
+        if (state.academyInvites.isNotEmpty)
+          PremiumCard(
+            title: '받은 초대',
+            child: Column(
+              children: [
+                for (final invite in state.academyInvites) ...[
+                  ListItemCard(
+                    title: invite.academyName,
+                    subtitle: [
+                      invite.className,
+                      invite.studentName,
+                    ].whereType<String>().where((value) => value.isNotEmpty).join(' · '),
+                    badge: 'pending',
+                    trailing: Wrap(
+                      spacing: 6,
+                      children: [
+                        FilledButton(
+                          onPressed: () {
+                            state.acceptAcademyInvite(invite);
+                          },
+                          child: const Text('수락'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () {
+                            state.declineAcademyInvite(invite);
+                          },
+                          child: const Text('거절'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (invite != state.academyInvites.last)
+                    const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          ),
+        if (state.academyInvites.isNotEmpty) const SizedBox(height: 14),
         PremiumCard(
           title: 'Contexts',
           child: Column(

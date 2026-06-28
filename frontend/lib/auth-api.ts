@@ -9,6 +9,7 @@ export type AcademyProfile = {
   email_verified: boolean;
   academy_name: string;
   display_name?: string | null;
+  profile_name: string;
   bio?: string | null;
   account_type?: "academy" | "student";
   business_number?: string | null;
@@ -180,7 +181,7 @@ export async function registerAcademy(payload: unknown) {
   return response.data as { message: string; email: string };
 }
 
-export async function completeSocialSignup(payload: { signup_token: string; login_id: string; nickname: string; password: string }) {
+export async function completeSocialSignup(payload: { signup_token: string; login_id: string; nickname: string; profile_name: string; password: string }) {
   const response = await authHttp.post("/api/auth/register/social-complete", payload);
   const data = response.data as LoginResult;
   if (data.access_token) setAccessToken(data.access_token);
@@ -191,6 +192,11 @@ export async function completeSocialSignup(payload: { signup_token: string; logi
 export async function checkLoginIdAvailability(loginId: string) {
   const response = await authHttp.get("/api/auth/login-id/availability", { params: { login_id: loginId } });
   return response.data as { login_id: string; valid: boolean; available: boolean };
+}
+
+export async function checkProfileNameAvailability(profileName: string) {
+  const response = await authHttp.get("/api/auth/profile-name/availability", { params: { profile_name: profileName } });
+  return response.data as { profile_name: string; valid: boolean; available: boolean };
 }
 
 export async function requestRegistrationCode(email: string) {
@@ -344,7 +350,7 @@ export async function uploadLiveLectureSlide(eventId: string, file: File, onProg
   return response.data as LiveLectureSession;
 }
 
-export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "display_name" | "bio" | "account_type" | "phone" | "address" | "business_number">>) {
+export async function updateMe(payload: Partial<Pick<AcademyProfile, "academy_name" | "display_name" | "profile_name" | "bio" | "account_type" | "phone" | "address" | "business_number">>) {
   const response = await authHttp.patch("/api/auth/me", payload);
   const profile = response.data as AcademyProfile;
   fetchMeCache = { profile, expiresAt: Date.now() + 15000 };

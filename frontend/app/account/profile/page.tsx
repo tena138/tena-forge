@@ -11,6 +11,7 @@ import { authHttp, getAccessToken, readStoredAuthProfile, setAccessToken } from 
 
 type ProfileDraft = {
   display_name: string;
+  profile_name: string;
   bio: string;
 };
 
@@ -21,6 +22,7 @@ function profileDisplayName(profile: AcademyProfile) {
 function toDraft(profile: AcademyProfile): ProfileDraft {
   return {
     display_name: profileDisplayName(profile),
+    profile_name: profile.profile_name || "",
     bio: profile.bio || "",
   };
 }
@@ -28,6 +30,7 @@ function toDraft(profile: AcademyProfile): ProfileDraft {
 function normalizeDraft(draft: ProfileDraft) {
   return {
     display_name: draft.display_name.trim(),
+    profile_name: draft.profile_name.trim().replace(/^@+/, "").toLowerCase(),
     bio: draft.bio.trim(),
   };
 }
@@ -87,6 +90,11 @@ export default function AccountProfilePage() {
       setError("사용자 표시 이름을 입력해주세요.");
       return;
     }
+    if (!/^[a-z0-9][a-z0-9_]{2,31}$/.test(cleaned.profile_name)) {
+      setNotice("");
+      setError("공개 프로필 이름은 영문 소문자, 숫자, _로 3-32자여야 합니다.");
+      return;
+    }
     if (!isDirty) return;
     setSaving(true);
     setNotice("");
@@ -95,6 +103,7 @@ export default function AccountProfilePage() {
       const updated = await updateMe({
         academy_name: cleaned.display_name,
         display_name: cleaned.display_name,
+        profile_name: cleaned.profile_name,
         bio: cleaned.bio || null,
       });
       setProfile(updated);
@@ -131,6 +140,19 @@ export default function AccountProfilePage() {
               value={draft?.display_name || ""}
               onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), display_name: event.target.value }))}
             />
+          </label>
+          <label className="block text-sm font-semibold text-zinc-950">
+            공개 프로필 이름
+            <div className="mt-1.5 flex h-10 items-center rounded-[8px] bg-zinc-100 px-3 transition focus-within:bg-white focus-within:ring-2 focus-within:ring-black/10">
+              <span className="text-sm font-bold text-zinc-500">@</span>
+              <input
+                className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none"
+                maxLength={32}
+                value={draft?.profile_name || ""}
+                onChange={(event) => setDraft((current) => ({ ...(current || toDraft(profile)), profile_name: event.target.value.replace(/^@+/, "").toLowerCase() }))}
+              />
+            </div>
+            <p className="mt-1.5 text-xs font-medium text-zinc-500">학생 초대에 쓰이는 공개 이름입니다. 로그인 아이디와 별개로 보입니다.</p>
           </label>
           <label className="block text-sm font-semibold text-zinc-950">
             소개글
