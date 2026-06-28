@@ -1,22 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
-  BookOpenCheck,
   Check,
-  CheckSquare,
   ChevronDown,
   ChevronRight,
-  ClipboardList,
   Copy,
   FileText,
   GripVertical,
   KeyRound,
   Loader2,
-  MessageSquare,
   Mic,
   Plus,
   RotateCcw,
@@ -24,7 +20,6 @@ import {
   Send,
   Sparkles,
   Square,
-  UsersRound,
   UserMinus,
   UserPlus,
   X,
@@ -1093,7 +1088,6 @@ function ProblemCell({
 }
 
 export default function StudentManagementPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>("classes");
   const [loading, setLoading] = useState(true);
@@ -2132,23 +2126,6 @@ export default function StudentManagementPage() {
   ).length;
   const scoredStudentCount = allStudents.filter((student) => typeof student.recent_score === "number").length;
   const unresolvedStudentWrongs = allStudents.reduce((total, student) => total + student.unresolved_wrong_count, 0);
-  const tabItems: Array<{ id: TabKey; label: string; icon: typeof BookOpenCheck; count?: number }> = [
-    { id: "classes", label: "클래스", icon: BookOpenCheck },
-    { id: "students", label: "학생", icon: UsersRound },
-    { id: "counseling", label: "상담", icon: MessageSquare },
-    { id: "sessions", label: "세트", icon: ClipboardList },
-    { id: "grading", label: "채점", icon: CheckSquare },
-  ];
-
-  function openManagementTab(tabId: TabKey) {
-    setActiveTab(tabId);
-    const params = new URLSearchParams(searchParams.toString());
-    if (tabId === "classes") params.delete("tab");
-    else params.set("tab", tabId);
-    const query = params.toString();
-    router.replace(query ? `/student-management?${query}` : "/student-management", { scroll: false });
-    if (tabId === "routine" && !routines.length) void loadRoutines();
-  }
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
@@ -2169,29 +2146,6 @@ export default function StudentManagementPage() {
           </div>
         ) : null}
 
-        {!loading ? (
-          <nav className="flex gap-2 overflow-x-auto rounded-lg bg-white p-1 [scrollbar-width:thin]">
-            {tabItems.map((tab) => {
-              const Icon = tab.icon;
-              const selected = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => openManagementTab(tab.id)}
-                  className={cn(
-                    "flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
-                    selected ? "bg-black text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
-                  {tab.count ? <span className={cn("rounded px-1.5 py-0.5 text-[11px] leading-none", selected ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-600")}>{tab.count}</span> : null}
-                </button>
-              );
-            })}
-          </nav>
-        ) : null}
 
         {!loading && activeTab === "routine" ? (
           <section className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]">
