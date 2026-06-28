@@ -286,7 +286,7 @@ export function FloatingNav({
           aria-label={isCollapsed ? "설정" : undefined}
           aria-current={pathname === "/account/security" || pathname === "/settings" ? "page" : undefined}
           className={cn(
-            "group relative inline-flex items-center border border-transparent bg-white text-zinc-950 shadow-none transition-all duration-150 hover:border-black/10 hover:bg-white hover:text-zinc-950",
+            "group relative inline-flex items-center border border-transparent bg-transparent text-zinc-950 shadow-none transition-all duration-150 hover:border-transparent hover:bg-transparent hover:text-zinc-950",
             isCollapsed
               ? "mx-auto flex h-10 w-10 justify-center rounded-[8px] px-0"
               : "flex h-10 w-full gap-2 rounded-[7px] px-2 text-sm font-medium"
