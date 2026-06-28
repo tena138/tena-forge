@@ -1198,7 +1198,10 @@ export default function StudentManagementPage() {
   const requestedTab = searchParams.get("tab");
 
   useEffect(() => {
-    if (!requestedTab) return;
+    if (!requestedTab) {
+      setActiveTab("classes");
+      return;
+    }
     if (STUDENT_MANAGEMENT_TAB_KEYS.includes(requestedTab as TabKey)) {
       setActiveTab(requestedTab as TabKey);
     }
