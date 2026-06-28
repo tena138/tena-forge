@@ -268,7 +268,12 @@ export default function AccountSecurityPage() {
       setNotice(result.message);
       await load();
     } catch (err) {
-      setError(actionErrorMessage(err, "계정 데이터를 초기화하지 못했습니다."));
+      const statusCode = (err as { response?: { status?: number } }).response?.status;
+      setError(
+        statusCode === 404
+          ? "백엔드가 아직 최신 버전으로 배포되지 않아 초기화 API를 찾지 못했습니다. Render 배포가 완료된 뒤 다시 실행해 주세요."
+          : actionErrorMessage(err, "계정 데이터를 초기화하지 못했습니다."),
+      );
     } finally {
       setAction(null);
     }
