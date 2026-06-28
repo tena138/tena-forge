@@ -1346,6 +1346,7 @@ export default function StudentManagementPage() {
     const startMinutes = minutesFromTimeValue(classForm.routine_starts_at);
     return startMinutes === null ? CLASS_TIME_OPTIONS : CLASS_TIME_OPTIONS.filter((option) => option.minutes > startMinutes);
   }, [classForm.routine_starts_at]);
+  const remainingStudentKeyCount = useMemo(() => classes.reduce((total, classRow) => total + (classRow.pending_key_count || 0), 0), [classes]);
   const requestedTab = searchParams.get("tab");
 
   useEffect(() => {
@@ -3616,10 +3617,10 @@ export default function StudentManagementPage() {
                   onClick={toggleKeyManager}
                   variant="outline"
                   className="fixed bottom-20 right-6 z-40 hidden h-12 w-12 rounded-full p-0 shadow-2xl shadow-zinc-950/30 sm:inline-flex"
-                  aria-label="학생 키 관리"
-                  title="학생 키 관리"
+                  aria-label={`남은 학생 키 ${remainingStudentKeyCount}개`}
+                  title={`남은 학생 키 ${remainingStudentKeyCount}개`}
                 >
-                  <KeyRound className="h-5 w-5" />
+                  <span className="font-mono text-base font-black tabular-nums leading-none text-zinc-950">{remainingStudentKeyCount}</span>
                 </Button>
                 <Button
                   type="button"
