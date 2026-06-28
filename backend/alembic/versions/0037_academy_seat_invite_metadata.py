@@ -18,12 +18,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "academy_seats",
-        sa.Column("invite_metadata", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-    )
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("academy_seats")}
+    if "invite_metadata" not in columns:
+        op.add_column(
+            "academy_seats",
+            sa.Column("invite_metadata", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
+        )
     op.alter_column("academy_seats", "invite_metadata", server_default=None)
 
 
 def downgrade() -> None:
-    op.drop_column("academy_seats", "invite_metadata")
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("academy_seats")}
+    if "invite_metadata" in columns:
+        op.drop_column("academy_seats", "invite_metadata")

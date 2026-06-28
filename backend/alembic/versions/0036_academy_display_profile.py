@@ -18,10 +18,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("academies", sa.Column("display_name", sa.String(length=120), nullable=True))
-    op.add_column("academies", sa.Column("bio", sa.Text(), nullable=True))
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("academies")}
+    if "display_name" not in columns:
+        op.add_column("academies", sa.Column("display_name", sa.String(length=120), nullable=True))
+    if "bio" not in columns:
+        op.add_column("academies", sa.Column("bio", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("academies", "bio")
-    op.drop_column("academies", "display_name")
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("academies")}
+    if "bio" in columns:
+        op.drop_column("academies", "bio")
+    if "display_name" in columns:
+        op.drop_column("academies", "display_name")

@@ -7,11 +7,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
-from services.profile_names import profile_name_seed, unique_profile_name_seed
-
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0038_profile_name_student_invites"
+HEAD_REVISION = "0037_academy_seat_invite_metadata"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -94,7 +92,6 @@ ACADEMY_REQUIRED_COLUMNS = {
     "password_hash",
     "academy_name",
     "display_name",
-    "profile_name",
     "bio",
     "account_type",
     "business_number",
@@ -166,7 +163,6 @@ def _ensure_academy_columns(connection, inspector) -> bool:
         ("password_hash", "VARCHAR(255) NULL"),
         ("academy_name", "VARCHAR(255) NOT NULL DEFAULT 'Tena User'"),
         ("display_name", "VARCHAR(120) NULL"),
-        ("profile_name", "VARCHAR(32) NULL"),
         ("bio", "TEXT NULL"),
         ("account_type", "VARCHAR(20) NOT NULL DEFAULT 'academy'"),
         ("business_number", "VARCHAR(50) NULL"),
@@ -198,23 +194,7 @@ def _ensure_academy_columns(connection, inspector) -> bool:
     connection.execute(text(f"UPDATE academies SET created_at = {timestamp_default} WHERE created_at IS NULL"))
     connection.execute(text(f"UPDATE academies SET updated_at = {timestamp_default} WHERE updated_at IS NULL"))
     connection.execute(text("UPDATE academies SET failed_login_attempts = 0 WHERE failed_login_attempts IS NULL"))
-    rows = connection.execute(text("SELECT id, email, display_name, academy_name, profile_name FROM academies")).mappings().all()
-    used = {str(row["profile_name"]).lower() for row in rows if row["profile_name"]}
-    for row in rows:
-        if row["profile_name"]:
-            continue
-        email_local = str(row["email"] or "").split("@", 1)[0]
-        seed = profile_name_seed(row["display_name"], row["academy_name"], email_local)
-        profile_name = unique_profile_name_seed(seed, str(row["id"]), used)
-        connection.execute(
-            text("UPDATE academies SET profile_name = :profile_name WHERE id = :id"),
-            {"profile_name": profile_name, "id": row["id"]},
-        )
-
     inspector = inspect(connection)
-    if "ix_academies_profile_name" not in _index_names(inspector, "academies"):
-        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_academies_profile_name ON academies (profile_name)"))
-        changed = True
     if "ix_academies_account_type" not in _index_names(inspector, "academies"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_academies_account_type ON academies (account_type)"))
         changed = True
@@ -617,7 +597,6 @@ def _schema_is_at_head(inspector) -> bool:
         "problem_usage_history",
         "student_tuition_payments",
         "student_tuition_session_adjustments",
-        "student_invites",
     }
     tables = set(inspector.get_table_names())
     return (

@@ -66,7 +66,6 @@ class AccountDataResetTests(unittest.TestCase):
             id=self.academy_uuid,
             email="academy@example.com",
             academy_name="Academy",
-            profile_name="academy-test",
             account_type="academy",
             plan=AcademyPlan.pro,
         )
@@ -261,7 +260,6 @@ class AccountDataResetTests(unittest.TestCase):
                 id=self.academy_uuid,
                 email="academy@example.com",
                 academy_name="Academy",
-                profile_name="academy-test",
                 account_type="academy",
                 plan=AcademyPlan.pro,
             )

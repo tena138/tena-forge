@@ -42,7 +42,6 @@ class StudentManagementClassCreationTests(unittest.TestCase):
                 id=uuid.UUID(self.academy_id),
                 email="academy@example.com",
                 academy_name="Academy",
-                profile_name="academy-test",
                 account_type="academy",
                 plan=AcademyPlan.basic,
             )
