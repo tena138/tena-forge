@@ -190,7 +190,13 @@ function PlanBadge({ label, tone, compact = false }: { label: string; tone: Plan
   );
 }
 
-export function HeaderAccountSummary() {
+export function HeaderAccountSummary({
+  variant = "header",
+  collapsed = false,
+}: {
+  variant?: "header" | "sidebar";
+  collapsed?: boolean;
+} = {}) {
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -279,6 +285,7 @@ export function HeaderAccountSummary() {
     );
   }
 
+  const sidebar = variant === "sidebar";
   const currentProfile = profile;
   const plan = displayPlan(currentProfile);
   const accountName = profileDisplayName(currentProfile) || currentProfile.email || "Tena Forge";
@@ -325,6 +332,18 @@ export function HeaderAccountSummary() {
     window.location.href = "/login";
   }
 
+  const accountButtonClassName = sidebar
+    ? collapsed
+      ? "group mx-auto flex h-10 w-10 items-center justify-center rounded-[8px] border border-transparent bg-transparent p-0 text-zinc-500 transition-all hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
+      : "group flex h-11 w-full min-w-0 items-center gap-2 rounded-[8px] border border-transparent bg-transparent px-2 text-left text-zinc-600 transition-all hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
+    : "flex min-w-0 items-center gap-1.5 rounded-[8px] border border-transparent bg-transparent px-1 py-1 text-left shadow-none transition-all hover:border-transparent hover:bg-zinc-100 hover:shadow-none sm:gap-2.5 sm:px-2.5 sm:py-1.5";
+  const menuClassName = sidebar
+    ? cn(
+        "fixed bottom-4 z-[2100] max-h-[calc(100vh-2rem)] w-[min(92vw,28rem)] overflow-y-auto rounded-[10px] bg-white p-2 text-sm text-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.16)] [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]",
+        collapsed ? "left-[4.25rem]" : "left-[10.25rem]"
+      )
+    : "fixed left-4 right-4 top-[11rem] z-[80] mt-0 max-h-[calc(100vh-12rem)] w-auto overflow-y-auto rounded-[10px] bg-white p-2 text-sm text-zinc-950 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[calc(100vh-5.5rem)] sm:w-[min(92vw,28rem)]";
+
   return (
     <Dialog
       open={profileOpen}
@@ -337,25 +356,41 @@ export function HeaderAccountSummary() {
         }
       }}
     >
-      <div className="relative">
+      <div className={cn("relative", sidebar && "w-full")}>
         <button
           type="button"
-          className="flex min-w-0 items-center gap-1.5 rounded-[8px] border border-transparent bg-transparent px-1 py-1 text-left shadow-none transition-all hover:border-transparent hover:bg-zinc-100 hover:shadow-none sm:gap-2.5 sm:px-2.5 sm:py-1.5"
+          className={accountButtonClassName}
           onClick={() => setOpen((value) => !value)}
           aria-label="계정 메뉴"
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-black text-xs font-bold text-white sm:h-8 sm:w-8 sm:rounded-[7px] sm:text-sm">
+          <span
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-[7px] bg-black font-bold text-white",
+              sidebar ? "h-8 w-8 text-sm" : "h-7 w-7 text-xs sm:h-8 sm:w-8 sm:text-sm"
+            )}
+          >
             {initials}
           </span>
-          <span className="hidden min-w-0 sm:block">
-            <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{accountName}</span>
-            <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{accountEmail}</span>
-          </span>
-          <PlanBadge label={plan.label} tone={plan.tone} compact />
+          {sidebar ? (
+            !collapsed && (
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-zinc-700 group-hover:text-zinc-950">{accountName}</span>
+                <span className="block truncate text-[11px] font-medium text-zinc-500">{plan.label}</span>
+              </span>
+            )
+          ) : (
+            <>
+              <span className="hidden min-w-0 sm:block">
+                <span className="block max-w-[160px] truncate text-sm font-semibold text-foreground">{accountName}</span>
+                <span className="block max-w-[180px] truncate text-xs text-muted-foreground">{accountEmail}</span>
+              </span>
+              <PlanBadge label={plan.label} tone={plan.tone} compact />
+            </>
+          )}
         </button>
 
       {open && (
-        <div className="fixed left-4 right-4 top-[11rem] z-[80] mt-0 max-h-[calc(100vh-12rem)] w-auto overflow-y-auto rounded-[10px] bg-white p-2 text-sm text-zinc-950 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[calc(100vh-5.5rem)] sm:w-[min(92vw,28rem)]">
+        <div className={menuClassName}>
           <div className="rounded-[8px] bg-zinc-100 p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">

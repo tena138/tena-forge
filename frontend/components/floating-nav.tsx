@@ -17,6 +17,7 @@ import {
   Store,
 } from "lucide-react";
 
+import { HeaderAccountSummary } from "@/components/auth/header-account-summary";
 import { SidebarNavItem } from "@/components/sidebar-nav-item";
 import { getDashboardAnnouncementAccess } from "@/lib/api";
 import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
@@ -275,6 +276,9 @@ export function FloatingNav({
             </div>
           </section>
         ))}
+      </div>
+      <div className={cn("mt-auto pt-4", isCollapsed ? "px-0" : "px-0.5")}>
+        <HeaderAccountSummary variant="sidebar" collapsed={isCollapsed} />
       </div>
     </nav>
   );
