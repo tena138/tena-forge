@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Radio, Save, ShieldCheck, ShieldOff, X } from "lucide-react";
+import { Loader2, Radio, RefreshCcw, Save, ShieldCheck, ShieldOff, X } from "lucide-react";
 
 import { PasswordStrength } from "@/components/auth/auth-ui";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,9 @@ import {
   setupTotp,
   unlinkOAuthAccount,
   deleteAccount,
+  resetAccountData,
   updateLiveInteractionSettings,
+  type AccountDataResetResult,
   type LoginHistoryItem,
   type OAuthAccountItem,
 } from "@/lib/auth-api";
@@ -59,6 +61,9 @@ export default function AccountSecurityPage() {
   const [backupSaved, setBackupSaved] = useState(false);
   const [disableForm, setDisableForm] = useState({ password: "", totp_code: "" });
   const [deletePassword, setDeletePassword] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [resetResult, setResetResult] = useState<AccountDataResetResult | null>(null);
   const [liveMinutes, setLiveMinutes] = useState(5);
   const [liveLoading, setLiveLoading] = useState(true);
   const [liveSaving, setLiveSaving] = useState(false);
@@ -236,6 +241,31 @@ export default function AccountSecurityPage() {
       await load();
     } catch (err) {
       setError(actionErrorMessage(err, "다른 기기에서 로그아웃하지 못했습니다."));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function submitAccountDataReset() {
+    if (resetConfirmation.trim() !== "초기화") {
+      setNotice("");
+      setError("초기화하려면 확인 칸에 '초기화'를 정확히 입력해 주세요.");
+      return;
+    }
+    if (!window.confirm("계정 데이터만 초기화합니다. 결제 플랜과 구입한 학생 키 수는 유지되지만, 클래스/학생/자료/일정/과제/발급 코드는 삭제됩니다. 계속할까요?")) return;
+    setAction("data-reset");
+    setNotice("");
+    setError("");
+    setResetResult(null);
+    try {
+      const result = await resetAccountData(resetPassword);
+      setResetPassword("");
+      setResetConfirmation("");
+      setResetResult(result);
+      setNotice(result.message);
+      await load();
+    } catch (err) {
+      setError(actionErrorMessage(err, "계정 데이터를 초기화하지 못했습니다."));
     } finally {
       setAction(null);
     }
@@ -480,6 +510,34 @@ export default function AccountSecurityPage() {
               </tbody>
             </table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-zinc-950">
+            <RefreshCcw className="h-5 w-5" />
+            계정 데이터 초기화
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-[8px] bg-zinc-100 p-4 text-sm leading-6 text-zinc-700">
+            계정, 로그인, 결제 플랜, 구입한 학생 키 수와 스태프 좌석은 유지됩니다. 클래스, 학생 연결, 발급된 기존 코드,
+            자료, 일정, 과제, 시험, 오답, 알림 등 운영 데이터만 삭제됩니다.
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input type="password" placeholder="비밀번호 확인" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} />
+            <Input placeholder="초기화 입력" value={resetConfirmation} onChange={(event) => setResetConfirmation(event.target.value)} />
+          </div>
+          {resetResult ? (
+            <div className="rounded-[8px] border border-zinc-200 bg-white p-3 text-xs font-bold text-zinc-600">
+              삭제된 데이터 {resetResult.total_deleted.toLocaleString("ko-KR")}개 · 보존된 추가 학생 키 {resetResult.preserved.purchased_additional_student_keys.toLocaleString("ko-KR")}개 · 보존된 스태프 좌석 {resetResult.preserved.purchased_staff_seats.toLocaleString("ko-KR")}개
+            </div>
+          ) : null}
+          <Button variant="outline" disabled={!resetPassword || resetConfirmation.trim() !== "초기화" || action === "data-reset"} onClick={submitAccountDataReset}>
+            {action === "data-reset" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {action === "data-reset" ? "초기화 중" : "데이터 초기화"}
+          </Button>
         </CardContent>
       </Card>
 

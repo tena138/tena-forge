@@ -430,6 +430,24 @@ export async function unlinkOAuthAccount(provider: string) {
   await authHttp.delete(`/api/auth/oauth-accounts/${provider}`);
 }
 
+export type AccountDataResetResult = {
+  message: string;
+  deleted: Record<string, number>;
+  total_deleted: number;
+  preserved: {
+    account_id: string;
+    plan: string;
+    student_plan_code?: string | null;
+    purchased_additional_student_keys: number;
+    purchased_staff_seats: number;
+  };
+};
+
+export async function resetAccountData(password: string) {
+  const response = await authHttp.post("/api/auth/me/data-reset", { password, confirmation: "RESET" });
+  return response.data as AccountDataResetResult;
+}
+
 export async function deleteAccount(password: string) {
   const response = await authHttp.delete("/api/auth/me", { data: { password } });
   clearAuthState();

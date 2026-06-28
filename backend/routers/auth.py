@@ -33,6 +33,7 @@ from models import (
 )
 from schemas import (
     AcademyProfile,
+    AccountDataResetRequest,
     AccountDeleteRequest,
     BackupCodeLoginRequest,
     ChangePasswordRequest,
@@ -93,6 +94,7 @@ from services.auth_security import (
     verify_refresh_record,
     verify_totp,
 )
+from services.account_data_reset import reset_account_data as reset_account_operational_data
 
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -909,6 +911,17 @@ def unlink_oauth_account(provider: OAuthProvider, academy: Academy = Depends(get
     db.delete(account)
     db.commit()
     return {"message": "소셜 계정 연결이 해제되었습니다"}
+
+
+@router.post("/me/data-reset")
+def reset_my_account_data(payload: AccountDataResetRequest, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+    if payload.confirmation != "RESET":
+        raise HTTPException(status_code=400, detail="초기화 확인 문구가 올바르지 않습니다.")
+    if academy.password_hash and not verify_password(payload.password, academy.password_hash):
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다")
+    result = reset_account_operational_data(db, academy)
+    db.commit()
+    return {"message": "계정 데이터가 초기화되었습니다. 결제 플랜과 구입한 학생 키 수는 유지됩니다.", **result}
 
 
 @router.delete("/me")

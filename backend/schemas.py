@@ -1511,3 +1511,8 @@ class OAuthAccountRead(BaseModel):
 
 class AccountDeleteRequest(BaseModel):
     password: str
+
+
+class AccountDataResetRequest(BaseModel):
+    password: str = ""
+    confirmation: str
