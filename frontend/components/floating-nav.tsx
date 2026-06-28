@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -279,16 +280,24 @@ export function FloatingNav({
         ))}
       </div>
       <div className={cn("mt-auto space-y-1 pt-4", isCollapsed ? "px-0" : "px-0.5")}>
-        <SidebarNavItem
+        <Link
           href="/account/security"
-          label="설정"
-          icon={Settings}
-          active={pathname === "/account/security" || pathname === "/settings"}
-          activeClassName="console-nav-active border-black/10 bg-white text-zinc-950 hover:border-black/10 hover:bg-white hover:text-zinc-950 shadow-none"
-          activeIndicatorClassName="bg-black"
-          activeIconClassName="text-zinc-950 group-hover:text-zinc-950"
-          collapsed={isCollapsed}
-        />
+          title={isCollapsed ? "설정" : undefined}
+          aria-label={isCollapsed ? "설정" : undefined}
+          aria-current={pathname === "/account/security" || pathname === "/settings" ? "page" : undefined}
+          className={cn(
+            "group relative inline-flex items-center border border-transparent bg-white text-zinc-950 shadow-none transition-all duration-150 hover:border-black/10 hover:bg-white hover:text-zinc-950",
+            isCollapsed
+              ? "mx-auto flex h-10 w-10 justify-center rounded-[8px] px-0"
+              : "flex h-10 w-full gap-2 rounded-[7px] px-2 text-sm font-medium"
+          )}
+        >
+          {!isCollapsed && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-black" />}
+          <span className="relative z-[1] grid h-5 w-5 shrink-0 place-items-center">
+            <Settings className="h-4 w-4 shrink-0 text-zinc-950 transition-colors group-hover:text-zinc-950" />
+          </span>
+          {!isCollapsed && <span className="truncate">설정</span>}
+        </Link>
         <HeaderAccountSummary variant="sidebar" collapsed={isCollapsed} />
       </div>
     </nav>
