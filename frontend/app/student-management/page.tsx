@@ -43,6 +43,7 @@ import {
 import type { AcademySeat } from "@/lib/academyStudent";
 import type { StudentKeyRecipient } from "@/lib/academyStudent";
 import { ProblemSetListItem, api } from "@/lib/api";
+import { publishCoAgentStatusMessage, type CoAgentStatusTone } from "@/lib/coAgentStatus";
 import {
   ClassCard,
   PaperSessionDetail,
@@ -541,6 +542,12 @@ function errorMessage(error: unknown, fallback: string) {
   if (detail && typeof detail === "object") return JSON.stringify(detail);
   if (candidate.message === "Network Error") return fallback;
   return candidate.message || fallback;
+}
+
+function noticeTone(message: string): CoAgentStatusTone {
+  if (/실패|오류|못했습니다|확인|입력|없습니다|않습니다|권한/.test(message)) return "error";
+  if (/중입니다|저장하는 중/.test(message)) return "working";
+  return "done";
 }
 
 function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; onMergeContext?: (event: MouseEvent<HTMLElement>, student: StudentCard) => void }) {
@@ -1271,7 +1278,6 @@ export default function StudentManagementPage() {
   const [bulkInviteText, setBulkInviteText] = useState("");
   const [bulkInviteResults, setBulkInviteResults] = useState<BulkInviteResult[]>([]);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [studentMergeMenu, setStudentMergeMenu] = useState<StudentMergeMenuState | null>(null);
   const [mergeSourceStudent, setMergeSourceStudent] = useState<StudentCard | null>(null);
   const [mergeSearch, setMergeSearch] = useState("");
@@ -1282,6 +1288,12 @@ export default function StudentManagementPage() {
   const [profileSettingsSaving, setProfileSettingsSaving] = useState(false);
 
   const [classForm, setClassForm] = useState(emptyClassForm);
+  function setMessage(nextMessage: string) {
+    const text = nextMessage.trim();
+    if (!text) return;
+    publishCoAgentStatusMessage(text, { tone: noticeTone(text) });
+  }
+
   const [sessionForm, setSessionForm] = useState({
     title: "",
     source_problem_set_id: "",
@@ -2295,15 +2307,6 @@ export default function StudentManagementPage() {
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        {message ? (
-          <div className="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm text-zinc-800">
-            <span>{message}</span>
-            <button type="button" onClick={() => setMessage("")} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        ) : null}
-
         {loading ? (
           <div className="flex min-h-[360px] items-center justify-center text-slate-400">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />

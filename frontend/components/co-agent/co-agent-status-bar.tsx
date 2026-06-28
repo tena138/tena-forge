@@ -224,7 +224,9 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
     return message || "필요한 정보를 알려주세요.";
   }, [workflow?.status, workflowBubble?.message]);
 
-  const statusMessage = chatLoading
+  const statusMessage = transientStatus?.message
+    ? transientStatus.message
+    : chatLoading
     ? "코파일럿이 작업 중입니다."
     : chatError || workflow?.status === "error"
       ? "코파일럿 연결을 확인해주세요."
@@ -234,7 +236,7 @@ export function CoAgentStatusBar({ compact = false }: { compact?: boolean }) {
           ? "작업 결과를 말풍선에 정리했습니다."
           : workflow?.status === "running"
           ? "코파일럿이 작업 중입니다."
-          : transientStatus?.message || report.message;
+          : report.message;
   const shouldAnimateAssistantMessage = chatOpen && !chatLoading && Boolean(latestAssistantMessage) && workflow?.status === "created";
   const typedReportMessage = useTypewriterText(statusMessage, assistantTypingKey, !prefersReducedMotion && shouldAnimateAssistantMessage);
   const primaryChatAction = chatActions.find((action) => action.href);
