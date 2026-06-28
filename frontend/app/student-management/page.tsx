@@ -3620,7 +3620,11 @@ export default function StudentManagementPage() {
                   aria-label={`남은 학생 키 ${remainingStudentKeyCount}개`}
                   title={`남은 학생 키 ${remainingStudentKeyCount}개`}
                 >
-                  <span className="font-mono text-base font-black tabular-nums leading-none text-zinc-950">{remainingStudentKeyCount}</span>
+                  <span className="flex items-center justify-center gap-0.5 font-mono text-[11px] font-black tabular-nums leading-none text-zinc-950">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    <span>X</span>
+                    <span>{remainingStudentKeyCount}</span>
+                  </span>
                 </Button>
                 <Button
                   type="button"
