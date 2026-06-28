@@ -38,6 +38,7 @@ from models import (  # noqa: E402
     ProblemSet,
     ProblemSetItem,
     StudentAcademyMembership,
+    StudentInvite,
     StudentNotification,
     StudentPersonalSet,
     StudentPersonalSetItem,
@@ -105,6 +106,15 @@ class AccountDataResetTests(unittest.TestCase):
         db.flush()
         seat.current_student_membership_id = membership.id
         db.add(ClassStudent(class_id=academy_class.id, student_membership_id=membership.id))
+        db.add(
+            StudentInvite(
+                academy_id=self.academy_id,
+                academy_seat_id=seat.id,
+                academy_student_membership_id=membership.id,
+                target_user_id=self.student_id,
+                target_profile_name="student_test",
+            )
+        )
 
         event = ClassScheduleEvent(
             academy_id=self.academy_id,
@@ -241,6 +251,7 @@ class AccountDataResetTests(unittest.TestCase):
             self.assertIsNotNone(db.get(AcademyStudentSubscription, student_subscription_id))
             self.assertEqual(db.query(AcademyClass).count(), 0)
             self.assertEqual(db.query(AcademySeat).count(), 0)
+            self.assertEqual(db.query(StudentInvite).count(), 0)
             self.assertEqual(db.query(StudentAcademyMembership).count(), 0)
             self.assertEqual(db.query(ClassScheduleEvent).count(), 0)
             self.assertEqual(db.query(CalendarEvent).count(), 0)

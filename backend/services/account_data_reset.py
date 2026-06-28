@@ -50,6 +50,7 @@ from models import (
     RoutineMessage,
     SeatAssignmentHistory,
     StudentAcademyMembership,
+    StudentInvite,
     StudentNotification,
     StudentPersonalSet,
     StudentPersonalSetItem,
@@ -114,6 +115,17 @@ def reset_account_data(db: Session, academy: Academy, target_owner_id: str | Non
     student_ids = _dedupe([account_id, user_id, *(row[1] for row in membership_rows)])
     class_ids = _ids(db, select(AcademyClass.id).where(AcademyClass.academy_id == academy_id))
     seat_ids = _ids(db, select(AcademySeat.id).where(AcademySeat.academy_id == academy_id))
+    student_invite_ids = _ids(
+        db,
+        select(StudentInvite.id).where(
+            _or(
+                StudentInvite.academy_id == academy_id,
+                _in(StudentInvite.academy_seat_id, seat_ids),
+                _in(StudentInvite.academy_student_membership_id, membership_ids),
+                _in(StudentInvite.target_user_id, student_ids),
+            )
+        ),
+    )
 
     assignment_ids = _ids(
         db,
@@ -271,6 +283,7 @@ def reset_account_data(db: Session, academy: Academy, target_owner_id: str | Non
         StudentNotification,
         _or(StudentNotification.academy_id == academy_id, _in(StudentNotification.student_user_id, student_ids)),
     )
+    _delete(db, counts, "student_invites", StudentInvite, _in(StudentInvite.id, student_invite_ids))
     _delete(db, counts, "academy_announcements", Announcement, Announcement.academy_id == academy_id)
     _delete(
         db,

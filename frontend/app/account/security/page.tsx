@@ -7,6 +7,7 @@ import { PasswordStrength } from "@/components/auth/auth-ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { clearAccountDataResetLocalState } from "@/lib/accountDataResetLocalState";
 import {
   AcademyProfile,
   SessionItem,
@@ -262,6 +263,7 @@ export default function AccountSecurityPage() {
     setResetResult(null);
     try {
       const result = await resetAccountData(resetPassword);
+      clearAccountDataResetLocalState();
       setResetPassword("");
       setResetConfirmation("");
       setResetResult(result);
