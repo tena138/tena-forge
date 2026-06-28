@@ -284,9 +284,9 @@ export function FloatingNav({
           label="설정"
           icon={Settings}
           active={pathname === "/account/security" || pathname === "/settings"}
-          activeClassName="console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none"
+          activeClassName="console-nav-active border-black/10 bg-white text-zinc-950 hover:border-black/10 hover:bg-white hover:text-zinc-950 shadow-none"
           activeIndicatorClassName="bg-black"
-          activeIconClassName="text-white group-hover:text-white"
+          activeIconClassName="text-zinc-950 group-hover:text-zinc-950"
           collapsed={isCollapsed}
         />
         <HeaderAccountSummary variant="sidebar" collapsed={isCollapsed} />
