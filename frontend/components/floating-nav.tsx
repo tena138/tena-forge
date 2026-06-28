@@ -14,6 +14,7 @@ import {
   MessageSquare,
   NotebookPen,
   ReceiptText,
+  Settings,
   Store,
 } from "lucide-react";
 
@@ -277,7 +278,17 @@ export function FloatingNav({
           </section>
         ))}
       </div>
-      <div className={cn("mt-auto pt-4", isCollapsed ? "px-0" : "px-0.5")}>
+      <div className={cn("mt-auto space-y-1 pt-4", isCollapsed ? "px-0" : "px-0.5")}>
+        <SidebarNavItem
+          href="/account/security"
+          label="설정"
+          icon={Settings}
+          active={pathname === "/account/security" || pathname === "/settings"}
+          activeClassName="console-nav-active bg-black text-white hover:bg-black hover:text-white shadow-none"
+          activeIndicatorClassName="bg-black"
+          activeIconClassName="text-white group-hover:text-white"
+          collapsed={isCollapsed}
+        />
         <HeaderAccountSummary variant="sidebar" collapsed={isCollapsed} />
       </div>
     </nav>

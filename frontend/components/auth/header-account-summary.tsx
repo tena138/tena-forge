@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
+import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 
 import { WorkspaceMenuSection } from "@/components/auth/workspace-menu-section";
 import { Badge } from "@/components/ui/badge";
@@ -334,8 +334,8 @@ export function HeaderAccountSummary({
 
   const accountButtonClassName = sidebar
     ? collapsed
-      ? "group mx-auto flex h-10 w-10 items-center justify-center rounded-[8px] border border-transparent bg-transparent p-0 text-zinc-500 transition-all hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
-      : "group flex h-11 w-full min-w-0 items-center gap-2 rounded-[8px] border border-transparent bg-transparent px-2 text-left text-zinc-600 transition-all hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
+      ? "group mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-transparent p-0 text-zinc-500 transition-all hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
+      : "group flex h-11 w-full min-w-0 items-center gap-2 rounded-full border border-transparent bg-transparent px-2 text-left text-zinc-600 transition-all hover:border-black/10 hover:bg-zinc-200 hover:text-zinc-950"
     : "flex min-w-0 items-center gap-1.5 rounded-[8px] border border-transparent bg-transparent px-1 py-1 text-left shadow-none transition-all hover:border-transparent hover:bg-zinc-100 hover:shadow-none sm:gap-2.5 sm:px-2.5 sm:py-1.5";
   const menuClassName = sidebar
     ? cn(
@@ -365,7 +365,7 @@ export function HeaderAccountSummary({
         >
           <span
             className={cn(
-              "flex shrink-0 items-center justify-center rounded-[7px] bg-black font-bold text-white",
+              "flex shrink-0 items-center justify-center rounded-full bg-black font-bold text-white",
               sidebar ? "h-8 w-8 text-sm" : "h-7 w-7 text-xs sm:h-8 sm:w-8 sm:text-sm"
             )}
           >
@@ -413,10 +413,6 @@ export function HeaderAccountSummary({
               <UserRound className="h-4 w-4" />
               프로필
             </button>
-            <Link href="/account/security" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950" onClick={() => setOpen(false)}>
-              <Settings className="h-4 w-4" />
-              설정
-            </Link>
             <button type="button" className="flex items-center gap-2 rounded-[7px] px-3 py-2 text-left text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950" onClick={signOut}>
               <LogOut className="h-4 w-4" />
               로그아웃
