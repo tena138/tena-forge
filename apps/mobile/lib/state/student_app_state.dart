@@ -175,6 +175,26 @@ class StudentAppState extends ChangeNotifier {
     return membership;
   }
 
+  Future<AcademyKeyRequirements> loadAcademyKeyRequirements(String code) {
+    return repository.getAcademyKeyRequirements(code);
+  }
+
+  Future<AcademyMembership> claimAcademyKey(
+    String code, {
+    Map<String, String> studentProfile = const {},
+  }) async {
+    final membership = await repository.claimAcademyKey(
+      code,
+      studentProfile: studentProfile,
+    );
+    await handleStudentInviteClaimSuccess(
+      userId: profile?.id,
+      academyStudentId: membership.id,
+      academyId: membership.academyId,
+    );
+    return membership;
+  }
+
   Future<AcademyMembership> acceptAcademyInvite(
     StudentAcademyInvite invite,
   ) async {

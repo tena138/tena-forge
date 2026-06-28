@@ -75,6 +75,22 @@ export type StudentInvitePreview = {
   expires_at?: string | null;
 };
 
+export type StudentProfileRequirementField = {
+  key: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+  real_name: boolean;
+};
+
+export type AcademyKeyRequirements = {
+  academy_id: string;
+  academy_name: string;
+  class_id?: string | null;
+  class_name?: string | null;
+  fields: StudentProfileRequirementField[];
+};
+
 export type StudentAcademyInvite = {
   id: string;
   academy_id: string;
@@ -204,11 +220,15 @@ export function releaseAcademySeat(academyId: string, seatId: string, reason?: s
   });
 }
 
-export function claimAcademyKey(inviteCode: string) {
+export function getAcademyKeyRequirements(inviteCode: string) {
+  return api<AcademyKeyRequirements>(`/api/student/academy-keys/requirements?invite_code=${encodeURIComponent(inviteCode.trim())}`);
+}
+
+export function claimAcademyKey(inviteCode: string, studentProfile: Record<string, string> = {}) {
   return api<StudentMembership>("/api/student/academy-keys/claim", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ invite_code: inviteCode }),
+    body: JSON.stringify({ invite_code: inviteCode, student_profile: studentProfile }),
   });
 }
 

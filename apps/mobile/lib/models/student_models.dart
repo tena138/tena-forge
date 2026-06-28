@@ -185,6 +185,67 @@ class StudentInvitePreview {
   }
 }
 
+class StudentProfileRequirementField {
+  const StudentProfileRequirementField({
+    required this.key,
+    required this.label,
+    required this.enabled,
+    required this.required,
+    required this.realName,
+  });
+
+  final String key;
+  final String label;
+  final bool enabled;
+  final bool required;
+  final bool realName;
+
+  factory StudentProfileRequirementField.fromJson(Map<String, dynamic> json) {
+    return StudentProfileRequirementField(
+      key: '${json['key'] ?? ''}',
+      label: json['label']?.toString() ?? '${json['key'] ?? ''}',
+      enabled: json['enabled'] != false,
+      required: json['required'] == true,
+      realName: json['real_name'] == true,
+    );
+  }
+}
+
+class AcademyKeyRequirements {
+  const AcademyKeyRequirements({
+    required this.academyId,
+    required this.academyName,
+    required this.fields,
+    this.classId,
+    this.className,
+  });
+
+  final String academyId;
+  final String academyName;
+  final String? classId;
+  final String? className;
+  final List<StudentProfileRequirementField> fields;
+
+  Iterable<StudentProfileRequirementField> get enabledFields =>
+      fields.where((field) => field.enabled);
+
+  factory AcademyKeyRequirements.fromJson(Map<String, dynamic> json) {
+    return AcademyKeyRequirements(
+      academyId: '${json['academy_id'] ?? ''}',
+      academyName: json['academy_name']?.toString() ?? 'Academy',
+      classId: json['class_id']?.toString(),
+      className: json['class_name']?.toString(),
+      fields: (json['fields'] as List? ?? const [])
+          .map(
+            (item) => StudentProfileRequirementField.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
 class StudentAcademyInvite {
   const StudentAcademyInvite({
     required this.id,

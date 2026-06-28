@@ -462,7 +462,7 @@ def _counseling_logs(membership: StudentAcademyMembership) -> list[dict]:
 
 def _student_name(membership: StudentAcademyMembership) -> str:
     metadata = membership.metadata_json or {}
-    return membership.display_name_in_academy or metadata.get("name") or metadata.get("display_name") or "Unnamed student"
+    return membership.display_name_in_academy or metadata.get("name") or metadata.get("display_name") or "학생 대기 중"
 
 
 def _student_person_id(membership: StudentAcademyMembership) -> str:
@@ -867,6 +867,7 @@ def _session_belongs_to_class(session: PaperSession, class_row: AcademyClass, me
 
 def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_students: bool = True) -> dict:
     memberships = _active_memberships_for_class(db, academy_id, row.id)
+    pending_seats = _unclaimed_seats_for_class(db, row.academy_id, row.id)
     student_ids = [membership.student_user_id for membership in memberships]
     student_membership_ids = {str(membership.id) for membership in memberships}
     unresolved = 0
@@ -905,7 +906,7 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
     students = []
     if include_students:
         students = [_safe_student_payload(db, academy_id, membership, [row]) for membership in memberships]
-        students.extend(_pending_student_card_for_seat(seat, row) for seat in _unclaimed_seats_for_class(db, row.academy_id, row.id))
+        students.extend(_pending_student_card_for_seat(seat, row) for seat in pending_seats)
     return {
         "id": str(row.id),
         "name": row.name,
@@ -914,6 +915,7 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
         "grade_level": row.grade_level,
         "is_active": row.is_active,
         "student_count": len(memberships),
+        "pending_key_count": len(pending_seats),
         "upcoming_count": upcoming_count,
         "recent_session": _session_summary(db, academy_id, recent_session) if recent_session else None,
         "average_recent_score": _decimal_float(avg_score),
@@ -934,6 +936,7 @@ def _fallback_class_payload(row: AcademyClass) -> dict:
         "grade_level": row.grade_level,
         "is_active": row.is_active,
         "student_count": 0,
+        "pending_key_count": 0,
         "upcoming_count": 0,
         "recent_session": None,
         "average_recent_score": None,

@@ -37,6 +37,7 @@ from routers.academy_student_app import (  # noqa: E402
     create_seats,
     student_calendar,
 )
+from routers.student_management import _class_payload  # noqa: E402
 from services.academy_student_access import (  # noqa: E402
     academy_seat_key_status,
     claim_invite_code,
@@ -122,6 +123,10 @@ class AcademyStudentKeyTests(unittest.TestCase):
             pending_membership = db.get(StudentAcademyMembership, seat.current_student_membership_id)
             self.assertIsNotNone(pending_membership)
             self.assertTrue(pending_membership.student_user_id.startswith("manual-"))
+            class_payload = _class_payload(db, self.academy_id, db.get(AcademyClass, self.class_id), include_students=True)
+            self.assertEqual(class_payload["student_count"], 0)
+            self.assertEqual(class_payload["pending_key_count"], 1)
+            self.assertEqual(class_payload["students"][0]["card_type"], "pending_key")
 
             membership = claim_invite_code(db, request_for(self.student_id), invite_code)
             db.commit()
@@ -139,6 +144,9 @@ class AcademyStudentKeyTests(unittest.TestCase):
                 )
             )
             self.assertIsNotNone(class_link)
+            class_payload = _class_payload(db, self.academy_id, db.get(AcademyClass, self.class_id), include_students=True)
+            self.assertEqual(class_payload["student_count"], 1)
+            self.assertEqual(class_payload["pending_key_count"], 0)
 
             with self.assertRaises(HTTPException) as already_used_by_same_student:
                 claim_invite_code(db, request_for(self.student_id), invite_code)

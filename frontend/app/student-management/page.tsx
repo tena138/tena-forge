@@ -34,7 +34,6 @@ import { Select } from "@/components/ui/select";
 import type { AcademyProfile } from "@/lib/auth-api";
 import { WORKSPACE_CHANGED_EVENT, getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import {
-  createStudentInviteByProfileName,
   issueLearningStudentKeys,
   listAcademySeats,
   releaseAcademySeat,
@@ -103,7 +102,6 @@ function normalizeListResponse<T>(value: unknown): T[] {
 type TabKey = "routine" | "classes" | "students" | "counseling" | "sessions" | "grading" | "wrong" | "calendar" | "analytics";
 const STUDENT_MANAGEMENT_TAB_KEYS: TabKey[] = ["routine", "classes", "students", "counseling", "sessions", "grading", "wrong", "calendar", "analytics"];
 type CounselingMode = "new" | "existing";
-type BulkKeyChannel = "manual" | "sms" | "student_app";
 type BulkInviteResult = AcademySeat & { key_code: string; status: string };
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
 type TrendMetricKey = "selected" | "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
@@ -1122,12 +1120,8 @@ export default function StudentManagementPage() {
   const [keyManagerLoading, setKeyManagerLoading] = useState(false);
   const [keyBusySeatId, setKeyBusySeatId] = useState("");
   const [newKeyCodes, setNewKeyCodes] = useState<string[]>([]);
-  const [profileInviteName, setProfileInviteName] = useState("");
-  const [profileInviteDisplayName, setProfileInviteDisplayName] = useState("");
-  const [profileInviteMemo, setProfileInviteMemo] = useState("");
   const [bulkKeyCount, setBulkKeyCount] = useState("1");
   const [bulkInviteText, setBulkInviteText] = useState("");
-  const [bulkInviteChannel, setBulkInviteChannel] = useState<BulkKeyChannel>("sms");
   const [bulkInviteResults, setBulkInviteResults] = useState<BulkInviteResult[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -1579,41 +1573,6 @@ export default function StudentManagementPage() {
     });
   }
 
-  function normalizedProfileInviteName() {
-    return profileInviteName.trim().replace(/^@+/, "").toLowerCase();
-  }
-
-  async function sendProfileNameInvite(classId = keyClassId) {
-    if (!academyId || !classId) return;
-    const profileName = normalizedProfileInviteName();
-    if (!/^[a-z0-9][a-z0-9_]{2,31}$/.test(profileName)) {
-      setMessage("공개 프로필 이름은 @ 없이 영문 소문자, 숫자, _로 정확히 입력해 주세요.");
-      return;
-    }
-    setKeyManagerLoading(true);
-    setClassStudentSavingId(classId);
-    try {
-      await createStudentInviteByProfileName(academyId, {
-        class_id: classId,
-        profile_name: profileName,
-        display_name: profileInviteDisplayName.trim() || null,
-        memo: profileInviteMemo.trim() || null,
-      });
-      setProfileInviteName("");
-      setProfileInviteDisplayName("");
-      setProfileInviteMemo("");
-      setNewKeyCodes([]);
-      setAddingStudentClassId("");
-      setMessage(`@${profileName} 학생에게 초대를 보냈습니다. 학생이 수락하면 클래스에 연결됩니다.`);
-      await Promise.all([loadKeyManager().catch(() => undefined), refresh().catch(() => undefined)]);
-    } catch (error) {
-      setMessage(errorMessage(error, "학생 프로필 초대를 보내지 못했습니다. 프로필 이름을 확인해 주세요."));
-    } finally {
-      setClassStudentSavingId("");
-      setKeyManagerLoading(false);
-    }
-  }
-
   async function issueClassKey() {
     if (!academyId || !keyClassId) return;
     setKeyManagerLoading(true);
@@ -1621,10 +1580,10 @@ export default function StudentManagementPage() {
       const created = await issueLearningStudentKeys(academyId, { count: 1, class_id: keyClassId });
       const codes = created.keys.map((seat) => seat.key_code || "").filter(Boolean);
       setNewKeyCodes(codes);
-      setMessage(codes[0] ? `학생 키를 발급했습니다: ${codes[0]}` : "학생 키를 발급했습니다.");
+      setMessage(codes[0] ? `익명 좌석 키를 발급했습니다: ${codes[0]}` : "익명 좌석 키를 발급했습니다.");
       await Promise.all([loadKeyManager(), refresh().catch(() => undefined)]);
     } catch (error) {
-      setMessage(errorMessage(error, "학생 키를 발급하지 못했습니다."));
+      setMessage(errorMessage(error, "익명 좌석 키를 발급하지 못했습니다."));
     } finally {
       setKeyManagerLoading(false);
     }
@@ -1634,39 +1593,20 @@ export default function StudentManagementPage() {
     if (!academyId || !keyClassId) return;
     const recipients = bulkInviteRecipients;
     const count = recipients.length || Math.max(1, Number(bulkKeyCount) || 1);
-    if (bulkInviteChannel === "sms" && !recipients.length) {
-      setMessage("SMS 발송 준비에는 학생 이름과 연락처 목록이 필요합니다.");
-      return;
-    }
-    if (bulkInviteChannel === "sms" && recipients.some((recipient) => !recipient.phone)) {
-      setMessage("SMS 발송 준비 대상에는 연락처가 모두 있어야 합니다.");
-      return;
-    }
-    if (bulkInviteChannel === "student_app" && recipients.some((recipient) => !recipient.account_user_id)) {
-      setMessage("앱 초대 대상에는 Tena 계정 ID가 모두 있어야 합니다.");
-      return;
-    }
     setKeyManagerLoading(true);
     try {
       const created = await issueLearningStudentKeys(academyId, {
         count,
         class_id: keyClassId,
-        delivery_channel: bulkInviteChannel,
+        delivery_channel: "manual",
         recipients: recipients.length ? recipients : undefined,
       });
       setBulkInviteResults(created.keys as BulkInviteResult[]);
       setNewKeyCodes(created.keys.map((seat) => seat.key_code || "").filter(Boolean));
-      const smsCount = created.keys.filter((seat) => seat.sms_url).length;
-      setMessage(
-        bulkInviteChannel === "sms"
-          ? `${created.keys.length}개의 학생 키를 만들고 SMS 링크 ${smsCount}개를 준비했습니다.`
-          : bulkInviteChannel === "student_app"
-            ? `${created.keys.length}개의 학생 앱 초대를 만들었습니다.`
-            : `${created.keys.length}개의 학생 키를 만들었습니다.`
-      );
+      setMessage(`${created.keys.length}개의 익명 좌석 키를 만들었습니다. 생성 직후에만 전체 키를 복사할 수 있습니다.`);
       await Promise.all([loadKeyManager(), refresh().catch(() => undefined)]);
     } catch (error) {
-      setMessage(errorMessage(error, "학생 키 대량 발급에 실패했습니다."));
+      setMessage(errorMessage(error, "익명 좌석 키 대량 발급에 실패했습니다."));
     } finally {
       setKeyManagerLoading(false);
     }
@@ -1677,23 +1617,23 @@ export default function StudentManagementPage() {
     const text = bulkInviteResults
       .map((seat) => {
         const meta = seat.invite_metadata || {};
-        return [meta.recipient_name || seat.display_name || seat.seat_number, meta.recipient_phone || "", seat.key_code, seat.sms_url || ""].filter(Boolean).join("\t");
+        return [meta.recipient_name || seat.display_name || seat.seat_number, meta.recipient_phone || "", seat.key_code].filter(Boolean).join("\t");
       })
       .join("\n");
     await navigator.clipboard.writeText(text);
-    setMessage("대량 초대 결과를 클립보드에 복사했습니다.");
+    setMessage("생성된 익명 좌석 키 목록을 클립보드에 복사했습니다.");
   }
 
   function loadCounselingCandidatesIntoBulkInvite() {
     const lines = pendingCounselingCandidates.map(bulkInviteLineFromCandidate).filter(Boolean);
     setBulkInviteText(lines.join("\n"));
-    setMessage(lines.length ? `상담 대기 후보 ${lines.length}명을 초대 목록에 불러왔습니다.` : "불러올 상담 대기 후보가 없습니다.");
+    setMessage(lines.length ? `상담 대기 후보 ${lines.length}명을 키 발급 메모로 불러왔습니다.` : "불러올 상담 대기 후보가 없습니다.");
   }
 
   async function copySeatKey(code: string) {
     if (!code) return;
     await navigator.clipboard.writeText(code);
-    setMessage("학생 키를 복사했습니다.");
+    setMessage("익명 좌석 키를 복사했습니다.");
   }
 
   async function rotateSeatKey(seat: AcademySeat) {
@@ -1703,10 +1643,10 @@ export default function StudentManagementPage() {
       const updated = await rotateAcademySeatCode(academyId, seat.id);
       const code = updated.invite_code || "";
       setNewKeyCodes(code ? [code] : []);
-      setMessage(code ? `학생 키를 새로 만들었습니다: ${code}` : "학생 키를 새로 만들었습니다.");
+      setMessage(code ? `익명 좌석 키를 새로 만들었습니다: ${code}` : "익명 좌석 키를 새로 만들었습니다.");
       await loadKeyManager();
     } catch (error) {
-      setMessage(errorMessage(error, "학생 키를 새로 만들지 못했습니다."));
+      setMessage(errorMessage(error, "익명 좌석 키를 새로 만들지 못했습니다."));
     } finally {
       setKeyBusySeatId("");
     }
@@ -1777,10 +1717,10 @@ export default function StudentManagementPage() {
         await navigator.clipboard.writeText(code);
         setNewKeyCodes([code]);
       }
-      setMessage(code ? classRow.name + " 클래스 키를 발급하고 복사했습니다: " + code : classRow.name + " 클래스 키를 발급했습니다.");
+      setMessage(code ? classRow.name + " 익명 좌석 키를 발급하고 복사했습니다: " + code : classRow.name + " 익명 좌석 키를 발급했습니다.");
       await Promise.all([refresh(), loadKeyManager().catch(() => undefined)]);
     } catch (error) {
-      setMessage(errorMessage(error, "클래스 키를 발급하지 못했습니다. 잠시 후 다시 시도해주세요."));
+      setMessage(errorMessage(error, "익명 좌석 키를 발급하지 못했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
       setClassStudentSavingId("");
     }
@@ -2087,7 +2027,7 @@ export default function StudentManagementPage() {
     setPendingCounselingCandidates(items);
     writePendingCounselingCandidates(items);
     resetCounselingDraft();
-    setMessage("신입 상담 후보를 대기 상태로 저장했습니다. 등록이 확정되면 학생 추가에서 연결할 수 있습니다.");
+    setMessage("신입 상담 후보를 대기 상태로 저장했습니다. 등록이 확정되면 익명 좌석 키를 발급해 연결할 수 있습니다.");
   }
 
   async function saveExistingCounselingLog() {
@@ -2126,7 +2066,6 @@ export default function StudentManagementPage() {
   ).length;
   const scoredStudentCount = allStudents.filter((student) => typeof student.recent_score === "number").length;
   const unresolvedStudentWrongs = allStudents.reduce((total, student) => total + student.unresolved_wrong_count, 0);
-
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -2145,7 +2084,6 @@ export default function StudentManagementPage() {
             학생관리 데이터를 불러오는 중입니다.
           </div>
         ) : null}
-
 
         {!loading && activeTab === "routine" ? (
           <section className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]">
@@ -2320,7 +2258,9 @@ export default function StudentManagementPage() {
                       <div>
                         <p className="text-lg font-black tracking-normal text-zinc-950 lg:text-3xl">{classRow.name}</p>
                         <p className="mt-0.5 text-sm font-black text-zinc-800 lg:mt-2 lg:text-2xl">{classRow.student_count}</p>
-                        <p className="text-[11px] text-zinc-500 lg:text-xs">학생</p>
+                        <p className="text-[11px] text-zinc-500 lg:text-xs">
+                          학생{classRow.pending_key_count ? ` · 대기 ${classRow.pending_key_count}` : ""}
+                        </p>
                         <p className="mt-1 max-w-[150px] truncate text-[11px] text-zinc-500 lg:mt-3 lg:max-w-none lg:text-xs">{[classRow.subject, classRow.grade_level].filter(Boolean).join(" · ") || classRow.description || "클래스 정보 없음"}</p>
                       </div>
                       <div className="flex shrink-0 gap-1.5 lg:gap-2">
@@ -2338,8 +2278,8 @@ export default function StudentManagementPage() {
                         </button>
                         <button
                           type="button"
-                          aria-label={`${classRow.name} 인원 추가`}
-                          title={`${classRow.name} 인원 추가`}
+                          aria-label={`${classRow.name} 익명 자리 만들기`}
+                          title={`${classRow.name} 익명 자리 만들기`}
                           onClick={() => startClassStudentAdd(classRow)}
                           className={cn(
                             "flex h-8 w-8 items-center justify-center rounded-md border transition lg:h-10 lg:w-10",
@@ -2355,40 +2295,17 @@ export default function StudentManagementPage() {
                         <div className="rounded-lg bg-white p-3 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-100">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-sm font-black text-zinc-950">클래스 키로 학생 연결</p>
-                              <p className="mt-1 text-xs leading-5 text-zinc-500">학생에게 키를 전달하면 학생이 Tena Note에서 본인 계정과 인적사항을 확인한 뒤 이 클래스에 자동 연결됩니다.</p>
+                              <p className="text-sm font-black text-zinc-950">익명 자리 만들기</p>
+                              <p className="mt-1 text-xs leading-5 text-zinc-500">이 클래스에 비어 있는 좌석을 만들고, 생성된 키를 학생에게 따로 전달하세요. 학생이 Tena Note에서 키를 입력하면 본인 계정과 연결됩니다.</p>
                             </div>
                             <button type="button" onClick={cancelClassStudentAdd} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="학생 연결 패널 닫기">
                               <X className="h-4 w-4" />
                             </button>
                           </div>
-                          <div className="mt-3 grid gap-2">
-                            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                              <div className="flex h-9 items-center rounded-md bg-zinc-100 px-2 ring-1 ring-zinc-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/10">
-                                <span className="text-xs font-black text-zinc-500">@</span>
-                                <input
-                                  className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none"
-                                  placeholder="profile_name"
-                                  value={profileInviteName}
-                                  onChange={(event) => setProfileInviteName(event.target.value.replace(/^@+/, "").toLowerCase())}
-                                />
-                              </div>
-                              <Button type="button" size="sm" onClick={() => sendProfileNameInvite(classRow.id)} disabled={classStudentSavingId === classRow.id || !academyId || !profileInviteName.trim()}>
-                                {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                                초대
-                              </Button>
-                            </div>
-                            <Input
-                              className="h-9 border-0 bg-zinc-100 text-sm"
-                              placeholder="학원 학생 표시명 (선택)"
-                              value={profileInviteDisplayName}
-                              onChange={(event) => setProfileInviteDisplayName(event.target.value)}
-                            />
-                          </div>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Button type="button" size="sm" onClick={() => issueClassKeyForClass(classRow)} disabled={classStudentSavingId === classRow.id || !academyId}>
                               {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                              키 발급 후 복사
+                              익명 키 발급 후 복사
                             </Button>
                             <Button
                               type="button"
@@ -2426,7 +2343,7 @@ export default function StudentManagementPage() {
                         </div>
                       ) : (
                         <button type="button" onClick={() => startClassStudentAdd(classRow)} className="flex h-full min-h-[84px] w-full items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-white text-sm font-semibold text-zinc-500 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950 lg:min-h-[116px]">
-                          학생 추가
+                          익명 자리 만들기
                         </button>
                       )}
                     </div>
@@ -2488,21 +2405,21 @@ export default function StudentManagementPage() {
               </section>
               <aside className="space-y-4 rounded-lg bg-white p-4">
                 <div>
-                  <h2 className="text-sm font-black text-zinc-950">학생 연결</h2>
+                  <h2 className="text-sm font-black text-zinc-950">익명 좌석 키</h2>
                   <p className="mt-1 text-xs leading-5 text-zinc-500">
-                    학생은 학원에서 받은 초대 링크를 열고, 학원이 요구한 개인정보만 본인 계정 정보로 채웁니다.
+                    학생은 학원에서 받은 키를 Tena Note에 입력하고, 학원이 요구한 개인정보만 본인 계정 정보로 채웁니다.
                   </p>
                 </div>
                 <div className="space-y-2">
                   <Select value={keyClassId} onChange={(event) => setKeyClassId(event.target.value)}>
-                    <option value="">키를 발급할 클래스 선택</option>
+                    <option value="">익명 키를 발급할 클래스 선택</option>
                     {classes.map((classRow) => (
                       <option key={classRow.id} value={classRow.id}>{classRow.name}</option>
                     ))}
                   </Select>
                   <Button type="button" className="w-full" onClick={issueClassKey} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length}>
                     <KeyRound className="h-4 w-4" />
-                    초대 링크 발급
+                    익명 키 발급
                   </Button>
                   <Button
                     type="button"
@@ -2790,7 +2707,7 @@ export default function StudentManagementPage() {
                         </label>
                       );
                     })}
-                    {!allStudents.length ? <p className="text-sm text-zinc-500">먼저 학생을 추가하세요.</p> : null}
+                    {!allStudents.length ? <p className="text-sm text-zinc-500">먼저 학생이 학원 키를 등록해야 합니다.</p> : null}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -3135,58 +3052,13 @@ export default function StudentManagementPage() {
                       <KeyRound className="h-4 w-4 text-zinc-700" />
                       학생 키 관리
                     </p>
-                    <p className="mt-1 text-xs text-zinc-500">반별 학생 접속 키를 발급하고 좌석을 관리합니다.</p>
+                    <p className="mt-1 text-xs text-zinc-500">반별 익명 좌석 키를 발급하고 대기/연결 상태를 관리합니다.</p>
                   </div>
                   <button type="button" onClick={() => setShowKeyManager(false)} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950" aria-label="학생 키 관리 닫기">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
                 <div className="space-y-3">
-                  <div className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-100">
-                    <p className="text-sm font-black text-zinc-950">공개 프로필 이름으로 초대</p>
-                    <div className="mt-3 grid gap-2">
-                      <select
-                        className="h-10 min-w-0 rounded-md border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 focus:ring-2 focus:ring-black/10"
-                        value={keyClassId}
-                        disabled={!classes.length || keyManagerLoading}
-                        onChange={(event) => setKeyClassId(event.target.value)}
-                      >
-                        {!classes.length ? <option value="">클래스 없음</option> : null}
-                        {classes.map((classRow) => (
-                          <option key={classRow.id} value={classRow.id}>
-                            {classRow.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                        <div className="flex h-10 items-center rounded-md bg-white px-3 ring-1 ring-zinc-200 focus-within:ring-2 focus-within:ring-black/10">
-                          <span className="text-sm font-black text-zinc-500">@</span>
-                          <input
-                            className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm font-semibold text-zinc-950 outline-none"
-                            placeholder="profile_name"
-                            value={profileInviteName}
-                            onChange={(event) => setProfileInviteName(event.target.value.replace(/^@+/, "").toLowerCase())}
-                          />
-                        </div>
-                        <Button type="button" onClick={() => sendProfileNameInvite()} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length || !profileInviteName.trim()}>
-                          {keyManagerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                          초대 보내기
-                        </Button>
-                      </div>
-                      <Input
-                        className="border-0 bg-white"
-                        placeholder="학원 학생 표시명 (선택)"
-                        value={profileInviteDisplayName}
-                        onChange={(event) => setProfileInviteDisplayName(event.target.value)}
-                      />
-                      <Input
-                        className="border-0 bg-white"
-                        placeholder="메모 (선택)"
-                        value={profileInviteMemo}
-                        onChange={(event) => setProfileInviteMemo(event.target.value)}
-                      />
-                    </div>
-                  </div>
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <select
                       className="h-10 min-w-0 rounded-md border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
@@ -3203,11 +3075,11 @@ export default function StudentManagementPage() {
                     </select>
                     <Button type="button" onClick={issueClassKey} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length}>
                       {keyManagerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                      키 발급
+                      익명 키 발급
                     </Button>
                   </div>
                   {!classes.length ? (
-                    <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">학생 키를 발급하려면 먼저 클래스를 만들어야 합니다.</p>
+                    <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">익명 좌석 키를 발급하려면 먼저 클래스를 만들어야 합니다.</p>
                   ) : null}
                   {newKeyCodes.length ? (
                     <div className="space-y-2 rounded-md bg-zinc-100 p-2">
@@ -3225,8 +3097,8 @@ export default function StudentManagementPage() {
                   <div className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-100">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-black text-zinc-950">대량 학생 키 초대</p>
-                        <p className="mt-1 text-xs leading-5 text-zinc-500">이름, 연락처, Tena 계정 ID 순서로 붙여 넣으면 한 클래스에 여러 키를 한 번에 만들고 SMS 또는 앱 초대를 준비합니다.</p>
+                        <p className="text-sm font-black text-zinc-950">대량 익명 키 발급</p>
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">선택적으로 이름과 연락처를 붙여 넣으면 키 목록을 구분하는 메모로 저장합니다. 실제 전달은 학원이 외부 경로로 진행합니다.</p>
                       </div>
                       <Badge variant="secondary">{bulkInviteRecipients.length || Math.max(1, Number(bulkKeyCount) || 1)}명</Badge>
                     </div>
@@ -3240,21 +3112,15 @@ export default function StudentManagementPage() {
                         className="border-0 bg-white"
                         aria-label="대량 발급 키 수"
                       />
-                      <select
-                        className="h-10 rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none ring-1 ring-zinc-200 focus:ring-2 focus:ring-black/10"
-                        value={bulkInviteChannel}
-                        onChange={(event) => setBulkInviteChannel(event.target.value as BulkKeyChannel)}
-                      >
-                        <option value="sms">SMS 링크 준비</option>
-                        <option value="student_app">Tena Note 앱 초대</option>
-                        <option value="manual">키만 생성</option>
-                      </select>
+                      <div className="flex h-10 items-center rounded-[8px] bg-white px-3 text-sm font-semibold text-zinc-600 ring-1 ring-zinc-200">
+                        키만 생성
+                      </div>
                     </div>
                     <textarea
                       className="mt-2 min-h-28 w-full rounded-md border-0 bg-white p-3 text-xs leading-5 text-zinc-950 outline-none ring-1 ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-black/10"
                       value={bulkInviteText}
                       onChange={(event) => setBulkInviteText(event.target.value)}
-                      placeholder={"김학생, 01012345678\n박학생, 01098765432\n앱초대학생, , tena-account-id"}
+                      placeholder={"김학생, 01012345678\n박학생, 01098765432\n메모만 남길 학생"}
                     />
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Button type="button" size="sm" onClick={issueBulkClassKeys} disabled={!academyId || !keyClassId || keyManagerLoading || !classes.length}>

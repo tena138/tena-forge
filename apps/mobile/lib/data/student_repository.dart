@@ -149,6 +149,28 @@ class StudentRepository {
     );
   }
 
+  Future<AcademyKeyRequirements> getAcademyKeyRequirements(String code) {
+    final encoded = Uri.encodeQueryComponent(code.trim());
+    return apiClient.get<AcademyKeyRequirements>(
+      '/api/student/academy-keys/requirements?invite_code=$encoded',
+      (json) => AcademyKeyRequirements.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      ),
+    );
+  }
+
+  Future<AcademyMembership> claimAcademyKey(
+    String code, {
+    Map<String, String> studentProfile = const {},
+  }) {
+    return apiClient.post<AcademyMembership>(
+      '/api/student/academy-keys/claim',
+      {'invite_code': code.trim(), 'student_profile': studentProfile},
+      (json) =>
+          AcademyMembership.fromJson(Map<String, dynamic>.from(json as Map)),
+    );
+  }
+
   Future<List<StudentAcademyInvite>> listAcademyInvites() {
     return apiClient.get<List<StudentAcademyInvite>>(
       '/api/student/academy-invites',
@@ -177,9 +199,8 @@ class StudentRepository {
     return apiClient.post<StudentAcademyInvite>(
       '/api/student/academy-invites/$encoded/decline',
       null,
-      (json) => StudentAcademyInvite.fromJson(
-        Map<String, dynamic>.from(json as Map),
-      ),
+      (json) =>
+          StudentAcademyInvite.fromJson(Map<String, dynamic>.from(json as Map)),
     );
   }
 

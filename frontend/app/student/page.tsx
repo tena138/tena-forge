@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { AcademyProfile } from "@/lib/auth-api";
 import { readStoredAuthProfile } from "@/lib/auth-client";
 import {
+  AcademyKeyRequirements,
   LearningArchiveDetail,
   LearningArchiveGrant,
   LearningAssignment,
@@ -22,8 +23,10 @@ import {
   StudentPersonalSet,
   addStudentPersonalSetItem,
   acceptStudentAcademyInvite,
+  claimAcademyKey,
   createStudentPersonalSet,
   declineStudentAcademyInvite,
+  getAcademyKeyRequirements,
   getLearningStats,
   getLearningToday,
   listStudentAcademyInvites,
@@ -82,6 +85,15 @@ function assignmentStatusLabel(assignment: LearningAssignment) {
   return "Assigned";
 }
 
+function apiErrorMessage(error: unknown, fallback: string) {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail && typeof (detail as { message?: unknown }).message === "string") {
+    return (detail as { message: string }).message;
+  }
+  return fallback;
+}
+
 type AssignmentProblemPageGroup = {
   key: string;
   label: string;
@@ -130,6 +142,10 @@ export default function StudentAppPage() {
   const [archiveAnswers, setArchiveAnswers] = useState<Record<string, string>>({});
   const [collapsedAssignmentPages, setCollapsedAssignmentPages] = useState<Record<string, boolean>>({});
   const [newSetTitle, setNewSetTitle] = useState("");
+  const [academyKeyCode, setAcademyKeyCode] = useState("");
+  const [academyKeyRequirements, setAcademyKeyRequirements] = useState<AcademyKeyRequirements | null>(null);
+  const [academyKeyProfile, setAcademyKeyProfile] = useState<Record<string, string>>({});
+  const [academyKeyBusy, setAcademyKeyBusy] = useState<"check" | "claim" | "">("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -266,6 +282,65 @@ export default function StudentAppPage() {
       setNotice(`${invite.academy_name} 초대를 거절했습니다.`);
     } catch {
       setError("초대를 거절하지 못했습니다.");
+    }
+  }
+
+  async function checkAcademyKey() {
+    const code = academyKeyCode.trim().toUpperCase();
+    if (!code) {
+      setError("학원 키를 입력해 주세요.");
+      return;
+    }
+    setNotice("");
+    setError("");
+    setAcademyKeyBusy("check");
+    try {
+      const requirements = await getAcademyKeyRequirements(code);
+      const nextProfile: Record<string, string> = {};
+      for (const field of requirements.fields.filter((item) => item.enabled)) {
+        nextProfile[field.key] = field.key === "name" ? profile?.academy_name || profile?.display_name || "" : "";
+      }
+      setAcademyKeyCode(code);
+      setAcademyKeyRequirements(requirements);
+      setAcademyKeyProfile(nextProfile);
+      setNotice(`${requirements.academy_name}${requirements.class_name ? ` · ${requirements.class_name}` : ""} 키를 확인했습니다.`);
+    } catch (err) {
+      setAcademyKeyRequirements(null);
+      setAcademyKeyProfile({});
+      setError(apiErrorMessage(err, "학원 키를 확인하지 못했습니다."));
+    } finally {
+      setAcademyKeyBusy("");
+    }
+  }
+
+  async function claimCheckedAcademyKey() {
+    const code = academyKeyCode.trim().toUpperCase();
+    const requirements = academyKeyRequirements;
+    if (!requirements) {
+      await checkAcademyKey();
+      return;
+    }
+    const missing = requirements.fields.filter((field) => field.enabled && field.required && !academyKeyProfile[field.key]?.trim());
+    if (missing.length) {
+      setError(`${missing.map((field) => field.label).join(", ")}을 입력해 주세요.`);
+      return;
+    }
+    setNotice("");
+    setError("");
+    setAcademyKeyBusy("claim");
+    try {
+      await claimAcademyKey(code, academyKeyProfile);
+      setAcademyKeyCode("");
+      setAcademyKeyRequirements(null);
+      setAcademyKeyProfile({});
+      setAcademyFilter("all");
+      await load("all");
+      setNotice("학원 키가 등록되었습니다.");
+      setTab("today");
+    } catch (err) {
+      setError(apiErrorMessage(err, "학원 키를 등록하지 못했습니다."));
+    } finally {
+      setAcademyKeyBusy("");
     }
   }
 
@@ -480,39 +555,79 @@ export default function StudentAppPage() {
 
       {tab === "profile" && (
         <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> Academy Invites</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {academyInvites.map((invite) => (
-                  <div key={invite.id} className="rounded-[10px] bg-zinc-50 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold text-zinc-950">{invite.academy_name}</div>
-                        <div className="mt-1 text-xs font-medium text-zinc-500">
-                          {[invite.class_name, invite.student_name].filter(Boolean).join(" · ") || "학생 초대"}
-                        </div>
-                      </div>
-                      <StatusChip>pending</StatusChip>
+          <div className="space-y-5">
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> 학원 키 추가</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    value={academyKeyCode}
+                    onChange={(event) => {
+                      setAcademyKeyCode(event.target.value.toUpperCase());
+                      setAcademyKeyRequirements(null);
+                    }}
+                    placeholder="예: 624N-AG8G-YAGY"
+                  />
+                  <Button type="button" onClick={() => void checkAcademyKey()} disabled={academyKeyBusy === "check"}>
+                    {academyKeyBusy === "check" ? <RotateCcw className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                    확인
+                  </Button>
+                </div>
+                {academyKeyRequirements ? (
+                  <div className="rounded-[10px] bg-zinc-50 p-3">
+                    <div className="font-semibold text-zinc-950">{academyKeyRequirements.academy_name}</div>
+                    <div className="mt-1 text-xs font-medium text-zinc-500">{academyKeyRequirements.class_name || "클래스"}</div>
+                    <div className="mt-3 space-y-2">
+                      {academyKeyRequirements.fields.filter((field) => field.enabled).map((field) => (
+                        <Input
+                          key={field.key}
+                          value={academyKeyProfile[field.key] || ""}
+                          onChange={(event) => setAcademyKeyProfile((current) => ({ ...current, [field.key]: event.target.value }))}
+                          placeholder={`${field.label}${field.required ? " *" : ""}`}
+                        />
+                      ))}
                     </div>
-                    <div className="mt-3 flex gap-2">
-                      <Button size="sm" onClick={() => void acceptAcademyInvite(invite)}>
-                        <CheckCircle2 className="h-4 w-4" />
-                        수락
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => void declineAcademyInvite(invite)}>
-                        거절
-                      </Button>
-                    </div>
+                    <Button type="button" className="mt-3 w-full" onClick={() => void claimCheckedAcademyKey()} disabled={academyKeyBusy === "claim"}>
+                      {academyKeyBusy === "claim" ? <RotateCcw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      이 학원 연결하기
+                    </Button>
                   </div>
-                ))}
-                {!academyInvites.length ? <p className="text-sm font-medium text-zinc-600">받은 초대가 없습니다.</p> : null}
-              </div>
-              <p className="hidden text-sm font-medium text-zinc-600">
-                학원 등록은 학원에서 보낸 초대 링크를 열어 진행합니다. 링크를 수락하면 이 계정에 학원이 추가되고 Today와 Archive가 다시 갱신됩니다.
-              </p>
-            </CardContent>
-          </Card>
+                ) : (
+                  <p className="text-sm font-medium text-zinc-600">학원에서 받은 키를 입력하면 클래스 일정과 자료가 이 계정에 연결됩니다.</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> 받은 앱 초대</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {academyInvites.map((invite) => (
+                    <div key={invite.id} className="rounded-[10px] bg-zinc-50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-zinc-950">{invite.academy_name}</div>
+                          <div className="mt-1 text-xs font-medium text-zinc-500">
+                            {[invite.class_name, invite.student_name].filter(Boolean).join(" · ") || "학생 초대"}
+                          </div>
+                        </div>
+                        <StatusChip>pending</StatusChip>
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <Button size="sm" onClick={() => void acceptAcademyInvite(invite)}>
+                          <CheckCircle2 className="h-4 w-4" />
+                          수락
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => void declineAcademyInvite(invite)}>
+                          거절
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {!academyInvites.length ? <p className="text-sm font-medium text-zinc-600">받은 앱 초대가 없습니다.</p> : null}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
           <Card>
             <CardHeader><CardTitle>Connected Academies / Personal Sets</CardTitle></CardHeader>
             <CardContent className="space-y-3">

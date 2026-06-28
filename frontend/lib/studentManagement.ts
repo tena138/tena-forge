@@ -69,6 +69,7 @@ export type ClassCard = {
   grade_level?: string | null;
   is_active: boolean;
   student_count: number;
+  pending_key_count?: number;
   upcoming_count: number;
   recent_session?: PaperSessionSummary | null;
   average_recent_score?: number | null;
