@@ -97,10 +97,11 @@ def _plan_value(academy: Academy) -> str:
     return getattr(academy.plan, "value", str(academy.plan))
 
 
-def reset_account_data(db: Session, academy: Academy) -> dict[str, Any]:
+def reset_account_data(db: Session, academy: Academy, target_owner_id: str | None = None) -> dict[str, Any]:
     """Delete academy/student operational data while preserving account and billing records."""
 
-    academy_id = str(academy.id)
+    account_id = str(academy.id)
+    academy_id = str(target_owner_id or account_id)
     user_id = academy_id
     counts: dict[str, int] = {}
 
@@ -110,7 +111,7 @@ def reset_account_data(db: Session, academy: Academy) -> dict[str, Any]:
         )
     ).all()
     membership_ids = [row[0] for row in membership_rows]
-    student_ids = _dedupe([user_id, *(row[1] for row in membership_rows)])
+    student_ids = _dedupe([account_id, user_id, *(row[1] for row in membership_rows)])
     class_ids = _ids(db, select(AcademyClass.id).where(AcademyClass.academy_id == academy_id))
     seat_ids = _ids(db, select(AcademySeat.id).where(AcademySeat.academy_id == academy_id))
 
@@ -505,9 +506,10 @@ def reset_account_data(db: Session, academy: Academy) -> dict[str, Any]:
     _delete(db, counts, "academy_seats", AcademySeat, _in(AcademySeat.id, seat_ids))
     _delete(db, counts, "academy_classes", AcademyClass, _in(AcademyClass.id, class_ids))
 
-    subscription = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == academy_id))
+    subscription = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == account_id))
     preserved = {
-        "account_id": user_id,
+        "account_id": account_id,
+        "target_owner_id": academy_id,
         "plan": _plan_value(academy),
         "student_plan_code": subscription.plan_code if subscription else None,
         "purchased_additional_student_keys": subscription.purchased_additional_seats if subscription else 0,

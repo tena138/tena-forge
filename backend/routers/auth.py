@@ -95,6 +95,7 @@ from services.auth_security import (
     verify_totp,
 )
 from services.account_data_reset import reset_account_data as reset_account_operational_data
+from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id, require_workspace_owner
 
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -913,13 +914,34 @@ def unlink_oauth_account(provider: OAuthProvider, academy: Academy = Depends(get
     return {"message": "소셜 계정 연결이 해제되었습니다"}
 
 
+def _account_data_reset_target_owner_ids(request: Request, db: Session) -> list[str]:
+    owner_id = current_workspace_id(request, db)
+    owner_ids = current_owner_ids(request, db)
+    if LOCAL_OWNER_ID in owner_ids:
+        return sorted(str(owner) for owner in owner_ids)
+    return [owner_id]
+
+
 @router.post("/me/data-reset")
-def reset_my_account_data(payload: AccountDataResetRequest, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
+def reset_my_account_data(payload: AccountDataResetRequest, request: Request, academy: Academy = Depends(get_current_academy), db: Session = Depends(get_db)):
     if payload.confirmation != "RESET":
         raise HTTPException(status_code=400, detail="초기화 확인 문구가 올바르지 않습니다.")
     if academy.password_hash and not verify_password(payload.password, academy.password_hash):
         raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다")
-    result = reset_account_operational_data(db, academy)
+    target_owner_ids = _account_data_reset_target_owner_ids(request, db)
+    deleted: dict[str, int] = {}
+    total_deleted = 0
+    preserved: dict = {}
+    for target_owner_id in target_owner_ids:
+        if target_owner_id != LOCAL_OWNER_ID:
+            require_workspace_owner(request, db, target_owner_id)
+        next_result = reset_account_operational_data(db, academy, target_owner_id=target_owner_id)
+        for table, count in next_result.get("deleted", {}).items():
+            deleted[table] = deleted.get(table, 0) + count
+        total_deleted += int(next_result.get("total_deleted", 0) or 0)
+        preserved = next_result.get("preserved", preserved)
+    preserved["target_owner_ids"] = target_owner_ids
+    result = {"deleted": dict(sorted(deleted.items())), "total_deleted": total_deleted, "preserved": preserved}
     db.commit()
     return {"message": "계정 데이터가 초기화되었습니다. 결제 플랜과 구입한 학생 키 수는 유지됩니다.", **result}
 

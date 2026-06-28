@@ -253,6 +253,62 @@ class AccountDataResetTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_reset_can_clear_legacy_local_user_student_management_data(self):
+        db = self.Session()
+        try:
+            academy = Academy(
+                id=self.academy_uuid,
+                email="academy@example.com",
+                academy_name="Academy",
+                account_type="academy",
+                plan=AcademyPlan.pro,
+            )
+            student_subscription = AcademyStudentSubscription(
+                academy_id=self.academy_id,
+                plan_code="growth",
+                purchased_additional_seats=7,
+                purchased_staff_seats=2,
+            )
+            academy_class = AcademyClass(academy_id="local_user", name="Legacy class", subject="math", grade_level="N")
+            db.add_all([academy, student_subscription, academy_class])
+            db.flush()
+            seat = AcademySeat(
+                academy_id="local_user",
+                class_id=academy_class.id,
+                seat_number="L1",
+                invite_code_hash="legacy-hash",
+                invite_code_preview="LGCY",
+            )
+            db.add(seat)
+            db.flush()
+            membership = StudentAcademyMembership(
+                student_user_id="manual-legacy",
+                academy_id="local_user",
+                academy_seat_id=seat.id,
+                display_name_in_academy="Legacy Student",
+            )
+            db.add(membership)
+            db.flush()
+            seat.current_student_membership_id = membership.id
+            db.add(ClassStudent(class_id=academy_class.id, student_membership_id=membership.id))
+            db.commit()
+
+            result = reset_account_data(db, academy, target_owner_id="local_user")
+            db.commit()
+
+            self.assertGreater(result["total_deleted"], 0)
+            self.assertEqual(result["preserved"]["target_owner_id"], "local_user")
+            self.assertEqual(result["preserved"]["student_plan_code"], "growth")
+            self.assertEqual(result["preserved"]["purchased_additional_student_keys"], 7)
+            self.assertIsNotNone(db.get(Academy, self.academy_uuid))
+            self.assertEqual(db.query(AcademyStudentSubscription).count(), 1)
+            self.assertEqual(db.query(AcademyClass).count(), 0)
+            self.assertEqual(db.query(AcademySeat).count(), 0)
+            self.assertEqual(db.query(StudentAcademyMembership).count(), 0)
+            self.assertEqual(db.query(ClassStudent).count(), 0)
+        finally:
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()
