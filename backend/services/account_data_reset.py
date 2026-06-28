@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from database import Base
 from models import (
     AbuseSignal,
     Academy,
@@ -68,6 +69,35 @@ from models import (
 )
 
 
+PRESERVED_GLOBAL_RESET_TABLES = {
+    "academies",
+    "academy_staff_invite_codes",
+    "academy_staff_memberships",
+    "academy_student_plans",
+    "academy_student_subscriptions",
+    "academy_workspace_settings",
+    "active_sessions",
+    "audit_logs",
+    "daily_student_quota_usage",
+    "email_verifications",
+    "login_history",
+    "monthly_usage_records",
+    "oauth_accounts",
+    "password_reset_tokens",
+    "plans",
+    "platform_settings",
+    "refresh_tokens",
+    "subscription_billing_keys",
+    "subscription_events",
+    "subscription_orders",
+    "subscription_payment_attempts",
+    "subscriptions",
+    "totp_secrets",
+    "usage_logs",
+    "user_roles",
+}
+
+
 def _dedupe(values: list[Any] | set[Any] | tuple[Any, ...]) -> list[Any]:
     return list(dict.fromkeys(value for value in values if value is not None))
 
@@ -96,6 +126,44 @@ def _delete(db: Session, counts: dict[str, int], label: str, model: Any, conditi
 
 def _plan_value(academy: Academy) -> str:
     return getattr(academy.plan, "value", str(academy.plan))
+
+
+def _preserved_account_snapshot(db: Session, academy: Academy, *, target_owner_id: str | None = None, reset_scope: str) -> dict[str, Any]:
+    account_id = str(academy.id)
+    subscription = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == account_id))
+    preserved = {
+        "account_id": account_id,
+        "target_owner_id": target_owner_id or account_id,
+        "reset_scope": reset_scope,
+        "plan": _plan_value(academy),
+        "student_plan_code": subscription.plan_code if subscription else None,
+        "purchased_additional_student_keys": subscription.purchased_additional_seats if subscription else 0,
+        "purchased_staff_seats": subscription.purchased_staff_seats if subscription else 0,
+    }
+    return preserved
+
+
+def reset_all_operational_data(db: Session, academy: Academy) -> dict[str, Any]:
+    """Delete all non-account operational tables for admin resets.
+
+    Admin resets are intentionally broader than the per-owner reset because legacy
+    rows may have stale owner IDs and still appear in archive screens.
+    """
+
+    counts: dict[str, int] = {}
+    for table in reversed(Base.metadata.sorted_tables):
+        if table.name in PRESERVED_GLOBAL_RESET_TABLES:
+            continue
+        result = db.execute(table.delete())
+        rowcount = result.rowcount if result.rowcount is not None else 0
+        if rowcount > 0:
+            counts[table.name] = int(rowcount)
+
+    return {
+        "deleted": dict(sorted(counts.items())),
+        "total_deleted": sum(counts.values()),
+        "preserved": _preserved_account_snapshot(db, academy, reset_scope="admin_global"),
+    }
 
 
 def reset_account_data(db: Session, academy: Academy, target_owner_id: str | None = None) -> dict[str, Any]:
@@ -519,17 +587,8 @@ def reset_account_data(db: Session, academy: Academy, target_owner_id: str | Non
     _delete(db, counts, "academy_seats", AcademySeat, _in(AcademySeat.id, seat_ids))
     _delete(db, counts, "academy_classes", AcademyClass, _in(AcademyClass.id, class_ids))
 
-    subscription = db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == account_id))
-    preserved = {
-        "account_id": account_id,
-        "target_owner_id": academy_id,
-        "plan": _plan_value(academy),
-        "student_plan_code": subscription.plan_code if subscription else None,
-        "purchased_additional_student_keys": subscription.purchased_additional_seats if subscription else 0,
-        "purchased_staff_seats": subscription.purchased_staff_seats if subscription else 0,
-    }
     return {
         "deleted": dict(sorted(counts.items())),
         "total_deleted": sum(counts.values()),
-        "preserved": preserved,
+        "preserved": _preserved_account_snapshot(db, academy, target_owner_id=academy_id, reset_scope="owner_scoped"),
     }

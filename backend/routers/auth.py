@@ -99,7 +99,10 @@ from services.auth_security import (
     verify_refresh_record,
     verify_totp,
 )
-from services.account_data_reset import reset_account_data as reset_account_operational_data
+from services.account_data_reset import (
+    reset_account_data as reset_account_operational_data,
+    reset_all_operational_data as reset_all_account_operational_data,
+)
 from services.ownership import LOCAL_OWNER_ID, _is_admin_user, current_owner_ids, current_workspace_id, require_workspace_owner
 from services.profile_names import normalize_profile_name, valid_profile_name
 
@@ -989,6 +992,11 @@ def reset_my_account_data(payload: AccountDataResetRequest, request: Request, ac
         raise HTTPException(status_code=400, detail="초기화 확인 문구가 올바르지 않습니다.")
     if academy.password_hash and not verify_password(payload.password, academy.password_hash):
         raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다")
+    if _is_admin_user(db, str(academy.id)):
+        result = reset_all_account_operational_data(db, academy)
+        db.commit()
+        return {"message": "계정 데이터가 초기화되었습니다. 결제 플랜과 구입한 학생 키 수는 유지됩니다.", **result}
+
     target_owner_ids = _account_data_reset_target_owner_ids(request, db)
     deleted: dict[str, int] = {}
     total_deleted = 0

@@ -21,6 +21,7 @@ from models import (  # noqa: E402
     AcademyPlan,
     AcademySeat,
     AcademyStudentSubscription,
+    ArchiveFolder,
     Assignment,
     Batch,
     CalendarEvent,
@@ -49,7 +50,7 @@ from models import (  # noqa: E402
     WrongAnswerRecord,
 )
 from routers.auth import _account_data_reset_target_owner_ids  # noqa: E402
-from services.account_data_reset import reset_account_data  # noqa: E402
+from services.account_data_reset import reset_account_data, reset_all_operational_data  # noqa: E402
 
 
 class AccountDataResetTests(unittest.TestCase):
@@ -374,6 +375,102 @@ class AccountDataResetTests(unittest.TestCase):
             self.assertIn(self.academy_id, target_owner_ids)
             self.assertIn(str(other_academy_id), target_owner_ids)
             self.assertIn("orphan_owner", target_owner_ids)
+        finally:
+            db.close()
+
+    def test_admin_global_reset_deletes_orphan_archive_and_pending_keys(self):
+        db = self.Session()
+        try:
+            admin = Academy(
+                id=self.academy_uuid,
+                email="admin@tena-forge.com",
+                academy_name="Admin",
+                profile_name="admin_test",
+                account_type="academy",
+                plan=AcademyPlan.pro,
+            )
+            subscription = Subscription(user_id=self.academy_id, plan_code="pro", status="active")
+            student_subscription = AcademyStudentSubscription(
+                academy_id=self.academy_id,
+                plan_code="growth",
+                purchased_additional_seats=25,
+                purchased_staff_seats=4,
+            )
+            academy_class = AcademyClass(academy_id=self.academy_id, name="P1", subject="math", grade_level="N")
+            orphan_folder = ArchiveFolder(name="고3", owner_id="orphan_owner", academy_id=None)
+            orphan_batch = Batch(
+                name="Orphan batch",
+                status="completed",
+                owner_id="orphan_owner",
+                academy_id=None,
+                problem_pdf_filename="source.pdf",
+                solution_pdf_filename=None,
+            )
+            db.add_all(
+                [
+                    admin,
+                    UserRole(user_id=self.academy_id, role="admin"),
+                    subscription,
+                    student_subscription,
+                    academy_class,
+                    orphan_folder,
+                    orphan_batch,
+                ]
+            )
+            db.flush()
+            seat = AcademySeat(
+                academy_id=self.academy_id,
+                class_id=academy_class.id,
+                seat_number="P1-001",
+                invite_code_hash="pending-hash",
+                invite_code_preview="PEND",
+            )
+            orphan_problem = Problem(
+                problem_number=1,
+                problem_text="orphan problem",
+                answer="1",
+                source_batch_id=orphan_batch.id,
+                owner_id="orphan_owner",
+                academy_id=None,
+            )
+            db.add_all([seat, orphan_problem])
+            db.flush()
+            membership = StudentAcademyMembership(
+                student_user_id="pending-student",
+                academy_id=self.academy_id,
+                academy_seat_id=seat.id,
+                display_name_in_academy="Pending Student",
+            )
+            db.add(membership)
+            db.flush()
+            db.add(
+                StudentInvite(
+                    academy_id=self.academy_id,
+                    academy_seat_id=seat.id,
+                    academy_student_membership_id=membership.id,
+                    target_user_id="pending-student",
+                    target_profile_name="pending",
+                )
+            )
+            db.commit()
+
+            result = reset_all_operational_data(db, admin)
+            db.commit()
+
+            self.assertGreater(result["total_deleted"], 0)
+            self.assertEqual(result["preserved"]["reset_scope"], "admin_global")
+            self.assertEqual(result["preserved"]["purchased_additional_student_keys"], 25)
+            self.assertIsNotNone(db.get(Academy, self.academy_uuid))
+            self.assertIsNotNone(db.get(Subscription, subscription.id))
+            self.assertIsNotNone(db.get(AcademyStudentSubscription, student_subscription.id))
+            self.assertEqual(db.query(UserRole).count(), 1)
+            self.assertEqual(db.query(ArchiveFolder).count(), 0)
+            self.assertEqual(db.query(Batch).count(), 0)
+            self.assertEqual(db.query(Problem).count(), 0)
+            self.assertEqual(db.query(AcademyClass).count(), 0)
+            self.assertEqual(db.query(AcademySeat).count(), 0)
+            self.assertEqual(db.query(StudentAcademyMembership).count(), 0)
+            self.assertEqual(db.query(StudentInvite).count(), 0)
         finally:
             db.close()
 
