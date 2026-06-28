@@ -20,6 +20,7 @@ import {
   Send,
   Sparkles,
   Square,
+  Trash2,
   UserMinus,
   UserPlus,
   X,
@@ -57,6 +58,7 @@ import {
   createPaperSession,
   createScheduleEvent,
   createReviewSet,
+  deleteClass,
   ensureStudentInviteCode,
   getPaperSessionDetail,
   getStudentManagementDashboard,
@@ -1253,6 +1255,7 @@ export default function StudentManagementPage() {
   const [collapsedTextbookGrids, setCollapsedTextbookGrids] = useState<Record<string, boolean>>({});
   const [wrongInput, setWrongInput] = useState("");
   const [classSaving, setClassSaving] = useState(false);
+  const [deletingClassId, setDeletingClassId] = useState("");
   const [showClassCreator, setShowClassCreator] = useState(false);
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [addingStudentClassId, setAddingStudentClassId] = useState("");
@@ -2071,6 +2074,42 @@ export default function StudentManagementPage() {
     }
   }
 
+  async function removeClassRow(classRow: ClassCard) {
+    if (deletingClassId) return;
+    const ok = window.confirm(`${classRow.name} 클래스를 삭제할까요? 연결된 일정과 학생 배정도 함께 정리될 수 있습니다.`);
+    if (!ok) return;
+    setDeletingClassId(classRow.id);
+    try {
+      await deleteClass(classRow.id);
+      setClasses((current) => {
+        const next = current.filter((item) => item.id !== classRow.id);
+        classOrderRef.current = next;
+        return next;
+      });
+      setStatsOpen((current) => {
+        const { [classRow.id]: _removed, ...next } = current;
+        return next;
+      });
+      setClassStatsDetails((current) => {
+        const { [classRow.id]: _removed, ...next } = current;
+        return next;
+      });
+      setClassStatsLoading((current) => {
+        const { [classRow.id]: _removed, ...next } = current;
+        return next;
+      });
+      if (addingStudentClassId === classRow.id) setAddingStudentClassId("");
+      if (keyClassId === classRow.id) setKeyClassId("");
+      if (draggingClassId === classRow.id) setDraggingClassId("");
+      setMessage(`${classRow.name} 클래스를 삭제했습니다.`);
+    } catch (error) {
+      setMessage(errorMessage(error, "클래스를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요."));
+      await refresh().catch(() => undefined);
+    } finally {
+      setDeletingClassId("");
+    }
+  }
+
   function resetCounselingDraft(options: { keepTranscript?: boolean } = {}) {
     setCounselingPreview(null);
     setCounselingAudioBlob(null);
@@ -2473,6 +2512,21 @@ export default function StudentManagementPage() {
                           )}
                         >
                           <UserPlus className="h-4 w-4 lg:h-5 lg:w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${classRow.name} 클래스 삭제`}
+                          title={`${classRow.name} 클래스 삭제`}
+                          onClick={() => void removeClassRow(classRow)}
+                          disabled={Boolean(deletingClassId)}
+                          className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-55 lg:h-10 lg:w-10",
+                            deletingClassId === classRow.id
+                              ? "border-red-200 bg-red-50 text-red-700"
+                              : "border-zinc-200 bg-white text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                          )}
+                        >
+                          {deletingClassId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin lg:h-5 lg:w-5" /> : <Trash2 className="h-4 w-4 lg:h-5 lg:w-5" />}
                         </button>
                       </div>
                     </aside>
