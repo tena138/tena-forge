@@ -18,7 +18,14 @@ class StudentRepository {
     final token = await sessionStore.readAccessToken();
     final profile = await sessionStore.readProfile();
     if (token != null && profile != null) {
-      return profile;
+      try {
+        return await fetchMe();
+      } catch (exception) {
+        if (exception is! ApiException ||
+            (exception.statusCode != 401 && exception.statusCode != 403)) {
+          return profile;
+        }
+      }
     }
 
     final refreshed = await apiClient.refreshAccessToken();

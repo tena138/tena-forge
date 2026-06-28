@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -67,7 +68,7 @@ class ApiClient {
       'X-Requested-With': 'XMLHttpRequest',
     };
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    if (refreshCookie != null) headers['Cookie'] = refreshCookie;
+    if (!kIsWeb && refreshCookie != null) headers['Cookie'] = refreshCookie;
     request.headers.addAll(headers);
     request.files.add(
       await http.MultipartFile.fromPath(
@@ -103,7 +104,7 @@ class ApiClient {
       'X-Requested-With': 'XMLHttpRequest',
     };
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    if (refreshCookie != null) headers['Cookie'] = refreshCookie;
+    if (!kIsWeb && refreshCookie != null) headers['Cookie'] = refreshCookie;
     final encodedBody = body == null ? null : jsonEncode(body);
     final response = switch (method) {
       'GET' => await http.get(uri, headers: headers),
@@ -130,6 +131,7 @@ class ApiClient {
   }
 
   Future<bool> refreshAccessToken() async {
+    if (kIsWeb) return false;
     final refreshCookie = await sessionStore.readRefreshCookie();
     if (refreshCookie == null) return false;
     try {
@@ -151,6 +153,7 @@ class ApiClient {
   }
 
   Future<void> _persistRefreshCookie(http.Response response) async {
+    if (kIsWeb) return;
     final setCookie = response.headers['set-cookie'];
     if (setCookie == null || !setCookie.contains('$_refreshCookieName=')) {
       return;
