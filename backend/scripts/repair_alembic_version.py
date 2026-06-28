@@ -9,7 +9,7 @@ from database import Base, get_settings
 import models  # noqa: F401 - registers all SQLAlchemy models on Base.metadata
 
 PREVIOUS_REVISION = "0023_portone_billing"
-HEAD_REVISION = "0037_academy_seat_invite_metadata"
+HEAD_REVISION = "0038_profile_name_student_invites"
 BATCH_REQUIRED_COLUMNS = {
     "source_type",
     "source_label",
@@ -92,6 +92,7 @@ ACADEMY_REQUIRED_COLUMNS = {
     "password_hash",
     "academy_name",
     "display_name",
+    "profile_name",
     "bio",
     "account_type",
     "business_number",
@@ -163,6 +164,7 @@ def _ensure_academy_columns(connection, inspector) -> bool:
         ("password_hash", "VARCHAR(255) NULL"),
         ("academy_name", "VARCHAR(255) NOT NULL DEFAULT 'Tena User'"),
         ("display_name", "VARCHAR(120) NULL"),
+        ("profile_name", "VARCHAR(32) NULL"),
         ("bio", "TEXT NULL"),
         ("account_type", "VARCHAR(20) NOT NULL DEFAULT 'academy'"),
         ("business_number", "VARCHAR(50) NULL"),
@@ -187,6 +189,23 @@ def _ensure_academy_columns(connection, inspector) -> bool:
 
     connection.execute(text(f"UPDATE academies SET email_verified = {bool_false} WHERE email_verified IS NULL"))
     connection.execute(text("UPDATE academies SET academy_name = split_part(email, '@', 1) WHERE academy_name IS NULL OR academy_name = ''")) if connection.dialect.name == "postgresql" else connection.execute(text("UPDATE academies SET academy_name = substr(email, 1, instr(email, '@') - 1) WHERE academy_name IS NULL OR academy_name = ''"))
+    if connection.dialect.name == "postgresql":
+        connection.execute(
+            text(
+                "UPDATE academies "
+                "SET profile_name = 'academy_' || substr(replace(id::text, '-', ''), 1, 24) "
+                "WHERE profile_name IS NULL OR profile_name = ''"
+            )
+        )
+        connection.execute(text("ALTER TABLE academies ALTER COLUMN profile_name SET NOT NULL"))
+    else:
+        connection.execute(
+            text(
+                "UPDATE academies "
+                "SET profile_name = 'academy_' || substr(replace(CAST(id AS TEXT), '-', ''), 1, 24) "
+                "WHERE profile_name IS NULL OR profile_name = ''"
+            )
+        )
     connection.execute(text("UPDATE academies SET account_type = 'academy' WHERE account_type IS NULL OR account_type = ''"))
     connection.execute(text("UPDATE academies SET plan = 'free' WHERE plan IS NULL"))
     connection.execute(text(f"UPDATE academies SET is_active = {bool_true} WHERE is_active IS NULL"))
@@ -200,6 +219,9 @@ def _ensure_academy_columns(connection, inspector) -> bool:
         changed = True
     if "ix_academies_email" not in _index_names(inspector, "academies"):
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_academies_email ON academies (email)"))
+        changed = True
+    if "ix_academies_profile_name" not in _index_names(inspector, "academies"):
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_academies_profile_name ON academies (profile_name)"))
         changed = True
     return changed
 
@@ -597,6 +619,7 @@ def _schema_is_at_head(inspector) -> bool:
         "problem_usage_history",
         "student_tuition_payments",
         "student_tuition_session_adjustments",
+        "student_invites",
     }
     tables = set(inspector.get_table_names())
     return (

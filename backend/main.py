@@ -297,6 +297,7 @@ def health_db():
             "problem_usage_history",
             "student_tuition_payments",
             "student_tuition_session_adjustments",
+            "student_invites",
         }
         academy_columns = {column["name"] for column in inspector.get_columns("academies")} if "academies" in tables else set()
         batch_columns = {column["name"] for column in inspector.get_columns("batches")} if "batches" in tables else set()
