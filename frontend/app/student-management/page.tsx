@@ -158,13 +158,10 @@ const CLASS_TIME_OPTIONS = Array.from({ length: (24 * 60) / CLASS_TIME_STEP_MINU
   const value = `${String(hours).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   return { value, label: value, minutes };
 });
-const CLASS_TIME_QUICK_STARTS = ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
-const CLASS_DURATION_PRESETS = [
-  { label: "50분", minutes: 50 },
-  { label: "1시간", minutes: 60 },
-  { label: "1시간 30분", minutes: 90 },
-  { label: "2시간", minutes: 120 },
-];
+const CLASS_START_TIME_OPTIONS = CLASS_TIME_OPTIONS.slice(0, -1);
+const CLASS_TIME_WHEEL_ITEM_HEIGHT = 34;
+const CLASS_TIME_WHEEL_VISIBLE_ITEMS = 5;
+const CLASS_TIME_WHEEL_PADDING_ITEMS = Math.floor(CLASS_TIME_WHEEL_VISIBLE_ITEMS / 2);
 const COUNSELING_PENDING_STORAGE_KEY = "tena.student-management.pending-counseling";
 
 function minutesFromTimeValue(value: string) {
@@ -182,6 +179,121 @@ function timeValueFromMinutes(value: number) {
   const hours = Math.floor(minutes / 60);
   const minute = minutes % 60;
   return `${String(hours).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+type ClassTimeOption = (typeof CLASS_TIME_OPTIONS)[number];
+
+function ClassTimeWheel({
+  label,
+  value,
+  options,
+  disabled = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: ClassTimeOption[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollTimeoutRef = useRef<number | null>(null);
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const displayIndex = selectedIndex >= 0 ? selectedIndex : 0;
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const nextScrollTop = displayIndex * CLASS_TIME_WHEEL_ITEM_HEIGHT;
+    if (Math.abs(element.scrollTop - nextScrollTop) > 1) {
+      element.scrollTo({ top: nextScrollTop, behavior: "smooth" });
+    }
+  }, [displayIndex, options]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current !== null) window.clearTimeout(scrollTimeoutRef.current);
+    };
+  }, []);
+
+  function selectIndex(index: number) {
+    if (disabled || !options.length) return;
+    const nextIndex = Math.max(0, Math.min(options.length - 1, index));
+    const nextValue = options[nextIndex]?.value;
+    if (nextValue && nextValue !== value) onChange(nextValue);
+  }
+
+  function handleScroll() {
+    if (disabled) return;
+    if (scrollTimeoutRef.current !== null) window.clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = window.setTimeout(() => {
+      const element = scrollRef.current;
+      if (!element) return;
+      selectIndex(Math.round(element.scrollTop / CLASS_TIME_WHEEL_ITEM_HEIGHT));
+    }, 80);
+  }
+
+  return (
+    <div className={cn("rounded-[10px] bg-zinc-100 p-2", disabled && "opacity-50")}>
+      <div className="mb-1 flex items-center justify-between px-1">
+        <span className="text-xs font-black text-zinc-500">{label}</span>
+        <span className="font-mono text-xs font-black text-zinc-950">{value || "--:--"}</span>
+      </div>
+      <div className="relative overflow-hidden rounded-[9px] bg-white ring-1 ring-zinc-200">
+        <div className="pointer-events-none absolute inset-x-2 top-1/2 z-0 h-[34px] -translate-y-1/2 rounded-[8px] bg-zinc-950/[0.06] ring-1 ring-zinc-950/10" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-10 bg-gradient-to-b from-white to-white/0" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-10 bg-gradient-to-t from-white to-white/0" />
+        <div
+          ref={scrollRef}
+          role="listbox"
+          aria-label={label}
+          aria-disabled={disabled}
+          tabIndex={disabled ? -1 : 0}
+          onScroll={handleScroll}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              selectIndex(displayIndex + 1);
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              selectIndex(displayIndex - 1);
+            }
+          }}
+          className="relative z-10 overflow-y-auto overscroll-contain outline-none focus-visible:ring-2 focus-visible:ring-black/10"
+          style={{
+            height: CLASS_TIME_WHEEL_ITEM_HEIGHT * CLASS_TIME_WHEEL_VISIBLE_ITEMS,
+            scrollSnapType: "y mandatory",
+            scrollbarWidth: "none",
+          }}
+        >
+          <div style={{ height: CLASS_TIME_WHEEL_ITEM_HEIGHT * CLASS_TIME_WHEEL_PADDING_ITEMS }} />
+          {options.map((option, index) => {
+            const active = selectedIndex === index;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                tabIndex={-1}
+                disabled={disabled}
+                onClick={() => selectIndex(index)}
+                className={cn(
+                  "flex w-full items-center justify-center font-mono text-sm font-black transition",
+                  active ? "scale-105 text-zinc-950" : "text-zinc-400 hover:text-zinc-700"
+                )}
+                style={{ height: CLASS_TIME_WHEEL_ITEM_HEIGHT, scrollSnapAlign: "center" }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+          <div style={{ height: CLASS_TIME_WHEEL_ITEM_HEIGHT * CLASS_TIME_WHEEL_PADDING_ITEMS }} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function readPendingCounselingCandidates(): PendingCounselingCandidate[] {
@@ -1231,11 +1343,6 @@ export default function StudentManagementPage() {
     const startMinutes = minutesFromTimeValue(classForm.routine_starts_at);
     return startMinutes === null ? CLASS_TIME_OPTIONS : CLASS_TIME_OPTIONS.filter((option) => option.minutes > startMinutes);
   }, [classForm.routine_starts_at]);
-  const classRoutineDurationMinutes = useMemo(() => {
-    const startMinutes = minutesFromTimeValue(classForm.routine_starts_at);
-    const endMinutes = minutesFromTimeValue(classForm.routine_ends_at);
-    return startMinutes !== null && endMinutes !== null && endMinutes > startMinutes ? endMinutes - startMinutes : null;
-  }, [classForm.routine_starts_at, classForm.routine_ends_at]);
   const requestedTab = searchParams.get("tab");
 
   useEffect(() => {
@@ -1486,17 +1593,6 @@ export default function StudentManagementPage() {
 
   function updateClassRoutineEndTime(value: string) {
     setClassForm((current) => ({ ...current, routine_ends_at: value }));
-  }
-
-  function applyClassRoutineDuration(minutes: number) {
-    setClassForm((current) => {
-      const startMinutes = minutesFromTimeValue(current.routine_starts_at);
-      if (startMinutes === null) return current;
-      return {
-        ...current,
-        routine_ends_at: timeValueFromMinutes(startMinutes + minutes),
-      };
-    });
   }
 
   async function submitClass() {
@@ -3357,68 +3453,15 @@ export default function StudentManagementPage() {
                   <div className="space-y-3 rounded-[8px] bg-zinc-50 p-3">
                     <div className="text-xs font-black text-zinc-500">일정</div>
                     <Input type="date" value={classForm.routine_date} onChange={(event) => setClassForm((current) => ({ ...current, routine_date: event.target.value }))} />
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <label className="block text-xs font-semibold text-zinc-600">
-                          시작
-                          <select
-                            className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
-                            value={classForm.routine_starts_at}
-                            onChange={(event) => updateClassRoutineStartTime(event.target.value)}
-                          >
-                            <option value="">시작 시간</option>
-                            {CLASS_TIME_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="block text-xs font-semibold text-zinc-600">
-                          종료
-                          <select
-                            className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10 disabled:opacity-55"
-                            value={classForm.routine_ends_at}
-                            onChange={(event) => updateClassRoutineEndTime(event.target.value)}
-                            disabled={!classForm.routine_starts_at}
-                          >
-                            <option value="">종료 시간</option>
-                            {classRoutineEndTimeOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                      <div className="grid grid-cols-6 gap-1.5">
-                        {CLASS_TIME_QUICK_STARTS.map((time) => (
-                          <button
-                            key={time}
-                            type="button"
-                            onClick={() => updateClassRoutineStartTime(time)}
-                            className={cn("h-8 rounded-[7px] text-xs font-bold transition", classForm.routine_starts_at === time ? "bg-black text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950")}
-                          >
-                            {time}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {CLASS_DURATION_PRESETS.map((preset) => (
-                          <button
-                            key={preset.minutes}
-                            type="button"
-                            onClick={() => applyClassRoutineDuration(preset.minutes)}
-                            disabled={!classForm.routine_starts_at}
-                            className={cn(
-                              "h-8 rounded-[7px] text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-45",
-                              classRoutineDurationMinutes === preset.minutes ? "bg-black text-white" : "bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-100 hover:text-zinc-950"
-                            )}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <ClassTimeWheel label="시작" value={classForm.routine_starts_at} options={CLASS_START_TIME_OPTIONS} onChange={updateClassRoutineStartTime} />
+                      <ClassTimeWheel
+                        label="종료"
+                        value={classForm.routine_ends_at}
+                        options={classRoutineEndTimeOptions}
+                        disabled={!classForm.routine_starts_at}
+                        onChange={updateClassRoutineEndTime}
+                      />
                     </div>
                     <select
                       className="h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
