@@ -3,6 +3,7 @@ import unittest
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -44,8 +45,10 @@ from models import (  # noqa: E402
     StudentPersonalSetItem,
     Subscription,
     Tag,
+    UserRole,
     WrongAnswerRecord,
 )
+from routers.auth import _account_data_reset_target_owner_ids  # noqa: E402
 from services.account_data_reset import reset_account_data  # noqa: E402
 
 
@@ -319,6 +322,58 @@ class AccountDataResetTests(unittest.TestCase):
             self.assertEqual(db.query(AcademySeat).count(), 0)
             self.assertEqual(db.query(StudentAcademyMembership).count(), 0)
             self.assertEqual(db.query(ClassStudent).count(), 0)
+        finally:
+            db.close()
+
+    def test_admin_reset_targets_all_operational_archive_owners(self):
+        db = self.Session()
+        try:
+            admin = Academy(
+                id=self.academy_uuid,
+                email="admin@tena-forge.com",
+                academy_name="Admin",
+                profile_name="admin_test",
+                account_type="academy",
+                plan=AcademyPlan.pro,
+            )
+            other_academy_id = uuid.uuid4()
+            other_academy = Academy(
+                id=other_academy_id,
+                email="other@example.com",
+                academy_name="Other",
+                profile_name="other_test",
+                account_type="academy",
+                plan=AcademyPlan.free,
+            )
+            batch = Batch(
+                name="Orphan batch",
+                status="completed",
+                owner_id="orphan_owner",
+                academy_id=None,
+                problem_pdf_filename="source.pdf",
+                solution_pdf_filename=None,
+            )
+            db.add_all([admin, other_academy, UserRole(user_id=self.academy_id, role="admin"), batch])
+            db.flush()
+            db.add(
+                Problem(
+                    problem_number=1,
+                    problem_text="orphan problem",
+                    answer="1",
+                    source_batch_id=batch.id,
+                    owner_id="orphan_owner",
+                    academy_id=None,
+                )
+            )
+            db.commit()
+
+            request = SimpleNamespace(state=SimpleNamespace(academy_id=self.academy_id))
+            target_owner_ids = _account_data_reset_target_owner_ids(request, db)
+
+            self.assertIn("local_user", target_owner_ids)
+            self.assertIn(self.academy_id, target_owner_ids)
+            self.assertIn(str(other_academy_id), target_owner_ids)
+            self.assertIn("orphan_owner", target_owner_ids)
         finally:
             db.close()
 

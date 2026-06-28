@@ -22,10 +22,15 @@ from models import (
     Academy,
     AcademyPlan,
     ActiveSession,
+    ArchiveFolder,
+    Batch,
     EmailVerification,
+    HubTemplate,
     OAuthAccount,
     OAuthProvider,
     PasswordResetToken,
+    Problem,
+    ProblemSet,
     RefreshToken,
     Subscription,
     TotpSecret,
@@ -95,7 +100,7 @@ from services.auth_security import (
     verify_totp,
 )
 from services.account_data_reset import reset_account_data as reset_account_operational_data
-from services.ownership import LOCAL_OWNER_ID, current_owner_ids, current_workspace_id, require_workspace_owner
+from services.ownership import LOCAL_OWNER_ID, _is_admin_user, current_owner_ids, current_workspace_id, require_workspace_owner
 from services.profile_names import normalize_profile_name, valid_profile_name
 
 settings = get_settings()
@@ -963,6 +968,14 @@ def unlink_oauth_account(provider: OAuthProvider, academy: Academy = Depends(get
 
 
 def _account_data_reset_target_owner_ids(request: Request, db: Session) -> list[str]:
+    user_id = str(getattr(request.state, "academy_id", "") or "")
+    if user_id and _is_admin_user(db, user_id):
+        target_ids: set[str] = {LOCAL_OWNER_ID, user_id}
+        target_ids.update(str(academy_id) for academy_id in db.scalars(select(Academy.id)).all())
+        for model in (ArchiveFolder, Batch, Problem, ProblemSet, HubTemplate):
+            target_ids.update(str(owner_id) for owner_id in db.scalars(select(model.owner_id).distinct()).all() if owner_id)
+        return sorted(target_ids)
+
     owner_id = current_workspace_id(request, db)
     owner_ids = current_owner_ids(request, db)
     if LOCAL_OWNER_ID in owner_ids:
