@@ -44,10 +44,12 @@ function formatSecurityDateTime(value?: string | null) {
 }
 
 type SettingsSection = "security" | "lecture";
+const ACTIVE_SESSION_PREVIEW_LIMIT = 3;
 
 export default function AccountSecurityPage() {
   const [profile, setProfile] = useState<AcademyProfile | null>(null);
   const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const [history, setHistory] = useState<LoginHistoryItem[]>([]);
   const [oauthAccounts, setOauthAccounts] = useState<OAuthAccountItem[]>([]);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("security");
@@ -75,6 +77,7 @@ export default function AccountSecurityPage() {
       const [me, sessionList, historyList, oauthList] = await Promise.all([fetchMe(), listSessions(), listLoginHistory(), listOAuthAccounts()]);
       setProfile(me);
       setSessions(sessionList);
+      if (sessionList.length <= ACTIVE_SESSION_PREVIEW_LIMIT) setShowAllSessions(false);
       setHistory(historyList);
       setOauthAccounts(oauthList);
       setError("");
@@ -307,6 +310,14 @@ export default function AccountSecurityPage() {
     `flex h-10 w-full items-center rounded-[8px] px-3 text-sm font-black transition ${
       settingsSection === section ? "bg-black text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
     }`;
+  const sessionPreview = sessions.slice(0, ACTIVE_SESSION_PREVIEW_LIMIT);
+  const currentSessionOutsidePreview = sessions.find((session) => session.is_current && !sessionPreview.some((item) => item.id === session.id));
+  const visibleSessions = showAllSessions
+    ? sessions
+    : currentSessionOutsidePreview
+      ? [currentSessionOutsidePreview, ...sessionPreview.slice(0, ACTIVE_SESSION_PREVIEW_LIMIT - 1)]
+      : sessionPreview;
+  const hiddenSessionCount = Math.max(0, sessions.length - ACTIVE_SESSION_PREVIEW_LIMIT);
 
   const lectureSettingsContent = (
     <Card>
@@ -453,7 +464,7 @@ export default function AccountSecurityPage() {
             <table className="w-full text-sm">
               <thead className="bg-zinc-100 text-left text-zinc-500"><tr><th className="p-2">기기</th><th className="hidden p-2 md:table-cell">브라우저</th><th className="hidden p-2 md:table-cell">IP</th><th className="hidden p-2 md:table-cell">마지막 활동</th><th className="p-2 text-right md:text-left">액션</th></tr></thead>
               <tbody>
-                {sessions.map((session) => (
+                {visibleSessions.map((session) => (
                   <tr key={session.id} className="odd:bg-white even:bg-zinc-50">
                     <td className="p-2">
                       <div className="font-medium">{session.device_info || "Unknown"} {session.is_current ? "(현재)" : ""}</div>
@@ -479,6 +490,11 @@ export default function AccountSecurityPage() {
               </tbody>
             </table>
           </div>
+          {hiddenSessionCount > 0 ? (
+            <Button variant="outline" onClick={() => setShowAllSessions((current) => !current)}>
+              {showAllSessions ? "접기" : `자세히 보기 (${hiddenSessionCount}개 더)`}
+            </Button>
+          ) : null}
           <Button variant="secondary" disabled={action === "sessions-other"} onClick={endOtherSessions}>
             {action === "sessions-other" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {action === "sessions-other" ? "로그아웃 중" : "모든 다른 기기에서 로그아웃"}
