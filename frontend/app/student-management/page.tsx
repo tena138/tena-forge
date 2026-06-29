@@ -50,6 +50,7 @@ import {
   PaperSessionSummary,
   RoutineAction,
   RoutineMessage,
+  ScheduleEvent,
   SessionProblem,
   StudentCard,
   StudentProfileCollectionSettings,
@@ -107,6 +108,13 @@ const STUDENT_MANAGEMENT_TAB_KEYS: TabKey[] = ["routine", "classes", "students",
 type CounselingMode = "new" | "existing";
 type BulkInviteResult = AcademySeat & { key_code: string; status: string };
 type ProblemStatus = "correct" | "wrong" | "unanswered" | "unmarked";
+type ClassCalendarItem = {
+  id: string;
+  title: string;
+  dateLabel: string;
+  kindLabel: string;
+  sortDate: string;
+};
 type TrendMetricKey = "selected" | "average" | "highest" | "lowest" | "q1" | "q2" | "q3" | "stddev";
 type ClassSessionMetricPoint = {
   id: string;
@@ -454,6 +462,14 @@ function sessionTypeLabel(type?: string | null) {
   if (type === "mock_exam") return "모의고사";
   if (type === "practice") return "연습";
   return type || "세션";
+}
+
+function scheduleEventTypeLabel(type?: string | null) {
+  if (type === "class" || type === "lesson") return "수업";
+  if (type === "homework" || type === "assignment") return "과제";
+  if (type === "test" || type === "exam") return "시험";
+  if (type === "notice") return "공지";
+  return type || "일정";
 }
 
 function routineTypeLabel(type: string) {
@@ -2095,6 +2111,42 @@ export default function StudentManagementPage() {
     });
   }
 
+  function scheduleEventsForClass(classRow: ClassCard) {
+    const byId = new Map<string, ScheduleEvent>();
+    for (const event of classRow.schedule_events || []) {
+      if (event.class_id === classRow.id) byId.set(event.id, event);
+    }
+    return Array.from(byId.values()).sort((left, right) => {
+      return (left.starts_at || "").localeCompare(right.starts_at || "") || left.title.localeCompare(right.title);
+    });
+  }
+
+  function calendarItemsForClass(classRow: ClassCard): ClassCalendarItem[] {
+    const scheduleItems = scheduleEventsForClass(classRow).map((event) => {
+      const startLabel = formatDate(event.starts_at);
+      const endLabel = event.ends_at && formatDate(event.ends_at) !== startLabel ? `~ ${formatDate(event.ends_at)}` : "";
+      return {
+        id: `event-${event.id}`,
+        title: event.title || classRow.name,
+        dateLabel: [startLabel, endLabel].filter(Boolean).join(" "),
+        kindLabel: scheduleEventTypeLabel(event.event_type),
+        sortDate: event.starts_at || "",
+      };
+    });
+    const sessionItems = sessionsForClass(classRow).map((session) => ({
+      id: `session-${session.id}`,
+      title: session.title,
+      dateLabel: formatDate(session.scheduled_at || session.due_at || session.created_at),
+      kindLabel: sessionTypeLabel(session.session_type),
+      sortDate: session.scheduled_at || session.due_at || session.created_at || "",
+    }));
+    return [...scheduleItems, ...sessionItems].sort((left, right) => {
+      const leftDate = left.sortDate || "9999-12-31T23:59:59";
+      const rightDate = right.sortDate || "9999-12-31T23:59:59";
+      return leftDate.localeCompare(rightDate) || left.title.localeCompare(right.title);
+    });
+  }
+
   function classSessionCount(classRow: ClassCard) {
     return sessionsForClass(classRow).length;
   }
@@ -3216,22 +3268,28 @@ export default function StudentManagementPage() {
 
         {!loading && activeTab === "calendar" ? (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {classes.map((classRow) => (
-              <Card key={classRow.id} className="bg-white shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200">
-                <CardHeader>
-                  <CardTitle className="text-zinc-950">{classRow.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {sessionsForClass(classRow).slice(0, 6).map((session) => (
-                    <div key={session.id} className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-200">
-                      <p className="text-sm font-semibold text-zinc-950">{session.title}</p>
-                      <p className="mt-1 text-xs text-zinc-500">{formatDate(session.scheduled_at)} · {sessionTypeLabel(session.session_type)}</p>
-                    </div>
-                  ))}
-                  {!sessionsForClass(classRow).length ? <p className="text-sm text-zinc-500">등록된 일정이 없습니다.</p> : null}
-                </CardContent>
-              </Card>
-            ))}
+            {classes.map((classRow) => {
+              const items = calendarItemsForClass(classRow);
+              return (
+                <Card key={classRow.id} className="bg-white shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-200">
+                  <CardHeader>
+                    <CardTitle className="text-zinc-950">{classRow.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {items.slice(0, 8).map((item) => (
+                      <div key={item.id} className="rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-200">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="min-w-0 truncate text-sm font-semibold text-zinc-950">{item.title}</p>
+                          <Badge className="shrink-0 border border-zinc-200 bg-white text-zinc-700">{item.kindLabel}</Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-zinc-500">{item.dateLabel}</p>
+                      </div>
+                    ))}
+                    {!items.length ? <p className="text-sm text-zinc-500">등록된 일정이 없습니다.</p> : null}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </section>
         ) : null}
 

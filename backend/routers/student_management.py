@@ -897,12 +897,22 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
     )
     now = _now()
     class_sessions = [session for session in sessions if _session_belongs_to_class(session, row, memberships)]
+    schedule_events = _safe_scalars(
+        db,
+        select(ClassScheduleEvent)
+        .where(
+            ClassScheduleEvent.academy_id == row.academy_id,
+            ClassScheduleEvent.class_id == row.id,
+        )
+        .order_by(ClassScheduleEvent.starts_at.asc())
+        .limit(500),
+    )
     upcoming_count = sum(
         1
         for session in class_sessions
         if session.status in {"draft", "scheduled", "exported", "grading"}
         and ((session.scheduled_at and session.scheduled_at >= now) or (session.due_at and session.due_at >= now))
-    )
+    ) + sum(1 for event in schedule_events if event.starts_at >= now)
     recent_session = class_sessions[0] if class_sessions else None
     students = []
     if include_students:
@@ -922,6 +932,7 @@ def _class_payload(db: Session, academy_id: str, row: AcademyClass, include_stud
         "average_recent_score": _decimal_float(avg_score),
         "unresolved_wrong_count": unresolved,
         "students": students,
+        "schedule_events": [_schedule_event_payload(event) for event in schedule_events],
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "student_membership_ids": list(student_membership_ids),
@@ -943,6 +954,7 @@ def _fallback_class_payload(row: AcademyClass) -> dict:
         "average_recent_score": None,
         "unresolved_wrong_count": 0,
         "students": [],
+        "schedule_events": [],
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "student_membership_ids": [],
