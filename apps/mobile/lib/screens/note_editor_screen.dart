@@ -69,12 +69,12 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         bottom: false,
         child: Column(
           children: [
-            _EditorTopBar(
+            _EditorTopBar(document: document),
+            _EditorToolBar(
               document: document,
               printedPageIndex: _printedPageIndex,
               onPrintedPageJump: _jumpToPrintedPage,
             ),
-            _EditorToolBar(documentId: document.id),
             Expanded(
               child: _CanvasStage(
                 key: _canvasStageKey,
@@ -99,15 +99,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 }
 
 class _EditorTopBar extends StatelessWidget {
-  const _EditorTopBar({
-    required this.document,
-    required this.printedPageIndex,
-    required this.onPrintedPageJump,
-  });
+  const _EditorTopBar({required this.document});
 
   final NoteDocument document;
-  final ValueListenable<int> printedPageIndex;
-  final ValueChanged<int> onPrintedPageJump;
 
   @override
   Widget build(BuildContext context) {
@@ -180,22 +174,6 @@ class _EditorTopBar extends StatelessWidget {
                       context.go('/notes/editor/${next.id}');
                     },
                   ),
-                  if (document.printedPages.length > 1) ...[
-                    const SizedBox(width: 6),
-                    ValueListenableBuilder<int>(
-                      valueListenable: printedPageIndex,
-                      builder: (context, index, _) {
-                        final pageCount = document.printedPages.length;
-                        final currentPage = index.clamp(0, pageCount - 1) + 1;
-                        return _PrintedPageJumpControl(
-                          currentPage: currentPage,
-                          pageCount: pageCount,
-                          onJump: onPrintedPageJump,
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 6),
-                  ],
                   _EditorIconButton(
                     icon: Icons.more_horiz_rounded,
                     tooltip: '더보기',
@@ -302,9 +280,15 @@ class _EditorTabStrip extends StatelessWidget {
 }
 
 class _EditorToolBar extends StatelessWidget {
-  const _EditorToolBar({required this.documentId});
+  const _EditorToolBar({
+    required this.document,
+    required this.printedPageIndex,
+    required this.onPrintedPageJump,
+  });
 
-  final String documentId;
+  final NoteDocument document;
+  final ValueListenable<int> printedPageIndex;
+  final ValueChanged<int> onPrintedPageJump;
 
   @override
   Widget build(BuildContext context) {
@@ -312,68 +296,91 @@ class _EditorToolBar extends StatelessWidget {
     return Container(
       height: 56,
       color: AppColors.panel,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
         children: [
-          _PassiveToolButton(
-            icon: Icons.add_photo_alternate_outlined,
-            tooltip: '페이지/이미지 추가',
-            onPressed: () => _showSnack(context, '페이지 또는 이미지를 추가할 수 있습니다.'),
-          ),
-          _ToolButton(
-            tool: NoteTool.pen,
-            icon: Icons.edit_outlined,
-            label: '펜',
-          ),
-          _ToolButton(
-            tool: NoteTool.eraser,
-            iconWidget: const _EraserToolIcon(),
-            label: '지우개',
-          ),
-          _ToolButton(
-            tool: NoteTool.highlighter,
-            icon: Icons.border_color_outlined,
-            label: '형광펜',
-          ),
-          _ToolButton(
-            tool: NoteTool.textExtractor,
-            icon: Icons.center_focus_strong_rounded,
-            label: '텍스트 추출',
-          ),
-          _ToolButton(
-            tool: NoteTool.lasso,
-            icon: Icons.gesture_rounded,
-            label: '올가미',
-          ),
-          _ToolButton(
-            tool: NoteTool.image,
-            icon: Icons.image_outlined,
-            label: '이미지',
-          ),
-          _ToolButton(
-            tool: NoteTool.text,
-            icon: Icons.text_fields_rounded,
-            label: '텍스트',
-          ),
-          _ToolButton(
-            tool: NoteTool.pointer,
-            icon: Icons.flash_on_rounded,
-            label: '포인터',
-          ),
-          const SizedBox(width: 8),
-          const VerticalDivider(color: AppColors.border),
-          const SizedBox(width: 8),
-          _StrokePreview(width: state.penWidth),
-          SizedBox(
-            width: 130,
-            child: Slider(
-              min: 1,
-              max: 10,
-              value: state.penWidth,
-              onChanged: state.setPenWidth,
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              children: [
+                _PassiveToolButton(
+                  icon: Icons.add_photo_alternate_outlined,
+                  tooltip: '페이지/이미지 추가',
+                  onPressed: () =>
+                      _showSnack(context, '페이지 또는 이미지를 추가할 수 있습니다.'),
+                ),
+                _ToolButton(
+                  tool: NoteTool.pen,
+                  icon: Icons.edit_outlined,
+                  label: '펜',
+                ),
+                _ToolButton(
+                  tool: NoteTool.eraser,
+                  iconWidget: const _EraserToolIcon(),
+                  label: '지우개',
+                ),
+                _ToolButton(
+                  tool: NoteTool.highlighter,
+                  icon: Icons.border_color_outlined,
+                  label: '형광펜',
+                ),
+                _ToolButton(
+                  tool: NoteTool.textExtractor,
+                  icon: Icons.center_focus_strong_rounded,
+                  label: '텍스트 추출',
+                ),
+                _ToolButton(
+                  tool: NoteTool.lasso,
+                  icon: Icons.gesture_rounded,
+                  label: '올가미',
+                ),
+                _ToolButton(
+                  tool: NoteTool.image,
+                  icon: Icons.image_outlined,
+                  label: '이미지',
+                ),
+                _ToolButton(
+                  tool: NoteTool.text,
+                  icon: Icons.text_fields_rounded,
+                  label: '텍스트',
+                ),
+                _ToolButton(
+                  tool: NoteTool.pointer,
+                  icon: Icons.flash_on_rounded,
+                  label: '포인터',
+                ),
+                const SizedBox(width: 8),
+                const VerticalDivider(color: AppColors.border),
+                const SizedBox(width: 8),
+                _StrokePreview(width: state.penWidth),
+                SizedBox(
+                  width: 130,
+                  child: Slider(
+                    min: 1,
+                    max: 10,
+                    value: state.penWidth,
+                    onChanged: state.setPenWidth,
+                  ),
+                ),
+              ],
             ),
           ),
+          if (document.printedPages.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(right: 18),
+              child: ValueListenableBuilder<int>(
+                valueListenable: printedPageIndex,
+                builder: (context, index, _) {
+                  final pageCount = document.printedPages.length;
+                  final currentPage = index.clamp(0, pageCount - 1) + 1;
+                  return _PrintedPageJumpControl(
+                    currentPage: currentPage,
+                    pageCount: pageCount,
+                    onJump: onPrintedPageJump,
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
