@@ -405,24 +405,6 @@ export function ArchiveBatchHistory({
                 )}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-4">
-                <div className="rounded-[9px] bg-zinc-100 p-3">
-                  <p className="text-xs font-semibold text-zinc-500">전체 문항</p>
-                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.problem_count}</p>
-                </div>
-                <div className="rounded-[9px] bg-zinc-100 p-3">
-                  <p className="text-xs font-semibold text-zinc-500">검토 필요</p>
-                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.review_count}</p>
-                </div>
-                <div className="rounded-[9px] bg-zinc-100 p-3">
-                  <p className="text-xs font-semibold text-zinc-500">태그 완료</p>
-                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.tagged_count}</p>
-                </div>
-                <div className="rounded-[9px] bg-zinc-100 p-3">
-                  <p className="text-xs font-semibold text-zinc-500">태그 미완료</p>
-                  <p className="mt-1 text-2xl font-semibold text-zinc-950">{batch.untagged_count}</p>
-                </div>
-              </div>
             </CardContent>
           </Card>
         ))}
