@@ -212,6 +212,15 @@ class StudentAppState extends ChangeNotifier {
     await refresh();
   }
 
+  Future<void> disconnectAcademy(AcademyMembership academy) async {
+    await repository.disconnectAcademy(academy.id);
+    if (selectedContextId == academy.id ||
+        selectedContextId == academy.academyId) {
+      selectedContextId = 'personal';
+    }
+    await refresh();
+  }
+
   Future<void> handleStudentInviteClaimSuccess({
     required String? userId,
     required String? academyStudentId,

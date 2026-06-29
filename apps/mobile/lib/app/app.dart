@@ -28,7 +28,7 @@ class _TenaForgeStudentAppState extends State<TenaForgeStudentApp> {
     });
 
     return MaterialApp.router(
-      title: 'Tena Forge Student',
+      title: 'Tena Note',
       debugShowCheckedModeBanner: false,
       theme: buildTenaTheme(),
       routerConfig: _router,

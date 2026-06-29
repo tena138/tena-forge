@@ -465,6 +465,119 @@ class Assignment {
   }
 }
 
+class StudentMaterialProblem {
+  const StudentMaterialProblem({
+    required this.id,
+    required this.pageNumber,
+    this.problemNumber,
+    this.originalProblemNumber,
+    this.problemText,
+    this.visualUrl,
+    this.reviewPageImageUrl,
+    this.sourceLabel,
+    this.tags = const [],
+  });
+
+  final String id;
+  final int pageNumber;
+  final String? problemNumber;
+  final int? originalProblemNumber;
+  final String? problemText;
+  final String? visualUrl;
+  final String? reviewPageImageUrl;
+  final String? sourceLabel;
+  final List<String> tags;
+
+  factory StudentMaterialProblem.fromJson(
+    Map<String, dynamic> json,
+    int fallbackPageNumber,
+  ) {
+    final rawTags = json['tags'];
+    return StudentMaterialProblem(
+      id: '${json['problem_id'] ?? json['id'] ?? 'problem-$fallbackPageNumber'}',
+      pageNumber:
+          int.tryParse('${json['page_number'] ?? fallbackPageNumber}') ??
+          fallbackPageNumber,
+      problemNumber: json['problem_number']?.toString(),
+      originalProblemNumber: int.tryParse('${json['original_problem_number']}'),
+      problemText: json['problem_text']?.toString(),
+      visualUrl: json['visual_url']?.toString(),
+      reviewPageImageUrl: json['review_page_image_url']?.toString(),
+      sourceLabel: json['source_label']?.toString(),
+      tags: rawTags is List
+          ? rawTags.map((value) => value.toString()).toList(growable: false)
+          : rawTags is Map
+          ? rawTags.values
+                .map((value) => value?.toString().trim() ?? '')
+                .where((value) => value.isNotEmpty)
+                .toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+class StudentMaterialContent {
+  const StudentMaterialContent({
+    required this.title,
+    required this.assignmentType,
+    required this.problemScope,
+    required this.renderMode,
+    required this.allowExport,
+    required this.problems,
+    this.learningAssignmentId,
+    this.sourceType,
+    this.sourceId,
+    this.timeLimitSeconds,
+    this.dueAt,
+    this.expiresAt,
+  });
+
+  final String title;
+  final String? sourceType;
+  final String? sourceId;
+  final String assignmentType;
+  final String problemScope;
+  final String renderMode;
+  final bool allowExport;
+  final String? learningAssignmentId;
+  final int? timeLimitSeconds;
+  final DateTime? dueAt;
+  final DateTime? expiresAt;
+  final List<StudentMaterialProblem> problems;
+
+  factory StudentMaterialContent.fromJson(Map<String, dynamic> json) {
+    final rawProblems = json['problems'];
+    final problems = rawProblems is List
+        ? rawProblems
+              .whereType<Map>()
+              .toList(growable: false)
+              .asMap()
+              .entries
+              .map(
+                (entry) => StudentMaterialProblem.fromJson(
+                  entry.value.cast<String, dynamic>(),
+                  entry.key + 1,
+                ),
+              )
+              .toList(growable: false)
+        : const <StudentMaterialProblem>[];
+    return StudentMaterialContent(
+      title: '${json['title'] ?? 'Untitled'}',
+      learningAssignmentId: json['learning_assignment_id']?.toString(),
+      sourceType: json['source_type']?.toString(),
+      sourceId: json['source_id']?.toString(),
+      assignmentType: '${json['assignment_type'] ?? 'textbook'}',
+      problemScope: '${json['problem_scope'] ?? 'all'}',
+      renderMode: '${json['render_mode'] ?? 'notebook_problem_pages'}',
+      allowExport: json['allow_export'] == true,
+      timeLimitSeconds: int.tryParse('${json['time_limit_seconds']}'),
+      dueAt: DateTime.tryParse('${json['due_at']}'),
+      expiresAt: DateTime.tryParse('${json['expires_at']}'),
+      problems: problems,
+    );
+  }
+}
+
 class StudentMaterial {
   const StudentMaterial({
     required this.id,
@@ -473,6 +586,7 @@ class StudentMaterial {
     required this.materialType,
     required this.permissions,
     this.academyName,
+    this.content,
     this.expiresAt,
     this.updatedAt,
   });
@@ -483,6 +597,7 @@ class StudentMaterial {
   final String title;
   final String materialType;
   final Map<String, bool> permissions;
+  final StudentMaterialContent? content;
   final DateTime? expiresAt;
   final DateTime? updatedAt;
 
@@ -502,6 +617,11 @@ class StudentMaterial {
       permissions: rawPermissions.map(
         (key, value) => MapEntry('$key', value == true),
       ),
+      content: json['content'] is Map
+          ? StudentMaterialContent.fromJson(
+              (json['content'] as Map).cast<String, dynamic>(),
+            )
+          : null,
       expiresAt: DateTime.tryParse('${json['expires_at']}'),
       updatedAt: DateTime.tryParse(
         '${json['updated_at'] ?? json['created_at']}',

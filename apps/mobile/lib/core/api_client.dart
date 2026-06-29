@@ -53,6 +53,11 @@ class ApiClient {
     return decode(_decode(response));
   }
 
+  Future<T> delete<T>(String path, T Function(Object? json) decode) async {
+    final response = await _send('DELETE', path);
+    return decode(_decode(response));
+  }
+
   Future<T> uploadFile<T>(
     String path, {
     required String fieldName,
@@ -109,6 +114,7 @@ class ApiClient {
     final response = switch (method) {
       'GET' => await http.get(uri, headers: headers),
       'POST' => await http.post(uri, headers: headers, body: encodedBody),
+      'DELETE' => await http.delete(uri, headers: headers, body: encodedBody),
       _ => throw ArgumentError('Unsupported method $method'),
     };
     await _persistRefreshCookie(response);

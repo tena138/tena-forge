@@ -101,11 +101,12 @@ def _apply_academy_entitlements(
     trial_end: datetime | None = None,
 ) -> None:
     academy = db.get(Academy, user_id)
-    if not academy or academy.account_type != "academy":
+    if not academy:
         return
     canonical = "pro" if str(plan_code).startswith("pro") or str(plan_code) == "team" else "basic"
-    academy.plan = AcademyPlan.pro if canonical == "pro" else AcademyPlan.basic
-    academy.plan_expires_at = trial_end
+    if academy.account_type == "academy":
+        academy.plan = AcademyPlan.pro if canonical == "pro" else AcademyPlan.basic
+        academy.plan_expires_at = trial_end
     selected_student_package = (selected_packages or {}).get("student")
     target_student_keys = STUDENT_KEYS_BY_PACKAGE.get(canonical, {}).get(str(selected_student_package or ""))
     selected_staff_package = (selected_packages or {}).get("staff")
@@ -512,7 +513,14 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
             )
             .order_by(SubscriptionPaymentAttempt.created_at.desc())
         )
-        return {"ok": True, "subscription_id": str(order.subscription_id), "payment_id": paid_attempt.provider_payment_id if paid_attempt else order.provider_payment_id, "idempotent": True}
+        return {
+            "ok": True,
+            "subscription_id": str(order.subscription_id),
+            "payment_id": paid_attempt.provider_payment_id if paid_attempt else order.provider_payment_id,
+            "forge_workspace_id": user_id,
+            "can_access_forge": True,
+            "idempotent": True,
+        }
     if order.status == "trialing" and order.subscription_id:
         subscription = db.get(Subscription, order.subscription_id)
         scheduled_attempt = db.scalar(
@@ -532,6 +540,8 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
             "next_payment_id": scheduled_attempt.provider_payment_id if scheduled_attempt else None,
             "trial_ends_at": subscription.current_period_end.isoformat() if subscription and subscription.current_period_end else None,
             "first_payment_at": scheduled_attempt.scheduled_at.isoformat() if scheduled_attempt and scheduled_attempt.scheduled_at else None,
+            "forge_workspace_id": user_id,
+            "can_access_forge": True,
             "idempotent": True,
         }
     if order.status not in {"ready", "failed"}:
@@ -604,6 +614,8 @@ def confirm_billing_key(payload: BillingKeyConfirmRequest, request: Request, db:
         "next_payment_id": next_attempt.provider_payment_id,
         "trial_ends_at": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
         "first_payment_at": next_attempt.scheduled_at.isoformat() if next_attempt.scheduled_at else None,
+        "forge_workspace_id": user_id,
+        "can_access_forge": True,
         "schedule_error": None,
     }
 
@@ -646,7 +658,14 @@ def confirm_one_time_payment(payload: OneTimePaymentConfirmRequest, request: Req
         db.add(attempt)
         db.flush()
     if order.status == "paid" and order.subscription_id:
-        return {"ok": True, "subscription_id": str(order.subscription_id), "payment_id": payment_id, "idempotent": True}
+        return {
+            "ok": True,
+            "subscription_id": str(order.subscription_id),
+            "payment_id": payment_id,
+            "forge_workspace_id": user_id,
+            "can_access_forge": True,
+            "idempotent": True,
+        }
     if order.status not in {"ready", "failed"}:
         raise HTTPException(status_code=409, detail=f"Subscription order is not payable: {order.status}")
 
@@ -661,6 +680,8 @@ def confirm_one_time_payment(payload: OneTimePaymentConfirmRequest, request: Req
         "plan_code": subscription.plan_code,
         "payment_id": payment_id,
         "next_payment_id": None,
+        "forge_workspace_id": user_id,
+        "can_access_forge": True,
     }
 
 

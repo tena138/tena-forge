@@ -34,6 +34,7 @@ from models import (
     WatermarkedExport,
     WrongAnswerRecord,
 )
+from services.forge_access import active_forge_subscription
 from services.ownership import current_owner_id
 
 BASE_STUDENT_QUOTA = {"upload": 5, "extraction": 5, "export": 5}
@@ -65,6 +66,17 @@ ACADEMY_PLAN_TO_STUDENT_PLAN = {
     "pro": "pro",
     "enterprise": "enterprise",
 }
+
+
+def _student_plan_from_forge_plan(plan_code: str | None) -> str:
+    code = str(plan_code or "free").strip().lower()
+    if code == "enterprise":
+        return "enterprise"
+    if code == "team" or code.startswith("pro"):
+        return "pro"
+    if code.startswith("basic"):
+        return "basic"
+    return ACADEMY_PLAN_TO_STUDENT_PLAN.get(code, "free")
 
 
 def normalize_invite_code(code: str) -> str:
@@ -274,13 +286,16 @@ def ensure_default_academy_plans(db: Session) -> None:
 
 
 def academy_student_plan_code(db: Session, academy_id: str) -> str:
+    subscription = active_forge_subscription(db, academy_id)
+    if subscription:
+        return _student_plan_from_forge_plan(subscription.plan_code)
     try:
         academy = db.get(Academy, UUID(academy_id))
     except ValueError:
         return "free"
     if not academy or academy.account_type != "academy":
         return "free"
-    return ACADEMY_PLAN_TO_STUDENT_PLAN.get(str(academy.plan.value if hasattr(academy.plan, "value") else academy.plan), "free")
+    return _student_plan_from_forge_plan(str(academy.plan.value if hasattr(academy.plan, "value") else academy.plan))
 
 
 def ensure_academy_subscription(db: Session, academy_id: str) -> AcademyStudentSubscription:

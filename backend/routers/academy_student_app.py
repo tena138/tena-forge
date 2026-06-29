@@ -980,6 +980,44 @@ def connected_academies(request: Request, db: Session = Depends(get_db)):
     return rows
 
 
+@router.delete("/student/academies/{membership_id}")
+def disconnect_academy(membership_id: UUID, request: Request, db: Session = Depends(get_db)):
+    user_id = current_owner_id(request)
+    membership = db.scalar(
+        select(StudentAcademyMembership).where(
+            StudentAcademyMembership.id == membership_id,
+            StudentAcademyMembership.student_user_id == user_id,
+            StudentAcademyMembership.status == "active",
+        )
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="Connected academy not found.")
+    seat = db.get(AcademySeat, membership.academy_seat_id)
+    if seat and seat.current_student_membership_id == membership.id:
+        release_seat(db, request, seat, reason="student_disconnected", rotate_code=True)
+    else:
+        membership.status = "ended"
+        membership.ended_at = datetime.utcnow()
+    for row in db.scalars(
+        select(ClassStudent).where(
+            ClassStudent.student_membership_id == membership.id,
+            ClassStudent.left_at.is_(None),
+        )
+    ):
+        row.left_at = datetime.utcnow()
+    audit(
+        db,
+        request,
+        user_id,
+        "student.academy_disconnected",
+        "student_academy_membership",
+        str(membership.id),
+        {"academy_id": membership.academy_id, "academy_seat_id": str(membership.academy_seat_id)},
+    )
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/student/quotas")
 def get_student_quotas(request: Request, db: Session = Depends(get_db)):
     return student_quota(db, current_owner_id(request))
@@ -1478,7 +1516,55 @@ def list_student_materials(request: Request, academy_id: str | None = None, db: 
     if not material_ids:
         return []
     materials = db.scalars(select(AcademyMaterial).where(AcademyMaterial.id.in_(material_ids), or_(AcademyMaterial.expires_at.is_(None), AcademyMaterial.expires_at > now))).all()
-    return [{**serialize(row), "academy_name": get_academy_name(db, row.academy_id)} for row in materials]
+    return [_student_material_payload(db, row, student_id) for row in materials]
+
+
+def _student_material_payload(db: Session, material: AcademyMaterial, student_id: str) -> dict[str, Any]:
+    permissions = dict(material.permissions or {})
+    note_payload = permissions.pop("note_payload", None)
+    public_permissions = {key: value for key, value in permissions.items() if isinstance(value, bool)}
+    content = None
+    if isinstance(note_payload, dict):
+        content = dict(note_payload)
+        problems = list(content.get("problems") or [])
+        if content.get("problem_scope") == "wrong_only":
+            problem_ids = {str(problem.get("problem_id") or problem.get("id")) for problem in problems}
+            problem_uuids: list[UUID] = []
+            for problem_id in problem_ids:
+                try:
+                    problem_uuids.append(UUID(problem_id))
+                except (TypeError, ValueError):
+                    continue
+            if not problem_uuids:
+                problems = []
+                content["problems"] = problems
+                content["problem_count"] = 0
+                return {
+                    **serialize(material),
+                    "academy_name": get_academy_name(db, material.academy_id),
+                    "permissions": public_permissions,
+                    "content": content,
+                }
+            wrong_ids = {
+                str(value)
+                for value in db.scalars(
+                    select(WrongAnswerRecord.problem_id).where(
+                        WrongAnswerRecord.academy_id == material.academy_id,
+                        WrongAnswerRecord.student_id == student_id,
+                        WrongAnswerRecord.problem_id.in_(problem_uuids),
+                        WrongAnswerRecord.resolved_status.in_(["unresolved", "reviewing"]),
+                    )
+                ).all()
+            }
+            problems = [problem for problem in problems if str(problem.get("problem_id") or problem.get("id")) in wrong_ids]
+        content["problems"] = problems
+        content["problem_count"] = len(problems)
+    return {
+        **serialize(material),
+        "academy_name": get_academy_name(db, material.academy_id),
+        "permissions": public_permissions,
+        "content": content,
+    }
 
 
 @router.post("/student/materials/{material_id}/download")

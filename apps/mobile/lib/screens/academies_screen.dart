@@ -32,6 +32,7 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
   String? _checkedCode;
   bool _checking = false;
   bool _claiming = false;
+  String? _disconnectingMembershipId;
 
   @override
   void dispose() {
@@ -228,12 +229,53 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
     }
   }
 
+  Future<void> _disconnectAcademy(AcademyMembership academy) async {
+    final academyName = academy.academyName ?? '학원';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('학원 연결 해제'),
+        content: Text(
+          '$academyName 연결을 해제할까요? 이 학원의 일정, 과제, 자료 폴더가 이 계정에서 더 이상 동기화되지 않습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('해제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _disconnectingMembershipId = academy.id);
+    try {
+      final state = context.read<StudentAppState>();
+      await state.disconnectAcademy(academy);
+      if (!mounted) return;
+      context.read<NoteLibraryState>().syncAcademyMaterials(
+        academies: state.academies,
+        materials: state.materials,
+      );
+      _showMessage('$academyName 연결을 해제했습니다.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(
+        error is ApiException ? error.displayMessage : '학원 연결을 해제하지 못했습니다.',
+      );
+    } finally {
+      if (mounted) setState(() => _disconnectingMembershipId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<StudentAppState>();
     return AppScaffold(
-      title: '학원 키 추가',
-      subtitle: '학원에서 받은 키를 입력하면 해당 클래스 자리가 이 계정에 연결되고, 일정과 자료가 자동으로 동기화됩니다.',
+      title: '',
       actions: [
         IconButton(
           tooltip: '캘린더로 이동',
@@ -289,35 +331,41 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
             ],
           ),
         ),
-        PremiumCard(
-          title: '연결된 학원',
-          eyebrow: '현재 계정',
-          child: Column(
-            children: [
-              const ListItemCard(
-                title: '개인 공간',
-                subtitle: '개인 캘린더와 개인 노트입니다. 학원에는 공개되지 않습니다.',
-                badge: 'private',
-              ),
-              for (final academy in state.academies) ...[
-                const SizedBox(height: 10),
-                ListItemCard(
-                  title: academy.academyName ?? academy.academyId,
-                  subtitle:
-                      [
-                            academy.className,
-                            '좌석 ${_shortSeatId(academy.academySeatId)}',
-                            academy.status,
-                          ]
-                          .whereType<String>()
-                          .where((value) => value.isNotEmpty)
-                          .join(' · '),
-                  badge: 'connected',
-                ),
+        if (state.academies.isNotEmpty)
+          PremiumCard(
+            title: '연결된 학원',
+            child: Column(
+              children: [
+                for (final academy in state.academies) ...[
+                  if (academy != state.academies.first)
+                    const SizedBox(height: 10),
+                  ListItemCard(
+                    title: academy.academyName ?? academy.academyId,
+                    subtitle:
+                        [
+                              academy.className,
+                              '좌석 ${_shortSeatId(academy.academySeatId)}',
+                            ]
+                            .whereType<String>()
+                            .where((value) => value.isNotEmpty)
+                            .join(' · '),
+                    trailing: OutlinedButton(
+                      onPressed: _disconnectingMembershipId == academy.id
+                          ? null
+                          : () => _disconnectAcademy(academy),
+                      child: _disconnectingMembershipId == academy.id
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('연결 해제'),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
         if (state.academies.isEmpty)
           const EmptyState(
             title: '아직 연결된 학원이 없습니다',

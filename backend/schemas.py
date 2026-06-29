@@ -1323,6 +1323,10 @@ class AcademyProfile(BaseModel):
     plan_expires_at: datetime | None = None
     trial_ends_at: datetime | None = None
     requires_payment: bool = False
+    forge_access_status: str = "none"
+    forge_workspace_id: UUID | None = None
+    forge_trial_ends_at: datetime | None = None
+    can_access_forge: bool = False
     roles: list[str] = Field(default_factory=list)
     is_active: bool
     is_suspended: bool

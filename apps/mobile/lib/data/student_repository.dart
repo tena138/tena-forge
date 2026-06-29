@@ -138,6 +138,11 @@ class StudentRepository {
     }
   }
 
+  Future<void> disconnectAcademy(String membershipId) {
+    final encoded = Uri.encodeComponent(membershipId.trim());
+    return apiClient.delete<void>('/api/student/academies/$encoded', (_) {});
+  }
+
   Future<StudentInvitePreview> getStudentInvite(String token) {
     final encoded = Uri.encodeComponent(token.trim());
     return apiClient.get<StudentInvitePreview>(

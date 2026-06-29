@@ -1,5 +1,5 @@
 name: tena_forge_student
-description: "Student-focused Tena Forge mobile app for academy access, assignments, calendar, and photo wrong-answer review."
+description: "Tena Note student learning app for academy access, assignments, calendar, notes, and review."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -67,6 +67,7 @@ flutter:
 
   assets:
     - assets/tenaforge-mark-dark.png
+    - assets/tena-integrated-login-mark-dark.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
