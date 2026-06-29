@@ -963,6 +963,14 @@ function SubjectEditRow({
   );
 }
 
+function mergePdfFileSelection(existing: File[], incoming: File[]) {
+  const byKey = new Map<string, File>();
+  for (const file of [...existing, ...incoming]) {
+    byKey.set(pdfFileKey(file), file);
+  }
+  return Array.from(byKey.values());
+}
+
 function MultiPdfDropZone({
   files,
   documentTypes,
@@ -980,16 +988,13 @@ function MultiPdfDropZone({
 
   function pickFiles(fileList: FileList | null) {
     const nextFiles = Array.from(fileList || []);
-    if (!nextFiles.length) {
-      onChange([]);
-      return;
-    }
+    if (!nextFiles.length) return;
     const invalid = nextFiles.find((file) => file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"));
     if (invalid) {
       window.alert("PDF 파일만 업로드할 수 있습니다.");
       return;
     }
-    onChange(nextFiles);
+    onChange(mergePdfFileSelection(files, nextFiles));
   }
 
   return (
@@ -1060,6 +1065,15 @@ function MultiPdfDropZone({
                     })}
                   </div>
                   <span className="w-14 shrink-0 text-right text-zinc-500">{formatCompactNumber(fileSizeMb(file))}MB</span>
+                  <button
+                    type="button"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-950"
+                    onClick={() => onChange(files.filter((item) => pdfFileKey(item) !== pdfFileKey(file)))}
+                    aria-label={`${file.name} 제거`}
+                    title="PDF 제거"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
