@@ -12,9 +12,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from database import Base  # noqa: E402
-from models import ArchiveFolder, Batch  # noqa: E402
+from models import ArchiveFolder, Batch, Problem, Tag  # noqa: E402
 from routers.archive_folders import create_archive_folder, delete_archive_folder, list_archive_folders  # noqa: E402
 from routers.batches import update_batch_archive_folder  # noqa: E402
+from routers.problems import category_counts  # noqa: E402
 from schemas import ArchiveFolderCreate, BatchArchiveFolderUpdate  # noqa: E402
 
 
@@ -51,6 +52,47 @@ class ArchiveFolderTests(unittest.TestCase):
             db.refresh(batch)
             self.assertIsNone(batch.archive_folder_id)
             self.assertEqual(db.query(ArchiveFolder).count(), 2)
+        finally:
+            db.close()
+
+    def test_category_counts_prefer_batch_archive_folder(self):
+        db = self.Session()
+        try:
+            folder = ArchiveFolder(name="Mock Exam", owner_id="local_user", subject_engine="math")
+            filed_batch = Batch(name="batch-a", problem_pdf_filename="a.pdf", owner_id="local_user", subject_engine="math", archive_folder=folder)
+            loose_batch = Batch(name="batch-b", problem_pdf_filename="b.pdf", owner_id="local_user", subject_engine="math")
+            db.add_all([folder, filed_batch, loose_batch])
+            db.flush()
+
+            folder_problem_without_tag = Problem(
+                problem_number=1,
+                problem_text="problem 1",
+                source_batch_id=filed_batch.id,
+                owner_id="local_user",
+            )
+            folder_problem_with_other_tag = Problem(
+                problem_number=2,
+                problem_text="problem 2",
+                source_batch_id=filed_batch.id,
+                owner_id="local_user",
+            )
+            uncategorized_problem = Problem(
+                problem_number=3,
+                problem_text="problem 3",
+                source_batch_id=loose_batch.id,
+                owner_id="local_user",
+            )
+            db.add_all([folder_problem_without_tag, folder_problem_with_other_tag, uncategorized_problem])
+            db.flush()
+            db.add(Tag(problem_id=folder_problem_with_other_tag.id, subject="Algebra"))
+            db.commit()
+
+            rows = category_counts(SimpleNamespace(state=SimpleNamespace()), db)
+            counts = {row["subject"]: row["count"] for row in rows}
+
+            self.assertEqual(counts["Mock Exam"], 2)
+            self.assertEqual(counts["과목 미분류"], 1)
+            self.assertNotIn("Algebra", counts)
         finally:
             db.close()
 

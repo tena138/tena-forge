@@ -73,9 +73,7 @@ function resolveActiveAcademyId(profile?: AcademyProfile | null) {
   return profile?.account_type === "academy" ? profile.id : "";
 }
 
-type ProblemPage = { items: unknown[]; total: number; page: number; limit: number; pages: number };
 type ProblemStats = { total: number; needs_review: number; tagged: number; untagged: number };
-type ProblemFacets = { subjects: string[] };
 type SubjectCount = { subject: string; count: number };
 type LearningAssignmentSourceMode = "archive" | "manual";
 
@@ -218,40 +216,23 @@ function AcademyConsoleHome() {
 
     async function loadArchiveAndSets() {
       try {
-        const [statsResult, facetsResult, setResult] = await Promise.allSettled([
+        const [statsResult, categoryCountsResult, setResult] = await Promise.allSettled([
           api<ProblemStats>("/api/problems/stats"),
-          api<ProblemFacets>("/api/problems/facets"),
+          api<SubjectCount[]>("/api/problems/category-counts"),
           api<ProblemSetListItem[]>("/api/problem-sets"),
         ]);
 
         const stats = statsResult.status === "fulfilled" ? statsResult.value : null;
-        const facets = facetsResult.status === "fulfilled" ? facetsResult.value : null;
-        let nextSubjectCounts: SubjectCount[] | null = null;
-
-        if (stats && facets) {
-          const countResults = await Promise.allSettled(
-            (facets.subjects || []).map(async (subject) => {
-              const params = new URLSearchParams({ limit: "1" });
-              params.append("subject", subject);
-              const page = await api<ProblemPage>(`/api/problems?${params.toString()}`);
-              return { subject, count: page.total };
-            })
-          );
-          if (cancelled) return;
-          if (countResults.every((result) => result.status === "fulfilled")) {
-            const counts = countResults.map((result) => result.value);
-            const sortedCounts = counts.filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
-            const classifiedTotal = sortedCounts.reduce((sum, item) => sum + item.count, 0);
-            const uncategorized = Math.max(stats.total - classifiedTotal, 0);
-            nextSubjectCounts = uncategorized > 0 ? [...sortedCounts, { subject: "과목 미분류", count: uncategorized }] : sortedCounts;
-          }
-        }
+        const categoryCounts = categoryCountsResult.status === "fulfilled" ? categoryCountsResult.value : null;
+        const nextSubjectCounts = categoryCounts
+          ? [...categoryCounts].filter((item) => item.count > 0).sort((a, b) => b.count - a.count)
+          : null;
 
         if (cancelled) return;
         if (stats) setProblemStats(stats);
         if (nextSubjectCounts) setSubjectCounts(nextSubjectCounts);
         if (setResult.status === "fulfilled") setSets(setResult.value);
-        if (statsResult.status === "rejected" && facetsResult.status === "rejected" && setResult.status === "rejected") {
+        if (statsResult.status === "rejected" && categoryCountsResult.status === "rejected" && setResult.status === "rejected") {
           setDataError("콘솔 데이터를 불러오지 못했습니다.");
         } else {
           setDataError("");
