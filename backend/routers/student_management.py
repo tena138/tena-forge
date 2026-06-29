@@ -63,7 +63,7 @@ from services.academy_student_access import (
     academy_seat_key_status,
     create_seat,
     ensure_academy_subscription,
-    hash_invite_code,
+    invite_code_matches,
     is_unlinked_academy_student,
     rotate_seat_code,
     save_student_profile_collection_settings,
@@ -527,7 +527,7 @@ def _ensure_membership_invite_code(
         return None
     metadata = dict(membership.metadata_json or {})
     code = metadata.get("invite_code")
-    if not code or hash_invite_code(code) != seat.invite_code_hash:
+    if not invite_code_matches(code, seat.invite_code_hash):
         code = rotate_seat_code(db, seat)
         metadata["invite_code"] = code
         metadata[STUDENT_PERSON_METADATA_KEY] = metadata.get(STUDENT_PERSON_METADATA_KEY) or _student_person_id(membership)

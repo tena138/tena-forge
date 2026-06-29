@@ -67,8 +67,46 @@ ACADEMY_PLAN_TO_STUDENT_PLAN = {
 }
 
 
+def normalize_invite_code(code: str) -> str:
+    return "".join(character for character in str(code or "").upper() if character.isalnum())
+
+
+def _legacy_normalize_invite_code(code: str) -> str:
+    return str(code or "").strip().upper()
+
+
+def _hash_normalized_invite_code(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def hash_invite_code(code: str) -> str:
-    return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
+    return _hash_normalized_invite_code(normalize_invite_code(code))
+
+
+def invite_code_hash_candidates(code: str) -> list[str]:
+    candidates: list[str] = []
+    for normalized in (normalize_invite_code(code), _legacy_normalize_invite_code(code)):
+        if normalized:
+            hashed = _hash_normalized_invite_code(normalized)
+            if hashed not in candidates:
+                candidates.append(hashed)
+    return candidates
+
+
+def invite_code_matches(code: str | None, stored_hash: str | None) -> bool:
+    if not code or not stored_hash:
+        return False
+    return stored_hash in invite_code_hash_candidates(code)
+
+
+def seat_by_invite_code(db: Session, code: str, *, for_update: bool = False) -> AcademySeat | None:
+    candidates = invite_code_hash_candidates(code)
+    if not candidates:
+        return None
+    query = select(AcademySeat).where(AcademySeat.invite_code_hash.in_(candidates))
+    if for_update:
+        query = query.with_for_update()
+    return db.scalar(query)
 
 
 def generate_invite_code() -> str:
@@ -633,7 +671,7 @@ def apply_seat_invitation_to_membership(membership: StudentAcademyMembership, se
 
 def claim_invite_code(db: Session, request: Request, code: str) -> StudentAcademyMembership:
     student_id = current_owner_id(request)
-    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(code)).with_for_update())
+    seat = seat_by_invite_code(db, code, for_update=True)
     if not seat:
         raise HTTPException(status_code=404, detail={"code": "KEY_NOT_FOUND", "message": "존재하지 않는 학원 키입니다."})
     if not seat.is_active:

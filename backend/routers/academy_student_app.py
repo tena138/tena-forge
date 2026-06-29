@@ -65,7 +65,6 @@ from services.academy_student_access import (
     ensure_academy_subscription,
     ensure_default_academy_plans,
     get_academy_name,
-    hash_invite_code,
     has_unlimited_seats,
     is_unlinked_academy_student,
     normalize_invite_phone,
@@ -75,6 +74,7 @@ from services.academy_student_access import (
     require_manage_seats,
     require_staff,
     rotate_seat_code,
+    seat_by_invite_code,
     staff_role,
     student_memberships,
     student_quota,
@@ -831,7 +831,7 @@ def seat_history(academy_id: str, seat_id: UUID, request: Request, db: Session =
 @router.get("/student/invites/{invite_token}")
 def student_invite_preview(invite_token: str, request: Request, db: Session = Depends(get_db)):
     current_owner_id(request)
-    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(invite_token)))
+    seat = seat_by_invite_code(db, invite_token)
     if not seat:
         raise HTTPException(status_code=404, detail={"code": "INVITE_NOT_FOUND", "message": "Invite link was not found."})
     if not seat.is_active:
@@ -927,7 +927,7 @@ def decline_student_academy_invite(invite_id: UUID, request: Request, db: Sessio
 
 @router.post("/student/invites/{invite_token}/claim")
 def claim_student_invite(invite_token: str, payload: StudentInviteClaimRequest, request: Request, db: Session = Depends(get_db)):
-    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(invite_token)))
+    seat = seat_by_invite_code(db, invite_token)
     if seat:
         profile_values = validate_student_profile_values(student_profile_collection_settings(db, seat.academy_id), payload.student_profile)
     else:
@@ -940,7 +940,7 @@ def claim_student_invite(invite_token: str, payload: StudentInviteClaimRequest, 
 
 @router.get("/student/academy-keys/requirements")
 def academy_key_requirements(invite_code: str, request: Request, db: Session = Depends(get_db)):
-    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(invite_code)))
+    seat = seat_by_invite_code(db, invite_code)
     if not seat:
         raise HTTPException(status_code=404, detail={"code": "KEY_NOT_FOUND", "message": "존재하지 않는 학원 키입니다."})
     if not seat.is_active:
@@ -959,7 +959,7 @@ def academy_key_requirements(invite_code: str, request: Request, db: Session = D
 
 @router.post("/student/academy-keys/claim")
 def claim_academy_key(payload: InviteCodeRequest, request: Request, db: Session = Depends(get_db)):
-    seat = db.scalar(select(AcademySeat).where(AcademySeat.invite_code_hash == hash_invite_code(payload.invite_code)))
+    seat = seat_by_invite_code(db, payload.invite_code)
     if seat:
         profile_values = validate_student_profile_values(student_profile_collection_settings(db, seat.academy_id), payload.student_profile)
     else:

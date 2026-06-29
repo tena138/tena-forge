@@ -1,3 +1,4 @@
+import '../core/academy_key.dart';
 import '../core/api_client.dart';
 import '../core/session_store.dart';
 import '../models/student_models.dart';
@@ -157,7 +158,8 @@ class StudentRepository {
   }
 
   Future<AcademyKeyRequirements> getAcademyKeyRequirements(String code) {
-    final encoded = Uri.encodeQueryComponent(code.trim());
+    final normalized = formatAcademyKey(code);
+    final encoded = Uri.encodeQueryComponent(normalized);
     return apiClient.get<AcademyKeyRequirements>(
       '/api/student/academy-keys/requirements?invite_code=$encoded',
       (json) => AcademyKeyRequirements.fromJson(
@@ -170,9 +172,10 @@ class StudentRepository {
     String code, {
     Map<String, String> studentProfile = const {},
   }) {
+    final normalized = formatAcademyKey(code);
     return apiClient.post<AcademyMembership>(
       '/api/student/academy-keys/claim',
-      {'invite_code': code.trim(), 'student_profile': studentProfile},
+      {'invite_code': normalized, 'student_profile': studentProfile},
       (json) =>
           AcademyMembership.fromJson(Map<String, dynamic>.from(json as Map)),
     );

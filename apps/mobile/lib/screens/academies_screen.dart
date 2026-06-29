@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../app/theme.dart';
+import '../core/academy_key.dart';
 import '../core/api_client.dart';
 import '../models/student_models.dart';
 import '../state/note_library_state.dart';
@@ -41,8 +42,19 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
     super.dispose();
   }
 
-  String _cleanKey() =>
-      _keyController.text.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
+  String _cleanKey() => formatAcademyKey(_keyController.text);
+
+  String? _localKeyValidationMessage() {
+    final raw = _keyController.text.trim();
+    if (raw.isEmpty) return '학원 키를 입력해 주세요.';
+    if (isMaskedAcademyKey(raw)) {
+      return '미리보기 키가 아니라 전체 학원 키를 복사해서 입력해 주세요.';
+    }
+    if (!isCompleteAcademyKey(raw)) {
+      return '학원 키는 12자리입니다. 문자와 숫자를 다시 확인해 주세요.';
+    }
+    return null;
+  }
 
   String _errorText(Object error, String fallback) {
     if (error is! ApiException) return fallback;
@@ -138,8 +150,9 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
 
   Future<void> _checkKey() async {
     final code = _cleanKey();
-    if (code.isEmpty) {
-      _showMessage('학원 키를 입력해 주세요.');
+    final localError = _localKeyValidationMessage();
+    if (localError != null) {
+      _showMessage(localError);
       return;
     }
     setState(() {
@@ -162,7 +175,12 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
 
   Future<void> _claimKey() async {
     final code = _checkedCode ?? _cleanKey();
-    if (code.isEmpty || _requirements == null) {
+    final localError = _localKeyValidationMessage();
+    if (localError != null) {
+      _showMessage(localError);
+      return;
+    }
+    if (_requirements == null) {
       await _checkKey();
       return;
     }

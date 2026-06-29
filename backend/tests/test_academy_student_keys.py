@@ -160,6 +160,28 @@ class AcademyStudentKeyTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_class_key_claim_accepts_normalized_key_input(self):
+        db = self.Session()
+        try:
+            self.seed_accounts(db)
+            created = create_seats(
+                self.academy_id,
+                SeatCreate(count=1, class_id=self.class_id),
+                request_for(self.academy_id),
+                db,
+            )
+            invite_code = created[0]["invite_code"]
+            normalized_input = f"  {invite_code.replace('-', '').lower()}  "
+
+            membership = claim_invite_code(db, request_for(self.student_id), normalized_input)
+            db.commit()
+
+            self.assertEqual(membership.student_user_id, self.student_id)
+            seat = db.scalar(select(AcademySeat).where(AcademySeat.id == uuid.UUID(created[0]["id"])))
+            self.assertEqual(academy_seat_key_status(db, seat), "claimed")
+        finally:
+            db.close()
+
     def test_bulk_sms_keys_store_recipient_metadata_and_claim_profile_defaults(self):
         db = self.Session()
         try:
