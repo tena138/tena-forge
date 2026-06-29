@@ -413,15 +413,10 @@ class _CanvasStageState extends State<_CanvasStage> {
                   },
                 ),
                 if (pageCount > 1)
-                  _PrintedPagePager(
-                    currentPage: currentPage,
+                  _PrintedPageJumpControl(
+                    currentPage: currentPage + 1,
                     pageCount: pageCount,
-                    onPrevious: currentPage > 0
-                        ? () => _animateToPrintedPage(currentPage - 1)
-                        : null,
-                    onNext: currentPage < pageCount - 1
-                        ? () => _animateToPrintedPage(currentPage + 1)
-                        : null,
+                    onJump: _jumpToPrintedPage,
                   ),
               ],
             );
@@ -640,7 +635,13 @@ class _CanvasStageState extends State<_CanvasStage> {
     });
   }
 
-  void _animateToPrintedPage(int index) {
+  void _jumpToPrintedPage(int pageNumber) {
+    final document = context.read<NoteLibraryState>().documentById(
+      widget.documentId,
+    );
+    final pageCount = document?.printedPages.length ?? 0;
+    if (pageCount <= 0) return;
+    final index = pageNumber.clamp(1, pageCount).toInt() - 1;
     _printedPageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 240),
@@ -1060,97 +1061,134 @@ class _EditorIconButton extends StatelessWidget {
   }
 }
 
-class _PrintedPagePager extends StatelessWidget {
-  const _PrintedPagePager({
+class _PrintedPageJumpControl extends StatefulWidget {
+  const _PrintedPageJumpControl({
     required this.currentPage,
     required this.pageCount,
-    required this.onPrevious,
-    required this.onNext,
+    required this.onJump,
   });
 
   final int currentPage;
   final int pageCount;
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
+  final ValueChanged<int> onJump;
+
+  @override
+  State<_PrintedPageJumpControl> createState() =>
+      _PrintedPageJumpControlState();
+}
+
+class _PrintedPageJumpControlState extends State<_PrintedPageJumpControl> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.currentPage}');
+    _focusNode = FocusNode()..addListener(_handleFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PrintedPageJumpControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_focusNode.hasFocus) return;
+    if (oldWidget.currentPage != widget.currentPage ||
+        _controller.text != '${widget.currentPage}') {
+      _controller.text = '${widget.currentPage}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChanged);
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 18,
-      child: Center(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.panel.withValues(alpha: 0.94),
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _PagerCircleButton(
-                  icon: Icons.chevron_left_rounded,
-                  onPressed: onPrevious,
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Text(
-                    '${currentPage + 1} / $pageCount',
-                    style: const TextStyle(
-                      color: AppColors.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                    ),
+      top: 12,
+      right: 18,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.panel.withValues(alpha: 0.94),
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x10000000),
+              blurRadius: 14,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 34,
+                height: 28,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.go,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onSubmitted: (_) => _submit(),
+                  onTap: () {
+                    _controller.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: _controller.text.length,
+                    );
+                  },
+                  style: const TextStyle(
+                    color: AppColors.text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 7),
                   ),
                 ),
-                _PagerCircleButton(
-                  icon: Icons.chevron_right_rounded,
-                  onPressed: onNext,
+              ),
+              Text(
+                '/ ${widget.pageCount}',
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-}
 
-class _PagerCircleButton extends StatelessWidget {
-  const _PagerCircleButton({required this.icon, required this.onPressed});
+  void _handleFocusChanged() {
+    if (!_focusNode.hasFocus) _submit();
+  }
 
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: 32,
-      child: IconButton(
-        onPressed: onPressed,
-        padding: EdgeInsets.zero,
-        style: IconButton.styleFrom(
-          backgroundColor: onPressed == null
-              ? AppColors.panelSoft
-              : AppColors.text,
-          foregroundColor: onPressed == null
-              ? AppColors.subtle
-              : AppColors.panel,
-          shape: const CircleBorder(),
-        ),
-        icon: Icon(icon, size: 20),
-      ),
+  void _submit() {
+    final parsed = int.tryParse(_controller.text);
+    final nextPage = (parsed ?? widget.currentPage)
+        .clamp(1, widget.pageCount)
+        .toInt();
+    _controller.text = '$nextPage';
+    _controller.selection = TextSelection.collapsed(
+      offset: _controller.text.length,
     );
+    widget.onJump(nextPage);
   }
 }
 
