@@ -259,7 +259,7 @@ export function ArchiveFolderExplorer({
               }}
               className={cn(
                 "group relative flex min-h-[82px] cursor-grab items-start gap-3 rounded-[10px] p-3 text-left transition-colors active:cursor-grabbing",
-                destinationPicker && "min-w-[180px] flex-[1_1_180px]",
+                destinationPicker && "w-[min(100%,220px)] flex-none",
                 selected ? "bg-black text-white" : "bg-zinc-50 text-zinc-800 hover:bg-zinc-100"
               )}
               role="button"
