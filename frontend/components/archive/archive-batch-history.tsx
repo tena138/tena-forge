@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Ban, BookOpenCheck, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, Ban, BookOpenCheck, Check, Eye, FileText, Info, RotateCcw, Trash2, UploadCloud, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, Batch } from "@/lib/api";
@@ -36,19 +35,37 @@ function statusLabel(status: Batch["status"]) {
   }[status];
 }
 
-function statusBadgeStyle(status: Batch["status"]): CSSProperties {
-  return {
-    pending: { backgroundColor: "#f4f4f5", color: "#27272a", boxShadow: "inset 0 0 0 1px #e4e4e7" },
-    processing: { backgroundColor: "#7c3aed", color: "#ffffff", boxShadow: "inset 0 0 0 1px #6d28d9" },
-    done: { backgroundColor: "#09090b", color: "#ffffff", boxShadow: "inset 0 0 0 1px #18181b" },
-    error: { backgroundColor: "#fef2f2", color: "#b91c1c", boxShadow: "inset 0 0 0 1px #fecaca" },
-  }[status];
-}
-
 function StatusBadge({ status }: { status: Batch["status"] }) {
+  const label = statusLabel(status);
+  if (status === "pending" || status === "processing") {
+    return (
+      <span
+        className="inline-flex h-6 w-8 items-center justify-center gap-0.5 rounded-[6px] bg-zinc-100 text-zinc-950 ring-1 ring-inset ring-zinc-200"
+        aria-label={label}
+        title={label}
+      >
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-950"
+            style={{ animationDelay: `${index * 120}ms`, animationDuration: "700ms" }}
+          />
+        ))}
+      </span>
+    );
+  }
+
+  const done = status === "done";
   return (
-    <span className="inline-flex h-6 items-center rounded-[6px] px-2 text-xs font-black leading-none" style={statusBadgeStyle(status)}>
-      {statusLabel(status)}
+    <span
+      className={cn(
+        "inline-flex h-6 w-6 items-center justify-center rounded-[6px] ring-1 ring-inset",
+        done ? "bg-black text-white ring-black" : "bg-red-50 text-red-700 ring-red-200"
+      )}
+      aria-label={label}
+      title={label}
+    >
+      {done ? <Check className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
     </span>
   );
 }
@@ -342,7 +359,11 @@ export function ArchiveBatchHistory({
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle className="text-zinc-950">{batch.name}</CardTitle>
                     <StatusBadge status={batch.status} />
-                    {batch.review_count > 0 ? <Badge variant="warning">검토 {batch.review_count}</Badge> : null}
+                    {batch.problem_count > 0 ? (
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-[6px] bg-zinc-100 px-2 text-xs font-black leading-none text-zinc-700">
+                        {batch.problem_count}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-1 text-sm text-zinc-500">{formatDate(batch.created_at)}</p>
                 </div>
