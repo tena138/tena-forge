@@ -358,6 +358,11 @@ export function ArchiveBatchHistory({
     setSelectedStudentIds((current) => (current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]));
   }
 
+  function selectAssignMaterialType(nextType: LearningMaterialType) {
+    setAssignMaterialType(nextType);
+    setAssignTimeLimitEnabled(nextType === "test");
+  }
+
   function selectedDirectStudentUserIds() {
     const classStudentIds = studentIdsForClasses(selectedClassIds);
     const studentsByMembershipId = new Map<string, StudentCard>();
@@ -377,6 +382,7 @@ export function ArchiveBatchHistory({
   }
 
   function assignTimeLimitSeconds() {
+    if (assignMaterialType === "textbook") return null;
     if (!assignTimeLimitEnabled && assignMaterialType !== "test") return null;
     const minutes = Number(assignTimeLimitMinutes);
     if (!Number.isFinite(minutes) || minutes <= 0) return null;
@@ -580,10 +586,7 @@ export function ArchiveBatchHistory({
                       <button
                         key={type.value}
                         type="button"
-                        onClick={() => {
-                          setAssignMaterialType(type.value);
-                          if (type.value === "test") setAssignTimeLimitEnabled(true);
-                        }}
+                        onClick={() => selectAssignMaterialType(type.value)}
                         className={cn(
                           "rounded-[8px] border p-3 text-left transition",
                           assignMaterialType === type.value
@@ -652,8 +655,8 @@ export function ArchiveBatchHistory({
                   <label className="flex min-h-11 items-center gap-3 rounded-[8px] bg-white px-3 text-sm font-bold text-zinc-800">
                     <input
                       type="checkbox"
-                      checked={assignMaterialType === "test" || assignTimeLimitEnabled}
-                      disabled={assignMaterialType === "test"}
+                      checked={assignMaterialType !== "textbook" && (assignMaterialType === "test" || assignTimeLimitEnabled)}
+                      disabled={assignMaterialType === "textbook" || assignMaterialType === "test"}
                       onChange={(event) => setAssignTimeLimitEnabled(event.target.checked)}
                       className="h-4 w-4 accent-black"
                     />
