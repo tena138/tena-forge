@@ -19,7 +19,14 @@ class StudentRepository {
     final token = await sessionStore.readAccessToken();
     final profile = await sessionStore.readProfile();
     if (token != null && profile != null) {
-      return profile;
+      try {
+        return await fetchMe();
+      } catch (exception) {
+        if (exception is! ApiException ||
+            (exception.statusCode != 401 && exception.statusCode != 403)) {
+          return profile;
+        }
+      }
     }
 
     final refreshed = await apiClient.refreshAccessToken();
@@ -129,6 +136,11 @@ class StudentRepository {
       if (allowMock && _canUseMock(exception)) return mockAcademies;
       rethrow;
     }
+  }
+
+  Future<void> disconnectAcademy(String membershipId) {
+    final encoded = Uri.encodeComponent(membershipId.trim());
+    return apiClient.delete<void>('/api/student/academies/$encoded', (_) {});
   }
 
   Future<StudentInvitePreview> getStudentInvite(String token) {

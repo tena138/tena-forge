@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { authHttp, ensureAccessToken } from "@/lib/auth-client";
+import { authHttp, ensureAccessToken, setActiveWorkspaceId } from "@/lib/auth-client";
+import { fetchMe } from "@/lib/auth-api";
 
 export function CheckoutBillingReturnClient() {
   const router = useRouter();
@@ -42,14 +43,10 @@ export function CheckoutBillingReturnClient() {
           billing_key: billingKey,
           billing_issue_token: billingIssueToken || null,
         });
-        const successParams = new URLSearchParams({
-          type: "monthly",
-          trial: "started",
-          paymentId: String(response.data.payment_id || ""),
-        });
-        if (response.data.trial_ends_at) successParams.set("trialEndsAt", String(response.data.trial_ends_at));
-        if (response.data.first_payment_at) successParams.set("firstPaymentAt", String(response.data.first_payment_at));
-        router.replace(`/checkout/success?${successParams.toString()}`);
+        const workspaceId = String(response.data.forge_workspace_id || "");
+        if (workspaceId) setActiveWorkspaceId(workspaceId);
+        await fetchMe({ force: true });
+        router.replace("/academy");
       } catch (error: any) {
         setMessage(paymentErrorMessage(error));
       }

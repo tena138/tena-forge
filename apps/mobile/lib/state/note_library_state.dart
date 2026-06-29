@@ -224,10 +224,12 @@ class NoteLibraryState extends ChangeNotifier {
     required List<AcademyMembership> academies,
     required List<StudentMaterial> materials,
   }) {
-    final fallbackTime = DateTime.fromMillisecondsSinceEpoch(0);
+    final syncTime = DateTime.now();
     final academyNameById = <String, String>{};
+    final academyJoinedAtById = <String, DateTime>{};
     for (final academy in academies) {
       academyNameById[academy.academyId] = academy.academyName ?? 'Academy';
+      academyJoinedAtById[academy.academyId] = academy.joinedAt;
     }
 
     final materialsByAcademy = <String, List<StudentMaterial>>{};
@@ -257,12 +259,14 @@ class NoteLibraryState extends ChangeNotifier {
       final folderId = _academyFolderId(academyId);
       final folderMaterials = materialsByAcademy[academyId] ?? const [];
       final existingFolder = itemById(folderId);
+      final folderFallback =
+          _usableTimestamp(existingFolder?.updatedAt) ??
+          _usableTimestamp(academyJoinedAtById[academyId]) ??
+          syncTime;
       final updatedAt = folderMaterials
-          .map((material) => material.updatedAt ?? fallbackTime)
-          .fold<DateTime>(existingFolder?.updatedAt ?? fallbackTime, (
-            latest,
-            value,
-          ) {
+          .map((material) => _usableTimestamp(material.updatedAt))
+          .whereType<DateTime>()
+          .fold<DateTime>(folderFallback, (latest, value) {
             return value.isAfter(latest) ? value : latest;
           });
       changed =
@@ -285,10 +289,12 @@ class NoteLibraryState extends ChangeNotifier {
     for (final material in materials) {
       final folderId = _academyFolderId(material.academyId);
       final documentId = _materialItemId(material.id);
+      final printedPages = _printedPagesForMaterial(material);
+      final isPrintedNotebook = printedPages.isNotEmpty;
       final updatedAt =
-          material.updatedAt ??
-          documentById(documentId)?.updatedAt ??
-          fallbackTime;
+          _usableTimestamp(material.updatedAt) ??
+          _usableTimestamp(documentById(documentId)?.updatedAt) ??
+          syncTime;
       changed =
           _upsertDocument(
             NoteDocument(
@@ -297,6 +303,7 @@ class NoteLibraryState extends ChangeNotifier {
               folderId: folderId,
               updatedAt: updatedAt,
               favorite: false,
+              printedPages: printedPages,
             ),
           ) ||
           changed;
@@ -305,15 +312,19 @@ class NoteLibraryState extends ChangeNotifier {
             NoteLibraryItem(
               id: documentId,
               name: material.title,
-              type: NoteItemType.pdf,
+              type: isPrintedNotebook
+                  ? NoteItemType.notebook
+                  : NoteItemType.pdf,
               updatedAt: updatedAt,
               favorite: false,
               shared: true,
-              documentCount: 1,
+              documentCount: isPrintedNotebook ? printedPages.length : 1,
               color: const Color(0xFFFFFFFF),
               parentFolderId: folderId,
               academyId: material.academyId,
               materialId: material.id,
+              assignmentId: material.content?.learningAssignmentId,
+              assignmentType: material.content?.assignmentType,
             ),
           ) ||
           changed;
@@ -492,7 +503,9 @@ class NoteLibraryState extends ChangeNotifier {
         current.color != next.color ||
         current.parentFolderId != next.parentFolderId ||
         current.academyId != next.academyId ||
-        current.materialId != next.materialId;
+        current.materialId != next.materialId ||
+        current.assignmentId != next.assignmentId ||
+        current.assignmentType != next.assignmentType;
     if (changed) {
       _items[index] = next;
     }
@@ -510,11 +523,59 @@ class NoteLibraryState extends ChangeNotifier {
         current.title != next.title ||
         current.folderId != next.folderId ||
         current.updatedAt != next.updatedAt ||
-        current.favorite != next.favorite;
+        current.favorite != next.favorite ||
+        !_samePrintedPages(current.printedPages, next.printedPages);
     if (changed) {
       _documents[index] = next;
     }
     return changed;
+  }
+
+  List<PrintedNotePage> _printedPagesForMaterial(StudentMaterial material) {
+    final content = material.content;
+    if (content == null || content.renderMode != 'notebook_problem_pages') {
+      return const [];
+    }
+    return content.problems
+        .asMap()
+        .entries
+        .map((entry) {
+          final problem = entry.value;
+          final pageNumber = problem.pageNumber <= 0
+              ? entry.key + 1
+              : problem.pageNumber;
+          final visibleNumber =
+              problem.problemNumber ??
+              problem.originalProblemNumber?.toString() ??
+              pageNumber.toString();
+          return PrintedNotePage(
+            problemId: problem.id,
+            pageNumber: pageNumber,
+            title: '$visibleNumber번',
+            body: problem.problemText,
+            sourceLabel: problem.sourceLabel ?? material.title,
+            visualUrl: problem.visualUrl ?? problem.reviewPageImageUrl,
+            tags: problem.tags,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  bool _samePrintedPages(
+    List<PrintedNotePage> current,
+    List<PrintedNotePage> next,
+  ) {
+    if (current.length != next.length) return false;
+    for (var index = 0; index < current.length; index += 1) {
+      if (!current[index].sameContentAs(next[index])) return false;
+    }
+    return true;
+  }
+
+  DateTime? _usableTimestamp(DateTime? value) {
+    if (value == null) return null;
+    if (value.year < 2001) return null;
+    return value;
   }
 
   void _touchDocument(String documentId) {

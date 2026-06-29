@@ -8,8 +8,45 @@ import '../models/note_models.dart';
 import '../state/note_library_state.dart';
 import '../state/student_app_state.dart';
 
-class NotesDocumentsScreen extends StatelessWidget {
+class NotesDocumentsScreen extends StatefulWidget {
   const NotesDocumentsScreen({super.key});
+
+  @override
+  State<NotesDocumentsScreen> createState() => _NotesDocumentsScreenState();
+}
+
+class _NotesDocumentsScreenState extends State<NotesDocumentsScreen> {
+  bool _quickActionsOpen = false;
+
+  void _toggleQuickActions() {
+    setState(() => _quickActionsOpen = !_quickActionsOpen);
+  }
+
+  void _closeQuickActions() {
+    if (_quickActionsOpen) {
+      setState(() => _quickActionsOpen = false);
+    }
+  }
+
+  void _createNotebook() {
+    _closeQuickActions();
+    final document = context.read<NoteLibraryState>().addNotebook();
+    context.push('/notes/editor/${document.id}');
+  }
+
+  Future<void> _createFolder() async {
+    _closeQuickActions();
+    final name = await _askName(context, '새 폴더 이름', '새 폴더');
+    if (!mounted || name == null) return;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    context.read<NoteLibraryState>().addFolder(trimmed);
+  }
+
+  void _openAcademyKey() {
+    _closeQuickActions();
+    context.push('/academies');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,31 +60,40 @@ class NotesDocumentsScreen extends StatelessWidget {
       );
     });
     final items = state.sortedItems;
-    final currentFolder = state.currentFolder;
 
-    return Material(
-      color: AppColors.bg,
-      child: SafeArea(
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      floatingActionButton: _NoteQuickActions(
+        open: _quickActionsOpen,
+        onToggle: _toggleQuickActions,
+        onCreateNotebook: _createNotebook,
+        onCreateFolder: _createFolder,
+        onAddAcademyKey: _openAcademyKey,
+      ),
+      body: SafeArea(
         bottom: false,
         child: CustomScrollView(
           slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(22, 24, 22, 0),
-              sliver: SliverToBoxAdapter(
-                child: _LibraryHeader(title: currentFolder?.name ?? 'Note'),
+            if (state.currentFolderId != null)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+                sliver: SliverToBoxAdapter(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _FolderBackButton(onPressed: state.leaveFolder),
+                  ),
+                ),
               ),
-            ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
-              sliver: SliverToBoxAdapter(
-                child: _SortAndLayoutBar(state: state),
+              padding: EdgeInsets.fromLTRB(
+                22,
+                state.currentFolderId == null ? 34 : 24,
+                22,
+                140,
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(22, 34, 22, 42),
               sliver: state.listLayout
                   ? _NoteListSliver(items: items)
-                  : _NoteGridSliver(items: items, showNewTile: true),
+                  : _NoteGridSliver(items: items),
             ),
           ],
         ),
@@ -56,132 +102,183 @@ class NotesDocumentsScreen extends StatelessWidget {
   }
 }
 
-class _LibraryHeader extends StatelessWidget {
-  const _LibraryHeader({required this.title});
+Future<void> _openLibraryItem(
+  BuildContext context,
+  NoteLibraryItem item,
+) async {
+  final noteState = context.read<NoteLibraryState>();
+  if (item.type == NoteItemType.folder) {
+    noteState.enterFolder(item.id);
+    return;
+  }
+  if (item.assignmentType == 'test' && item.assignmentId != null) {
+    final appState = context.read<StudentAppState>();
+    try {
+      await appState.startTest(item.assignmentId!);
+      if (context.mounted) context.push('/test/${item.assignmentId}');
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('시험을 시작할 수 없습니다. 기한 또는 세션 상태를 확인해주세요.')),
+      );
+    }
+    return;
+  }
+  final document = noteState.openDocumentForItem(item.id);
+  if (context.mounted) context.push('/notes/editor/${document.id}');
+}
 
-  final String title;
+class _FolderBackButton extends StatelessWidget {
+  const _FolderBackButton({required this.onPressed});
+
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<NoteLibraryState>();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            if (state.currentFolderId != null) ...[
-              IconButton(
-                tooltip: '뒤로',
-                onPressed: state.leaveFolder,
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-              const SizedBox(width: 4),
-            ],
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: AppColors.text,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
-                ),
-              ),
+    return Tooltip(
+      message: '뒤로가기',
+      child: Material(
+        color: AppColors.panel,
+        shape: const CircleBorder(),
+        elevation: 1,
+        shadowColor: Colors.black.withValues(alpha: 0.08),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: const SizedBox(
+            width: 42,
+            height: 42,
+            child: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              color: AppColors.text,
             ),
-            _LibraryActionIcon(
-              icon: Icons.sync_rounded,
-              badge: '${state.syncCount}',
-              tooltip: '동기화 상태',
-              onPressed: () =>
-                  _showSnack(context, '동기화 대기 ${state.syncCount}개'),
-            ),
-            _LibraryActionIcon(
-              icon: Icons.folder_copy_outlined,
-              badge: '${state.inboxCount}',
-              tooltip: '받은 문서함',
-              onPressed: () =>
-                  _showSnack(context, '받은 문서 ${state.inboxCount}개'),
-            ),
-            _LibraryActionIcon(
-              icon: Icons.notifications_none_rounded,
-              tooltip: '알림',
-              onPressed: () => _showNotifications(context),
-            ),
-            _LibraryActionIcon(
-              icon: state.selectionMode
-                  ? Icons.check_circle_rounded
-                  : Icons.check_circle_outline_rounded,
-              tooltip: '선택 모드',
-              onPressed: state.toggleSelectionMode,
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 14),
-        const Divider(height: 1, color: AppColors.border),
-      ],
+      ),
     );
   }
 }
 
-class _SortAndLayoutBar extends StatelessWidget {
-  const _SortAndLayoutBar({required this.state});
+class _NoteQuickActions extends StatelessWidget {
+  const _NoteQuickActions({
+    required this.open,
+    required this.onToggle,
+    required this.onCreateNotebook,
+    required this.onCreateFolder,
+    required this.onAddAcademyKey,
+  });
 
-  final NoteLibraryState state;
+  final bool open;
+  final VoidCallback onToggle;
+  final VoidCallback onCreateNotebook;
+  final VoidCallback onCreateFolder;
+  final VoidCallback onAddAcademyKey;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Spacer(),
-        SegmentedButton<NoteSortMode>(
-          selected: {state.sortMode},
-          showSelectedIcon: false,
-          onSelectionChanged: (selection) => state.setSortMode(selection.first),
-          style: ButtonStyle(
-            backgroundColor: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.selected)
-                  ? AppColors.text
-                  : AppColors.panelSoft,
-            ),
-            foregroundColor: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.selected)
-                  ? AppColors.panel
-                  : AppColors.text,
-            ),
-            side: const WidgetStatePropertyAll(
-              BorderSide(color: AppColors.border),
-            ),
-            minimumSize: const WidgetStatePropertyAll(Size(82, 36)),
-            textStyle: const WidgetStatePropertyAll(
-              TextStyle(fontWeight: FontWeight.w700),
+    return SizedBox(
+      width: 64,
+      height: open ? 244 : 64,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomRight,
+        children: [
+          _QuickActionButton(
+            visible: open,
+            bottom: 180,
+            heroTag: 'note-action-new-note',
+            icon: Icons.note_add_outlined,
+            tooltip: '새 노트',
+            onPressed: onCreateNotebook,
+          ),
+          _QuickActionButton(
+            visible: open,
+            bottom: 120,
+            heroTag: 'note-action-new-folder',
+            icon: Icons.create_new_folder_outlined,
+            tooltip: '새 폴더',
+            onPressed: onCreateFolder,
+          ),
+          _QuickActionButton(
+            visible: open,
+            bottom: 60,
+            heroTag: 'note-action-academy-key',
+            icon: Icons.key_rounded,
+            tooltip: '학원 키 추가',
+            onPressed: onAddAcademyKey,
+          ),
+          FloatingActionButton(
+            heroTag: 'note-action-main',
+            tooltip: open ? '닫기' : '추가',
+            backgroundColor: AppColors.text,
+            foregroundColor: AppColors.panel,
+            shape: const CircleBorder(),
+            onPressed: onToggle,
+            child: AnimatedRotation(
+              duration: const Duration(milliseconds: 180),
+              turns: open ? 0.125 : 0,
+              child: Icon(open ? Icons.close_rounded : Icons.add_rounded),
             ),
           ),
-          segments: const [
-            ButtonSegment(value: NoteSortMode.date, label: Text('Date')),
-            ButtonSegment(value: NoteSortMode.name, label: Text('Name')),
-            ButtonSegment(value: NoteSortMode.type, label: Text('Type')),
-          ],
-        ),
-        const Spacer(),
-        IconButton(
-          tooltip: state.listLayout ? '그리드 보기' : '리스트 보기',
-          onPressed: state.toggleLayout,
-          icon: Icon(
-            state.listLayout
-                ? Icons.grid_view_rounded
-                : Icons.view_list_rounded,
-            color: AppColors.text,
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  const _QuickActionButton({
+    required this.visible,
+    required this.bottom,
+    required this.heroTag,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final bool visible;
+  final double bottom;
+  final String heroTag;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 4,
+      bottom: bottom,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 160),
+          opacity: visible ? 1 : 0,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            scale: visible ? 1 : 0.72,
+            child: FloatingActionButton.small(
+              heroTag: heroTag,
+              tooltip: tooltip,
+              backgroundColor: AppColors.panel,
+              foregroundColor: AppColors.text,
+              elevation: 4,
+              shape: const CircleBorder(),
+              onPressed: onPressed,
+              child: Icon(icon),
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
 class _NoteGridSliver extends StatelessWidget {
-  const _NoteGridSliver({required this.items, required this.showNewTile});
+  const _NoteGridSliver({required this.items});
 
   final List<NoteLibraryItem> items;
-  final bool showNewTile;
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +292,6 @@ class _NoteGridSliver extends StatelessWidget {
             : width >= 620
             ? 3
             : 2;
-        final totalCount = items.length + (showNewTile ? 1 : 0);
         return SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
@@ -204,12 +300,9 @@ class _NoteGridSliver extends StatelessWidget {
             childAspectRatio: 0.86,
           ),
           delegate: SliverChildBuilderDelegate((context, index) {
-            if (showNewTile && index == 0) {
-              return const _NewDocumentTile();
-            }
-            final item = items[index - (showNewTile ? 1 : 0)];
+            final item = items[index];
             return _FolderTile(item: item);
-          }, childCount: totalCount),
+          }, childCount: items.length),
         );
       },
     );
@@ -224,64 +317,12 @@ class _NoteListSliver extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverList.separated(
-      itemCount: items.length + 1,
+      itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
-        if (index == 0) return const _NewListItem();
-        final item = items[index - 1];
+        final item = items[index];
         return _FolderListItem(item: item);
       },
-    );
-  }
-}
-
-class _NewDocumentTile extends StatelessWidget {
-  const _NewDocumentTile();
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => _showNewMenu(context),
-      child: Column(
-        children: [
-          Expanded(
-            child: CustomPaint(
-              painter: _DashedBorderPainter(color: AppColors.text),
-              child: const Center(
-                child: Icon(Icons.add_rounded, color: AppColors.text, size: 36),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'New...',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.text,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-}
-
-class _NewListItem extends StatelessWidget {
-  const _NewListItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: () => _showNewMenu(context),
-      tileColor: AppColors.panel,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      leading: const Icon(Icons.add_rounded, color: AppColors.text),
-      title: const Text('New...', style: TextStyle(color: AppColors.text)),
     );
   }
 }
@@ -296,14 +337,7 @@ class _FolderTile extends StatelessWidget {
     final state = context.read<NoteLibraryState>();
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () {
-        if (item.type == NoteItemType.folder) {
-          state.enterFolder(item.id);
-          return;
-        }
-        final document = state.openDocumentForItem(item.id);
-        context.push('/notes/editor/${document.id}');
-      },
+      onTap: () => _openLibraryItem(context, item),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -377,14 +411,7 @@ class _FolderListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<NoteLibraryState>();
     return ListTile(
-      onTap: () {
-        if (item.type == NoteItemType.folder) {
-          state.enterFolder(item.id);
-          return;
-        }
-        final document = state.openDocumentForItem(item.id);
-        context.push('/notes/editor/${document.id}');
-      },
+      onTap: () => _openLibraryItem(context, item),
       tileColor: AppColors.panel,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: SizedBox(
@@ -446,7 +473,109 @@ class _FolderGraphic extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _FolderPainter(color: color));
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 160.0;
+        final height = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 112.0;
+        final bodyTop = height * 0.26;
+        final bodyRadius = BorderRadius.circular(width * 0.045);
+        final baseColor = Color.lerp(color, Colors.white, 0.22) ?? color;
+        final tabColor = Color.lerp(color, Colors.white, 0.08) ?? color;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: width * 0.07,
+              right: width * 0.07,
+              top: bodyTop + height * 0.08,
+              bottom: height * 0.02,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  borderRadius: bodyRadius,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: width * 0.05,
+              top: height * 0.08,
+              width: width * 0.36,
+              height: height * 0.28,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: tabColor,
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: 0.05),
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(width * 0.05),
+                    topRight: Radius.circular(width * 0.08),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: width * 0.02,
+              right: width * 0.02,
+              top: bodyTop,
+              bottom: height * 0.02,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: baseColor,
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: 0.05),
+                  ),
+                  borderRadius: bodyRadius,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 14,
+                      offset: const Offset(0, 7),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: width * 0.08,
+              right: width * 0.08,
+              top: bodyTop + height * 0.08,
+              child: Container(
+                height: 2,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            Positioned(
+              left: width * 0.08,
+              right: width * 0.12,
+              bottom: height * 0.13,
+              child: Container(
+                height: height * 0.13,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(width * 0.025),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -497,197 +626,9 @@ class _NotebookGraphic extends StatelessWidget {
   }
 }
 
-class _LibraryActionIcon extends StatelessWidget {
-  const _LibraryActionIcon({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-    this.badge,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final String? badge;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          tooltip: tooltip,
-          onPressed: onPressed,
-          icon: Icon(icon, color: AppColors.text, size: 25),
-        ),
-        if (badge != null)
-          Positioned(
-            right: 3,
-            top: 3,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: AppColors.text,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                badge!,
-                style: const TextStyle(
-                  color: AppColors.panel,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _FolderPainter extends CustomPainter {
-  const _FolderPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final tabPaint = Paint()..color = color.withValues(alpha: 0.92);
-    final bodyPaint = Paint()..color = color;
-    final shadowPaint = Paint()..color = Colors.black.withValues(alpha: 0.06);
-    final tabHeight = size.height * 0.28;
-    final bodyTop = size.height * 0.20;
-    final radius = Radius.circular(size.shortestSide * 0.08);
-
-    final shadowRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(1, bodyTop + 3, size.width - 2, size.height - bodyTop - 3),
-      radius,
-    );
-    canvas.drawRRect(shadowRect, shadowPaint);
-
-    final tabPath = Path()
-      ..moveTo(size.width * 0.03, tabHeight)
-      ..quadraticBezierTo(size.width * 0.03, 0, size.width * 0.13, 0)
-      ..lineTo(size.width * 0.26, 0)
-      ..quadraticBezierTo(size.width * 0.34, 0, size.width * 0.40, tabHeight)
-      ..lineTo(size.width * 0.95, tabHeight)
-      ..quadraticBezierTo(
-        size.width,
-        tabHeight,
-        size.width,
-        tabHeight + size.height * 0.05,
-      )
-      ..lineTo(size.width, bodyTop + 4)
-      ..lineTo(size.width * 0.03, bodyTop + 4)
-      ..close();
-    canvas.drawPath(tabPath, tabPaint);
-
-    final bodyRect = RRect.fromRectAndCorners(
-      Rect.fromLTWH(0, bodyTop, size.width, size.height - bodyTop),
-      topLeft: radius,
-      topRight: radius,
-      bottomLeft: radius,
-      bottomRight: radius,
-    );
-    canvas.drawRRect(bodyRect, bodyPaint);
-
-    final highlightPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.34)
-      ..strokeWidth = 2;
-    canvas.drawLine(
-      Offset(size.width * 0.04, bodyTop + 8),
-      Offset(size.width * 0.96, bodyTop + 8),
-      highlightPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _FolderPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    const dash = 5.0;
-    const gap = 5.0;
-    final rect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      const Radius.circular(8),
-    );
-    final path = Path()..addRRect(rect.deflate(1));
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final next = distance + dash;
-        canvas.drawPath(metric.extractPath(distance, next), paint);
-        distance = next + gap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
 String _formatItemDate(DateTime date) {
-  return DateFormat('MMM d, yyyy \'at\' h:mm a').format(date);
-}
-
-Future<void> _showNewMenu(BuildContext context) async {
-  final state = context.read<NoteLibraryState>();
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppColors.panel,
-    showDragHandle: true,
-    builder: (context) {
-      return SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.create_new_folder_outlined),
-              title: const Text('새 폴더'),
-              subtitle: const Text('Documents에 폴더를 추가합니다.'),
-              onTap: () async {
-                Navigator.pop(context);
-                final name = await _askName(context, '새 폴더 이름', '새 폴더');
-                if (name != null) state.addFolder(name);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.note_add_outlined),
-              title: const Text('새 노트'),
-              subtitle: const Text('빈 페이지 편집기를 엽니다.'),
-              onTap: () {
-                Navigator.pop(context);
-                final document = state.addNotebook();
-                context.push('/notes/editor/${document.id}');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.upload_file_outlined),
-              title: const Text('가져오기'),
-              subtitle: const Text('PDF/이미지 가져오기는 연결 준비 상태입니다.'),
-              onTap: () {
-                Navigator.pop(context);
-                _showSnack(context, '가져오기 흐름을 열었습니다.');
-              },
-            ),
-          ],
-        ),
-      );
-    },
-  );
+  if (date.year < 2001) return 'No date';
+  return DateFormat('MMM d, yyyy \'at\' h:mm a').format(date.toLocal());
 }
 
 Future<void> _showItemMenu(BuildContext context, NoteLibraryItem item) async {
@@ -715,12 +656,7 @@ Future<void> _showItemMenu(BuildContext context, NoteLibraryItem item) async {
     case 'share':
       _showSnack(context, '${item.name} 공유 설정을 열었습니다.');
     case 'open':
-      if (item.type == NoteItemType.folder) {
-        state.enterFolder(item.id);
-        return;
-      }
-      final document = state.openDocumentForItem(item.id);
-      if (context.mounted) context.push('/notes/editor/${document.id}');
+      await _openLibraryItem(context, item);
   }
 }
 
@@ -806,38 +742,6 @@ class _NameDialogState extends State<_NameDialog> {
       ],
     );
   }
-}
-
-void _showNotifications(BuildContext context) {
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppColors.panel,
-    showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              '알림',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            SizedBox(height: 12),
-            ListTile(
-              leading: Icon(Icons.cloud_done_outlined),
-              title: Text('최근 노트가 저장되었습니다.'),
-            ),
-            ListTile(
-              leading: Icon(Icons.group_outlined),
-              title: Text('공유 폴더 업데이트가 있습니다.'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 void _showSnack(BuildContext context, String message) {

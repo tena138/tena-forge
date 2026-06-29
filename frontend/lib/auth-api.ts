@@ -19,6 +19,10 @@ export type AcademyProfile = {
   plan_expires_at?: string | null;
   trial_ends_at?: string | null;
   requires_payment?: boolean;
+  forge_access_status?: "none" | "trialing" | "active" | "expired" | string;
+  forge_workspace_id?: string | null;
+  forge_trial_ends_at?: string | null;
+  can_access_forge?: boolean;
   roles?: string[];
   is_active: boolean;
   is_suspended: boolean;
@@ -256,10 +260,14 @@ export async function logout() {
   }
 }
 
-export async function fetchMe() {
+export async function fetchMe(options: { force?: boolean } = {}) {
   const now = Date.now();
-  if (fetchMeCache && fetchMeCache.expiresAt > now) return fetchMeCache.profile;
-  if (fetchMePromise) return fetchMePromise;
+  if (!options.force && fetchMeCache && fetchMeCache.expiresAt > now) return fetchMeCache.profile;
+  if (!options.force && fetchMePromise) return fetchMePromise;
+  if (options.force) {
+    fetchMeCache = null;
+    fetchMePromise = null;
+  }
   fetchMePromise = authHttp
     .get("/api/auth/me", { timeout: PROFILE_REQUEST_TIMEOUT_MS })
     .then((response) => {

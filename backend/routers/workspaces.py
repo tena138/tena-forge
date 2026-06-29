@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Academy, AcademyClass, AcademyStaffInviteCode, AcademyStaffMembership, AcademyStudentSubscription, ClassTeacher
+from services.forge_access import forge_access_for_user
 from services.ownership import current_user_id, current_workspace_id, require_workspace_owner, requested_workspace_id
 from services.subscription_pricing import STAFF_SEAT_MONTHLY_ADDON_KRW
 
@@ -261,7 +262,9 @@ def list_workspaces(request: Request, db: Session = Depends(get_db)):
             }
         )
 
-    if account and account.account_type == "academy":
+    forge_access = forge_access_for_user(db, user_id) if account else None
+
+    if account and (account.account_type == "academy" or (account.account_type == "student" and forge_access and forge_access.can_access_forge)):
         items.append(
             {
                 "id": str(account.id),

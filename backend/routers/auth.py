@@ -103,6 +103,7 @@ from services.account_data_reset import (
     reset_account_data as reset_account_operational_data,
     reset_all_operational_data as reset_all_account_operational_data,
 )
+from services.forge_access import forge_access_for_user
 from services.ownership import LOCAL_OWNER_ID, _is_admin_user, current_owner_ids, current_workspace_id, require_workspace_owner
 from services.profile_names import normalize_profile_name, valid_profile_name
 
@@ -166,14 +167,27 @@ def _is_admin_account(db: Session | None, academy: Academy) -> bool:
 def _profile(academy: Academy, db: Session | None = None) -> AcademyProfile:
     profile = AcademyProfile.model_validate(academy)
     profile.roles = sorted(_account_roles(db, academy))
+    forge_access = forge_access_for_user(db, str(academy.id)) if db else None
+    if forge_access:
+        profile.forge_access_status = forge_access.status
+        profile.forge_workspace_id = academy.id if forge_access.workspace_id else None
+        profile.forge_trial_ends_at = forge_access.trial_ends_at
+        profile.can_access_forge = forge_access.can_access_forge
+    else:
+        profile.can_access_forge = academy.account_type == "academy"
+        profile.forge_workspace_id = academy.id if academy.account_type == "academy" else None
     if _is_admin_account(db, academy):
         profile.plan = "admin"
         profile.plan_expires_at = None
         profile.trial_ends_at = None
         profile.requires_payment = False
+        profile.forge_access_status = "active"
+        profile.forge_workspace_id = academy.id
+        profile.forge_trial_ends_at = None
+        profile.can_access_forge = True
         return profile
 
-    subscription = _active_subscription_for_profile(db, academy) if db else None
+    subscription = forge_access.subscription if forge_access else (_active_subscription_for_profile(db, academy) if db else None)
     if subscription:
         profile.plan = subscription.plan_code
         if subscription.status == "trialing":

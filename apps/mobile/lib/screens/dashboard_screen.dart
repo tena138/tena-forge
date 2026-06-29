@@ -33,9 +33,9 @@ class DashboardScreen extends StatelessWidget {
           child: Column(
             children: [
               const ListItemCard(
-                title: '학원 초대',
-                subtitle: '학원에서 보낸 초대 링크를 열거나 앱 알림에서 수락하면 학원 컨텍스트가 자동으로 연결됩니다.',
-                badge: 'invite',
+                title: '학원 키 추가',
+                subtitle: '학원에서 받은 키를 등록하면 클래스 일정, 과제, 자료가 자동으로 연결됩니다.',
+                badge: 'key',
               ),
               const SizedBox(height: 10),
               FilledButton.icon(

@@ -1,11 +1,11 @@
 {
-    "name": "tena_forge_student",
-    "short_name": "tena_forge_student",
+    "name": "Tena Note",
+    "short_name": "Tena Note",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#111111",
+    "description": "Tena Note student learning app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -36,6 +36,7 @@ import { SiteLogo } from "@/components/site-logo";
 import { MathText } from "@/components/math-text";
 import { TemplatePageView } from "@/components/templates/visual-template-renderer";
 import { PAGE_SIZES, SampleProblem, TemplateSet } from "@/lib/visualTemplateTypes";
+import { readStoredAuthProfile } from "@/lib/auth-client";
 
 type IconComponent = ComponentType<{ className?: string }>;
 type PlanCardTone = "free" | "basic" | "pro";
@@ -472,9 +473,27 @@ function scrollToLandingFeature(event: MouseEvent<HTMLAnchorElement>, featureId:
 }
 
 export function PlanLandingPage() {
+  const [showForgeStudentNotice, setShowForgeStudentNotice] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const profile = readStoredAuthProfile<{ account_type?: "academy" | "student"; can_access_forge?: boolean }>();
+    setShowForgeStudentNotice(
+      params.get("from") === "forge" &&
+        params.get("reason") === "payment_method_required" &&
+        profile?.account_type === "student" &&
+        !profile.can_access_forge
+    );
+  }, []);
+
   return (
     <main className="relative isolate min-h-screen overflow-x-hidden bg-transparent text-[var(--landing-text-primary)]">
       <LandingNav />
+      {showForgeStudentNotice ? (
+        <div className="relative z-20 border-b border-zinc-200 bg-white px-4 py-3 text-center text-sm font-bold text-zinc-800">
+          Tena Note 계정으로 로그인되어 있습니다. Tena Forge 무료 체험은 결제수단 등록 후 시작됩니다.
+        </div>
+      ) : null}
 
       <section className="relative overflow-hidden border-b border-black/10 bg-[#fbfbfa] pt-16 text-zinc-950">
         <div className="relative z-10 mx-auto flex min-h-[calc(92svh-4rem)] w-full max-w-[104rem] flex-col px-4 sm:px-6 xl:px-8">

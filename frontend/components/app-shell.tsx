@@ -10,7 +10,7 @@ import { FloatingNav } from "@/components/floating-nav";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchMe } from "@/lib/auth-api";
-import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, clearAuthState, ensureAccessToken, getAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken } from "@/lib/auth-client";
+import { AUTH_CHANGED_EVENT, WORKSPACE_CHANGED_EVENT, clearAuthState, ensureAccessToken, getAccessToken, getActiveWorkspaceId, readStoredAuthProfile, setAccessToken, setActiveWorkspaceId } from "@/lib/auth-client";
 import { resolvePostLoginRedirect } from "@/lib/auth-redirect";
 
 const authRoutes = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"];
@@ -26,6 +26,10 @@ function isAdminProfile(profile: { plan?: string | null; roles?: string[] | null
 
 function isMarketplaceAdminRoute(pathname: string) {
   return marketplaceAdminRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
+function isStudentAppRoute(pathname: string) {
+  return pathname === "/student" || pathname.startsWith("/student/");
 }
 
 function isAuthFailure(error: unknown) {
@@ -113,6 +117,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             return;
           }
           const canVisitForBilling = billingAllowedRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+          const isStudentForgeOwnerRoute = profile.account_type === "student" && !isStudentAppRoute(pathname) && !canVisitForBilling;
+          if (isStudentForgeOwnerRoute && !profile.can_access_forge) {
+            setActiveWorkspaceId("student");
+            router.replace("/plan?from=forge&reason=payment_method_required");
+            return;
+          }
+          if (isStudentForgeOwnerRoute && profile.can_access_forge && profile.forge_workspace_id) {
+            const activeWorkspaceId = getActiveWorkspaceId();
+            if (!activeWorkspaceId || activeWorkspaceId === "student") {
+              setActiveWorkspaceId(profile.forge_workspace_id);
+            }
+          }
           if (profile.account_type !== "student" && profile.requires_payment && !canVisitForBilling) {
             router.replace("/billing?trial=expired");
             return;

@@ -28,6 +28,8 @@ class NoteLibraryItem {
     this.parentFolderId,
     this.academyId,
     this.materialId,
+    this.assignmentId,
+    this.assignmentType,
   });
 
   final String id;
@@ -41,6 +43,8 @@ class NoteLibraryItem {
   final String? parentFolderId;
   final String? academyId;
   final String? materialId;
+  final String? assignmentId;
+  final String? assignmentType;
 
   String get typeLabel {
     switch (type) {
@@ -64,6 +68,8 @@ class NoteLibraryItem {
     String? parentFolderId,
     String? academyId,
     String? materialId,
+    String? assignmentId,
+    String? assignmentType,
   }) {
     return NoteLibraryItem(
       id: id,
@@ -77,7 +83,45 @@ class NoteLibraryItem {
       parentFolderId: parentFolderId ?? this.parentFolderId,
       academyId: academyId ?? this.academyId,
       materialId: materialId ?? this.materialId,
+      assignmentId: assignmentId ?? this.assignmentId,
+      assignmentType: assignmentType ?? this.assignmentType,
     );
+  }
+}
+
+class PrintedNotePage {
+  const PrintedNotePage({
+    required this.problemId,
+    required this.pageNumber,
+    required this.title,
+    this.body,
+    this.sourceLabel,
+    this.visualUrl,
+    this.tags = const [],
+  });
+
+  final String problemId;
+  final int pageNumber;
+  final String title;
+  final String? body;
+  final String? sourceLabel;
+  final String? visualUrl;
+  final List<String> tags;
+
+  bool sameContentAs(PrintedNotePage other) {
+    if (problemId != other.problemId ||
+        pageNumber != other.pageNumber ||
+        title != other.title ||
+        body != other.body ||
+        sourceLabel != other.sourceLabel ||
+        visualUrl != other.visualUrl ||
+        tags.length != other.tags.length) {
+      return false;
+    }
+    for (var index = 0; index < tags.length; index += 1) {
+      if (tags[index] != other.tags[index]) return false;
+    }
+    return true;
   }
 }
 
@@ -88,6 +132,7 @@ class NoteDocument {
     required this.folderId,
     required this.updatedAt,
     required this.favorite,
+    this.printedPages = const [],
   });
 
   final String id;
@@ -95,12 +140,14 @@ class NoteDocument {
   final String folderId;
   final DateTime updatedAt;
   final bool favorite;
+  final List<PrintedNotePage> printedPages;
 
   NoteDocument copyWith({
     String? title,
     String? folderId,
     DateTime? updatedAt,
     bool? favorite,
+    List<PrintedNotePage>? printedPages,
   }) {
     return NoteDocument(
       id: id,
@@ -108,6 +155,7 @@ class NoteDocument {
       folderId: folderId ?? this.folderId,
       updatedAt: updatedAt ?? this.updatedAt,
       favorite: favorite ?? this.favorite,
+      printedPages: printedPages ?? this.printedPages,
     );
   }
 }

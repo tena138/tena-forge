@@ -420,6 +420,11 @@ export type LearningAssignment = {
       title: string;
       source_type: string;
       source_id: string;
+      assignment_type?: "textbook" | "homework" | "test" | string;
+      problem_scope?: "all" | "wrong_only" | string;
+      allow_export?: boolean;
+      render_mode?: string;
+      academy_material_id?: string | null;
       problem_count: number;
       problems: LearningProblem[];
       material_title?: string | null;
@@ -670,11 +675,20 @@ export function createLearningAssignment(
     description?: string;
     source_type: string;
     source_id: string;
+    assignment_type?: "textbook" | "homework" | "test" | string;
+    problem_scope?: "all" | "wrong_only" | string;
+    allow_export?: boolean;
+    material_expires_at?: string | null;
+    create_note_material?: boolean;
     manual_material_title?: string | null;
     manual_material_scope?: string | null;
     student_ids?: string[];
     group_ids?: string[];
     due_at?: string | null;
+    time_limit_seconds?: number | null;
+    show_answer_policy?: string;
+    show_solution_policy?: string;
+    retry_policy?: string;
     status?: string;
   }
 ) {

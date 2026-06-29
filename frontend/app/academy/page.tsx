@@ -76,6 +76,18 @@ function resolveActiveAcademyId(profile?: AcademyProfile | null) {
 type ProblemStats = { total: number; needs_review: number; tagged: number; untagged: number };
 type SubjectCount = { subject: string; count: number };
 type LearningAssignmentSourceMode = "archive" | "manual";
+type LearningMaterialType = "textbook" | "homework" | "test";
+type LearningProblemScope = "all" | "wrong_only";
+
+const learningMaterialTypes: Array<{ value: LearningMaterialType; label: string; description: string }> = [
+  { value: "textbook", label: "교재", description: "학원 폴더 안에 교재 노트만 생성합니다." },
+  { value: "homework", label: "과제", description: "기한과 완료 현황을 함께 추적합니다." },
+  { value: "test", label: "시험", description: "시작 시 타이머와 답안 제출 흐름을 사용합니다." },
+];
+
+function learningMaterialTypeLabel(value: LearningMaterialType) {
+  return learningMaterialTypes.find((item) => item.value === value)?.label || value;
+}
 
 function money(value?: number) {
   return new Intl.NumberFormat("ko-KR").format(value || 0);
@@ -408,6 +420,13 @@ function AcademyOperationsPanel() {
   const [error, setError] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
   const [learningAssignmentDueAt, setLearningAssignmentDueAt] = useState("");
+  const [learningAssignmentDialogOpen, setLearningAssignmentDialogOpen] = useState(false);
+  const [learningMaterialType, setLearningMaterialType] = useState<LearningMaterialType>("textbook");
+  const [learningProblemScope, setLearningProblemScope] = useState<LearningProblemScope>("all");
+  const [learningTimeLimitEnabled, setLearningTimeLimitEnabled] = useState(false);
+  const [learningTimeLimitMinutes, setLearningTimeLimitMinutes] = useState("50");
+  const [learningAllowExport, setLearningAllowExport] = useState(false);
+  const [learningMaterialExpiresAt, setLearningMaterialExpiresAt] = useState("");
   const [learningAssignmentSourceMode, setLearningAssignmentSourceMode] = useState<LearningAssignmentSourceMode>(
     searchParams.get("source_type") === "manual" ? "manual" : "archive"
   );
@@ -564,8 +583,29 @@ function AcademyOperationsPanel() {
     return new Date(`${learningAssignmentDueAt}T23:59:00+09:00`).toISOString();
   }
 
-  async function submitLearningAssignment(event: FormEvent<HTMLFormElement>) {
+  function materialExpiresAtIso() {
+    if (!learningMaterialExpiresAt) return null;
+    return new Date(`${learningMaterialExpiresAt}T23:59:00+09:00`).toISOString();
+  }
+
+  function learningTimeLimitSeconds() {
+    if (!learningTimeLimitEnabled && learningMaterialType !== "test") return null;
+    const minutes = Number(learningTimeLimitMinutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) return null;
+    return Math.round(minutes * 60);
+  }
+
+  function openLearningAssignmentSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError("");
+    if (!canPublishLearningAssignment) {
+      setError("자료, 제목, 대상 학생 또는 반을 먼저 선택해주세요.");
+      return;
+    }
+    setLearningAssignmentDialogOpen(true);
+  }
+
+  async function submitLearningAssignment() {
     setError("");
     if (!academyId || !learningAssignmentTitle.trim()) return;
     const isManualSource = learningAssignmentSourceMode === "manual";
@@ -582,6 +622,11 @@ function AcademyOperationsPanel() {
       setError("과제를 받을 반 또는 학생을 선택해주세요.");
       return;
     }
+    const timeLimitSeconds = learningTimeLimitSeconds();
+    if (learningMaterialType === "test" && !timeLimitSeconds) {
+      setError("시험은 제한 시간을 분 단위로 입력해야 합니다.");
+      return;
+    }
     const created = await createLearningAssignment(academyId, {
       title: learningAssignmentTitle.trim(),
       description: isManualSource
@@ -589,20 +634,40 @@ function AcademyOperationsPanel() {
         : "아카이브 자료를 기반으로 생성한 학생 풀이 과제입니다.",
       source_type: isManualSource ? "manual" : selectedLearningSourceType,
       source_id: sourceId,
+      assignment_type: learningMaterialType,
+      problem_scope: learningProblemScope,
+      allow_export: learningAllowExport,
+      material_expires_at: materialExpiresAtIso(),
+      create_note_material: true,
       manual_material_title: isManualSource ? manualMaterialTitle.trim() : null,
       manual_material_scope: isManualSource ? manualMaterialScope.trim() : null,
       group_ids: selectedGroupIds,
       student_ids: selectedStudentIds,
-      due_at: assignmentDueAtIso(),
+      due_at: learningMaterialType === "textbook" ? null : assignmentDueAtIso(),
+      time_limit_seconds: timeLimitSeconds,
+      show_answer_policy: learningMaterialType === "test" ? "afterSubmit" : "never",
+      show_solution_policy: learningMaterialType === "test" ? "never" : "afterSubmit",
+      retry_policy: learningMaterialType === "test" ? "none" : "wrongOnly",
       status: "published",
     });
     setLearningAssignmentTitle("");
     setLearningAssignmentDueAt("");
+    setLearningAssignmentDialogOpen(false);
+    setLearningMaterialType("textbook");
+    setLearningProblemScope("all");
+    setLearningTimeLimitEnabled(false);
+    setLearningTimeLimitMinutes("50");
+    setLearningAllowExport(false);
+    setLearningMaterialExpiresAt("");
     if (isManualSource) {
       setManualMaterialTitle("");
       setManualMaterialScope("");
     }
-    setNotice("학생 풀이 과제를 배포했습니다. 학생 Today 화면에 표시됩니다.");
+    setNotice(
+      learningMaterialType === "textbook"
+        ? "교재 노트를 배포했습니다. 학생 Tena Note의 학원 폴더에 표시됩니다."
+        : `${learningMaterialTypeLabel(learningMaterialType)} 자료를 배포했습니다. 학생 Tena Note와 과제 화면에 표시됩니다.`
+    );
     setLearningReport(await readLearningAssignmentReport(academyId, created.id));
     await load();
   }
@@ -786,12 +851,11 @@ function AcademyOperationsPanel() {
                   </span>
                 </div>
 
-                <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto]" onSubmit={submitLearningAssignment}>
+                <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]" onSubmit={openLearningAssignmentSettings}>
                   <Input value={learningAssignmentTitle} onChange={(event) => setLearningAssignmentTitle(event.target.value)} placeholder="학생 풀이 과제 제목" />
-                  <Input type="date" value={learningAssignmentDueAt} onChange={(event) => setLearningAssignmentDueAt(event.target.value)} />
                   <Button type="submit" disabled={!canPublishLearningAssignment}>
                     <BookOpenCheck className="h-4 w-4" />
-                    즉시 배포
+                    할당 설정
                   </Button>
                 </form>
               </CardContent>
@@ -884,6 +948,140 @@ function AcademyOperationsPanel() {
             )}
           </div>
         </div>
+
+      <Dialog open={learningAssignmentDialogOpen} onOpenChange={setLearningAssignmentDialogOpen}>
+        <DialogContent className="max-w-xl bg-white text-zinc-950">
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-xl font-black text-zinc-950">자료 할당 설정</h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                학생 Tena Note의 학원 폴더에 배치 문항을 노트 페이지로 생성합니다. 자료 타입에 따라 제출, 채점, 열람 정책이 달라집니다.
+              </p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              {learningMaterialTypes.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => {
+                    setLearningMaterialType(type.value);
+                    if (type.value === "test") setLearningTimeLimitEnabled(true);
+                  }}
+                  className={`rounded-[8px] border p-3 text-left transition ${
+                    learningMaterialType === type.value
+                      ? "border-black bg-black text-white"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-zinc-300 hover:bg-zinc-100"
+                  }`}
+                >
+                  <span className="block text-sm font-black">{type.label}</span>
+                  <span className={`mt-2 block text-xs leading-5 ${learningMaterialType === type.value ? "text-zinc-200" : "text-zinc-500"}`}>
+                    {type.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-sm font-black text-zinc-950">제공 문항</div>
+                <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-zinc-100 p-1">
+                  {[
+                    { value: "all", label: "전체 문항" },
+                    { value: "wrong_only", label: "오답만" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setLearningProblemScope(option.value as LearningProblemScope)}
+                      className={`h-10 rounded-[7px] text-sm font-bold transition ${
+                        learningProblemScope === option.value
+                          ? "bg-black text-white"
+                          : "bg-transparent text-zinc-600 hover:bg-white hover:text-zinc-950"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-black text-zinc-950">열람 기한</div>
+                <Input
+                  type="date"
+                  value={learningMaterialExpiresAt}
+                  onChange={(event) => setLearningMaterialExpiresAt(event.target.value)}
+                />
+              </div>
+            </div>
+
+            {learningMaterialType !== "textbook" ? (
+              <div className="space-y-2">
+                <div className="text-sm font-black text-zinc-950">
+                  {learningMaterialType === "test" ? "시험 제출 기한" : "과제 기한"}
+                </div>
+                <Input
+                  type="date"
+                  value={learningAssignmentDueAt}
+                  onChange={(event) => setLearningAssignmentDueAt(event.target.value)}
+                />
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+              <label className="flex min-h-11 items-center gap-3 rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-800">
+                <input
+                  type="checkbox"
+                  checked={learningMaterialType === "test" || learningTimeLimitEnabled}
+                  disabled={learningMaterialType === "test"}
+                  onChange={(event) => setLearningTimeLimitEnabled(event.target.checked)}
+                  className="h-4 w-4 accent-black"
+                />
+                시간 제한 사용
+              </label>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={learningTimeLimitMinutes}
+                onChange={(event) => setLearningTimeLimitMinutes(event.target.value)}
+                placeholder="분"
+                disabled={learningMaterialType !== "test" && !learningTimeLimitEnabled}
+              />
+            </div>
+
+            <label className="flex min-h-11 items-center gap-3 rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-800">
+              <input
+                type="checkbox"
+                checked={learningAllowExport}
+                onChange={(event) => setLearningAllowExport(event.target.checked)}
+                className="h-4 w-4 accent-black"
+              />
+              학생 자료 내보내기 허용
+            </label>
+
+            <div className="rounded-[8px] bg-zinc-100 p-3 text-sm leading-6 text-zinc-600">
+              <span className="font-black text-zinc-950">{learningMaterialTypeLabel(learningMaterialType)}</span>
+              {learningMaterialType === "textbook"
+                ? "는 제출 흐름 없이 학원 폴더 안에 읽고 필기할 수 있는 노트로 생성됩니다."
+                : learningMaterialType === "homework"
+                  ? "는 완료 여부와 제출 현황이 학원으로 전송됩니다."
+                  : "은 학생이 열면 시작되며 제한 시간이 끝나거나 제출하면 채점 결과가 학원으로 전송됩니다."}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setLearningAssignmentDialogOpen(false)}>
+                취소
+              </Button>
+              <Button type="button" onClick={() => void submitLearningAssignment()}>
+                <BookOpenCheck className="h-4 w-4" />
+                배포하기
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

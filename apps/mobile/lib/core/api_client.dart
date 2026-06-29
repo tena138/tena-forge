@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -52,6 +53,11 @@ class ApiClient {
     return decode(_decode(response));
   }
 
+  Future<T> delete<T>(String path, T Function(Object? json) decode) async {
+    final response = await _send('DELETE', path);
+    return decode(_decode(response));
+  }
+
   Future<T> uploadFile<T>(
     String path, {
     required String fieldName,
@@ -67,7 +73,7 @@ class ApiClient {
       'X-Requested-With': 'XMLHttpRequest',
     };
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    if (refreshCookie != null) headers['Cookie'] = refreshCookie;
+    if (!kIsWeb && refreshCookie != null) headers['Cookie'] = refreshCookie;
     request.headers.addAll(headers);
     request.files.add(
       await http.MultipartFile.fromPath(
@@ -103,11 +109,12 @@ class ApiClient {
       'X-Requested-With': 'XMLHttpRequest',
     };
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    if (refreshCookie != null) headers['Cookie'] = refreshCookie;
+    if (!kIsWeb && refreshCookie != null) headers['Cookie'] = refreshCookie;
     final encodedBody = body == null ? null : jsonEncode(body);
     final response = switch (method) {
       'GET' => await http.get(uri, headers: headers),
       'POST' => await http.post(uri, headers: headers, body: encodedBody),
+      'DELETE' => await http.delete(uri, headers: headers, body: encodedBody),
       _ => throw ArgumentError('Unsupported method $method'),
     };
     await _persistRefreshCookie(response);
@@ -130,6 +137,7 @@ class ApiClient {
   }
 
   Future<bool> refreshAccessToken() async {
+    if (kIsWeb) return false;
     final refreshCookie = await sessionStore.readRefreshCookie();
     if (refreshCookie == null) return false;
     try {
@@ -151,6 +159,7 @@ class ApiClient {
   }
 
   Future<void> _persistRefreshCookie(http.Response response) async {
+    if (kIsWeb) return;
     final setCookie = response.headers['set-cookie'];
     if (setCookie == null || !setCookie.contains('$_refreshCookieName=')) {
       return;

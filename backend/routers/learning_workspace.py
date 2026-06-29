@@ -14,6 +14,8 @@ from database import get_db
 from models import (
     Academy,
     AcademyClass,
+    AcademyMaterial,
+    AcademyMaterialAssignment,
     AcademySeat,
     ArchiveAccessGrant,
     Batch,
@@ -104,6 +106,11 @@ class LearningAssignmentCreate(BaseModel):
     description: str | None = None
     source_type: str = "problemSet"
     source_id: str
+    assignment_type: str = "homework"
+    problem_scope: str = "all"
+    allow_export: bool = False
+    material_expires_at: datetime | None = None
+    create_note_material: bool = True
     manual_material_title: str | None = None
     manual_material_scope: str | None = None
     student_ids: list[str] = Field(default_factory=list)
@@ -247,6 +254,21 @@ def _problem_snapshot(problem: Problem) -> dict[str, Any]:
     }
 
 
+def _problem_note_snapshot(problem: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": problem.get("id"),
+        "problem_id": problem.get("id") or problem.get("problem_id"),
+        "problem_number": problem.get("problem_number"),
+        "original_problem_number": problem.get("original_problem_number"),
+        "review_page_number": problem.get("review_page_number"),
+        "problem_text": problem.get("problem_text"),
+        "visual_url": problem.get("visual_url"),
+        "review_page_image_url": problem.get("review_page_image_url"),
+        "source_label": problem.get("source_label"),
+        "tags": problem.get("tags") or {},
+    }
+
+
 def _academy_content_filter(model, academy_id: str):
     return or_(model.academy_id == academy_id, model.owner_id == academy_id)
 
@@ -344,6 +366,106 @@ def _create_content_version(
     db.add(version)
     db.flush()
     return version
+
+
+def _normalize_assignment_type(value: str | None) -> str:
+    normalized = (value or "homework").strip().lower()
+    if normalized in {"book", "textbook", "material", "course"}:
+        return "textbook"
+    if normalized in {"assignment", "homework", "task"}:
+        return "homework"
+    if normalized in {"test", "exam", "quiz"}:
+        return "test"
+    raise HTTPException(status_code=400, detail="Unsupported assignment type.")
+
+
+def _normalize_problem_scope(value: str | None) -> str:
+    normalized = (value or "all").strip().lower()
+    if normalized in {"all", "wrong_only"}:
+        return normalized
+    raise HTTPException(status_code=400, detail="Unsupported problem scope.")
+
+
+def _assignment_snapshot_settings(payload: LearningAssignmentCreate) -> dict[str, Any]:
+    assignment_type = _normalize_assignment_type(payload.assignment_type)
+    problem_scope = _normalize_problem_scope(payload.problem_scope)
+    return {
+        "assignment_type": assignment_type,
+        "problem_scope": problem_scope,
+        "allow_export": bool(payload.allow_export),
+        "material_expires_at": payload.material_expires_at.isoformat() if payload.material_expires_at else None,
+        "render_mode": "notebook_problem_pages",
+    }
+
+
+def _student_membership_for_material_target(db: Session, academy_id: str, student_id: str) -> StudentAcademyMembership | None:
+    return db.scalar(
+        select(StudentAcademyMembership).where(
+            StudentAcademyMembership.academy_id == academy_id,
+            StudentAcademyMembership.student_user_id == student_id,
+            StudentAcademyMembership.status == "active",
+        )
+    )
+
+
+def _create_assignment_note_material(
+    db: Session,
+    *,
+    academy_id: str,
+    actor_id: str,
+    assignment: LearningAssignment,
+    version: ContentVersion,
+    payload: LearningAssignmentCreate,
+) -> AcademyMaterial | None:
+    if not payload.create_note_material or payload.source_type == "manual":
+        return None
+    snapshot = dict(version.snapshot or {})
+    settings = _assignment_snapshot_settings(payload)
+    public_problems = [_problem_note_snapshot(problem) for problem in snapshot.get("problems", [])]
+    if not public_problems and settings["problem_scope"] != "wrong_only":
+        return None
+    title = payload.title.strip() or snapshot.get("title") or version.title
+    export_enabled = bool(payload.allow_export)
+    note_payload = {
+        "title": title,
+        "source_type": payload.source_type,
+        "source_id": payload.source_id,
+        "content_version_id": str(version.id),
+        "learning_assignment_id": str(assignment.id),
+        "assignment_type": settings["assignment_type"],
+        "problem_scope": settings["problem_scope"],
+        "render_mode": settings["render_mode"],
+        "problem_count": len(public_problems),
+        "problems": public_problems,
+        "time_limit_seconds": payload.time_limit_seconds,
+        "due_at": payload.due_at.isoformat() if payload.due_at else None,
+        "expires_at": payload.material_expires_at.isoformat() if payload.material_expires_at else None,
+        "allow_export": export_enabled,
+    }
+    material = AcademyMaterial(
+        academy_id=academy_id,
+        created_by_user_id=actor_id,
+        title=title,
+        material_type=f"forge_{settings['assignment_type']}_note",
+        permissions={
+            "view": True,
+            "download": export_enabled,
+            "print": export_enabled,
+            "export": export_enabled,
+            "add_to_wrong_answer": settings["problem_scope"] == "wrong_only",
+            "note_payload": note_payload,
+        },
+        expires_at=payload.material_expires_at,
+    )
+    db.add(material)
+    db.flush()
+    for group_id in payload.group_ids:
+        db.add(AcademyMaterialAssignment(material_id=material.id, target_type="class", target_id=str(group_id)))
+    for student_id in payload.student_ids:
+        membership = _student_membership_for_material_target(db, academy_id, student_id)
+        if membership:
+            db.add(AcademyMaterialAssignment(material_id=material.id, target_type="student", target_id=str(membership.id)))
+    return material
 
 
 def _content_problem(version: ContentVersion, problem_id: UUID) -> dict[str, Any]:
@@ -611,6 +733,8 @@ def _problem_for_student(problem: dict[str, Any], *, show_answer: bool, show_sol
 def _assignment_payload(db: Session, assignment: LearningAssignment, student_id: str | None = None) -> dict[str, Any]:
     content = assignment.content_version
     academy_name = get_academy_name(db, assignment.academy_id)
+    snapshot = dict(content.snapshot or {})
+    assignment_type = _normalize_assignment_type(snapshot.get("assignment_type") or ("test" if assignment.time_limit_seconds else "homework"))
     submission = None
     if student_id:
         submission = db.scalar(
@@ -624,13 +748,17 @@ def _assignment_payload(db: Session, assignment: LearningAssignment, student_id:
     return {
         **_serialize(assignment),
         "academy_name": academy_name,
+        "assignment_type": assignment_type,
+        "submission_mode": "problem_set" if snapshot.get("problem_count", 0) else "completion",
+        "material_type": f"forge_{assignment_type}_note",
         "content": {
             **_serialize(content),
             "snapshot": {
-                **content.snapshot,
+                **snapshot,
+                "assignment_type": assignment_type,
                 "problems": [
                     _problem_for_student(problem, show_answer=show_answer, show_solution=show_solution)
-                    for problem in content.snapshot.get("problems", [])
+                    for problem in snapshot.get("problems", [])
                 ],
             },
         },
@@ -671,9 +799,14 @@ def student_today(request: Request, academy_id: str | None = None, db: Session =
             .options(joinedload(LearningAssignment.content_version))
             .order_by(LearningAssignment.due_at.is_(None), LearningAssignment.due_at, LearningAssignment.created_at.desc())
         ).all()
+    visible_assignments = [
+        assignment
+        for assignment in assignments
+        if (assignment.content_version.snapshot or {}).get("assignment_type") != "textbook"
+    ]
     return {
         "academies": learning_connected_academies(request, db),
-        "assignments": [_assignment_payload(db, assignment, student_id) for assignment in assignments],
+        "assignments": [_assignment_payload(db, assignment, student_id) for assignment in visible_assignments],
         "stats": _student_stats_payload(db, student_id, academy_id),
     }
 
@@ -690,6 +823,11 @@ def student_assignments(request: Request, academy_id: str | None = None, db: Ses
         .options(joinedload(LearningAssignment.content_version))
         .order_by(LearningAssignment.due_at.is_(None), LearningAssignment.due_at)
     ).all()
+    rows = [
+        row
+        for row in rows
+        if (row.content_version.snapshot or {}).get("assignment_type") != "textbook"
+    ]
     return [_assignment_payload(db, row, student_id) for row in rows]
 
 
@@ -1300,6 +1438,7 @@ def remove_group_student(academy_id: str, group_id: UUID, student_id: str, reque
 @router.post("/academy/{academy_id}/assignments")
 def create_learning_assignment(academy_id: str, payload: LearningAssignmentCreate, request: Request, db: Session = Depends(get_db)):
     actor = require_staff(db, request, academy_id, {"owner", "admin", "teacher", "assistant"}, permission="can_manage_assignments")
+    settings = _assignment_snapshot_settings(payload)
     version = _create_content_version(
         db,
         academy_id,
@@ -1309,6 +1448,7 @@ def create_learning_assignment(academy_id: str, payload: LearningAssignmentCreat
         payload.manual_material_title,
         payload.manual_material_scope,
     )
+    version.snapshot = {**dict(version.snapshot or {}), **settings}
     target_type = "mixed"
     if payload.student_ids and not payload.group_ids:
         target_type = "students"
@@ -1346,6 +1486,19 @@ def create_learning_assignment(academy_id: str, payload: LearningAssignmentCreat
         if not group:
             raise HTTPException(status_code=404, detail=f"Group not found: {group_id}")
         db.add(LearningAssignmentTarget(assignment_id=assignment.id, academy_id=academy_id, group_id=group_id))
+    material = _create_assignment_note_material(
+        db,
+        academy_id=academy_id,
+        actor_id=actor,
+        assignment=assignment,
+        version=version,
+        payload=payload,
+    )
+    if material:
+        version.snapshot = {
+            **dict(version.snapshot or {}),
+            "academy_material_id": str(material.id),
+        }
     db.commit()
     db.refresh(assignment)
     return _assignment_payload(db, assignment)

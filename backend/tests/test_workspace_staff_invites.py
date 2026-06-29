@@ -1,6 +1,7 @@
 import sys
 import unittest
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,7 +14,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from database import Base  # noqa: E402
-from models import Academy, AcademyClass, AcademyStaffInviteCode, AcademyStaffMembership, AcademyStudentSubscription, ClassTeacher  # noqa: E402
+from models import Academy, AcademyClass, AcademyStaffInviteCode, AcademyStaffMembership, AcademyStudentSubscription, ClassTeacher, Subscription  # noqa: E402
+from routers.auth import _profile  # noqa: E402
 from routers.workspaces import StaffInviteClaim, StaffInviteCreate, create_staff_invite_code, claim_staff_invite_code, list_staff, list_workspaces  # noqa: E402
 
 
@@ -128,6 +130,69 @@ class WorkspaceStaffInviteTests(unittest.TestCase):
             workspace = next(item for item in visible["items"] if item["id"] == self.owner_id)
             self.assertEqual(workspace["seat_status"]["purchased_staff_seats"], 0)
             self.assertIsNone(db.scalar(select(AcademyStudentSubscription).where(AcademyStudentSubscription.academy_id == self.owner_id)))
+        finally:
+            db.close()
+
+    def test_student_owner_forge_workspace_requires_payment_method(self):
+        db = self.Session()
+        try:
+            db.add(Academy(id=uuid.UUID(self.staff_id), email="student@example.com", academy_name="Student User", profile_name="student_user", account_type="student"))
+            db.commit()
+
+            visible = list_workspaces(request_for(self.staff_id), db)
+            self.assertEqual(visible["active_workspace_id"], "student")
+            self.assertEqual([item["type"] for item in visible["items"]], ["student"])
+
+            with self.assertRaises(HTTPException) as blocked:
+                list_workspaces(request_for(self.staff_id, self.staff_id), db)
+            self.assertEqual(blocked.exception.status_code, 402)
+            self.assertEqual(blocked.exception.detail["code"], "FORGE_TRIAL_REQUIRES_PAYMENT_METHOD")
+        finally:
+            db.close()
+
+    def test_student_with_trial_subscription_gets_owner_forge_workspace(self):
+        db = self.Session()
+        try:
+            now = datetime.utcnow()
+            db.add_all(
+                [
+                    Academy(id=uuid.UUID(self.staff_id), email="student@example.com", academy_name="Student User", profile_name="student_user", account_type="student"),
+                    Subscription(user_id=self.staff_id, plan_code="basic", status="trialing", current_period_start=now, current_period_end=now + timedelta(days=7)),
+                ]
+            )
+            db.commit()
+
+            visible = list_workspaces(request_for(self.staff_id), db)
+            self.assertEqual(visible["active_workspace_id"], "student")
+            self.assertEqual([item["type"] for item in visible["items"]], ["student", "academy"])
+            forge_workspace = next(item for item in visible["items"] if item["type"] == "academy")
+            self.assertEqual(forge_workspace["id"], self.staff_id)
+            self.assertEqual(forge_workspace["role"], "owner")
+
+            active_forge = list_workspaces(request_for(self.staff_id, self.staff_id), db)
+            self.assertEqual(active_forge["active_workspace_id"], self.staff_id)
+        finally:
+            db.close()
+
+    def test_student_trial_profile_reports_forge_access_without_changing_account_type(self):
+        db = self.Session()
+        try:
+            now = datetime.utcnow()
+            student = Academy(id=uuid.UUID(self.staff_id), email="student@example.com", academy_name="Student User", profile_name="student_user", account_type="student")
+            db.add_all(
+                [
+                    student,
+                    Subscription(user_id=self.staff_id, plan_code="basic", status="trialing", current_period_start=now, current_period_end=now + timedelta(days=7)),
+                ]
+            )
+            db.commit()
+
+            profile = _profile(student, db)
+            self.assertEqual(profile.account_type, "student")
+            self.assertEqual(profile.forge_access_status, "trialing")
+            self.assertEqual(str(profile.forge_workspace_id), self.staff_id)
+            self.assertTrue(profile.can_access_forge)
+            self.assertEqual(profile.plan, "basic")
         finally:
             db.close()
 

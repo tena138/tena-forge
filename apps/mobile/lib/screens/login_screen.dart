@@ -279,7 +279,7 @@ class _LogoMark extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(9),
         child: Image.asset(
-          'assets/tenaforge-mark-dark.png',
+          'assets/tena-integrated-login-mark-dark.png',
           fit: BoxFit.contain,
         ),
       ),

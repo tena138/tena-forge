@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from database import get_settings
 from models import Academy, AcademyStaffMembership, ArchiveFolder, Batch, HubTemplate, Problem, ProblemSet, UserRole
+from services.forge_access import require_student_own_forge_access
 
 LOCAL_OWNER_ID = "local_user"
 WORKSPACE_HEADER = "x-tena-workspace-id"
@@ -77,6 +78,7 @@ def current_workspace_id(request: Request, db: Session | None, *, permission: st
         raise HTTPException(status_code=500, detail="Unknown workspace permission.")
 
     if workspace_id == user_id:
+        require_student_own_forge_access(db, user_id)
         return workspace_id
 
     staff = staff_membership_for_workspace(db, user_id, workspace_id)
@@ -94,7 +96,10 @@ def current_workspace_id(request: Request, db: Session | None, *, permission: st
 def require_workspace_owner(request: Request, db: Session, workspace_id: str | None = None) -> str:
     user_id = current_user_id(request)
     target = str(workspace_id or requested_workspace_id(request) or user_id)
-    if target == user_id or _is_admin_user(db, user_id):
+    if target == user_id:
+        require_student_own_forge_access(db, user_id)
+        return user_id
+    if _is_admin_user(db, user_id):
         return user_id
     raise HTTPException(status_code=403, detail="Workspace owner permission is required.")
 

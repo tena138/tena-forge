@@ -326,7 +326,9 @@ class _CanvasStage extends StatefulWidget {
 class _CanvasStageState extends State<_CanvasStage> {
   final GlobalKey _pageBoundaryKey = GlobalKey();
   List<Offset> _draftPoints = [];
+  String? _draftDocumentId;
   Offset? _textInputPoint;
+  String? _textInputDocumentId;
   TextEditingController? _textInputController;
   FocusNode? _textInputFocusNode;
   bool _extractingSelectionText = false;
@@ -341,8 +343,8 @@ class _CanvasStageState extends State<_CanvasStage> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<NoteLibraryState>();
-    final strokes = state.strokesFor(widget.documentId);
-    final draftStroke = _buildDraftStroke(state);
+    final document = state.documentById(widget.documentId);
+    final printedPages = document?.printedPages ?? const <PrintedNotePage>[];
 
     return Container(
       color: AppColors.bg,
@@ -354,104 +356,39 @@ class _CanvasStageState extends State<_CanvasStage> {
           );
           final safePageWidth = math.max(pageWidth, 280.0);
           final pageHeight = safePageWidth * 1.414;
+          if (printedPages.isNotEmpty) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 22),
+              child: Column(
+                children: [
+                  for (final page in printedPages) ...[
+                    _buildCanvasPage(
+                      context: context,
+                      state: state,
+                      strokeDocumentId: _printedPageStrokeId(
+                        widget.documentId,
+                        page,
+                      ),
+                      width: safePageWidth,
+                      height: pageHeight,
+                      printedPage: page,
+                    ),
+                    const SizedBox(height: 22),
+                  ],
+                ],
+              ),
+            );
+          }
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(vertical: 22),
             child: Center(
-              child: Stack(
-                children: [
-                  SizedBox(
-                    width: safePageWidth,
-                    height: pageHeight,
-                    child: GestureDetector(
-                      onTapDown: (details) =>
-                          _handleTap(context, details.localPosition),
-                      onPanStart: (details) =>
-                          _startStroke(context, details.localPosition),
-                      onPanUpdate: (details) =>
-                          _updateStroke(details.localPosition),
-                      onPanEnd: (_) => _finishStroke(context),
-                      child: Stack(
-                        children: [
-                          RepaintBoundary(
-                            key: _pageBoundaryKey,
-                            child: CustomPaint(
-                              painter: _NotebookPagePainter(strokes: strokes),
-                              child: const SizedBox.expand(),
-                            ),
-                          ),
-                          if (draftStroke != null)
-                            IgnorePointer(
-                              child: CustomPaint(
-                                painter: _StrokeOverlayPainter(draftStroke),
-                                child: const SizedBox.expand(),
-                              ),
-                            ),
-                          if (_extractingSelectionText)
-                            const Positioned(
-                              right: 12,
-                              top: 12,
-                              child: _SelectionExtractionBadge(),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_textInputPoint != null &&
-                      _textInputController != null &&
-                      _textInputFocusNode != null)
-                    Positioned(
-                      left: math
-                          .min(_textInputPoint!.dx, safePageWidth - 220)
-                          .clamp(0, safePageWidth),
-                      top: math
-                          .min(_textInputPoint!.dy, pageHeight - 52)
-                          .clamp(0, pageHeight),
-                      child: SizedBox(
-                        width: math.min(260, safePageWidth),
-                        child: TextField(
-                          controller: _textInputController,
-                          focusNode: _textInputFocusNode,
-                          autofocus: true,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _commitTextInput(context),
-                          style: const TextStyle(
-                            color: AppColors.text,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: '텍스트 입력',
-                            filled: true,
-                            fillColor: AppColors.panel,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: AppColors.border,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: AppColors.border,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: AppColors.text,
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: _buildCanvasPage(
+                context: context,
+                state: state,
+                strokeDocumentId: widget.documentId,
+                width: safePageWidth,
+                height: pageHeight,
+                boundaryKey: _pageBoundaryKey,
               ),
             ),
           );
@@ -460,7 +397,123 @@ class _CanvasStageState extends State<_CanvasStage> {
     );
   }
 
-  NoteStroke? _buildDraftStroke(NoteLibraryState state) {
+  Widget _buildCanvasPage({
+    required BuildContext context,
+    required NoteLibraryState state,
+    required String strokeDocumentId,
+    required double width,
+    required double height,
+    PrintedNotePage? printedPage,
+    GlobalKey? boundaryKey,
+  }) {
+    final strokes = state.strokesFor(strokeDocumentId);
+    final draftStroke = _buildDraftStroke(state, strokeDocumentId);
+    return Stack(
+      children: [
+        SizedBox(
+          width: width,
+          height: height,
+          child: GestureDetector(
+            onTapDown: (details) =>
+                _handleTap(context, details.localPosition, strokeDocumentId),
+            onPanStart: (details) =>
+                _startStroke(context, details.localPosition, strokeDocumentId),
+            onPanUpdate: (details) => _updateStroke(details.localPosition),
+            onPanEnd: (_) => _finishStroke(context),
+            child: Stack(
+              children: [
+                RepaintBoundary(
+                  key: boundaryKey,
+                  child: CustomPaint(
+                    painter: _NotebookPagePainter(
+                      strokes: strokes,
+                      printedPage: printedPage,
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                if (draftStroke != null)
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: _StrokeOverlayPainter(draftStroke),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                if (_extractingSelectionText &&
+                    _draftDocumentId == strokeDocumentId)
+                  const Positioned(
+                    right: 12,
+                    top: 12,
+                    child: _SelectionExtractionBadge(),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (_textInputPoint != null &&
+            _textInputDocumentId == strokeDocumentId &&
+            _textInputController != null &&
+            _textInputFocusNode != null)
+          Positioned(
+            left: math
+                .min(_textInputPoint!.dx, width - 220)
+                .clamp(0.0, width)
+                .toDouble(),
+            top: math
+                .min(_textInputPoint!.dy, height - 52)
+                .clamp(0.0, height)
+                .toDouble(),
+            child: SizedBox(
+              width: math.min(260, width),
+              child: TextField(
+                controller: _textInputController,
+                focusNode: _textInputFocusNode,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _commitTextInput(context),
+                style: const TextStyle(
+                  color: AppColors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: InputDecoration(
+                  hintText: '텍스트 입력',
+                  filled: true,
+                  fillColor: AppColors.panel,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: AppColors.text,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _printedPageStrokeId(String documentId, PrintedNotePage page) {
+    return '$documentId::problem-${page.problemId}';
+  }
+
+  NoteStroke? _buildDraftStroke(NoteLibraryState state, String documentId) {
+    if (_draftDocumentId != documentId) return null;
     if (_draftPoints.isEmpty) return null;
     final extractingText = state.selectedTool == NoteTool.textExtractor;
     final highlighting = state.selectedTool == NoteTool.highlighter;
@@ -480,13 +533,13 @@ class _CanvasStageState extends State<_CanvasStage> {
     );
   }
 
-  void _handleTap(BuildContext context, Offset point) {
+  void _handleTap(BuildContext context, Offset point, String strokeDocumentId) {
     final state = context.read<NoteLibraryState>();
     switch (state.selectedTool) {
       case NoteTool.text:
-        _beginTextInput(context, point);
+        _beginTextInput(context, point, strokeDocumentId);
       case NoteTool.eraser:
-        state.eraseLastStroke(widget.documentId);
+        state.eraseLastStroke(strokeDocumentId);
       case NoteTool.textExtractor:
       case NoteTool.lasso:
       case NoteTool.image:
@@ -498,7 +551,11 @@ class _CanvasStageState extends State<_CanvasStage> {
     }
   }
 
-  void _startStroke(BuildContext context, Offset point) {
+  void _startStroke(
+    BuildContext context,
+    Offset point,
+    String strokeDocumentId,
+  ) {
     if (_extractingSelectionText) return;
     final state = context.read<NoteLibraryState>();
     switch (state.selectedTool) {
@@ -507,10 +564,11 @@ class _CanvasStageState extends State<_CanvasStage> {
       case NoteTool.textExtractor:
         setState(() {
           _draftPoints = [point];
+          _draftDocumentId = strokeDocumentId;
           _clearTextInput();
         });
       case NoteTool.eraser:
-        state.eraseLastStroke(widget.documentId);
+        state.eraseLastStroke(strokeDocumentId);
       case NoteTool.text:
       case NoteTool.lasso:
       case NoteTool.image:
@@ -535,15 +593,19 @@ class _CanvasStageState extends State<_CanvasStage> {
       final selectionPoints = List<Offset>.from(_draftPoints);
       if (selectionPoints.length < 4) {
         _showSnack(context, '텍스트를 원으로 감싸 주세요.');
-        setState(() => _draftPoints = []);
+        setState(() {
+          _draftPoints = [];
+          _draftDocumentId = null;
+        });
         return;
       }
       _extractTextFromSelection(selectionPoints);
       return;
     }
     if (_draftPoints.length > 1) {
+      final strokeDocumentId = _draftDocumentId ?? widget.documentId;
       state.addStroke(
-        widget.documentId,
+        strokeDocumentId,
         NoteStroke(
           points: _draftPoints,
           color: state.selectedTool == NoteTool.highlighter
@@ -558,6 +620,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     }
     setState(() {
       _draftPoints = [];
+      _draftDocumentId = null;
     });
   }
 
@@ -594,6 +657,7 @@ class _CanvasStageState extends State<_CanvasStage> {
         setState(() {
           _extractingSelectionText = false;
           _draftPoints = [];
+          _draftDocumentId = null;
         });
       }
     }
@@ -671,12 +735,17 @@ class _CanvasStageState extends State<_CanvasStage> {
     );
   }
 
-  void _beginTextInput(BuildContext context, Offset point) {
+  void _beginTextInput(
+    BuildContext context,
+    Offset point,
+    String strokeDocumentId,
+  ) {
     _commitTextInput(context);
     final controller = TextEditingController();
     final focusNode = FocusNode();
     setState(() {
       _textInputPoint = point;
+      _textInputDocumentId = strokeDocumentId;
       _textInputController = controller;
       _textInputFocusNode = focusNode;
     });
@@ -688,9 +757,10 @@ class _CanvasStageState extends State<_CanvasStage> {
   void _commitTextInput(BuildContext context) {
     final point = _textInputPoint;
     final controller = _textInputController;
+    final strokeDocumentId = _textInputDocumentId ?? widget.documentId;
     if (point != null && controller != null) {
       context.read<NoteLibraryState>().addTextAt(
-        widget.documentId,
+        strokeDocumentId,
         point,
         controller.text,
       );
@@ -708,6 +778,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     _textInputController = null;
     _textInputFocusNode = null;
     _textInputPoint = null;
+    _textInputDocumentId = null;
   }
 }
 
@@ -877,9 +948,10 @@ class _StrokePreview extends StatelessWidget {
 }
 
 class _NotebookPagePainter extends CustomPainter {
-  const _NotebookPagePainter({required this.strokes});
+  const _NotebookPagePainter({required this.strokes, this.printedPage});
 
   final List<NoteStroke> strokes;
+  final PrintedNotePage? printedPage;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -892,9 +964,127 @@ class _NotebookPagePainter extends CustomPainter {
         ..style = PaintingStyle.stroke,
     );
 
+    final page = printedPage;
+    if (page != null) {
+      _drawPrintedPage(canvas, size, page);
+    }
+
     for (final stroke in strokes) {
       _drawStroke(canvas, stroke);
     }
+  }
+
+  void _drawPrintedPage(Canvas canvas, Size size, PrintedNotePage page) {
+    const inset = 48.0;
+    final contentWidth = math.max(size.width - inset * 2, 120.0);
+    final headerPaint = Paint()..color = const Color(0xFFF4F4F5);
+    final headerRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(inset, 38, contentWidth, 54),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(headerRect, headerPaint);
+
+    _paintText(
+      canvas,
+      text: page.title,
+      offset: const Offset(inset + 16, 52),
+      maxWidth: contentWidth - 32,
+      style: const TextStyle(
+        color: AppColors.text,
+        fontSize: 19,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+
+    if ((page.sourceLabel ?? '').trim().isNotEmpty) {
+      _paintText(
+        canvas,
+        text: page.sourceLabel!.trim(),
+        offset: Offset(inset, 112),
+        maxWidth: contentWidth,
+        style: const TextStyle(
+          color: AppColors.muted,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
+    final body = (page.body ?? '').trim();
+    _paintText(
+      canvas,
+      text: body.isEmpty ? '문항 이미지 또는 지문 자료가 포함된 페이지입니다.' : body,
+      offset: Offset(inset, 150),
+      maxWidth: contentWidth,
+      style: TextStyle(
+        color: body.isEmpty ? AppColors.muted : AppColors.text,
+        fontSize: 18,
+        height: 1.55,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+
+    if ((page.visualUrl ?? '').trim().isNotEmpty) {
+      final boxTop = size.height * 0.52;
+      final boxHeight = math.min(138.0, size.height - boxTop - 64);
+      final visualRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(inset, boxTop, contentWidth, boxHeight),
+        const Radius.circular(8),
+      );
+      canvas.drawRRect(
+        visualRect,
+        Paint()
+          ..color = const Color(0xFFF8FAFC)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawRRect(
+        visualRect,
+        Paint()
+          ..color = AppColors.border
+          ..style = PaintingStyle.stroke,
+      );
+      _paintText(
+        canvas,
+        text: '첨부된 문항 이미지',
+        offset: Offset(inset + 16, boxTop + 18),
+        maxWidth: contentWidth - 32,
+        style: const TextStyle(
+          color: AppColors.muted,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+    }
+
+    if (page.tags.isNotEmpty) {
+      _paintText(
+        canvas,
+        text: page.tags.map((tag) => '#$tag').join('  '),
+        offset: Offset(inset, size.height - 72),
+        maxWidth: contentWidth,
+        style: const TextStyle(
+          color: AppColors.subtle,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+  }
+
+  void _paintText(
+    Canvas canvas, {
+    required String text,
+    required Offset offset,
+    required double maxWidth,
+    required TextStyle style,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      maxLines: 12,
+      ellipsis: '...',
+    )..layout(maxWidth: maxWidth);
+    painter.paint(canvas, offset);
   }
 
   void _drawStroke(Canvas canvas, NoteStroke stroke) {
@@ -928,7 +1118,7 @@ class _NotebookPagePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _NotebookPagePainter oldDelegate) =>
-      oldDelegate.strokes != strokes;
+      oldDelegate.strokes != strokes || oldDelegate.printedPage != printedPage;
 }
 
 class _StrokeOverlayPainter extends CustomPainter {
