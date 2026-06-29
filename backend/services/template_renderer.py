@@ -206,7 +206,7 @@ def problem_to_template_data(problem: Problem, base_data: dict[str, Any], page_n
         "visual_schema": problem.visual_schema,
         "math_model": problem.math_model,
         "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model))
-        if is_high_confidence_problem_visual_schema(problem.visual_schema) or not problem.visual_url
+        if not problem.visual_url and is_high_confidence_problem_visual_schema(problem.visual_schema)
         else Markup(""),
     }
 
@@ -483,7 +483,7 @@ def _problem_export_data(problem: Problem, index: int, total: int, base_data: di
         "visual_schema": problem.visual_schema,
         "math_model": problem.math_model,
         "visual_svg": Markup(problem_visual_schema_to_svg(problem.visual_schema, problem.math_model))
-        if is_high_confidence_problem_visual_schema(problem.visual_schema) or not problem.visual_url
+        if not problem.visual_url and is_high_confidence_problem_visual_schema(problem.visual_schema)
         else Markup(""),
         "page_number": index,
         "total_pages": total,

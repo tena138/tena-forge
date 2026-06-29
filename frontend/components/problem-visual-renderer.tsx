@@ -595,7 +595,7 @@ export function problemVisualSchemaConfidence(schema?: ProblemVisualSchema | nul
 
 export function shouldPreferProblemVisualSchema(schema?: ProblemVisualSchema | null, hasImageFallback = false) {
   if (!canRenderProblemVisual(schema)) return false;
-  if (!hasImageFallback) return true;
+  if (hasImageFallback) return false;
   return problemVisualSchemaConfidence(schema) >= STRUCTURED_VISUAL_CONFIDENCE_THRESHOLD;
 }
 
