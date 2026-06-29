@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, assetUrl, Problem, Tag, uploadProblemVisual } from "@/lib/api";
+import { normalizeProblemSourceLabel } from "@/lib/source-label";
 
 type Facets = { subjects: string[]; units: string[]; problem_types: string[]; sources: string[] };
 type Point = { x: number; y: number };
@@ -590,8 +591,9 @@ function ProblemDetailContent() {
 
   const cropSourceUrl = problem.review_page_image_url || problem.visual_url;
   const hasStructuredVisual = shouldPreferProblemVisualSchema(problem.visual_schema, Boolean(problem.visual_url));
-  const sourceLabel =
-    tags.source || problem.source_label || `${problem.review_page_number ? `${problem.review_page_number}페이지 / ` : ""}${problem.problem_number}번`;
+  const sourceLabel = normalizeProblemSourceLabel(
+    tags.source || problem.source_label || `${problem.review_page_number ? `${problem.review_page_number}페이지 / ` : ""}${problem.problem_number}번`
+  );
   const navigationLabel =
     navigation?.position && navigation.total
       ? `${navigation.position} / ${navigation.total}`

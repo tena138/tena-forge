@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { api, ArchiveFolder, Batch, createArchiveFolder, deleteArchiveFolder, KoreanReviewItemsResponse, KoreanReviewPassageItem, listArchiveFolders, Problem, updateArchiveFolder, updateBatchArchiveFolder } from "@/lib/api";
 import { archiveFolderBatchIds, archiveFolderPathLabel, migrateLegacyBatchFolders } from "@/lib/archiveFolders";
 import { SUBJECT_ENGINES, subjectEngineLabel, type SubjectEngineCode } from "@/lib/plan-pricing";
+import { normalizeProblemSourceLabel } from "@/lib/source-label";
 import { subjectDisplayLabel } from "@/lib/subjectHierarchy";
 import { cn } from "@/lib/utils";
 
@@ -242,7 +243,7 @@ function problemTypeLabel(problem: Problem) {
 }
 
 function sourceLabel(problem: Problem) {
-  return problem.tags?.source || problem.source_label || "출처 없음";
+  return normalizeProblemSourceLabel(problem.tags?.source || problem.source_label || "출처 없음");
 }
 
 function ProblemsBrowser() {
