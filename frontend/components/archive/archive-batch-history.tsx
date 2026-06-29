@@ -255,8 +255,24 @@ export function ArchiveBatchHistory({
     setScheduledAt(localDateTimeInputValue());
   }
 
-  function toggleClass(classId: string) {
-    setSelectedClassIds((current) => (current.includes(classId) ? current.filter((id) => id !== classId) : [...current, classId]));
+  function studentIdsForClasses(classIds: string[]) {
+    const classIdSet = new Set(classIds);
+    return new Set(classes.filter((classRow) => classIdSet.has(classRow.id)).flatMap((classRow) => classRow.students.map((student) => student.id)));
+  }
+
+  function toggleClass(classRow: ClassCard) {
+    const isSelected = selectedClassIds.includes(classRow.id);
+    const classStudentIds = classRow.students.map((student) => student.id);
+    setSelectedClassIds((current) => (current.includes(classRow.id) ? current.filter((id) => id !== classRow.id) : [...current, classRow.id]));
+    setSelectedStudentIds((current) => {
+      if (isSelected) {
+        const classStudentIdSet = new Set(classStudentIds);
+        return current.filter((studentId) => !classStudentIdSet.has(studentId));
+      }
+      const next = new Set(current);
+      classStudentIds.forEach((studentId) => next.add(studentId));
+      return Array.from(next);
+    });
   }
 
   function toggleStudent(studentId: string) {
@@ -272,13 +288,15 @@ export function ArchiveBatchHistory({
     setAssigning(true);
     setAssignError("");
     try {
+      const classStudentIds = studentIdsForClasses(selectedClassIds);
+      const directStudentIds = selectedStudentIds.filter((studentId) => !classStudentIds.has(studentId));
       await createPaperSession({
         title: assignBatch.name,
         description: "교재 배치 할당: 학생별 오답 및 복습 관리를 위해 생성되었습니다.",
         source_batch_id: assignBatch.id,
         session_type: "homework",
         class_ids: selectedClassIds,
-        student_membership_ids: selectedStudentIds,
+        student_membership_ids: directStudentIds,
         scheduled_at: scheduledAt ? `${scheduledAt}:00` : null,
         status: "scheduled",
         create_calendar_events: true,
@@ -423,8 +441,7 @@ export function ArchiveBatchHistory({
           <div className="w-full max-w-3xl overflow-hidden rounded-[14px] bg-white text-zinc-950 shadow-[0_24px_80px_rgba(15,15,15,0.22)]">
             <div className="flex items-start justify-between gap-4 p-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">Batch Assignment</p>
-                <h2 className="mt-1 text-xl font-black text-zinc-950">클래스/학생에게 할당</h2>
+                <h2 className="text-xl font-black text-zinc-950">클래스/학생에게 할당</h2>
                 <p className="mt-1 text-sm text-zinc-500">{assignBatch.name} · {assignBatch.problem_count}문항</p>
               </div>
               <button
@@ -458,7 +475,7 @@ export function ArchiveBatchHistory({
                       <input
                         type="checkbox"
                         checked={selectedClassIds.includes(classRow.id)}
-                        onChange={() => toggleClass(classRow.id)}
+                        onChange={() => toggleClass(classRow)}
                         className="h-5 w-5 accent-black"
                       />
                     </label>
@@ -472,7 +489,7 @@ export function ArchiveBatchHistory({
                             </span>
                             <input
                               type="checkbox"
-                              checked={selectedStudentIds.includes(student.id)}
+                              checked={selectedClassIds.includes(classRow.id) || selectedStudentIds.includes(student.id)}
                               onChange={() => toggleStudent(student.id)}
                               className="h-4 w-4 shrink-0 accent-black"
                             />
