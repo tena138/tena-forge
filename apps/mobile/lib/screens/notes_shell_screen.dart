@@ -37,6 +37,7 @@ class NotesShellScreen extends StatelessWidget {
         ),
         child: NavigationBar(
           height: 76,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
           selectedIndex: navigationShell.currentIndex,
           onDestinationSelected: (index) => navigationShell.goBranch(
             index,
@@ -46,12 +47,12 @@ class NotesShellScreen extends StatelessWidget {
             NavigationDestination(
               icon: Icon(Icons.calendar_month_outlined),
               selectedIcon: Icon(Icons.calendar_month_rounded),
-              label: 'Calendar',
+              label: '',
             ),
             NavigationDestination(
               icon: Icon(Icons.grid_view_rounded),
               selectedIcon: Icon(Icons.grid_view_rounded),
-              label: 'Note',
+              label: '',
             ),
           ],
         ),
