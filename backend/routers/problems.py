@@ -17,7 +17,7 @@ from sqlalchemy import String, and_, cast, delete as sa_delete, distinct, func, 
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db, get_settings
-from models import Batch, Problem, ProblemSet, ProblemSetItem, Tag
+from models import ArchiveFolder, Batch, Problem, ProblemSet, ProblemSetItem, Tag
 from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigation, ProblemRead, ProblemStats, ProblemUpdate, ReviewUpdate, TagBase, TagRead, VisualCropUpdate
 from services.math_normalization import normalize_geometry_notation
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
@@ -43,6 +43,11 @@ class RandomProblemSelectionResponse(BaseModel):
     items: list[ProblemListItem]
     total: int
     requested: int
+
+
+class ProblemCategoryCount(BaseModel):
+    subject: str
+    count: int
 
 
 MAX_PROBLEM_VISUAL_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -269,6 +274,30 @@ def facets(request: Request, db: Session = Depends(get_db)):
         "visibilities": problem_values(Problem.visibility),
         "origin_types": problem_values(Problem.origin_type),
     }
+
+
+@router.get("/category-counts", response_model=list[ProblemCategoryCount])
+def category_counts(request: Request, db: Session = Depends(get_db)):
+    owner_ids = current_owner_ids(request, db)
+    rows = db.execute(
+        select(ArchiveFolder.name, Tag.subject, func.count(Problem.id))
+        .select_from(Problem)
+        .outerjoin(Tag, Tag.problem_id == Problem.id)
+        .outerjoin(Batch, Problem.source_batch_id == Batch.id)
+        .outerjoin(ArchiveFolder, Batch.archive_folder_id == ArchiveFolder.id)
+        .where(Problem.owner_id.in_(owner_ids), Problem.deleted_at.is_(None))
+        .group_by(ArchiveFolder.name, Tag.subject)
+    ).all()
+
+    counts: dict[str, int] = {}
+    for folder_name, subject, row_count in rows:
+        label = str(folder_name or subject or "").strip() or "과목 미분류"
+        counts[label] = counts.get(label, 0) + int(row_count or 0)
+
+    return [
+        {"subject": subject, "count": count}
+        for subject, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
 
 
 @router.get("/stats", response_model=ProblemStats)
