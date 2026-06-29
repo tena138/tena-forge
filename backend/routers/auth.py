@@ -637,7 +637,7 @@ def resend_verification(payload: ResendVerificationRequest, request: Request, db
 
 
 @router.post("/login", response_model=TokenResponse | TotpRequiredResponse)
-@limiter.limit("5 per 15 minutes")
+@limiter.limit("30 per 15 minutes")
 def login(payload: LoginRequest, request: Request, response: Response, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     academy = db.scalar(select(Academy).where(Academy.email == _login_lookup_email(payload.email)))
     generic = "아이디 또는 비밀번호가 올바르지 않습니다"
