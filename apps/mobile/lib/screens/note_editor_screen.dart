@@ -326,6 +326,8 @@ class _CanvasStage extends StatefulWidget {
 
 class _CanvasStageState extends State<_CanvasStage> {
   final GlobalKey _pageBoundaryKey = GlobalKey();
+  final PageController _printedPageController = PageController();
+  final Map<String, TransformationController> _transformControllers = {};
   List<Offset> _draftPoints = [];
   String? _draftDocumentId;
   Offset? _textInputPoint;
@@ -333,11 +335,29 @@ class _CanvasStageState extends State<_CanvasStage> {
   TextEditingController? _textInputController;
   FocusNode? _textInputFocusNode;
   bool _extractingSelectionText = false;
+  int _currentPrintedPageIndex = 0;
+  bool _printedPageSwipeLocked = false;
+
+  @override
+  void didUpdateWidget(covariant _CanvasStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.documentId == widget.documentId) return;
+    _currentPrintedPageIndex = 0;
+    _draftPoints = [];
+    _draftDocumentId = null;
+    _clearTextInput();
+    _disposeTransformControllers();
+    if (_printedPageController.hasClients) {
+      _printedPageController.jumpToPage(0);
+    }
+  }
 
   @override
   void dispose() {
     _textInputController?.dispose();
     _textInputFocusNode?.dispose();
+    _printedPageController.dispose();
+    _disposeTransformControllers();
     super.dispose();
   }
 
@@ -351,51 +371,104 @@ class _CanvasStageState extends State<_CanvasStage> {
       color: AppColors.bg,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final maxPageWidth = printedPages.isNotEmpty
-              ? (constraints.maxWidth >= 900 ? 960.0 : 620.0)
-              : (constraints.maxWidth >= 900 ? 660.0 : 560.0);
-          final pageWidth = math.min(constraints.maxWidth - 28, maxPageWidth);
-          final safePageWidth = math.max(pageWidth, 280.0);
-          final pageHeight = printedPages.isNotEmpty
-              ? safePageWidth * 9 / 16
-              : safePageWidth * 1.414;
+          final pageSize = _pageSizeFor(
+            constraints,
+            printed: printedPages.isNotEmpty,
+          );
           if (printedPages.isNotEmpty) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 22),
-              child: Column(
-                children: [
-                  for (final page in printedPages) ...[
-                    _buildCanvasPage(
-                      context: context,
-                      state: state,
-                      strokeDocumentId: _printedPageStrokeId(
-                        widget.documentId,
-                        page,
+            final pageCount = printedPages.length;
+            final currentPage = _currentPrintedPageIndex.clamp(
+              0,
+              pageCount - 1,
+            );
+            return Stack(
+              children: [
+                PageView.builder(
+                  controller: _printedPageController,
+                  physics: _printedPageSwipeLocked
+                      ? const NeverScrollableScrollPhysics()
+                      : const PageScrollPhysics(),
+                  itemCount: pageCount,
+                  onPageChanged: _handlePrintedPageChanged,
+                  itemBuilder: (context, index) {
+                    final page = printedPages[index];
+                    final strokeDocumentId = _printedPageStrokeId(
+                      widget.documentId,
+                      page,
+                    );
+                    return _buildZoomableCanvasViewport(
+                      transformId: strokeDocumentId,
+                      child: _buildCanvasPage(
+                        context: context,
+                        state: state,
+                        strokeDocumentId: strokeDocumentId,
+                        width: pageSize.width,
+                        height: pageSize.height,
+                        printedPage: page,
+                        boundaryKey: index == currentPage
+                            ? _pageBoundaryKey
+                            : null,
                       ),
-                      width: safePageWidth,
-                      height: pageHeight,
-                      printedPage: page,
-                    ),
-                    const SizedBox(height: 22),
-                  ],
-                ],
-              ),
+                    );
+                  },
+                ),
+                if (pageCount > 1)
+                  _PrintedPagePager(
+                    currentPage: currentPage,
+                    pageCount: pageCount,
+                    onPrevious: currentPage > 0
+                        ? () => _animateToPrintedPage(currentPage - 1)
+                        : null,
+                    onNext: currentPage < pageCount - 1
+                        ? () => _animateToPrintedPage(currentPage + 1)
+                        : null,
+                  ),
+              ],
             );
           }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(vertical: 22),
-            child: Center(
-              child: _buildCanvasPage(
-                context: context,
-                state: state,
-                strokeDocumentId: widget.documentId,
-                width: safePageWidth,
-                height: pageHeight,
-                boundaryKey: _pageBoundaryKey,
-              ),
+          return _buildZoomableCanvasViewport(
+            transformId: widget.documentId,
+            child: _buildCanvasPage(
+              context: context,
+              state: state,
+              strokeDocumentId: widget.documentId,
+              width: pageSize.width,
+              height: pageSize.height,
+              boundaryKey: _pageBoundaryKey,
             ),
           );
         },
+      ),
+    );
+  }
+
+  Size _pageSizeFor(BoxConstraints constraints, {required bool printed}) {
+    final availableWidth = math.max(constraints.maxWidth - 42, 280.0);
+    final availableHeight = math.max(constraints.maxHeight - 42, 180.0);
+    final aspectRatio = printed ? 16 / 9 : 1 / 1.414;
+    var width = availableWidth;
+    var height = width / aspectRatio;
+    if (height > availableHeight) {
+      height = availableHeight;
+      width = height * aspectRatio;
+    }
+    return Size(math.max(width, 280.0), math.max(height, 180.0));
+  }
+
+  Widget _buildZoomableCanvasViewport({
+    required String transformId,
+    required Widget child,
+  }) {
+    return ClipRect(
+      child: InteractiveViewer(
+        transformationController: _transformControllerFor(transformId),
+        boundaryMargin: const EdgeInsets.all(360),
+        minScale: 0.65,
+        maxScale: 5,
+        panEnabled: true,
+        scaleEnabled: true,
+        trackpadScrollCausesScale: true,
+        child: SizedBox.expand(child: Center(child: child)),
       ),
     );
   }
@@ -411,6 +484,10 @@ class _CanvasStageState extends State<_CanvasStage> {
   }) {
     final strokes = state.strokesFor(strokeDocumentId);
     final draftStroke = _buildDraftStroke(state, strokeDocumentId);
+    final handlesStrokePan =
+        state.selectedTool == NoteTool.pen ||
+        state.selectedTool == NoteTool.highlighter ||
+        state.selectedTool == NoteTool.textExtractor;
     return Stack(
       children: [
         SizedBox(
@@ -419,10 +496,17 @@ class _CanvasStageState extends State<_CanvasStage> {
           child: GestureDetector(
             onTapDown: (details) =>
                 _handleTap(context, details.localPosition, strokeDocumentId),
-            onPanStart: (details) =>
-                _startStroke(context, details.localPosition, strokeDocumentId),
-            onPanUpdate: (details) => _updateStroke(details.localPosition),
-            onPanEnd: (_) => _finishStroke(context),
+            onPanStart: handlesStrokePan
+                ? (details) => _startStroke(
+                    context,
+                    details.localPosition,
+                    strokeDocumentId,
+                  )
+                : null,
+            onPanUpdate: handlesStrokePan
+                ? (details) => _updateStroke(details.localPosition)
+                : null,
+            onPanEnd: handlesStrokePan ? (_) => _finishStroke(context) : null,
             child: Stack(
               children: [
                 RepaintBoundary(
@@ -521,6 +605,47 @@ class _CanvasStageState extends State<_CanvasStage> {
 
   String _printedPageStrokeId(String documentId, PrintedNotePage page) {
     return '$documentId::problem-${page.problemId}';
+  }
+
+  TransformationController _transformControllerFor(String id) {
+    return _transformControllers.putIfAbsent(id, () {
+      final controller = TransformationController();
+      controller.addListener(_handleTransformChanged);
+      return controller;
+    });
+  }
+
+  void _handleTransformChanged() {
+    final locked = _transformControllers.values.any(
+      (controller) => controller.value.getMaxScaleOnAxis() > 1.02,
+    );
+    if (locked == _printedPageSwipeLocked || !mounted) return;
+    setState(() => _printedPageSwipeLocked = locked);
+  }
+
+  void _disposeTransformControllers() {
+    for (final controller in _transformControllers.values) {
+      controller.dispose();
+    }
+    _transformControllers.clear();
+    _printedPageSwipeLocked = false;
+  }
+
+  void _handlePrintedPageChanged(int index) {
+    setState(() {
+      _currentPrintedPageIndex = index;
+      _draftPoints = [];
+      _draftDocumentId = null;
+      _clearTextInput();
+    });
+  }
+
+  void _animateToPrintedPage(int index) {
+    _printedPageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   NoteStroke? _buildDraftStroke(NoteLibraryState state, String documentId) {
@@ -930,6 +1055,100 @@ class _EditorIconButton extends StatelessWidget {
       child: IconButton(
         onPressed: enabled ? onPressed : null,
         icon: Icon(icon, color: enabled ? AppColors.text : AppColors.subtle),
+      ),
+    );
+  }
+}
+
+class _PrintedPagePager extends StatelessWidget {
+  const _PrintedPagePager({
+    required this.currentPage,
+    required this.pageCount,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int currentPage;
+  final int pageCount;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 18,
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.panel.withValues(alpha: 0.94),
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x14000000),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _PagerCircleButton(
+                  icon: Icons.chevron_left_rounded,
+                  onPressed: onPrevious,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Text(
+                    '${currentPage + 1} / $pageCount',
+                    style: const TextStyle(
+                      color: AppColors.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                _PagerCircleButton(
+                  icon: Icons.chevron_right_rounded,
+                  onPressed: onNext,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PagerCircleButton extends StatelessWidget {
+  const _PagerCircleButton({required this.icon, required this.onPressed});
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 32,
+      child: IconButton(
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          backgroundColor: onPressed == null
+              ? AppColors.panelSoft
+              : AppColors.text,
+          foregroundColor: onPressed == null
+              ? AppColors.subtle
+              : AppColors.panel,
+          shape: const CircleBorder(),
+        ),
+        icon: Icon(icon, size: 20),
       ),
     );
   }
