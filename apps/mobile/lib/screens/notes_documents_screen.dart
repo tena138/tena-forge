@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../app/theme.dart';
+import '../core/text_encoding.dart';
 import '../models/note_models.dart';
 import '../state/note_library_state.dart';
 import '../state/student_app_state.dart';
@@ -366,7 +367,7 @@ class _FolderTile extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  item.name,
+                  repairKoreanText(item.name),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -420,7 +421,7 @@ class _FolderListItem extends StatelessWidget {
         child: _LibraryItemGraphic(item: item),
       ),
       title: Text(
-        item.name,
+        repairKoreanText(item.name),
         style: const TextStyle(
           color: AppColors.text,
           fontWeight: FontWeight.w800,

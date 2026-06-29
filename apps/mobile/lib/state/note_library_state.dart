@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/text_encoding.dart';
 import '../models/note_models.dart';
 import '../models/student_models.dart';
 
@@ -289,6 +290,7 @@ class NoteLibraryState extends ChangeNotifier {
     for (final material in materials) {
       final folderId = _academyFolderId(material.academyId);
       final documentId = _materialItemId(material.id);
+      final materialTitle = repairKoreanText(material.title);
       final printedPages = _printedPagesForMaterial(material);
       final isPrintedNotebook = printedPages.isNotEmpty;
       final updatedAt =
@@ -299,7 +301,7 @@ class NoteLibraryState extends ChangeNotifier {
           _upsertDocument(
             NoteDocument(
               id: documentId,
-              title: material.title,
+              title: materialTitle,
               folderId: folderId,
               updatedAt: updatedAt,
               favorite: false,
@@ -311,7 +313,7 @@ class NoteLibraryState extends ChangeNotifier {
           _upsertItem(
             NoteLibraryItem(
               id: documentId,
-              name: material.title,
+              name: materialTitle,
               type: isPrintedNotebook
                   ? NoteItemType.notebook
                   : NoteItemType.pdf,
@@ -536,6 +538,7 @@ class NoteLibraryState extends ChangeNotifier {
     if (content == null || content.renderMode != 'notebook_problem_pages') {
       return const [];
     }
+    final materialTitle = repairKoreanText(material.title);
     return content.problems
         .asMap()
         .entries
@@ -553,7 +556,7 @@ class NoteLibraryState extends ChangeNotifier {
             pageNumber: pageNumber,
             title: '$visibleNumber번',
             body: problem.problemText,
-            sourceLabel: problem.sourceLabel ?? material.title,
+            sourceLabel: problem.sourceLabel ?? materialTitle,
             visualUrl: problem.visualUrl ?? problem.reviewPageImageUrl,
             tags: problem.tags,
           );

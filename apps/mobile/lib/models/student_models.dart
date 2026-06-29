@@ -1,3 +1,5 @@
+import '../core/text_encoding.dart';
+
 enum StudentContextType { personal, academy }
 
 class StudentPersonalInfo {
@@ -498,12 +500,18 @@ class StudentMaterialProblem {
       pageNumber:
           int.tryParse('${json['page_number'] ?? fallbackPageNumber}') ??
           fallbackPageNumber,
-      problemNumber: json['problem_number']?.toString(),
+      problemNumber: json['problem_number'] == null
+          ? null
+          : repairKoreanText(json['problem_number'].toString()),
       originalProblemNumber: int.tryParse('${json['original_problem_number']}'),
-      problemText: json['problem_text']?.toString(),
+      problemText: json['problem_text'] == null
+          ? null
+          : repairKoreanText(json['problem_text'].toString()),
       visualUrl: json['visual_url']?.toString(),
       reviewPageImageUrl: json['review_page_image_url']?.toString(),
-      sourceLabel: json['source_label']?.toString(),
+      sourceLabel: json['source_label'] == null
+          ? null
+          : repairKoreanText(json['source_label'].toString()),
       tags: rawTags is List
           ? rawTags.map((value) => value.toString()).toList(growable: false)
           : rawTags is Map
@@ -562,7 +570,7 @@ class StudentMaterialContent {
               .toList(growable: false)
         : const <StudentMaterialProblem>[];
     return StudentMaterialContent(
-      title: '${json['title'] ?? 'Untitled'}',
+      title: repairKoreanText('${json['title'] ?? 'Untitled'}'),
       learningAssignmentId: json['learning_assignment_id']?.toString(),
       sourceType: json['source_type']?.toString(),
       sourceId: json['source_id']?.toString(),
@@ -611,8 +619,10 @@ class StudentMaterial {
     return StudentMaterial(
       id: '${json['id']}',
       academyId: '${json['academy_id']}',
-      academyName: json['academy_name']?.toString(),
-      title: '${json['title'] ?? 'Untitled'}',
+      academyName: json['academy_name'] == null
+          ? null
+          : repairKoreanText(json['academy_name'].toString()),
+      title: repairKoreanText('${json['title'] ?? 'Untitled'}'),
       materialType: '${json['material_type'] ?? 'pdf'}',
       permissions: rawPermissions.map(
         (key, value) => MapEntry('$key', value == true),
