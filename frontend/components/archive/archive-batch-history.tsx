@@ -11,6 +11,7 @@ import { api, Batch } from "@/lib/api";
 import type { AcademyProfile } from "@/lib/auth-api";
 import { getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { rememberActiveBatch } from "@/lib/batch-progress";
+import { publishCoAgentStatusMessage } from "@/lib/coAgentStatus";
 import { formatKstMonthDayTime } from "@/lib/datetime";
 import { getStudentManagementDashboard } from "@/lib/studentManagement";
 import type { ClassCard, StudentCard } from "@/lib/studentManagement";
@@ -212,7 +213,6 @@ export function ArchiveBatchHistory({
   const [assignAllowExport, setAssignAllowExport] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState("");
-  const [assignNotice, setAssignNotice] = useState("");
 
   const fetchActiveBatch = useCallback(async () => {
     if (!activeBatchId) return null;
@@ -321,7 +321,6 @@ export function ArchiveBatchHistory({
   function openAssignModal(batch: Batch) {
     setAssignBatch(batch);
     setAssignError("");
-    setAssignNotice("");
     setSelectedClassIds([]);
     setSelectedStudentIds([]);
     setScheduledAt(localDateTimeInputValue());
@@ -389,6 +388,16 @@ export function ArchiveBatchHistory({
     return Math.round(minutes * 60);
   }
 
+  function assignmentTargetLabel() {
+    const selectedClassNames = classes
+      .filter((classRow) => selectedClassIds.includes(classRow.id))
+      .map((classRow) => classRow.name)
+      .filter(Boolean);
+    if (selectedClassNames.length) return `클래스 ${selectedClassNames.join(", ")}에`;
+    if (selectedStudentIds.length) return `선택한 학생 ${selectedStudentIds.length}명에게`;
+    return "선택한 대상에";
+  }
+
   async function assignSelectedBatch() {
     if (!assignBatch || assigning) return;
     const academyId = resolveActiveAcademyId();
@@ -429,7 +438,7 @@ export function ArchiveBatchHistory({
         retry_policy: assignMaterialType === "test" ? "none" : "wrongOnly",
         status: "published",
       });
-      setAssignNotice(`${learningMaterialTypeLabel(assignMaterialType)} 자료를 할당했습니다. 학생 Tena Note의 학원 폴더에 문항별 노트가 표시됩니다.`);
+      publishCoAgentStatusMessage(`${assignmentTargetLabel()} ${assignBatch.name} 교재를 할당했습니다.`, { tone: "done" });
       setAssignBatch(null);
     } catch (error) {
       setAssignError(apiErrorMessage(error, "배치를 할당하지 못했습니다. 선택한 학생과 배치 문항을 확인해주세요."));
@@ -452,12 +461,6 @@ export function ArchiveBatchHistory({
       {loadError ? (
         <div className="rounded-[10px] bg-zinc-100 p-4 text-sm font-semibold text-zinc-700">
           {loadError}
-        </div>
-      ) : null}
-
-      {assignNotice ? (
-        <div className="rounded-[10px] bg-zinc-100 p-4 text-sm font-semibold text-zinc-700">
-          {assignNotice}
         </div>
       ) : null}
 
