@@ -644,8 +644,7 @@ function ProblemDetailContent() {
         <section className="flex min-h-[680px] flex-col rounded-lg bg-white">
           <div className="flex h-14 items-center justify-between gap-3 px-4">
             <div>
-              <h2 className="text-sm font-bold text-zinc-950">원본 페이지 p.{problem.review_page_number || "-"}</h2>
-              <p className="mt-0.5 text-xs font-semibold text-zinc-500">{sourceLabel}</p>
+              <p className="text-sm font-bold text-zinc-950">{sourceLabel}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {cropSourceUrl ? (
