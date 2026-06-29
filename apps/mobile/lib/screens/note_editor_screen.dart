@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -350,12 +351,14 @@ class _CanvasStageState extends State<_CanvasStage> {
       color: AppColors.bg,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final pageWidth = math.min(
-            constraints.maxWidth - 28,
-            constraints.maxWidth >= 900 ? 660.0 : 560.0,
-          );
+          final maxPageWidth = printedPages.isNotEmpty
+              ? (constraints.maxWidth >= 900 ? 960.0 : 620.0)
+              : (constraints.maxWidth >= 900 ? 660.0 : 560.0);
+          final pageWidth = math.min(constraints.maxWidth - 28, maxPageWidth);
           final safePageWidth = math.max(pageWidth, 280.0);
-          final pageHeight = safePageWidth * 1.414;
+          final pageHeight = printedPages.isNotEmpty
+              ? safePageWidth * 9 / 16
+              : safePageWidth * 1.414;
           if (printedPages.isNotEmpty) {
             return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(vertical: 22),
@@ -424,12 +427,20 @@ class _CanvasStageState extends State<_CanvasStage> {
               children: [
                 RepaintBoundary(
                   key: boundaryKey,
-                  child: CustomPaint(
-                    painter: _NotebookPagePainter(
-                      strokes: strokes,
-                      printedPage: printedPage,
-                    ),
-                    child: const SizedBox.expand(),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CustomPaint(
+                        painter: const _NotebookPageBackgroundPainter(),
+                        child: const SizedBox.expand(),
+                      ),
+                      if (printedPage != null)
+                        _PrintedProblemPage(page: printedPage),
+                      CustomPaint(
+                        painter: _NotebookPagePainter(strokes: strokes),
+                        child: const SizedBox.expand(),
+                      ),
+                    ],
                   ),
                 ),
                 if (draftStroke != null)
@@ -947,11 +958,8 @@ class _StrokePreview extends StatelessWidget {
   }
 }
 
-class _NotebookPagePainter extends CustomPainter {
-  const _NotebookPagePainter({required this.strokes, this.printedPage});
-
-  final List<NoteStroke> strokes;
-  final PrintedNotePage? printedPage;
+class _NotebookPageBackgroundPainter extends CustomPainter {
+  const _NotebookPageBackgroundPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -963,128 +971,197 @@ class _NotebookPagePainter extends CustomPainter {
         ..color = const Color(0xFFE5E7EB)
         ..style = PaintingStyle.stroke,
     );
+  }
 
-    final page = printedPage;
-    if (page != null) {
-      _drawPrintedPage(canvas, size, page);
+  @override
+  bool shouldRepaint(covariant _NotebookPageBackgroundPainter oldDelegate) =>
+      false;
+}
+
+class _PrintedProblemPage extends StatelessWidget {
+  const _PrintedProblemPage({required this.page});
+
+  final PrintedNotePage page;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = (page.body ?? '').trim();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontalPadding = math.max(constraints.maxWidth * 0.06, 34.0);
+        final verticalPadding = math.max(constraints.maxHeight * 0.08, 28.0);
+        final bodyStyle = TextStyle(
+          color: AppColors.text,
+          fontSize: _problemBodyFontSize(body, constraints.maxWidth),
+          height: 1.45,
+          fontWeight: FontWeight.w700,
+        );
+        return Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.text,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    page.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: math.max(constraints.maxHeight * 0.09, 24.0)),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: _ProblemMathText(
+                    text: body.isEmpty ? '문항 내용이 없습니다.' : body,
+                    style: bodyStyle.copyWith(
+                      color: body.isEmpty ? AppColors.muted : AppColors.text,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  double _problemBodyFontSize(String body, double width) {
+    final length = body.runes.length;
+    if (width >= 780 && length <= 90) return 31;
+    if (width >= 640 && length <= 160) return 27;
+    if (length <= 260) return 23;
+    return 20;
+  }
+}
+
+class _ProblemMathText extends StatelessWidget {
+  const _ProblemMathText({required this.text, required this.style});
+
+  final String text;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = <InlineSpan>[];
+    for (final segment in _splitMathSegments(text)) {
+      if (segment.isMath) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1.5),
+              child: Math.tex(
+                segment.text,
+                mathStyle: segment.display ? MathStyle.display : MathStyle.text,
+                textStyle: style.copyWith(fontWeight: FontWeight.w700),
+                onErrorFallback: (_) => Text(
+                  segment.raw,
+                  style: style.copyWith(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      } else {
+        spans.add(TextSpan(text: segment.text, style: style));
+      }
     }
+    return Text.rich(
+      TextSpan(children: spans),
+      softWrap: true,
+      overflow: TextOverflow.visible,
+      textAlign: TextAlign.start,
+    );
+  }
+}
 
+class _MathTextSegment {
+  const _MathTextSegment.text(this.text)
+    : isMath = false,
+      display = false,
+      raw = text;
+
+  const _MathTextSegment.math({
+    required this.text,
+    required this.raw,
+    required this.display,
+  }) : isMath = true;
+
+  final String text;
+  final String raw;
+  final bool isMath;
+  final bool display;
+}
+
+List<_MathTextSegment> _splitMathSegments(String value) {
+  final segments = <_MathTextSegment>[];
+  var cursor = 0;
+  while (cursor < value.length) {
+    final start = value.indexOf(r'$', cursor);
+    if (start < 0) {
+      if (cursor < value.length) {
+        segments.add(_MathTextSegment.text(value.substring(cursor)));
+      }
+      break;
+    }
+    if (start > cursor) {
+      segments.add(_MathTextSegment.text(value.substring(cursor, start)));
+    }
+    final display = start + 1 < value.length && value[start + 1] == r'$';
+    final markerLength = display ? 2 : 1;
+    final marker = display ? r'$$' : r'$';
+    final contentStart = start + markerLength;
+    final end = value.indexOf(marker, contentStart);
+    if (end < 0) {
+      segments.add(_MathTextSegment.text(value.substring(start)));
+      break;
+    }
+    final raw = value.substring(start, end + markerLength);
+    final tex = value.substring(contentStart, end).trim();
+    if (tex.isEmpty) {
+      segments.add(_MathTextSegment.text(raw));
+    } else {
+      segments.add(
+        _MathTextSegment.math(text: tex, raw: raw, display: display),
+      );
+    }
+    cursor = end + markerLength;
+  }
+  return segments;
+}
+
+class _NotebookPagePainter extends CustomPainter {
+  const _NotebookPagePainter({required this.strokes});
+
+  final List<NoteStroke> strokes;
+
+  @override
+  void paint(Canvas canvas, Size size) {
     for (final stroke in strokes) {
       _drawStroke(canvas, stroke);
     }
-  }
-
-  void _drawPrintedPage(Canvas canvas, Size size, PrintedNotePage page) {
-    const inset = 48.0;
-    final contentWidth = math.max(size.width - inset * 2, 120.0);
-    final headerPaint = Paint()..color = const Color(0xFFF4F4F5);
-    final headerRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(inset, 38, contentWidth, 54),
-      const Radius.circular(8),
-    );
-    canvas.drawRRect(headerRect, headerPaint);
-
-    _paintText(
-      canvas,
-      text: page.title,
-      offset: const Offset(inset + 16, 52),
-      maxWidth: contentWidth - 32,
-      style: const TextStyle(
-        color: AppColors.text,
-        fontSize: 19,
-        fontWeight: FontWeight.w900,
-      ),
-    );
-
-    if ((page.sourceLabel ?? '').trim().isNotEmpty) {
-      _paintText(
-        canvas,
-        text: page.sourceLabel!.trim(),
-        offset: Offset(inset, 112),
-        maxWidth: contentWidth,
-        style: const TextStyle(
-          color: AppColors.muted,
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-        ),
-      );
-    }
-
-    final body = (page.body ?? '').trim();
-    _paintText(
-      canvas,
-      text: body.isEmpty ? '문항 이미지 또는 지문 자료가 포함된 페이지입니다.' : body,
-      offset: Offset(inset, 150),
-      maxWidth: contentWidth,
-      style: TextStyle(
-        color: body.isEmpty ? AppColors.muted : AppColors.text,
-        fontSize: 18,
-        height: 1.55,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-
-    if ((page.visualUrl ?? '').trim().isNotEmpty) {
-      final boxTop = size.height * 0.52;
-      final boxHeight = math.min(138.0, size.height - boxTop - 64);
-      final visualRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(inset, boxTop, contentWidth, boxHeight),
-        const Radius.circular(8),
-      );
-      canvas.drawRRect(
-        visualRect,
-        Paint()
-          ..color = const Color(0xFFF8FAFC)
-          ..style = PaintingStyle.fill,
-      );
-      canvas.drawRRect(
-        visualRect,
-        Paint()
-          ..color = AppColors.border
-          ..style = PaintingStyle.stroke,
-      );
-      _paintText(
-        canvas,
-        text: '첨부된 문항 이미지',
-        offset: Offset(inset + 16, boxTop + 18),
-        maxWidth: contentWidth - 32,
-        style: const TextStyle(
-          color: AppColors.muted,
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-        ),
-      );
-    }
-
-    if (page.tags.isNotEmpty) {
-      _paintText(
-        canvas,
-        text: page.tags.map((tag) => '#$tag').join('  '),
-        offset: Offset(inset, size.height - 72),
-        maxWidth: contentWidth,
-        style: const TextStyle(
-          color: AppColors.subtle,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      );
-    }
-  }
-
-  void _paintText(
-    Canvas canvas, {
-    required String text,
-    required Offset offset,
-    required double maxWidth,
-    required TextStyle style,
-  }) {
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
-      maxLines: 12,
-      ellipsis: '...',
-    )..layout(maxWidth: maxWidth);
-    painter.paint(canvas, offset);
   }
 
   void _drawStroke(Canvas canvas, NoteStroke stroke) {
@@ -1118,7 +1195,7 @@ class _NotebookPagePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _NotebookPagePainter oldDelegate) =>
-      oldDelegate.strokes != strokes || oldDelegate.printedPage != printedPage;
+      oldDelegate.strokes != strokes;
 }
 
 class _StrokeOverlayPainter extends CustomPainter {
