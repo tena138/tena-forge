@@ -5663,6 +5663,156 @@ def _projection_counts(mask: Image.Image) -> tuple[list[int], list[int]]:
     return row_counts, col_counts
 
 
+def _connected_ink_components(mask: Image.Image) -> list[dict[str, int]]:
+    width, height = mask.size
+    if width <= 0 or height <= 0:
+        return []
+    data = mask.tobytes()
+    visited = bytearray(width * height)
+    components: list[dict[str, int]] = []
+    for start, value in enumerate(data):
+        if not value or visited[start]:
+            continue
+        stack = [start]
+        visited[start] = 1
+        pixels = 0
+        left = right = start % width
+        top = bottom = start // width
+        while stack:
+            index = stack.pop()
+            x = index % width
+            y = index // width
+            pixels += 1
+            left = min(left, x)
+            right = max(right, x)
+            top = min(top, y)
+            bottom = max(bottom, y)
+            for ny in range(max(0, y - 1), min(height, y + 2)):
+                row_offset = ny * width
+                for nx in range(max(0, x - 1), min(width, x + 2)):
+                    neighbor = row_offset + nx
+                    if visited[neighbor] or not data[neighbor]:
+                        continue
+                    visited[neighbor] = 1
+                    stack.append(neighbor)
+        box_width = right - left + 1
+        box_height = bottom - top + 1
+        if pixels >= 4 and box_width >= 2 and box_height >= 2:
+            components.append(
+                {
+                    "left": left,
+                    "top": top,
+                    "right": right + 1,
+                    "bottom": bottom + 1,
+                    "pixels": pixels,
+                    "width": box_width,
+                    "height": box_height,
+                }
+            )
+    return components
+
+
+def _pixel_box_distance(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> int:
+    dx = _distance_between_intervals(left[0], left[2], right[0], right[2])
+    dy = _distance_between_intervals(left[1], left[3], right[1], right[3])
+    return max(dx, dy)
+
+
+def _component_box(component: dict[str, int]) -> tuple[int, int, int, int]:
+    return component["left"], component["top"], component["right"], component["bottom"]
+
+
+def _component_is_text_like(component: dict[str, int], width: int, height: int) -> bool:
+    comp_w = max(1, int(component["width"]))
+    comp_h = max(1, int(component["height"]))
+    if comp_h <= max(10, int(height * 0.035)) and comp_w >= comp_h * 4:
+        return True
+    if comp_w <= max(10, int(width * 0.035)) and comp_h <= max(10, int(height * 0.035)):
+        return True
+    return False
+
+
+def _visual_component_score(component: dict[str, int], seed_box: tuple[int, int, int, int], width: int, height: int) -> float:
+    comp_box = _component_box(component)
+    comp_w = max(1, component["width"])
+    comp_h = max(1, component["height"])
+    box_area = comp_w * comp_h
+    seed_area = max(1, (seed_box[2] - seed_box[0]) * (seed_box[3] - seed_box[1]))
+    overlap_left = max(comp_box[0], seed_box[0])
+    overlap_top = max(comp_box[1], seed_box[1])
+    overlap_right = min(comp_box[2], seed_box[2])
+    overlap_bottom = min(comp_box[3], seed_box[3])
+    overlap = max(0, overlap_right - overlap_left) * max(0, overlap_bottom - overlap_top)
+    seed_is_focused = seed_area < width * height * 0.35
+    seed_bonus = (overlap / max(1, box_area)) * 450 if seed_is_focused else 0
+    distance = _pixel_box_distance(comp_box, seed_box)
+    distance_penalty = min(250.0, distance * (0.45 if seed_is_focused else 0.12))
+    dimension_score = min(comp_w, comp_h) * 5.0 + max(comp_w, comp_h) * 0.8
+    area_score = box_area * 0.025 + component["pixels"] * 0.9
+    aspect = max(comp_w, comp_h) / max(1, min(comp_w, comp_h))
+    aspect_penalty = 80.0 if aspect > 9 else 0.0
+    score = area_score + dimension_score + seed_bonus - distance_penalty - aspect_penalty
+    if _component_is_text_like(component, width, height):
+        score *= 0.12
+    return score
+
+
+def _component_union_box(components: list[dict[str, int]]) -> tuple[int, int, int, int]:
+    return (
+        min(component["left"] for component in components),
+        min(component["top"] for component in components),
+        max(component["right"] for component in components),
+        max(component["bottom"] for component in components),
+    )
+
+
+def _visual_component_ink_box(
+    mask: Image.Image,
+    seed_box: tuple[int, int, int, int],
+    *,
+    padding_px: int,
+) -> tuple[int, int, int, int] | None:
+    components = _connected_ink_components(mask)
+    if not components:
+        return None
+    image_area = max(1, mask.width * mask.height)
+    min_pixels = max(5, int(image_area * 0.00001))
+    usable = [component for component in components if component["pixels"] >= min_pixels]
+    if not usable:
+        usable = components
+    selected = max(usable, key=lambda component: _visual_component_score(component, seed_box, mask.width, mask.height))
+    selected_components = [selected]
+    current_box = _component_box(selected)
+    merge_distance = max(6, min(24, int(padding_px * 0.9)))
+    changed = True
+    while changed:
+        changed = False
+        for component in usable:
+            if component in selected_components:
+                continue
+            component_box = _component_box(component)
+            if _pixel_box_distance(current_box, component_box) > merge_distance:
+                continue
+            if _component_is_text_like(component, mask.width, mask.height) and not (
+                current_box[0] <= (component_box[0] + component_box[2]) // 2 <= current_box[2]
+                and current_box[1] - merge_distance <= (component_box[1] + component_box[3]) // 2 <= current_box[3] + merge_distance
+            ):
+                continue
+            selected_components.append(component)
+            current_box = _component_union_box(selected_components)
+            changed = True
+
+    left, top, right, bottom = current_box
+    tight_padding = max(4, int(padding_px * 0.55))
+    left = max(0, left - tight_padding)
+    top = max(0, top - tight_padding)
+    right = min(mask.width, right + tight_padding)
+    bottom = min(mask.height, bottom + tight_padding)
+    if right - left < 8 or bottom - top < 8:
+        return None
+    return left, top, right, bottom
+
+
 def _active_projection_runs(counts: list[int], min_count: int, gap_tolerance: int) -> list[tuple[int, int, int]]:
     runs: list[tuple[int, int, int]] = []
     run_start: int | None = None
@@ -5758,6 +5908,9 @@ def _ink_box_near_seed(
     raw_box = mask.getbbox()
     if not raw_box:
         return None
+    component_box = _visual_component_ink_box(mask, seed_box, padding_px=padding_px)
+    if component_box:
+        return component_box
     row_counts, col_counts = _projection_counts(mask)
     row_min = max(2, int(image.width * 0.0015))
     col_min = max(2, int(image.height * 0.0015))
