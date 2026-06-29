@@ -41,11 +41,15 @@ from services.pipeline import (  # noqa: E402
 
 
 class PipelineMergeKeyTests(unittest.TestCase):
-    def test_math_visual_prompts_reconstruct_from_problem_text(self):
+    def test_math_visual_prompts_prefer_source_crops(self):
         for prompt in (EXTRACTION_PROMPT, RESCUE_EXTRACTION_PROMPT, PROBLEM_PREVIEW_QA_PROMPT):
-            self.assertIn("Do not merely trace pixels", prompt)
+            self.assertIn("visual_bbox is the authoritative visual asset", prompt)
+            self.assertIn("set visual_schema to null and rely on the visual_bbox crop", prompt)
+            self.assertNotIn("shape_diagram", prompt)
+            self.assertNotIn("Do not merely trace pixels", prompt)
+        for prompt in (EXTRACTION_PROMPT, RESCUE_EXTRACTION_PROMPT):
             self.assertIn("visual_and_problem_text", prompt)
-            self.assertIn("problem_text supplies explicit constraints", prompt)
+            self.assertIn("explicit problem_text constraints", prompt)
 
     def test_quick_answer_prompts_allow_tables_with_explanations(self):
         self.assertIn("may also contain worked solutions", QUICK_ANSWER_TABLE_SCAN_PROMPT)
@@ -751,6 +755,21 @@ class PipelineMergeKeyTests(unittest.TestCase):
         )
 
         self.assertEqual(normalized[0]["choices"], [{"label": "①", "text": "$x=1$"}, {"label": "②", "text": "$x=2$"}])
+
+    def test_extracted_point_difficulty_is_preserved_for_metadata(self):
+        page = RenderedPage(page_index=1, base64_png="", png_bytes=b"")
+        normalized = _normalize_extracted_items(
+            [
+                {
+                    "problem_number": "6",
+                    "problem_text": r"$\tan\theta$의 값을 구하시오.",
+                    "difficulty": "3점",
+                }
+            ],
+            page,
+        )
+
+        self.assertEqual(normalized[0]["difficulty"], "3점")
 
     def test_source_title_unit_does_not_become_section_label(self):
         page = RenderedPage(page_index=2, base64_png="", png_bytes=b"")
