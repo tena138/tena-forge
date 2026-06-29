@@ -2,6 +2,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from PIL import Image, ImageDraw
+
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
@@ -19,6 +21,7 @@ from services.pipeline import (  # noqa: E402
     _choose_solution_candidates,
     _document_type_hints_include_mixed,
     _embedded_solution_page_indexes,
+    _crop_visual_ink_region,
     _extracted_problem_merge_key,
     _is_structural_section_label,
     _mixed_answer_recovery_page_indexes,
@@ -87,6 +90,32 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertEqual(_source_problem_number_label("00000006"), "6")
         self.assertEqual(_source_problem_number_label(6), "6")
         self.assertEqual(_source_problem_number_label("01"), "01")
+
+    def test_visual_crop_prefers_figure_component_when_bbox_contains_problem_text(self):
+        image = Image.new("RGB", (500, 360), "white")
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((40, 35, 430, 39), fill="black")
+        draw.rectangle((48, 54, 340, 58), fill="black")
+        draw.line((190, 95, 190, 255), fill="black", width=3)
+        draw.line((150, 220, 350, 220), fill="black", width=3)
+        draw.line((155, 240, 330, 95), fill="black", width=3)
+        draw.line((220, 110, 300, 190), fill="black", width=3)
+        draw.line((240, 130, 240, 220), fill="black", width=1)
+        draw.line((190, 160, 300, 160), fill="black", width=1)
+        draw.rectangle((370, 304, 455, 308), fill="black")
+        draw.rectangle((40, 314, 245, 318), fill="black")
+
+        crop = _crop_visual_ink_region(
+            image,
+            {"x1": 0.05, "y1": 0.05, "x2": 0.95, "y2": 0.95},
+        )
+
+        self.assertIsNotNone(crop)
+        assert crop is not None
+        self.assertLess(crop.height, 230)
+        self.assertLess(crop.width, 260)
+        self.assertGreater(crop.height, 120)
+        self.assertGreater(crop.width, 140)
 
     def test_quick_answer_candidates_include_middle_boundary_pages(self):
         indexes = _quick_answer_candidate_page_indexes(14)
