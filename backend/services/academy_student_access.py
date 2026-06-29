@@ -593,8 +593,11 @@ def student_has_active_class(db: Session, student_id: str, academy_id: str, clas
 
 def rotate_seat_code(db: Session, seat: AcademySeat) -> str:
     code = generate_invite_code()
+    metadata = dict(seat.invite_metadata or {})
+    metadata["key_code"] = code
     seat.invite_code_hash = hash_invite_code(code)
     seat.invite_code_preview = code[-4:]
+    seat.invite_metadata = metadata
     seat.last_rotated_at = datetime.utcnow()
     seat.updated_at = datetime.utcnow()
     return code
