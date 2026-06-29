@@ -44,6 +44,12 @@ const pdfDocumentTypeOptions: Array<{ value: PdfDocumentType; label: string }> =
   { value: "solution", label: "해설" },
   { value: "mixed", label: "믹스" },
 ];
+const solutionFilenamePattern = /(해설|풀이|해답|정답|답안|답지|solution|solutions|explanation|explanations|answer|answers|answer[\s_-]*key)/i;
+
+function inferPdfDocumentType(file: File | string): PdfDocumentType {
+  const name = typeof file === "string" ? file : file.name;
+  return solutionFilenamePattern.test(name.normalize("NFKC")) ? "solution" : "problem";
+}
 
 type PdfPageEstimate = {
   pages: number | null;
@@ -1048,7 +1054,7 @@ function MultiPdfDropZone({
                 <div className="flex shrink-0 items-center gap-2">
                   <div className="inline-flex rounded-[8px] bg-zinc-100 p-0.5" aria-label={`${file.name} 자료 유형`}>
                     {pdfDocumentTypeOptions.map((option) => {
-                      const selected = (documentTypes[pdfFileKey(file)] || "mixed") === option.value;
+                      const selected = (documentTypes[pdfFileKey(file)] || inferPdfDocumentType(file)) === option.value;
                       return (
                         <button
                           key={option.value}
@@ -1363,7 +1369,7 @@ export default function UploadPage() {
       const next: Record<string, PdfDocumentType> = {};
       files.forEach((file) => {
         const key = pdfFileKey(file);
-        next[key] = current[key] || "mixed";
+        next[key] = current[key] || inferPdfDocumentType(file);
       });
       return next;
     });
@@ -1412,7 +1418,7 @@ export default function UploadPage() {
           file_index: index,
           filename: file.name,
           size: file.size,
-          type: pdfDocumentTypes[pdfFileKey(file)] || "mixed",
+          type: pdfDocumentTypes[pdfFileKey(file)] || inferPdfDocumentType(file),
         }))
       )
     );
