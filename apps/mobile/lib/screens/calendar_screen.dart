@@ -38,21 +38,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
           padding: const EdgeInsets.fromLTRB(22, 14, 22, 20),
           child: Column(
             children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Calendar',
-                      style: TextStyle(
-                        color: AppColors.text,
-                        fontSize: 34,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
