@@ -6126,6 +6126,7 @@ def _normalize_extracted_items(
                 "has_visual": bool(item.get("has_visual") or item.get("visual_schema")),
                 "subject": str(item.get("subject") or "").strip() or None,
                 "unit": _clean_unit_label(item.get("unit")),
+                "difficulty": item.get("difficulty"),
                 "section_label": section_label,
                 "problem_bbox": _normalized_visual_bbox(item.get("problem_bbox")),
                 "visual_bbox": _normalized_visual_bbox(item.get("visual_bbox")),
@@ -6337,6 +6338,7 @@ Return a JSON array with exactly one object:
     "visual_bbox": {"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>} or null,
     "math_model": {"expressions": {"f": "<plain editable expression in x>"}, "parameters": {}} or null,
     "visual_schema": <optional editable schema only for an exact analytic cartesian_graph or structured_table, always including "confidence": 0.0-1.0, e.g. {"type": "cartesian_graph", "confidence": 0.92, "viewport": {"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}, "axes": {"x": true, "y": true, "grid": true}, "objects": [{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}]} or {"type": "structured_table", "confidence": 0.92, "rows": [[{"text": "x", "header": true}, {"text": "1", "header": true}], ["$f(x)$", "2"]], "headerRows": 1}> or null,
+    "difficulty": "<2점, 3점, 4점 if a visible point value is printed for this problem, else null>",
     "visible_numbers": ["<numbers/measurements visibly inside the visual only>"],
     "visible_point_labels": ["A", "B", "..."],
     "visible_geometry_labels": ["AB", "ABC", "..."],
@@ -6352,6 +6354,7 @@ Rules:
 - The source image is authoritative. Use the current extraction only as context.
 - If current text contains broken tokens like /w, \w, empty $$ $$, unbalanced $, or malformed LaTeX, correct them from the image.
 - problem_text must contain only the target problem stem and condition text. Do not include neighboring problems, answers, explanations, or choices.
+- If a visible point value such as (2점), [3점], 4점, or 배점 3점 is printed as this problem's score label, return it in difficulty as 2점, 3점, or 4점 and do not include that label in problem_text.
 - Preserve Korean text faithfully and convert math expressions to LaTeX with $...$ or $$...$$.
 - Always use display LaTeX delimiters like $$\sum_{k=1}^{n} a_k$$ for any sigma/summation expression containing \sum, \Sigma, or ∑.
 - visual_bbox coordinates are relative to this cropped preview, not the full page.
@@ -6370,6 +6373,7 @@ def _problem_preview_qa_prompt(problem: dict[str, Any]) -> str:
         "problem_no": problem.get("problem_no"),
         "problem_text": problem.get("problem_text"),
         "choices": problem.get("choices") or [],
+        "difficulty": problem.get("difficulty"),
         "has_visual": bool(problem.get("has_visual")),
         "math_model": problem.get("math_model"),
         "visual_schema": problem.get("visual_schema"),
@@ -6468,6 +6472,10 @@ def _apply_preview_qa_result(problem: dict[str, Any], preview_png: bytes, qa: di
             problem["needs_review"] = True
         else:
             problem["problem_text"] = corrected_text
+
+    qa_difficulty = qa.get("difficulty")
+    if qa_difficulty:
+        problem["difficulty"] = qa_difficulty
 
     if isinstance(qa.get("choices"), list) and qa.get("choices"):
         problem["choices"] = _normalize_problem_choices(qa.get("choices"), problem.get("problem_text"))
