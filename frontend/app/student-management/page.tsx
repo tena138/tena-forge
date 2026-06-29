@@ -1316,7 +1316,6 @@ export default function StudentManagementPage() {
   const [deletingClassId, setDeletingClassId] = useState("");
   const [showClassCreator, setShowClassCreator] = useState(false);
   const [showKeyManager, setShowKeyManager] = useState(false);
-  const [addingStudentClassId, setAddingStudentClassId] = useState("");
   const [classStudentSavingId, setClassStudentSavingId] = useState("");
   const [copyingStudentKeyId, setCopyingStudentKeyId] = useState("");
   const [academyId, setAcademyId] = useState("");
@@ -1976,19 +1975,10 @@ export default function StudentManagementPage() {
     }
   }
 
-  function startClassStudentAdd(classRow: ClassCard) {
-    setAddingStudentClassId(classRow.id);
-    setKeyClassId(classRow.id);
-  }
-
-  function cancelClassStudentAdd() {
-    setAddingStudentClassId("");
-    setClassStudentSavingId("");
-  }
-
   async function issueClassKeyForClass(classRow: ClassCard) {
     if (!academyId) return;
     setClassStudentSavingId(classRow.id);
+    setKeyClassId(classRow.id);
     try {
       const created = await issueLearningStudentKeys(academyId, { count: 1, class_id: classRow.id });
       const code = created.keys.map((seat) => seat.key_code || "").find(Boolean) || "";
@@ -2224,7 +2214,6 @@ export default function StudentManagementPage() {
         const { [classRow.id]: _removed, ...next } = current;
         return next;
       });
-      if (addingStudentClassId === classRow.id) setAddingStudentClassId("");
       if (keyClassId === classRow.id) setKeyClassId("");
       if (draggingClassId === classRow.id) setDraggingClassId("");
       setMessage(`${classRow.name} 클래스를 삭제했습니다.`);
@@ -2620,15 +2609,16 @@ export default function StudentManagementPage() {
                         </button>
                         <button
                           type="button"
-                          aria-label={`${classRow.name} 익명 자리 만들기`}
-                          title={`${classRow.name} 익명 자리 만들기`}
-                          onClick={() => startClassStudentAdd(classRow)}
+                          aria-label={`${classRow.name} 익명 키 발급`}
+                          title={`${classRow.name} 익명 키 발급`}
+                          onClick={() => void issueClassKeyForClass(classRow)}
+                          disabled={classStudentSavingId === classRow.id || !academyId}
                           className={cn(
-                            "flex h-8 w-8 items-center justify-center rounded-md border transition lg:h-10 lg:w-10",
-                            addingStudentClassId === classRow.id ? "border-black bg-black text-white" : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950"
+                            "flex h-8 w-8 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-60 lg:h-10 lg:w-10",
+                            classStudentSavingId === classRow.id ? "border-black bg-black text-white" : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950"
                           )}
                         >
-                          <UserPlus className="h-4 w-4 lg:h-5 lg:w-5" />
+                          {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin lg:h-5 lg:w-5" /> : <UserPlus className="h-4 w-4 lg:h-5 lg:w-5" />}
                         </button>
                         <button
                           type="button"
@@ -2648,39 +2638,6 @@ export default function StudentManagementPage() {
                       </div>
                     </aside>
                     <div className="col-start-2 flex min-w-0 flex-col gap-2 p-2.5 lg:col-start-auto lg:gap-3 lg:p-4">
-                      {addingStudentClassId === classRow.id ? (
-                        <div className="rounded-lg bg-white p-3 shadow-sm shadow-zinc-950/5 ring-1 ring-zinc-100">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-black text-zinc-950">익명 자리 만들기</p>
-                              <p className="mt-1 text-xs leading-5 text-zinc-500">이 클래스에 비어 있는 좌석을 만들고, 생성된 키를 학생에게 따로 전달하세요. 학생이 Tena Note에서 키를 입력하면 본인 계정과 연결됩니다.</p>
-                            </div>
-                            <button type="button" onClick={cancelClassStudentAdd} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="학생 연결 패널 닫기">
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Button type="button" size="sm" onClick={() => issueClassKeyForClass(classRow)} disabled={classStudentSavingId === classRow.id || !academyId}>
-                              {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                              익명 키 발급 후 복사
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setShowClassCreator(false);
-                                setShowKeyManager(true);
-                                setKeyClassId(classRow.id);
-                                void loadKeyManager();
-                                void loadStudentProfileSettings();
-                              }}
-                            >
-                              키 목록 보기
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null}
                       {classRow.students.length ? (
                         <div className="flex min-h-[92px] flex-1 flex-col items-stretch gap-2 pb-1 lg:min-h-[136px] lg:flex-row lg:gap-3 lg:overflow-x-auto lg:[scrollbar-color:#d4d4d8_transparent] lg:[scrollbar-width:thin]">
                           {classRow.students.map((student) => (
@@ -2701,7 +2658,13 @@ export default function StudentManagementPage() {
                           ))}
                         </div>
                       ) : (
-                        <button type="button" onClick={() => startClassStudentAdd(classRow)} className="flex h-full min-h-[84px] w-full items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-white text-sm font-semibold text-zinc-500 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950 lg:min-h-[116px]">
+                        <button
+                          type="button"
+                          onClick={() => void issueClassKeyForClass(classRow)}
+                          disabled={classStudentSavingId === classRow.id || !academyId}
+                          className="flex h-full min-h-[84px] w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-200 bg-white text-sm font-semibold text-zinc-500 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-[116px]"
+                        >
+                          {classStudentSavingId === classRow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                           익명 자리 만들기
                         </button>
                       )}
