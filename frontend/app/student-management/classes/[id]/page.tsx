@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Check, ClipboardCheck, Clock, KeyRound, Loader2, Plus, RotateCcw, Trash2, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, ClipboardCheck, Clock, Copy, Loader2, Plus, RotateCcw, Trash2, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,11 +55,19 @@ function studentKeyLabel(student: ClassCard["students"][number]) {
   return student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "-");
 }
 
-function deliveryStatusLabel(status?: string | null) {
-  if (status === "sms_link_ready") return "SMS 준비";
-  if (status === "app_notification_created") return "앱 초대 생성";
-  if (status === "claimed") return "등록 완료";
-  return "키 대기";
+function studentRawInviteCode(student: ClassCard["students"][number]) {
+  const metadata = (student.invite_metadata || {}) as Record<string, unknown>;
+  const key = student.invite_codes?.[0];
+  const directCode = key?.invite_code || student.invite_code || metadata.key_code || metadata.invite_code;
+  return typeof directCode === "string" ? directCode.trim() : "";
+}
+
+function studentKeyPreviewLabel(student: ClassCard["students"][number]) {
+  const key = student.invite_codes?.[0];
+  const preview = key?.invite_code_preview || student.invite_code_preview;
+  if (preview) return `****${preview}`;
+  const directCode = studentRawInviteCode(student);
+  return directCode ? `****${directCode.slice(-4)}` : studentKeyLabel(student);
 }
 
 function composeScheduleDescription(lessonPlan: string, assignmentNote: string) {
@@ -121,6 +129,16 @@ export default function StudentManagementClassPage({ params }: { params: Promise
     if (!data) return;
     const review = await createReviewSet({ title: `${data.name} 오답 복습 세트`, class_id: data.id, unresolved_only: true });
     setMessage(`복습 세트를 만들었습니다: ${review.name}`);
+  }
+
+  async function copyPendingKey(student: ClassCard["students"][number]) {
+    const code = studentRawInviteCode(student);
+    if (!code) {
+      setMessage("전체 키가 저장되지 않은 기존 대기 좌석입니다. 학생 관리 화면에서 키를 갱신한 뒤 복사해 주세요.");
+      return;
+    }
+    await navigator.clipboard.writeText(code);
+    setMessage(`${student.name} 키를 복사했습니다.`);
   }
 
   function startEdit() {
@@ -316,17 +334,19 @@ export default function StudentManagementClassPage({ params }: { params: Promise
                   {classStudentCards.map((student) =>
                     isPendingKeyCard(student) ? (
                       <article key={student.id} className="min-w-0 rounded-[8px] border border-dashed border-zinc-300 bg-zinc-50 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-zinc-700 ring-1 ring-zinc-200">
-                            <KeyRound className="h-4 w-4" />
-                          </div>
-                          <Badge className="rounded-md bg-zinc-900 text-white hover:bg-zinc-900">{deliveryStatusLabel(student.delivery_status)}</Badge>
-                        </div>
-                        <p className="mt-3 truncate text-sm font-black text-zinc-950">{student.name}</p>
-                        <p className="mt-1 text-xs leading-5 text-zinc-500">학생이 Tena Note에서 초대 링크를 수락하면 이 카드가 실제 학생 정보로 채워집니다.</p>
-                        <div className="mt-3 rounded-[7px] bg-white px-2 py-2 text-xs font-bold text-zinc-700 ring-1 ring-zinc-200">
-                          <span className="text-zinc-500">Invite </span>
-                          <span className="font-mono">{studentKeyLabel(student)}</span>
+                        <p className="truncate text-sm font-black text-zinc-950">{student.name}</p>
+                        <div className="mt-3 flex items-center gap-1.5 rounded-[7px] bg-white px-2 py-2 text-xs font-bold text-zinc-700 ring-1 ring-zinc-200">
+                          <span className="shrink-0 text-zinc-500">Invite</span>
+                          <span className="min-w-0 flex-1 truncate font-mono">{studentKeyPreviewLabel(student)}</span>
+                          <button
+                            type="button"
+                            onClick={() => void copyPendingKey(student)}
+                            className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
+                            aria-label={`${student.name} 키 복사`}
+                            title="키 복사"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </article>
                     ) : (

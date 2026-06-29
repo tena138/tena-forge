@@ -550,27 +550,37 @@ function noticeTone(message: string): CoAgentStatusTone {
   return "done";
 }
 
-function ClassStudentCard({ student, onMergeContext }: { student: StudentCard; onMergeContext?: (event: MouseEvent<HTMLElement>, student: StudentCard) => void }) {
+function ClassStudentCard({
+  student,
+  copying,
+  onCopyKey,
+  onMergeContext,
+}: {
+  student: StudentCard;
+  copying?: boolean;
+  onCopyKey?: (student: StudentCard) => void;
+  onMergeContext?: (event: MouseEvent<HTMLElement>, student: StudentCard) => void;
+}) {
   if (isPendingKeyCard(student)) {
-    const keyLabel = studentKeyLabel(student);
-    const metadata = (student.invite_metadata || {}) as Record<string, string | null | undefined>;
-    const phone = student.recipient_phone || metadata.recipient_phone;
-    const delivery = student.delivery_status || metadata.delivery_status;
+    const keyLabel = studentKeyPreviewLabel(student);
     return (
       <article className="flex h-full min-h-[92px] w-full flex-col justify-between rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-2.5 lg:min-h-[136px] lg:w-[210px] lg:shrink-0 lg:p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-zinc-700 ring-1 ring-zinc-200">
-            <KeyRound className="h-4 w-4" />
-          </div>
-          <Badge className="shrink-0 rounded-md bg-zinc-900 text-white hover:bg-zinc-900">{deliveryStatusLabel(delivery)}</Badge>
-        </div>
-        <div className="mt-2 min-w-0">
+        <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-zinc-950">{student.name}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{phone ? `${phone} · ` : ""}학생이 Tena Note에서 초대 링크를 수락하면 실제 정보로 채워집니다.</p>
         </div>
-        <div className="mt-3 rounded bg-white px-2 py-1.5 text-[11px] font-bold text-zinc-700 ring-1 ring-zinc-200 lg:rounded-md lg:text-xs">
-          <span className="text-zinc-500">Invite </span>
-          <span className="font-mono">{keyLabel}</span>
+        <div className="mt-3 flex items-center gap-1.5 rounded bg-white px-2 py-1.5 text-[11px] font-bold text-zinc-700 ring-1 ring-zinc-200 lg:rounded-md lg:text-xs">
+          <span className="shrink-0 text-zinc-500">Invite</span>
+          <span className="min-w-0 flex-1 truncate font-mono">{keyLabel}</span>
+          <button
+            type="button"
+            onClick={() => onCopyKey?.(student)}
+            disabled={copying || !onCopyKey}
+            className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={`${student.name} 키 복사`}
+            title="키 복사"
+          >
+            {copying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </article>
     );
@@ -613,6 +623,31 @@ function studentKeyLabel(student: StudentCard) {
   if (key?.invite_code) return key.invite_code;
   if (key?.invite_code_preview) return `****${key.invite_code_preview}`;
   return student.invite_code || (student.invite_code_preview ? `****${student.invite_code_preview}` : "키 없음");
+}
+
+function studentRawInviteCode(student: StudentCard) {
+  const metadata = (student.invite_metadata || {}) as Record<string, unknown>;
+  const key = student.invite_codes?.[0];
+  const directCode = key?.invite_code || student.invite_code || metadata.key_code || metadata.invite_code;
+  return typeof directCode === "string" ? directCode.trim() : "";
+}
+
+function studentKeyPreviewLabel(student: StudentCard) {
+  const key = student.invite_codes?.[0];
+  const preview = key?.invite_code_preview || student.invite_code_preview;
+  if (preview) return `****${preview}`;
+  const directCode = studentRawInviteCode(student);
+  return directCode ? `****${directCode.slice(-4)}` : studentKeyLabel(student);
+}
+
+function studentKeyCopyText(student: StudentCard) {
+  if (isPendingKeyCard(student)) return studentRawInviteCode(student);
+  const keys = student.invite_codes || [];
+  const codes = keys
+    .map((key) => [key.class_name || "클래스 미지정", key.invite_code].filter(Boolean).join(": "))
+    .filter((value) => value.trim());
+  if (codes.length) return codes.join("\n");
+  return studentRawInviteCode(student);
 }
 
 function StudentDirectoryCard({ student, copying, onCopyKey }: { student: StudentCard; copying?: boolean; onCopyKey: (student: StudentCard) => void }) {
@@ -1678,11 +1713,37 @@ export default function StudentManagementPage() {
   }
 
   async function copyStudentKey(student: StudentCard) {
+    setCopyingStudentKeyId(student.id);
     if (isPendingKeyCard(student)) {
-      setMessage("아직 학생 계정과 연결되지 않은 활성 키입니다. 전체 키는 발급/회전 직후에만 복사할 수 있습니다.");
+      try {
+        const directCopyText = studentKeyCopyText(student);
+        if (directCopyText) {
+          await navigator.clipboard.writeText(directCopyText);
+          setMessage(`${student.name} 키를 복사했습니다.`);
+          return;
+        }
+        const seatId = student.pending_seat_id || student.academy_seat_id || student.invite_codes?.[0]?.seat_id || "";
+        if (!academyId || !seatId) {
+          setMessage("복사할 전체 키를 찾지 못했습니다. 키를 새로 발급해 주세요.");
+          return;
+        }
+        const updated = await rotateAcademySeatCode(academyId, seatId);
+        const code = updated.invite_code || updated.key_code || "";
+        if (!code) {
+          setMessage("새 키를 만들었지만 복사할 전체 키를 받지 못했습니다.");
+          return;
+        }
+        await navigator.clipboard.writeText(code);
+        setNewKeyCodes([code]);
+        setMessage(`${student.name} 키를 새로 만들고 복사했습니다.`);
+        await Promise.all([refresh().catch(() => undefined), loadKeyManager().catch(() => undefined)]);
+      } catch (error) {
+        setMessage(errorMessage(error, "학생 키를 복사하지 못했습니다. 잠시 후 다시 시도해주세요."));
+      } finally {
+        setCopyingStudentKeyId("");
+      }
       return;
     }
-    setCopyingStudentKeyId(student.id);
     try {
       const response = await ensureStudentInviteCode(student.id);
       const inviteCodes = response.invite_codes?.length
@@ -2574,6 +2635,8 @@ export default function StudentManagementPage() {
                             <ClassStudentCard
                               key={student.id}
                               student={student}
+                              copying={copyingStudentKeyId === student.id}
+                              onCopyKey={copyStudentKey}
                               onMergeContext={(event, selectedStudent) =>
                                 setStudentMergeMenu({
                                   student: selectedStudent,

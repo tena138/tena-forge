@@ -771,6 +771,7 @@ def _pending_student_card_for_seat(seat: AcademySeat, class_row: AcademyClass) -
     seat_id = str(seat.id)
     invitation = dict(seat.invite_metadata or {})
     recipient_name = str(invitation.get("recipient_name") or seat.display_name or "").strip()
+    invite_code = str(invitation.get("key_code") or invitation.get("invite_code") or "").strip() or None
     return {
         "id": f"pending-seat-{seat_id}",
         "student_user_id": f"pending-seat-{seat_id}",
@@ -778,7 +779,7 @@ def _pending_student_card_for_seat(seat: AcademySeat, class_row: AcademyClass) -
         "academy_seat_id": seat_id,
         "pending_seat_id": seat_id,
         "invite_metadata": invitation,
-        "invite_code": None,
+        "invite_code": invite_code,
         "invite_code_preview": seat.invite_code_preview,
         "invite_codes": [
             {
@@ -786,7 +787,7 @@ def _pending_student_card_for_seat(seat: AcademySeat, class_row: AcademyClass) -
                 "seat_id": seat_id,
                 "class_id": str(class_row.id),
                 "class_name": class_row.name,
-                "invite_code": None,
+                "invite_code": invite_code,
                 "invite_code_preview": seat.invite_code_preview,
             }
         ],

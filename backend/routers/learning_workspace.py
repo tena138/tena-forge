@@ -1154,6 +1154,7 @@ def _issue_student_key_seats(db: Session, academy_id: str, class_row: AcademyCla
         seat.invite_metadata = {
             "source": "bulk_student_key_invite" if payload.recipients else "single_student_key_invite",
             "channel": payload.delivery_channel,
+            "key_code": code,
             "recipient_name": recipient_name,
             "recipient_phone": recipient_phone,
             "recipient_account_user_id": account_user_id,
