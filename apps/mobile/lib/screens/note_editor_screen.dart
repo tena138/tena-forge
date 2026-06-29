@@ -69,7 +69,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         bottom: false,
         child: Column(
           children: [
-            _EditorTopBar(document: document),
+            _EditorTopBar(
+              document: document,
+              printedPageIndex: _printedPageIndex,
+              onPrintedPageJump: _jumpToPrintedPage,
+            ),
             _EditorToolBar(
               document: document,
               printedPageIndex: _printedPageIndex,
@@ -99,9 +103,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 }
 
 class _EditorTopBar extends StatelessWidget {
-  const _EditorTopBar({required this.document});
+  const _EditorTopBar({
+    required this.document,
+    required this.printedPageIndex,
+    required this.onPrintedPageJump,
+  });
 
   final NoteDocument document;
+  final ValueListenable<int> printedPageIndex;
+  final ValueChanged<int> onPrintedPageJump;
 
   @override
   Widget build(BuildContext context) {
@@ -125,7 +135,12 @@ class _EditorTopBar extends StatelessWidget {
                   _EditorIconButton(
                     icon: Icons.grid_view_rounded,
                     tooltip: '페이지 목록',
-                    onPressed: () => _showPageOverview(context, document.id),
+                    onPressed: () => _showPageOverview(
+                      context,
+                      document.id,
+                      selectedPrintedPageIndex: printedPageIndex.value,
+                      onPrintedPageJump: onPrintedPageJump,
+                    ),
                   ),
                   _EditorIconButton(
                     icon: Icons.search_rounded,
@@ -668,10 +683,6 @@ class _CanvasStageState extends State<_CanvasStage> {
           ),
       ],
     );
-  }
-
-  String _printedPageStrokeId(String documentId, PrintedNotePage page) {
-    return '$documentId::problem-${page.problemId}';
   }
 
   TransformationController _transformControllerFor(String id) {
@@ -1636,18 +1647,37 @@ class _SelectionExtractionBadge extends StatelessWidget {
   }
 }
 
-void _showPageOverview(BuildContext context, String documentId) {
+String _printedPageStrokeId(String documentId, PrintedNotePage page) {
+  return '$documentId::problem-${page.problemId}';
+}
+
+void _showPageOverview(
+  BuildContext context,
+  String documentId, {
+  required int selectedPrintedPageIndex,
+  required ValueChanged<int> onPrintedPageJump,
+}) {
   showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.28),
-    builder: (context) => _PageOverviewDialog(documentId: documentId),
+    builder: (context) => _PageOverviewDialog(
+      documentId: documentId,
+      selectedPrintedPageIndex: selectedPrintedPageIndex,
+      onPrintedPageJump: onPrintedPageJump,
+    ),
   );
 }
 
 class _PageOverviewDialog extends StatefulWidget {
-  const _PageOverviewDialog({required this.documentId});
+  const _PageOverviewDialog({
+    required this.documentId,
+    required this.selectedPrintedPageIndex,
+    required this.onPrintedPageJump,
+  });
 
   final String documentId;
+  final int selectedPrintedPageIndex;
+  final ValueChanged<int> onPrintedPageJump;
 
   @override
   State<_PageOverviewDialog> createState() => _PageOverviewDialogState();
@@ -1722,7 +1752,11 @@ class _PageOverviewDialogState extends State<_PageOverviewDialog> {
             ),
             Expanded(
               child: _section == 0
-                  ? _ThumbnailOverview(documentId: widget.documentId)
+                  ? _ThumbnailOverview(
+                      documentId: widget.documentId,
+                      selectedPrintedPageIndex: widget.selectedPrintedPageIndex,
+                      onPrintedPageJump: widget.onPrintedPageJump,
+                    )
                   : Center(
                       child: Text(
                         _section == 1 ? 'No favorites yet' : 'No outlines yet',
@@ -1819,19 +1853,54 @@ class _OverviewSegment extends StatelessWidget {
 }
 
 class _ThumbnailOverview extends StatelessWidget {
-  const _ThumbnailOverview({required this.documentId});
+  const _ThumbnailOverview({
+    required this.documentId,
+    required this.selectedPrintedPageIndex,
+    required this.onPrintedPageJump,
+  });
 
   final String documentId;
+  final int selectedPrintedPageIndex;
+  final ValueChanged<int> onPrintedPageJump;
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<NoteLibraryState>();
+    final document = state.documentById(documentId);
+    final printedPages = document?.printedPages ?? const <PrintedNotePage>[];
     final strokes = state.strokesFor(documentId);
+    final selectedIndex = printedPages.isEmpty
+        ? 0
+        : selectedPrintedPageIndex.clamp(0, printedPages.length - 1).toInt();
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final printedCards = printedPages.asMap().entries.map((entry) {
+          final index = entry.key;
+          final page = entry.value;
+          return _PageThumbnailCard(
+            pageNumber: index + 1,
+            strokes: state.strokesFor(_printedPageStrokeId(documentId, page)),
+            selected: index == selectedIndex,
+            printedPage: page,
+            onTap: () {
+              onPrintedPageJump(index + 1);
+              Navigator.pop(context);
+            },
+          );
+        });
+        final children = printedPages.isEmpty
+            ? <Widget>[
+                _PageThumbnailCard(
+                  pageNumber: 1,
+                  strokes: strokes,
+                  selected: true,
+                ),
+                const _AddPageTile(),
+              ]
+            : printedCards.toList(growable: false);
+
         return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(34, 28, 34, 32),
           child: ConstrainedBox(
             constraints: BoxConstraints(
@@ -1839,18 +1908,7 @@ class _ThumbnailOverview extends StatelessWidget {
             ),
             child: Align(
               alignment: Alignment.topLeft,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _PageThumbnailCard(
-                    pageNumber: 1,
-                    strokes: strokes,
-                    selected: true,
-                  ),
-                  const SizedBox(width: 48),
-                  const _AddPageTile(),
-                ],
-              ),
+              child: Wrap(spacing: 34, runSpacing: 30, children: children),
             ),
           ),
         );
@@ -1864,67 +1922,100 @@ class _PageThumbnailCard extends StatelessWidget {
     required this.pageNumber,
     required this.strokes,
     required this.selected,
+    this.printedPage,
+    this.onTap,
   });
 
   final int pageNumber;
   final List<NoteStroke> strokes;
   final bool selected;
+  final PrintedNotePage? printedPage;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 150,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 150,
-            height: 212,
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: AppColors.panel,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: selected ? AppColors.text : AppColors.border,
-                width: 2,
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: _ThumbnailPagePreview(strokes: strokes),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(
-                '$pageNumber',
-                style: const TextStyle(
-                  color: AppColors.text,
-                  fontWeight: FontWeight.w800,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 150,
+              height: 212,
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: AppColors.panel,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: selected ? AppColors.text : AppColors.border,
+                  width: 2,
                 ),
               ),
-              const Spacer(),
-              const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: AppColors.muted,
-                size: 18,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: _ThumbnailPagePreview(
+                  strokes: strokes,
+                  printedPage: printedPage,
+                ),
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text(
+                  '$pageNumber',
+                  style: const TextStyle(
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.muted,
+                  size: 18,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _ThumbnailPagePreview extends StatelessWidget {
-  const _ThumbnailPagePreview({required this.strokes});
+  const _ThumbnailPagePreview({required this.strokes, this.printedPage});
 
   final List<NoteStroke> strokes;
+  final PrintedNotePage? printedPage;
 
   @override
   Widget build(BuildContext context) {
+    final printedPage = this.printedPage;
+    if (printedPage != null) {
+      const sourceWidth = 660.0;
+      const sourceHeight = sourceWidth * 1.414;
+      return FittedBox(
+        fit: BoxFit.contain,
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: sourceWidth,
+          height: sourceHeight,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(painter: const _NotebookPageBackgroundPainter()),
+              _PrintedProblemPage(page: printedPage),
+              CustomPaint(painter: _NotebookPagePainter(strokes: strokes)),
+            ],
+          ),
+        ),
+      );
+    }
     return CustomPaint(
       painter: _ThumbnailPagePainter(strokes),
       child: const SizedBox.expand(),
