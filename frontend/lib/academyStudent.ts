@@ -684,6 +684,7 @@ export function createLearningAssignment(
     manual_material_scope?: string | null;
     student_ids?: string[];
     group_ids?: string[];
+    start_at?: string | null;
     due_at?: string | null;
     time_limit_seconds?: number | null;
     show_answer_policy?: string;

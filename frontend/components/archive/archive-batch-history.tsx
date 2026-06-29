@@ -6,11 +6,28 @@ import { AlertTriangle, Ban, BookOpenCheck, Check, Eye, FileText, Info, RotateCc
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createLearningAssignment } from "@/lib/academyStudent";
 import { api, Batch } from "@/lib/api";
+import type { AcademyProfile } from "@/lib/auth-api";
+import { getActiveWorkspaceId, readStoredAuthProfile } from "@/lib/auth-client";
 import { rememberActiveBatch } from "@/lib/batch-progress";
 import { formatKstMonthDayTime } from "@/lib/datetime";
-import { ClassCard, createPaperSession, getStudentManagementDashboard } from "@/lib/studentManagement";
+import { getStudentManagementDashboard } from "@/lib/studentManagement";
+import type { ClassCard, StudentCard } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
+
+type LearningMaterialType = "textbook" | "homework" | "test";
+type LearningProblemScope = "all" | "wrong_only";
+
+const learningMaterialTypes: Array<{ value: LearningMaterialType; label: string; description: string }> = [
+  { value: "textbook", label: "교재", description: "학원 폴더 안에 교재 노트로 배포합니다." },
+  { value: "homework", label: "과제", description: "기한과 완료 여부를 학원으로 추적합니다." },
+  { value: "test", label: "시험", description: "시작 시 타이머가 돌고 제출 후 채점합니다." },
+];
+
+function learningMaterialTypeLabel(value: LearningMaterialType) {
+  return learningMaterialTypes.find((item) => item.value === value)?.label || value;
+}
 
 function fileName(path: string | null) {
   if (!path) return "없음";
@@ -24,6 +41,37 @@ function formatDate(value: string) {
 function localDateTimeInputValue(value = new Date()) {
   const pad = (number: number) => String(number).padStart(2, "0");
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
+function localDateTimeIso(value: string) {
+  if (!value) return null;
+  return new Date(`${value}:00`).toISOString();
+}
+
+function localDateEndIso(value: string) {
+  if (!value) return null;
+  return new Date(`${value}T23:59:00+09:00`).toISOString();
+}
+
+function resolveActiveAcademyId() {
+  const activeWorkspaceId = getActiveWorkspaceId();
+  if (activeWorkspaceId && activeWorkspaceId !== "student") return activeWorkspaceId;
+  const profile = readStoredAuthProfile<AcademyProfile>();
+  if (profile?.account_type === "academy") return profile.id;
+  return profile?.forge_workspace_id || "";
+}
+
+function isLinkedStudent(student: StudentCard) {
+  return student.card_type !== "pending_key" && student.status !== "pending_key" && !student.student_user_id.startsWith("pending-seat-");
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const response = (error as { response?: { data?: { detail?: unknown } } } | null)?.response;
+  const detail = response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail && typeof detail.message === "string") return detail.message;
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 function statusLabel(status: Batch["status"]) {
@@ -155,6 +203,13 @@ export function ArchiveBatchHistory({
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [scheduledAt, setScheduledAt] = useState(() => localDateTimeInputValue());
+  const [assignMaterialType, setAssignMaterialType] = useState<LearningMaterialType>("textbook");
+  const [assignProblemScope, setAssignProblemScope] = useState<LearningProblemScope>("all");
+  const [assignDueAt, setAssignDueAt] = useState("");
+  const [assignMaterialExpiresAt, setAssignMaterialExpiresAt] = useState("");
+  const [assignTimeLimitEnabled, setAssignTimeLimitEnabled] = useState(false);
+  const [assignTimeLimitMinutes, setAssignTimeLimitMinutes] = useState("50");
+  const [assignAllowExport, setAssignAllowExport] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState("");
   const [assignNotice, setAssignNotice] = useState("");
@@ -270,6 +325,13 @@ export function ArchiveBatchHistory({
     setSelectedClassIds([]);
     setSelectedStudentIds([]);
     setScheduledAt(localDateTimeInputValue());
+    setAssignMaterialType("textbook");
+    setAssignProblemScope("all");
+    setAssignDueAt("");
+    setAssignMaterialExpiresAt("");
+    setAssignTimeLimitEnabled(false);
+    setAssignTimeLimitMinutes("50");
+    setAssignAllowExport(false);
   }
 
   function studentIdsForClasses(classIds: string[]) {
@@ -296,32 +358,75 @@ export function ArchiveBatchHistory({
     setSelectedStudentIds((current) => (current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]));
   }
 
+  function selectedDirectStudentUserIds() {
+    const classStudentIds = studentIdsForClasses(selectedClassIds);
+    const studentsByMembershipId = new Map<string, StudentCard>();
+    classes.forEach((classRow) => {
+      classRow.students.forEach((student) => {
+        studentsByMembershipId.set(student.id, student);
+      });
+    });
+    const directUserIds = new Set<string>();
+    selectedStudentIds
+      .filter((studentId) => !classStudentIds.has(studentId))
+      .forEach((studentId) => {
+        const student = studentsByMembershipId.get(studentId);
+        if (student && isLinkedStudent(student)) directUserIds.add(student.student_user_id);
+      });
+    return Array.from(directUserIds);
+  }
+
+  function assignTimeLimitSeconds() {
+    if (!assignTimeLimitEnabled && assignMaterialType !== "test") return null;
+    const minutes = Number(assignTimeLimitMinutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) return null;
+    return Math.round(minutes * 60);
+  }
+
   async function assignSelectedBatch() {
     if (!assignBatch || assigning) return;
-    if (!selectedClassIds.length && !selectedStudentIds.length) {
+    const academyId = resolveActiveAcademyId();
+    const directStudentUserIds = selectedDirectStudentUserIds();
+    if (!academyId) {
+      setAssignError("현재 활성 학원을 확인하지 못했습니다. 학원 워크스페이스를 선택한 뒤 다시 시도해주세요.");
+      return;
+    }
+    if (!selectedClassIds.length && !directStudentUserIds.length) {
       setAssignError("할당할 클래스 또는 학생을 선택해주세요.");
+      return;
+    }
+    const timeLimitSeconds = assignTimeLimitSeconds();
+    if (assignMaterialType === "test" && !timeLimitSeconds) {
+      setAssignError("시험은 제한 시간을 분 단위로 입력해야 합니다.");
       return;
     }
     setAssigning(true);
     setAssignError("");
     try {
-      const classStudentIds = studentIdsForClasses(selectedClassIds);
-      const directStudentIds = selectedStudentIds.filter((studentId) => !classStudentIds.has(studentId));
-      await createPaperSession({
+      await createLearningAssignment(academyId, {
         title: assignBatch.name,
-        description: "교재 배치 할당: 학생별 오답 및 복습 관리를 위해 생성되었습니다.",
-        source_batch_id: assignBatch.id,
-        session_type: "homework",
-        class_ids: selectedClassIds,
-        student_membership_ids: directStudentIds,
-        scheduled_at: scheduledAt ? `${scheduledAt}:00` : null,
-        status: "scheduled",
-        create_calendar_events: true,
+        description: `${learningMaterialTypeLabel(assignMaterialType)} 배치 할당: 학생 Tena Note의 학원 폴더에 문항별 노트 자료로 배포됩니다.`,
+        source_type: "archive",
+        source_id: assignBatch.id,
+        assignment_type: assignMaterialType,
+        problem_scope: assignProblemScope,
+        allow_export: assignAllowExport,
+        material_expires_at: localDateEndIso(assignMaterialExpiresAt),
+        create_note_material: true,
+        group_ids: selectedClassIds,
+        student_ids: directStudentUserIds,
+        start_at: localDateTimeIso(scheduledAt),
+        due_at: assignMaterialType === "textbook" ? null : localDateEndIso(assignDueAt),
+        time_limit_seconds: timeLimitSeconds,
+        show_answer_policy: assignMaterialType === "test" ? "afterSubmit" : "never",
+        show_solution_policy: assignMaterialType === "test" ? "never" : "afterSubmit",
+        retry_policy: assignMaterialType === "test" ? "none" : "wrongOnly",
+        status: "published",
       });
-      setAssignNotice("클래스/학생에게 할당했습니다. 학생 캘린더에서 문항별 결과 입력이 가능합니다.");
+      setAssignNotice(`${learningMaterialTypeLabel(assignMaterialType)} 자료를 할당했습니다. 학생 Tena Note의 학원 폴더에 문항별 노트가 표시됩니다.`);
       setAssignBatch(null);
-    } catch {
-      setAssignError("배치를 할당하지 못했습니다. 선택한 학생과 배치 문항을 확인해주세요.");
+    } catch (error) {
+      setAssignError(apiErrorMessage(error, "배치를 할당하지 못했습니다. 선택한 학생과 배치 문항을 확인해주세요."));
     } finally {
       setAssigning(false);
     }
@@ -441,10 +546,10 @@ export function ArchiveBatchHistory({
       ) : null}
       {assignBatch ? (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-3xl overflow-hidden rounded-[14px] bg-white text-zinc-950 shadow-[0_24px_80px_rgba(15,15,15,0.22)]">
+          <div className="w-full max-w-4xl overflow-hidden rounded-[14px] bg-white text-zinc-950 shadow-[0_24px_80px_rgba(15,15,15,0.22)]">
             <div className="flex items-start justify-between gap-4 p-5">
               <div>
-                <h2 className="text-xl font-black text-zinc-950">클래스/학생에게 할당</h2>
+                <h2 className="text-xl font-black text-zinc-950">자료 할당 설정</h2>
                 <p className="mt-1 text-sm text-zinc-500">{assignBatch.name} · {assignBatch.problem_count}문항</p>
               </div>
               <button
@@ -458,7 +563,7 @@ export function ArchiveBatchHistory({
             </div>
             <div className="max-h-[70vh] overflow-y-auto p-5">
               <label className="block text-sm font-bold text-zinc-700">
-                할당 날짜
+                시작 일시
                 <input
                   type="datetime-local"
                   value={scheduledAt}
@@ -466,6 +571,116 @@ export function ArchiveBatchHistory({
                   className="mt-2 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
                 />
               </label>
+
+              <div className="mt-5 space-y-4 rounded-[12px] bg-zinc-50 p-4">
+                <div>
+                  <div className="text-sm font-black text-zinc-950">할당 자료 타입</div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {learningMaterialTypes.map((type) => (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => {
+                          setAssignMaterialType(type.value);
+                          if (type.value === "test") setAssignTimeLimitEnabled(true);
+                        }}
+                        className={cn(
+                          "rounded-[8px] border p-3 text-left transition",
+                          assignMaterialType === type.value
+                            ? "border-black bg-black text-white"
+                            : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300 hover:bg-zinc-100"
+                        )}
+                      >
+                        <span className="block text-sm font-black">{type.label}</span>
+                        <span className={cn("mt-2 block text-xs leading-5", assignMaterialType === type.value ? "text-zinc-200" : "text-zinc-500")}>
+                          {type.description}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-black text-zinc-950">제공 문항</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 rounded-[8px] bg-zinc-100 p-1">
+                      {[
+                        { value: "all", label: "전체 문항" },
+                        { value: "wrong_only", label: "오답만" },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setAssignProblemScope(option.value as LearningProblemScope)}
+                          className={cn(
+                            "h-10 rounded-[7px] text-sm font-bold transition",
+                            assignProblemScope === option.value
+                              ? "bg-black text-white"
+                              : "bg-transparent text-zinc-600 hover:bg-white hover:text-zinc-950"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="block text-sm font-bold text-zinc-700">
+                    열람 기한
+                    <input
+                      type="date"
+                      value={assignMaterialExpiresAt}
+                      onChange={(event) => setAssignMaterialExpiresAt(event.target.value)}
+                      className="mt-2 h-10 w-full rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10"
+                    />
+                  </label>
+                </div>
+
+                {assignMaterialType !== "textbook" ? (
+                  <label className="block text-sm font-bold text-zinc-700">
+                    {assignMaterialType === "test" ? "시험 제출 기한" : "과제 기한"}
+                    <input
+                      type="date"
+                      value={assignDueAt}
+                      onChange={(event) => setAssignDueAt(event.target.value)}
+                      className="mt-2 h-10 w-full rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10"
+                    />
+                  </label>
+                ) : null}
+
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
+                  <label className="flex min-h-11 items-center gap-3 rounded-[8px] bg-white px-3 text-sm font-bold text-zinc-800">
+                    <input
+                      type="checkbox"
+                      checked={assignMaterialType === "test" || assignTimeLimitEnabled}
+                      disabled={assignMaterialType === "test"}
+                      onChange={(event) => setAssignTimeLimitEnabled(event.target.checked)}
+                      className="h-4 w-4 accent-black"
+                    />
+                    시간 제한 사용
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={assignTimeLimitMinutes}
+                    onChange={(event) => setAssignTimeLimitMinutes(event.target.value)}
+                    placeholder="분"
+                    disabled={assignMaterialType !== "test" && !assignTimeLimitEnabled}
+                    className="h-11 rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none transition disabled:text-zinc-400 focus:ring-2 focus:ring-black/10"
+                  />
+                </div>
+
+                <label className="flex min-h-11 items-center gap-3 rounded-[8px] bg-white px-3 text-sm font-bold text-zinc-800">
+                  <input
+                    type="checkbox"
+                    checked={assignAllowExport}
+                    onChange={(event) => setAssignAllowExport(event.target.checked)}
+                    className="h-4 w-4 accent-black"
+                  />
+                  학생 자료 내보내기 허용
+                </label>
+              </div>
 
               <div className="mt-5 space-y-3">
                 {classes.map((classRow) => (
@@ -484,20 +699,32 @@ export function ArchiveBatchHistory({
                     </label>
                     {classRow.students.length ? (
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {classRow.students.map((student) => (
-                          <label key={student.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[8px] bg-white px-3 py-2 transition hover:bg-zinc-100">
-                            <span className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-zinc-950">{student.name}</span>
-                              <span className="mt-0.5 block truncate text-xs text-zinc-500">{student.grade_level || "-"} · 오답 {student.unresolved_wrong_count}</span>
-                            </span>
-                            <input
-                              type="checkbox"
-                              checked={selectedClassIds.includes(classRow.id) || selectedStudentIds.includes(student.id)}
-                              onChange={() => toggleStudent(student.id)}
-                              className="h-4 w-4 shrink-0 accent-black"
-                            />
-                          </label>
-                        ))}
+                        {classRow.students.map((student) => {
+                          const linked = isLinkedStudent(student);
+                          return (
+                            <label
+                              key={student.id}
+                              className={cn(
+                                "flex items-center justify-between gap-3 rounded-[8px] bg-white px-3 py-2 transition",
+                                linked ? "cursor-pointer hover:bg-zinc-100" : "cursor-not-allowed opacity-55"
+                              )}
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-zinc-950">{student.name}</span>
+                                <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                                  {linked ? `${student.grade_level || "-"} · 오답 ${student.unresolved_wrong_count}` : "계정 연결 대기 중"}
+                                </span>
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={selectedClassIds.includes(classRow.id) || selectedStudentIds.includes(student.id)}
+                                disabled={!linked}
+                                onChange={() => toggleStudent(student.id)}
+                                className="h-4 w-4 shrink-0 accent-black disabled:accent-zinc-300"
+                              />
+                            </label>
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>
