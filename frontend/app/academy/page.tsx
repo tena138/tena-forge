@@ -1191,7 +1191,19 @@ function academyDateTimeFromMinutes(dateKey: string, minutes: number) {
 
 function academyTimeRangeLabel(startsAt: string, endsAt?: string | null) {
   if (!endsAt) return academyTimeLabel(startsAt);
-  return `${academyTimeLabel(startsAt)} - ${academyTimeLabel(endsAt)}`;
+  return `${academyTimeLabel(startsAt)} ~ ${academyTimeLabel(endsAt)}`;
+}
+
+function academyCompactScheduleLabel(event: ScheduleEvent, className?: string) {
+  const title = event.title || className || "클래스";
+  const timeRange = academyTimeRangeLabel(event.starts_at, event.ends_at);
+  return timeRange ? `${title} ${timeRange}` : title;
+}
+
+function academyScheduleMetaLabel(event: ScheduleEvent, className?: string) {
+  const timeRange = academyTimeRangeLabel(event.starts_at, event.ends_at);
+  if (!className || className === event.title) return timeRange;
+  return `${timeRange} · ${className}`;
 }
 
 function academyTimelineMinutesFromPointer(clientY: number, rect: DOMRect) {
@@ -1866,7 +1878,7 @@ function AcademySchedulePanel() {
                               <p className="min-w-0 flex-1 truncate text-sm font-black text-zinc-950">{event.title}</p>
                               <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600">{academyEventTypeLabel(event.event_type)}</span>
                             </div>
-                            <p className="mt-1 truncate text-xs font-semibold text-zinc-600">{academyTimeRangeLabel(event.starts_at, event.ends_at)} · {classRow?.name || "클래스"}</p>
+                            <p className="mt-1 truncate text-xs font-semibold text-zinc-600">{academyScheduleMetaLabel(event, classRow?.name)}</p>
                           </button>
                         );
                       })}
@@ -1943,8 +1955,7 @@ function AcademySchedulePanel() {
                               >
                                 <div className="flex items-start justify-between gap-1.5">
                                   <div className="min-w-0">
-                                    <p className="truncate text-[10px] font-black text-zinc-950 sm:text-[11px]">{event.title}</p>
-                                    <p className="hidden truncate text-[10px] text-zinc-600 sm:block">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
+                                    <p className="truncate pr-4 text-[10px] font-black text-zinc-950 sm:text-[11px]">{academyCompactScheduleLabel(event, classRow?.name)}</p>
                                   </div>
                                   <button
                                     type="button"
@@ -1978,8 +1989,7 @@ function AcademySchedulePanel() {
                     const classRow = classById.get(event.class_id);
                     return (
                       <div key={event.id} className="rounded-[8px] bg-zinc-100 px-3 py-2 text-sm">
-                        <p className="truncate font-black text-zinc-950">{event.title}</p>
-                        <p className="mt-1 truncate text-xs font-semibold text-zinc-600">{academyTimeLabel(event.starts_at)} · {classRow?.name || "클래스"}</p>
+                        <p className="truncate font-black text-zinc-950">{academyCompactScheduleLabel(event, classRow?.name)}</p>
                       </div>
                     );
                   })}
