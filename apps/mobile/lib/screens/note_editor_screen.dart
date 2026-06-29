@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter/rendering.dart';
@@ -15,15 +16,38 @@ import '../models/note_models.dart';
 import '../state/note_library_state.dart';
 import '../state/student_app_state.dart';
 
-class NoteEditorScreen extends StatelessWidget {
+class NoteEditorScreen extends StatefulWidget {
   const NoteEditorScreen({required this.documentId, super.key});
 
   final String documentId;
 
   @override
+  State<NoteEditorScreen> createState() => _NoteEditorScreenState();
+}
+
+class _NoteEditorScreenState extends State<NoteEditorScreen> {
+  final GlobalKey<_CanvasStageState> _canvasStageKey =
+      GlobalKey<_CanvasStageState>();
+  final ValueNotifier<int> _printedPageIndex = ValueNotifier<int>(0);
+
+  @override
+  void didUpdateWidget(covariant NoteEditorScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.documentId != widget.documentId) {
+      _printedPageIndex.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _printedPageIndex.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = context.watch<NoteLibraryState>();
-    final document = state.documentById(documentId);
+    final document = state.documentById(widget.documentId);
     if (document == null) {
       return Scaffold(
         backgroundColor: AppColors.bg,
@@ -45,20 +69,45 @@ class NoteEditorScreen extends StatelessWidget {
         bottom: false,
         child: Column(
           children: [
-            _EditorTopBar(document: document),
+            _EditorTopBar(
+              document: document,
+              printedPageIndex: _printedPageIndex,
+              onPrintedPageJump: _jumpToPrintedPage,
+            ),
             _EditorToolBar(documentId: document.id),
-            Expanded(child: _CanvasStage(documentId: document.id)),
+            Expanded(
+              child: _CanvasStage(
+                key: _canvasStageKey,
+                documentId: document.id,
+                onPrintedPageChanged: _handlePrintedPageChanged,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+
+  void _handlePrintedPageChanged(int index) {
+    if (_printedPageIndex.value == index) return;
+    _printedPageIndex.value = index;
+  }
+
+  void _jumpToPrintedPage(int pageNumber) {
+    _canvasStageKey.currentState?.jumpToPrintedPage(pageNumber);
+  }
 }
 
 class _EditorTopBar extends StatelessWidget {
-  const _EditorTopBar({required this.document});
+  const _EditorTopBar({
+    required this.document,
+    required this.printedPageIndex,
+    required this.onPrintedPageJump,
+  });
 
   final NoteDocument document;
+  final ValueListenable<int> printedPageIndex;
+  final ValueChanged<int> onPrintedPageJump;
 
   @override
   Widget build(BuildContext context) {
@@ -131,6 +180,22 @@ class _EditorTopBar extends StatelessWidget {
                       context.go('/notes/editor/${next.id}');
                     },
                   ),
+                  if (document.printedPages.length > 1) ...[
+                    const SizedBox(width: 6),
+                    ValueListenableBuilder<int>(
+                      valueListenable: printedPageIndex,
+                      builder: (context, index, _) {
+                        final pageCount = document.printedPages.length;
+                        final currentPage = index.clamp(0, pageCount - 1) + 1;
+                        return _PrintedPageJumpControl(
+                          currentPage: currentPage,
+                          pageCount: pageCount,
+                          onJump: onPrintedPageJump,
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                  ],
                   _EditorIconButton(
                     icon: Icons.more_horiz_rounded,
                     tooltip: '더보기',
@@ -316,9 +381,14 @@ class _EditorToolBar extends StatelessWidget {
 }
 
 class _CanvasStage extends StatefulWidget {
-  const _CanvasStage({required this.documentId});
+  const _CanvasStage({
+    required this.documentId,
+    required this.onPrintedPageChanged,
+    super.key,
+  });
 
   final String documentId;
+  final ValueChanged<int> onPrintedPageChanged;
 
   @override
   State<_CanvasStage> createState() => _CanvasStageState();
@@ -350,6 +420,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     if (_printedPageController.hasClients) {
       _printedPageController.jumpToPage(0);
     }
+    widget.onPrintedPageChanged(0);
   }
 
   @override
@@ -412,12 +483,6 @@ class _CanvasStageState extends State<_CanvasStage> {
                     );
                   },
                 ),
-                if (pageCount > 1)
-                  _PrintedPageJumpControl(
-                    currentPage: currentPage + 1,
-                    pageCount: pageCount,
-                    onJump: _jumpToPrintedPage,
-                  ),
               ],
             );
           }
@@ -633,15 +698,21 @@ class _CanvasStageState extends State<_CanvasStage> {
       _draftDocumentId = null;
       _clearTextInput();
     });
+    widget.onPrintedPageChanged(index);
   }
 
-  void _jumpToPrintedPage(int pageNumber) {
+  void jumpToPrintedPage(int pageNumber) {
     final document = context.read<NoteLibraryState>().documentById(
       widget.documentId,
     );
     final pageCount = document?.printedPages.length ?? 0;
     if (pageCount <= 0) return;
     final index = pageNumber.clamp(1, pageCount).toInt() - 1;
+    if (_currentPrintedPageIndex != index) {
+      setState(() => _currentPrintedPageIndex = index);
+      widget.onPrintedPageChanged(index);
+    }
+    if (!_printedPageController.hasClients) return;
     _printedPageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 240),
@@ -1108,67 +1179,61 @@ class _PrintedPageJumpControlState extends State<_PrintedPageJumpControl> {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: 12,
-      right: 18,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.panel.withValues(alpha: 0.94),
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x10000000),
-              blurRadius: 14,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 34,
-                height: 28,
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.go,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onSubmitted: (_) => _submit(),
-                  onTap: () {
-                    _controller.selection = TextSelection(
-                      baseOffset: 0,
-                      extentOffset: _controller.text.length,
-                    );
-                  },
+    return SizedBox(
+      height: 36,
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.panelSoft,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 32,
+                  height: 26,
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    textAlign: TextAlign.center,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.go,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onSubmitted: (_) => _submit(),
+                    onTap: () {
+                      _controller.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _controller.text.length,
+                      );
+                    },
+                    style: const TextStyle(
+                      color: AppColors.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 6),
+                    ),
+                  ),
+                ),
+                Text(
+                  '/ ${widget.pageCount}',
                   style: const TextStyle(
-                    color: AppColors.text,
+                    color: AppColors.muted,
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                     height: 1,
                   ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 7),
-                  ),
                 ),
-              ),
-              Text(
-                '/ ${widget.pageCount}',
-                style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
