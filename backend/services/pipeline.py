@@ -5732,10 +5732,22 @@ def _component_is_text_like(component: dict[str, int], width: int, height: int) 
     return False
 
 
+def _component_is_page_rule_like(component: dict[str, int], width: int, height: int) -> bool:
+    comp_w = max(1, int(component["width"]))
+    comp_h = max(1, int(component["height"]))
+    if comp_h >= height * 0.38 and comp_w <= max(8, int(width * 0.018)):
+        return True
+    if comp_w >= width * 0.42 and comp_h <= max(8, int(height * 0.018)):
+        return True
+    return False
+
+
 def _visual_component_score(component: dict[str, int], seed_box: tuple[int, int, int, int], width: int, height: int) -> float:
     comp_box = _component_box(component)
     comp_w = max(1, component["width"])
     comp_h = max(1, component["height"])
+    if _component_is_page_rule_like(component, width, height):
+        return -1_000_000.0
     box_area = comp_w * comp_h
     seed_area = max(1, (seed_box[2] - seed_box[0]) * (seed_box[3] - seed_box[1]))
     overlap_left = max(comp_box[0], seed_box[0])
@@ -5780,6 +5792,13 @@ def _visual_component_ink_box(
     usable = [component for component in components if component["pixels"] >= min_pixels]
     if not usable:
         usable = components
+    non_rule_components = [
+        component
+        for component in usable
+        if not _component_is_page_rule_like(component, mask.width, mask.height)
+    ]
+    if non_rule_components:
+        usable = non_rule_components
     selected = max(usable, key=lambda component: _visual_component_score(component, seed_box, mask.width, mask.height))
     selected_components = [selected]
     current_box = _component_box(selected)
@@ -5791,6 +5810,8 @@ def _visual_component_ink_box(
             if component in selected_components:
                 continue
             component_box = _component_box(component)
+            if _component_is_page_rule_like(component, mask.width, mask.height):
+                continue
             if _pixel_box_distance(current_box, component_box) > merge_distance:
                 continue
             if _component_is_text_like(component, mask.width, mask.height) and not (

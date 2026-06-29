@@ -117,6 +117,34 @@ class PipelineMergeKeyTests(unittest.TestCase):
         self.assertGreater(crop.height, 120)
         self.assertGreater(crop.width, 140)
 
+    def test_visual_crop_ignores_page_divider_and_footer_when_bbox_is_too_large(self):
+        image = Image.new("RGB", (640, 900), "white")
+        draw = ImageDraw.Draw(image)
+        draw.line((120, 0, 120, 850), fill="black", width=3)
+        draw.rectangle((155, 70, 420, 76), fill="black")
+        draw.rectangle((165, 95, 355, 100), fill="black")
+        draw.line((300, 170, 300, 390), fill="black", width=3)
+        draw.line((240, 335, 500, 335), fill="black", width=3)
+        draw.line((245, 385, 485, 145), fill="black", width=3)
+        draw.line((365, 185, 455, 275), fill="black", width=3)
+        draw.line((350, 205, 350, 335), fill="black", width=1)
+        draw.line((300, 250, 455, 250), fill="black", width=1)
+        draw.rectangle((190, 455, 500, 461), fill="black")
+        draw.rectangle((210, 505, 520, 511), fill="black")
+        draw.rectangle((95, 820, 155, 860), outline="black", width=2)
+
+        crop = _crop_visual_ink_region(
+            image,
+            {"x1": 0.05, "y1": 0.04, "x2": 0.90, "y2": 0.96},
+        )
+
+        self.assertIsNotNone(crop)
+        assert crop is not None
+        self.assertLess(crop.height, 330)
+        self.assertLess(crop.width, 360)
+        self.assertGreater(crop.height, 180)
+        self.assertGreater(crop.width, 220)
+
     def test_quick_answer_candidates_include_middle_boundary_pages(self):
         indexes = _quick_answer_candidate_page_indexes(14)
 
