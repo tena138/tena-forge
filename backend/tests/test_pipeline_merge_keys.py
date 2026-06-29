@@ -27,6 +27,7 @@ from services.pipeline import (  # noqa: E402
     _problem_page_indexes_from_metadata,
     _quick_answer_candidate_page_indexes,
     _select_quick_answer_table_page_indexes,
+    _source_problem_number_label,
     _overlay_quick_answer_solutions,
     _should_run_mixed_answer_recovery,
     _sort_number_keys,
@@ -81,6 +82,11 @@ class PipelineMergeKeyTests(unittest.TestCase):
         )
 
         self.assertEqual(key, (4, None, "", 0))
+
+    def test_source_problem_number_label_hides_internal_zero_padded_key(self):
+        self.assertEqual(_source_problem_number_label("00000006"), "6")
+        self.assertEqual(_source_problem_number_label(6), "6")
+        self.assertEqual(_source_problem_number_label("01"), "01")
 
     def test_quick_answer_candidates_include_middle_boundary_pages(self):
         indexes = _quick_answer_candidate_page_indexes(14)

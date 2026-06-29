@@ -6149,6 +6149,13 @@ def _extracted_problem_number_merge_key(value: Any) -> str:
     return f"~{number}"
 
 
+def _source_problem_number_label(value: Any) -> str:
+    text = str(value if value is not None else "").strip()
+    if re.fullmatch(r"0{3,}\d+", text):
+        return str(int(text))
+    return text
+
+
 def _extracted_problem_merge_key(page_index: int, item: dict[str, Any]) -> tuple[int, str | None, str, int]:
     return (
         page_index,
@@ -6852,11 +6859,12 @@ def save_results(db: Session, batch: Batch, problems: list[dict[str, Any]]) -> N
             academy_id=batch.academy_id,
         )
         page_number = int(item.get("page_index") or 0) + 1
+        source_problem_number = _source_problem_number_label(item.get("problem_number"))
         problem.tags = Tag(
             subject=str(item.get("subject") or "").strip() or None,
             unit=_tag_unit_label(item.get("section_label"), item.get("unit")),
             difficulty=item.get("difficulty"),
-            source=f"{batch_name} / p.{page_number} / {item['problem_number']}번",
+            source=f"{batch_name} / p.{page_number} / {source_problem_number}번",
         )
         db.add(problem)
     ensure_batch_active(batch.id)
