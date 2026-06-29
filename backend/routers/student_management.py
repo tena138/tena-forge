@@ -46,6 +46,7 @@ from models import (
     RoutineMessage,
     SeatAssignmentHistory,
     StudentAcademyMembership,
+    StudentInvite,
     StudentNotification,
     StudentPersonalSet,
     StudentPersonalSetItem,
@@ -967,6 +968,80 @@ def _safe_class_payload(db: Session, academy_id: str, row: AcademyClass, include
     except Exception:
         db.rollback()
         return _fallback_class_payload(row)
+
+
+def _revoke_class_seats_for_delete(db: Session, request: Request, class_row: AcademyClass) -> None:
+    now = _now()
+    actor_id = current_user_id(request)
+    seats = db.scalars(
+        select(AcademySeat)
+        .where(
+            AcademySeat.academy_id == class_row.academy_id,
+            _id_equals(AcademySeat.class_id, class_row.id),
+        )
+        .with_for_update()
+    ).all()
+    if not seats:
+        return
+
+    seat_ids = [seat.id for seat in seats]
+    membership_ids: list[UUID] = []
+    for seat in seats:
+        metadata = dict(seat.invite_metadata or {})
+        metadata["revoked_reason"] = "class_deleted"
+        metadata["revoked_at"] = now.isoformat()
+        seat.invite_metadata = metadata
+        seat.is_active = False
+        seat.released_at = now
+        seat.updated_at = now
+        seat.class_id = None
+        if seat.current_student_membership_id:
+            membership_ids.append(seat.current_student_membership_id)
+        seat.current_student_membership_id = None
+
+    pending_invites = db.scalars(
+        select(StudentInvite).where(
+            StudentInvite.academy_id == class_row.academy_id,
+            StudentInvite.academy_seat_id.in_(seat_ids),
+            StudentInvite.status == "pending",
+        )
+    ).all()
+    for invite in pending_invites:
+        invite.status = "revoked"
+        invite.revoked_at = now
+
+    open_histories = db.scalars(
+        select(SeatAssignmentHistory)
+        .where(
+            SeatAssignmentHistory.academy_seat_id.in_(seat_ids),
+            SeatAssignmentHistory.released_at.is_(None),
+        )
+        .order_by(SeatAssignmentHistory.assigned_at.desc())
+    ).all()
+    for history in open_histories:
+        history.released_at = now
+        history.released_by = actor_id
+        history.reason = "class_deleted"
+
+    for membership_id in set(membership_ids):
+        membership = db.get(StudentAcademyMembership, membership_id)
+        if not membership or membership.academy_id != class_row.academy_id or membership.status != "active":
+            continue
+        other_class_link = db.scalar(
+            select(ClassStudent.id).where(
+                _id_equals(ClassStudent.student_membership_id, membership.id),
+                ClassStudent.class_id != class_row.id,
+                ClassStudent.left_at.is_(None),
+            )
+        )
+        if other_class_link:
+            continue
+        membership.status = "ended"
+        membership.ended_at = now
+        metadata = dict(membership.metadata_json or {})
+        metadata["ended_reason"] = "class_deleted"
+        metadata["ended_at"] = now.isoformat()
+        membership.metadata_json = metadata
 
 
 def _safe_session_summary(db: Session, academy_id: str, session: PaperSession) -> dict | None:
@@ -3169,6 +3244,9 @@ def delete_class(class_id: UUID, request: Request, db: Session = Depends(get_db)
     academy_id = _student_management_academy_id(request, db)
     visible_academy_ids = _student_management_academy_ids(request, db, academy_id)
     row = _get_class(db, academy_id, class_id, visible_academy_ids)
+    _revoke_class_seats_for_delete(db, request, row)
+    db.execute(delete(ClassStudent).where(_id_equals(ClassStudent.class_id, row.id)))
+    db.execute(delete(ClassScheduleEvent).where(_id_equals(ClassScheduleEvent.class_id, row.id)))
     db.delete(row)
     db.commit()
     return Response(status_code=204)
