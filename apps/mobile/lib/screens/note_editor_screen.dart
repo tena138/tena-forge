@@ -318,12 +318,6 @@ class _EditorToolBar extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               children: [
-                _PassiveToolButton(
-                  icon: Icons.add_photo_alternate_outlined,
-                  tooltip: '페이지/이미지 추가',
-                  onPressed: () =>
-                      _showSnack(context, '페이지 또는 이미지를 추가할 수 있습니다.'),
-                ),
                 _ToolButton(
                   tool: NoteTool.pen,
                   icon: Icons.edit_outlined,
