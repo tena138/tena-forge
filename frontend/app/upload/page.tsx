@@ -266,6 +266,10 @@ function fileNameToBatchName(fileName: string) {
   return cleanName || fileName.trim();
 }
 
+function firstBatchNameFile(files: File[], documentTypes: Record<string, PdfDocumentType> = {}) {
+  return files.find((file) => (documentTypes[pdfFileKey(file)] || inferPdfDocumentType(file)) === "problem") || files[0] || null;
+}
+
 function fileSizeMb(file: File | null) {
   return file ? file.size / MB : 0;
 }
@@ -1362,7 +1366,8 @@ export default function UploadPage() {
 
   function handlePdfFilesChange(files: File[]) {
     const firstFile = files[0] || null;
-    const nextAutoBatchName = firstFile ? `${fileNameToBatchName(firstFile.name)}${files.length > 1 ? ` 외 ${files.length - 1}개` : ""}` : "";
+    const batchNameFile = firstBatchNameFile(files, pdfDocumentTypes);
+    const nextAutoBatchName = batchNameFile ? fileNameToBatchName(batchNameFile.name) : "";
     const inferredSubjects = inferSubjectsFromFilename(files.map((file) => file.name).join(" "));
     setPdfFiles(files);
     setPdfDocumentTypes((current) => {
