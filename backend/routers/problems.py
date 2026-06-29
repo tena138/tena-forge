@@ -22,7 +22,7 @@ from schemas import FacetsResponse, Paginated, ProblemListItem, ProblemNavigatio
 from services.math_normalization import normalize_geometry_notation
 from services.batch_colors import batch_color_for_seed, normalize_batch_color
 from services.ownership import current_owner_ids, current_workspace_id
-from services.pipeline import strip_answer_choices, vision_json
+from services.pipeline import _crop_visual_ink_region, _normalized_visual_bbox, strip_answer_choices, vision_json
 from services.private_files import sign_static_url
 from services.problem_visuals import normalize_math_model, normalize_problem_visual_schema
 from services.storage import save_visual_bytes
@@ -199,19 +199,22 @@ Return a JSON array with exactly one object:
 [
   {{
     "problem_number": {problem.problem_number},
-    "problem_text": "<the full visible question stem for this problem only, excluding answer choices>",
+    "problem_text": "<the full visible question stem for this problem only, excluding answer choices; use the existing text if the source crop is unclear>",
     "has_visual": <true if this problem uses a figure, graph, table, diagram, or image>,
+    "visual_bbox": {{"x1": <0-1>, "y1": <0-1>, "x2": <0-1>, "y2": <0-1>}} or null,
     "math_model": {{
       "expressions": {{"f": "<plain expression in x such as x^2-2*x-3>"}},
       "parameters": {{}}
     }} or null,
-    "visual_schema": <editable schema when confident: {{"type": "cartesian_graph", "viewport": {{"xMin": -5, "xMax": 5, "yMin": -5, "yMax": 5, "xStep": 1, "yStep": 1}}, "axes": {{"x": true, "y": true, "grid": true}}, "objects": [{{"kind": "function", "ref": "expressions.f", "domain": [-5, 5]}}]}} or {{"type": "structured_table", "rows": [[{{"text": "x", "header": true}}, {{"text": "1", "header": true}}], ["$f(x)$", "2"]], "headerRows": 1}} or {{"type": "shape_diagram", "viewport": {{"width": 100, "height": 100}}, "objects": [{{"kind": "segment", "x1": 10, "y1": 70, "x2": 90, "y2": 70, "label": "AB"}}, {{"kind": "circle", "cx": 50, "cy": 50, "r": 24}}]}}> or null
+    "visual_schema": <optional editable schema only for an exact analytic cartesian_graph or structured_table, otherwise null>
   }}
 ]
 
 Rules:
 - Treat the existing extraction as the first draft and source image as the authority.
 - Preserve correct parts of the existing extraction; fix OCR errors, missing Korean text, broken LaTeX, wrong math notation, and incorrect has_visual.
+- Always return one object. Never return [] just because the text is already correct or hard to OCR.
+- If this request is only correcting the visual, keep the existing problem_text and return the tight visual_bbox for the figure/graph/diagram/table/image.
 - Use the existing text to anchor the target problem location. Do not drift to neighboring problems.
 - Extract only problem {problem.problem_number}. Do not include neighboring problems.
 - If the problem number is not clearly visible, extract the problem visually closest to the existing target area/number and still return problem_number {problem.problem_number}.
@@ -223,7 +226,8 @@ Rules:
 - When the source image visibly draws a geometric symbol over letters, encode only that drawn symbol as LaTeX, for example an overbar over BC as $\\overline{{BC}}$. Do not infer symbols from ordinary Korean words such as 선분 BC, 변 BC, 직선 BC, 반직선 BC, or 호 BC; preserve those words as plain text unless the symbol itself is drawn.
 - If an expression was already correctly converted in the existing extraction, keep it unless the source image contradicts it.
 - Do not invent answers or solutions.
-- For structured visuals, extract an editable visual_schema only when the visual can be represented confidently. Reconstruct the intended math object from the source image and the corrected problem_text together: the image supplies layout and visible labels, while the problem_text supplies explicit constraints such as coordinates, lengths, equalities, parallel/perpendicular/tangent/angle conditions, domains/ranges, graph equations, table headers/values, and named points or regions. Do not merely trace pixels; rebuild the diagram, table, or graph from the stated mathematical facts plus what is visible. Use cartesian_graph for coordinate-plane function graphs, structured_table for visible tables or matrix-like grids, and shape_diagram for standardized geometry or simple diagrams made from points, segments, lines, circles, ellipses, rectangles, polygons, arcs, angles, and labels. Set visual_schema.source to "visual_and_problem_text" when problem_text constraints shaped the schema, otherwise "visual_only". Use null when the visual is decorative, a photo, ambiguous, or cannot be represented confidently. Do not invent graph equations, table values, labels, measurements, or constraints that are neither visible nor explicitly stated.
+- visual_bbox is the authoritative visual asset. It must tightly enclose only the source image region that should be cropped by black/white ink pixels. Exclude problem text, answer choices, and neighboring problems.
+- Return visual_schema only as a secondary aid when the visual is exactly reproducible from explicit mathematical facts, such as a simple coordinate-plane function graph with its equation/domain stated in the problem text, or a structured table with readable cells. For geometry diagrams, scanned figures, piecewise graphs with open/closed points, dotted guide lines, printed textbook diagrams, hand-drawn diagrams, illustrations, photos, complex art, or anything requiring visual fidelity, set visual_schema to null and rely on the visual_bbox crop. Do not redraw, approximate, or invent diagrams.
 - If a graph visual_schema object references an expression, define that expression in math_model.expressions so later problem edits can update the graph by changing the math model.
 - Return raw JSON only. No markdown."""
 
@@ -651,23 +655,69 @@ def reextract_problem(problem_id: UUID, request: Request, db: Session = Depends(
     candidates = [
         item
         for item in items
-        if str(item.get("problem_text") or "").strip()
+        if isinstance(item, dict)
+        and (
+            str(item.get("problem_text") or "").strip()
+            or item.get("visual_bbox")
+            or item.get("has_visual") is not None
+            or item.get("visual_schema")
+        )
     ]
     if not candidates:
-        raise HTTPException(status_code=502, detail="AI가 이 원본 페이지에서 문항 텍스트를 다시 추출하지 못했습니다.")
+        problem.needs_review = True
+        record_usage_event(db, owner_id, estimate, job_id=problem.source_batch_id)
+        db.commit()
+        db.refresh(problem)
+        return _serialize_problem(problem)
 
     matching = [
         item
         for item in candidates
         if str(item.get("problem_number") or "").strip() == str(problem.problem_number)
     ]
-    selected = max(matching or candidates, key=lambda item: len(str(item.get("problem_text") or "")))
-    cleaned, suspicious = strip_answer_choices(str(selected.get("problem_text") or ""))
-    problem.problem_text = normalize_geometry_notation(cleaned)
-    problem.has_visual = bool(selected.get("has_visual", problem.has_visual))
-    problem.math_model = normalize_math_model(selected.get("math_model")) or problem.math_model
-    problem.visual_schema = normalize_problem_visual_schema(selected.get("visual_schema"))
-    problem.has_visual = bool(problem.has_visual or problem.visual_schema)
+    selected = max(
+        matching or candidates,
+        key=lambda item: (1 if item.get("visual_bbox") else 0, len(str(item.get("problem_text") or ""))),
+    )
+    suspicious = False
+    selected_text = str(selected.get("problem_text") or "").strip()
+    if selected_text:
+        cleaned, suspicious = strip_answer_choices(selected_text)
+        if cleaned.strip():
+            problem.problem_text = normalize_geometry_notation(cleaned)
+
+    if isinstance(selected.get("has_visual"), bool):
+        problem.has_visual = bool(selected.get("has_visual"))
+
+    visual_bbox = _normalized_visual_bbox(selected.get("visual_bbox"))
+    if visual_bbox:
+        with Image.open(io.BytesIO(image_bytes)) as source_image:
+            crop = _crop_visual_ink_region(source_image, visual_bbox)
+            if not crop:
+                left = max(0, min(source_image.width - 1, int(visual_bbox["x1"] * source_image.width)))
+                top = max(0, min(source_image.height - 1, int(visual_bbox["y1"] * source_image.height)))
+                right = max(left + 1, min(source_image.width, int(visual_bbox["x2"] * source_image.width)))
+                bottom = max(top + 1, min(source_image.height, int(visual_bbox["y2"] * source_image.height)))
+                crop = _trim_visual_whitespace(source_image.crop((left, top, right, bottom)))
+            if crop:
+                buffer = io.BytesIO()
+                crop.save(buffer, format="PNG")
+                filename = f"{problem.id}_reextract_visual_{int(time.time())}.png"
+                problem.visual_url = save_visual_bytes(buffer.getvalue(), filename)
+                problem.has_visual = True
+                problem.visual_schema = None
+                problem.math_model = None
+
+    visual_schema = normalize_problem_visual_schema(selected.get("visual_schema"))
+    if visual_schema and not problem.visual_url:
+        problem.visual_schema = visual_schema
+        problem.math_model = normalize_math_model(selected.get("math_model"))
+        problem.has_visual = True
+    elif "visual_schema" in selected and not selected.get("visual_schema") and not visual_bbox:
+        problem.visual_schema = None
+        problem.math_model = None
+
+    problem.has_visual = bool(problem.has_visual or problem.visual_url or problem.visual_schema)
     problem.needs_review = True if suspicious else problem.needs_review
     record_usage_event(db, owner_id, estimate, job_id=problem.source_batch_id)
     db.commit()
