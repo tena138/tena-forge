@@ -1158,6 +1158,7 @@ class _PrintedPageJumpControl extends StatefulWidget {
 class _PrintedPageJumpControlState extends State<_PrintedPageJumpControl> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+  bool _editing = false;
 
   @override
   void initState() {
@@ -1169,7 +1170,7 @@ class _PrintedPageJumpControlState extends State<_PrintedPageJumpControl> {
   @override
   void didUpdateWidget(covariant _PrintedPageJumpControl oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_focusNode.hasFocus) return;
+    if (_editing) return;
     if (oldWidget.currentPage != widget.currentPage ||
         _controller.text != '${widget.currentPage}') {
       _controller.text = '${widget.currentPage}';
@@ -1186,69 +1187,113 @@ class _PrintedPageJumpControlState extends State<_PrintedPageJumpControl> {
 
   @override
   Widget build(BuildContext context) {
+    const pageTextStyle = TextStyle(
+      color: AppColors.text,
+      fontSize: 13,
+      fontWeight: FontWeight.w900,
+      height: 1,
+    );
+    const pageTextStrut = StrutStyle(
+      fontSize: 13,
+      height: 1,
+      forceStrutHeight: true,
+    );
+    final numberWidth = math.max(
+      18.0,
+      widget.pageCount.toString().length * 8.0 + 8.0,
+    );
+
     return SizedBox(
       height: 36,
       child: Center(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.panelSoft,
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 32,
-                  height: 26,
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.go,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onSubmitted: (_) => _submit(),
-                    onTap: () {
-                      _controller.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: _controller.text.length,
-                      );
-                    },
-                    style: const TextStyle(
-                      color: AppColors.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      height: 1,
-                    ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 6),
-                    ),
-                  ),
-                ),
-                Text(
-                  '/ ${widget.pageCount}',
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
-                  ),
-                ),
-              ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: numberWidth,
+              height: 20,
+              child: Center(
+                child: _editing
+                    ? TextField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        textAlign: TextAlign.center,
+                        textAlignVertical: TextAlignVertical.center,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.go,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onSubmitted: (_) => _finishEditing(),
+                        onTap: _selectCurrentValue,
+                        style: pageTextStyle,
+                        strutStyle: pageTextStrut,
+                        cursorHeight: 14,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          isCollapsed: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      )
+                    : GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _beginEditing,
+                        child: Text(
+                          '${widget.currentPage}',
+                          textAlign: TextAlign.center,
+                          strutStyle: pageTextStrut,
+                          style: pageTextStyle,
+                        ),
+                      ),
+              ),
             ),
-          ),
+            const SizedBox(width: 2),
+            Text(
+              '/ ${widget.pageCount}',
+              strutStyle: pageTextStrut,
+              style: pageTextStyle.copyWith(color: AppColors.muted),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  void _beginEditing() {
+    if (_editing) return;
+    setState(() => _editing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focusNode.requestFocus();
+      _selectCurrentValue();
+    });
+  }
+
+  void _selectCurrentValue() {
+    _controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _controller.text.length,
+    );
+  }
+
+  void _finishEditing({bool unfocus = true}) {
+    _submit();
+    if (!mounted) return;
+    if (_editing) {
+      setState(() => _editing = false);
+    }
+    if (unfocus) {
+      _focusNode.unfocus();
+    }
+  }
+
   void _handleFocusChanged() {
-    if (!_focusNode.hasFocus) _submit();
+    if (!_focusNode.hasFocus && _editing) {
+      _finishEditing(unfocus: false);
+    }
   }
 
   void _submit() {
