@@ -735,13 +735,22 @@ function ProblemDetailContent() {
                   저장
                 </Button>
               </div>
-              <textarea
-                aria-label="정답 수정"
-                className="min-h-24 w-full resize-y rounded-[7px] border-0 bg-white p-3 font-mono text-sm leading-7 text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
-                value={draftAnswer}
-                onChange={(event) => setDraftAnswer(event.target.value)}
-                placeholder="정답 데이터 없음"
-              />
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="min-h-28 rounded-[7px] bg-white p-3 text-sm leading-7 text-zinc-950">
+                  {draftAnswer.trim() ? (
+                    <MathText className="tena-math-review text-[15px] leading-8" value={draftAnswer} />
+                  ) : (
+                    <span className="text-zinc-500">정답 데이터 없음</span>
+                  )}
+                </div>
+                <textarea
+                  aria-label="정답 LaTeX 원문 수정"
+                  className="min-h-28 w-full resize-y rounded-[7px] border-0 bg-white p-3 font-mono text-sm leading-7 text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
+                  value={draftAnswer}
+                  onChange={(event) => setDraftAnswer(event.target.value)}
+                  placeholder="LaTeX 원문을 입력하세요."
+                />
+              </div>
             </div>
           </div>
 
