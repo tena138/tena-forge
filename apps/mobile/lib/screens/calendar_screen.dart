@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -32,6 +33,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
+      floatingActionButton: FloatingActionButton.small(
+        tooltip: '학원 키 추가',
+        onPressed: () => context.push('/academies'),
+        child: const Icon(Icons.key_rounded),
+      ),
       body: SafeArea(
         bottom: false,
         child: Padding(
