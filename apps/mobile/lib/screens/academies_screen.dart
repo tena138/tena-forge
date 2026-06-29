@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../app/theme.dart';
 import '../core/api_client.dart';
 import '../models/student_models.dart';
+import '../state/note_library_state.dart';
 import '../state/student_app_state.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/empty_state.dart';
@@ -38,11 +41,46 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
     super.dispose();
   }
 
-  String _cleanKey() => _keyController.text.trim().toUpperCase();
+  String _cleanKey() =>
+      _keyController.text.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
 
   String _errorText(Object error, String fallback) {
-    if (error is ApiException) return error.displayMessage;
-    return fallback;
+    if (error is! ApiException) return fallback;
+    final code = _apiErrorCode(error);
+    return switch (code) {
+      'KEY_NOT_FOUND' => '존재하지 않는 학원 키입니다. 문자와 하이픈을 다시 확인해 주세요.',
+      'KEY_INACTIVE' => '비활성화되었거나 해제된 학원 키입니다. 학원에 새 키를 요청해 주세요.',
+      'KEY_MISSING_CLASS' => '클래스가 배정되지 않은 키입니다. 학원에서 클래스 키를 다시 발급해야 합니다.',
+      'KEY_ALREADY_CLAIMED' => '이미 다른 학생 계정에 연결된 학원 키입니다.',
+      'CLASS_ALREADY_CONNECTED' => '이미 이 클래스가 현재 계정에 연결되어 있습니다.',
+      'STUDENT_PROFILE_REQUIRED' => '학원에서 요구한 필수 학생 정보를 입력해 주세요.',
+      _ =>
+        error.statusCode == 404
+            ? '존재하지 않는 학원 키입니다. 문자와 하이픈을 다시 확인해 주세요.'
+            : error.statusCode == 410
+            ? '비활성화되었거나 해제된 학원 키입니다. 학원에 새 키를 요청해 주세요.'
+            : error.statusCode == 409
+            ? '이미 사용되었거나 현재 계정에 등록할 수 없는 학원 키입니다.'
+            : error.statusCode == 422
+            ? '이 키는 지금 학생 앱에 등록할 수 없습니다. 학원에 확인해 주세요.'
+            : error.displayMessage,
+    };
+  }
+
+  String? _apiErrorCode(ApiException error) {
+    try {
+      final decoded = jsonDecode(error.message);
+      if (decoded is Map) {
+        final detail = decoded['detail'];
+        if (detail is Map && detail['code'] is String) {
+          return detail['code'] as String;
+        }
+        if (decoded['code'] is String) return decoded['code'] as String;
+      }
+    } catch (_) {
+      // Use the status-code fallback in _errorText.
+    }
+    return null;
   }
 
   void _showMessage(String message) {
@@ -131,18 +169,38 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
     final missing = _missingRequiredFields();
     if (missing.isNotEmpty) {
       _showMessage(
-        '${missing.map((field) => field.label).join(', ')}을 입력해 주세요.',
+        '${missing.map((field) => field.label).join(', ')} 입력이 필요합니다.',
       );
       return;
     }
+
     setState(() => _claiming = true);
     try {
-      await context.read<StudentAppState>().claimAcademyKey(
-        code,
-        studentProfile: _profilePayload(),
+      final state = context.read<StudentAppState>();
+      final noteLibrary = context.read<NoteLibraryState>();
+      final profilePayload = _profilePayload();
+      await state.claimAcademyKey(code, studentProfile: profilePayload);
+      if (profilePayload.isNotEmpty) {
+        var nextInfo = state.personalInfo;
+        for (final entry in profilePayload.entries) {
+          nextInfo = nextInfo.copyWithValue(entry.key, entry.value);
+        }
+        await state.savePersonalInfo(nextInfo);
+      }
+      noteLibrary.syncAcademyMaterials(
+        academies: state.academies,
+        materials: state.materials,
       );
       if (!mounted) return;
-      _showMessage('학원 키가 등록되었습니다.');
+      _keyController.clear();
+      for (final controller in _profileControllers.values) {
+        controller.clear();
+      }
+      setState(() {
+        _requirements = null;
+        _checkedCode = null;
+      });
+      _showMessage('학원 키가 등록되었습니다. 캘린더에 일정이 반영됩니다.');
       context.go('/calendar');
     } catch (error) {
       if (!mounted) return;
@@ -156,18 +214,19 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<StudentAppState>();
     return AppScaffold(
-      title: '연결된 학원',
-      subtitle: '학원에서 받은 키를 추가하면 해당 클래스 일정, 과제, 자료가 앱에 연결됩니다.',
+      title: '학원 키 추가',
+      subtitle: '학원에서 받은 키를 입력하면 해당 클래스 자리가 이 계정에 연결되고, 일정과 자료가 자동으로 동기화됩니다.',
       actions: [
         IconButton(
-          tooltip: '캘린더',
+          tooltip: '캘린더로 이동',
           onPressed: () => context.go('/calendar'),
           icon: const Icon(Icons.calendar_month_outlined),
         ),
       ],
       children: [
         PremiumCard(
-          title: '학원 키 추가',
+          title: '키 입력',
+          eyebrow: '1단계',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -197,8 +256,8 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.search),
-                label: const Text('키 확인'),
+                    : const Icon(Icons.search_rounded),
+                label: Text(_checking ? '확인 중' : '키 확인'),
               ),
               if (_requirements != null) ...[
                 const SizedBox(height: 14),
@@ -212,49 +271,13 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
             ],
           ),
         ),
-        if (state.academyInvites.isNotEmpty)
-          PremiumCard(
-            title: '받은 앱 초대',
-            child: Column(
-              children: [
-                for (final invite in state.academyInvites) ...[
-                  ListItemCard(
-                    title: invite.academyName,
-                    subtitle: [invite.className, invite.studentName]
-                        .whereType<String>()
-                        .where((value) => value.isNotEmpty)
-                        .join(' · '),
-                    badge: 'pending',
-                    trailing: Wrap(
-                      spacing: 6,
-                      children: [
-                        FilledButton(
-                          onPressed: () {
-                            state.acceptAcademyInvite(invite);
-                          },
-                          child: const Text('수락'),
-                        ),
-                        OutlinedButton(
-                          onPressed: () {
-                            state.declineAcademyInvite(invite);
-                          },
-                          child: const Text('거절'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (invite != state.academyInvites.last)
-                    const SizedBox(height: 10),
-                ],
-              ],
-            ),
-          ),
         PremiumCard(
-          title: '학원 연결',
+          title: '연결된 학원',
+          eyebrow: '현재 계정',
           child: Column(
             children: [
               const ListItemCard(
-                title: 'Personal',
+                title: '개인 공간',
                 subtitle: '개인 캘린더와 개인 노트입니다. 학원에는 공개되지 않습니다.',
                 badge: 'private',
               ),
@@ -271,7 +294,7 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
                           .whereType<String>()
                           .where((value) => value.isNotEmpty)
                           .join(' · '),
-                  badge: 'academy',
+                  badge: 'connected',
                 ),
               ],
             ],
@@ -280,7 +303,7 @@ class _AcademiesScreenState extends State<AcademiesScreen> {
         if (state.academies.isEmpty)
           const EmptyState(
             title: '아직 연결된 학원이 없습니다',
-            body: '학원에서 받은 키를 입력하면 클래스 일정, 과제, 자료가 앱에 표시됩니다.',
+            body: '학원 키를 등록하면 클래스 일정, 과제, 자료 폴더가 Tena Note에 표시됩니다.',
           ),
       ],
     );
@@ -314,30 +337,37 @@ class _AcademyKeyRequirementsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              requirements.academyName,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            const _StepLabel(text: '2단계 · 연결 정보 확인'),
+            const SizedBox(height: 10),
+            _ConnectionSummary(
+              academyName: requirements.academyName,
+              className: requirements.className,
             ),
-            if (requirements.className != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                requirements.className!,
-                style: const TextStyle(color: AppColors.muted),
-              ),
-            ],
             if (fields.isNotEmpty) ...[
               const SizedBox(height: 14),
+              const _StepLabel(text: '3단계 · 학생 정보 확인'),
+              const SizedBox(height: 10),
               for (final field in fields) ...[
                 TextField(
                   controller: controllers[field.key],
+                  keyboardType: field.key.contains('phone')
+                      ? TextInputType.phone
+                      : TextInputType.text,
                   decoration: InputDecoration(
                     labelText: '${field.label}${field.required ? ' *' : ''}',
-                    helperText: field.realName ? '학원이 실명 입력을 요구했습니다.' : null,
+                    helperText: field.realName ? '학원이 실명 입력을 요구한 항목입니다.' : null,
                   ),
                 ),
                 const SizedBox(height: 10),
               ],
+            ] else ...[
+              const SizedBox(height: 12),
+              const Text(
+                '이 학원은 추가 학생 정보를 요구하지 않습니다.',
+                style: TextStyle(color: AppColors.muted),
+              ),
             ],
+            const SizedBox(height: 4),
             FilledButton.icon(
               onPressed: claiming ? null : onClaim,
               icon: claiming
@@ -346,11 +376,76 @@ class _AcademyKeyRequirementsCard extends StatelessWidget {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.check_circle_outline),
-              label: const Text('이 학원 연결하기'),
+                  : const Icon(Icons.check_circle_outline_rounded),
+              label: Text(claiming ? '등록 중' : '등록하고 캘린더로 이동'),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StepLabel extends StatelessWidget {
+  const _StepLabel({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppColors.muted,
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _ConnectionSummary extends StatelessWidget {
+  const _ConnectionSummary({required this.academyName, this.className});
+
+  final String academyName;
+  final String? className;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.school_outlined),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  academyName,
+                  style: const TextStyle(
+                    color: AppColors.text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  className == null || className!.isEmpty
+                      ? '클래스 정보 없음'
+                      : className!,
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
