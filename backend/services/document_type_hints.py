@@ -33,7 +33,9 @@ def normalize_document_type_hint(value: Any) -> str:
         "solution": DOCUMENT_TYPE_SOLUTION,
         "solutions": DOCUMENT_TYPE_SOLUTION,
         "explanation": DOCUMENT_TYPE_SOLUTION,
+        "explanations": DOCUMENT_TYPE_SOLUTION,
         "해설": DOCUMENT_TYPE_SOLUTION,
+        "풀이": DOCUMENT_TYPE_SOLUTION,
         "답안": DOCUMENT_TYPE_SOLUTION,
         "정답": DOCUMENT_TYPE_SOLUTION,
         "mix": DOCUMENT_TYPE_MIXED,
@@ -89,17 +91,17 @@ def document_type_hints_note(hint: str | None, *, doc_kind: str) -> str:
     if normalized == DOCUMENT_TYPE_PROBLEM:
         return (
             "Uploaded document type hint for this page: PROBLEM/BODY material. "
-            "Expect student-facing problem statements. Treat answer keys, worked solutions, and teacher explanations as absent unless they are explicitly visible on this page."
+            "Use this page primarily for student-facing problem extraction. Treat answer keys, worked solutions, and teacher explanations as absent unless they are explicitly visible on this page."
         )
     if normalized == DOCUMENT_TYPE_SOLUTION:
         return (
             "Uploaded document type hint for this page: ANSWER/SOLUTION material. "
-            "Expect final answers, answer tables, or worked solution explanations. Do not reinterpret solution explanations as standalone student problems."
+            "Use this page as answer metadata source: final answers, answer tables, worked solution explanations, and problem-number-to-answer mappings. Do not reinterpret solution explanations as standalone student problems."
         )
     if normalized == DOCUMENT_TYPE_MIXED:
         return (
             "Uploaded document type hint for this page: MIXED material. "
-            "The same PDF may contain both student problems and answers/solutions; classify the visible page content carefully before extracting."
+            "The same PDF may contain both student problems and answers/solutions. Separate student-facing problem extraction from answer metadata recovery before returning results."
         )
     return (
         f"Uploaded document type hint for this page: not provided. Use visible evidence and the declared document kind ({doc_kind}) to classify the page."

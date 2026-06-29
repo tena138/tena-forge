@@ -352,7 +352,7 @@ def _parse_archive_folder_id(raw: str | UUID | None) -> UUID | None:
 def upload_batch(
     request: Request,
     problem_pdf: UploadFile | None = File(default=None),
-    pdf_files: list[UploadFile] | None = File(default=None),
+    pdf_files: list[UploadFile] = File(default=[]),
     solution_pdf: UploadFile | None = File(default=None),
     batch_name: str = Form(...),
     source_type: str = Form(...),

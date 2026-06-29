@@ -170,7 +170,7 @@ function uploadLimitDetail(detail: Record<string, unknown>) {
 
 function uploadValidationDetail(detail: unknown[]) {
   function validationMessage(field: string, message: string) {
-    if (field === "pdf_files" && /valid list/i.test(message)) return "PDF를 다시 선택해 주세요.";
+    if (field === "pdf_files" && /valid list/i.test(message)) return "여러 PDF 업로드 형식을 서버가 받지 못했습니다. 새로고침 후 다시 시도해 주세요.";
     if (/Field required/i.test(message)) return "필수 값이 비어 있습니다.";
     return message || "값을 다시 확인해 주세요.";
   }
