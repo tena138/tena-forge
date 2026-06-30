@@ -1563,8 +1563,7 @@ function LiveLectureContent() {
           />
           <input ref={slidePdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleSlidePdfInput} />
           <div className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="text-sm font-black text-zinc-950">발표자 메모</div>
+            <div className="mb-3 flex items-center justify-end gap-3">
               <div className="flex items-center gap-2 text-[11px] font-black text-zinc-400">
                 {sessionSaving ? <span>저장 중</span> : null}
                 <span>{slidePage}p</span>
@@ -1585,7 +1584,7 @@ function LiveLectureContent() {
                   return next;
                 });
               }}
-              placeholder={`${slidePage}페이지 메모`}
+              placeholder="memo"
               className="min-h-[10rem] w-full resize-none rounded-[8px] bg-zinc-100 p-3 text-sm font-medium leading-6 text-zinc-800 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-black/10"
             />
           </div>
