@@ -112,7 +112,6 @@ class _MonthCalendar extends StatelessWidget {
     final firstVisibleDay = firstDay.subtract(Duration(days: startOffset));
     final today = DateTime.now();
     final monthLabel = DateFormat('MMMM yyyy').format(focusedMonth);
-    final selectedBlocks = _blocksForDay(blocks, selectedDay);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -199,8 +198,6 @@ class _MonthCalendar extends StatelessWidget {
               },
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
-          _SelectedDayAgenda(day: selectedDay, blocks: selectedBlocks),
         ],
       ),
     );
@@ -345,132 +342,6 @@ class _EventBlock extends StatelessWidget {
   }
 }
 
-class _SelectedDayAgenda extends StatelessWidget {
-  const _SelectedDayAgenda({required this.day, required this.blocks});
-
-  final DateTime day;
-  final List<_CalendarBlock> blocks;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 172,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Text(
-                  DateFormat('EEE, MMM d').format(day),
-                  style: const TextStyle(
-                    color: AppColors.text,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${blocks.length} events',
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: blocks.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No schedule blocks',
-                        style: TextStyle(
-                          color: AppColors.muted,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemCount: blocks.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) =>
-                          _AgendaBlock(block: blocks[index]),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AgendaBlock extends StatelessWidget {
-  const _AgendaBlock({required this.block});
-
-  final _CalendarBlock block;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 46),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: block.background,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: block.border),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 76,
-            child: Text(
-              block.timeLabel,
-              style: TextStyle(
-                color: block.foreground,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  block.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: block.foreground,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (block.detailLabel.isNotEmpty)
-                  Text(
-                    block.detailLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: block.foreground.withValues(alpha: 0.72),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MoreBlock extends StatelessWidget {
   const _MoreBlock({required this.count});
 
@@ -497,7 +368,6 @@ class _CalendarBlock {
     required this.border,
     required this.foreground,
     this.endsAt,
-    this.detailLabel = '',
     this.allDay = false,
   });
 
@@ -507,7 +377,6 @@ class _CalendarBlock {
   final Color background;
   final Color border;
   final Color foreground;
-  final String detailLabel;
   final bool allDay;
 
   DateTime get day => startsAt;
@@ -537,7 +406,6 @@ class _CalendarBlock {
               : const Color(0xFF374151),
           border: isClassSchedule ? AppColors.text : const Color(0xFF374151),
           foreground: AppColors.panel,
-          detailLabel: event.className ?? event.eventType,
         ),
       );
     }
@@ -552,7 +420,6 @@ class _CalendarBlock {
           background: AppColors.panelSoft,
           border: AppColors.border,
           foreground: AppColors.text,
-          detailLabel: 'Assignment due',
           allDay: true,
         ),
       );
