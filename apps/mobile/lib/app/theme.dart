@@ -26,6 +26,14 @@ ThemeData buildTenaTheme() {
     colorScheme: scheme,
     scaffoldBackgroundColor: AppColors.bg,
     fontFamily: 'Roboto',
+    fontFamilyFallback: const [
+      'Noto Sans KR',
+      'Noto Sans CJK KR',
+      'Apple SD Gothic Neo',
+      'Malgun Gothic',
+      'Arial Unicode MS',
+      'sans-serif',
+    ],
     appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.bg,
       foregroundColor: AppColors.text,
