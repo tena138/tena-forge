@@ -649,6 +649,8 @@ class CalendarItem {
     required this.endsAt,
     required this.visibility,
     this.academyId,
+    this.academyName,
+    this.classId,
     this.className,
     this.sourceType,
     this.description,
@@ -662,6 +664,8 @@ class CalendarItem {
   final DateTime? endsAt;
   final String visibility;
   final String? academyId;
+  final String? academyName;
+  final String? classId;
   final String? className;
   final String? sourceType;
 
@@ -675,8 +679,120 @@ class CalendarItem {
       endsAt: DateTime.tryParse('${json['ends_at']}'),
       visibility: '${json['visibility'] ?? 'personal_private'}',
       academyId: json['academy_id']?.toString(),
+      academyName: json['academy_name']?.toString(),
+      classId: json['class_id']?.toString(),
       className: json['class_name']?.toString(),
       sourceType: json['source_type']?.toString(),
+    );
+  }
+}
+
+class ClassSchedulePreview {
+  const ClassSchedulePreview({
+    required this.event,
+    required this.source,
+    required this.lessonPlan,
+    this.notes = '',
+    this.pageNotes = const {},
+    this.updatedAt,
+  });
+
+  final ClassSchedulePreviewEvent event;
+  final String source;
+  final List<ClassScheduleLessonPlanItem> lessonPlan;
+  final String notes;
+  final Map<String, String> pageNotes;
+  final DateTime? updatedAt;
+
+  factory ClassSchedulePreview.fromJson(Map<String, dynamic> json) {
+    final lecture = Map<String, dynamic>.from(
+      json['lecture'] as Map? ?? const {},
+    );
+    return ClassSchedulePreview(
+      event: ClassSchedulePreviewEvent.fromJson(
+        Map<String, dynamic>.from(json['event'] as Map? ?? const {}),
+      ),
+      source: json['source']?.toString() ?? 'empty',
+      notes: lecture['notes']?.toString() ?? '',
+      pageNotes: (lecture['page_notes'] as Map? ?? const {}).map(
+        (key, value) => MapEntry(key.toString(), value.toString()),
+      ),
+      lessonPlan: (lecture['lesson_plan'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => ClassScheduleLessonPlanItem.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(growable: false),
+      updatedAt: DateTime.tryParse('${lecture['updated_at'] ?? ''}'),
+    );
+  }
+}
+
+class ClassSchedulePreviewEvent {
+  const ClassSchedulePreviewEvent({
+    required this.id,
+    required this.title,
+    required this.startsAt,
+    this.endsAt,
+    this.description,
+    this.academyId,
+    this.academyName,
+    this.classId,
+    this.className,
+  });
+
+  final String id;
+  final String title;
+  final String? description;
+  final DateTime startsAt;
+  final DateTime? endsAt;
+  final String? academyId;
+  final String? academyName;
+  final String? classId;
+  final String? className;
+
+  factory ClassSchedulePreviewEvent.fromJson(Map<String, dynamic> json) {
+    return ClassSchedulePreviewEvent(
+      id: '${json['id'] ?? ''}',
+      title: '${json['title'] ?? 'Class'}',
+      description: json['description']?.toString(),
+      startsAt: DateTime.tryParse('${json['starts_at']}') ?? DateTime.now(),
+      endsAt: DateTime.tryParse('${json['ends_at'] ?? ''}'),
+      academyId: json['academy_id']?.toString(),
+      academyName: json['academy_name']?.toString(),
+      classId: json['class_id']?.toString(),
+      className: json['class_name']?.toString(),
+    );
+  }
+}
+
+class ClassScheduleLessonPlanItem {
+  const ClassScheduleLessonPlanItem({
+    required this.id,
+    required this.title,
+    required this.kind,
+    required this.startMinute,
+    required this.durationMinutes,
+    this.paperSessionId,
+  });
+
+  final String id;
+  final String title;
+  final String kind;
+  final int startMinute;
+  final int durationMinutes;
+  final String? paperSessionId;
+
+  factory ClassScheduleLessonPlanItem.fromJson(Map<String, dynamic> json) {
+    return ClassScheduleLessonPlanItem(
+      id: '${json['id'] ?? ''}',
+      title: '${json['title'] ?? ''}',
+      kind: json['kind']?.toString() ?? 'lesson',
+      startMinute: (json['start_minute'] as num?)?.toInt() ?? 0,
+      durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 1,
+      paperSessionId: json['paper_session_id']?.toString(),
     );
   }
 }

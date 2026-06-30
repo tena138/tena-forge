@@ -364,4 +364,13 @@ class StudentRepository {
       rethrow;
     }
   }
+
+  Future<ClassSchedulePreview> getClassSchedulePreview(String eventId) {
+    final encoded = Uri.encodeComponent(eventId.trim());
+    return apiClient.get<ClassSchedulePreview>(
+      '/api/student/calendar/class-events/$encoded/preview',
+      (json) =>
+          ClassSchedulePreview.fromJson(Map<String, dynamic>.from(json as Map)),
+    );
+  }
 }

@@ -287,4 +287,8 @@ class StudentAppState extends ChangeNotifier {
   Future<String> extractNoteSelectionText(String imageBase64) {
     return repository.extractNoteSelectionText(imageBase64);
   }
+
+  Future<ClassSchedulePreview> loadClassSchedulePreview(String eventId) {
+    return repository.getClassSchedulePreview(eventId);
+  }
 }

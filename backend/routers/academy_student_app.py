@@ -91,6 +91,9 @@ from services.profile_names import normalize_profile_name, valid_profile_name
 
 router = APIRouter(prefix="/api", tags=["academy-student-app"])
 
+LIVE_LECTURE_EVENT_METADATA_KEY = "live_lecture"
+LIVE_LECTURE_CLASS_DEFAULTS_METADATA_KEY = "live_lecture_class_defaults"
+
 
 class SeatInviteRecipient(BaseModel):
     name: str | None = None
@@ -540,6 +543,116 @@ def _class_schedule_calendar_payload(event: ClassScheduleEvent, class_names: dic
         "class_id": str(event.class_id),
         "class_name": class_name,
         "source_type": "forge_class_schedule",
+    }
+
+
+def _class_schedule_duration_minutes(event: ClassScheduleEvent) -> int:
+    ends_at = event.ends_at or event.starts_at + timedelta(minutes=60)
+    return max(1, int((ends_at - event.starts_at).total_seconds() // 60) or 1)
+
+
+def _clean_live_preview_notes(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).replace("\r\n", "\n").replace("\r", "\n")[:10000].strip()
+
+
+def _clean_live_preview_page_notes(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, str] = {}
+    for raw_page, raw_note in value.items():
+        try:
+            page = int(raw_page)
+        except (TypeError, ValueError):
+            continue
+        if page < 1 or page > 10000:
+            continue
+        note = _clean_live_preview_notes(raw_note)
+        if note:
+            cleaned[str(page)] = note
+    return cleaned
+
+
+def _clean_live_preview_lesson_plan(value: Any, event: ClassScheduleEvent) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    total_minutes = _class_schedule_duration_minutes(event)
+    items: list[dict[str, Any]] = []
+    for raw in value[:80]:
+        if not isinstance(raw, dict):
+            continue
+        title = str(raw.get("title") or "").strip()[:120]
+        if not title:
+            continue
+        kind = str(raw.get("kind") or "lesson").strip().lower()
+        if kind not in {"lesson", "break", "test"}:
+            kind = "lesson"
+        try:
+            start_minute = int(raw.get("start_minute"))
+            duration_minutes = int(raw.get("duration_minutes"))
+        except (TypeError, ValueError):
+            continue
+        if start_minute < 0 or duration_minutes < 1 or start_minute + duration_minutes > total_minutes:
+            continue
+        items.append(
+            {
+                "id": str(raw.get("id") or f"{start_minute}-{len(items)}")[:80],
+                "title": title,
+                "kind": kind,
+                "start_minute": start_minute,
+                "duration_minutes": duration_minutes,
+                "paper_session_id": str(raw.get("paper_session_id")) if raw.get("paper_session_id") else None,
+            }
+        )
+    return sorted(items, key=lambda item: (item["start_minute"], item["title"]))
+
+
+def _class_live_default_preview(db: Session, academy_id: str, class_id: UUID) -> dict[str, Any]:
+    subscription = ensure_academy_subscription(db, academy_id)
+    metadata = subscription.billing_metadata if isinstance(subscription.billing_metadata, dict) else {}
+    defaults = metadata.get(LIVE_LECTURE_CLASS_DEFAULTS_METADATA_KEY)
+    if not isinstance(defaults, dict):
+        return {}
+    value = defaults.get(str(class_id))
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _student_class_schedule_preview_payload(
+    db: Session,
+    event: ClassScheduleEvent,
+    class_row: AcademyClass,
+) -> dict[str, Any]:
+    event_metadata = event.metadata_json if isinstance(event.metadata_json, dict) else {}
+    event_live = event_metadata.get(LIVE_LECTURE_EVENT_METADATA_KEY)
+    event_live = dict(event_live) if isinstance(event_live, dict) else {}
+    class_default = _class_live_default_preview(db, event.academy_id, event.class_id)
+    source = "event" if event_live else "class_default" if class_default else "empty"
+    lesson_plan_source = event_live.get("lesson_plan")
+    if not isinstance(lesson_plan_source, list):
+        lesson_plan_source = class_default.get("lesson_plan")
+    notes = event_live.get("notes") if isinstance(event_live.get("notes"), str) else class_default.get("notes")
+    page_notes = event_live.get("page_notes") if isinstance(event_live.get("page_notes"), dict) else class_default.get("page_notes")
+    updated_at = event_live.get("updated_at") if isinstance(event_live.get("updated_at"), str) else class_default.get("updated_at")
+    return {
+        "event": {
+            "id": str(event.id),
+            "academy_id": event.academy_id,
+            "academy_name": get_academy_name(db, event.academy_id),
+            "class_id": str(event.class_id),
+            "class_name": class_row.name,
+            "title": event.title,
+            "description": event.description,
+            "starts_at": event.starts_at.isoformat(),
+            "ends_at": event.ends_at.isoformat() if event.ends_at else None,
+        },
+        "source": source,
+        "lecture": {
+            "notes": _clean_live_preview_notes(notes),
+            "page_notes": _clean_live_preview_page_notes(page_notes),
+            "lesson_plan": _clean_live_preview_lesson_plan(lesson_plan_source, event),
+            "updated_at": updated_at,
+        },
     }
 
 
@@ -1425,6 +1538,29 @@ def student_calendar(request: Request, db: Session = Depends(get_db)):
         "events": event_payloads,
         "assignment_due_dates": assignment_due_dates,
     }
+
+
+@router.get("/student/calendar/class-events/{event_id}/preview")
+def student_class_schedule_preview(event_id: UUID, request: Request, db: Session = Depends(get_db)):
+    student_id = current_owner_id(request)
+    event = db.get(ClassScheduleEvent, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Class event not found.")
+
+    memberships = [
+        membership
+        for membership in student_memberships(db, student_id)
+        if membership.academy_id == event.academy_id
+    ]
+    class_ids = set(_student_class_ids(db, memberships))
+    if event.class_id not in class_ids:
+        raise HTTPException(status_code=404, detail="Class event not found.")
+
+    class_row = db.get(AcademyClass, event.class_id)
+    if not class_row or class_row.academy_id != event.academy_id:
+        raise HTTPException(status_code=404, detail="Class not found.")
+
+    return _student_class_schedule_preview_payload(db, event, class_row)
 
 
 @router.post("/student/notes/extract-text", response_model=NoteTextExtractionResponse)
