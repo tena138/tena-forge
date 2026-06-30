@@ -16,7 +16,6 @@ import {
   ScreenShareOff,
   Square,
   TrendingUp,
-  UsersRound,
   Video,
 } from "lucide-react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
@@ -31,7 +30,7 @@ import {
 } from "@/lib/auth-api";
 import { assetUrl } from "@/lib/api";
 import { formatLocalTime } from "@/lib/datetime";
-import { getClassDetail, type ClassCard, type PaperSessionSummary, type StudentCard } from "@/lib/studentManagement";
+import { getClassDetail, type ClassCard, type StudentCard } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 type RecordingMode = "audio" | "video";
@@ -542,27 +541,9 @@ function ShareOnlyView({ eventId, classId }: { eventId: string; classId: string 
   );
 }
 
-function compactDate(value?: string | null) {
-  if (!value) return "";
-  const date = parseDate(value);
-  if (!date) return "";
-  return date.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
-}
-
 function scoreText(value?: number | null) {
   if (value == null || !Number.isFinite(value)) return "-";
   return `${Math.round(value)}점`;
-}
-
-function sessionTypeText(value?: string | null) {
-  if (value === "homework") return "과제";
-  if (value === "test" || value === "exam") return "테스트";
-  if (value === "review") return "복습";
-  return "기록";
-}
-
-function sessionDateText(session: PaperSessionSummary) {
-  return compactDate(session.due_at || session.scheduled_at || session.updated_at || session.created_at);
 }
 
 function topRecentScoreStudents(students: StudentCard[]) {
@@ -608,7 +589,6 @@ function ClassLearningSnapshot({ classId }: { classId: string }) {
     };
   }, [classId]);
 
-  const recentSessions = useMemo(() => (classDetail?.paper_sessions || []).slice(0, 3), [classDetail?.paper_sessions]);
   const scoreStudents = useMemo(() => topRecentScoreStudents(classDetail?.students || []), [classDetail?.students]);
   const scoredStudentCount = (classDetail?.students || []).filter((student) => typeof student.recent_score === "number").length;
 
@@ -644,28 +624,6 @@ function ClassLearningSnapshot({ classId }: { classId: string }) {
             <div className="rounded-[8px] bg-zinc-50 p-2">
               <p className="text-[11px] font-black text-zinc-500">점수 입력</p>
               <p className="mt-1 text-base font-black text-zinc-950">{scoredStudentCount}</p>
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-black text-zinc-700">
-              <UsersRound className="h-3.5 w-3.5" />
-              최근 과제/테스트
-            </div>
-            <div className="space-y-1.5">
-              {recentSessions.length ? recentSessions.map((session) => (
-                <div key={session.id} className="rounded-[8px] bg-zinc-50 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="min-w-0 truncate text-xs font-black text-zinc-950">{session.title}</p>
-                    <span className="shrink-0 text-[11px] font-black text-zinc-500">{scoreText(session.average_score)}</span>
-                  </div>
-                  <p className="mt-1 text-[11px] font-bold text-zinc-500">
-                    {sessionTypeText(session.session_type)} · {session.graded_count}/{session.assigned_count} 채점{sessionDateText(session) ? ` · ${sessionDateText(session)}` : ""}
-                  </p>
-                </div>
-              )) : (
-                <div className="rounded-[8px] bg-zinc-50 px-3 py-3 text-xs font-bold text-zinc-500">최근 과제나 테스트 기록이 없습니다.</div>
-              )}
             </div>
           </div>
 
