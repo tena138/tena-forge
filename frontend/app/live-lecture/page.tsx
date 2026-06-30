@@ -342,10 +342,10 @@ function LectureTimeline({
 
   return (
     <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-black text-zinc-950">수업 계획</p>
-          <p className="mt-0.5 text-xs font-bold text-zinc-500">타임라인에 쉬는 시간, 교시, 테스트를 배치합니다.</p>
+          <p className="mt-0.5 text-xs font-bold text-zinc-500">위에서 아래로 시간이 흐릅니다.</p>
         </div>
         <button
           type="button"
@@ -356,11 +356,11 @@ function LectureTimeline({
           계획 추가
         </button>
       </div>
-      <div className="relative h-28 overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
-        <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-zinc-300" />
+      <div className="relative h-[28rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
+        <div className="absolute bottom-5 left-5 top-5 w-px bg-zinc-300" />
         {timelineItems.map((item) => {
-          const left = (item.start_minute / lectureDurationMinutes) * 100;
-          const width = Math.max(4, (item.duration_minutes / lectureDurationMinutes) * 100);
+          const top = (item.start_minute / lectureDurationMinutes) * 100;
+          const height = Math.max(6, (item.duration_minutes / lectureDurationMinutes) * 100);
           const Icon = LESSON_KIND_ICONS[item.kind] || BookOpen;
           return (
             <button
@@ -368,30 +368,32 @@ function LectureTimeline({
               type="button"
               onClick={() => (item.kind === "test" ? onOpenTest(item) : onEdit(item))}
               className={cn(
-                "absolute top-3 z-10 flex h-10 items-center gap-1.5 rounded-[7px] px-2 text-left text-[11px] font-black shadow-sm ring-1 transition hover:brightness-95",
+                "absolute left-10 right-3 z-10 flex min-h-10 items-start gap-2 overflow-hidden rounded-[7px] px-2.5 py-2 text-left text-[11px] font-black shadow-sm ring-1 transition hover:brightness-95",
                 LESSON_KIND_STYLES[item.kind]
               )}
-              style={{ left: `${left}%`, width: `${width}%`, minWidth: 72 }}
+              style={{ top: `${top}%`, height: `${height}%` }}
               title={`${item.title} · ${planTimeRangeText(item)}`}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0 truncate">{item.title}</span>
+              <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0">
+                <span className="block truncate">{item.title}</span>
+                <span className="mt-0.5 block text-[10px] opacity-70">{planTimeRangeText(item)}</span>
+              </span>
             </button>
           );
         })}
         {ticks.map((minute) => {
-          const left = (minute / lectureDurationMinutes) * 100;
-          const labelAlign = minute === 0 ? "translate-x-0" : minute === lectureDurationMinutes ? "-translate-x-full" : "-translate-x-1/2";
+          const top = (minute / lectureDurationMinutes) * 100;
           return (
-            <div key={minute} className="absolute top-0 z-10 h-full" style={{ left: `${left}%` }}>
-              <span className="absolute left-0 top-1/2 h-3 -translate-y-1/2 border-l border-zinc-400/70" />
-              <span className={cn("absolute bottom-3 whitespace-nowrap text-[10px] font-black text-zinc-600", labelAlign)}>{minute}분</span>
+            <div key={minute} className="absolute left-0 right-0 z-0" style={{ top: `${top}%` }}>
+              <span className="absolute left-5 top-0 h-px w-3 bg-zinc-400/70" />
+              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-black text-zinc-600">{minute}분</span>
             </div>
           );
         })}
         <div
-          className="absolute bottom-3 top-3 z-20 w-[3px] -translate-x-1/2 rounded-full bg-black shadow-[0_0_0_4px_rgba(0,0,0,0.08)] transition-[left] duration-700"
-          style={{ left: `${progressPercent}%` }}
+          className="absolute left-3 right-3 z-20 h-[3px] -translate-y-1/2 rounded-full bg-black shadow-[0_0_0_4px_rgba(0,0,0,0.08)] transition-[top] duration-700"
+          style={{ top: `${progressPercent}%` }}
           aria-hidden="true"
         />
       </div>
@@ -400,11 +402,11 @@ function LectureTimeline({
         <span>{lectureDurationMinutes}분</span>
         <span>{timeText(endsAt)}</span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-col gap-2">
         {timelineItems.length ? timelineItems.map((item) => {
           const Icon = LESSON_KIND_ICONS[item.kind] || BookOpen;
           return (
-            <div key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-[8px] bg-zinc-50 px-2.5 py-2 text-xs font-bold text-zinc-700 ring-1 ring-black/5">
+            <div key={item.id} className="flex max-w-full items-center gap-2 rounded-[8px] bg-zinc-50 px-2.5 py-2 text-xs font-bold text-zinc-700 ring-1 ring-black/5">
               <Icon className="h-3.5 w-3.5 shrink-0" />
               <button type="button" onClick={() => onEdit(item)} className="min-w-0 truncate text-left hover:text-black">
                 <span className="font-black text-zinc-950">{item.title}</span>
@@ -1516,20 +1518,6 @@ function LiveLectureContent() {
 
   return (
     <div className="space-y-4">
-      <LectureTimeline
-        event={activeEvent}
-        now={now}
-        lessonPlan={lessonPlan}
-        saving={lessonPlanSaving}
-        onAdd={openNewLessonPlanDraft}
-        onEdit={(item) => {
-          setLessonPlanError("");
-          setLessonPlanDraft(draftFromLessonPlanItem(item));
-        }}
-        onDelete={deleteLessonPlanItem}
-        onOpenTest={openTestResult}
-      />
-
       {(!sessionLoaded || sessionSaving || sessionNotice) && !shareOnly ? (
         <section className="flex items-center justify-between rounded-[8px] bg-white px-4 py-2 text-xs font-black text-zinc-600 ring-1 ring-black/5">
           <span>{!sessionLoaded ? "강의 자료를 불러오는 중" : sessionSaving ? "강의 자료 저장 중" : sessionNotice}</span>
@@ -1592,6 +1580,19 @@ function LiveLectureContent() {
 
         <aside className="flex min-w-0 flex-col gap-3">
           <ClassLearningSnapshot classId={classId || activeEvent?.class_id || ""} />
+          <LectureTimeline
+            event={activeEvent}
+            now={now}
+            lessonPlan={lessonPlan}
+            saving={lessonPlanSaving}
+            onAdd={openNewLessonPlanDraft}
+            onEdit={(item) => {
+              setLessonPlanError("");
+              setLessonPlanDraft(draftFromLessonPlanItem(item));
+            }}
+            onDelete={deleteLessonPlanItem}
+            onOpenTest={openTestResult}
+          />
         </aside>
       </section>
 
