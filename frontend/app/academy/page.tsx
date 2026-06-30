@@ -9,11 +9,11 @@ import {
   BookOpenCheck,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   ClipboardCheck,
   LineChart,
   PackageCheck,
   Plus,
-  Radio,
   ScanText,
   ShieldCheck,
   Trash2,
@@ -1495,11 +1495,6 @@ function AcademySchedulePanel() {
   const timeEditorCellRect = timeEditor?.dateKey ? dateCellRefs.current[timeEditor.dateKey]?.getBoundingClientRect() || null : null;
   const pendingSeriesEvent = pendingSeriesTimeEdit ? events.find((event) => event.id === pendingSeriesTimeEdit.eventId) || null : null;
   const pendingSeriesClass = pendingSeriesEvent ? classById.get(pendingSeriesEvent.class_id) : null;
-  const selectedLiveLectureEvent = selectedEvent?.event_type === "class" ? selectedEvent : null;
-  const selectedLiveLectureClass = selectedLiveLectureEvent ? classById.get(selectedLiveLectureEvent.class_id) : null;
-  const selectedLiveLectureHref = selectedLiveLectureEvent
-    ? `/live-lecture?eventId=${encodeURIComponent(selectedLiveLectureEvent.id)}&classId=${encodeURIComponent(selectedLiveLectureEvent.class_id)}`
-    : "";
   const academyStartDateTime = `${form.date}T${form.starts_at || "00:00"}`;
   const academySelectedWeekdays = form.recurrence_weekdays.length ? form.recurrence_weekdays : [defaultWeekdayFromDateTime(academyStartDateTime)];
   const academySelectedMonthDay = Number(form.recurrence_month_day) || defaultMonthDayFromDateTime(academyStartDateTime);
@@ -1804,6 +1799,11 @@ function AcademySchedulePanel() {
     setFormOpen(true);
   }
 
+  function openLiveLecture(event: ScheduleEvent) {
+    if (event.event_type !== "class") return;
+    window.location.assign(`/live-lecture?eventId=${encodeURIComponent(event.id)}&classId=${encodeURIComponent(event.class_id)}`);
+  }
+
   function setAcademyDateCellRef(key: string, node: HTMLElement | null) {
     if (!node) return;
     const rect = node.getBoundingClientRect();
@@ -1954,7 +1954,7 @@ function AcademySchedulePanel() {
                               setTimeEditor(null);
                               setError("");
                             }}
-                            onDoubleClick={() => openTimeEditor(event, academyDateKey(event.starts_at))}
+                            onDoubleClick={() => openLiveLecture(event)}
                             className={`w-full rounded-[10px] bg-white px-3 py-3 text-left transition ${
                               isSelectedEvent ? "ring-1 ring-inset ring-black/30" : "hover:bg-zinc-100"
                             }`}
@@ -2026,7 +2026,7 @@ function AcademySchedulePanel() {
                                   doubleClickEvent.preventDefault();
                                   doubleClickEvent.stopPropagation();
                                   setError("");
-                                  openTimeEditor(event, key);
+                                  openLiveLecture(event);
                                 }}
                                 onKeyDown={(keyEvent) => {
                                   if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
@@ -2036,7 +2036,7 @@ function AcademySchedulePanel() {
                                   setTimeEditor(null);
                                   setError("");
                                 }}
-                                title="더블 클릭으로 시간 조정 · 선택 후 Ctrl+C로 복사"
+                                title="더블 클릭으로 실시간 강의 열기 · 선택 후 Ctrl+C로 복사"
                               >
                                 <div className="flex items-start justify-between gap-1.5">
                                   <div className="min-w-0">
@@ -2212,15 +2212,16 @@ function AcademySchedulePanel() {
         </div>
       ) : null}
 
-      {selectedLiveLectureEvent ? (
-        <Link
-          href={selectedLiveLectureHref}
+      {selectedEvent ? (
+        <button
+          type="button"
+          onClick={() => openTimeEditor(selectedEvent, academyDateKey(selectedEvent.starts_at))}
           className="fixed bottom-[calc(env(safe-area-inset-bottom)+8.5rem)] right-5 z-[80] inline-flex h-10 w-10 items-center justify-center rounded-full bg-black text-white shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition hover:bg-zinc-800 lg:bottom-20 lg:right-6 lg:h-12 lg:w-12"
-          aria-label={`${selectedLiveLectureEvent.title} 실시간 강의 열기`}
-          title={`${selectedLiveLectureClass?.name || "클래스"} 실시간 강의`}
+          aria-label={`${selectedEvent.title} 시간 수정`}
+          title={`${selectedEvent.title} 시간 수정`}
         >
-          <Radio className="h-5 w-5" />
-        </Link>
+          <Clock3 className="h-5 w-5" />
+        </button>
       ) : null}
 
       <button
