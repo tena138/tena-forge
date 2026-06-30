@@ -400,6 +400,12 @@ class _ClassSchedulePreviewDialog extends StatelessWidget {
           future: previewFuture,
           builder: (context, snapshot) {
             final preview = snapshot.data;
+            final previewEvent = preview?.event;
+            final title = previewEvent?.title ?? block.title;
+            final dateTimeLabel = _eventDateTimeLabel(
+              previewEvent?.startsAt ?? block.startsAt,
+              previewEvent?.endsAt ?? block.endsAt,
+            );
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -409,14 +415,30 @@ class _ClassSchedulePreviewDialog extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
+                        flex: 2,
                         child: Text(
-                          preview?.event.title ?? block.title,
+                          title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.text,
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        flex: 3,
+                        child: Text(
+                          dateTimeLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -479,26 +501,7 @@ class _ClassPreviewBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _PreviewPill(
-              icon: Icons.school_outlined,
-              label: event.academyName ?? 'Academy',
-            ),
-            _PreviewPill(
-              icon: Icons.groups_outlined,
-              label: event.className ?? 'Class',
-            ),
-            _PreviewPill(
-              icon: Icons.schedule_rounded,
-              label: _eventTimeLabel(event.startsAt, event.endsAt),
-            ),
-          ],
-        ),
         if ((event.description ?? '').trim().isNotEmpty) ...[
-          const SizedBox(height: 16),
           _PreviewSection(
             title: '수업 설명',
             child: Text(
@@ -506,8 +509,8 @@ class _ClassPreviewBody extends StatelessWidget {
               style: const TextStyle(color: AppColors.text, height: 1.45),
             ),
           ),
+          const SizedBox(height: 16),
         ],
-        const SizedBox(height: 16),
         _PreviewSection(
           title: '수업 타임라인',
           child: preview.lessonPlan.isEmpty
@@ -556,39 +559,6 @@ class _ClassPreviewBody extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _PreviewPill extends StatelessWidget {
-  const _PreviewPill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.panelSoft,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.muted),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.text,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -841,4 +811,9 @@ String _eventTimeLabel(DateTime startsAt, DateTime? endsAt) {
   final start = DateFormat('HH:mm').format(startsAt.toLocal());
   if (endsAt == null) return start;
   return '$start-${DateFormat('HH:mm').format(endsAt.toLocal())}';
+}
+
+String _eventDateTimeLabel(DateTime startsAt, DateTime? endsAt) {
+  final localStart = startsAt.toLocal();
+  return '${DateFormat('yyyy. MM. dd.').format(localStart)} ${_eventTimeLabel(startsAt, endsAt)}';
 }
