@@ -205,6 +205,8 @@ export function ArchiveBatchHistory({
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [scheduledAt, setScheduledAt] = useState(() => localDateTimeInputValue());
   const [assignTestStartMode, setAssignTestStartMode] = useState<"scheduled" | "free">("scheduled");
+  const [assignTestStartWindowBeforeMinutes, setAssignTestStartWindowBeforeMinutes] = useState("10");
+  const [assignTestStartWindowAfterMinutes, setAssignTestStartWindowAfterMinutes] = useState("30");
   const [assignMaterialType, setAssignMaterialType] = useState<LearningMaterialType>("textbook");
   const [assignProblemScope, setAssignProblemScope] = useState<LearningProblemScope>("all");
   const [assignMaterialExpiresAt, setAssignMaterialExpiresAt] = useState("");
@@ -325,6 +327,8 @@ export function ArchiveBatchHistory({
     setSelectedStudentIds([]);
     setScheduledAt(localDateTimeInputValue());
     setAssignTestStartMode("scheduled");
+    setAssignTestStartWindowBeforeMinutes("10");
+    setAssignTestStartWindowAfterMinutes("30");
     setAssignMaterialType("textbook");
     setAssignProblemScope("all");
     setAssignMaterialExpiresAt("");
@@ -389,6 +393,12 @@ export function ArchiveBatchHistory({
     return Math.round(minutes * 60);
   }
 
+  function testStartWindowMinutes(value: string) {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes) || minutes < 0) return null;
+    return Math.round(minutes);
+  }
+
   function assignmentTargetLabel() {
     const selectedClassNames = classes
       .filter((classRow) => selectedClassIds.includes(classRow.id))
@@ -420,6 +430,12 @@ export function ArchiveBatchHistory({
       setAssignError("기한 내 자유 시작 시험은 열람 기한을 입력해야 합니다.");
       return;
     }
+    const startWindowBeforeMinutes = testStartWindowMinutes(assignTestStartWindowBeforeMinutes);
+    const startWindowAfterMinutes = testStartWindowMinutes(assignTestStartWindowAfterMinutes);
+    if (assignMaterialType === "test" && assignTestStartMode === "scheduled" && (startWindowBeforeMinutes === null || startWindowAfterMinutes === null)) {
+      setAssignError("시험 시작 허용 구간은 0 이상의 분 단위로 입력해야 합니다.");
+      return;
+    }
     const materialExpiresAt = localDateEndIso(assignMaterialExpiresAt);
     setAssigning(true);
     setAssignError("");
@@ -437,6 +453,8 @@ export function ArchiveBatchHistory({
         group_ids: selectedClassIds,
         student_ids: directStudentUserIds,
         start_at: assignMaterialType === "test" && assignTestStartMode === "free" ? null : localDateTimeIso(scheduledAt),
+        test_start_window_before_minutes: assignMaterialType === "test" && assignTestStartMode === "scheduled" ? startWindowBeforeMinutes : null,
+        test_start_window_after_minutes: assignMaterialType === "test" && assignTestStartMode === "scheduled" ? startWindowAfterMinutes : null,
         due_at: assignMaterialType === "textbook" ? null : materialExpiresAt,
         time_limit_seconds: timeLimitSeconds,
         show_answer_policy: assignMaterialType === "test" ? "afterSubmit" : "never",
@@ -609,15 +627,49 @@ export function ArchiveBatchHistory({
                     학생이 열람 기한 전까지 원하는 시점에 시험을 시작합니다.
                   </div>
                 ) : (
-                  <label className="block text-sm font-bold text-zinc-700">
-                    시작 일시
-                    <input
-                      type="datetime-local"
-                      value={scheduledAt}
-                      onChange={(event) => setScheduledAt(event.target.value)}
-                      className="mt-2 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
-                    />
-                  </label>
+                  <div className="space-y-3">
+                    <label className="block text-sm font-bold text-zinc-700">
+                      시작 일시
+                      <input
+                        type="datetime-local"
+                        value={scheduledAt}
+                        onChange={(event) => setScheduledAt(event.target.value)}
+                        className="mt-2 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
+                      />
+                    </label>
+                    {assignMaterialType === "test" ? (
+                      <div>
+                        <div className="text-sm font-black text-zinc-950">응시 가능 구간</div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          <label className="block text-xs font-bold text-zinc-600">
+                            시작 전 허용
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={assignTestStartWindowBeforeMinutes}
+                              onChange={(event) => setAssignTestStartWindowBeforeMinutes(event.target.value)}
+                              className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
+                            />
+                          </label>
+                          <label className="block text-xs font-bold text-zinc-600">
+                            시작 후 허용
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={assignTestStartWindowAfterMinutes}
+                              onChange={(event) => setAssignTestStartWindowAfterMinutes(event.target.value)}
+                              className="mt-1 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
+                            />
+                          </label>
+                        </div>
+                        <p className="mt-2 text-xs font-semibold text-zinc-500">
+                          학생은 시작 일시 기준 앞뒤 허용 구간 안에서만 시험을 시작할 수 있습니다.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
               </div>
 

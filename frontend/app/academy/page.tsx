@@ -419,10 +419,13 @@ function AcademyOperationsPanel() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [learningAssignmentTitle, setLearningAssignmentTitle] = useState("");
-  const [learningAssignmentDueAt, setLearningAssignmentDueAt] = useState("");
   const [learningAssignmentDialogOpen, setLearningAssignmentDialogOpen] = useState(false);
   const [learningMaterialType, setLearningMaterialType] = useState<LearningMaterialType>("textbook");
   const [learningProblemScope, setLearningProblemScope] = useState<LearningProblemScope>("all");
+  const [learningScheduledAt, setLearningScheduledAt] = useState(() => localDateTimeInputValue(new Date()));
+  const [learningTestStartMode, setLearningTestStartMode] = useState<"scheduled" | "free">("scheduled");
+  const [learningTestStartWindowBeforeMinutes, setLearningTestStartWindowBeforeMinutes] = useState("10");
+  const [learningTestStartWindowAfterMinutes, setLearningTestStartWindowAfterMinutes] = useState("30");
   const [learningTimeLimitEnabled, setLearningTimeLimitEnabled] = useState(false);
   const [learningTimeLimitMinutes, setLearningTimeLimitMinutes] = useState("50");
   const [learningAllowExport, setLearningAllowExport] = useState(false);
@@ -578,14 +581,21 @@ function AcademyOperationsPanel() {
     setManualMaterialScope(value);
   }
 
-  function assignmentDueAtIso() {
-    if (!learningAssignmentDueAt) return null;
-    return new Date(`${learningAssignmentDueAt}T23:59:00+09:00`).toISOString();
-  }
-
   function materialExpiresAtIso() {
     if (!learningMaterialExpiresAt) return null;
     return new Date(`${learningMaterialExpiresAt}T23:59:00+09:00`).toISOString();
+  }
+
+  function learningStartAtIso() {
+    if (learningMaterialType === "test" && learningTestStartMode === "free") return null;
+    if (!learningScheduledAt) return null;
+    return new Date(learningScheduledAt).toISOString();
+  }
+
+  function testStartWindowMinutes(value: string) {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes) || minutes < 0) return null;
+    return Math.round(minutes);
   }
 
   function learningTimeLimitSeconds() {
@@ -627,6 +637,17 @@ function AcademyOperationsPanel() {
       setError("시험은 제한 시간을 분 단위로 입력해야 합니다.");
       return;
     }
+    if (learningMaterialType === "test" && learningTestStartMode === "free" && !learningMaterialExpiresAt) {
+      setError("기한 내 자유 시작 시험은 열람 기한을 입력해야 합니다.");
+      return;
+    }
+    const startWindowBeforeMinutes = testStartWindowMinutes(learningTestStartWindowBeforeMinutes);
+    const startWindowAfterMinutes = testStartWindowMinutes(learningTestStartWindowAfterMinutes);
+    if (learningMaterialType === "test" && learningTestStartMode === "scheduled" && (startWindowBeforeMinutes === null || startWindowAfterMinutes === null)) {
+      setError("시험 시작 허용 구간은 0 이상의 분 단위로 입력해야 합니다.");
+      return;
+    }
+    const materialExpiresAt = materialExpiresAtIso();
     const created = await createLearningAssignment(academyId, {
       title: learningAssignmentTitle.trim(),
       description: isManualSource
@@ -637,13 +658,16 @@ function AcademyOperationsPanel() {
       assignment_type: learningMaterialType,
       problem_scope: learningProblemScope,
       allow_export: learningAllowExport,
-      material_expires_at: materialExpiresAtIso(),
+      material_expires_at: materialExpiresAt,
       create_note_material: true,
       manual_material_title: isManualSource ? manualMaterialTitle.trim() : null,
       manual_material_scope: isManualSource ? manualMaterialScope.trim() : null,
       group_ids: selectedGroupIds,
       student_ids: selectedStudentIds,
-      due_at: learningMaterialType === "textbook" ? null : assignmentDueAtIso(),
+      start_at: learningStartAtIso(),
+      test_start_window_before_minutes: learningMaterialType === "test" && learningTestStartMode === "scheduled" ? startWindowBeforeMinutes : null,
+      test_start_window_after_minutes: learningMaterialType === "test" && learningTestStartMode === "scheduled" ? startWindowAfterMinutes : null,
+      due_at: learningMaterialType === "textbook" ? null : materialExpiresAt,
       time_limit_seconds: timeLimitSeconds,
       show_answer_policy: learningMaterialType === "test" ? "afterSubmit" : "never",
       show_solution_policy: learningMaterialType === "test" ? "never" : "afterSubmit",
@@ -651,10 +675,13 @@ function AcademyOperationsPanel() {
       status: "published",
     });
     setLearningAssignmentTitle("");
-    setLearningAssignmentDueAt("");
     setLearningAssignmentDialogOpen(false);
     setLearningMaterialType("textbook");
     setLearningProblemScope("all");
+    setLearningScheduledAt(localDateTimeInputValue(new Date()));
+    setLearningTestStartMode("scheduled");
+    setLearningTestStartWindowBeforeMinutes("10");
+    setLearningTestStartWindowAfterMinutes("30");
     setLearningTimeLimitEnabled(false);
     setLearningTimeLimitMinutes("50");
     setLearningAllowExport(false);
@@ -982,6 +1009,77 @@ function AcademyOperationsPanel() {
               ))}
             </div>
 
+            {learningMaterialType === "test" ? (
+              <div className="space-y-3 rounded-[10px] bg-zinc-50 p-3">
+                <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-zinc-100 p-1">
+                  {[
+                    { value: "scheduled", label: "지정 시간 시작" },
+                    { value: "free", label: "기한 내 자유 시작" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setLearningTestStartMode(option.value as "scheduled" | "free")}
+                      className={`h-10 rounded-[7px] text-sm font-bold transition ${
+                        learningTestStartMode === option.value
+                          ? "bg-black text-white"
+                          : "bg-transparent text-zinc-600 hover:bg-white hover:text-zinc-950"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {learningTestStartMode === "free" ? (
+                  <p className="rounded-[8px] bg-white px-3 py-2 text-xs font-semibold text-zinc-600">
+                    학생이 열람 기한 전까지 원하는 시점에 시험을 시작합니다.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-bold text-zinc-700">
+                      시작 일시
+                      <Input
+                        type="datetime-local"
+                        value={learningScheduledAt}
+                        onChange={(event) => setLearningScheduledAt(event.target.value)}
+                        className="mt-2"
+                      />
+                    </label>
+                    <div>
+                      <div className="text-sm font-black text-zinc-950">응시 가능 구간</div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <label className="block text-xs font-bold text-zinc-600">
+                          시작 전 허용
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={learningTestStartWindowBeforeMinutes}
+                            onChange={(event) => setLearningTestStartWindowBeforeMinutes(event.target.value)}
+                            className="mt-1"
+                          />
+                        </label>
+                        <label className="block text-xs font-bold text-zinc-600">
+                          시작 후 허용
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={learningTestStartWindowAfterMinutes}
+                            onChange={(event) => setLearningTestStartWindowAfterMinutes(event.target.value)}
+                            className="mt-1"
+                          />
+                        </label>
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-zinc-500">
+                        학생은 시작 일시 기준 앞뒤 허용 구간 안에서만 시험을 시작할 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <div className="text-sm font-black text-zinc-950">제공 문항</div>
@@ -1015,19 +1113,6 @@ function AcademyOperationsPanel() {
                 />
               </div>
             </div>
-
-            {learningMaterialType !== "textbook" ? (
-              <div className="space-y-2">
-                <div className="text-sm font-black text-zinc-950">
-                  {learningMaterialType === "test" ? "시험 제출 기한" : "과제 기한"}
-                </div>
-                <Input
-                  type="date"
-                  value={learningAssignmentDueAt}
-                  onChange={(event) => setLearningAssignmentDueAt(event.target.value)}
-                />
-              </div>
-            ) : null}
 
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
               <label className="flex min-h-11 items-center gap-3 rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-800">

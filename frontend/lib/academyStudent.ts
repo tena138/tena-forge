@@ -424,6 +424,8 @@ export type LearningAssignment = {
       problem_scope?: "all" | "wrong_only" | string;
       allow_export?: boolean;
       render_mode?: string;
+      test_start_window_before_minutes?: number | null;
+      test_start_window_after_minutes?: number | null;
       academy_material_id?: string | null;
       problem_count: number;
       problems: LearningProblem[];
@@ -685,6 +687,8 @@ export function createLearningAssignment(
     student_ids?: string[];
     group_ids?: string[];
     start_at?: string | null;
+    test_start_window_before_minutes?: number | null;
+    test_start_window_after_minutes?: number | null;
     due_at?: string | null;
     time_limit_seconds?: number | null;
     show_answer_policy?: string;

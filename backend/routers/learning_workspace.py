@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -116,6 +116,8 @@ class LearningAssignmentCreate(BaseModel):
     student_ids: list[str] = Field(default_factory=list)
     group_ids: list[UUID] = Field(default_factory=list)
     start_at: datetime | None = None
+    test_start_window_before_minutes: int | None = Field(default=None, ge=0)
+    test_start_window_after_minutes: int | None = Field(default=None, ge=0)
     due_at: datetime | None = None
     schedule_type: str = "one_time"
     recurrence_rule: str | None = None
@@ -389,13 +391,17 @@ def _normalize_problem_scope(value: str | None) -> str:
 def _assignment_snapshot_settings(payload: LearningAssignmentCreate) -> dict[str, Any]:
     assignment_type = _normalize_assignment_type(payload.assignment_type)
     problem_scope = _normalize_problem_scope(payload.problem_scope)
-    return {
+    settings = {
         "assignment_type": assignment_type,
         "problem_scope": problem_scope,
         "allow_export": bool(payload.allow_export),
         "material_expires_at": payload.material_expires_at.isoformat() if payload.material_expires_at else None,
         "render_mode": "notebook_problem_pages",
     }
+    if assignment_type == "test" and payload.start_at and payload.test_start_window_before_minutes is not None and payload.test_start_window_after_minutes is not None:
+        settings["test_start_window_before_minutes"] = payload.test_start_window_before_minutes
+        settings["test_start_window_after_minutes"] = payload.test_start_window_after_minutes
+    return settings
 
 
 def _student_membership_for_material_target(db: Session, academy_id: str, student_id: str) -> StudentAcademyMembership | None:
@@ -438,6 +444,8 @@ def _create_assignment_note_material(
         "problem_count": len(public_problems),
         "problems": public_problems,
         "time_limit_seconds": payload.time_limit_seconds,
+        "test_start_window_before_minutes": settings.get("test_start_window_before_minutes"),
+        "test_start_window_after_minutes": settings.get("test_start_window_after_minutes"),
         "due_at": payload.due_at.isoformat() if payload.due_at else None,
         "expires_at": payload.material_expires_at.isoformat() if payload.material_expires_at else None,
         "allow_export": export_enabled,
@@ -584,6 +592,34 @@ def _require_student_assignment(db: Session, student_id: str, assignment_id: UUI
         raise HTTPException(status_code=404, detail="Assignment not found.")
     can_student_access_academy(db, student_id, assignment.academy_id)
     return assignment
+
+
+def _test_start_window_minutes(snapshot: dict[str, Any], key: str) -> int | None:
+    value = snapshot.get(key)
+    if value is None:
+        return None
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        return None
+    return minutes if minutes >= 0 else None
+
+
+def _ensure_learning_assignment_can_start(assignment: LearningAssignment, now: datetime) -> None:
+    snapshot = dict(assignment.content_version.snapshot or {}) if assignment.content_version else {}
+    assignment_type = _normalize_assignment_type(snapshot.get("assignment_type") or ("test" if assignment.time_limit_seconds else "homework"))
+    if assignment_type != "test" or not assignment.start_at:
+        return
+    before_minutes = _test_start_window_minutes(snapshot, "test_start_window_before_minutes")
+    after_minutes = _test_start_window_minutes(snapshot, "test_start_window_after_minutes")
+    if before_minutes is None or after_minutes is None:
+        return
+    opens_at = assignment.start_at - timedelta(minutes=before_minutes)
+    closes_at = assignment.start_at + timedelta(minutes=after_minutes)
+    if now < opens_at:
+        raise HTTPException(status_code=403, detail={"code": "TEST_NOT_OPEN", "message": "아직 시험 응시 가능 시간이 아닙니다."})
+    if now > closes_at:
+        raise HTTPException(status_code=403, detail={"code": "TEST_START_WINDOW_CLOSED", "message": "시험 시작 가능 시간이 지났습니다."})
 
 
 def _clean_answer(value: str | None) -> str | None:
@@ -850,6 +886,7 @@ def start_learning_assignment(assignment_id: UUID, request: Request, db: Session
         )
     )
     if not submission:
+        _ensure_learning_assignment_can_start(assignment, datetime.utcnow())
         submission = LearningSubmission(
             academy_id=assignment.academy_id,
             student_id=student_id,
