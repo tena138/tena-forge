@@ -16,7 +16,6 @@ import {
   MonitorUp,
   Pause,
   Play,
-  Plus,
   Save,
   ScreenShare,
   ScreenShareOff,
@@ -339,16 +338,17 @@ function LectureTimeline({
 
   return (
     <section className="rounded-[8px] bg-white p-3 ring-1 ring-black/5">
-      <div className="group relative h-[34rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
+      <div className="relative h-[34rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
         <button
           type="button"
           onClick={onAdd}
-          className="absolute right-3 top-3 z-30 inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-black px-3 text-xs font-black text-white opacity-0 shadow-sm transition hover:bg-zinc-800 focus:opacity-100 group-hover:opacity-100"
-          aria-label="계획 추가"
-          title="계획 추가"
+          className="group/add absolute inset-0 z-[1] cursor-pointer rounded-[8px] bg-transparent transition-colors hover:bg-black/[0.045] focus-visible:bg-black/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+          aria-label="계획을 추가하려면 클릭"
+          title="계획을 추가하려면 클릭"
         >
-          <Plus className="h-4 w-4" />
-          계획 추가
+          <span className="pointer-events-none absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 rounded-[8px] bg-black px-4 py-2 text-xs font-black text-white opacity-0 shadow-sm transition-opacity group-hover/add:opacity-100 group-focus-visible/add:opacity-100">
+            계획을 추가하려면 클릭
+          </span>
         </button>
         <div className="absolute bottom-[5%] left-5 top-[5%] w-px bg-zinc-300" />
         {timelineItems.map((item) => {
