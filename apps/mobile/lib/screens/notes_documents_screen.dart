@@ -8,6 +8,7 @@ import '../core/text_encoding.dart';
 import '../models/note_models.dart';
 import '../state/note_library_state.dart';
 import '../state/student_app_state.dart';
+import '../widgets/test_start_dialog.dart';
 
 class NotesDocumentsScreen extends StatefulWidget {
   const NotesDocumentsScreen({super.key});
@@ -114,14 +115,16 @@ Future<void> _openLibraryItem(
   }
   if (item.assignmentType == 'test' && item.assignmentId != null) {
     final appState = context.read<StudentAppState>();
-    try {
-      await appState.startTest(item.assignmentId!);
-      if (context.mounted) context.push('/test/${item.assignmentId}');
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('시험을 시작할 수 없습니다. 기한 또는 세션 상태를 확인해주세요.')),
-      );
+    final assignment = appState.assignments
+        .where((assignment) => assignment.id == item.assignmentId)
+        .firstOrNull;
+    final confirmed = await confirmTestStart(
+      context,
+      title: repairKoreanText(item.name),
+      timeLimitMinutes: assignment?.timeLimitMinutes,
+    );
+    if (confirmed && context.mounted) {
+      context.push('/test/${item.assignmentId}');
     }
     return;
   }

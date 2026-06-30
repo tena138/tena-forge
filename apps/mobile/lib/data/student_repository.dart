@@ -259,10 +259,29 @@ class StudentRepository {
     );
   }
 
+  Future<Assignment> getAssignment(String assignmentId) {
+    return apiClient.get<Assignment>(
+      '/api/learning/student/assignments/$assignmentId',
+      (json) => Assignment.fromJson(Map<String, dynamic>.from(json as Map)),
+    );
+  }
+
   Future<void> startTest(String assignmentId) {
     return apiClient.post<void>(
       '/api/learning/student/assignments/$assignmentId/start',
       null,
+      (_) {},
+    );
+  }
+
+  Future<void> submitTestAnswers(
+    String assignmentId, {
+    required List<Map<String, dynamic>> answers,
+    required int timeSpentSeconds,
+  }) {
+    return apiClient.post<void>(
+      '/api/learning/student/assignments/$assignmentId/submit',
+      {'answers': answers, 'time_spent_seconds': timeSpentSeconds},
       (_) {},
     );
   }

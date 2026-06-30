@@ -405,9 +405,12 @@ class Assignment {
     this.sourceType,
     this.status,
     this.submittedAt,
+    this.startedAt,
+    this.timeLimitSeconds,
     this.problemCount = 0,
     this.materialTitle,
     this.materialScope,
+    this.problems = const [],
   });
 
   final String id;
@@ -425,9 +428,12 @@ class Assignment {
   final String? sourceType;
   final String? status;
   final DateTime? submittedAt;
+  final DateTime? startedAt;
+  final int? timeLimitSeconds;
   final int problemCount;
   final String? materialTitle;
   final String? materialScope;
+  final List<StudentMaterialProblem> problems;
 
   bool get isTest => assignmentType == 'test';
   bool get isAwaitingTeacherConfirmation => status == 'pending_confirmation';
@@ -468,27 +474,49 @@ class Assignment {
         (snapshot['problem_count'] as num?)?.toInt() ??
         (snapshot['problems'] as List?)?.length ??
         0;
+    final rawProblems = snapshot['problems'];
+    final problems = rawProblems is List
+        ? rawProblems
+              .whereType<Map>()
+              .toList(growable: false)
+              .asMap()
+              .entries
+              .map(
+                (entry) => StudentMaterialProblem.fromJson(
+                  entry.value.cast<String, dynamic>(),
+                  entry.key + 1,
+                ),
+              )
+              .toList(growable: false)
+        : const <StudentMaterialProblem>[];
     return Assignment(
       id: '${json['id']}',
       academyId: '${json['academy_id']}',
-      title: '${json['title'] ?? 'Untitled'}',
-      description: json['description']?.toString(),
+      title: repairKoreanText('${json['title'] ?? 'Untitled'}'),
+      description: json['description'] == null
+          ? null
+          : repairKoreanText(json['description'].toString()),
       assignmentType:
           '${json['assignment_type'] ?? (timeLimitSeconds == null ? 'homework' : 'test')}',
       submissionMode:
           '${json['submission_mode'] ?? (problemCount > 0 ? 'problem_set' : 'completion')}',
-      openAt: DateTime.tryParse('${json['open_at'] ?? json['start_at']}'),
-      dueAt: DateTime.tryParse('${json['due_at']}'),
-      closeAt: DateTime.tryParse('${json['close_at']}'),
+      openAt: _parseUtcServerDateTime(json['open_at'] ?? json['start_at']),
+      dueAt: _parseUtcServerDateTime(json['due_at']),
+      closeAt: _parseUtcServerDateTime(json['close_at']),
       resultReleasePolicy: json['result_release_policy']?.toString(),
       timeLimitMinutes: timeLimitMinutes,
+      timeLimitSeconds: timeLimitSeconds,
       academyName: json['academy_name']?.toString(),
       sourceType: json['source_type']?.toString(),
       status: submission['status']?.toString(),
-      submittedAt: DateTime.tryParse('${submission['submitted_at']}'),
+      startedAt: _parseUtcServerDateTime(submission['started_at']),
+      submittedAt: _parseUtcServerDateTime(submission['submitted_at']),
       problemCount: problemCount,
-      materialTitle: snapshot['material_title']?.toString(),
+      materialTitle: snapshot['material_title'] == null
+          ? null
+          : repairKoreanText(snapshot['material_title'].toString()),
       materialScope: snapshot['material_scope']?.toString(),
+      problems: problems,
     );
   }
 }

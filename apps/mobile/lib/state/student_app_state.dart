@@ -246,8 +246,25 @@ class StudentAppState extends ChangeNotifier {
     await refresh();
   }
 
+  Future<Assignment> loadAssignmentDetail(String assignmentId) {
+    return repository.getAssignment(assignmentId);
+  }
+
   Future<void> startTest(String assignmentId) async {
     await repository.startTest(assignmentId);
+    await refresh();
+  }
+
+  Future<void> submitTestAnswers(
+    String assignmentId, {
+    required List<Map<String, dynamic>> answers,
+    required int timeSpentSeconds,
+  }) async {
+    await repository.submitTestAnswers(
+      assignmentId,
+      answers: answers,
+      timeSpentSeconds: timeSpentSeconds,
+    );
     await refresh();
   }
 
