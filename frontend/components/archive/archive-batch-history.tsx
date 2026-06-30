@@ -204,9 +204,9 @@ export function ArchiveBatchHistory({
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [scheduledAt, setScheduledAt] = useState(() => localDateTimeInputValue());
+  const [assignTestStartMode, setAssignTestStartMode] = useState<"scheduled" | "free">("scheduled");
   const [assignMaterialType, setAssignMaterialType] = useState<LearningMaterialType>("textbook");
   const [assignProblemScope, setAssignProblemScope] = useState<LearningProblemScope>("all");
-  const [assignDueAt, setAssignDueAt] = useState("");
   const [assignMaterialExpiresAt, setAssignMaterialExpiresAt] = useState("");
   const [assignTimeLimitEnabled, setAssignTimeLimitEnabled] = useState(false);
   const [assignTimeLimitMinutes, setAssignTimeLimitMinutes] = useState("50");
@@ -324,9 +324,9 @@ export function ArchiveBatchHistory({
     setSelectedClassIds([]);
     setSelectedStudentIds([]);
     setScheduledAt(localDateTimeInputValue());
+    setAssignTestStartMode("scheduled");
     setAssignMaterialType("textbook");
     setAssignProblemScope("all");
-    setAssignDueAt("");
     setAssignMaterialExpiresAt("");
     setAssignTimeLimitEnabled(false);
     setAssignTimeLimitMinutes("50");
@@ -360,6 +360,7 @@ export function ArchiveBatchHistory({
   function selectAssignMaterialType(nextType: LearningMaterialType) {
     setAssignMaterialType(nextType);
     setAssignTimeLimitEnabled(nextType === "test");
+    if (nextType !== "test") setAssignTestStartMode("scheduled");
   }
 
   function selectedDirectStudentUserIds() {
@@ -415,6 +416,11 @@ export function ArchiveBatchHistory({
       setAssignError("시험은 제한 시간을 분 단위로 입력해야 합니다.");
       return;
     }
+    if (assignMaterialType === "test" && assignTestStartMode === "free" && !assignMaterialExpiresAt) {
+      setAssignError("기한 내 자유 시작 시험은 열람 기한을 입력해야 합니다.");
+      return;
+    }
+    const materialExpiresAt = localDateEndIso(assignMaterialExpiresAt);
     setAssigning(true);
     setAssignError("");
     try {
@@ -426,12 +432,12 @@ export function ArchiveBatchHistory({
         assignment_type: assignMaterialType,
         problem_scope: assignProblemScope,
         allow_export: assignAllowExport,
-        material_expires_at: localDateEndIso(assignMaterialExpiresAt),
+        material_expires_at: materialExpiresAt,
         create_note_material: true,
         group_ids: selectedClassIds,
         student_ids: directStudentUserIds,
-        start_at: localDateTimeIso(scheduledAt),
-        due_at: assignMaterialType === "textbook" ? null : localDateEndIso(assignDueAt),
+        start_at: assignMaterialType === "test" && assignTestStartMode === "free" ? null : localDateTimeIso(scheduledAt),
+        due_at: assignMaterialType === "textbook" ? null : materialExpiresAt,
         time_limit_seconds: timeLimitSeconds,
         show_answer_policy: assignMaterialType === "test" ? "afterSubmit" : "never",
         show_solution_policy: assignMaterialType === "test" ? "never" : "afterSubmit",
@@ -571,15 +577,49 @@ export function ArchiveBatchHistory({
               </button>
             </div>
             <div className="max-h-[70vh] overflow-y-auto p-5">
-              <label className="block text-sm font-bold text-zinc-700">
-                시작 일시
-                <input
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(event) => setScheduledAt(event.target.value)}
-                  className="mt-2 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
-                />
-              </label>
+              <div className="space-y-3">
+                {assignMaterialType === "test" ? (
+                  <div>
+                    <div className="text-sm font-black text-zinc-950">시험 시작 방식</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 rounded-[8px] bg-zinc-100 p-1">
+                      {[
+                        { value: "scheduled", label: "지정 시간 시작" },
+                        { value: "free", label: "기한 내 자유 시작" },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setAssignTestStartMode(option.value as "scheduled" | "free")}
+                          className={cn(
+                            "h-10 rounded-[7px] text-sm font-bold transition",
+                            assignTestStartMode === option.value
+                              ? "bg-black text-white"
+                              : "bg-transparent text-zinc-600 hover:bg-white hover:text-zinc-950"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {assignMaterialType === "test" && assignTestStartMode === "free" ? (
+                  <div className="rounded-[8px] bg-zinc-100 px-3 py-3 text-sm font-semibold text-zinc-700">
+                    학생이 열람 기한 전까지 원하는 시점에 시험을 시작합니다.
+                  </div>
+                ) : (
+                  <label className="block text-sm font-bold text-zinc-700">
+                    시작 일시
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      onChange={(event) => setScheduledAt(event.target.value)}
+                      className="mt-2 h-10 w-full rounded-[8px] border-0 bg-zinc-100 px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:bg-white focus:ring-2 focus:ring-black/10"
+                    />
+                  </label>
+                )}
+              </div>
 
               <div className="mt-5 space-y-4 rounded-[12px] bg-zinc-50 p-4">
                 <div>
@@ -641,18 +681,6 @@ export function ArchiveBatchHistory({
                     />
                   </label>
                 </div>
-
-                {assignMaterialType !== "textbook" ? (
-                  <label className="block text-sm font-bold text-zinc-700">
-                    {assignMaterialType === "test" ? "시험 제출 기한" : "과제 기한"}
-                    <input
-                      type="date"
-                      value={assignDueAt}
-                      onChange={(event) => setAssignDueAt(event.target.value)}
-                      className="mt-2 h-10 w-full rounded-[8px] border-0 bg-white px-3 text-sm font-semibold text-zinc-950 outline-none transition focus:ring-2 focus:ring-black/10"
-                    />
-                  </label>
-                ) : null}
 
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
                   <label className="flex min-h-11 items-center gap-3 rounded-[8px] bg-white px-3 text-sm font-bold text-zinc-800">
