@@ -10,7 +10,6 @@ import {
   Coffee,
   Copy,
   Download,
-  Eye,
   FileUp,
   Loader2,
   Mic,
@@ -23,7 +22,6 @@ import {
   ScreenShareOff,
   Square,
   TrendingUp,
-  Trash2,
   Video,
   X,
   type LucideIcon,
@@ -317,7 +315,6 @@ function LectureTimeline({
   saving,
   onAdd,
   onEdit,
-  onDelete,
   onOpenTest,
 }: {
   event: LiveInteractionEvent | null;
@@ -326,7 +323,6 @@ function LectureTimeline({
   saving: boolean;
   onAdd: () => void;
   onEdit: (item: LiveLessonPlanItem) => void;
-  onDelete: (item: LiveLessonPlanItem) => void;
   onOpenTest: (item: LiveLessonPlanItem) => void;
 }) {
   const fallbackStart = useMemo(() => new Date(now), []);
@@ -335,32 +331,29 @@ function LectureTimeline({
   const totalMs = Math.max(1, endsAt.getTime() - startsAt.getTime());
   const elapsedMs = Math.max(0, Math.min(totalMs, now - startsAt.getTime()));
   const progressRatio = Math.max(0, Math.min(1, elapsedMs / totalMs));
-  const progressPercent = progressRatio * 100;
   const lectureDurationMinutes = Math.max(1, Math.round(totalMs / 60000));
   const ticks = useMemo(() => buildMinuteTicks(lectureDurationMinutes), [lectureDurationMinutes]);
   const timelineItems = lessonPlan.filter((item) => item.start_minute < lectureDurationMinutes);
+  const trackTopPercent = 5;
+  const trackHeightPercent = 90;
+  const progressPercent = trackTopPercent + progressRatio * trackHeightPercent;
 
   return (
-    <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-black text-zinc-950">수업 계획</p>
-          <p className="mt-0.5 text-xs font-bold text-zinc-500">위에서 아래로 시간이 흐릅니다.</p>
-        </div>
+    <section className="rounded-[8px] bg-white p-3 ring-1 ring-black/5">
+      <div className="relative h-[34rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
         <button
           type="button"
           onClick={onAdd}
-          className="inline-flex h-9 items-center gap-2 rounded-[8px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800"
+          className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-[8px] bg-black text-white shadow-sm transition hover:bg-zinc-800"
+          aria-label="계획 추가"
+          title="계획 추가"
         >
           <Plus className="h-4 w-4" />
-          계획 추가
         </button>
-      </div>
-      <div className="relative h-[28rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
-        <div className="absolute bottom-5 left-5 top-5 w-px bg-zinc-300" />
+        <div className="absolute bottom-[5%] left-5 top-[5%] w-px bg-zinc-300" />
         {timelineItems.map((item) => {
-          const top = (item.start_minute / lectureDurationMinutes) * 100;
-          const height = Math.max(6, (item.duration_minutes / lectureDurationMinutes) * 100);
+          const top = trackTopPercent + (item.start_minute / lectureDurationMinutes) * trackHeightPercent;
+          const height = Math.max(6, (item.duration_minutes / lectureDurationMinutes) * trackHeightPercent);
           const Icon = LESSON_KIND_ICONS[item.kind] || BookOpen;
           return (
             <button
@@ -383,7 +376,7 @@ function LectureTimeline({
           );
         })}
         {ticks.map((minute) => {
-          const top = (minute / lectureDurationMinutes) * 100;
+          const top = trackTopPercent + (minute / lectureDurationMinutes) * trackHeightPercent;
           return (
             <div key={minute} className="absolute left-0 right-0 z-0" style={{ top: `${top}%` }}>
               <span className="absolute left-5 top-0 h-px w-3 bg-zinc-400/70" />
@@ -397,41 +390,12 @@ function LectureTimeline({
           aria-hidden="true"
         />
       </div>
-      <div className="mt-2 flex items-center justify-between text-[11px] font-bold text-zinc-500">
-        <span>{timeText(startsAt)}</span>
-        <span>{lectureDurationMinutes}분</span>
-        <span>{timeText(endsAt)}</span>
-      </div>
-      <div className="mt-3 flex flex-col gap-2">
-        {timelineItems.length ? timelineItems.map((item) => {
-          const Icon = LESSON_KIND_ICONS[item.kind] || BookOpen;
-          return (
-            <div key={item.id} className="flex max-w-full items-center gap-2 rounded-[8px] bg-zinc-50 px-2.5 py-2 text-xs font-bold text-zinc-700 ring-1 ring-black/5">
-              <Icon className="h-3.5 w-3.5 shrink-0" />
-              <button type="button" onClick={() => onEdit(item)} className="min-w-0 truncate text-left hover:text-black">
-                <span className="font-black text-zinc-950">{item.title}</span>
-                <span className="ml-1 text-zinc-500">{planTimeRangeText(item)}</span>
-              </button>
-              {item.kind === "test" ? (
-                <button type="button" onClick={() => onOpenTest(item)} className="grid h-6 w-6 place-items-center rounded-[6px] text-zinc-500 hover:bg-white hover:text-black" aria-label="테스트 결과 보기">
-                  <Eye className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
-              <button type="button" onClick={() => onDelete(item)} className="grid h-6 w-6 place-items-center rounded-[6px] text-zinc-500 hover:bg-white hover:text-black" aria-label="계획 삭제">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          );
-        }) : (
-          <div className="rounded-[8px] bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-500">아직 등록된 수업 계획이 없습니다.</div>
-        )}
-        {saving ? (
-          <div className="inline-flex items-center gap-1.5 rounded-[8px] bg-zinc-50 px-3 py-2 text-xs font-black text-zinc-500 ring-1 ring-black/5">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            저장 중
-          </div>
-        ) : null}
-      </div>
+      {saving ? (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-[8px] bg-zinc-50 px-3 py-2 text-xs font-black text-zinc-500 ring-1 ring-black/5">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          저장 중
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1495,11 +1459,6 @@ function LiveLectureContent() {
     if (saved) setLessonPlanDraft(null);
   }
 
-  async function deleteLessonPlanItem(item: LiveLessonPlanItem) {
-    const nextPlan = lessonPlan.filter((current) => current.id !== item.id);
-    await persistLessonPlan(nextPlan);
-  }
-
   function openTestResult(item: LiveLessonPlanItem) {
     if (!item.paper_session_id) {
       setLessonPlanDraft(draftFromLessonPlanItem(item));
@@ -1590,7 +1549,6 @@ function LiveLectureContent() {
               setLessonPlanError("");
               setLessonPlanDraft(draftFromLessonPlanItem(item));
             }}
-            onDelete={deleteLessonPlanItem}
             onOpenTest={openTestResult}
           />
         </aside>
