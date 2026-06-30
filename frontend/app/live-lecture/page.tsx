@@ -340,15 +340,16 @@ function LectureTimeline({
 
   return (
     <section className="rounded-[8px] bg-white p-3 ring-1 ring-black/5">
-      <div className="relative h-[34rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
+      <div className="group relative h-[34rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
         <button
           type="button"
           onClick={onAdd}
-          className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-[8px] bg-black text-white shadow-sm transition hover:bg-zinc-800"
+          className="absolute right-3 top-3 z-30 inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-black px-3 text-xs font-black text-white opacity-0 shadow-sm transition hover:bg-zinc-800 focus:opacity-100 group-hover:opacity-100"
           aria-label="계획 추가"
           title="계획 추가"
         >
           <Plus className="h-4 w-4" />
+          계획 추가
         </button>
         <div className="absolute bottom-[5%] left-5 top-[5%] w-px bg-zinc-300" />
         {timelineItems.map((item) => {
@@ -377,10 +378,11 @@ function LectureTimeline({
         })}
         {ticks.map((minute) => {
           const top = trackTopPercent + (minute / lectureDurationMinutes) * trackHeightPercent;
+          const labelDate = new Date(startsAt.getTime() + minute * 60000);
           return (
             <div key={minute} className="absolute left-0 right-0 z-0" style={{ top: `${top}%` }}>
               <span className="absolute left-5 top-0 h-px w-3 bg-zinc-400/70" />
-              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-black text-zinc-600">{minute}분</span>
+              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-black text-zinc-600">{timeText(labelDate)}</span>
             </div>
           );
         })}
