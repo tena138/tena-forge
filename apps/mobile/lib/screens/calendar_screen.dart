@@ -95,6 +95,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         .loadClassSchedulePreview(block.id);
     showDialog<void>(
       context: context,
+      barrierDismissible: true,
       builder: (context) => _ClassSchedulePreviewDialog(
         block: block,
         previewFuture: previewFuture,
@@ -411,7 +412,7 @@ class _ClassSchedulePreviewDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
                   child: Row(
                     children: [
                       Expanded(
@@ -441,11 +442,6 @@ class _ClassSchedulePreviewDialog extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
