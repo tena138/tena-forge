@@ -1,5 +1,31 @@
 import '../core/text_encoding.dart';
 
+DateTime? _parseUtcServerDateTime(Object? value) {
+  final raw = value?.toString().trim() ?? '';
+  if (raw.isEmpty || raw == 'null') return null;
+  final normalized = raw.contains(' ') && !raw.contains('T')
+      ? raw.replaceFirst(' ', 'T')
+      : raw;
+  final parsed = DateTime.tryParse(normalized);
+  if (parsed == null) return null;
+  final hasTimezone = RegExp(
+    r'(?:[zZ]|[+-]\d{2}:?\d{2})$',
+  ).hasMatch(normalized);
+  if (parsed.isUtc || hasTimezone) return parsed;
+  final hasTime = RegExp(r'[T ]\d{2}:').hasMatch(raw);
+  if (!hasTime) return parsed;
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  );
+}
+
 enum StudentContextType { personal, academy }
 
 class StudentPersonalInfo {
@@ -632,9 +658,9 @@ class StudentMaterial {
               (json['content'] as Map).cast<String, dynamic>(),
             )
           : null,
-      expiresAt: DateTime.tryParse('${json['expires_at']}'),
-      updatedAt: DateTime.tryParse(
-        '${json['updated_at'] ?? json['created_at']}',
+      expiresAt: _parseUtcServerDateTime(json['expires_at']),
+      updatedAt: _parseUtcServerDateTime(
+        json['updated_at'] ?? json['created_at'],
       ),
     );
   }
