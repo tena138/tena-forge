@@ -116,11 +116,17 @@ Future<void> _showSidePanel(BuildContext context, Widget child) {
         color: Colors.transparent,
         child: Stack(
           children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ),
             Positioned(
               left: 72,
               bottom: media.padding.bottom + 18,
               width: panelWidth.toDouble(),
-              child: child,
+              child: Listener(behavior: HitTestBehavior.opaque, child: child),
             ),
           ],
         ),
@@ -312,32 +318,16 @@ class _ProfilePanel extends StatelessWidget {
             value: '${state.academyInvites.length}',
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  icon: const Icon(Icons.close_rounded),
-                  label: const Text('닫기'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    final router = GoRouter.of(context);
-                    await context.read<StudentAppState>().logout();
-                    if (!context.mounted) return;
-                    Navigator.of(context).pop();
-                    router.go('/login');
-                  },
-                  icon: const Icon(Icons.logout_rounded),
-                  label: const Text('로그아웃'),
-                ),
-              ),
-            ],
+          FilledButton.icon(
+            onPressed: () async {
+              final router = GoRouter.of(context);
+              await context.read<StudentAppState>().logout();
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
+              router.go('/login');
+            },
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('로그아웃'),
           ),
         ],
       ),
