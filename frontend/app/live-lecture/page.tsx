@@ -350,7 +350,6 @@ function LectureTimeline({
             계획을 추가하려면 클릭
           </span>
         </button>
-        <div className="absolute bottom-[5%] left-5 top-[5%] w-px bg-zinc-300" />
         {timelineItems.map((item) => {
           const top = trackTopPercent + (item.start_minute / lectureDurationMinutes) * trackHeightPercent;
           const height = Math.max(6, (item.duration_minutes / lectureDurationMinutes) * trackHeightPercent);
@@ -361,7 +360,7 @@ function LectureTimeline({
               type="button"
               onClick={() => (item.kind === "test" ? onOpenTest(item) : onEdit(item))}
               className={cn(
-                "absolute left-10 right-3 z-10 flex min-h-10 items-start gap-2 overflow-hidden rounded-[7px] px-2.5 py-2 text-left text-[11px] font-black shadow-sm ring-1 transition hover:brightness-95",
+                "absolute left-16 right-3 z-10 flex min-h-10 items-start gap-2 overflow-hidden rounded-[7px] px-2.5 py-2 text-left text-[11px] font-black shadow-sm ring-1 transition hover:brightness-95",
                 LESSON_KIND_STYLES[item.kind]
               )}
               style={{ top: `${top}%`, height: `${height}%` }}
@@ -380,13 +379,13 @@ function LectureTimeline({
           const labelDate = new Date(startsAt.getTime() + minute * 60000);
           return (
             <div key={minute} className="absolute left-0 right-0 z-0" style={{ top: `${top}%` }}>
-              <span className="absolute left-5 top-0 h-px w-3 bg-zinc-400/70" />
-              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-black text-zinc-600">{timeText(labelDate)}</span>
+              <span className="absolute left-16 right-3 top-0 h-px bg-zinc-300/90" />
+              <span className="absolute left-2 top-1/2 w-11 -translate-y-1/2 text-right text-[10px] font-black text-zinc-600">{timeText(labelDate)}</span>
             </div>
           );
         })}
         <div
-          className="absolute left-3 right-3 z-20 h-[3px] -translate-y-1/2 rounded-full bg-black shadow-[0_0_0_4px_rgba(0,0,0,0.08)] transition-[top] duration-700"
+          className="absolute left-16 right-3 z-20 h-[3px] -translate-y-1/2 rounded-full bg-black shadow-[0_0_0_4px_rgba(0,0,0,0.08)] transition-[top] duration-700"
           style={{ top: `${progressPercent}%` }}
           aria-hidden="true"
         />
