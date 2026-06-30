@@ -3,20 +3,30 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Coffee,
   Copy,
   Download,
+  Eye,
   FileUp,
+  Loader2,
   Mic,
   MonitorUp,
   Pause,
   Play,
+  Plus,
+  Save,
   ScreenShare,
   ScreenShareOff,
   Square,
   TrendingUp,
+  Trash2,
   Video,
+  X,
+  type LucideIcon,
 } from "lucide-react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
@@ -26,11 +36,12 @@ import {
   saveLiveLectureSession,
   type LiveInteractionEvent,
   type LiveLectureSession,
+  type LiveLessonPlanItem,
   uploadLiveLectureSlide,
 } from "@/lib/auth-api";
-import { assetUrl } from "@/lib/api";
+import { api, assetUrl, type Batch, type ProblemSetListItem } from "@/lib/api";
 import { formatLocalTime } from "@/lib/datetime";
-import { getClassDetail, type ClassCard, type StudentCard } from "@/lib/studentManagement";
+import { createPaperSession, getClassDetail, getPaperSessionDetail, type ClassCard, type PaperSessionDetail, type StudentCard } from "@/lib/studentManagement";
 import { cn } from "@/lib/utils";
 
 type RecordingMode = "audio" | "video";
@@ -44,7 +55,42 @@ type SlidePdf = {
 
 type LecturePageNotes = Record<string, string>;
 
+type LessonPlanKind = LiveLessonPlanItem["kind"];
+
+type LessonPlanDraft = {
+  id?: string;
+  title: string;
+  kind: LessonPlanKind;
+  startMinute: string;
+  durationMinutes: string;
+  paperSessionId?: string | null;
+  testSourceKey: string;
+};
+
+type TestSource = {
+  type: "batch" | "problem_set";
+  id: string;
+};
+
 const LEGACY_DEFAULT_LIVE_NOTES = "수업 시작 전 출석 확인\n핵심 개념 설명 후 대표 문항 풀이\n마지막 5분 질문 정리";
+
+const LESSON_KIND_LABELS: Record<LessonPlanKind, string> = {
+  lesson: "수업",
+  break: "쉬는 시간",
+  test: "테스트",
+};
+
+const LESSON_KIND_STYLES: Record<LessonPlanKind, string> = {
+  lesson: "bg-zinc-950 text-white ring-zinc-950",
+  break: "bg-zinc-200 text-zinc-950 ring-zinc-300",
+  test: "bg-sky-600 text-white ring-sky-700",
+};
+
+const LESSON_KIND_ICONS: Record<LessonPlanKind, LucideIcon> = {
+  lesson: BookOpen,
+  break: Coffee,
+  test: ClipboardList,
+};
 
 type PdfPageSize = {
   width: number;
@@ -93,6 +139,63 @@ function parseDate(value?: string | null) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function eventDurationMinutes(event: LiveInteractionEvent | null, fallbackNow = Date.now()) {
+  const startsAt = parseDate(event?.starts_at) || new Date(fallbackNow);
+  const endsAt = parseDate(event?.ends_at) || new Date(startsAt.getTime() + 60 * 60000);
+  return Math.max(1, Math.round((endsAt.getTime() - startsAt.getTime()) / 60000));
+}
+
+function eventMinuteDate(event: LiveInteractionEvent | null, minute: number) {
+  const startsAt = parseDate(event?.starts_at);
+  if (!startsAt) return null;
+  return new Date(startsAt.getTime() + minute * 60000);
+}
+
+function planTimeRangeText(item: LiveLessonPlanItem) {
+  return `${item.start_minute}분 - ${item.start_minute + item.duration_minutes}분`;
+}
+
+function normalizeLessonPlanItems(items?: LiveLessonPlanItem[] | null): LiveLessonPlanItem[] {
+  if (!Array.isArray(items)) return [];
+  const normalized: LiveLessonPlanItem[] = [];
+  for (const item of items) {
+    const kind: LessonPlanKind = item.kind === "break" || item.kind === "test" ? item.kind : "lesson";
+    const startMinute = Number(item.start_minute);
+    const durationMinutes = Number(item.duration_minutes);
+    if (!Number.isFinite(startMinute) || !Number.isFinite(durationMinutes) || durationMinutes < 1) continue;
+    normalized.push({
+      id: item.id || newLessonPlanId(),
+      title: String(item.title || LESSON_KIND_LABELS[kind]).trim() || LESSON_KIND_LABELS[kind],
+      kind,
+      start_minute: Math.max(0, Math.round(startMinute)),
+      duration_minutes: Math.max(1, Math.round(durationMinutes)),
+      paper_session_id: item.paper_session_id || null,
+    });
+  }
+  return normalized.sort((left, right) => left.start_minute - right.start_minute || left.title.localeCompare(right.title));
+}
+
+function newLessonPlanId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `plan-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function parseTestSourceKey(value: string): TestSource | null {
+  const [type, id] = value.split(":");
+  if ((type === "batch" || type === "problem_set") && id) return { type, id };
+  return null;
+}
+
+function normalizeListResponse<T>(value: T[] | { items?: T[]; data?: T[] } | null | undefined): T[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    const response = value as { items?: T[]; data?: T[] };
+    if (Array.isArray(response.items)) return response.items;
+    if (Array.isArray(response.data)) return response.data;
+  }
+  return [];
 }
 
 function timeText(date: Date | null) {
@@ -207,7 +310,25 @@ function useLectureEvent(eventId: string | null) {
   };
 }
 
-function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; now: number }) {
+function LectureTimeline({
+  event,
+  now,
+  lessonPlan,
+  saving,
+  onAdd,
+  onEdit,
+  onDelete,
+  onOpenTest,
+}: {
+  event: LiveInteractionEvent | null;
+  now: number;
+  lessonPlan: LiveLessonPlanItem[];
+  saving: boolean;
+  onAdd: () => void;
+  onEdit: (item: LiveLessonPlanItem) => void;
+  onDelete: (item: LiveLessonPlanItem) => void;
+  onOpenTest: (item: LiveLessonPlanItem) => void;
+}) {
   const fallbackStart = useMemo(() => new Date(now), []);
   const startsAt = parseDate(event?.starts_at) || fallbackStart;
   const endsAt = parseDate(event?.ends_at) || new Date(startsAt.getTime() + 60 * 60000);
@@ -217,11 +338,47 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
   const progressPercent = progressRatio * 100;
   const lectureDurationMinutes = Math.max(1, Math.round(totalMs / 60000));
   const ticks = useMemo(() => buildMinuteTicks(lectureDurationMinutes), [lectureDurationMinutes]);
+  const timelineItems = lessonPlan.filter((item) => item.start_minute < lectureDurationMinutes);
 
   return (
     <section className="rounded-[8px] bg-white p-4 ring-1 ring-black/5">
-      <div className="relative h-20 overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-zinc-950">수업 계획</p>
+          <p className="mt-0.5 text-xs font-bold text-zinc-500">타임라인에 쉬는 시간, 교시, 테스트를 배치합니다.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex h-9 items-center gap-2 rounded-[8px] bg-black px-3 text-xs font-black text-white transition hover:bg-zinc-800"
+        >
+          <Plus className="h-4 w-4" />
+          계획 추가
+        </button>
+      </div>
+      <div className="relative h-28 overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
         <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-zinc-300" />
+        {timelineItems.map((item) => {
+          const left = (item.start_minute / lectureDurationMinutes) * 100;
+          const width = Math.max(4, (item.duration_minutes / lectureDurationMinutes) * 100);
+          const Icon = LESSON_KIND_ICONS[item.kind] || BookOpen;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => (item.kind === "test" ? onOpenTest(item) : onEdit(item))}
+              className={cn(
+                "absolute top-3 z-10 flex h-10 items-center gap-1.5 rounded-[7px] px-2 text-left text-[11px] font-black shadow-sm ring-1 transition hover:brightness-95",
+                LESSON_KIND_STYLES[item.kind]
+              )}
+              style={{ left: `${left}%`, width: `${width}%`, minWidth: 72 }}
+              title={`${item.title} · ${planTimeRangeText(item)}`}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{item.title}</span>
+            </button>
+          );
+        })}
         {ticks.map((minute) => {
           const left = (minute / lectureDurationMinutes) * 100;
           const labelAlign = minute === 0 ? "translate-x-0" : minute === lectureDurationMinutes ? "-translate-x-full" : "-translate-x-1/2";
@@ -242,6 +399,36 @@ function LectureTimeline({ event, now }: { event: LiveInteractionEvent | null; n
         <span>{timeText(startsAt)}</span>
         <span>{lectureDurationMinutes}분</span>
         <span>{timeText(endsAt)}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {timelineItems.length ? timelineItems.map((item) => {
+          const Icon = LESSON_KIND_ICONS[item.kind] || BookOpen;
+          return (
+            <div key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-[8px] bg-zinc-50 px-2.5 py-2 text-xs font-bold text-zinc-700 ring-1 ring-black/5">
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <button type="button" onClick={() => onEdit(item)} className="min-w-0 truncate text-left hover:text-black">
+                <span className="font-black text-zinc-950">{item.title}</span>
+                <span className="ml-1 text-zinc-500">{planTimeRangeText(item)}</span>
+              </button>
+              {item.kind === "test" ? (
+                <button type="button" onClick={() => onOpenTest(item)} className="grid h-6 w-6 place-items-center rounded-[6px] text-zinc-500 hover:bg-white hover:text-black" aria-label="테스트 결과 보기">
+                  <Eye className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+              <button type="button" onClick={() => onDelete(item)} className="grid h-6 w-6 place-items-center rounded-[6px] text-zinc-500 hover:bg-white hover:text-black" aria-label="계획 삭제">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        }) : (
+          <div className="rounded-[8px] bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-500">아직 등록된 수업 계획이 없습니다.</div>
+        )}
+        {saving ? (
+          <div className="inline-flex items-center gap-1.5 rounded-[8px] bg-zinc-50 px-3 py-2 text-xs font-black text-zinc-500 ring-1 ring-black/5">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            저장 중
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -509,6 +696,268 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
   );
 }
 
+function LessonPlanEditorModal({
+  draft,
+  durationMinutes,
+  batches,
+  problemSets,
+  saving,
+  error,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  draft: LessonPlanDraft;
+  durationMinutes: number;
+  batches: Batch[];
+  problemSets: ProblemSetListItem[];
+  saving: boolean;
+  error: string;
+  onChange: (draft: LessonPlanDraft) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const selectedKindIcon = LESSON_KIND_ICONS[draft.kind] || BookOpen;
+  const SelectedIcon = selectedKindIcon;
+  const doneBatches = batches.filter((batch) => batch.status === "done" && batch.problem_count > 0);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
+      <section className="w-full max-w-xl rounded-[8px] bg-white p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)] ring-1 ring-black/10">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-[8px] bg-zinc-100 text-zinc-950">
+                <SelectedIcon className="h-4 w-4" />
+              </span>
+              <div>
+                <h2 className="text-lg font-black text-zinc-950">{draft.id ? "계획 수정" : "계획 추가"}</h2>
+                <p className="mt-0.5 text-xs font-bold text-zinc-500">현재 수업 안에서만 저장됩니다.</p>
+              </div>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-[7px] text-zinc-500 hover:bg-zinc-100 hover:text-black" aria-label="닫기">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <label className="block">
+            <span className="text-xs font-black text-zinc-600">제목</span>
+            <input
+              value={draft.title}
+              onChange={(event) => onChange({ ...draft, title: event.target.value })}
+              placeholder="예: 1교시, 쉬는 시간, Preview test"
+              className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
+            />
+          </label>
+
+          <div>
+            <div className="text-xs font-black text-zinc-600">유형</div>
+            <div className="mt-1 grid grid-cols-3 gap-2">
+              {(["lesson", "break", "test"] as LessonPlanKind[]).map((kind) => {
+                const Icon = LESSON_KIND_ICONS[kind] || BookOpen;
+                const active = draft.kind === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => onChange({ ...draft, kind, title: draft.title || LESSON_KIND_LABELS[kind] })}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center gap-2 rounded-[8px] text-xs font-black ring-1 transition",
+                      active ? "bg-black text-white ring-black" : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {LESSON_KIND_LABELS[kind]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs font-black text-zinc-600">시작 분</span>
+              <input
+                type="number"
+                min={0}
+                max={Math.max(0, durationMinutes - 1)}
+                value={draft.startMinute}
+                onChange={(event) => onChange({ ...draft, startMinute: event.target.value })}
+                className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-black text-zinc-600">길이</span>
+              <input
+                type="number"
+                min={1}
+                max={durationMinutes}
+                value={draft.durationMinutes}
+                onChange={(event) => onChange({ ...draft, durationMinutes: event.target.value })}
+                className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
+              />
+            </label>
+          </div>
+
+          {draft.kind === "test" ? (
+            <label className="block">
+              <span className="text-xs font-black text-zinc-600">테스트 자료</span>
+              <select
+                value={draft.testSourceKey}
+                onChange={(event) => onChange({ ...draft, testSourceKey: event.target.value })}
+                className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
+              >
+                <option value="">자료 선택</option>
+                <optgroup label="추출 배치">
+                  {doneBatches.map((batch) => (
+                    <option key={batch.id} value={`batch:${batch.id}`}>
+                      {batch.name} · {batch.problem_count}문항
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="문항 묶음">
+                  {problemSets.filter((set) => set.item_count > 0).map((set) => (
+                    <option key={set.id} value={`problem_set:${set.id}`}>
+                      {set.name} · {set.item_count}문항
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              {draft.paperSessionId && !draft.testSourceKey ? (
+                <p className="mt-1 text-xs font-bold text-zinc-500">이미 연결된 테스트가 있습니다. 새 자료를 선택하면 테스트 세션을 새로 만듭니다.</p>
+              ) : null}
+            </label>
+          ) : null}
+
+          {error ? <div className="rounded-[8px] bg-red-50 px-3 py-2 text-xs font-black text-red-600">{error}</div> : null}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="h-10 rounded-[8px] px-4 text-sm font-black text-zinc-700 hover:bg-zinc-100">
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={saving}
+            className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-black px-4 text-sm font-black text-white transition hover:bg-zinc-800 disabled:bg-zinc-300"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            저장
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TestResultModal({
+  item,
+  detail,
+  loading,
+  error,
+  onClose,
+}: {
+  item: LiveLessonPlanItem;
+  detail: PaperSessionDetail | null;
+  loading: boolean;
+  error: string;
+  onClose: () => void;
+}) {
+  const gradedStudents = detail?.students.filter((student) => student.result.status === "graded" && typeof student.result.score === "number") || [];
+  const averageScore = gradedStudents.length
+    ? Math.round(gradedStudents.reduce((sum, student) => sum + Number(student.result.score || 0), 0) / gradedStudents.length)
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
+      <section className="max-h-[86vh] w-full max-w-4xl overflow-hidden rounded-[8px] bg-white shadow-[0_24px_70px_rgba(0,0,0,0.24)] ring-1 ring-black/10">
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 p-5">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-[8px] bg-sky-50 px-2.5 py-1 text-xs font-black text-sky-700">
+              <ClipboardList className="h-3.5 w-3.5" />
+              테스트
+            </div>
+            <h2 className="mt-2 text-xl font-black text-zinc-950">{detail?.title || item.title}</h2>
+            <p className="mt-1 text-xs font-bold text-zinc-500">{planTimeRangeText(item)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-[7px] text-zinc-500 hover:bg-zinc-100 hover:text-black" aria-label="닫기">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(86vh-5.5rem)] overflow-auto p-5">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 rounded-[8px] bg-zinc-50 px-4 py-12 text-sm font-black text-zinc-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              테스트 결과를 불러오는 중
+            </div>
+          ) : error ? (
+            <div className="rounded-[8px] bg-red-50 px-4 py-3 text-sm font-black text-red-600">{error}</div>
+          ) : detail ? (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-[8px] bg-zinc-50 p-3">
+                    <p className="text-[11px] font-black text-zinc-500">문항</p>
+                    <p className="mt-1 text-xl font-black text-zinc-950">{detail.problem_count}</p>
+                  </div>
+                  <div className="rounded-[8px] bg-zinc-50 p-3">
+                    <p className="text-[11px] font-black text-zinc-500">채점</p>
+                    <p className="mt-1 text-xl font-black text-zinc-950">{detail.graded_count}/{detail.assigned_count}</p>
+                  </div>
+                  <div className="rounded-[8px] bg-zinc-50 p-3">
+                    <p className="text-[11px] font-black text-zinc-500">평균</p>
+                    <p className="mt-1 text-xl font-black text-zinc-950">{averageScore == null ? "-" : `${averageScore}점`}</p>
+                  </div>
+                </div>
+
+                <section className="rounded-[8px] bg-zinc-50 p-3">
+                  <h3 className="text-sm font-black text-zinc-950">문항 미리보기</h3>
+                  <div className="mt-2 space-y-2">
+                    {detail.problems.slice(0, 8).map((problem) => (
+                      <article key={problem.problem_id} className="rounded-[8px] bg-white p-3 text-sm ring-1 ring-black/5">
+                        <div className="mb-1 text-xs font-black text-zinc-500">문항 {problem.original_problem_number || problem.problem_number}</div>
+                        <p className="line-clamp-3 whitespace-pre-wrap font-semibold leading-6 text-zinc-800">{problem.problem_text || "문항 텍스트 없음"}</p>
+                      </article>
+                    ))}
+                    {detail.problems.length > 8 ? <p className="text-xs font-bold text-zinc-500">외 {detail.problems.length - 8}문항</p> : null}
+                  </div>
+                </section>
+              </div>
+
+              <section className="rounded-[8px] bg-zinc-50 p-3">
+                <h3 className="text-sm font-black text-zinc-950">학생 결과</h3>
+                <div className="mt-2 space-y-2">
+                  {detail.students.map((student) => (
+                    <article key={student.id || student.result.id} className="rounded-[8px] bg-white p-3 ring-1 ring-black/5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-zinc-950">{student.name || "학생"}</p>
+                          <p className="mt-1 text-xs font-bold text-zinc-500">{student.result.status === "graded" ? "채점 완료" : "채점 대기"}</p>
+                        </div>
+                        <span className="shrink-0 text-lg font-black text-zinc-950">{typeof student.result.score === "number" ? `${Math.round(student.result.score)}점` : "-"}</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-1 text-center text-xs font-black">
+                        <div className="rounded-[7px] bg-zinc-50 py-2 text-zinc-700">정답 {student.result.correct_count}</div>
+                        <div className="rounded-[7px] bg-zinc-50 py-2 text-zinc-700">오답 {student.result.wrong_count}</div>
+                        <div className="rounded-[7px] bg-zinc-50 py-2 text-zinc-700">총 {student.result.total_count}</div>
+                      </div>
+                    </article>
+                  ))}
+                  {!detail.students.length ? <div className="rounded-[8px] bg-white p-4 text-sm font-bold text-zinc-500">아직 배정된 학생 결과가 없습니다.</div> : null}
+                </div>
+              </section>
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ShareOnlyView({ eventId, classId }: { eventId: string; classId: string }) {
   const storageKey = liveShareKey(eventId, classId);
   const [state, setState] = useState<SharedLectureState | null>(null);
@@ -660,6 +1109,16 @@ function LiveLectureContent() {
   const [slideUploadProgress, setSlideUploadProgress] = useState(0);
   const [slidePdf, setSlidePdf] = useState<SlidePdf | null>(null);
   const [pageNotes, setPageNotes] = useState<LecturePageNotes>({});
+  const [lessonPlan, setLessonPlan] = useState<LiveLessonPlanItem[]>([]);
+  const [lessonPlanDraft, setLessonPlanDraft] = useState<LessonPlanDraft | null>(null);
+  const [lessonPlanSaving, setLessonPlanSaving] = useState(false);
+  const [lessonPlanError, setLessonPlanError] = useState("");
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [problemSets, setProblemSets] = useState<ProblemSetListItem[]>([]);
+  const [testResultItem, setTestResultItem] = useState<LiveLessonPlanItem | null>(null);
+  const [testResultDetail, setTestResultDetail] = useState<PaperSessionDetail | null>(null);
+  const [testResultLoading, setTestResultLoading] = useState(false);
+  const [testResultError, setTestResultError] = useState("");
   const [sharing, setSharing] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [recordingMode, setRecordingMode] = useState<RecordingMode>("audio");
@@ -679,12 +1138,15 @@ function LiveLectureContent() {
   const storageKey = liveShareKey(eventId, classId);
   const shareUrl = slideShareUrl(eventId, classId);
   const currentPageNote = pageNotes[String(slidePage)] || "";
+  const activeDurationMinutes = useMemo(() => eventDurationMinutes(activeEvent, now), [activeEvent, now]);
 
   function applyLectureSession(session: LiveLectureSession) {
     const nextSlide = slidePdfFromSession(session);
     const nextPageNotes = normalizeLecturePageNotes(session.lecture.page_notes, session.lecture.notes);
+    const nextLessonPlan = normalizeLessonPlanItems(session.lecture.lesson_plan);
     setSessionEvent(session.event);
     setPageNotes(nextPageNotes);
+    setLessonPlan(nextLessonPlan);
     setSlidePage(session.lecture.page_number || 1);
     setSlidePdf((current) => {
       if (current?.url && isBlobUrl(current.url)) URL.revokeObjectURL(current.url);
@@ -706,6 +1168,7 @@ function LiveLectureContent() {
     if (shareOnly) return;
     if (!eventId) {
       setSessionEvent(null);
+      setLessonPlan([]);
       setSessionLoaded(true);
       savedSessionRef.current = { pageNotes: {}, pageNumber: 1 };
       return;
@@ -729,6 +1192,31 @@ function LiveLectureContent() {
       cancelled = true;
     };
   }, [eventId, shareOnly]);
+
+  useEffect(() => {
+    if (shareOnly) return;
+    let cancelled = false;
+    async function loadTestSources() {
+      try {
+        const [batchRows, setRows] = await Promise.all([
+          api<Batch[]>("/api/batches").catch(() => []),
+          api<ProblemSetListItem[]>("/api/problem-sets").catch(() => []),
+        ]);
+        if (cancelled) return;
+        setBatches(normalizeListResponse<Batch>(batchRows));
+        setProblemSets(normalizeListResponse<ProblemSetListItem>(setRows));
+      } catch {
+        if (!cancelled) {
+          setBatches([]);
+          setProblemSets([]);
+        }
+      }
+    }
+    void loadTestSources();
+    return () => {
+      cancelled = true;
+    };
+  }, [shareOnly]);
 
   useEffect(() => {
     if (!eventId || !sessionLoaded || shareOnly) return;
@@ -888,9 +1376,159 @@ function LiveLectureContent() {
     void applySlidePdfFile(file);
   }
 
+  function draftFromLessonPlanItem(item: LiveLessonPlanItem): LessonPlanDraft {
+    return {
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      startMinute: String(item.start_minute),
+      durationMinutes: String(item.duration_minutes),
+      paperSessionId: item.paper_session_id || null,
+      testSourceKey: "",
+    };
+  }
+
+  function openNewLessonPlanDraft() {
+    const lastEnd = lessonPlan.reduce((max, item) => Math.max(max, item.start_minute + item.duration_minutes), 0);
+    const startMinute = Math.min(Math.max(0, activeDurationMinutes - 1), lastEnd);
+    setLessonPlanError("");
+    setLessonPlanDraft({
+      title: "",
+      kind: "lesson",
+      startMinute: String(startMinute),
+      durationMinutes: String(Math.min(30, Math.max(1, activeDurationMinutes - startMinute))),
+      testSourceKey: "",
+    });
+  }
+
+  async function persistLessonPlan(nextPlan: LiveLessonPlanItem[]) {
+    if (!eventId) {
+      setLessonPlanError("수업 이벤트가 연결되어야 저장할 수 있습니다.");
+      setLessonPlanSaving(false);
+      return null;
+    }
+    setLessonPlanSaving(true);
+    setLessonPlanError("");
+    try {
+      const session = await saveLiveLectureSession(eventId, { lesson_plan: nextPlan });
+      const normalized = normalizeLessonPlanItems(session.lecture.lesson_plan);
+      setLessonPlan(normalized);
+      setSessionEvent(session.event);
+      setSessionNotice("수업 계획이 저장되었습니다.");
+      return normalized;
+    } catch {
+      setLessonPlanError("수업 계획을 저장하지 못했습니다. 시간을 확인하고 다시 시도해 주세요.");
+      return null;
+    } finally {
+      setLessonPlanSaving(false);
+    }
+  }
+
+  async function createTimelineTestSession(draft: LessonPlanDraft, startMinute: number, durationMinutes: number) {
+    const source = parseTestSourceKey(draft.testSourceKey);
+    if (!source) return draft.paperSessionId || null;
+    const targetClassId = classId || activeEvent?.class_id || "";
+    if (!targetClassId) throw new Error("class-required");
+    const scheduledAt = eventMinuteDate(activeEvent, startMinute);
+    const dueAt = eventMinuteDate(activeEvent, startMinute + durationMinutes);
+    const session = await createPaperSession({
+      title: draft.title.trim() || "Preview test",
+      source_batch_id: source.type === "batch" ? source.id : null,
+      source_problem_set_id: source.type === "problem_set" ? source.id : null,
+      session_type: "test",
+      target_type: "class",
+      class_ids: [targetClassId],
+      scheduled_at: scheduledAt ? scheduledAt.toISOString() : null,
+      due_at: dueAt ? dueAt.toISOString() : null,
+      status: "scheduled",
+      create_calendar_events: false,
+    });
+    return session.id;
+  }
+
+  async function saveLessonPlanDraft() {
+    if (!lessonPlanDraft || lessonPlanSaving) return;
+    const title = lessonPlanDraft.title.trim() || LESSON_KIND_LABELS[lessonPlanDraft.kind];
+    const startMinute = Number(lessonPlanDraft.startMinute);
+    const durationMinutes = Number(lessonPlanDraft.durationMinutes);
+    if (!Number.isInteger(startMinute) || !Number.isInteger(durationMinutes) || startMinute < 0 || durationMinutes < 1 || startMinute + durationMinutes > activeDurationMinutes) {
+      setLessonPlanError(`계획 블록은 0분부터 ${activeDurationMinutes}분 사이에 있어야 합니다.`);
+      return;
+    }
+    setLessonPlanSaving(true);
+    let paperSessionId = lessonPlanDraft.paperSessionId || null;
+    if (lessonPlanDraft.kind === "test") {
+      if (!paperSessionId && !lessonPlanDraft.testSourceKey) {
+        setLessonPlanError("테스트 블록에는 추출 배치 또는 문항 묶음을 선택해야 합니다.");
+        setLessonPlanSaving(false);
+        return;
+      }
+      try {
+        paperSessionId = await createTimelineTestSession(lessonPlanDraft, startMinute, durationMinutes);
+      } catch {
+        setLessonPlanError("테스트 세션을 만들지 못했습니다. 클래스에 활성 학생이 있는지 확인해 주세요.");
+        setLessonPlanSaving(false);
+        return;
+      }
+      if (!paperSessionId) {
+        setLessonPlanError("테스트 세션이 필요합니다.");
+        setLessonPlanSaving(false);
+        return;
+      }
+    }
+    const item: LiveLessonPlanItem = {
+      id: lessonPlanDraft.id || newLessonPlanId(),
+      title,
+      kind: lessonPlanDraft.kind,
+      start_minute: startMinute,
+      duration_minutes: durationMinutes,
+      paper_session_id: lessonPlanDraft.kind === "test" ? paperSessionId : null,
+    };
+    const nextPlan = normalizeLessonPlanItems(
+      lessonPlanDraft.id
+        ? lessonPlan.map((current) => (current.id === lessonPlanDraft.id ? item : current))
+        : [...lessonPlan, item]
+    );
+    const saved = await persistLessonPlan(nextPlan);
+    if (saved) setLessonPlanDraft(null);
+  }
+
+  async function deleteLessonPlanItem(item: LiveLessonPlanItem) {
+    const nextPlan = lessonPlan.filter((current) => current.id !== item.id);
+    await persistLessonPlan(nextPlan);
+  }
+
+  function openTestResult(item: LiveLessonPlanItem) {
+    if (!item.paper_session_id) {
+      setLessonPlanDraft(draftFromLessonPlanItem(item));
+      setLessonPlanError("테스트 자료를 먼저 연결해 주세요.");
+      return;
+    }
+    setTestResultItem(item);
+    setTestResultDetail(null);
+    setTestResultError("");
+    setTestResultLoading(true);
+    getPaperSessionDetail(item.paper_session_id)
+      .then((detail) => setTestResultDetail(detail))
+      .catch(() => setTestResultError("테스트 결과를 불러오지 못했습니다."))
+      .finally(() => setTestResultLoading(false));
+  }
+
   return (
     <div className="space-y-4">
-      <LectureTimeline event={activeEvent} now={now} />
+      <LectureTimeline
+        event={activeEvent}
+        now={now}
+        lessonPlan={lessonPlan}
+        saving={lessonPlanSaving}
+        onAdd={openNewLessonPlanDraft}
+        onEdit={(item) => {
+          setLessonPlanError("");
+          setLessonPlanDraft(draftFromLessonPlanItem(item));
+        }}
+        onDelete={deleteLessonPlanItem}
+        onOpenTest={openTestResult}
+      />
 
       {(!sessionLoaded || sessionSaving || sessionNotice) && !shareOnly ? (
         <section className="flex items-center justify-between rounded-[8px] bg-white px-4 py-2 text-xs font-black text-zinc-600 ring-1 ring-black/5">
@@ -1000,6 +1638,38 @@ function LiveLectureContent() {
           </button>
         </div>
       </section>
+      {lessonPlanDraft ? (
+        <LessonPlanEditorModal
+          draft={lessonPlanDraft}
+          durationMinutes={activeDurationMinutes}
+          batches={batches}
+          problemSets={problemSets}
+          saving={lessonPlanSaving}
+          error={lessonPlanError}
+          onChange={(draft) => {
+            setLessonPlanError("");
+            setLessonPlanDraft(draft);
+          }}
+          onClose={() => {
+            setLessonPlanDraft(null);
+            setLessonPlanError("");
+          }}
+          onSubmit={saveLessonPlanDraft}
+        />
+      ) : null}
+      {testResultItem ? (
+        <TestResultModal
+          item={testResultItem}
+          detail={testResultDetail}
+          loading={testResultLoading}
+          error={testResultError}
+          onClose={() => {
+            setTestResultItem(null);
+            setTestResultDetail(null);
+            setTestResultError("");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

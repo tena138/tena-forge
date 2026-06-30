@@ -147,6 +147,15 @@ export type LiveLectureSlidePdf = {
   content_type?: string | null;
 };
 
+export type LiveLessonPlanItem = {
+  id: string;
+  title: string;
+  kind: "lesson" | "break" | "test";
+  start_minute: number;
+  duration_minutes: number;
+  paper_session_id?: string | null;
+};
+
 export type LiveLectureSession = {
   event: LiveInteractionEvent;
   source: "event" | "class_default" | "empty" | string;
@@ -158,6 +167,7 @@ export type LiveLectureSession = {
     page_notes?: Record<string, string> | null;
     slide_pdf?: LiveLectureSlidePdf | null;
     page_number: number;
+    lesson_plan?: LiveLessonPlanItem[] | null;
     updated_at?: string | null;
   };
 };
@@ -167,6 +177,7 @@ export type LiveLectureSessionSavePayload = Partial<{
   page_notes: Record<string, string> | null;
   page_number: number | null;
   slide_pdf: LiveLectureSlidePdf | null;
+  lesson_plan: LiveLessonPlanItem[] | null;
 }>;
 
 export type LoginResult = {

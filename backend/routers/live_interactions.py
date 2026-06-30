@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from database import get_db, get_settings
-from models import Academy, AcademyClass, AcademyStaffMembership, AcademyWorkspaceSettings, ClassScheduleEvent, ClassTeacher
+from models import Academy, AcademyClass, AcademyStaffMembership, AcademyWorkspaceSettings, ClassScheduleEvent, ClassTeacher, PaperSession
 from services.academy_student_access import ensure_academy_subscription
 from services.ownership import current_user_id, current_workspace_id, require_workspace_owner
 from services.private_files import sign_static_url, static_file_path, static_relative_path
@@ -36,11 +36,21 @@ class LiveLectureSlidePayload(BaseModel):
     content_type: str | None = Field(default=None, max_length=120)
 
 
+class LiveLectureLessonPlanItemPayload(BaseModel):
+    id: str | None = Field(default=None, max_length=80)
+    title: str = Field(min_length=1, max_length=120)
+    kind: str = Field(default="lesson", max_length=20)
+    start_minute: int = Field(ge=0, le=1440)
+    duration_minutes: int = Field(ge=1, le=1440)
+    paper_session_id: UUID | None = None
+
+
 class LiveLectureSessionPayload(BaseModel):
     notes: str | None = None
     page_notes: dict[str, str] | None = None
     page_number: int | None = Field(default=None, ge=1, le=10000)
     slide_pdf: LiveLectureSlidePayload | None = None
+    lesson_plan: list[LiveLectureLessonPlanItemPayload] | None = None
 
 
 def _workspace_settings(db: Session, academy_id: str) -> AcademyWorkspaceSettings:
@@ -95,6 +105,88 @@ def _clean_live_page_notes(value: dict | None) -> dict[str, str]:
         if note.strip():
             cleaned[str(page)] = note
     return cleaned
+
+
+def _event_duration_minutes(event: ClassScheduleEvent) -> int:
+    starts_at = event.starts_at
+    ends_at = event.ends_at or starts_at + timedelta(minutes=60)
+    return max(1, math.ceil((ends_at - starts_at).total_seconds() / 60))
+
+
+def _validate_live_test_session(db: Session, academy_id: str, event: ClassScheduleEvent, paper_session_id: UUID) -> str:
+    session = db.get(PaperSession, paper_session_id)
+    if not session or session.academy_id != academy_id:
+        raise HTTPException(status_code=404, detail="Test session not found.")
+    class_ids = {str(value) for value in (session.class_ids or [])}
+    if str(event.class_id) not in class_ids:
+        raise HTTPException(status_code=400, detail="Test session is not assigned to this class.")
+    return str(session.id)
+
+
+def _clean_lesson_plan_item(
+    db: Session,
+    academy_id: str,
+    event: ClassScheduleEvent,
+    raw_item: dict | LiveLectureLessonPlanItemPayload,
+    *,
+    strict: bool,
+) -> dict | None:
+    raw = raw_item.model_dump() if isinstance(raw_item, LiveLectureLessonPlanItemPayload) else dict(raw_item or {})
+    item_id = re.sub(r"[^0-9A-Za-z_-]+", "", str(raw.get("id") or ""))[:80] or uuid4().hex
+    title = str(raw.get("title") or "").strip()[:120]
+    kind = str(raw.get("kind") or "lesson").strip().lower()
+    if kind not in {"lesson", "break", "test"}:
+        kind = "lesson"
+    if not title:
+        if strict:
+            raise HTTPException(status_code=400, detail="Lesson plan title is required.")
+        return None
+    try:
+        start_minute = int(raw.get("start_minute"))
+        duration_minutes = int(raw.get("duration_minutes"))
+    except (TypeError, ValueError):
+        if strict:
+            raise HTTPException(status_code=400, detail="Lesson plan time is invalid.")
+        return None
+    total_minutes = _event_duration_minutes(event)
+    if start_minute < 0 or duration_minutes < 1 or start_minute + duration_minutes > total_minutes:
+        if strict:
+            raise HTTPException(status_code=400, detail="Lesson plan block must stay inside the class time.")
+        return None
+    paper_session_id = None
+    if kind == "test" and raw.get("paper_session_id"):
+        try:
+            paper_session_id = _validate_live_test_session(db, academy_id, event, UUID(str(raw.get("paper_session_id"))))
+        except (TypeError, ValueError):
+            if strict:
+                raise HTTPException(status_code=400, detail="Test session id is invalid.")
+            return None
+    return {
+        "id": item_id,
+        "title": title,
+        "kind": kind,
+        "start_minute": start_minute,
+        "duration_minutes": duration_minutes,
+        "paper_session_id": paper_session_id,
+    }
+
+
+def _clean_lesson_plan(
+    db: Session,
+    academy_id: str,
+    event: ClassScheduleEvent,
+    value: list | None,
+    *,
+    strict: bool = False,
+) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[dict] = []
+    for raw_item in value[:80]:
+        item = _clean_lesson_plan_item(db, academy_id, event, raw_item, strict=strict)
+        if item:
+            cleaned.append(item)
+    return sorted(cleaned, key=lambda item: (item["start_minute"], item["title"]))
 
 
 def _normalize_slide(slide: dict | LiveLectureSlidePayload | None) -> dict | None:
@@ -236,6 +328,7 @@ def _live_session_payload(db: Session, academy_id: str, event: ClassScheduleEven
     notes = event_live.get("notes") if isinstance(event_live.get("notes"), str) else class_default.get("notes") if isinstance(class_default.get("notes"), str) else DEFAULT_LIVE_NOTES
     page_notes = event_live.get("page_notes") if isinstance(event_live.get("page_notes"), dict) else class_default.get("page_notes") if isinstance(class_default.get("page_notes"), dict) else {}
     page_number = event_live.get("page_number") if isinstance(event_live.get("page_number"), int) else 1
+    lesson_plan = _clean_lesson_plan(db, academy_id, event, event_live.get("lesson_plan") if isinstance(event_live, dict) else None)
     return {
         "event": _event_payload(event, class_row, datetime.utcnow()),
         "source": source,
@@ -247,6 +340,7 @@ def _live_session_payload(db: Session, academy_id: str, event: ClassScheduleEven
             "page_notes": _clean_live_page_notes(page_notes),
             "slide_pdf": _public_slide(event_live.get("slide_pdf") if isinstance(event_live, dict) else None, academy_id),
             "page_number": max(1, int(page_number or 1)),
+            "lesson_plan": lesson_plan,
             "updated_at": event_live.get("updated_at") if isinstance(event_live.get("updated_at"), str) else class_default.get("updated_at") if isinstance(class_default.get("updated_at"), str) else None,
         },
     }
@@ -347,6 +441,8 @@ def update_live_lecture_session(event_id: UUID, payload: LiveLectureSessionPaylo
             normalized = _normalize_slide(payload.slide_pdf)
             if normalized:
                 live["slide_pdf"] = normalized
+    if "lesson_plan" in fields:
+        live["lesson_plan"] = _clean_lesson_plan(db, academy_id, event, payload.lesson_plan or [], strict=True)
 
     live["updated_at"] = now
     metadata[LIVE_LECTURE_EVENT_METADATA_KEY] = live
