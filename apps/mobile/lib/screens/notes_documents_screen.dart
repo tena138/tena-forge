@@ -336,6 +336,7 @@ class _FolderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<NoteLibraryState>();
+    final assignmentLabel = _assignmentTypeLabel(item);
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: () => _openLibraryItem(context, item),
@@ -389,6 +390,13 @@ class _FolderTile extends StatelessWidget {
               ),
             ],
           ),
+          if (assignmentLabel != null) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.center,
+              child: _AssignmentTypeBadge(label: assignmentLabel),
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
             _formatItemDate(item.updatedAt),
@@ -411,6 +419,10 @@ class _FolderListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<NoteLibraryState>();
+    final assignmentLabel = _assignmentTypeLabel(item);
+    final subtitle = assignmentLabel == null
+        ? '${item.typeLabel} · ${_formatItemDate(item.updatedAt)}'
+        : '$assignmentLabel · ${_formatItemDate(item.updatedAt)}';
     return ListTile(
       onTap: () => _openLibraryItem(context, item),
       tileColor: AppColors.panel,
@@ -427,10 +439,7 @@ class _FolderListItem extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
-      subtitle: Text(
-        '${item.typeLabel} · ${_formatItemDate(item.updatedAt)}',
-        style: const TextStyle(color: AppColors.muted),
-      ),
+      subtitle: Text(subtitle, style: const TextStyle(color: AppColors.muted)),
       trailing: Wrap(
         spacing: 2,
         children: [
@@ -627,9 +636,54 @@ class _NotebookGraphic extends StatelessWidget {
   }
 }
 
+class _AssignmentTypeBadge extends StatelessWidget {
+  const _AssignmentTypeBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.text,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.panel,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 String _formatItemDate(DateTime date) {
   if (date.year < 2001) return 'No date';
   return DateFormat('MMM d, yyyy \'at\' h:mm a').format(date.toLocal());
+}
+
+String? _assignmentTypeLabel(NoteLibraryItem item) {
+  if (item.type == NoteItemType.folder) return null;
+  switch ((item.assignmentType ?? '').trim().toLowerCase()) {
+    case 'textbook':
+    case 'book':
+    case 'material':
+      return '교재';
+    case 'homework':
+    case 'assignment':
+      return '과제';
+    case 'test':
+    case 'exam':
+      return '시험';
+    default:
+      return null;
+  }
 }
 
 Future<void> _showItemMenu(BuildContext context, NoteLibraryItem item) async {
