@@ -407,6 +407,9 @@ class Assignment {
     this.submittedAt,
     this.startedAt,
     this.timeLimitSeconds,
+    this.serverNow,
+    this.testExpiresAt,
+    this.testRemainingSeconds,
     this.problemCount = 0,
     this.materialTitle,
     this.materialScope,
@@ -430,6 +433,9 @@ class Assignment {
   final DateTime? submittedAt;
   final DateTime? startedAt;
   final int? timeLimitSeconds;
+  final DateTime? serverNow;
+  final DateTime? testExpiresAt;
+  final int? testRemainingSeconds;
   final int problemCount;
   final String? materialTitle;
   final String? materialScope;
@@ -511,6 +517,9 @@ class Assignment {
       status: submission['status']?.toString(),
       startedAt: _parseUtcServerDateTime(submission['started_at']),
       submittedAt: _parseUtcServerDateTime(submission['submitted_at']),
+      serverNow: _parseUtcServerDateTime(json['server_now']),
+      testExpiresAt: _parseUtcServerDateTime(json['test_expires_at']),
+      testRemainingSeconds: (json['test_remaining_seconds'] as num?)?.toInt(),
       problemCount: problemCount,
       materialTitle: snapshot['material_title'] == null
           ? null
@@ -830,6 +839,7 @@ class ClassScheduleLessonPlanItem {
     required this.startMinute,
     required this.durationMinutes,
     this.paperSessionId,
+    this.learningAssignmentId,
   });
 
   final String id;
@@ -838,6 +848,7 @@ class ClassScheduleLessonPlanItem {
   final int startMinute;
   final int durationMinutes;
   final String? paperSessionId;
+  final String? learningAssignmentId;
 
   factory ClassScheduleLessonPlanItem.fromJson(Map<String, dynamic> json) {
     return ClassScheduleLessonPlanItem(
@@ -847,6 +858,7 @@ class ClassScheduleLessonPlanItem {
       startMinute: (json['start_minute'] as num?)?.toInt() ?? 0,
       durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 1,
       paperSessionId: json['paper_session_id']?.toString(),
+      learningAssignmentId: json['learning_assignment_id']?.toString(),
     );
   }
 }

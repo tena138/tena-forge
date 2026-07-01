@@ -27,6 +27,8 @@ class _TestScreenState extends State<TestScreen> {
   Timer? _timer;
   Assignment? _assignment;
   DateTime? _startedAt;
+  DateTime? _remainingSyncedAt;
+  int? _remainingAtSync;
   int _pageIndex = 0;
   int _remainingSeconds = 0;
   bool _submitting = false;
@@ -67,6 +69,18 @@ class _TestScreenState extends State<TestScreen> {
       _answers.putIfAbsent(problem.id, () => '');
     }
     _startedAt = assignment.startedAt ?? DateTime.now().toUtc();
+    final serverRemaining = assignment.testRemainingSeconds;
+    if (serverRemaining != null && serverRemaining >= 0) {
+      _remainingAtSync = serverRemaining;
+      _remainingSyncedAt = DateTime.now();
+    } else if (startTimer && assignment.isTest && _limitSeconds != null) {
+      _startedAt = DateTime.now().toUtc();
+      _remainingAtSync = _limitSeconds;
+      _remainingSyncedAt = DateTime.now();
+    } else {
+      _remainingAtSync = null;
+      _remainingSyncedAt = null;
+    }
     _syncRemainingSeconds();
     _timer?.cancel();
     if (startTimer && _limitSeconds != null) {
@@ -95,7 +109,28 @@ class _TestScreenState extends State<TestScreen> {
     return null;
   }
 
+  int _computedRemainingSeconds() {
+    final limit = _limitSeconds;
+    if (limit == null) return 0;
+    final remainingAtSync = _remainingAtSync;
+    final remainingSyncedAt = _remainingSyncedAt;
+    if (remainingAtSync != null && remainingSyncedAt != null) {
+      final elapsedSinceSync = DateTime.now()
+          .difference(remainingSyncedAt)
+          .inSeconds;
+      return math.max(0, remainingAtSync - elapsedSinceSync);
+    }
+    final startedAt = _startedAt;
+    if (startedAt == null) return limit;
+    return math.max(
+      0,
+      limit - DateTime.now().toUtc().difference(startedAt.toUtc()).inSeconds,
+    );
+  }
+
   int get _elapsedSeconds {
+    final limit = _limitSeconds;
+    if (limit != null) return math.max(0, limit - _computedRemainingSeconds());
     final startedAt = _startedAt;
     if (startedAt == null) return 0;
     return math.max(
@@ -106,9 +141,7 @@ class _TestScreenState extends State<TestScreen> {
 
   void _syncRemainingSeconds() {
     final limit = _limitSeconds;
-    _remainingSeconds = limit == null
-        ? 0
-        : math.max(0, limit - _elapsedSeconds);
+    _remainingSeconds = limit == null ? 0 : _computedRemainingSeconds();
   }
 
   void _tickTimer() {

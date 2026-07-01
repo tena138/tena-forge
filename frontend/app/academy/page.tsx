@@ -125,6 +125,59 @@ function learningAssignmentWorkloadLabel(assignment: LearningAssignment) {
   return snapshot.material_scope || "직접 입력 숙제";
 }
 
+function learningAssignmentMaterialType(assignment: LearningAssignment): LearningMaterialType | string {
+  return assignment.content.snapshot.assignment_type || (assignment.time_limit_seconds ? "test" : "homework");
+}
+
+function learningAssignmentMaterialTypeLabel(assignment: LearningAssignment) {
+  const type = learningAssignmentMaterialType(assignment);
+  if (type === "textbook" || type === "homework" || type === "test") return learningMaterialTypeLabel(type);
+  return type;
+}
+
+function learningAssignmentDeadline(assignment: LearningAssignment) {
+  return assignment.due_at || assignment.content.snapshot.material_expires_at || null;
+}
+
+function isActiveLearningAssignment(assignment: LearningAssignment) {
+  if (assignment.status === "archived" || assignment.status === "closed") return false;
+  const deadline = learningAssignmentDeadline(assignment);
+  if (!deadline) return assignment.status === "published";
+  const date = new Date(deadline);
+  if (Number.isNaN(date.getTime())) return assignment.status === "published";
+  return assignment.status === "published" && date.getTime() >= Date.now();
+}
+
+function learningAssignmentStatusLabelForClass(assignment: LearningAssignment) {
+  if (assignment.status === "archived") return "보관됨";
+  if (assignment.status === "closed") return "마감";
+  if (assignment.status !== "published") return assignment.status;
+  const deadline = learningAssignmentDeadline(assignment);
+  if (!deadline) return "진행 중";
+  const date = new Date(deadline);
+  if (!Number.isNaN(date.getTime()) && date.getTime() < Date.now()) return "마감";
+  return "진행 중";
+}
+
+function learningAssignmentScheduleLine(assignment: LearningAssignment) {
+  const parts: string[] = [];
+  if (assignment.start_at) parts.push(`시작 ${compactDate(assignment.start_at)}`);
+  if (assignment.due_at) parts.push(`기한 ${compactDate(assignment.due_at)}`);
+  else if (assignment.content.snapshot.material_expires_at) parts.push(`열람 ${compactDate(assignment.content.snapshot.material_expires_at)}`);
+  if (assignment.time_limit_seconds) parts.push(`${Math.round(assignment.time_limit_seconds / 60)}분`);
+  return parts.join(" · ") || "기한 없음";
+}
+
+function learningAssignmentTargetsClass(assignment: LearningAssignment, classId: string, studentIds: Set<string>) {
+  const targets = assignment.targets || [];
+  if (!targets.length) return false;
+  return targets.some((target) => {
+    if ((target.target_type === "class" || target.target_type === "group" || target.target_type === "groups") && target.target_id === classId) return true;
+    if ((target.target_type === "student" || target.target_type === "students") && studentIds.has(target.target_id)) return true;
+    return false;
+  });
+}
+
 function fileName(value: string | null) {
   if (!value) return "-";
   return value.split(/[\\/]/).pop() || value;
@@ -1165,6 +1218,324 @@ function AcademyOperationsPanel() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function AcademyClassesPanel() {
+  const [profile, setProfile] = useState<AcademyProfile | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(null);
+  const [classes, setClasses] = useState<AcademyClass[]>([]);
+  const [learningStudents, setLearningStudents] = useState<AcademyLearningStudent[]>([]);
+  const [learningAssignments, setLearningAssignments] = useState<LearningAssignment[]>([]);
+  const [learningReport, setLearningReport] = useState<LearningAssignmentReport | null>(null);
+  const [reportLoadingId, setReportLoadingId] = useState("");
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const academyId = activeWorkspaceId && activeWorkspaceId !== "student" ? activeWorkspaceId : resolveActiveAcademyId(profile);
+
+  async function load(id = academyId) {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const [classRows, studentRows, assignmentRows] = await Promise.all([
+        listAcademyClasses(id),
+        listAcademyLearningStudents(id),
+        listAcademyLearningAssignments(id),
+      ]);
+      setClasses(classRows);
+      setLearningStudents(studentRows);
+      setLearningAssignments(assignmentRows);
+      setSelectedClassId((current) => (current && classRows.some((row) => row.id === current) ? current : classRows[0]?.id || ""));
+      setError("");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "클래스 현황을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const syncWorkspace = () => {
+      const currentProfile = readStoredAuthProfile<AcademyProfile>();
+      setProfile(currentProfile);
+      setActiveWorkspaceIdState(getActiveWorkspaceId());
+      const id = resolveActiveAcademyId(currentProfile);
+      if (id) void load(id);
+    };
+    syncWorkspace();
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, syncWorkspace);
+    return () => window.removeEventListener(WORKSPACE_CHANGED_EVENT, syncWorkspace);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Workspace changes explicitly reload the academy-scoped data.
+  }, []);
+
+  const classSummaries = useMemo(
+    () =>
+      classes.map((classRow) => {
+        const students = learningStudents.filter((student) => student.groups.some((group) => group.id === classRow.id));
+        const studentIds = new Set(students.map((student) => student.student_user_id));
+        const assignments = learningAssignments.filter((assignment) => learningAssignmentTargetsClass(assignment, classRow.id, studentIds));
+        return {
+          classRow,
+          students,
+          assignments,
+          activeAssignments: assignments.filter(isActiveLearningAssignment),
+          textbookCount: assignments.filter((assignment) => learningAssignmentMaterialType(assignment) === "textbook").length,
+          homeworkCount: assignments.filter((assignment) => learningAssignmentMaterialType(assignment) === "homework").length,
+          testCount: assignments.filter((assignment) => learningAssignmentMaterialType(assignment) === "test").length,
+        };
+      }),
+    [classes, learningAssignments, learningStudents]
+  );
+
+  const selectedSummary = classSummaries.find((summary) => summary.classRow.id === selectedClassId) || classSummaries[0] || null;
+
+  const selectedStudentNameById = useMemo(() => {
+    const names = new Map<string, string>();
+    selectedSummary?.students.forEach((student) => names.set(student.student_user_id, student.student_name));
+    return names;
+  }, [selectedSummary]);
+
+  function targetLabelsForSelectedClass(assignment: LearningAssignment) {
+    if (!selectedSummary) return [];
+    const labels = (assignment.targets || [])
+      .map((target) => {
+        if ((target.target_type === "class" || target.target_type === "group" || target.target_type === "groups") && target.target_id === selectedSummary.classRow.id) {
+          return `${selectedSummary.classRow.name} 전체`;
+        }
+        if ((target.target_type === "student" || target.target_type === "students") && selectedStudentNameById.has(target.target_id)) {
+          return selectedStudentNameById.get(target.target_id) || target.target_name || "학생";
+        }
+        return null;
+      })
+      .filter(Boolean) as string[];
+    return Array.from(new Set(labels));
+  }
+
+  async function openClassLearningReport(assignment: LearningAssignment) {
+    if (!academyId) return;
+    setReportLoadingId(assignment.id);
+    try {
+      setLearningReport(await readLearningAssignmentReport(academyId, assignment.id));
+      setError("");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "리포트를 불러오지 못했습니다.");
+    } finally {
+      setReportLoadingId("");
+    }
+  }
+
+  if (!academyId && profile?.account_type === "student") {
+    return (
+      <div className="mx-auto max-w-xl rounded-[14px] bg-white p-6 text-center">
+        <h1 className="text-xl font-bold text-zinc-950">학생 계정에서는 Tena Note를 사용합니다.</h1>
+        <a href="/student" className="mt-5 inline-flex h-10 items-center rounded-[8px] bg-black px-4 text-sm font-semibold text-white hover:bg-zinc-800">
+          Student App으로 이동
+        </a>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return <div className="rounded-[12px] bg-white p-6 text-sm font-semibold text-zinc-700">로그인이 필요합니다.</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {(loading || error) && (
+        <div className="rounded-[12px] bg-zinc-100 p-4 text-sm font-semibold">
+          {loading && <div className="text-zinc-700">클래스 현황을 불러오는 중입니다.</div>}
+          {error && <div className="text-zinc-800">{error}</div>}
+        </div>
+      )}
+
+      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpenCheck className="h-5 w-5" />
+                  클래스
+                </CardTitle>
+                <p className="mt-2 text-sm leading-6 text-zinc-500">클래스별 진행 교재, 과제, 시험 할당 내역을 확인합니다.</p>
+              </div>
+              <Link
+                href="/academy?panel=seats"
+                className="inline-flex h-9 shrink-0 items-center rounded-[7px] bg-zinc-100 px-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200"
+              >
+                자료 할당
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {classSummaries.length ? (
+              classSummaries.map((summary) => {
+                const selected = selectedSummary?.classRow.id === summary.classRow.id;
+                return (
+                  <button
+                    key={summary.classRow.id}
+                    type="button"
+                    onClick={() => setSelectedClassId(summary.classRow.id)}
+                    className={`w-full rounded-[10px] p-4 text-left transition ${
+                      selected ? "bg-black text-white" : "bg-zinc-100 text-zinc-950 hover:bg-zinc-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-black">{summary.classRow.name}</div>
+                        <div className={`mt-1 truncate text-xs font-semibold ${selected ? "text-zinc-300" : "text-zinc-500"}`}>
+                          {[summary.classRow.subject, summary.classRow.grade_level].filter(Boolean).join(" · ") || "클래스 정보 없음"}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 text-xs font-black ${selected ? "text-white" : "text-zinc-700"}`}>{summary.students.length}명</span>
+                    </div>
+                    <div className={`mt-4 grid grid-cols-3 gap-2 text-xs font-semibold ${selected ? "text-zinc-200" : "text-zinc-600"}`}>
+                      <span>진행 {summary.activeAssignments.length}</span>
+                      <span>교재 {summary.textbookCount}</span>
+                      <span>시험 {summary.testCount}</span>
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <EmptyState>아직 생성된 클래스가 없습니다.</EmptyState>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-5">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{selectedSummary?.classRow.name || "클래스 선택"}</CardTitle>
+                  <p className="mt-2 text-sm leading-6 text-zinc-500">
+                    {selectedSummary
+                      ? [selectedSummary.classRow.subject, selectedSummary.classRow.grade_level, selectedSummary.classRow.description].filter(Boolean).join(" · ") ||
+                        "클래스 정보 없음"
+                      : "왼쪽에서 클래스를 선택하세요."}
+                  </p>
+                </div>
+                <Link
+                  href="/student-management"
+                  className="inline-flex h-9 items-center rounded-[7px] bg-zinc-100 px-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200"
+                >
+                  학생 관리
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: "학생", value: selectedSummary?.students.length ?? 0, icon: LineChart },
+                  { label: "진행 중", value: selectedSummary?.activeAssignments.length ?? 0, icon: Clock3 },
+                  { label: "교재", value: selectedSummary?.textbookCount ?? 0, icon: PackageCheck },
+                  { label: "시험", value: selectedSummary?.testCount ?? 0, icon: ClipboardCheck },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-[10px] bg-zinc-100 p-4">
+                    <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </div>
+                    <div className="mt-3 text-2xl font-black text-zinc-950">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Archive className="h-5 w-5" />
+                  진행 교재 / 시험 내역
+                </CardTitle>
+                <div className="text-sm font-semibold text-zinc-500">{selectedSummary?.assignments.length || 0}개</div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {selectedSummary?.assignments.length ? (
+                selectedSummary.assignments.map((assignment) => {
+                  const active = isActiveLearningAssignment(assignment);
+                  const targetLabels = targetLabelsForSelectedClass(assignment);
+                  return (
+                    <div key={assignment.id} className="rounded-[12px] bg-zinc-100 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={active ? "default" : "secondary"}>{learningAssignmentStatusLabelForClass(assignment)}</Badge>
+                            <Badge variant="outline">{learningAssignmentMaterialTypeLabel(assignment)}</Badge>
+                            <span className="text-xs font-semibold text-zinc-500">{learningAssignmentWorkloadLabel(assignment)}</span>
+                          </div>
+                          <div className="mt-3 truncate text-base font-black text-zinc-950">{assignment.title}</div>
+                          <div className="mt-1 text-sm font-semibold text-zinc-500">{learningAssignmentScheduleLine(assignment)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void openClassLearningReport(assignment)}
+                          disabled={reportLoadingId === assignment.id}
+                          className="inline-flex h-9 items-center rounded-[7px] bg-white px-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200"
+                        >
+                          <ArrowUpRight className="h-4 w-4" />
+                          {reportLoadingId === assignment.id ? "확인 중" : "리포트"}
+                        </button>
+                      </div>
+                      {targetLabels.length ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {targetLabels.map((label) => (
+                            <span key={label} className="rounded-[6px] bg-white px-2 py-1 text-xs font-semibold text-zinc-600">
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <EmptyState>이 클래스에 배포된 교재, 과제, 시험이 아직 없습니다.</EmptyState>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Dialog open={!!learningReport} onOpenChange={(open) => !open && setLearningReport(null)}>
+        <DialogContent className="max-w-2xl bg-white text-zinc-950">
+          {learningReport ? (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-black text-zinc-950">{learningReport.assignment.title}</h2>
+                <p className="mt-2 text-sm font-semibold text-zinc-500">
+                  대상 {learningReport.summary.target_count} · 제출 {learningReport.summary.submitted_count} · 미제출 {learningReport.summary.missing_count}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-[10px] bg-zinc-100 p-4">
+                  <div className="text-xs font-bold text-zinc-500">완료율</div>
+                  <div className="mt-2 text-2xl font-black text-zinc-950">{percentLabel(learningReport.summary.completion_rate)}</div>
+                </div>
+                <div className="rounded-[10px] bg-zinc-100 p-4">
+                  <div className="text-xs font-bold text-zinc-500">평균</div>
+                  <div className="mt-2 text-2xl font-black text-zinc-950">{learningReport.summary.average_score ?? "-"}</div>
+                </div>
+              </div>
+              <div className="max-h-80 space-y-2 overflow-y-auto">
+                {learningReport.students.map((student) => (
+                  <div key={student.student_id} className="flex items-center justify-between gap-3 rounded-[10px] bg-zinc-100 px-4 py-3 text-sm">
+                    <span className="min-w-0 truncate font-bold text-zinc-950">{student.student_name}</span>
+                    <span className="shrink-0 font-semibold text-zinc-600">{learningSubmissionStatusLabel(student.status)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
@@ -2406,7 +2777,8 @@ function AcademySchedulePanel() {
 function AcademyPageContent() {
   const searchParams = useSearchParams();
   const panel = searchParams.get("panel");
-  if (panel === "seats" || panel === "classes") return <AcademyOperationsPanel />;
+  if (panel === "seats") return <AcademyOperationsPanel />;
+  if (panel === "classes") return <AcademyClassesPanel />;
   if (panel === "operations") return <AcademySchedulePanel />;
   return <AcademyConsoleHome />;
 }

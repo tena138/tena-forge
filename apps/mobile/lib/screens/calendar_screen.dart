@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -527,6 +528,17 @@ class _ClassPreviewBody extends StatelessWidget {
                         (item) => _LessonPlanRow(
                           item: item,
                           classStartsAt: event.startsAt,
+                          onOpenTest:
+                              item.learningAssignmentId == null ||
+                                  item.learningAssignmentId!.isEmpty
+                              ? null
+                              : () {
+                                  final router = GoRouter.of(context);
+                                  final assignmentId =
+                                      item.learningAssignmentId!;
+                                  Navigator.of(context).pop();
+                                  router.push('/test/$assignmentId');
+                                },
                         ),
                       )
                       .toList(growable: false),
@@ -595,10 +607,15 @@ class _PreviewSection extends StatelessWidget {
 }
 
 class _LessonPlanRow extends StatelessWidget {
-  const _LessonPlanRow({required this.item, required this.classStartsAt});
+  const _LessonPlanRow({
+    required this.item,
+    required this.classStartsAt,
+    this.onOpenTest,
+  });
 
   final ClassScheduleLessonPlanItem item;
   final DateTime classStartsAt;
+  final VoidCallback? onOpenTest;
 
   @override
   Widget build(BuildContext context) {
@@ -606,8 +623,7 @@ class _LessonPlanRow extends StatelessWidget {
       Duration(minutes: item.startMinute),
     );
     final endsAt = startsAt.add(Duration(minutes: item.durationMinutes));
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+    final content = Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.panelSoft,
@@ -640,7 +656,22 @@ class _LessonPlanRow extends StatelessWidget {
               ),
             ),
           ),
+          if (onOpenTest != null) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, color: AppColors.muted, size: 18),
+          ],
         ],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onOpenTest,
+          borderRadius: BorderRadius.circular(8),
+          child: content,
+        ),
       ),
     );
   }

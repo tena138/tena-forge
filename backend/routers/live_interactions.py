@@ -155,13 +155,16 @@ def _clean_lesson_plan_item(
             raise HTTPException(status_code=400, detail="Lesson plan block must stay inside the class time.")
         return None
     paper_session_id = None
-    if kind == "test" and raw.get("paper_session_id"):
+    if raw.get("paper_session_id"):
         try:
             paper_session_id = _validate_live_test_session(db, academy_id, event, UUID(str(raw.get("paper_session_id"))))
         except (TypeError, ValueError):
             if strict:
                 raise HTTPException(status_code=400, detail="Test session id is invalid.")
             return None
+        kind = "test"
+    elif kind == "test":
+        kind = "lesson"
     color = str(raw.get("color") or "").strip().lower()
     if not re.fullmatch(r"#[0-9a-f]{6}", color):
         color = None

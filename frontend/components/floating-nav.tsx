@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
+  BookOpenCheck,
   CalendarDays,
   FileUp,
   FolderKanban,
@@ -67,6 +68,7 @@ const sections = [
     activeIcon: "text-white group-hover:text-white",
     items: [
       { href: "/academy?panel=operations", label: "캘린더", icon: CalendarDays },
+      { href: "/academy?panel=classes", label: "클래스", icon: BookOpenCheck },
       { href: "/student-management", label: "학생 관리", icon: NotebookPen },
       { href: "/student-management?tab=counseling", label: "상담", icon: MessageSquare },
       { href: "/student-management/tuition", label: "수강료", icon: ReceiptText },

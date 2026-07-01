@@ -574,19 +574,35 @@ def _clean_live_preview_page_notes(value: Any) -> dict[str, str]:
     return cleaned
 
 
-def _clean_live_preview_lesson_plan(value: Any, event: ClassScheduleEvent) -> list[dict[str, Any]]:
+def _clean_live_preview_lesson_plan(db: Session, value: Any, event: ClassScheduleEvent) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     total_minutes = _class_schedule_duration_minutes(event)
+    raw_items = [raw for raw in value[:80] if isinstance(raw, dict)]
+    paper_session_ids = [str(raw.get("paper_session_id")) for raw in raw_items if raw.get("paper_session_id")]
+    assignment_by_paper_session_id: dict[str, str] = {}
+    if paper_session_ids:
+        assignments = db.scalars(
+            select(LearningAssignment).where(
+                LearningAssignment.academy_id == event.academy_id,
+                LearningAssignment.source_type == "paper_session",
+                LearningAssignment.source_id.in_(paper_session_ids),
+                LearningAssignment.status.in_(["published", "closed"]),
+            )
+        ).all()
+        assignment_by_paper_session_id = {str(assignment.source_id): str(assignment.id) for assignment in assignments}
     items: list[dict[str, Any]] = []
-    for raw in value[:80]:
-        if not isinstance(raw, dict):
-            continue
+    for raw in raw_items:
         title = str(raw.get("title") or "").strip()[:120]
         if not title:
             continue
         kind = str(raw.get("kind") or "lesson").strip().lower()
         if kind not in {"lesson", "break", "test"}:
+            kind = "lesson"
+        paper_session_id = str(raw.get("paper_session_id")) if raw.get("paper_session_id") else None
+        if paper_session_id:
+            kind = "test"
+        elif kind == "test":
             kind = "lesson"
         try:
             start_minute = int(raw.get("start_minute"))
@@ -602,7 +618,8 @@ def _clean_live_preview_lesson_plan(value: Any, event: ClassScheduleEvent) -> li
                 "kind": kind,
                 "start_minute": start_minute,
                 "duration_minutes": duration_minutes,
-                "paper_session_id": str(raw.get("paper_session_id")) if raw.get("paper_session_id") else None,
+                "paper_session_id": paper_session_id,
+                "learning_assignment_id": assignment_by_paper_session_id.get(paper_session_id) if paper_session_id else None,
             }
         )
     return sorted(items, key=lambda item: (item["start_minute"], item["title"]))
@@ -650,7 +667,7 @@ def _student_class_schedule_preview_payload(
         "lecture": {
             "notes": _clean_live_preview_notes(notes),
             "page_notes": _clean_live_preview_page_notes(page_notes),
-            "lesson_plan": _clean_live_preview_lesson_plan(lesson_plan_source, event),
+            "lesson_plan": _clean_live_preview_lesson_plan(db, lesson_plan_source, event),
             "updated_at": updated_at,
         },
     }

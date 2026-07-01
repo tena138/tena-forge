@@ -605,9 +605,21 @@ def _test_start_window_minutes(snapshot: dict[str, Any], key: str) -> int | None
     return minutes if minutes >= 0 else None
 
 
+def _assignment_time_limit_seconds(assignment: LearningAssignment) -> int | None:
+    value = assignment.time_limit_seconds
+    if value is None and assignment.content_version:
+        snapshot = dict(assignment.content_version.snapshot or {})
+        value = snapshot.get("time_limit_seconds")
+    try:
+        seconds = int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds and seconds > 0 else None
+
+
 def _ensure_learning_assignment_can_start(assignment: LearningAssignment, now: datetime) -> None:
     snapshot = dict(assignment.content_version.snapshot or {}) if assignment.content_version else {}
-    assignment_type = _normalize_assignment_type(snapshot.get("assignment_type") or ("test" if assignment.time_limit_seconds else "homework"))
+    assignment_type = _normalize_assignment_type(snapshot.get("assignment_type") or ("test" if _assignment_time_limit_seconds(assignment) else "homework"))
     if assignment_type != "test" or not assignment.start_at:
         return
     before_minutes = _test_start_window_minutes(snapshot, "test_start_window_before_minutes")
@@ -766,11 +778,44 @@ def _problem_for_student(problem: dict[str, Any], *, show_answer: bool, show_sol
     return payload
 
 
-def _assignment_payload(db: Session, assignment: LearningAssignment, student_id: str | None = None) -> dict[str, Any]:
+def _assignment_targets_payload(db: Session, assignment: LearningAssignment) -> list[dict[str, Any]]:
+    targets = db.scalars(select(LearningAssignmentTarget).where(LearningAssignmentTarget.assignment_id == assignment.id)).all()
+    group_ids = {target.group_id for target in targets if target.group_id}
+    student_ids = {target.student_id for target in targets if target.student_id}
+    group_names: dict[str, str] = {}
+    student_names: dict[str, str] = {}
+    if group_ids:
+        groups = db.scalars(
+            select(AcademyClass).where(AcademyClass.academy_id == assignment.academy_id, AcademyClass.id.in_(list(group_ids)))
+        ).all()
+        group_names = {str(group.id): group.name for group in groups}
+    if student_ids:
+        memberships = db.scalars(
+            select(StudentAcademyMembership).where(
+                StudentAcademyMembership.academy_id == assignment.academy_id,
+                StudentAcademyMembership.student_user_id.in_(list(student_ids)),
+            )
+        ).all()
+        student_names = {
+            membership.student_user_id: membership.display_name_in_academy or _student_name(db, membership.student_user_id)
+            for membership in memberships
+        }
+    rows: list[dict[str, Any]] = []
+    for target in targets:
+        if target.group_id:
+            target_id = str(target.group_id)
+            rows.append({"target_type": "class", "target_id": target_id, "target_name": group_names.get(target_id)})
+        if target.student_id:
+            rows.append({"target_type": "student", "target_id": target.student_id, "target_name": student_names.get(target.student_id)})
+    return rows
+
+
+def _assignment_payload(db: Session, assignment: LearningAssignment, student_id: str | None = None, include_targets: bool = False) -> dict[str, Any]:
     content = assignment.content_version
     academy_name = get_academy_name(db, assignment.academy_id)
     snapshot = dict(content.snapshot or {})
-    assignment_type = _normalize_assignment_type(snapshot.get("assignment_type") or ("test" if assignment.time_limit_seconds else "homework"))
+    time_limit_seconds = _assignment_time_limit_seconds(assignment)
+    assignment_type = _normalize_assignment_type(snapshot.get("assignment_type") or ("test" if time_limit_seconds else "homework"))
     submission = None
     if student_id:
         submission = db.scalar(
@@ -778,15 +823,25 @@ def _assignment_payload(db: Session, assignment: LearningAssignment, student_id:
             .where(LearningSubmission.assignment_id == assignment.id, LearningSubmission.student_id == student_id)
             .order_by(LearningSubmission.created_at.desc())
         )
+    server_now = datetime.utcnow()
+    test_expires_at = None
+    test_remaining_seconds = None
+    if assignment_type == "test" and submission and submission.status == "in_progress" and time_limit_seconds:
+        test_expires_at = submission.started_at + timedelta(seconds=time_limit_seconds)
+        test_remaining_seconds = max(0, int((test_expires_at - server_now).total_seconds()))
     submitted = bool(submission and submission.status in COMPLETED_SUBMISSION_STATUSES)
     show_answer = assignment.show_answer_policy == "immediately" or (submitted and assignment.show_answer_policy in {"afterSubmit", "immediately"})
     show_solution = assignment.show_solution_policy == "immediately" or (submitted and assignment.show_solution_policy in {"afterSubmit", "immediately"})
-    return {
+    payload = {
         **_serialize(assignment),
         "academy_name": academy_name,
         "assignment_type": assignment_type,
         "submission_mode": "problem_set" if snapshot.get("problem_count", 0) else "completion",
         "material_type": f"forge_{assignment_type}_note",
+        "time_limit_seconds": time_limit_seconds,
+        "server_now": server_now.isoformat(),
+        "test_expires_at": test_expires_at.isoformat() if test_expires_at else None,
+        "test_remaining_seconds": test_remaining_seconds,
         "content": {
             **_serialize(content),
             "snapshot": {
@@ -800,6 +855,9 @@ def _assignment_payload(db: Session, assignment: LearningAssignment, student_id:
         },
         "submission": _serialize(submission) if submission else None,
     }
+    if include_targets:
+        payload["targets"] = _assignment_targets_payload(db, assignment)
+    return payload
 
 
 @router.post("/student/academy-keys/activate")
@@ -878,21 +936,32 @@ def read_student_assignment(assignment_id: UUID, request: Request, db: Session =
 def start_learning_assignment(assignment_id: UUID, request: Request, db: Session = Depends(get_db)):
     student_id = current_owner_id(request)
     assignment = _require_student_assignment(db, student_id, assignment_id)
+    now = datetime.utcnow()
     submission = db.scalar(
-        select(LearningSubmission).where(
+        select(LearningSubmission)
+        .where(
             LearningSubmission.assignment_id == assignment.id,
             LearningSubmission.student_id == student_id,
             LearningSubmission.status == "in_progress",
         )
+        .order_by(LearningSubmission.created_at.desc())
     )
+    time_limit_seconds = _assignment_time_limit_seconds(assignment)
+    if submission and time_limit_seconds:
+        expires_at = submission.started_at + timedelta(seconds=time_limit_seconds)
+        if now >= expires_at:
+            _ensure_learning_assignment_can_start(assignment, now)
+            submission.started_at = now
+            submission.updated_at = now
     if not submission:
-        _ensure_learning_assignment_can_start(assignment, datetime.utcnow())
+        _ensure_learning_assignment_can_start(assignment, now)
         submission = LearningSubmission(
             academy_id=assignment.academy_id,
             student_id=student_id,
             assignment_id=assignment.id,
             source_context="assignment",
             source_id=str(assignment.id),
+            started_at=now,
         )
         db.add(submission)
         db.flush()
@@ -1538,7 +1607,7 @@ def create_learning_assignment(academy_id: str, payload: LearningAssignmentCreat
         }
     db.commit()
     db.refresh(assignment)
-    return _assignment_payload(db, assignment)
+    return _assignment_payload(db, assignment, include_targets=True)
 
 
 @router.get("/academy/{academy_id}/assignments")
@@ -1550,7 +1619,7 @@ def list_learning_assignments(academy_id: str, request: Request, db: Session = D
         .options(joinedload(LearningAssignment.content_version))
         .order_by(LearningAssignment.created_at.desc())
     ).all()
-    return [_assignment_payload(db, row) for row in rows]
+    return [_assignment_payload(db, row, include_targets=True) for row in rows]
 
 
 @router.patch("/academy/{academy_id}/assignments/{assignment_id}")
@@ -1566,7 +1635,7 @@ def update_learning_assignment(academy_id: str, assignment_id: UUID, payload: Le
         setattr(assignment, key, value)
     assignment.updated_at = datetime.utcnow()
     db.commit()
-    return _assignment_payload(db, assignment)
+    return _assignment_payload(db, assignment, include_targets=True)
 
 
 @router.post("/academy/{academy_id}/assignments/{assignment_id}/publish")

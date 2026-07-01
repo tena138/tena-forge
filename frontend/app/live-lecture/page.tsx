@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Coffee,
   Copy,
   Download,
   FileUp,
@@ -20,9 +19,9 @@ import {
   ScreenShare,
   ScreenShareOff,
   Square,
+  type LucideIcon,
   Video,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
@@ -77,6 +76,12 @@ const LESSON_KIND_LABELS: Record<LessonPlanKind, string> = {
   test: "테스트",
 };
 
+const LESSON_KIND_ICONS: Record<LessonPlanKind, LucideIcon> = {
+  lesson: BookOpen,
+  break: Pause,
+  test: ClipboardList,
+};
+
 const LESSON_KIND_DEFAULT_COLORS: Record<LessonPlanKind, string> = {
   lesson: "#111827",
   break: "#64748b",
@@ -86,12 +91,6 @@ const LESSON_KIND_DEFAULT_COLORS: Record<LessonPlanKind, string> = {
 const LESSON_PLAN_COLOR_OPTIONS = ["#111827", "#2563eb", "#7c3aed", "#059669", "#f97316", "#dc2626", "#64748b", "#a16207"];
 
 const LESSON_PLAN_STEP_MINUTES = 5;
-
-const LESSON_KIND_ICONS: Record<LessonPlanKind, LucideIcon> = {
-  lesson: BookOpen,
-  break: Coffee,
-  test: ClipboardList,
-};
 
 type PdfPageSize = {
   width: number;
@@ -758,6 +757,8 @@ function LessonPlanEditorModal({
   onSubmit: () => void;
 }) {
   const doneBatches = batches.filter((batch) => batch.status === "done" && batch.problem_count > 0);
+  const attachableProblemSets = problemSets.filter((set) => set.item_count > 0);
+  const hasExistingPaperSession = Boolean(draft.paperSessionId && !draft.testSourceKey);
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
@@ -780,29 +781,6 @@ function LessonPlanEditorModal({
           </label>
 
           <div>
-            <div className="grid grid-cols-3 gap-2">
-              {(["lesson", "break", "test"] as LessonPlanKind[]).map((kind) => {
-                const Icon = LESSON_KIND_ICONS[kind] || BookOpen;
-                const active = draft.kind === kind;
-                return (
-                  <button
-                    key={kind}
-                    type="button"
-                    onClick={() => onChange({ ...draft, kind, title: draft.title || LESSON_KIND_LABELS[kind], color: LESSON_KIND_DEFAULT_COLORS[kind] })}
-                    className={cn(
-                      "inline-flex h-10 items-center justify-center gap-2 rounded-[8px] text-xs font-black ring-1 transition",
-                      active ? "bg-black text-white ring-black" : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {LESSON_KIND_LABELS[kind]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
             <div className="flex flex-wrap gap-2">
               {LESSON_PLAN_COLOR_OPTIONS.map((color) => {
                 const active = normalizeLessonPlanColor(draft.color) === color;
@@ -820,35 +798,57 @@ function LessonPlanEditorModal({
             </div>
           </div>
 
-          {draft.kind === "test" ? (
+          <div className="rounded-[8px] bg-zinc-50 p-3 ring-1 ring-black/5">
             <label className="block">
-              <span className="text-xs font-black text-zinc-600">테스트 자료</span>
+              <span className="text-xs font-black text-zinc-600">문항 세트 첨부</span>
               <select
                 value={draft.testSourceKey}
-                onChange={(event) => onChange({ ...draft, testSourceKey: event.target.value })}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onChange({
+                    ...draft,
+                    kind: value ? "test" : "lesson",
+                    paperSessionId: value ? null : null,
+                    testSourceKey: value,
+                    color: value && normalizeLessonPlanColor(draft.color) === LESSON_KIND_DEFAULT_COLORS.lesson ? LESSON_KIND_DEFAULT_COLORS.test : draft.color,
+                  });
+                }}
                 className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
               >
-                <option value="">자료 선택</option>
-                <optgroup label="추출 배치">
-                  {doneBatches.map((batch) => (
-                    <option key={batch.id} value={`batch:${batch.id}`}>
-                      {batch.name} · {batch.problem_count}문항
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="문항 묶음">
-                  {problemSets.filter((set) => set.item_count > 0).map((set) => (
-                    <option key={set.id} value={`problem_set:${set.id}`}>
-                      {set.name} · {set.item_count}문항
-                    </option>
-                  ))}
-                </optgroup>
+                <option value="">첨부 없음</option>
+                {doneBatches.length ? (
+                  <optgroup label="추출 배치">
+                    {doneBatches.map((batch) => (
+                      <option key={batch.id} value={`batch:${batch.id}`}>
+                        {batch.name} · {batch.problem_count}문항
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {attachableProblemSets.length ? (
+                  <optgroup label="문항 묶음">
+                    {attachableProblemSets.map((set) => (
+                      <option key={set.id} value={`problem_set:${set.id}`}>
+                        {set.name} · {set.item_count}문항
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
-              {draft.paperSessionId && !draft.testSourceKey ? (
-                <p className="mt-1 text-xs font-bold text-zinc-500">이미 연결된 테스트가 있습니다. 새 자료를 선택하면 테스트 세션을 새로 만듭니다.</p>
-              ) : null}
             </label>
-          ) : null}
+            {hasExistingPaperSession ? (
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-[8px] bg-white px-3 py-2 ring-1 ring-zinc-200">
+                <p className="text-xs font-bold text-zinc-500">이미 연결된 문항 세트가 있습니다. 새 세트를 선택하면 교체됩니다.</p>
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...draft, kind: "lesson", paperSessionId: null, testSourceKey: "" })}
+                  className="h-8 shrink-0 rounded-[7px] px-3 text-xs font-black text-zinc-700 hover:bg-zinc-100"
+                >
+                  해제
+                </button>
+              </div>
+            ) : null}
+          </div>
 
           {error ? <div className="rounded-[8px] bg-red-50 px-3 py-2 text-xs font-black text-red-600">{error}</div> : null}
         </div>
@@ -1349,7 +1349,7 @@ function LiveLectureContent() {
     const scheduledAt = eventMinuteDate(activeEvent, startMinute);
     const dueAt = eventMinuteDate(activeEvent, startMinute + durationMinutes);
     const session = await createPaperSession({
-      title: draft.title.trim() || "Preview test",
+      title: draft.title.trim() || "계획",
       source_batch_id: source.type === "batch" ? source.id : null,
       source_problem_set_id: source.type === "problem_set" ? source.id : null,
       session_type: "test",
@@ -1365,7 +1365,9 @@ function LiveLectureContent() {
 
   async function saveLessonPlanDraft() {
     if (!lessonPlanDraft || lessonPlanSaving) return;
-    const title = lessonPlanDraft.title.trim() || LESSON_KIND_LABELS[lessonPlanDraft.kind];
+    const hasAttachment = Boolean(lessonPlanDraft.paperSessionId || lessonPlanDraft.testSourceKey);
+    const nextKind: LessonPlanKind = hasAttachment ? "test" : "lesson";
+    const title = lessonPlanDraft.title.trim() || "계획";
     const startMinute = Number(lessonPlanDraft.startMinute);
     const durationMinutes = Number(lessonPlanDraft.durationMinutes);
     if (!Number.isInteger(startMinute) || !Number.isInteger(durationMinutes) || startMinute < 0 || durationMinutes < 1 || startMinute + durationMinutes > activeDurationMinutes) {
@@ -1374,21 +1376,16 @@ function LiveLectureContent() {
     }
     setLessonPlanSaving(true);
     let paperSessionId = lessonPlanDraft.paperSessionId || null;
-    if (lessonPlanDraft.kind === "test") {
-      if (!paperSessionId && !lessonPlanDraft.testSourceKey) {
-        setLessonPlanError("테스트 블록에는 추출 배치 또는 문항 묶음을 선택해야 합니다.");
-        setLessonPlanSaving(false);
-        return;
-      }
+    if (hasAttachment) {
       try {
         paperSessionId = await createTimelineTestSession(lessonPlanDraft, startMinute, durationMinutes);
       } catch {
-        setLessonPlanError("테스트 세션을 만들지 못했습니다. 클래스에 활성 학생이 있는지 확인해 주세요.");
+        setLessonPlanError("첨부 테스트를 만들지 못했습니다. 클래스에 활성 학생이 있는지 확인해 주세요.");
         setLessonPlanSaving(false);
         return;
       }
       if (!paperSessionId) {
-        setLessonPlanError("테스트 세션이 필요합니다.");
+        setLessonPlanError("첨부된 문항 세트를 저장하지 못했습니다.");
         setLessonPlanSaving(false);
         return;
       }
@@ -1396,11 +1393,11 @@ function LiveLectureContent() {
     const item: LiveLessonPlanItem = {
       id: lessonPlanDraft.id || newLessonPlanId(),
       title,
-      kind: lessonPlanDraft.kind,
+      kind: nextKind,
       start_minute: startMinute,
       duration_minutes: durationMinutes,
-      paper_session_id: lessonPlanDraft.kind === "test" ? paperSessionId : null,
-      color: normalizeLessonPlanColor(lessonPlanDraft.color) || LESSON_KIND_DEFAULT_COLORS[lessonPlanDraft.kind],
+      paper_session_id: hasAttachment ? paperSessionId : null,
+      color: normalizeLessonPlanColor(lessonPlanDraft.color) || LESSON_KIND_DEFAULT_COLORS[nextKind],
     };
     const nextPlan = normalizeLessonPlanItems(
       lessonPlanDraft.id

@@ -32,6 +32,7 @@ from models import (
     ContentVersion,
     DailyStudentQuotaUsage,
     HubTemplate,
+    LearningAssignment,
     LearningAssignmentTarget,
     LearningSubmission,
     MaterialDeliveryLog,
@@ -1106,17 +1107,30 @@ def _problem_set_snapshot(db: Session, owner_id: str, academy_id: str, problem_s
         tags = problem.tags
         problems.append(
             {
+                "id": str(problem.id),
                 "problem_id": str(problem.id),
                 "problem_number": index,
                 "original_problem_number": problem.problem_number,
                 "review_page_number": problem.review_page_number,
                 "problem_text": problem.problem_text,
+                "has_visual": problem.has_visual,
+                "visual_url": problem.visual_url,
+                "visual_schema": problem.visual_schema,
+                "math_model": problem.math_model,
+                "review_page_image_url": problem.review_page_image_url,
                 "answer": problem.answer,
                 "solution_steps": None,
                 "source_label": problem.source_label,
                 "subject": tags.subject if tags else None,
                 "unit": tags.unit if tags else None,
                 "difficulty": tags.difficulty if tags else None,
+                "tags": {
+                    "subject": tags.subject if tags else None,
+                    "unit": tags.unit if tags else None,
+                    "difficulty": tags.difficulty if tags else None,
+                    "problem_type": tags.problem_type if tags else None,
+                    "source": tags.source if tags else None,
+                },
             }
         )
     version = ContentVersion(
@@ -1149,17 +1163,30 @@ def _snapshot_problem_rows(problems: list[Problem]) -> list[dict]:
         tags = problem.tags
         rows.append(
             {
+                "id": str(problem.id),
                 "problem_id": str(problem.id),
                 "problem_number": index,
                 "original_problem_number": problem.problem_number,
                 "review_page_number": problem.review_page_number,
                 "problem_text": problem.problem_text,
+                "has_visual": problem.has_visual,
+                "visual_url": problem.visual_url,
+                "visual_schema": problem.visual_schema,
+                "math_model": problem.math_model,
+                "review_page_image_url": problem.review_page_image_url,
                 "answer": problem.answer,
                 "solution_steps": None,
                 "source_label": problem.source_label,
                 "subject": tags.subject if tags else None,
                 "unit": tags.unit if tags else None,
                 "difficulty": tags.difficulty if tags else None,
+                "tags": {
+                    "subject": tags.subject if tags else None,
+                    "unit": tags.unit if tags else None,
+                    "difficulty": tags.difficulty if tags else None,
+                    "problem_type": tags.problem_type if tags else None,
+                    "source": tags.source if tags else None,
+                },
             }
         )
     return rows
@@ -1306,8 +1333,16 @@ def _session_summary(db: Session, academy_id: str, session: PaperSession | None)
     )
     graded = [row for row in results if row.status == "graded"]
     score_stats = _score_distribution(results)
+    learning_assignment = db.scalar(
+        select(LearningAssignment.id).where(
+            LearningAssignment.academy_id == session_academy_id,
+            LearningAssignment.source_type == "paper_session",
+            LearningAssignment.source_id == str(session.id),
+        )
+    )
     return {
         "id": str(session.id),
+        "learning_assignment_id": str(learning_assignment) if learning_assignment else None,
         "title": session.title,
         "description": session.description,
         "source_problem_set_id": str(session.source_problem_set_id) if session.source_problem_set_id else None,
@@ -1487,6 +1522,107 @@ def _target_memberships(db: Session, academy_id: str, class_ids: list[UUID], stu
         if missing:
             raise HTTPException(status_code=404, detail=f"Students not found: {', '.join(missing)}")
     return sorted(rows.values(), key=_student_name)
+
+
+def _paper_session_problem_for_learning(problem: dict) -> dict:
+    problem_id = str(problem.get("id") or problem.get("problem_id") or "")
+    tags = problem.get("tags")
+    if not isinstance(tags, dict):
+        tags = {}
+    for key in ("subject", "unit", "difficulty"):
+        value = problem.get(key)
+        if value is not None and key not in tags:
+            tags[key] = value
+    return {
+        **problem,
+        "id": problem_id,
+        "problem_id": problem_id,
+        "tags": tags,
+    }
+
+
+def _ensure_learning_assignment_for_paper_session(
+    db: Session,
+    academy_id: str,
+    owner_id: str,
+    session: PaperSession,
+    targets: list[StudentAcademyMembership],
+    class_ids: list[UUID],
+    direct_student_membership_ids: list[UUID],
+    create_calendar_events: bool,
+) -> LearningAssignment:
+    existing = db.scalar(
+        select(LearningAssignment).where(
+            LearningAssignment.academy_id == academy_id,
+            LearningAssignment.source_type == "paper_session",
+            LearningAssignment.source_id == str(session.id),
+        )
+    )
+    if existing:
+        return existing
+
+    snapshot = dict(session.content_version.snapshot or {}) if session.content_version else {}
+    problems = [_paper_session_problem_for_learning(dict(problem)) for problem in snapshot.get("problems", [])]
+    snapshot = {
+        **snapshot,
+        "assignment_type": "test" if (session.session_type or "test") == "test" else "homework",
+        "problem_scope": "all",
+        "allow_export": False,
+        "render_mode": "notebook_problem_pages",
+        "problem_count": len(problems),
+        "problems": problems,
+        "paper_session_id": str(session.id),
+    }
+    if session.content_version:
+        session.content_version.snapshot = snapshot
+
+    direct_membership_id_set = {str(value) for value in direct_student_membership_ids or []}
+    direct_targets = [
+        target
+        for target in targets
+        if direct_membership_id_set and str(target.id) in direct_membership_id_set and target.student_user_id
+    ]
+    if class_ids and not direct_targets:
+        assigned_to_type = "groups"
+    elif direct_targets and not class_ids:
+        assigned_to_type = "students"
+    else:
+        assigned_to_type = "mixed"
+
+    assignment = LearningAssignment(
+        academy_id=academy_id,
+        title=session.title,
+        description=session.description,
+        source_type="paper_session",
+        source_id=str(session.id),
+        content_version_id=session.content_version_id,
+        assigned_by=owner_id,
+        assigned_to_type=assigned_to_type,
+        start_at=session.scheduled_at,
+        due_at=session.due_at if create_calendar_events else None,
+        schedule_type="one_time",
+        recurrence_rule=None,
+        grading_mode="auto",
+        show_score_policy="afterSubmit",
+        show_answer_policy="afterSubmit",
+        show_solution_policy="afterSubmit",
+        retry_policy="wrongOnly",
+        time_limit_seconds=None,
+        shuffle_problems=False,
+        shuffle_choices=False,
+        status="published",
+    )
+    db.add(assignment)
+    db.flush()
+
+    for class_id in class_ids:
+        db.add(LearningAssignmentTarget(assignment_id=assignment.id, academy_id=academy_id, group_id=class_id))
+    if not class_ids:
+        direct_targets = [target for target in targets if target.student_user_id]
+    for target in direct_targets:
+        db.add(LearningAssignmentTarget(assignment_id=assignment.id, academy_id=academy_id, student_id=target.student_user_id))
+    return assignment
+
 
 def _parse_wrong_numbers(value: str | None) -> set[int]:
     if not value:
@@ -4323,6 +4459,16 @@ def create_paper_session(payload: PaperSessionPayload, request: Request, db: Ses
                 total_count=total_count,
             )
         )
+    _ensure_learning_assignment_for_paper_session(
+        db,
+        academy_id=academy_id,
+        owner_id=owner_id,
+        session=session,
+        targets=targets,
+        class_ids=payload.class_ids,
+        direct_student_membership_ids=payload.student_membership_ids,
+        create_calendar_events=payload.create_calendar_events,
+    )
     if payload.create_calendar_events and payload.scheduled_at and payload.class_ids:
         for class_id in payload.class_ids:
             db.add(

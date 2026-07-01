@@ -82,6 +82,7 @@ export type ClassCard = {
 
 export type PaperSessionSummary = {
   id: string;
+  learning_assignment_id?: string | null;
   title: string;
   description?: string | null;
   source_problem_set_id?: string | null;

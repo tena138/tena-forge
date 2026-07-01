@@ -411,6 +411,11 @@ export type LearningAssignment = {
   status: string;
   created_at: string;
   updated_at: string;
+  targets?: Array<{
+    target_type: "class" | "student" | string;
+    target_id: string;
+    target_name?: string | null;
+  }>;
   content: {
     id: string;
     title: string;
@@ -426,6 +431,7 @@ export type LearningAssignment = {
       render_mode?: string;
       test_start_window_before_minutes?: number | null;
       test_start_window_after_minutes?: number | null;
+      material_expires_at?: string | null;
       academy_material_id?: string | null;
       problem_count: number;
       problems: LearningProblem[];
