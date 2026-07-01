@@ -770,18 +770,17 @@ function LessonPlanEditorModal({
 
         <div className="mt-5 space-y-4">
           <label className="block">
-            <span className="text-xs font-black text-zinc-600">제목</span>
             <input
               value={draft.title}
               onChange={(event) => onChange({ ...draft, title: event.target.value })}
-              placeholder="예: 1교시, 쉬는 시간, Preview test"
-              className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
+              placeholder="계획"
+              aria-label="계획"
+              className="h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
             />
           </label>
 
           <div>
-            <div className="text-xs font-black text-zinc-600">유형</div>
-            <div className="mt-1 grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {(["lesson", "break", "test"] as LessonPlanKind[]).map((kind) => {
                 const Icon = LESSON_KIND_ICONS[kind] || BookOpen;
                 const active = draft.kind === kind;
@@ -804,8 +803,7 @@ function LessonPlanEditorModal({
           </div>
 
           <div>
-            <div className="text-xs font-black text-zinc-600">블록 색상</div>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               {LESSON_PLAN_COLOR_OPTIONS.map((color) => {
                 const active = normalizeLessonPlanColor(draft.color) === color;
                 return (
