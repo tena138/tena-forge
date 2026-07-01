@@ -314,6 +314,30 @@ def _safe_redirect(value: str | None) -> str | None:
     return clean[:500]
 
 
+def _safe_mobile_redirect_uri(value: str | None) -> str | None:
+    if not value:
+        return None
+    clean = value.strip()
+    try:
+        parts = urlsplit(clean)
+    except ValueError:
+        return None
+    if parts.scheme != "tenanote":
+        return None
+    if parts.netloc != "auth" or parts.path != "/oauth":
+        return None
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, ""))
+
+
+def _redirect_with_fragment(base_url: str, params: dict[str, str]) -> RedirectResponse:
+    parts = urlsplit(base_url)
+    fragment = urlencode(params)
+    return RedirectResponse(
+        urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, fragment)),
+        status_code=302,
+    )
+
+
 def _safe_account_type(value: str | None) -> str:
     return value if value in {"academy", "student"} else "academy"
 
@@ -322,11 +346,19 @@ def _safe_oauth_mode(value: str | None) -> str:
     return "signup" if value == "signup" else "login"
 
 
-def _store_oauth_intent(request: Request, *, mode: str, account_type: str | None, redirect: str | None) -> None:
+def _store_oauth_intent(
+    request: Request,
+    *,
+    mode: str,
+    account_type: str | None,
+    redirect: str | None,
+    mobile_redirect_uri: str | None = None,
+) -> None:
     request.session["oauth_intent"] = {
         "mode": _safe_oauth_mode(mode),
         "account_type": _safe_account_type(account_type) if account_type else None,
         "redirect": _safe_redirect(redirect),
+        "mobile_redirect_uri": _safe_mobile_redirect_uri(mobile_redirect_uri),
     }
 
 
@@ -341,10 +373,14 @@ def _consume_oauth_intent(request: Request) -> dict:
         "mode": _safe_oauth_mode(data.get("mode")),
         "account_type": _safe_account_type(data.get("account_type")) if data.get("account_type") else None,
         "redirect": _safe_redirect(data.get("redirect")),
+        "mobile_redirect_uri": _safe_mobile_redirect_uri(data.get("mobile_redirect_uri")),
     }
 
 
-def _oauth_error_redirect(code: str, *, mode: str = "login") -> RedirectResponse:
+def _oauth_error_redirect(code: str, *, mode: str = "login", mobile_redirect_uri: str | None = None) -> RedirectResponse:
+    mobile_redirect_uri = _safe_mobile_redirect_uri(mobile_redirect_uri)
+    if mobile_redirect_uri:
+        return _redirect_with_fragment(mobile_redirect_uri, {"oauth_error": code})
     target = "/register" if mode == "signup" else "/login"
     if code == "oauth_state_expired":
         return RedirectResponse(f"{settings.frontend_url}{target}", status_code=302)
@@ -1062,8 +1098,20 @@ def _oauth_callback_url(request: Request, callback_name: str) -> str:
 
 
 @router.get("/google")
-async def google_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
-    _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
+async def google_login(
+    request: Request,
+    mode: str = "login",
+    account_type: str | None = None,
+    redirect: str | None = None,
+    mobile_redirect_uri: str | None = None,
+):
+    _store_oauth_intent(
+        request,
+        mode=mode,
+        account_type=account_type,
+        redirect=redirect,
+        mobile_redirect_uri=mobile_redirect_uri,
+    )
     redirect_uri = _oauth_callback_url(request, "google_callback")
     return await _oauth_client("google").authorize_redirect(request, redirect_uri)
 
@@ -1075,14 +1123,30 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         token = await _oauth_client("google").authorize_access_token(request)
     except OAuthError as exc:
         _log_oauth_error("google", exc)
-        return _oauth_error_redirect(_oauth_error_code(exc), mode=intent.get("mode", "login"))
+        return _oauth_error_redirect(
+            _oauth_error_code(exc),
+            mode=intent.get("mode", "login"),
+            mobile_redirect_uri=intent.get("mobile_redirect_uri"),
+        )
     info = token.get("userinfo") or await _oauth_client("google").parse_id_token(request, token)
     return _oauth_finalize(db, request, "google", str(info["sub"]), info.get("name") or "Google Academy", token, intent)
 
 
 @router.get("/kakao")
-async def kakao_login(request: Request, mode: str = "login", account_type: str | None = None, redirect: str | None = None):
-    _store_oauth_intent(request, mode=mode, account_type=account_type, redirect=redirect)
+async def kakao_login(
+    request: Request,
+    mode: str = "login",
+    account_type: str | None = None,
+    redirect: str | None = None,
+    mobile_redirect_uri: str | None = None,
+):
+    _store_oauth_intent(
+        request,
+        mode=mode,
+        account_type=account_type,
+        redirect=redirect,
+        mobile_redirect_uri=mobile_redirect_uri,
+    )
     redirect_uri = _oauth_callback_url(request, "kakao_callback")
     return await _oauth_client("kakao").authorize_redirect(request, redirect_uri)
 
@@ -1092,10 +1156,18 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     intent = _consume_oauth_intent(request)
     token, error_code = await _exchange_kakao_token(request)
     if error_code or not token:
-        return _oauth_error_redirect(error_code or "oauth_token_failed", mode=intent.get("mode", "login"))
+        return _oauth_error_redirect(
+            error_code or "oauth_token_failed",
+            mode=intent.get("mode", "login"),
+            mobile_redirect_uri=intent.get("mobile_redirect_uri"),
+        )
     data, error_code = await _fetch_kakao_profile(token)
     if error_code or not data:
-        return _oauth_error_redirect(error_code or "oauth_profile_failed", mode=intent.get("mode", "login"))
+        return _oauth_error_redirect(
+            error_code or "oauth_profile_failed",
+            mode=intent.get("mode", "login"),
+            mobile_redirect_uri=intent.get("mobile_redirect_uri"),
+        )
     account = data.get("kakao_account", {})
     profile = account.get("profile", {})
     return _oauth_finalize(db, request, "kakao", str(data["id"]), profile.get("nickname") or "Kakao Academy", token, intent)
@@ -1114,15 +1186,29 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
     if oauth_account:
         academy = oauth_account.academy
         if mode == "signup" and requested_account_type and academy.account_type != requested_account_type:
-            return _oauth_error_redirect("account_type_conflict", mode=mode)
+            return _oauth_error_redirect(
+                "account_type_conflict",
+                mode=mode,
+                mobile_redirect_uri=intent.get("mobile_redirect_uri"),
+            )
     else:
         academy = None
         if mode == "signup":
             signup_token = _create_social_signup_token(provider, provider_account_id, name)
+            mobile_redirect_uri = _safe_mobile_redirect_uri(intent.get("mobile_redirect_uri"))
+            if mobile_redirect_uri:
+                return _redirect_with_fragment(
+                    mobile_redirect_uri,
+                    {"oauth_error": "signup_required", "signup_token": signup_token, "nickname": name},
+                )
             fragment = urlencode({"signup_token": signup_token, "nickname": name})
             return RedirectResponse(f"{settings.frontend_url}/register/complete#{fragment}", status_code=302)
         if not academy and mode == "login":
-            return _oauth_error_redirect("signup_required", mode=mode)
+            return _oauth_error_redirect(
+                "signup_required",
+                mode=mode,
+                mobile_redirect_uri=intent.get("mobile_redirect_uri"),
+            )
         if not academy:
             profile_name = _normalize_required_profile_name(f"{provider}_{provider_account_id[:20]}")
             _ensure_profile_name_available(db, profile_name)
@@ -1167,6 +1253,17 @@ def _oauth_finalize(db: Session, request: Request, provider: str, provider_accou
             "redirect": intent.get("redirect") or "",
         }
     )
+    mobile_redirect_uri = _safe_mobile_redirect_uri(intent.get("mobile_redirect_uri"))
+    if mobile_redirect_uri:
+        return _redirect_with_fragment(
+            mobile_redirect_uri,
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "provider": provider,
+                "redirect": intent.get("redirect") or "",
+            },
+        )
     redirect = RedirectResponse(f"{settings.frontend_url}/#{fragment}", status_code=302)
     set_refresh_cookie(redirect, refresh_token, remember=True)
     return redirect

@@ -451,12 +451,14 @@ class Assignment {
   String get statusLabel {
     if (isAwaitingTeacherConfirmation) return '선생 확인 대기';
     if (status == 'late') return '지각 완료';
+    if (isTest && isCompleted) return '제출됨';
     if (isCompleted) return '완료';
     if (status == 'in_progress') return '진행 중';
     return '대기';
   }
 
   String get badgeLabel {
+    if (isTest && isCompleted) return '제출됨';
     if (isCompleted) return '완료';
     if (isAwaitingTeacherConfirmation) return '확인 대기';
     return assignmentType;
@@ -601,6 +603,8 @@ class StudentMaterialContent {
     this.timeLimitSeconds,
     this.dueAt,
     this.expiresAt,
+    this.submissionStatus,
+    this.submittedAt,
   });
 
   final String title;
@@ -614,7 +618,15 @@ class StudentMaterialContent {
   final int? timeLimitSeconds;
   final DateTime? dueAt;
   final DateTime? expiresAt;
+  final String? submissionStatus;
+  final DateTime? submittedAt;
   final List<StudentMaterialProblem> problems;
+
+  bool get isSubmitted =>
+      submittedAt != null ||
+      submissionStatus == 'submitted' ||
+      submissionStatus == 'late' ||
+      submissionStatus == 'completed';
 
   factory StudentMaterialContent.fromJson(Map<String, dynamic> json) {
     final rawProblems = json['problems'];
@@ -644,6 +656,8 @@ class StudentMaterialContent {
       timeLimitSeconds: int.tryParse('${json['time_limit_seconds']}'),
       dueAt: DateTime.tryParse('${json['due_at']}'),
       expiresAt: DateTime.tryParse('${json['expires_at']}'),
+      submissionStatus: json['submission_status']?.toString(),
+      submittedAt: _parseUtcServerDateTime(json['submitted_at']),
       problems: problems,
     );
   }

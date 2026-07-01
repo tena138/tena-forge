@@ -80,6 +80,20 @@ class StudentRepository {
     return profile;
   }
 
+  Future<StudentProfile> loginWithOAuthTokens({
+    required String accessToken,
+    String? refreshToken,
+  }) async {
+    await sessionStore.writeAccessToken(accessToken);
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      final cookie = refreshToken.startsWith('refresh_token=')
+          ? refreshToken
+          : 'refresh_token=$refreshToken';
+      await sessionStore.writeRefreshCookie(cookie);
+    }
+    return fetchMe();
+  }
+
   Future<StudentProfile> fetchMe() async {
     final previousProfile = await sessionStore.readProfile();
     final profile = await apiClient.get<StudentProfile>(

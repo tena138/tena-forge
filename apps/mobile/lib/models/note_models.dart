@@ -30,6 +30,8 @@ class NoteLibraryItem {
     this.materialId,
     this.assignmentId,
     this.assignmentType,
+    this.assignmentStatus,
+    this.assignmentSubmittedAt,
   });
 
   final String id;
@@ -45,6 +47,14 @@ class NoteLibraryItem {
   final String? materialId;
   final String? assignmentId;
   final String? assignmentType;
+  final String? assignmentStatus;
+  final DateTime? assignmentSubmittedAt;
+
+  bool get isAssignmentSubmitted =>
+      assignmentSubmittedAt != null ||
+      assignmentStatus == 'submitted' ||
+      assignmentStatus == 'late' ||
+      assignmentStatus == 'completed';
 
   String get typeLabel {
     switch (type) {
@@ -70,6 +80,8 @@ class NoteLibraryItem {
     String? materialId,
     String? assignmentId,
     String? assignmentType,
+    String? assignmentStatus,
+    DateTime? assignmentSubmittedAt,
   }) {
     return NoteLibraryItem(
       id: id,
@@ -85,6 +97,9 @@ class NoteLibraryItem {
       materialId: materialId ?? this.materialId,
       assignmentId: assignmentId ?? this.assignmentId,
       assignmentType: assignmentType ?? this.assignmentType,
+      assignmentStatus: assignmentStatus ?? this.assignmentStatus,
+      assignmentSubmittedAt:
+          assignmentSubmittedAt ?? this.assignmentSubmittedAt,
     );
   }
 }

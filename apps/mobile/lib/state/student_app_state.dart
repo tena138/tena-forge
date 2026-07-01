@@ -102,6 +102,28 @@ class StudentAppState extends ChangeNotifier {
     }
   }
 
+  Future<void> completeOAuthLogin({
+    required String accessToken,
+    String? refreshToken,
+  }) async {
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      profile = await repository.loginWithOAuthTokens(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+      );
+      await refresh();
+      bootstrapped = true;
+    } catch (exception) {
+      error = '濡쒓렇?몄뿉 ?ㅽ뙣?덉뒿?덈떎.';
+      loading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     await repository.logout();
     profile = null;

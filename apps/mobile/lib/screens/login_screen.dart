@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -69,9 +70,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _openKakaoLogin() {
-    return _openWebUrl(
-      _buildUri(apiBaseUrl, '/api/auth/kakao', {'mode': 'login'}),
-    );
+    final params = <String, String>{'mode': 'login', 'account_type': 'student'};
+    if (!kIsWeb) {
+      params['mobile_redirect_uri'] = mobileOAuthRedirectUri;
+    }
+    return _openWebUrl(_buildUri(apiBaseUrl, '/api/auth/kakao', params));
   }
 
   Future<void> _openRegister() {

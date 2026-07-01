@@ -327,6 +327,8 @@ class NoteLibraryState extends ChangeNotifier {
               materialId: material.id,
               assignmentId: material.content?.learningAssignmentId,
               assignmentType: material.content?.assignmentType,
+              assignmentStatus: material.content?.submissionStatus,
+              assignmentSubmittedAt: material.content?.submittedAt,
             ),
           ) ||
           changed;
@@ -507,7 +509,9 @@ class NoteLibraryState extends ChangeNotifier {
         current.academyId != next.academyId ||
         current.materialId != next.materialId ||
         current.assignmentId != next.assignmentId ||
-        current.assignmentType != next.assignmentType;
+        current.assignmentType != next.assignmentType ||
+        current.assignmentStatus != next.assignmentStatus ||
+        current.assignmentSubmittedAt != next.assignmentSubmittedAt;
     if (changed) {
       _items[index] = next;
     }

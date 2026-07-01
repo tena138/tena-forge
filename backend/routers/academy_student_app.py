@@ -32,6 +32,7 @@ from models import (
     DailyStudentQuotaUsage,
     LearningAssignment,
     LearningAssignmentTarget,
+    LearningSubmission,
     MaterialDeliveryLog,
     PaperSession,
     Problem,
@@ -1680,6 +1681,32 @@ def _student_material_payload(db: Session, material: AcademyMaterial, student_id
     if isinstance(note_payload, dict):
         content = dict(note_payload)
         problems = list(content.get("problems") or [])
+        assignment_id = content.get("learning_assignment_id")
+        if assignment_id:
+            try:
+                assignment_uuid = UUID(str(assignment_id))
+            except (TypeError, ValueError):
+                assignment_uuid = None
+            if assignment_uuid:
+                submission = db.scalar(
+                    select(LearningSubmission)
+                    .where(
+                        LearningSubmission.assignment_id == assignment_uuid,
+                        LearningSubmission.student_id == student_id,
+                    )
+                    .order_by(LearningSubmission.created_at.desc())
+                )
+                if submission:
+                    content["submission_status"] = submission.status
+                    content["submitted_at"] = (
+                        submission.submitted_at.isoformat()
+                        if submission.submitted_at
+                        else None
+                    )
+                    content["is_submitted"] = bool(
+                        submission.submitted_at
+                        or submission.status in {"submitted", "late", "completed"}
+                    )
         if content.get("problem_scope") == "wrong_only":
             problem_ids = {str(problem.get("problem_id") or problem.get("id")) for problem in problems}
             problem_uuids: list[UUID] = []

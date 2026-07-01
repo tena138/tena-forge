@@ -7,6 +7,7 @@ const localWebApiBaseUrl = 'http://127.0.0.1:8000';
 const localDeviceApiBaseUrl = 'http://10.0.2.2:8000';
 const localWebFrontendBaseUrl = 'http://127.0.0.1:3001';
 const localDeviceFrontendBaseUrl = 'http://10.0.2.2:3001';
+const mobileOAuthRedirectUri = 'tenanote://auth/oauth';
 
 String get apiBaseUrl => _resolveBaseUrl(
   configured: _configuredApiBaseUrl,
@@ -23,9 +24,7 @@ String _resolveBaseUrl({
   required String defaultValue,
 }) {
   final value = configured.trim();
-  return _withoutTrailingSlash(
-    value.isNotEmpty ? value : defaultValue,
-  );
+  return _withoutTrailingSlash(value.isNotEmpty ? value : defaultValue);
 }
 
 bool get usesProductionApi => apiBaseUrl == productionApiBaseUrl;

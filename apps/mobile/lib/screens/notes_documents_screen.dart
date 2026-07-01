@@ -673,7 +673,12 @@ String _formatItemDate(DateTime date) {
 
 String? _assignmentTypeLabel(NoteLibraryItem item) {
   if (item.type == NoteItemType.folder) return null;
-  switch ((item.assignmentType ?? '').trim().toLowerCase()) {
+  final assignmentType = (item.assignmentType ?? '').trim().toLowerCase();
+  if (item.isAssignmentSubmitted &&
+      (assignmentType == 'test' || assignmentType == 'exam')) {
+    return '제출됨';
+  }
+  switch (assignmentType) {
     case 'textbook':
     case 'book':
     case 'material':
