@@ -43,6 +43,7 @@ class LiveLectureLessonPlanItemPayload(BaseModel):
     start_minute: int = Field(ge=0, le=1440)
     duration_minutes: int = Field(ge=1, le=1440)
     paper_session_id: UUID | None = None
+    color: str | None = Field(default=None, max_length=24)
 
 
 class LiveLectureSessionPayload(BaseModel):
@@ -161,6 +162,9 @@ def _clean_lesson_plan_item(
             if strict:
                 raise HTTPException(status_code=400, detail="Test session id is invalid.")
             return None
+    color = str(raw.get("color") or "").strip().lower()
+    if not re.fullmatch(r"#[0-9a-f]{6}", color):
+        color = None
     return {
         "id": item_id,
         "title": title,
@@ -168,6 +172,7 @@ def _clean_lesson_plan_item(
         "start_minute": start_minute,
         "duration_minutes": duration_minutes,
         "paper_session_id": paper_session_id,
+        "color": color,
     }
 
 

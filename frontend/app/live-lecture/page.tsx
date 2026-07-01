@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   BookOpen,
@@ -61,6 +61,7 @@ type LessonPlanDraft = {
   durationMinutes: string;
   paperSessionId?: string | null;
   testSourceKey: string;
+  color: string;
 };
 
 type TestSource = {
@@ -76,11 +77,15 @@ const LESSON_KIND_LABELS: Record<LessonPlanKind, string> = {
   test: "테스트",
 };
 
-const LESSON_KIND_STYLES: Record<LessonPlanKind, string> = {
-  lesson: "bg-zinc-950 text-white ring-zinc-950",
-  break: "bg-zinc-200 text-zinc-950 ring-zinc-300",
-  test: "bg-sky-600 text-white ring-sky-700",
+const LESSON_KIND_DEFAULT_COLORS: Record<LessonPlanKind, string> = {
+  lesson: "#111827",
+  break: "#64748b",
+  test: "#2563eb",
 };
+
+const LESSON_PLAN_COLOR_OPTIONS = ["#111827", "#2563eb", "#7c3aed", "#059669", "#f97316", "#dc2626", "#64748b", "#a16207"];
+
+const LESSON_PLAN_STEP_MINUTES = 5;
 
 const LESSON_KIND_ICONS: Record<LessonPlanKind, LucideIcon> = {
   lesson: BookOpen,
@@ -149,6 +154,28 @@ function eventMinuteDate(event: LiveInteractionEvent | null, minute: number) {
   return new Date(startsAt.getTime() + minute * 60000);
 }
 
+function normalizeLessonPlanColor(value?: string | null) {
+  const color = String(value || "").trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(color) ? color : null;
+}
+
+function lessonPlanColor(item: Pick<LiveLessonPlanItem, "kind" | "color">) {
+  return normalizeLessonPlanColor(item.color) || LESSON_KIND_DEFAULT_COLORS[item.kind] || LESSON_KIND_DEFAULT_COLORS.lesson;
+}
+
+function readableColor(hex: string) {
+  const normalized = normalizeLessonPlanColor(hex) || "#111827";
+  const red = parseInt(normalized.slice(1, 3), 16);
+  const green = parseInt(normalized.slice(3, 5), 16);
+  const blue = parseInt(normalized.slice(5, 7), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return luminance > 0.62 ? "#111827" : "#ffffff";
+}
+
+function snapLessonMinute(value: number) {
+  return Math.round(value / LESSON_PLAN_STEP_MINUTES) * LESSON_PLAN_STEP_MINUTES;
+}
+
 function planTimeRangeText(item: LiveLessonPlanItem) {
   return `${item.start_minute}분 - ${item.start_minute + item.duration_minutes}분`;
 }
@@ -168,6 +195,7 @@ function normalizeLessonPlanItems(items?: LiveLessonPlanItem[] | null): LiveLess
       start_minute: Math.max(0, Math.round(startMinute)),
       duration_minutes: Math.max(1, Math.round(durationMinutes)),
       paper_session_id: item.paper_session_id || null,
+      color: normalizeLessonPlanColor(item.color) || LESSON_KIND_DEFAULT_COLORS[kind],
     });
   }
   return normalized.sort((left, right) => left.start_minute - right.start_minute || left.title.localeCompare(right.title));
@@ -314,15 +342,19 @@ function LectureTimeline({
   onAdd,
   onEdit,
   onOpenTest,
+  onResize,
 }: {
   event: LiveInteractionEvent | null;
   now: number;
   lessonPlan: LiveLessonPlanItem[];
   saving: boolean;
-  onAdd: () => void;
+  onAdd: (startMinute?: number) => void;
   onEdit: (item: LiveLessonPlanItem) => void;
   onOpenTest: (item: LiveLessonPlanItem) => void;
+  onResize: (item: LiveLessonPlanItem, durationMinutes: number) => void;
 }) {
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ id: string; durationMinutes: number } | null>(null);
   const fallbackStart = useMemo(() => new Date(now), []);
   const startsAt = parseDate(event?.starts_at) || fallbackStart;
   const endsAt = parseDate(event?.ends_at) || new Date(startsAt.getTime() + 60 * 60000);
@@ -335,13 +367,47 @@ function LectureTimeline({
   const trackTopPercent = 5;
   const trackHeightPercent = 90;
   const progressPercent = trackTopPercent + progressRatio * trackHeightPercent;
+  const minuteFromClientY = (clientY: number, allowEnd = false) => {
+    const rect = timelineRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const yRatio = ((clientY - rect.top) / Math.max(1, rect.height)) * 100;
+    const rawMinute = ((yRatio - trackTopPercent) / trackHeightPercent) * lectureDurationMinutes;
+    const maxMinute = allowEnd ? lectureDurationMinutes : Math.max(0, lectureDurationMinutes - 1);
+    return Math.max(0, Math.min(maxMinute, snapLessonMinute(rawMinute)));
+  };
+  const handleAddClick = (event: MouseEvent<HTMLButtonElement>) => {
+    onAdd(minuteFromClientY(event.clientY));
+  };
+  const handleResizeStart = (event: ReactPointerEvent<HTMLSpanElement>, item: LiveLessonPlanItem) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const maxDuration = Math.max(1, lectureDurationMinutes - item.start_minute);
+    const minDuration = Math.min(LESSON_PLAN_STEP_MINUTES, maxDuration);
+    const durationFromY = (clientY: number) => {
+      const endMinute = Math.max(item.start_minute + minDuration, minuteFromClientY(clientY, true));
+      return Math.max(minDuration, Math.min(maxDuration, endMinute - item.start_minute));
+    };
+    const handleMove = (moveEvent: PointerEvent) => {
+      setResizePreview({ id: item.id, durationMinutes: durationFromY(moveEvent.clientY) });
+    };
+    const handleEnd = (upEvent: PointerEvent) => {
+      const nextDuration = durationFromY(upEvent.clientY);
+      setResizePreview(null);
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleEnd);
+      if (nextDuration !== item.duration_minutes) onResize(item, nextDuration);
+    };
+    setResizePreview({ id: item.id, durationMinutes: durationFromY(event.clientY) });
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleEnd, { once: true });
+  };
 
   return (
     <section className="rounded-[8px] bg-white p-3 ring-1 ring-black/5">
-      <div className="relative h-[34rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
+      <div ref={timelineRef} className="relative h-[34rem] overflow-hidden rounded-[8px] bg-zinc-50 ring-1 ring-black/5">
         <button
           type="button"
-          onClick={onAdd}
+          onClick={handleAddClick}
           className="group/add absolute inset-0 z-[1] cursor-pointer rounded-[8px] bg-transparent transition-colors hover:bg-black/[0.045] focus-visible:bg-black/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
           aria-label="계획을 추가하려면 클릭"
           title="계획을 추가하려면 클릭"
@@ -352,25 +418,35 @@ function LectureTimeline({
         </button>
         {timelineItems.map((item) => {
           const top = trackTopPercent + (item.start_minute / lectureDurationMinutes) * trackHeightPercent;
-          const height = Math.max(6, (item.duration_minutes / lectureDurationMinutes) * trackHeightPercent);
+          const previewDuration = resizePreview?.id === item.id ? resizePreview.durationMinutes : item.duration_minutes;
+          const height = Math.max(6, (previewDuration / lectureDurationMinutes) * trackHeightPercent);
           const Icon = LESSON_KIND_ICONS[item.kind] || BookOpen;
+          const color = lessonPlanColor(item);
+          const textColor = readableColor(color);
           return (
             <button
               key={item.id}
               type="button"
               onClick={() => (item.kind === "test" ? onOpenTest(item) : onEdit(item))}
-              className={cn(
-                "absolute left-16 right-3 z-10 flex min-h-10 items-start gap-2 overflow-hidden rounded-[7px] px-2.5 py-2 text-left text-[11px] font-black shadow-sm ring-1 transition hover:brightness-95",
-                LESSON_KIND_STYLES[item.kind]
-              )}
-              style={{ top: `${top}%`, height: `${height}%` }}
+              className="group absolute left-16 right-3 z-10 flex min-h-10 items-start gap-2 overflow-hidden rounded-[7px] border px-2.5 py-2 text-left text-[11px] font-black shadow-sm ring-1 ring-black/10 transition hover:brightness-95"
+              style={{ top: `${top}%`, height: `${height}%`, backgroundColor: color, borderColor: color, color: textColor }}
               title={`${item.title} · ${planTimeRangeText(item)}`}
             >
+              <span className="absolute inset-y-2 left-1.5 w-1 rounded-full bg-white/55" aria-hidden="true" />
               <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0">
                 <span className="block truncate">{item.title}</span>
                 <span className="mt-0.5 block text-[10px] opacity-70">{planTimeRangeText(item)}</span>
               </span>
+              <span
+                role="presentation"
+                onPointerDown={(event) => handleResizeStart(event, item)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                className="absolute bottom-1 left-1/2 h-1.5 w-10 -translate-x-1/2 cursor-ns-resize rounded-full bg-white/70 opacity-0 transition group-hover:opacity-100"
+              />
             </button>
           );
         })}
@@ -664,7 +740,6 @@ function PdfSlideViewer({ slidePdf, pageNumber = 1, className, shared = false, d
 
 function LessonPlanEditorModal({
   draft,
-  durationMinutes,
   batches,
   problemSets,
   saving,
@@ -674,7 +749,6 @@ function LessonPlanEditorModal({
   onSubmit,
 }: {
   draft: LessonPlanDraft;
-  durationMinutes: number;
   batches: Batch[];
   problemSets: ProblemSetListItem[];
   saving: boolean;
@@ -683,25 +757,12 @@ function LessonPlanEditorModal({
   onClose: () => void;
   onSubmit: () => void;
 }) {
-  const selectedKindIcon = LESSON_KIND_ICONS[draft.kind] || BookOpen;
-  const SelectedIcon = selectedKindIcon;
   const doneBatches = batches.filter((batch) => batch.status === "done" && batch.problem_count > 0);
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
       <section className="w-full max-w-xl rounded-[8px] bg-white p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)] ring-1 ring-black/10">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-[8px] bg-zinc-100 text-zinc-950">
-                <SelectedIcon className="h-4 w-4" />
-              </span>
-              <div>
-                <h2 className="text-lg font-black text-zinc-950">{draft.id ? "계획 수정" : "계획 추가"}</h2>
-                <p className="mt-0.5 text-xs font-bold text-zinc-500">현재 수업 안에서만 저장됩니다.</p>
-              </div>
-            </div>
-          </div>
+        <div className="flex justify-end">
           <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-[7px] text-zinc-500 hover:bg-zinc-100 hover:text-black" aria-label="닫기">
             <X className="h-4 w-4" />
           </button>
@@ -728,7 +789,7 @@ function LessonPlanEditorModal({
                   <button
                     key={kind}
                     type="button"
-                    onClick={() => onChange({ ...draft, kind, title: draft.title || LESSON_KIND_LABELS[kind] })}
+                    onClick={() => onChange({ ...draft, kind, title: draft.title || LESSON_KIND_LABELS[kind], color: LESSON_KIND_DEFAULT_COLORS[kind] })}
                     className={cn(
                       "inline-flex h-10 items-center justify-center gap-2 rounded-[8px] text-xs font-black ring-1 transition",
                       active ? "bg-black text-white ring-black" : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50"
@@ -742,29 +803,23 @@ function LessonPlanEditorModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs font-black text-zinc-600">시작 분</span>
-              <input
-                type="number"
-                min={0}
-                max={Math.max(0, durationMinutes - 1)}
-                value={draft.startMinute}
-                onChange={(event) => onChange({ ...draft, startMinute: event.target.value })}
-                className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-black text-zinc-600">길이</span>
-              <input
-                type="number"
-                min={1}
-                max={durationMinutes}
-                value={draft.durationMinutes}
-                onChange={(event) => onChange({ ...draft, durationMinutes: event.target.value })}
-                className="mt-1 h-11 w-full rounded-[8px] bg-zinc-100 px-3 text-sm font-bold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10"
-              />
-            </label>
+          <div>
+            <div className="text-xs font-black text-zinc-600">블록 색상</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {LESSON_PLAN_COLOR_OPTIONS.map((color) => {
+                const active = normalizeLessonPlanColor(draft.color) === color;
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => onChange({ ...draft, color })}
+                    className={cn("h-8 w-8 rounded-full ring-2 ring-offset-2 transition", active ? "ring-black" : "ring-transparent hover:ring-zinc-300")}
+                    style={{ backgroundColor: color }}
+                    aria-label={`${color} 색상 선택`}
+                  />
+                );
+              })}
+            </div>
           </div>
 
           {draft.kind === "test" ? (
@@ -1246,12 +1301,14 @@ function LiveLectureContent() {
       durationMinutes: String(item.duration_minutes),
       paperSessionId: item.paper_session_id || null,
       testSourceKey: "",
+      color: lessonPlanColor(item),
     };
   }
 
-  function openNewLessonPlanDraft() {
+  function openNewLessonPlanDraft(startMinuteOverride?: number) {
     const lastEnd = lessonPlan.reduce((max, item) => Math.max(max, item.start_minute + item.duration_minutes), 0);
-    const startMinute = Math.min(Math.max(0, activeDurationMinutes - 1), lastEnd);
+    const rawStartMinute = typeof startMinuteOverride === "number" ? startMinuteOverride : lastEnd;
+    const startMinute = Math.min(Math.max(0, activeDurationMinutes - 1), Math.max(0, rawStartMinute));
     setLessonPlanError("");
     setLessonPlanDraft({
       title: "",
@@ -1259,6 +1316,7 @@ function LiveLectureContent() {
       startMinute: String(startMinute),
       durationMinutes: String(Math.min(30, Math.max(1, activeDurationMinutes - startMinute))),
       testSourceKey: "",
+      color: LESSON_KIND_DEFAULT_COLORS.lesson,
     });
   }
 
@@ -1344,6 +1402,7 @@ function LiveLectureContent() {
       start_minute: startMinute,
       duration_minutes: durationMinutes,
       paper_session_id: lessonPlanDraft.kind === "test" ? paperSessionId : null,
+      color: normalizeLessonPlanColor(lessonPlanDraft.color) || LESSON_KIND_DEFAULT_COLORS[lessonPlanDraft.kind],
     };
     const nextPlan = normalizeLessonPlanItems(
       lessonPlanDraft.id
@@ -1352,6 +1411,16 @@ function LiveLectureContent() {
     );
     const saved = await persistLessonPlan(nextPlan);
     if (saved) setLessonPlanDraft(null);
+  }
+
+  function resizeLessonPlanItem(item: LiveLessonPlanItem, durationMinutes: number) {
+    const nextDuration = Math.max(1, Math.min(activeDurationMinutes - item.start_minute, Math.round(durationMinutes)));
+    if (nextDuration === item.duration_minutes) return;
+    void persistLessonPlan(
+      normalizeLessonPlanItems(
+        lessonPlan.map((current) => (current.id === item.id ? { ...current, duration_minutes: nextDuration } : current))
+      )
+    );
   }
 
   function openTestResult(item: LiveLessonPlanItem) {
@@ -1444,6 +1513,7 @@ function LiveLectureContent() {
               setLessonPlanDraft(draftFromLessonPlanItem(item));
             }}
             onOpenTest={openTestResult}
+            onResize={resizeLessonPlanItem}
           />
         </aside>
       </section>
@@ -1493,7 +1563,6 @@ function LiveLectureContent() {
       {lessonPlanDraft ? (
         <LessonPlanEditorModal
           draft={lessonPlanDraft}
-          durationMinutes={activeDurationMinutes}
           batches={batches}
           problemSets={problemSets}
           saving={lessonPlanSaving}

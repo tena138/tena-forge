@@ -154,6 +154,7 @@ export type LiveLessonPlanItem = {
   start_minute: number;
   duration_minutes: number;
   paper_session_id?: string | null;
+  color?: string | null;
 };
 
 export type LiveLectureSession = {
