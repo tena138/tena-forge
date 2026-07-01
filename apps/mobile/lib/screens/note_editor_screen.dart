@@ -411,11 +411,15 @@ class _CanvasStage extends StatefulWidget {
 }
 
 class _CanvasStageState extends State<_CanvasStage> {
+  static const double _minStrokePointDistance = 0.45;
+  static const double _maxStrokeSegmentDistance = 3.5;
+
   final GlobalKey _pageBoundaryKey = GlobalKey();
   final PageController _printedPageController = PageController();
   final Map<String, TransformationController> _transformControllers = {};
   List<Offset> _draftPoints = [];
   String? _draftDocumentId;
+  int? _activeStrokePointer;
   Offset? _textInputPoint;
   String? _textInputDocumentId;
   TextEditingController? _textInputController;
@@ -431,6 +435,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     _currentPrintedPageIndex = 0;
     _draftPoints = [];
     _draftDocumentId = null;
+    _activeStrokePointer = null;
     _clearTextInput();
     _disposeTransformControllers();
     if (_printedPageController.hasClients) {
@@ -485,6 +490,7 @@ class _CanvasStageState extends State<_CanvasStage> {
                     );
                     return _buildZoomableCanvasViewport(
                       transformId: strokeDocumentId,
+                      panEnabled: state.selectedTool == NoteTool.pointer,
                       child: _buildCanvasPage(
                         context: context,
                         state: state,
@@ -504,6 +510,7 @@ class _CanvasStageState extends State<_CanvasStage> {
           }
           return _buildZoomableCanvasViewport(
             transformId: widget.documentId,
+            panEnabled: state.selectedTool == NoteTool.pointer,
             child: _buildCanvasPage(
               context: context,
               state: state,
@@ -533,6 +540,7 @@ class _CanvasStageState extends State<_CanvasStage> {
 
   Widget _buildZoomableCanvasViewport({
     required String transformId,
+    required bool panEnabled,
     required Widget child,
   }) {
     return ClipRect(
@@ -541,7 +549,7 @@ class _CanvasStageState extends State<_CanvasStage> {
         boundaryMargin: const EdgeInsets.all(360),
         minScale: 0.65,
         maxScale: 5,
-        panEnabled: true,
+        panEnabled: panEnabled,
         scaleEnabled: true,
         trackpadScrollCausesScale: true,
         child: SizedBox.expand(child: Center(child: child)),
@@ -569,20 +577,17 @@ class _CanvasStageState extends State<_CanvasStage> {
         SizedBox(
           width: width,
           height: height,
-          child: GestureDetector(
-            onTapDown: (details) =>
-                _handleTap(context, details.localPosition, strokeDocumentId),
-            onPanStart: handlesStrokePan
-                ? (details) => _startStroke(
-                    context,
-                    details.localPosition,
-                    strokeDocumentId,
-                  )
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (event) =>
+                _handlePointerDown(context, event, strokeDocumentId),
+            onPointerMove: handlesStrokePan ? _handlePointerMove : null,
+            onPointerUp: handlesStrokePan
+                ? (event) => _handlePointerUp(context, event)
                 : null,
-            onPanUpdate: handlesStrokePan
-                ? (details) => _updateStroke(details.localPosition)
+            onPointerCancel: handlesStrokePan
+                ? (event) => _handlePointerCancel(event)
                 : null,
-            onPanEnd: handlesStrokePan ? (_) => _finishStroke(context) : null,
             child: Stack(
               children: [
                 RepaintBoundary(
@@ -708,6 +713,7 @@ class _CanvasStageState extends State<_CanvasStage> {
       _currentPrintedPageIndex = index;
       _draftPoints = [];
       _draftDocumentId = null;
+      _activeStrokePointer = null;
       _clearTextInput();
     });
     widget.onPrintedPageChanged(index);
@@ -751,6 +757,48 @@ class _CanvasStageState extends State<_CanvasStage> {
           : state.penWidth,
       isHighlighter: highlighting || extractingText,
     );
+  }
+
+  bool _isStrokeTool(NoteTool tool) {
+    return tool == NoteTool.pen ||
+        tool == NoteTool.highlighter ||
+        tool == NoteTool.textExtractor;
+  }
+
+  void _handlePointerDown(
+    BuildContext context,
+    PointerDownEvent event,
+    String strokeDocumentId,
+  ) {
+    if (_extractingSelectionText) return;
+    final state = context.read<NoteLibraryState>();
+    if (_isStrokeTool(state.selectedTool)) {
+      if (_activeStrokePointer != null) return;
+      _activeStrokePointer = event.pointer;
+      _startStroke(context, event.localPosition, strokeDocumentId);
+      return;
+    }
+    _handleTap(context, event.localPosition, strokeDocumentId);
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (_activeStrokePointer != event.pointer) return;
+    _updateStroke(event.localPosition);
+  }
+
+  void _handlePointerUp(BuildContext context, PointerUpEvent event) {
+    if (_activeStrokePointer != event.pointer) return;
+    _activeStrokePointer = null;
+    _finishStroke(context);
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (_activeStrokePointer != event.pointer) return;
+    setState(() {
+      _activeStrokePointer = null;
+      _draftPoints = [];
+      _draftDocumentId = null;
+    });
   }
 
   void _handleTap(BuildContext context, Offset point, String strokeDocumentId) {
@@ -803,8 +851,28 @@ class _CanvasStageState extends State<_CanvasStage> {
     if (state.selectedTool == NoteTool.pen ||
         state.selectedTool == NoteTool.highlighter ||
         state.selectedTool == NoteTool.textExtractor) {
-      setState(() => _draftPoints = [..._draftPoints, point]);
+      setState(() => _appendDraftPoint(point));
     }
+  }
+
+  void _appendDraftPoint(Offset point) {
+    if (_draftPoints.isEmpty) {
+      _draftPoints.add(point);
+      return;
+    }
+    final last = _draftPoints.last;
+    final distance = (point - last).distance;
+    if (distance < _minStrokePointDistance) return;
+
+    final insertedPoints = math.min(
+      24,
+      math.max(0, (distance / _maxStrokeSegmentDistance).floor()),
+    );
+    for (var index = 1; index <= insertedPoints; index += 1) {
+      final t = index / (insertedPoints + 1);
+      _draftPoints.add(Offset.lerp(last, point, t)!);
+    }
+    _draftPoints.add(point);
   }
 
   void _finishStroke(BuildContext context) {
@@ -827,7 +895,7 @@ class _CanvasStageState extends State<_CanvasStage> {
       state.addStroke(
         strokeDocumentId,
         NoteStroke(
-          points: _draftPoints,
+          points: List<Offset>.unmodifiable(_draftPoints),
           color: state.selectedTool == NoteTool.highlighter
               ? const Color(0x66FACC15)
               : state.inkColor,
@@ -841,6 +909,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     setState(() {
       _draftPoints = [];
       _draftDocumentId = null;
+      _activeStrokePointer = null;
     });
   }
 
@@ -1531,6 +1600,31 @@ List<_MathTextSegment> _splitMathSegments(String value) {
   return segments;
 }
 
+void _drawStrokePath(Canvas canvas, List<Offset> points, Paint paint) {
+  if (points.isEmpty) return;
+  if (points.length == 1) {
+    canvas.drawCircle(points.first, paint.strokeWidth / 2, paint);
+    return;
+  }
+  if (points.length == 2) {
+    canvas.drawLine(points.first, points.last, paint);
+    return;
+  }
+
+  final path = Path()..moveTo(points.first.dx, points.first.dy);
+  for (var index = 1; index < points.length - 1; index += 1) {
+    final current = points[index];
+    final next = points[index + 1];
+    final midpoint = Offset(
+      (current.dx + next.dx) / 2,
+      (current.dy + next.dy) / 2,
+    );
+    path.quadraticBezierTo(current.dx, current.dy, midpoint.dx, midpoint.dy);
+  }
+  path.lineTo(points.last.dx, points.last.dy);
+  canvas.drawPath(path, paint);
+}
+
 class _NotebookPagePainter extends CustomPainter {
   const _NotebookPagePainter({required this.strokes});
 
@@ -1567,9 +1661,7 @@ class _NotebookPagePainter extends CustomPainter {
       ..strokeWidth = stroke.width
       ..style = PaintingStyle.stroke;
 
-    for (var index = 0; index < stroke.points.length - 1; index += 1) {
-      canvas.drawLine(stroke.points[index], stroke.points[index + 1], paint);
-    }
+    _drawStrokePath(canvas, stroke.points, paint);
   }
 
   @override
@@ -1591,9 +1683,7 @@ class _StrokeOverlayPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round
       ..strokeWidth = stroke.width
       ..style = PaintingStyle.stroke;
-    for (var index = 0; index < stroke.points.length - 1; index += 1) {
-      canvas.drawLine(stroke.points[index], stroke.points[index + 1], paint);
-    }
+    _drawStrokePath(canvas, stroke.points, paint);
   }
 
   @override
