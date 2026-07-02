@@ -6,6 +6,8 @@ import '../app/theme.dart';
 import '../models/student_models.dart';
 import '../state/student_app_state.dart';
 
+const double _phoneNavigationBreakpoint = 600;
+
 class NotesShellScreen extends StatelessWidget {
   const NotesShellScreen({required this.navigationShell, super.key});
 
@@ -13,15 +15,250 @@ class NotesShellScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            _NotesSideToolbar(navigationShell: navigationShell),
-            Expanded(child: navigationShell),
-          ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isPhone = constraints.maxWidth < _phoneNavigationBreakpoint;
+        return Scaffold(
+          backgroundColor: AppColors.bg,
+          body: SafeArea(
+            bottom: isPhone,
+            child: isPhone
+                ? Column(
+                    children: [
+                      Expanded(child: navigationShell),
+                      _NotesBottomToolbar(navigationShell: navigationShell),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      _NotesSideToolbar(navigationShell: navigationShell),
+                      Expanded(child: navigationShell),
+                    ],
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _NotesBottomToolbar extends StatelessWidget {
+  const _NotesBottomToolbar({required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 74,
+      decoration: const BoxDecoration(
+        color: AppColors.panel,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          _BottomToolbarButton(
+            selected: navigationShell.currentIndex == 0,
+            icon: Icons.calendar_month_outlined,
+            selectedIcon: Icons.calendar_month_rounded,
+            label: '캘린더',
+            onPressed: () => _goBranch(0),
+          ),
+          _BottomToolbarButton(
+            selected: navigationShell.currentIndex == 1,
+            icon: Icons.grid_view_rounded,
+            selectedIcon: Icons.grid_view_rounded,
+            label: '노트',
+            onPressed: () => _goBranch(1),
+          ),
+          _BottomToolbarAction(
+            icon: Icons.settings_outlined,
+            label: '설정',
+            onPressed: () => _showSettingsPanel(context),
+          ),
+          _BottomProfileAction(onPressed: () => _showProfilePanel(context)),
+        ],
+      ),
+    );
+  }
+
+  void _goBranch(int index) {
+    navigationShell.goBranch(
+      index,
+      initialLocation: index == navigationShell.currentIndex,
+    );
+  }
+
+  void _showProfilePanel(BuildContext context) {
+    _showSidePanel(
+      context,
+      Consumer<StudentAppState>(
+        builder: (context, state, _) => _ProfilePanel(state: state),
+      ),
+    );
+  }
+
+  void _showSettingsPanel(BuildContext context) {
+    _showSidePanel(
+      context,
+      Consumer<StudentAppState>(
+        builder: (context, state, _) => _SettingsPanel(state: state),
+      ),
+    );
+  }
+}
+
+class _BottomToolbarButton extends StatelessWidget {
+  const _BottomToolbarButton({
+    required this.selected,
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.text : AppColors.muted;
+    return Expanded(
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          height: 74,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                curve: Curves.easeOut,
+                width: 48,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.panelSoft : Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  selected ? selectedIcon : icon,
+                  size: 24,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomToolbarAction extends StatelessWidget {
+  const _BottomToolbarAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          height: 74,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 48,
+                height: 34,
+                child: Icon(icon, size: 24, color: AppColors.muted),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomProfileAction extends StatelessWidget {
+  const _BottomProfileAction({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = context.watch<StudentAppState>().profile;
+    return Expanded(
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          height: 74,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.text,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  _initialFor(profile),
+                  style: const TextStyle(
+                    color: AppColors.panel,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                '프로필',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -111,6 +348,7 @@ Future<void> _showSidePanel(BuildContext context, Widget child) {
     transitionDuration: const Duration(milliseconds: 140),
     pageBuilder: (context, _, _) {
       final media = MediaQuery.of(context);
+      final isPhone = media.size.width < _phoneNavigationBreakpoint;
       final panelWidth = (media.size.width - 96).clamp(280.0, 360.0);
       return Material(
         color: Colors.transparent,
@@ -123,9 +361,10 @@ Future<void> _showSidePanel(BuildContext context, Widget child) {
               ),
             ),
             Positioned(
-              left: 72,
-              bottom: media.padding.bottom + 18,
-              width: panelWidth.toDouble(),
+              left: isPhone ? 18 : 72,
+              right: isPhone ? 18 : null,
+              bottom: media.padding.bottom + (isPhone ? 12 : 18),
+              width: isPhone ? null : panelWidth.toDouble(),
               child: Listener(behavior: HitTestBehavior.opaque, child: child),
             ),
           ],
