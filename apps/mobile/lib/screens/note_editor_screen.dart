@@ -368,7 +368,7 @@ class _EditorToolBar extends StatelessWidget {
                 ),
                 _ToolButton(
                   tool: NoteTool.lasso,
-                  icon: Icons.gesture_rounded,
+                  iconWidget: const _LassoToolIcon(),
                   label: '올가미',
                 ),
                 _PhotoToolButton(
@@ -2190,6 +2190,53 @@ class _MagicPointerToolIcon extends StatelessWidget {
       ),
     );
   }
+}
+
+class _LassoToolIcon extends StatelessWidget {
+  const _LassoToolIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size.square(24),
+      painter: _LassoToolPainter(IconTheme.of(context).color ?? AppColors.text),
+    );
+  }
+}
+
+class _LassoToolPainter extends CustomPainter {
+  const _LassoToolPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.35
+      ..strokeCap = StrokeCap.round;
+    final rect = Rect.fromCenter(
+      center: size.center(Offset.zero),
+      width: size.width * 0.72,
+      height: size.height * 0.58,
+    );
+    const segmentCount = 10;
+    const sweep = (math.pi * 2) / segmentCount;
+    for (var index = 0; index < segmentCount; index += 1) {
+      canvas.drawArc(
+        rect,
+        -math.pi / 2 + sweep * index,
+        sweep * 0.48,
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LassoToolPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _TextExtractToolPainter extends CustomPainter {
