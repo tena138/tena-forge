@@ -71,6 +71,8 @@ flutter:
   assets:
     - assets/tenaforge-mark-dark.png
     - assets/tena-integrated-login-mark-dark.png
+    - assets/text_extract_tool.png
+    - assets/laser_pointer_tool.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

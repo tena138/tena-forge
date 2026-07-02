@@ -174,15 +174,13 @@ class _EditorTopBar extends StatelessWidget {
                             icon: Icons.undo_rounded,
                             tooltip: '실행 취소',
                             enabled: state.canUndo(strokeDocumentId),
-                            onPressed: () =>
-                                state.undoStroke(strokeDocumentId),
+                            onPressed: () => state.undoStroke(strokeDocumentId),
                           ),
                           _EditorIconButton(
                             icon: Icons.redo_rounded,
                             tooltip: '다시 실행',
                             enabled: state.canRedo(strokeDocumentId),
-                            onPressed: () =>
-                                state.redoStroke(strokeDocumentId),
+                            onPressed: () => state.redoStroke(strokeDocumentId),
                           ),
                         ],
                       );
@@ -352,6 +350,9 @@ class _EditorToolBar extends StatelessWidget {
                 _ToolButton(
                   tool: NoteTool.textExtractor,
                   icon: Icons.center_focus_strong_rounded,
+                  iconWidget: const _AssetToolIcon(
+                    'assets/text_extract_tool.png',
+                  ),
                   label: '텍스트 추출',
                 ),
                 _ToolButton(
@@ -372,7 +373,10 @@ class _EditorToolBar extends StatelessWidget {
                 _ToolButton(
                   tool: NoteTool.pointer,
                   icon: Icons.flash_on_rounded,
-                  label: '포인터',
+                  iconWidget: const _AssetToolIcon(
+                    'assets/laser_pointer_tool.png',
+                  ),
+                  label: '레이저 포인터',
                 ),
                 const SizedBox(width: 8),
                 const VerticalDivider(color: AppColors.border),
@@ -436,6 +440,8 @@ class _CanvasStageState extends State<_CanvasStage> {
   List<Offset> _draftPoints = [];
   String? _draftDocumentId;
   int? _activeStrokePointer;
+  Offset? _laserPoint;
+  String? _laserDocumentId;
   Offset? _textInputPoint;
   String? _textInputDocumentId;
   TextEditingController? _textInputController;
@@ -452,6 +458,8 @@ class _CanvasStageState extends State<_CanvasStage> {
     _draftPoints = [];
     _draftDocumentId = null;
     _activeStrokePointer = null;
+    _laserPoint = null;
+    _laserDocumentId = null;
     _clearTextInput();
     _disposeTransformControllers();
     if (_printedPageController.hasClients) {
@@ -492,11 +500,14 @@ class _CanvasStageState extends State<_CanvasStage> {
               0,
               pageCount - 1,
             );
+            final pageSwipeLocked =
+                _printedPageSwipeLocked ||
+                _locksPageSwipeForTool(state.selectedTool);
             return Stack(
               children: [
                 PageView.builder(
                   controller: _printedPageController,
-                  physics: _printedPageSwipeLocked
+                  physics: pageSwipeLocked
                       ? const NeverScrollableScrollPhysics()
                       : const PageScrollPhysics(),
                   itemCount: pageCount,
@@ -512,7 +523,7 @@ class _CanvasStageState extends State<_CanvasStage> {
                     );
                     return _buildZoomableCanvasViewport(
                       transformId: strokeDocumentId,
-                      panEnabled: state.selectedTool == NoteTool.pointer,
+                      panEnabled: false,
                       child: _buildCanvasPage(
                         context: context,
                         state: state,
@@ -538,7 +549,7 @@ class _CanvasStageState extends State<_CanvasStage> {
               widget.documentId,
               pageRef,
             ),
-            panEnabled: state.selectedTool == NoteTool.pointer,
+            panEnabled: false,
             child: _buildCanvasPage(
               context: context,
               state: state,
@@ -599,10 +610,11 @@ class _CanvasStageState extends State<_CanvasStage> {
   }) {
     final strokes = state.strokesFor(strokeDocumentId);
     final draftStroke = _buildDraftStroke(state, strokeDocumentId);
-    final handlesStrokePan =
+    final handlesPrecisionPan =
         state.selectedTool == NoteTool.pen ||
         state.selectedTool == NoteTool.highlighter ||
-        state.selectedTool == NoteTool.textExtractor;
+        state.selectedTool == NoteTool.textExtractor ||
+        state.selectedTool == NoteTool.pointer;
     return Stack(
       children: [
         SizedBox(
@@ -612,11 +624,11 @@ class _CanvasStageState extends State<_CanvasStage> {
             behavior: HitTestBehavior.opaque,
             onPointerDown: (event) =>
                 _handlePointerDown(context, event, strokeDocumentId),
-            onPointerMove: handlesStrokePan ? _handlePointerMove : null,
-            onPointerUp: handlesStrokePan
+            onPointerMove: handlesPrecisionPan ? _handlePointerMove : null,
+            onPointerUp: handlesPrecisionPan
                 ? (event) => _handlePointerUp(context, event)
                 : null,
-            onPointerCancel: handlesStrokePan
+            onPointerCancel: handlesPrecisionPan
                 ? (event) => _handlePointerCancel(event)
                 : null,
             child: Stack(
@@ -652,6 +664,13 @@ class _CanvasStageState extends State<_CanvasStage> {
                     right: 12,
                     top: 12,
                     child: _SelectionExtractionBadge(),
+                  ),
+                if (_laserDocumentId == strokeDocumentId && _laserPoint != null)
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: _LaserPointerPainter(_laserPoint!),
+                      child: const SizedBox.expand(),
+                    ),
                   ),
               ],
             ),
@@ -798,6 +817,26 @@ class _CanvasStageState extends State<_CanvasStage> {
         tool == NoteTool.textExtractor;
   }
 
+  bool _requiresPrecisionInput(NoteTool tool) {
+    return tool == NoteTool.pen ||
+        tool == NoteTool.highlighter ||
+        tool == NoteTool.textExtractor ||
+        tool == NoteTool.pointer ||
+        tool == NoteTool.eraser;
+  }
+
+  bool _isPrecisionInput(PointerEvent event) {
+    if (event.kind == ui.PointerDeviceKind.stylus ||
+        event.kind == ui.PointerDeviceKind.invertedStylus) {
+      return true;
+    }
+    if (event.kind != ui.PointerDeviceKind.mouse) return false;
+    if (kIsWeb) return true;
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
   void _handlePointerDown(
     BuildContext context,
     PointerDownEvent event,
@@ -805,6 +844,20 @@ class _CanvasStageState extends State<_CanvasStage> {
   ) {
     if (_extractingSelectionText) return;
     final state = context.read<NoteLibraryState>();
+    if (_requiresPrecisionInput(state.selectedTool) &&
+        !_isPrecisionInput(event)) {
+      return;
+    }
+    if (state.selectedTool == NoteTool.pointer) {
+      if (_activeStrokePointer != null) return;
+      setState(() {
+        _activeStrokePointer = event.pointer;
+        _laserPoint = event.localPosition;
+        _laserDocumentId = strokeDocumentId;
+        _clearTextInput();
+      });
+      return;
+    }
     if (_isStrokeTool(state.selectedTool)) {
       if (_activeStrokePointer != null) return;
       _activeStrokePointer = event.pointer;
@@ -816,11 +869,23 @@ class _CanvasStageState extends State<_CanvasStage> {
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (_activeStrokePointer != event.pointer) return;
+    if (_laserDocumentId != null) {
+      setState(() => _laserPoint = event.localPosition);
+      return;
+    }
     _updateStroke(event.localPosition);
   }
 
   void _handlePointerUp(BuildContext context, PointerUpEvent event) {
     if (_activeStrokePointer != event.pointer) return;
+    if (_laserDocumentId != null) {
+      setState(() {
+        _activeStrokePointer = null;
+        _laserPoint = null;
+        _laserDocumentId = null;
+      });
+      return;
+    }
     _activeStrokePointer = null;
     _finishStroke(context);
   }
@@ -831,6 +896,8 @@ class _CanvasStageState extends State<_CanvasStage> {
       _activeStrokePointer = null;
       _draftPoints = [];
       _draftDocumentId = null;
+      _laserPoint = null;
+      _laserDocumentId = null;
     });
   }
 
@@ -1182,6 +1249,17 @@ class _EraserToolIcon extends StatelessWidget {
         IconTheme.of(context).color ?? AppColors.text,
       ),
     );
+  }
+}
+
+class _AssetToolIcon extends StatelessWidget {
+  const _AssetToolIcon(this.assetPath);
+
+  final String assetPath;
+
+  @override
+  Widget build(BuildContext context) {
+    return ImageIcon(AssetImage(assetPath), size: 24);
   }
 }
 
@@ -1724,6 +1802,32 @@ class _StrokeOverlayPainter extends CustomPainter {
       oldDelegate.stroke != stroke;
 }
 
+class _LaserPointerPainter extends CustomPainter {
+  const _LaserPointerPainter(this.point);
+
+  final Offset point;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final glow = Paint()
+      ..color = const Color(0x44EF4444)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+    final core = Paint()..color = const Color(0xFFEF4444);
+    final ring = Paint()
+      ..color = const Color(0xCCEF4444)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+
+    canvas.drawCircle(point, 18, glow);
+    canvas.drawCircle(point, 8, core);
+    canvas.drawCircle(point, 15, ring);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LaserPointerPainter oldDelegate) =>
+      oldDelegate.point != point;
+}
+
 class _SelectionExtractionBadge extends StatelessWidget {
   const _SelectionExtractionBadge();
 
@@ -1783,6 +1887,14 @@ String _strokeDocumentIdForPageIndex(NoteDocument document, int pageIndex) {
   if (pageRefs.isEmpty) return document.id;
   final safeIndex = pageIndex.clamp(0, pageRefs.length - 1).toInt();
   return _strokeDocumentIdForPageRef(document.id, pageRefs[safeIndex]);
+}
+
+bool _locksPageSwipeForTool(NoteTool tool) {
+  return tool == NoteTool.pen ||
+      tool == NoteTool.highlighter ||
+      tool == NoteTool.textExtractor ||
+      tool == NoteTool.pointer ||
+      tool == NoteTool.eraser;
 }
 
 PrintedNotePage? _printedPageForRef(NoteDocument document, String pageRef) {
