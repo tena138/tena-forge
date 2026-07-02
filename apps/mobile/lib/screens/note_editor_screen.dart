@@ -780,6 +780,8 @@ class _CanvasStageState extends State<_CanvasStage> {
   bool _extractingSelectionText = false;
   int _currentPrintedPageIndex = 0;
   bool _printedPageSwipeLocked = false;
+  NoteStroke? _selectedImageStroke;
+  String? _selectedImageDocumentId;
 
   @override
   void didUpdateWidget(covariant _CanvasStage oldWidget) {
@@ -794,6 +796,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     _draftStraightened = false;
     _laserPoint = null;
     _laserDocumentId = null;
+    _clearSelectedImageSelection();
     _clearTextInput();
     _disposeTransformControllers();
     if (_printedPageController.hasClients) {
@@ -948,6 +951,11 @@ class _CanvasStageState extends State<_CanvasStage> {
   }) {
     final strokes = state.strokesFor(strokeDocumentId);
     final draftStroke = _buildDraftStroke(state, strokeDocumentId);
+    final selectedImageStroke =
+        _selectedImageDocumentId == strokeDocumentId &&
+            strokes.any((stroke) => identical(stroke, _selectedImageStroke))
+        ? _selectedImageStroke
+        : null;
     final handlesPrecisionPan =
         state.selectedTool == NoteTool.pen ||
         state.selectedTool == NoteTool.highlighter ||
@@ -998,6 +1006,27 @@ class _CanvasStageState extends State<_CanvasStage> {
                       painter: _StrokeOverlayPainter(draftStroke),
                       child: const SizedBox.expand(),
                     ),
+                  ),
+                if (strokes.any((stroke) => stroke.isImage))
+                  _ImageInteractionLayer(
+                    strokes: strokes,
+                    selectedStroke: selectedImageStroke,
+                    onSelect: (stroke) =>
+                        _selectImageStroke(strokeDocumentId, stroke),
+                    onMove: (stroke, delta) => _moveImageStroke(
+                      strokeDocumentId,
+                      stroke,
+                      delta,
+                      Size(width, height),
+                    ),
+                    onResize: (stroke, delta) => _resizeImageStroke(
+                      strokeDocumentId,
+                      stroke,
+                      delta,
+                      Size(width, height),
+                    ),
+                    onDelete: (stroke) =>
+                        _deleteImageStroke(strokeDocumentId, stroke),
                   ),
                 if (_extractingSelectionText &&
                     _draftDocumentId == strokeDocumentId)
@@ -1112,9 +1141,113 @@ class _CanvasStageState extends State<_CanvasStage> {
       _draftDocumentId = null;
       _activeStrokePointer = null;
       _draftStraightened = false;
+      _clearSelectedImageSelection();
       _clearTextInput();
     });
     widget.onPrintedPageChanged(index);
+  }
+
+  void _clearSelectedImageSelection() {
+    _selectedImageStroke = null;
+    _selectedImageDocumentId = null;
+  }
+
+  void _selectImageStroke(String documentId, NoteStroke stroke) {
+    setState(() {
+      _selectedImageDocumentId = documentId;
+      _selectedImageStroke = stroke;
+      _clearTextInput();
+    });
+  }
+
+  void _moveImageStroke(
+    String documentId,
+    NoteStroke stroke,
+    Offset delta,
+    Size pageSize,
+  ) {
+    if (stroke.points.isEmpty) return;
+    final origin = stroke.points.first;
+    final width = stroke.imageWidth ?? 320;
+    final height = stroke.imageHeight ?? 220;
+    final maxLeft = math.max(0.0, pageSize.width - width);
+    final maxTop = math.max(0.0, pageSize.height - height);
+    final nextPoint = Offset(
+      (origin.dx + delta.dx).clamp(0.0, maxLeft).toDouble(),
+      (origin.dy + delta.dy).clamp(0.0, maxTop).toDouble(),
+    );
+    final updated = context.read<NoteLibraryState>().updateImageStroke(
+      documentId,
+      stroke,
+      point: nextPoint,
+    );
+    if (updated == null || !mounted) return;
+    setState(() {
+      _selectedImageDocumentId = documentId;
+      _selectedImageStroke = updated;
+    });
+  }
+
+  void _resizeImageStroke(
+    String documentId,
+    NoteStroke stroke,
+    Offset delta,
+    Size pageSize,
+  ) {
+    if (stroke.points.isEmpty) return;
+    final origin = stroke.points.first;
+    final width = stroke.imageWidth ?? 320;
+    final height = stroke.imageHeight ?? 220;
+    final aspectRatio = width > 0 && height > 0 ? width / height : 1.45;
+    final widthDeltaFromY = delta.dy * aspectRatio;
+    final widthDelta = delta.dx.abs() >= widthDeltaFromY.abs()
+        ? delta.dx
+        : widthDeltaFromY;
+    const minWidth = 72.0;
+    final maxWidthByPage = math.min(
+      pageSize.width - origin.dx,
+      (pageSize.height - origin.dy) * aspectRatio,
+    );
+    final maxWidth = math.max(minWidth, maxWidthByPage);
+    final nextWidth = (width + widthDelta).clamp(minWidth, maxWidth).toDouble();
+    final nextHeight = nextWidth / aspectRatio;
+    final updated = context.read<NoteLibraryState>().updateImageStroke(
+      documentId,
+      stroke,
+      imageWidth: nextWidth,
+      imageHeight: nextHeight,
+    );
+    if (updated == null || !mounted) return;
+    setState(() {
+      _selectedImageDocumentId = documentId;
+      _selectedImageStroke = updated;
+    });
+  }
+
+  void _deleteImageStroke(String documentId, NoteStroke stroke) {
+    final removed = context.read<NoteLibraryState>().removeStroke(
+      documentId,
+      stroke,
+    );
+    if (!removed || !mounted) return;
+    setState(_clearSelectedImageSelection);
+  }
+
+  NoteStroke? _imageStrokeAt(String documentId, Offset point) {
+    final strokes = context.read<NoteLibraryState>().strokesFor(documentId);
+    for (var index = strokes.length - 1; index >= 0; index -= 1) {
+      final stroke = strokes[index];
+      if (!stroke.isImage || stroke.points.isEmpty) continue;
+      final origin = stroke.points.first;
+      final rect = Rect.fromLTWH(
+        origin.dx,
+        origin.dy,
+        stroke.imageWidth ?? 320,
+        stroke.imageHeight ?? 220,
+      ).inflate(12);
+      if (rect.contains(point)) return stroke;
+    }
+    return null;
   }
 
   void jumpToPrintedPage(int pageNumber) {
@@ -1192,6 +1325,21 @@ class _CanvasStageState extends State<_CanvasStage> {
   ) {
     if (_extractingSelectionText) return;
     final state = context.read<NoteLibraryState>();
+    final imageHit = _imageStrokeAt(strokeDocumentId, event.localPosition);
+    final canInteractWithImage =
+        event.kind != ui.PointerDeviceKind.stylus &&
+        event.kind != ui.PointerDeviceKind.invertedStylus;
+    if (canInteractWithImage &&
+        imageHit != null &&
+        state.selectedTool != NoteTool.eraser) {
+      _selectImageStroke(strokeDocumentId, imageHit);
+      return;
+    }
+    if (canInteractWithImage &&
+        imageHit == null &&
+        _selectedImageDocumentId == strokeDocumentId) {
+      setState(_clearSelectedImageSelection);
+    }
     if (_requiresPrecisionInput(state.selectedTool) &&
         !_isPrecisionInput(event)) {
       return;
@@ -1211,6 +1359,7 @@ class _CanvasStageState extends State<_CanvasStage> {
       setState(() {
         _activeStrokePointer = event.pointer;
         _activeEraserDocumentId = strokeDocumentId;
+        _clearSelectedImageSelection();
         _clearTextInput();
       });
       state.eraseAt(strokeDocumentId, event.localPosition);
@@ -1311,6 +1460,7 @@ class _CanvasStageState extends State<_CanvasStage> {
           _draftPoints = [point];
           _draftDocumentId = strokeDocumentId;
           _draftStraightened = false;
+          _clearSelectedImageSelection();
           _clearTextInput();
         });
         if (state.selectedTool == NoteTool.pen) {
@@ -2364,6 +2514,167 @@ class _ImageStrokeLayer extends StatelessWidget {
     }
     if (imageWidgets.isEmpty) return const SizedBox.shrink();
     return Stack(children: imageWidgets);
+  }
+}
+
+class _ImageInteractionLayer extends StatelessWidget {
+  const _ImageInteractionLayer({
+    required this.strokes,
+    required this.selectedStroke,
+    required this.onSelect,
+    required this.onMove,
+    required this.onResize,
+    required this.onDelete,
+  });
+
+  static const double _controlMargin = 18;
+  static const Set<ui.PointerDeviceKind> _imageInputDevices =
+      <ui.PointerDeviceKind>{
+        ui.PointerDeviceKind.touch,
+        ui.PointerDeviceKind.mouse,
+        ui.PointerDeviceKind.trackpad,
+      };
+
+  final List<NoteStroke> strokes;
+  final NoteStroke? selectedStroke;
+  final ValueChanged<NoteStroke> onSelect;
+  final void Function(NoteStroke stroke, Offset delta) onMove;
+  final void Function(NoteStroke stroke, Offset delta) onResize;
+  final ValueChanged<NoteStroke> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageWidgets = <Widget>[];
+    for (final stroke in strokes) {
+      if (!stroke.isImage || stroke.points.isEmpty) continue;
+      final point = stroke.points.first;
+      final width = stroke.imageWidth ?? 320;
+      final height = stroke.imageHeight ?? 220;
+      final selected = identical(stroke, selectedStroke);
+      imageWidgets.add(
+        Positioned(
+          left: point.dx - _controlMargin,
+          top: point.dy - _controlMargin,
+          width: width + _controlMargin * 2,
+          height: height + _controlMargin * 2,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: _controlMargin,
+                top: _controlMargin,
+                width: width,
+                height: height,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.move,
+                  child: GestureDetector(
+                    supportedDevices: _imageInputDevices,
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => onSelect(stroke),
+                    onPanStart: (_) => onSelect(stroke),
+                    onPanUpdate: (details) => onMove(stroke, details.delta),
+                    child: selected
+                        ? CustomPaint(
+                            painter: const _DashedBorderPainter(
+                              color: Color(0xFF2F80FF),
+                            ),
+                            child: const SizedBox.expand(),
+                          )
+                        : const SizedBox.expand(),
+                  ),
+                ),
+              ),
+              if (selected)
+                Positioned(
+                  left: _controlMargin - 14,
+                  top: _controlMargin - 14,
+                  child: GestureDetector(
+                    supportedDevices: _imageInputDevices,
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onDelete(stroke),
+                    child: const _ImageDeleteHandle(),
+                  ),
+                ),
+              if (selected)
+                Positioned(
+                  right: _controlMargin - 14,
+                  bottom: _controlMargin - 14,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.resizeDownRight,
+                    child: GestureDetector(
+                      supportedDevices: _imageInputDevices,
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (_) => onSelect(stroke),
+                      onPanUpdate: (details) => onResize(stroke, details.delta),
+                      child: const _ImageResizeHandle(),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (imageWidgets.isEmpty) return const SizedBox.shrink();
+    return Stack(clipBehavior: Clip.none, children: imageWidgets);
+  }
+}
+
+class _ImageDeleteHandle extends StatelessWidget {
+  const _ImageDeleteHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF5A5F),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const SizedBox(
+        width: 28,
+        height: 28,
+        child: Icon(Icons.close_rounded, size: 18, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _ImageResizeHandle extends StatelessWidget {
+  const _ImageResizeHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF2F80FF), width: 2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const SizedBox(
+        width: 30,
+        height: 30,
+        child: Icon(
+          Icons.open_in_full_rounded,
+          size: 16,
+          color: Color(0xFF2F80FF),
+        ),
+      ),
+    );
   }
 }
 

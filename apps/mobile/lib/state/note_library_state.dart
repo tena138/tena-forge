@@ -823,6 +823,62 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  NoteStroke? updateImageStroke(
+    String documentId,
+    NoteStroke stroke, {
+    Offset? point,
+    double? imageWidth,
+    double? imageHeight,
+  }) {
+    if (!stroke.isImage) return null;
+    final strokes = _strokesByDocument[documentId];
+    if (strokes == null || strokes.isEmpty) return null;
+    final index = _strokeIndex(strokes, stroke);
+    if (index == -1) return null;
+
+    final nextWidth = imageWidth ?? stroke.imageWidth ?? 320;
+    final nextHeight = imageHeight ?? stroke.imageHeight ?? 220;
+    if (nextWidth <= 0 || nextHeight <= 0) return null;
+
+    final updated = NoteStroke(
+      points: List<Offset>.unmodifiable(
+        point == null ? stroke.points : <Offset>[point],
+      ),
+      color: stroke.color,
+      width: stroke.width,
+      isHighlighter: stroke.isHighlighter,
+      text: stroke.text,
+      imageData: stroke.imageData,
+      imageMimeType: stroke.imageMimeType,
+      imageWidth: nextWidth,
+      imageHeight: nextHeight,
+    );
+    strokes[index] = updated;
+    _redoByDocument[documentId] = [];
+    _touchDocument(documentId);
+    notifyListeners();
+    return updated;
+  }
+
+  bool removeStroke(String documentId, NoteStroke stroke) {
+    final strokes = _strokesByDocument[documentId];
+    if (strokes == null || strokes.isEmpty) return false;
+    final index = _strokeIndex(strokes, stroke);
+    if (index == -1) return false;
+    strokes.removeAt(index);
+    _redoByDocument[documentId] = [];
+    _touchDocument(documentId);
+    notifyListeners();
+    return true;
+  }
+
+  int _strokeIndex(List<NoteStroke> strokes, NoteStroke stroke) {
+    for (var index = 0; index < strokes.length; index += 1) {
+      if (identical(strokes[index], stroke)) return index;
+    }
+    return -1;
+  }
+
   int addBlankPage(
     String documentId, {
     required NotePageInsertPosition position,
