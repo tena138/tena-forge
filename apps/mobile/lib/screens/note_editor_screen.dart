@@ -363,10 +363,7 @@ class _EditorToolBar extends StatelessWidget {
                 ),
                 _ToolButton(
                   tool: NoteTool.textExtractor,
-                  icon: Icons.center_focus_strong_rounded,
-                  iconWidget: const _AssetToolIcon(
-                    'assets/text_extract_tool.png',
-                  ),
+                  iconWidget: const _TextExtractToolIcon(),
                   label: '텍스트 추출',
                 ),
                 _ToolButton(
@@ -385,10 +382,7 @@ class _EditorToolBar extends StatelessWidget {
                 ),
                 _ToolButton(
                   tool: NoteTool.pointer,
-                  icon: Icons.flash_on_rounded,
-                  iconWidget: const _AssetToolIcon(
-                    'assets/laser_pointer_tool.png',
-                  ),
+                  iconWidget: const _MagicPointerToolIcon(),
                   label: '레이저 포인터',
                 ),
                 const SizedBox(width: 8),
@@ -1783,15 +1777,103 @@ class _EraserToolIcon extends StatelessWidget {
   }
 }
 
-class _AssetToolIcon extends StatelessWidget {
-  const _AssetToolIcon(this.assetPath);
-
-  final String assetPath;
+class _TextExtractToolIcon extends StatelessWidget {
+  const _TextExtractToolIcon();
 
   @override
   Widget build(BuildContext context) {
-    return ImageIcon(AssetImage(assetPath), size: 24);
+    return CustomPaint(
+      size: const Size.square(24),
+      painter: _TextExtractToolPainter(
+        IconTheme.of(context).color ?? AppColors.text,
+      ),
+    );
   }
+}
+
+class _MagicPointerToolIcon extends StatelessWidget {
+  const _MagicPointerToolIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size.square(24),
+      painter: _MagicPointerToolPainter(
+        IconTheme.of(context).color ?? AppColors.text,
+      ),
+    );
+  }
+}
+
+class _TextExtractToolPainter extends CustomPainter {
+  const _TextExtractToolPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.35
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(3.5, 4.5, 15.5, 13.5),
+        const Radius.circular(6),
+      ),
+      stroke,
+    );
+    canvas
+      ..drawLine(const Offset(7.2, 9), const Offset(15.2, 9), stroke)
+      ..drawLine(const Offset(7.2, 12), const Offset(13.8, 12), stroke)
+      ..drawLine(const Offset(7.2, 15), const Offset(12.2, 15), stroke)
+      ..drawLine(const Offset(15.6, 16.3), const Offset(21, 21), stroke)
+      ..drawLine(const Offset(21, 21), const Offset(20.1, 16.7), stroke)
+      ..drawLine(const Offset(21, 21), const Offset(16.6, 20.5), stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TextExtractToolPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _MagicPointerToolPainter extends CustomPainter {
+  const _MagicPointerToolPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.35
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final accent = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas
+      ..drawLine(const Offset(5.2, 20.2), const Offset(15.8, 9.6), stroke)
+      ..drawLine(const Offset(13.6, 7.4), const Offset(18, 11.8), stroke)
+      ..drawLine(const Offset(15.6, 5), const Offset(15.6, 1.8), accent)
+      ..drawLine(const Offset(15.6, 17.2), const Offset(15.6, 20.4), accent)
+      ..drawLine(const Offset(9.6, 11.1), const Offset(6.4, 11.1), accent)
+      ..drawLine(const Offset(21.8, 11.1), const Offset(18.6, 11.1), accent)
+      ..drawLine(const Offset(11.4, 6.9), const Offset(9.1, 4.6), accent)
+      ..drawLine(const Offset(20, 15.5), const Offset(22.2, 17.7), accent);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MagicPointerToolPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _EraserToolPainter extends CustomPainter {
