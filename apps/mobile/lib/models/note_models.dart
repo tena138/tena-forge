@@ -15,6 +15,8 @@ enum NoteTool {
   pointer,
 }
 
+enum NoteEraserMode { precision, standard, stroke }
+
 class NoteLibraryItem {
   const NoteLibraryItem({
     required this.id,
@@ -203,4 +205,18 @@ class NoteStroke {
   final double? imageHeight;
 
   bool get isImage => imageData != null && imageData!.isNotEmpty;
+
+  NoteStroke copyWith({List<Offset>? points}) {
+    return NoteStroke(
+      points: points ?? this.points,
+      color: color,
+      width: width,
+      isHighlighter: isHighlighter,
+      text: text,
+      imageData: imageData,
+      imageMimeType: imageMimeType,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+    );
+  }
 }

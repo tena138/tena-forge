@@ -32,8 +32,52 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
   String query = '';
   String? currentFolderId;
   NoteTool selectedTool = NoteTool.pen;
-  double penWidth = 3;
+  double penWidth = 4;
+  double highlighterWidth = 12;
+  double eraserWidth = 14;
   Color inkColor = const Color(0xFF111827);
+  Color highlighterColor = const Color(0x66FACC15);
+  NoteEraserMode eraserMode = NoteEraserMode.standard;
+  final List<Color> _penPalette = [
+    const Color(0xFF111827),
+    const Color(0xFFEF4444),
+    const Color(0xFF2563EB),
+  ];
+  final List<Color> _highlighterPalette = [
+    const Color(0x66FACC15),
+    const Color(0x665BE66A),
+    const Color(0x66F472B6),
+  ];
+
+  static const int maxPaletteColors = 12;
+  static const List<Color> _penColorBank = [
+    Color(0xFF111827),
+    Color(0xFFEF4444),
+    Color(0xFF2563EB),
+    Color(0xFF16A34A),
+    Color(0xFF9333EA),
+    Color(0xFFEA580C),
+    Color(0xFF0F766E),
+    Color(0xFF64748B),
+    Color(0xFFDB2777),
+    Color(0xFFB45309),
+    Color(0xFF0891B2),
+    Color(0xFF000000),
+  ];
+  static const List<Color> _highlighterColorBank = [
+    Color(0x66FACC15),
+    Color(0x665BE66A),
+    Color(0x66F472B6),
+    Color(0x6638BDF8),
+    Color(0x66FB923C),
+    Color(0x66A78BFA),
+    Color(0x66F87171),
+    Color(0x662DD4BF),
+    Color(0x66E879F9),
+    Color(0x6684CC16),
+    Color(0x66FDE047),
+    Color(0x669CA3AF),
+  ];
 
   int syncCount = 0;
   int inboxCount = 0;
@@ -208,6 +252,102 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
   void setPenWidth(double value) {
     penWidth = value;
     notifyListeners();
+  }
+
+  void setHighlighterWidth(double value) {
+    highlighterWidth = value;
+    notifyListeners();
+  }
+
+  void setEraserWidth(double value) {
+    eraserWidth = value;
+    notifyListeners();
+  }
+
+  void setEraserMode(NoteEraserMode mode) {
+    eraserMode = mode;
+    notifyListeners();
+  }
+
+  void setInkColor(Color color) {
+    inkColor = color;
+    if (!_penPalette.contains(color) && _penPalette.length < maxPaletteColors) {
+      _penPalette.add(color);
+    }
+    notifyListeners();
+  }
+
+  void setHighlighterColor(Color color) {
+    highlighterColor = color;
+    if (!_highlighterPalette.contains(color) &&
+        _highlighterPalette.length < maxPaletteColors) {
+      _highlighterPalette.add(color);
+    }
+    notifyListeners();
+  }
+
+  List<Color> paletteFor(NoteTool tool) {
+    if (tool == NoteTool.highlighter) {
+      return List.unmodifiable(_highlighterPalette);
+    }
+    return List.unmodifiable(_penPalette);
+  }
+
+  bool addNextPaletteColor(NoteTool tool) {
+    final palette = tool == NoteTool.highlighter
+        ? _highlighterPalette
+        : _penPalette;
+    if (palette.length >= maxPaletteColors) return false;
+    final bank = tool == NoteTool.highlighter
+        ? _highlighterColorBank
+        : _penColorBank;
+    for (final color in bank) {
+      if (palette.contains(color)) continue;
+      palette.add(color);
+      if (tool == NoteTool.highlighter) {
+        highlighterColor = color;
+      } else {
+        inkColor = color;
+      }
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  double widthForTool(NoteTool tool) {
+    switch (tool) {
+      case NoteTool.highlighter:
+        return highlighterWidth;
+      case NoteTool.eraser:
+        return eraserWidth;
+      case NoteTool.pen:
+      case NoteTool.textExtractor:
+      case NoteTool.lasso:
+      case NoteTool.image:
+      case NoteTool.text:
+      case NoteTool.pointer:
+        return penWidth;
+    }
+  }
+
+  void setWidthForTool(NoteTool tool, double value) {
+    switch (tool) {
+      case NoteTool.highlighter:
+        setHighlighterWidth(value);
+        return;
+      case NoteTool.eraser:
+        setEraserWidth(value);
+        return;
+      case NoteTool.pen:
+      case NoteTool.textExtractor:
+      case NoteTool.lasso:
+      case NoteTool.image:
+      case NoteTool.text:
+      case NoteTool.pointer:
+        setPenWidth(value);
+        return;
+    }
   }
 
   void addFolder(String name) {
@@ -510,11 +650,145 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
     undoStroke(documentId);
   }
 
+  bool eraseAt(String documentId, Offset point) {
+    final strokes = _strokesByDocument[documentId];
+    if (strokes == null || strokes.isEmpty) return false;
+
+    final radius = switch (eraserMode) {
+      NoteEraserMode.precision => eraserWidth * 0.55,
+      NoteEraserMode.standard => eraserWidth,
+      NoteEraserMode.stroke => eraserWidth,
+    };
+
+    for (var index = strokes.length - 1; index >= 0; index -= 1) {
+      final stroke = strokes[index];
+      if (eraserMode == NoteEraserMode.stroke) {
+        if (!_strokeContainsPoint(stroke, point, radius)) continue;
+        strokes.removeAt(index);
+        _redoByDocument[documentId] = [];
+        _touchDocument(documentId);
+        notifyListeners();
+        return true;
+      }
+
+      final replacement = _eraseStrokePart(stroke, point, radius);
+      if (replacement == null) continue;
+      strokes
+        ..removeAt(index)
+        ..insertAll(index, replacement);
+      _redoByDocument[documentId] = [];
+      _touchDocument(documentId);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
   void clearPage(String documentId) {
     _strokesByDocument[documentId] = [];
     _redoByDocument[documentId] = [];
     _touchDocument(documentId);
     notifyListeners();
+  }
+
+  List<NoteStroke>? _eraseStrokePart(
+    NoteStroke stroke,
+    Offset point,
+    double radius,
+  ) {
+    if (stroke.isImage || stroke.text != null || stroke.points.length < 2) {
+      return _strokeContainsPoint(stroke, point, radius) ? const [] : null;
+    }
+
+    final threshold = radius + stroke.width / 2;
+    final removed = List<bool>.filled(stroke.points.length, false);
+    var touched = false;
+
+    for (var index = 0; index < stroke.points.length - 1; index += 1) {
+      final first = stroke.points[index];
+      final second = stroke.points[index + 1];
+      if (_distanceToSegment(point, first, second) <= threshold) {
+        removed[index] = true;
+        removed[index + 1] = true;
+        touched = true;
+      }
+    }
+    if (!touched) return null;
+
+    final result = <NoteStroke>[];
+    var segment = <Offset>[];
+    for (var index = 0; index < stroke.points.length; index += 1) {
+      if (removed[index]) {
+        if (segment.length > 1) {
+          result.add(
+            stroke.copyWith(points: List<Offset>.unmodifiable(segment)),
+          );
+        }
+        segment = <Offset>[];
+      } else {
+        segment.add(stroke.points[index]);
+      }
+    }
+    if (segment.length > 1) {
+      result.add(stroke.copyWith(points: List<Offset>.unmodifiable(segment)));
+    }
+    return result;
+  }
+
+  bool _strokeContainsPoint(NoteStroke stroke, Offset point, double radius) {
+    if (stroke.points.isEmpty) return false;
+    if (stroke.isImage) {
+      final origin = stroke.points.first;
+      final rect = Rect.fromLTWH(
+        origin.dx,
+        origin.dy,
+        stroke.imageWidth ?? 320,
+        stroke.imageHeight ?? 220,
+      ).inflate(radius);
+      return rect.contains(point);
+    }
+    if (stroke.text != null) {
+      final origin = stroke.points.first;
+      final rect = Rect.fromLTWH(
+        origin.dx,
+        origin.dy,
+        (stroke.text!.length * 10).clamp(44, 320).toDouble(),
+        28,
+      ).inflate(radius);
+      return rect.contains(point);
+    }
+    if (stroke.points.length == 1) {
+      return (stroke.points.first - point).distance <=
+          radius + stroke.width / 2;
+    }
+    final threshold = radius + stroke.width / 2;
+    for (var index = 0; index < stroke.points.length - 1; index += 1) {
+      if (_distanceToSegment(
+            point,
+            stroke.points[index],
+            stroke.points[index + 1],
+          ) <=
+          threshold) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  double _distanceToSegment(Offset point, Offset first, Offset second) {
+    final segment = second - first;
+    final lengthSquared = segment.dx * segment.dx + segment.dy * segment.dy;
+    if (lengthSquared == 0) return (point - first).distance;
+    final t =
+        (((point.dx - first.dx) * segment.dx) +
+            ((point.dy - first.dy) * segment.dy)) /
+        lengthSquared;
+    final clamped = t.clamp(0.0, 1.0).toDouble();
+    final projection = Offset(
+      first.dx + segment.dx * clamped,
+      first.dy + segment.dy * clamped,
+    );
+    return (point - projection).distance;
   }
 
   void addTextAt(String documentId, Offset point, String text) {

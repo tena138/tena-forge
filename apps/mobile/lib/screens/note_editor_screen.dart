@@ -336,7 +336,7 @@ class _EditorToolBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<NoteLibraryState>();
     return Container(
-      height: 56,
+      height: 72,
       color: AppColors.panel,
       child: Row(
         children: [
@@ -393,15 +393,9 @@ class _EditorToolBar extends StatelessWidget {
                 const SizedBox(width: 8),
                 const VerticalDivider(color: AppColors.border),
                 const SizedBox(width: 8),
-                _StrokePreview(width: state.penWidth),
                 SizedBox(
-                  width: 130,
-                  child: Slider(
-                    min: 1,
-                    max: 10,
-                    value: state.penWidth,
-                    onChanged: state.setPenWidth,
-                  ),
+                  width: 720,
+                  child: _ToolOptionsStrip(tool: state.selectedTool),
                 ),
               ],
             ),
@@ -428,6 +422,331 @@ class _EditorToolBar extends StatelessWidget {
   }
 }
 
+class _ToolOptionsStrip extends StatelessWidget {
+  const _ToolOptionsStrip({required this.tool});
+
+  final NoteTool tool;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 150),
+      child: switch (tool) {
+        NoteTool.pen => const _InkToolOptions(
+          key: ValueKey('pen-options'),
+          tool: NoteTool.pen,
+        ),
+        NoteTool.highlighter => const _InkToolOptions(
+          key: ValueKey('highlighter-options'),
+          tool: NoteTool.highlighter,
+        ),
+        NoteTool.eraser => const _EraserToolOptions(
+          key: ValueKey('eraser-options'),
+        ),
+        _ => const SizedBox(key: ValueKey('empty-options')),
+      },
+    );
+  }
+}
+
+class _InkToolOptions extends StatelessWidget {
+  const _InkToolOptions({required this.tool, super.key});
+
+  final NoteTool tool;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<NoteLibraryState>();
+    final widths = tool == NoteTool.highlighter
+        ? const [8.0, 12.0, 18.0]
+        : const [2.0, 4.0, 7.0];
+    final activeWidth = state.widthForTool(tool);
+    final activeColor = tool == NoteTool.highlighter
+        ? state.highlighterColor
+        : state.inkColor;
+    final palette = state.paletteFor(tool);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          const SizedBox(width: 10),
+          for (final width in widths)
+            _StrokeSizePresetButton(
+              width: width,
+              color: activeColor,
+              selected: (activeWidth - width).abs() < 0.1,
+              onTap: () => state.setWidthForTool(tool, width),
+            ),
+          const SizedBox(width: 12),
+          const SizedBox(
+            height: 30,
+            child: VerticalDivider(color: AppColors.border),
+          ),
+          const SizedBox(width: 10),
+          for (final color in palette)
+            _ColorPresetButton(
+              color: color,
+              selected: color == activeColor,
+              onTap: () {
+                if (tool == NoteTool.highlighter) {
+                  state.setHighlighterColor(color);
+                } else {
+                  state.setInkColor(color);
+                }
+              },
+            ),
+          _AddColorButton(
+            enabled: palette.length < NoteLibraryState.maxPaletteColors,
+            onTap: () => state.addNextPaletteColor(tool),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+    );
+  }
+}
+
+class _EraserToolOptions extends StatelessWidget {
+  const _EraserToolOptions({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<NoteLibraryState>();
+    const widths = [8.0, 14.0, 24.0];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          const SizedBox(width: 10),
+          for (final width in widths)
+            _StrokeSizePresetButton(
+              width: width,
+              color: AppColors.text,
+              selected: (state.eraserWidth - width).abs() < 0.1,
+              onTap: () => state.setEraserWidth(width),
+            ),
+          const SizedBox(width: 12),
+          const SizedBox(
+            height: 30,
+            child: VerticalDivider(color: AppColors.border),
+          ),
+          const SizedBox(width: 10),
+          _EraserModeButton(
+            mode: NoteEraserMode.precision,
+            label: 'Precision',
+            selected: state.eraserMode == NoteEraserMode.precision,
+            onTap: () => state.setEraserMode(NoteEraserMode.precision),
+          ),
+          _EraserModeButton(
+            mode: NoteEraserMode.standard,
+            label: 'Standard',
+            selected: state.eraserMode == NoteEraserMode.standard,
+            onTap: () => state.setEraserMode(NoteEraserMode.standard),
+          ),
+          _EraserModeButton(
+            mode: NoteEraserMode.stroke,
+            label: 'Stroke',
+            selected: state.eraserMode == NoteEraserMode.stroke,
+            onTap: () => state.setEraserMode(NoteEraserMode.stroke),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+    );
+  }
+}
+
+class _StrokeSizePresetButton extends StatelessWidget {
+  const _StrokeSizePresetButton({
+    required this.width,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final double width;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = (8 + width * 1.25).clamp(12.0, 34.0);
+    return Tooltip(
+      message: 'Stroke ${width.toStringAsFixed(0)}',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 44,
+          height: 44,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.panelSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? AppColors.text : Colors.transparent,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Center(
+            child: Container(
+              width: previewSize,
+              height: previewSize,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ColorPresetButton extends StatelessWidget {
+  const _ColorPresetButton({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Color',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          width: 34,
+          height: 44,
+          alignment: Alignment.center,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: selected ? 28 : 24,
+            height: selected ? 28 : 24,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? AppColors.text : Colors.white,
+                width: selected ? 2.2 : 1.2,
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x18000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddColorButton extends StatelessWidget {
+  const _AddColorButton({required this.enabled, required this.onTap});
+
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: enabled ? 'Add color' : 'Palette full',
+      child: IconButton(
+        visualDensity: VisualDensity.compact,
+        onPressed: enabled ? onTap : null,
+        icon: Icon(
+          Icons.add_circle_outline_rounded,
+          color: enabled ? AppColors.text : AppColors.subtle,
+        ),
+      ),
+    );
+  }
+}
+
+class _EraserModeButton extends StatelessWidget {
+  const _EraserModeButton({
+    required this.mode,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final NoteEraserMode mode;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 76,
+          height: 50,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.panelSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? AppColors.text : Colors.transparent,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconTheme(
+                data: IconThemeData(
+                  color: selected ? const Color(0xFF0EA5E9) : AppColors.text,
+                  size: mode == NoteEraserMode.stroke ? 24 : 22,
+                ),
+                child: const _EraserToolIcon(),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? AppColors.text : AppColors.muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FingerPageScrollBehavior extends MaterialScrollBehavior {
+  const _FingerPageScrollBehavior();
+
+  @override
+  Set<ui.PointerDeviceKind> get dragDevices => const {
+    ui.PointerDeviceKind.touch,
+    ui.PointerDeviceKind.mouse,
+  };
+}
+
 class _CanvasStage extends StatefulWidget {
   const _CanvasStage({
     required this.documentId,
@@ -452,6 +771,7 @@ class _CanvasStageState extends State<_CanvasStage> {
   List<Offset> _draftPoints = [];
   String? _draftDocumentId;
   int? _activeStrokePointer;
+  String? _activeEraserDocumentId;
   Offset? _laserPoint;
   String? _laserDocumentId;
   Offset? _textInputPoint;
@@ -470,6 +790,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     _draftPoints = [];
     _draftDocumentId = null;
     _activeStrokePointer = null;
+    _activeEraserDocumentId = null;
     _laserPoint = null;
     _laserDocumentId = null;
     _clearTextInput();
@@ -512,43 +833,44 @@ class _CanvasStageState extends State<_CanvasStage> {
               0,
               pageCount - 1,
             );
-            final pageSwipeLocked =
-                _printedPageSwipeLocked ||
-                _locksPageSwipeForTool(state.selectedTool);
+            final pageSwipeLocked = _printedPageSwipeLocked;
             return Stack(
               children: [
-                PageView.builder(
-                  controller: _printedPageController,
-                  physics: pageSwipeLocked
-                      ? const NeverScrollableScrollPhysics()
-                      : const PageScrollPhysics(),
-                  itemCount: pageCount,
-                  onPageChanged: _handlePrintedPageChanged,
-                  itemBuilder: (context, index) {
-                    final pageRef = pageRefs[index];
-                    final page = document == null
-                        ? null
-                        : _printedPageForRef(document, pageRef);
-                    final strokeDocumentId = _strokeDocumentIdForPageRef(
-                      widget.documentId,
-                      pageRef,
-                    );
-                    return _buildZoomableCanvasViewport(
-                      transformId: strokeDocumentId,
-                      panEnabled: false,
-                      child: _buildCanvasPage(
-                        context: context,
-                        state: state,
-                        strokeDocumentId: strokeDocumentId,
-                        width: pageSize.width,
-                        height: pageSize.height,
-                        printedPage: page,
-                        boundaryKey: index == currentPage
-                            ? _pageBoundaryKey
-                            : null,
-                      ),
-                    );
-                  },
+                ScrollConfiguration(
+                  behavior: const _FingerPageScrollBehavior(),
+                  child: PageView.builder(
+                    controller: _printedPageController,
+                    physics: pageSwipeLocked
+                        ? const NeverScrollableScrollPhysics()
+                        : const PageScrollPhysics(),
+                    itemCount: pageCount,
+                    onPageChanged: _handlePrintedPageChanged,
+                    itemBuilder: (context, index) {
+                      final pageRef = pageRefs[index];
+                      final page = document == null
+                          ? null
+                          : _printedPageForRef(document, pageRef);
+                      final strokeDocumentId = _strokeDocumentIdForPageRef(
+                        widget.documentId,
+                        pageRef,
+                      );
+                      return _buildZoomableCanvasViewport(
+                        transformId: strokeDocumentId,
+                        panEnabled: _isTransformZoomed(strokeDocumentId),
+                        child: _buildCanvasPage(
+                          context: context,
+                          state: state,
+                          strokeDocumentId: strokeDocumentId,
+                          width: pageSize.width,
+                          height: pageSize.height,
+                          printedPage: page,
+                          boundaryKey: index == currentPage
+                              ? _pageBoundaryKey
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             );
@@ -561,7 +883,9 @@ class _CanvasStageState extends State<_CanvasStage> {
               widget.documentId,
               pageRef,
             ),
-            panEnabled: false,
+            panEnabled: _isTransformZoomed(
+              _strokeDocumentIdForPageRef(widget.documentId, pageRef),
+            ),
             child: _buildCanvasPage(
               context: context,
               state: state,
@@ -626,7 +950,8 @@ class _CanvasStageState extends State<_CanvasStage> {
         state.selectedTool == NoteTool.pen ||
         state.selectedTool == NoteTool.highlighter ||
         state.selectedTool == NoteTool.textExtractor ||
-        state.selectedTool == NoteTool.pointer;
+        state.selectedTool == NoteTool.pointer ||
+        state.selectedTool == NoteTool.eraser;
     return Stack(
       children: [
         SizedBox(
@@ -756,6 +1081,11 @@ class _CanvasStageState extends State<_CanvasStage> {
     });
   }
 
+  bool _isTransformZoomed(String id) {
+    final controller = _transformControllers[id];
+    return controller != null && controller.value.getMaxScaleOnAxis() > 1.02;
+  }
+
   void _handleTransformChanged() {
     final locked = _transformControllers.values.any(
       (controller) => controller.value.getMaxScaleOnAxis() > 1.02,
@@ -814,12 +1144,12 @@ class _CanvasStageState extends State<_CanvasStage> {
       color: extractingText
           ? const Color(0x6634D399)
           : highlighting
-          ? const Color(0x66FACC15)
+          ? state.highlighterColor
           : state.inkColor,
       width: extractingText
-          ? math.max(14, state.penWidth * 4)
+          ? math.max(14, state.highlighterWidth)
           : highlighting
-          ? state.penWidth * 4
+          ? state.highlighterWidth
           : state.penWidth,
       isHighlighter: highlighting || extractingText,
     );
@@ -872,6 +1202,16 @@ class _CanvasStageState extends State<_CanvasStage> {
       });
       return;
     }
+    if (state.selectedTool == NoteTool.eraser) {
+      if (_activeStrokePointer != null) return;
+      setState(() {
+        _activeStrokePointer = event.pointer;
+        _activeEraserDocumentId = strokeDocumentId;
+        _clearTextInput();
+      });
+      state.eraseAt(strokeDocumentId, event.localPosition);
+      return;
+    }
     if (_isStrokeTool(state.selectedTool)) {
       if (_activeStrokePointer != null) return;
       _activeStrokePointer = event.pointer;
@@ -887,6 +1227,14 @@ class _CanvasStageState extends State<_CanvasStage> {
       setState(() => _laserPoint = event.localPosition);
       return;
     }
+    final eraserDocumentId = _activeEraserDocumentId;
+    if (eraserDocumentId != null) {
+      context.read<NoteLibraryState>().eraseAt(
+        eraserDocumentId,
+        event.localPosition,
+      );
+      return;
+    }
     _updateStroke(event.localPosition);
   }
 
@@ -900,6 +1248,13 @@ class _CanvasStageState extends State<_CanvasStage> {
       });
       return;
     }
+    if (_activeEraserDocumentId != null) {
+      setState(() {
+        _activeStrokePointer = null;
+        _activeEraserDocumentId = null;
+      });
+      return;
+    }
     _activeStrokePointer = null;
     _finishStroke(context);
   }
@@ -908,6 +1263,7 @@ class _CanvasStageState extends State<_CanvasStage> {
     if (_activeStrokePointer != event.pointer) return;
     setState(() {
       _activeStrokePointer = null;
+      _activeEraserDocumentId = null;
       _draftPoints = [];
       _draftDocumentId = null;
       _laserPoint = null;
@@ -1011,10 +1367,10 @@ class _CanvasStageState extends State<_CanvasStage> {
         NoteStroke(
           points: List<Offset>.unmodifiable(_draftPoints),
           color: state.selectedTool == NoteTool.highlighter
-              ? const Color(0x66FACC15)
+              ? state.highlighterColor
               : state.inkColor,
           width: state.selectedTool == NoteTool.highlighter
-              ? state.penWidth * 4
+              ? state.highlighterWidth
               : state.penWidth,
           isHighlighter: state.selectedTool == NoteTool.highlighter,
         ),
@@ -1571,29 +1927,6 @@ class _PrintedPageJumpControlState extends State<_PrintedPageJumpControl> {
   }
 }
 
-class _StrokePreview extends StatelessWidget {
-  const _StrokePreview({required this.width});
-
-  final double width;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 48,
-      child: Center(
-        child: Container(
-          width: 8 + width * 2,
-          height: 8 + width * 2,
-          decoration: const BoxDecoration(
-            color: AppColors.text,
-            shape: BoxShape.circle,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _NotebookPageBackgroundPainter extends CustomPainter {
   const _NotebookPageBackgroundPainter();
 
@@ -2006,14 +2339,6 @@ String _strokeDocumentIdForPageIndex(NoteDocument document, int pageIndex) {
   if (pageRefs.isEmpty) return document.id;
   final safeIndex = pageIndex.clamp(0, pageRefs.length - 1).toInt();
   return _strokeDocumentIdForPageRef(document.id, pageRefs[safeIndex]);
-}
-
-bool _locksPageSwipeForTool(NoteTool tool) {
-  return tool == NoteTool.pen ||
-      tool == NoteTool.highlighter ||
-      tool == NoteTool.textExtractor ||
-      tool == NoteTool.pointer ||
-      tool == NoteTool.eraser;
 }
 
 Future<Size> _imageSizeFor(Uint8List bytes) async {
