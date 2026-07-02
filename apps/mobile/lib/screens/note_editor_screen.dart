@@ -1306,6 +1306,10 @@ class _CanvasStageState extends State<_CanvasStage> {
   }) {
     final strokes = state.strokesFor(strokeDocumentId);
     final draftStroke = _buildDraftStroke(state, strokeDocumentId);
+    final textExtractionDraft =
+        state.selectedTool == NoteTool.textExtractor &&
+        _draftDocumentId == strokeDocumentId &&
+        _draftPoints.isNotEmpty;
     final selectedImageStroke =
         _selectedImageDocumentId == strokeDocumentId &&
             strokes.any((stroke) => identical(stroke, _selectedImageStroke))
@@ -1359,6 +1363,13 @@ class _CanvasStageState extends State<_CanvasStage> {
                   IgnorePointer(
                     child: CustomPaint(
                       painter: _StrokeOverlayPainter(draftStroke),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                if (textExtractionDraft)
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: _TextExtractionLaserOverlayPainter(_draftPoints),
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -1704,21 +1715,13 @@ class _CanvasStageState extends State<_CanvasStage> {
   NoteStroke? _buildDraftStroke(NoteLibraryState state, String documentId) {
     if (_draftDocumentId != documentId) return null;
     if (_draftPoints.isEmpty) return null;
-    final extractingText = state.selectedTool == NoteTool.textExtractor;
+    if (state.selectedTool == NoteTool.textExtractor) return null;
     final highlighting = state.selectedTool == NoteTool.highlighter;
     return NoteStroke(
       points: _draftPoints,
-      color: extractingText
-          ? const Color(0x6634D399)
-          : highlighting
-          ? state.highlighterColor
-          : state.inkColor,
-      width: extractingText
-          ? math.max(14, state.highlighterWidth)
-          : highlighting
-          ? state.highlighterWidth
-          : state.penWidth,
-      isHighlighter: highlighting || extractingText,
+      color: highlighting ? state.highlighterColor : state.inkColor,
+      width: highlighting ? state.highlighterWidth : state.penWidth,
+      isHighlighter: highlighting,
     );
   }
 
@@ -3221,6 +3224,52 @@ class _StrokeOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _StrokeOverlayPainter oldDelegate) =>
       oldDelegate.stroke != stroke;
+}
+
+class _TextExtractionLaserOverlayPainter extends CustomPainter {
+  const _TextExtractionLaserOverlayPainter(this.points);
+
+  final List<Offset> points;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final glow = Paint()
+      ..color = const Color(0x66EF4444)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 13
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+    final outer = Paint()
+      ..color = const Color(0xFFE11D48)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 5
+      ..style = PaintingStyle.stroke;
+    final core = Paint()
+      ..color = Colors.white
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+
+    _drawStrokePath(canvas, points, glow);
+    _drawStrokePath(canvas, points, outer);
+    _drawStrokePath(canvas, points, core);
+
+    final pointGlow = Paint()
+      ..color = const Color(0x55EF4444)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    final pointCore = Paint()..color = const Color(0xFFE11D48);
+    canvas.drawCircle(points.last, 10, pointGlow);
+    canvas.drawCircle(points.last, 4.5, pointCore);
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _TextExtractionLaserOverlayPainter oldDelegate,
+  ) => oldDelegate.points != points;
 }
 
 class _LaserPointerPainter extends CustomPainter {
