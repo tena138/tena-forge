@@ -156,8 +156,11 @@ class _EditorTopBar extends StatelessWidget {
                   _EditorIconButton(
                     icon: Icons.ios_share_rounded,
                     tooltip: '공유',
-                    onPressed: () =>
-                        _showSnack(context, '${document.title} 공유 메뉴를 열었습니다.'),
+                    onPressed: () => _showShareExportPanel(
+                      context,
+                      document: document,
+                      selectedPrintedPageIndex: printedPageIndex.value,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -212,7 +215,11 @@ class _EditorTopBar extends StatelessWidget {
                   _EditorIconButton(
                     icon: Icons.more_horiz_rounded,
                     tooltip: '더보기',
-                    onPressed: () => _showEditorMoreMenu(context, document.id),
+                    onPressed: () => _showEditorMoreMenu(
+                      context,
+                      document,
+                      selectedPrintedPageIndex: printedPageIndex.value,
+                    ),
                   ),
                 ],
               ),
@@ -2049,6 +2056,343 @@ String _strokeDocumentIdForPageRef(String documentId, String pageRef) {
   return documentId;
 }
 
+void _showShareExportPanel(
+  BuildContext context, {
+  required NoteDocument document,
+  required int selectedPrintedPageIndex,
+}) {
+  showGeneralDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.10),
+    barrierDismissible: true,
+    barrierLabel: '공유 및 내보내기 닫기',
+    transitionDuration: const Duration(milliseconds: 140),
+    pageBuilder: (dialogContext, _, _) {
+      final media = MediaQuery.sizeOf(dialogContext);
+      final width = math.min(media.width - 24, 480.0);
+      final desiredLeft = media.width < 700 ? 12.0 : 72.0;
+      final left = math.max(
+        12.0,
+        math.min(desiredLeft, media.width - width - 12),
+      );
+
+      return SafeArea(
+        child: Stack(
+          children: [
+            Positioned(
+              top: 58,
+              left: left,
+              child: _ShareExportSheet(
+                document: document,
+                selectedPrintedPageIndex: selectedPrintedPageIndex,
+                width: width,
+                onAction: (message) {
+                  if (context.mounted) _showSnack(context, message);
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+    transitionBuilder: (context, animation, _, child) => FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, -0.04), end: Offset.zero)
+            .animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+        child: child,
+      ),
+    ),
+  );
+}
+
+class _ShareExportSheet extends StatefulWidget {
+  const _ShareExportSheet({
+    required this.document,
+    required this.selectedPrintedPageIndex,
+    required this.width,
+    required this.onAction,
+  });
+
+  final NoteDocument document;
+  final int selectedPrintedPageIndex;
+  final double width;
+  final ValueChanged<String> onAction;
+
+  @override
+  State<_ShareExportSheet> createState() => _ShareExportSheetState();
+}
+
+class _ShareExportSheetState extends State<_ShareExportSheet> {
+  bool _collaborationEnabled = false;
+  int _presentationMode = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final pageCount = math.max(_pageRefsForDocument(widget.document).length, 1);
+    final currentPage =
+        widget.selectedPrintedPageIndex.clamp(0, pageCount - 1).toInt() + 1;
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: -7,
+            left: math.min(142.0, widget.width - 60),
+            child: Transform.rotate(
+              angle: math.pi / 4,
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: AppColors.panel,
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: widget.width,
+            constraints: const BoxConstraints(maxHeight: 720),
+            decoration: BoxDecoration(
+              color: AppColors.panel,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 28,
+                  offset: Offset(0, 16),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '공유 및 내보내기',
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.document.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1, color: AppColors.border),
+                    const _ShareExportSectionLabel('협업'),
+                    _ShareExportAction(
+                      icon: Icons.person_add_alt_1_rounded,
+                      title: '협업 링크 공유',
+                      subtitle: '보기, 댓글, 편집 권한으로 공유',
+                      trailing: Switch.adaptive(
+                        value: _collaborationEnabled,
+                        activeThumbColor: AppColors.text,
+                        activeTrackColor: AppColors.border,
+                        onChanged: (value) =>
+                            setState(() => _collaborationEnabled = value),
+                      ),
+                      onTap: () => setState(
+                        () => _collaborationEnabled = !_collaborationEnabled,
+                      ),
+                    ),
+                    const _ShareExportSectionLabel('내보내기'),
+                    _ShareExportAction(
+                      icon: Icons.file_upload_outlined,
+                      title: '현재 페이지 내보내기',
+                      subtitle: '$currentPage / $pageCount 페이지',
+                      onTap: () => _finish('현재 페이지 내보내기 준비 상태입니다.'),
+                    ),
+                    _ShareExportAction(
+                      icon: Icons.library_books_outlined,
+                      title: '전체 페이지 내보내기',
+                      subtitle: '총 $pageCount페이지',
+                      onTap: () => _finish('전체 페이지 내보내기 준비 상태입니다.'),
+                    ),
+                    _ShareExportAction(
+                      icon: Icons.print_rounded,
+                      title: '인쇄',
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.subtle,
+                      ),
+                      onTap: () => _finish('인쇄 준비 상태입니다.'),
+                    ),
+                    const _ShareExportSectionLabel('프레젠테이션 모드'),
+                    _ShareExportAction(
+                      icon: Icons.connected_tv_rounded,
+                      title: '전체 화면 미러링',
+                      subtitle: '보는 화면 전체를 표시',
+                      trailing: _presentationMode == 0
+                          ? const Icon(
+                              Icons.check_rounded,
+                              color: AppColors.cyan,
+                            )
+                          : null,
+                      onTap: () => setState(() => _presentationMode = 0),
+                    ),
+                    _ShareExportAction(
+                      icon: Icons.present_to_all_rounded,
+                      title: '발표자 페이지 미러링',
+                      subtitle: '툴바 없이 페이지 중심으로 표시',
+                      trailing: _presentationMode == 1
+                          ? const Icon(
+                              Icons.check_rounded,
+                              color: AppColors.cyan,
+                            )
+                          : null,
+                      onTap: () => setState(() => _presentationMode = 1),
+                    ),
+                    _ShareExportAction(
+                      icon: Icons.fit_screen_rounded,
+                      title: '전체 페이지 미러링',
+                      subtitle: '확대 상태와 무관하게 페이지 전체 표시',
+                      trailing: _presentationMode == 2
+                          ? const Icon(
+                              Icons.check_rounded,
+                              color: AppColors.cyan,
+                            )
+                          : null,
+                      onTap: () => setState(() => _presentationMode = 2),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _finish(String message) {
+    Navigator.of(context).pop();
+    widget.onAction(message);
+  }
+}
+
+class _ShareExportSectionLabel extends StatelessWidget {
+  const _ShareExportSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.muted,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+}
+
+class _ShareExportAction extends StatelessWidget {
+  const _ShareExportAction({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.border)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 42,
+                height: 42,
+                child: Icon(icon, color: AppColors.text, size: 27),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 void _showDocumentSearch(
   BuildContext context, {
   required NoteDocument document,
@@ -3323,7 +3667,11 @@ class _DashedBorderPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-void _showEditorMoreMenu(BuildContext context, String documentId) async {
+void _showEditorMoreMenu(
+  BuildContext context,
+  NoteDocument document, {
+  required int selectedPrintedPageIndex,
+}) async {
   final selected = await showMenu<String>(
     context: context,
     position: const RelativeRect.fromLTRB(260, 96, 16, 0),
@@ -3335,9 +3683,15 @@ void _showEditorMoreMenu(BuildContext context, String documentId) async {
   if (!context.mounted || selected == null) return;
   switch (selected) {
     case 'clear':
-      context.read<NoteLibraryState>().clearPage(documentId);
+      context.read<NoteLibraryState>().clearPage(
+        _strokeDocumentIdForPageIndex(document, selectedPrintedPageIndex),
+      );
     case 'export':
-      _showSnack(context, 'PDF 내보내기 준비 상태입니다.');
+      _showShareExportPanel(
+        context,
+        document: document,
+        selectedPrintedPageIndex: selectedPrintedPageIndex,
+      );
   }
 }
 
