@@ -438,6 +438,9 @@ class _ToolOptionsStrip extends StatelessWidget {
         NoteTool.eraser => const _EraserToolOptions(
           key: ValueKey('eraser-options'),
         ),
+        NoteTool.pointer => const _PointerToolOptions(
+          key: ValueKey('pointer-options'),
+        ),
         _ => const SizedBox(key: ValueKey('empty-options')),
       },
     );
@@ -544,6 +547,36 @@ class _EraserToolOptions extends StatelessWidget {
             label: 'Stroke',
             selected: state.eraserMode == NoteEraserMode.stroke,
             onTap: () => state.setEraserMode(NoteEraserMode.stroke),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+    );
+  }
+}
+
+class _PointerToolOptions extends StatelessWidget {
+  const _PointerToolOptions({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<NoteLibraryState>();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          const SizedBox(width: 10),
+          _PointerModeButton(
+            mode: NotePointerMode.dot,
+            label: 'Dot',
+            selected: state.pointerMode == NotePointerMode.dot,
+            onTap: () => state.setPointerMode(NotePointerMode.dot),
+          ),
+          _PointerModeButton(
+            mode: NotePointerMode.trail,
+            label: 'Trail',
+            selected: state.pointerMode == NotePointerMode.trail,
+            onTap: () => state.setPointerMode(NotePointerMode.trail),
           ),
           const SizedBox(width: 10),
         ],
@@ -669,6 +702,127 @@ class _AddColorButton extends StatelessWidget {
   }
 }
 
+class _PointerModeButton extends StatelessWidget {
+  const _PointerModeButton({
+    required this.mode,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final NotePointerMode mode;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 76,
+          height: 50,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.panelSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? AppColors.text : Colors.transparent,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CustomPaint(
+                painter: _PointerModePreviewPainter(mode),
+                child: const SizedBox(width: 36, height: 18),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? AppColors.text : AppColors.muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PointerModePreviewPainter extends CustomPainter {
+  const _PointerModePreviewPainter(this.mode);
+
+  final NotePointerMode mode;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final glow = Paint()
+      ..color = const Color(0x55EF4444)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    final red = Paint()
+      ..color = const Color(0xFFEF4444)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    if (mode == NotePointerMode.dot) {
+      canvas.drawCircle(
+        size.center(Offset.zero),
+        6,
+        Paint()
+          ..color = const Color(0x55EF4444)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+      canvas.drawCircle(
+        size.center(Offset.zero),
+        3,
+        Paint()..color = const Color(0xFFEF4444),
+      );
+      return;
+    }
+
+    final path = Path()
+      ..moveTo(3, size.height * 0.65)
+      ..cubicTo(
+        size.width * 0.30,
+        0,
+        size.width * 0.55,
+        size.height,
+        size.width - 3,
+        size.height * 0.35,
+      );
+    canvas.drawPath(path, glow..strokeWidth = 8);
+    canvas.drawPath(path, red..strokeWidth = 3);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white
+        ..strokeWidth = 1.2
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _PointerModePreviewPainter oldDelegate) =>
+      oldDelegate.mode != mode;
+}
+
 class _EraserModeButton extends StatelessWidget {
   const _EraserModeButton({
     required this.mode,
@@ -761,6 +915,8 @@ class _CanvasStageState extends State<_CanvasStage> {
   static const double _maxStrokeSegmentDistance = 3.5;
   static const Duration _lineStraightenHoldDelay = Duration(milliseconds: 520);
   static const double _lineStraightenMinLength = 36;
+  static const Duration _laserTrailClearDelay = Duration(milliseconds: 900);
+  static const double _minLaserTrailPointDistance = 1.2;
 
   final GlobalKey _pageBoundaryKey = GlobalKey();
   final PageController _printedPageController = PageController();
@@ -770,8 +926,10 @@ class _CanvasStageState extends State<_CanvasStage> {
   int? _activeStrokePointer;
   String? _activeEraserDocumentId;
   Timer? _lineStraightenTimer;
+  Timer? _laserTrailClearTimer;
   bool _draftStraightened = false;
   Offset? _laserPoint;
+  List<Offset> _laserTrailPoints = [];
   String? _laserDocumentId;
   Offset? _textInputPoint;
   String? _textInputDocumentId;
@@ -795,7 +953,9 @@ class _CanvasStageState extends State<_CanvasStage> {
     _activeEraserDocumentId = null;
     _draftStraightened = false;
     _laserPoint = null;
+    _laserTrailPoints = [];
     _laserDocumentId = null;
+    _cancelLaserTrailClearTimer();
     _clearSelectedImageSelection();
     _clearTextInput();
     _disposeTransformControllers();
@@ -808,6 +968,7 @@ class _CanvasStageState extends State<_CanvasStage> {
   @override
   void dispose() {
     _cancelLineStraightenTimer();
+    _cancelLaserTrailClearTimer();
     _textInputController?.dispose();
     _textInputFocusNode?.dispose();
     _printedPageController.dispose();
@@ -1038,7 +1199,10 @@ class _CanvasStageState extends State<_CanvasStage> {
                 if (_laserDocumentId == strokeDocumentId && _laserPoint != null)
                   IgnorePointer(
                     child: CustomPaint(
-                      painter: _LaserPointerPainter(_laserPoint!),
+                      painter: _LaserPointerPainter(
+                        point: _laserPoint!,
+                        trailPoints: _laserTrailPoints,
+                      ),
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -1135,12 +1299,16 @@ class _CanvasStageState extends State<_CanvasStage> {
 
   void _handlePrintedPageChanged(int index) {
     _cancelLineStraightenTimer();
+    _cancelLaserTrailClearTimer();
     setState(() {
       _currentPrintedPageIndex = index;
       _draftPoints = [];
       _draftDocumentId = null;
       _activeStrokePointer = null;
       _draftStraightened = false;
+      _laserPoint = null;
+      _laserTrailPoints = [];
+      _laserDocumentId = null;
       _clearSelectedImageSelection();
       _clearTextInput();
     });
@@ -1250,6 +1418,74 @@ class _CanvasStageState extends State<_CanvasStage> {
     return null;
   }
 
+  void _cancelLaserTrailClearTimer() {
+    _laserTrailClearTimer?.cancel();
+    _laserTrailClearTimer = null;
+  }
+
+  void _startLaserPointer(
+    NoteLibraryState state,
+    int pointer,
+    Offset point,
+    String documentId,
+  ) {
+    _cancelLaserTrailClearTimer();
+    setState(() {
+      _activeStrokePointer = pointer;
+      _laserPoint = point;
+      _laserDocumentId = documentId;
+      _laserTrailPoints = state.pointerMode == NotePointerMode.trail
+          ? <Offset>[point]
+          : const <Offset>[];
+      _clearSelectedImageSelection();
+      _clearTextInput();
+    });
+  }
+
+  void _updateLaserPointer(NoteLibraryState state, Offset point) {
+    setState(() {
+      _laserPoint = point;
+      if (state.pointerMode == NotePointerMode.trail) {
+        _appendLaserTrailPoint(point);
+      }
+    });
+  }
+
+  void _appendLaserTrailPoint(Offset point) {
+    if (_laserTrailPoints.isEmpty) {
+      _laserTrailPoints = <Offset>[point];
+      return;
+    }
+    final last = _laserTrailPoints.last;
+    if ((point - last).distance < _minLaserTrailPointDistance) return;
+    _laserTrailPoints = List<Offset>.unmodifiable([
+      ..._laserTrailPoints,
+      point,
+    ]);
+  }
+
+  void _finishLaserPointer(NoteLibraryState state) {
+    _activeStrokePointer = null;
+    if (state.pointerMode == NotePointerMode.trail &&
+        _laserTrailPoints.length > 1) {
+      _laserTrailClearTimer = Timer(_laserTrailClearDelay, () {
+        if (!mounted) return;
+        setState(_clearLaserPointer);
+      });
+      setState(() {});
+      return;
+    }
+    setState(_clearLaserPointer);
+  }
+
+  void _clearLaserPointer() {
+    _activeStrokePointer = null;
+    _laserTrailClearTimer = null;
+    _laserPoint = null;
+    _laserTrailPoints = [];
+    _laserDocumentId = null;
+  }
+
   void jumpToPrintedPage(int pageNumber) {
     final document = context.read<NoteLibraryState>().documentById(
       widget.documentId,
@@ -1346,12 +1582,12 @@ class _CanvasStageState extends State<_CanvasStage> {
     }
     if (state.selectedTool == NoteTool.pointer) {
       if (_activeStrokePointer != null) return;
-      setState(() {
-        _activeStrokePointer = event.pointer;
-        _laserPoint = event.localPosition;
-        _laserDocumentId = strokeDocumentId;
-        _clearTextInput();
-      });
+      _startLaserPointer(
+        state,
+        event.pointer,
+        event.localPosition,
+        strokeDocumentId,
+      );
       return;
     }
     if (state.selectedTool == NoteTool.eraser) {
@@ -1377,7 +1613,10 @@ class _CanvasStageState extends State<_CanvasStage> {
   void _handlePointerMove(PointerMoveEvent event) {
     if (_activeStrokePointer != event.pointer) return;
     if (_laserDocumentId != null) {
-      setState(() => _laserPoint = event.localPosition);
+      _updateLaserPointer(
+        context.read<NoteLibraryState>(),
+        event.localPosition,
+      );
       return;
     }
     final eraserDocumentId = _activeEraserDocumentId;
@@ -1394,11 +1633,7 @@ class _CanvasStageState extends State<_CanvasStage> {
   void _handlePointerUp(BuildContext context, PointerUpEvent event) {
     if (_activeStrokePointer != event.pointer) return;
     if (_laserDocumentId != null) {
-      setState(() {
-        _activeStrokePointer = null;
-        _laserPoint = null;
-        _laserDocumentId = null;
-      });
+      _finishLaserPointer(context.read<NoteLibraryState>());
       return;
     }
     if (_activeEraserDocumentId != null) {
@@ -1415,6 +1650,7 @@ class _CanvasStageState extends State<_CanvasStage> {
   void _handlePointerCancel(PointerCancelEvent event) {
     if (_activeStrokePointer != event.pointer) return;
     _cancelLineStraightenTimer();
+    _cancelLaserTrailClearTimer();
     setState(() {
       _activeStrokePointer = null;
       _activeEraserDocumentId = null;
@@ -1422,6 +1658,7 @@ class _CanvasStageState extends State<_CanvasStage> {
       _draftDocumentId = null;
       _draftStraightened = false;
       _laserPoint = null;
+      _laserTrailPoints = [];
       _laserDocumentId = null;
     });
   }
@@ -2746,12 +2983,40 @@ class _StrokeOverlayPainter extends CustomPainter {
 }
 
 class _LaserPointerPainter extends CustomPainter {
-  const _LaserPointerPainter(this.point);
+  const _LaserPointerPainter({required this.point, required this.trailPoints});
 
   final Offset point;
+  final List<Offset> trailPoints;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (trailPoints.length > 1) {
+      final glow = Paint()
+        ..color = const Color(0x88EF4444)
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = 15
+        ..style = PaintingStyle.stroke
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 13);
+      final outer = Paint()
+        ..color = const Color(0xFFEF4444)
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = 6
+        ..style = PaintingStyle.stroke;
+      final hotCore = Paint()
+        ..color = Colors.white
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+
+      _drawStrokePath(canvas, trailPoints, glow);
+      _drawStrokePath(canvas, trailPoints, outer);
+      _drawStrokePath(canvas, trailPoints, hotCore);
+      return;
+    }
+
     final glow = Paint()
       ..color = const Color(0x44EF4444)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
@@ -2768,7 +3033,7 @@ class _LaserPointerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LaserPointerPainter oldDelegate) =>
-      oldDelegate.point != point;
+      oldDelegate.point != point || oldDelegate.trailPoints != trailPoints;
 }
 
 class _SelectionExtractionBadge extends StatelessWidget {

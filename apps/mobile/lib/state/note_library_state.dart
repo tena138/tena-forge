@@ -38,6 +38,7 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
   Color inkColor = const Color(0xFF111827);
   Color highlighterColor = const Color(0x66FACC15);
   NoteEraserMode eraserMode = NoteEraserMode.standard;
+  NotePointerMode pointerMode = NotePointerMode.dot;
   final List<Color> _penPalette = [
     const Color(0xFF111827),
     const Color(0xFFEF4444),
@@ -266,6 +267,11 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
 
   void setEraserMode(NoteEraserMode mode) {
     eraserMode = mode;
+    notifyListeners();
+  }
+
+  void setPointerMode(NotePointerMode mode) {
+    pointerMode = mode;
     notifyListeners();
   }
 

@@ -17,6 +17,8 @@ enum NoteTool {
 
 enum NoteEraserMode { precision, standard, stroke }
 
+enum NotePointerMode { dot, trail }
+
 class NoteLibraryItem {
   const NoteLibraryItem({
     required this.id,
