@@ -148,6 +148,7 @@ class NoteDocument {
     required this.updatedAt,
     required this.favorite,
     this.printedPages = const [],
+    this.pageRefs = const [],
   });
 
   final String id;
@@ -156,6 +157,7 @@ class NoteDocument {
   final DateTime updatedAt;
   final bool favorite;
   final List<PrintedNotePage> printedPages;
+  final List<String> pageRefs;
 
   NoteDocument copyWith({
     String? title,
@@ -163,6 +165,7 @@ class NoteDocument {
     DateTime? updatedAt,
     bool? favorite,
     List<PrintedNotePage>? printedPages,
+    List<String>? pageRefs,
   }) {
     return NoteDocument(
       id: id,
@@ -171,6 +174,7 @@ class NoteDocument {
       updatedAt: updatedAt ?? this.updatedAt,
       favorite: favorite ?? this.favorite,
       printedPages: printedPages ?? this.printedPages,
+      pageRefs: pageRefs ?? this.pageRefs,
     );
   }
 }

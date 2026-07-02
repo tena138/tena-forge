@@ -160,17 +160,33 @@ class _EditorTopBar extends StatelessWidget {
                   const SizedBox(width: 8),
                   const _TenaMainButton(),
                   const SizedBox(width: 8),
-                  _EditorIconButton(
-                    icon: Icons.undo_rounded,
-                    tooltip: '실행 취소',
-                    enabled: state.canUndo(document.id),
-                    onPressed: () => state.undoStroke(document.id),
-                  ),
-                  _EditorIconButton(
-                    icon: Icons.redo_rounded,
-                    tooltip: '다시 실행',
-                    enabled: state.canRedo(document.id),
-                    onPressed: () => state.redoStroke(document.id),
+                  ValueListenableBuilder<int>(
+                    valueListenable: printedPageIndex,
+                    builder: (context, pageIndex, _) {
+                      final strokeDocumentId = _strokeDocumentIdForPageIndex(
+                        document,
+                        pageIndex,
+                      );
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _EditorIconButton(
+                            icon: Icons.undo_rounded,
+                            tooltip: '실행 취소',
+                            enabled: state.canUndo(strokeDocumentId),
+                            onPressed: () =>
+                                state.undoStroke(strokeDocumentId),
+                          ),
+                          _EditorIconButton(
+                            icon: Icons.redo_rounded,
+                            tooltip: '다시 실행',
+                            enabled: state.canRedo(strokeDocumentId),
+                            onPressed: () =>
+                                state.redoStroke(strokeDocumentId),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   _EditorIconButton(
                     icon: state.isDocumentFavorite(document.id)
@@ -181,13 +197,13 @@ class _EditorTopBar extends StatelessWidget {
                   ),
                   _EditorIconButton(
                     icon: Icons.note_add_outlined,
-                    tooltip: '새 노트',
-                    onPressed: () {
-                      final next = state.addNotebook(
-                        folderId: document.folderId,
-                      );
-                      context.go('/notes/editor/${next.id}');
-                    },
+                    tooltip: '페이지 추가',
+                    onPressed: () => _showAddPagePanel(
+                      context,
+                      document: document,
+                      currentPageIndex: printedPageIndex.value,
+                      onPageInserted: onPrintedPageJump,
+                    ),
                   ),
                   _EditorIconButton(
                     icon: Icons.more_horiz_rounded,
@@ -374,13 +390,13 @@ class _EditorToolBar extends StatelessWidget {
               ],
             ),
           ),
-          if (document.printedPages.length > 1)
+          if (_pageRefsForDocument(document).length > 1)
             Padding(
               padding: const EdgeInsets.only(right: 18),
               child: ValueListenableBuilder<int>(
                 valueListenable: printedPageIndex,
                 builder: (context, index, _) {
-                  final pageCount = document.printedPages.length;
+                  final pageCount = _pageRefsForDocument(document).length;
                   final currentPage = index.clamp(0, pageCount - 1) + 1;
                   return _PrintedPageJumpControl(
                     currentPage: currentPage,
@@ -457,7 +473,9 @@ class _CanvasStageState extends State<_CanvasStage> {
   Widget build(BuildContext context) {
     final state = context.watch<NoteLibraryState>();
     final document = state.documentById(widget.documentId);
-    final printedPages = document?.printedPages ?? const <PrintedNotePage>[];
+    final pageRefs = document == null
+        ? const <String>[]
+        : _pageRefsForDocument(document);
 
     return Container(
       color: AppColors.bg,
@@ -465,10 +483,11 @@ class _CanvasStageState extends State<_CanvasStage> {
         builder: (context, constraints) {
           final pageSize = _pageSizeFor(
             constraints,
-            printed: printedPages.isNotEmpty,
+            printed: document?.printedPages.isNotEmpty ?? false,
           );
-          if (printedPages.isNotEmpty) {
-            final pageCount = printedPages.length;
+          if (pageRefs.length > 1 ||
+              (document?.printedPages.isNotEmpty ?? false)) {
+            final pageCount = pageRefs.length;
             final currentPage = _currentPrintedPageIndex.clamp(
               0,
               pageCount - 1,
@@ -483,10 +502,13 @@ class _CanvasStageState extends State<_CanvasStage> {
                   itemCount: pageCount,
                   onPageChanged: _handlePrintedPageChanged,
                   itemBuilder: (context, index) {
-                    final page = printedPages[index];
-                    final strokeDocumentId = _printedPageStrokeId(
+                    final pageRef = pageRefs[index];
+                    final page = document == null
+                        ? null
+                        : _printedPageForRef(document, pageRef);
+                    final strokeDocumentId = _strokeDocumentIdForPageRef(
                       widget.documentId,
-                      page,
+                      pageRef,
                     );
                     return _buildZoomableCanvasViewport(
                       transformId: strokeDocumentId,
@@ -508,13 +530,22 @@ class _CanvasStageState extends State<_CanvasStage> {
               ],
             );
           }
+          final pageRef = pageRefs.isEmpty
+              ? 'blank:${widget.documentId}'
+              : pageRefs.first;
           return _buildZoomableCanvasViewport(
-            transformId: widget.documentId,
+            transformId: _strokeDocumentIdForPageRef(
+              widget.documentId,
+              pageRef,
+            ),
             panEnabled: state.selectedTool == NoteTool.pointer,
             child: _buildCanvasPage(
               context: context,
               state: state,
-              strokeDocumentId: widget.documentId,
+              strokeDocumentId: _strokeDocumentIdForPageRef(
+                widget.documentId,
+                pageRef,
+              ),
               width: pageSize.width,
               height: pageSize.height,
               boundaryKey: _pageBoundaryKey,
@@ -723,7 +754,9 @@ class _CanvasStageState extends State<_CanvasStage> {
     final document = context.read<NoteLibraryState>().documentById(
       widget.documentId,
     );
-    final pageCount = document?.printedPages.length ?? 0;
+    final pageCount = document == null
+        ? 0
+        : _pageRefsForDocument(document).length;
     if (pageCount <= 0) return;
     final index = pageNumber.clamp(1, pageCount).toInt() - 1;
     if (_currentPrintedPageIndex != index) {
@@ -1731,8 +1764,472 @@ class _SelectionExtractionBadge extends StatelessWidget {
   }
 }
 
-String _printedPageStrokeId(String documentId, PrintedNotePage page) {
-  return '$documentId::problem-${page.problemId}';
+List<String> _pageRefsForDocument(NoteDocument document) {
+  if (document.pageRefs.isNotEmpty) return document.pageRefs;
+  if (document.printedPages.isNotEmpty) {
+    return document.printedPages
+        .map((page) => _printedPageRef(page))
+        .toList(growable: false);
+  }
+  return [_blankPageRef(document.id)];
+}
+
+String _printedPageRef(PrintedNotePage page) => 'printed:${page.problemId}';
+
+String _blankPageRef(String pageId) => 'blank:$pageId';
+
+String _strokeDocumentIdForPageIndex(NoteDocument document, int pageIndex) {
+  final pageRefs = _pageRefsForDocument(document);
+  if (pageRefs.isEmpty) return document.id;
+  final safeIndex = pageIndex.clamp(0, pageRefs.length - 1).toInt();
+  return _strokeDocumentIdForPageRef(document.id, pageRefs[safeIndex]);
+}
+
+PrintedNotePage? _printedPageForRef(NoteDocument document, String pageRef) {
+  if (!pageRef.startsWith('printed:')) return null;
+  final problemId = pageRef.substring('printed:'.length);
+  for (final page in document.printedPages) {
+    if (page.problemId == problemId) return page;
+  }
+  return null;
+}
+
+String _strokeDocumentIdForPageRef(String documentId, String pageRef) {
+  if (pageRef.startsWith('printed:')) {
+    final problemId = pageRef.substring('printed:'.length);
+    return '$documentId::problem-$problemId';
+  }
+  if (pageRef.startsWith('blank:')) {
+    final pageId = pageRef.substring('blank:'.length);
+    if (pageId == documentId) return documentId;
+    return '$documentId::$pageId';
+  }
+  return documentId;
+}
+
+void _showAddPagePanel(
+  BuildContext context, {
+  required NoteDocument document,
+  required int currentPageIndex,
+  required ValueChanged<int> onPageInserted,
+}) {
+  showGeneralDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.18),
+    barrierDismissible: true,
+    barrierLabel: '페이지 추가 닫기',
+    transitionDuration: const Duration(milliseconds: 160),
+    pageBuilder: (context, _, _) => SafeArea(
+      child: Align(
+        alignment: Alignment.topRight,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 60, right: 18),
+          child: _AddPageSheet(
+            document: document,
+            currentPageIndex: currentPageIndex,
+            onPageInserted: onPageInserted,
+          ),
+        ),
+      ),
+    ),
+    transitionBuilder: (context, animation, _, child) => FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+      child: SlideTransition(
+        position:
+            Tween<Offset>(
+              begin: const Offset(0.03, -0.03),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+        child: child,
+      ),
+    ),
+  );
+}
+
+class _AddPageSheet extends StatefulWidget {
+  const _AddPageSheet({
+    required this.document,
+    required this.currentPageIndex,
+    required this.onPageInserted,
+  });
+
+  final NoteDocument document;
+  final int currentPageIndex;
+  final ValueChanged<int> onPageInserted;
+
+  @override
+  State<_AddPageSheet> createState() => _AddPageSheetState();
+}
+
+class _AddPageSheetState extends State<_AddPageSheet> {
+  NotePageInsertPosition _position = NotePageInsertPosition.after;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = math.min(MediaQuery.sizeOf(context).width - 36, 620.0);
+    final maxHeight = math.min(MediaQuery.sizeOf(context).height - 96, 620.0);
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: width,
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x24000000),
+              blurRadius: 24,
+              offset: Offset(0, 14),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Center(
+                    child: Text(
+                      '페이지 추가',
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _AddPageSegmentedControl(
+                    value: _position,
+                    onChanged: (value) => setState(() => _position = value),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    height: 188,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        _AddPageTemplateCard(
+                          title: '현재 서식',
+                          icon: Icons.keyboard_alt_outlined,
+                          selected: _position != NotePageInsertPosition.last,
+                          onTap: _insertBlankPage,
+                        ),
+                        const SizedBox(width: 18),
+                        _AddPageTemplateCard(
+                          title: '빈 페이지',
+                          icon: Icons.add_rounded,
+                          selected: _position == NotePageInsertPosition.after,
+                          onTap: _insertBlankPage,
+                        ),
+                        const SizedBox(width: 18),
+                        _AddPageTemplateCard(
+                          title: '마지막 빈 페이지',
+                          icon: Icons.last_page_rounded,
+                          selected: _position == NotePageInsertPosition.last,
+                          onTap: _insertAtLastPage,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _AddPageActionRow(
+                    icon: Icons.dashboard_customize_outlined,
+                    label: '템플릿 더 보기',
+                    onTap: _showComingSoon,
+                  ),
+                  _AddPageActionRow(
+                    icon: Icons.image_outlined,
+                    label: '이미지',
+                    onTap: _showComingSoon,
+                  ),
+                  _AddPageActionRow(
+                    icon: Icons.document_scanner_outlined,
+                    label: '문서 스캔',
+                    onTap: _showComingSoon,
+                  ),
+                  _AddPageActionRow(
+                    icon: Icons.photo_camera_outlined,
+                    label: '사진 촬영',
+                    onTap: _showComingSoon,
+                  ),
+                  _AddPageActionRow(
+                    icon: Icons.file_upload_outlined,
+                    label: '가져오기',
+                    onTap: _showComingSoon,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _insertAtLastPage() {
+    setState(() => _position = NotePageInsertPosition.last);
+    _insertBlankPage();
+  }
+
+  void _insertBlankPage() {
+    final insertedPage = context.read<NoteLibraryState>().addBlankPage(
+      widget.document.id,
+      position: _position,
+      currentPageIndex: widget.currentPageIndex,
+    );
+    Navigator.pop(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onPageInserted(insertedPage);
+    });
+  }
+
+  void _showComingSoon() {
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.pop(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('이 페이지 추가 방식은 준비 중입니다.')),
+    );
+  }
+}
+
+class _AddPageSegmentedControl extends StatelessWidget {
+  const _AddPageSegmentedControl({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final NotePageInsertPosition value;
+  final ValueChanged<NotePageInsertPosition> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.panelSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          _AddPageSegmentButton(
+            label: '이전',
+            selected: value == NotePageInsertPosition.before,
+            onTap: () => onChanged(NotePageInsertPosition.before),
+          ),
+          _AddPageSegmentButton(
+            label: '다음',
+            selected: value == NotePageInsertPosition.after,
+            onTap: () => onChanged(NotePageInsertPosition.after),
+          ),
+          _AddPageSegmentButton(
+            label: '마지막',
+            selected: value == NotePageInsertPosition.last,
+            onTap: () => onChanged(NotePageInsertPosition.last),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AddPageSegmentButton extends StatelessWidget {
+  const _AddPageSegmentButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.text : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? AppColors.panel : AppColors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddPageTemplateCard extends StatelessWidget {
+  const _AddPageTemplateCard({
+    required this.title,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 132,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 132,
+              height: 146,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: selected ? AppColors.text : AppColors.border,
+                  width: selected ? 1.8 : 1,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0F000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 7),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  const Positioned(
+                    left: 16,
+                    right: 16,
+                    top: 18,
+                    child: Column(
+                      children: [
+                        _TemplatePreviewLine(widthFactor: 1),
+                        SizedBox(height: 9),
+                        _TemplatePreviewLine(widthFactor: 0.74),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    right: 10,
+                    top: 10,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: AppColors.text,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 17),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 9),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TemplatePreviewLine extends StatelessWidget {
+  const _TemplatePreviewLine({required this.widthFactor});
+
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      widthFactor: widthFactor,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        height: 6,
+        decoration: BoxDecoration(
+          color: AppColors.panelSoft,
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddPageActionRow extends StatelessWidget {
+  const _AddPageActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        height: 54,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppColors.border)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.text, size: 24),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.text,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 void _showPageOverview(
@@ -1951,38 +2448,44 @@ class _ThumbnailOverview extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<NoteLibraryState>();
     final document = state.documentById(documentId);
-    final printedPages = document?.printedPages ?? const <PrintedNotePage>[];
-    final strokes = state.strokesFor(documentId);
-    final selectedIndex = printedPages.isEmpty
+    final pageRefs = document == null
+        ? const <String>[]
+        : _pageRefsForDocument(document);
+    final selectedIndex = pageRefs.isEmpty
         ? 0
-        : selectedPrintedPageIndex.clamp(0, printedPages.length - 1).toInt();
+        : selectedPrintedPageIndex.clamp(0, pageRefs.length - 1).toInt();
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final printedCards = printedPages.asMap().entries.map((entry) {
+        final pageCards = pageRefs.asMap().entries.map((entry) {
           final index = entry.key;
-          final page = entry.value;
+          final pageRef = entry.value;
+          final printedPage = document == null
+              ? null
+              : _printedPageForRef(document, pageRef);
           return _PageThumbnailCard(
             pageNumber: index + 1,
-            strokes: state.strokesFor(_printedPageStrokeId(documentId, page)),
+            strokes: state.strokesFor(
+              _strokeDocumentIdForPageRef(documentId, pageRef),
+            ),
             selected: index == selectedIndex,
-            printedPage: page,
+            printedPage: printedPage,
             onTap: () {
               onPrintedPageJump(index + 1);
               Navigator.pop(context);
             },
           );
         });
-        final children = printedPages.isEmpty
+        final children = pageRefs.isEmpty
             ? <Widget>[
                 _PageThumbnailCard(
                   pageNumber: 1,
-                  strokes: strokes,
+                  strokes: state.strokesFor(documentId),
                   selected: true,
                 ),
                 const _AddPageTile(),
               ]
-            : printedCards.toList(growable: false);
+            : pageCards.toList(growable: false);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(34, 28, 34, 32),

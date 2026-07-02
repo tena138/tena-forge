@@ -9,7 +9,7 @@ import 'data/student_repository.dart';
 import 'state/note_library_state.dart';
 import 'state/student_app_state.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final sessionStore = createSessionStore();
@@ -18,6 +18,8 @@ void main() {
     apiClient: apiClient,
     sessionStore: sessionStore,
   );
+  final noteLibraryState = NoteLibraryState();
+  await noteLibraryState.bootstrap();
 
   runApp(
     MultiProvider(
@@ -25,7 +27,7 @@ void main() {
         ChangeNotifierProvider(
           create: (_) => StudentAppState(repository)..bootstrap(),
         ),
-        ChangeNotifierProvider(create: (_) => NoteLibraryState()),
+        ChangeNotifierProvider.value(value: noteLibraryState),
       ],
       child: const TenaForgeStudentApp(),
     ),

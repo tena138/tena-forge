@@ -339,7 +339,6 @@ class _FolderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<NoteLibraryState>();
-    final assignmentLabel = _assignmentTypeLabel(item);
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: () => _openLibraryItem(context, item),
@@ -393,13 +392,6 @@ class _FolderTile extends StatelessWidget {
               ),
             ],
           ),
-          if (assignmentLabel != null) ...[
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.center,
-              child: _AssignmentTypeBadge(label: assignmentLabel),
-            ),
-          ],
           const SizedBox(height: 4),
           Text(
             _formatItemDate(item.updatedAt),
@@ -422,10 +414,6 @@ class _FolderListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<NoteLibraryState>();
-    final assignmentLabel = _assignmentTypeLabel(item);
-    final subtitle = assignmentLabel == null
-        ? '${item.typeLabel} · ${_formatItemDate(item.updatedAt)}'
-        : '$assignmentLabel · ${_formatItemDate(item.updatedAt)}';
     return ListTile(
       onTap: () => _openLibraryItem(context, item),
       tileColor: AppColors.panel,
@@ -442,7 +430,10 @@ class _FolderListItem extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
-      subtitle: Text(subtitle, style: const TextStyle(color: AppColors.muted)),
+      subtitle: Text(
+        _formatItemDate(item.updatedAt),
+        style: const TextStyle(color: AppColors.muted),
+      ),
       trailing: Wrap(
         spacing: 2,
         children: [
@@ -472,17 +463,29 @@ class _LibraryItemGraphic extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visualKind = _assignmentVisualKind(item);
+    final submitted = _isSubmittedTest(item);
     if (item.type == NoteItemType.folder) {
-      return _FolderGraphic(color: item.color);
+      return _FolderGraphic(
+        color: item.color,
+        visualKind: visualKind,
+        submitted: submitted,
+      );
     }
-    return const _NotebookGraphic();
+    return _NotebookGraphic(visualKind: visualKind, submitted: submitted);
   }
 }
 
 class _FolderGraphic extends StatelessWidget {
-  const _FolderGraphic({required this.color});
+  const _FolderGraphic({
+    required this.color,
+    required this.visualKind,
+    required this.submitted,
+  });
 
   final Color color;
+  final _AssignmentVisualKind visualKind;
+  final bool submitted;
 
   @override
   Widget build(BuildContext context) {
@@ -585,6 +588,22 @@ class _FolderGraphic extends StatelessWidget {
                 ),
               ),
             ),
+            if (visualKind != _AssignmentVisualKind.none)
+              Positioned(
+                right: width * 0.1,
+                bottom: height * 0.11,
+                child: _AssignmentGraphicMark(
+                  visualKind: visualKind,
+                  size: height * 0.18,
+                ),
+              ),
+            if (submitted)
+              Positioned(
+                left: width * 0.1,
+                right: width * 0.1,
+                top: bodyTop + height * 0.22,
+                child: const _SubmittedStamp(),
+              ),
           ],
         );
       },
@@ -593,77 +612,210 @@ class _FolderGraphic extends StatelessWidget {
 }
 
 class _NotebookGraphic extends StatelessWidget {
-  const _NotebookGraphic();
+  const _NotebookGraphic({required this.visualKind, required this.submitted});
+
+  final _AssignmentVisualKind visualKind;
+  final bool submitted;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 14,
-            offset: Offset(0, 8),
+    final accent = _assignmentAccentColor(visualKind);
+    final hasAssignment = visualKind != _AssignmentVisualKind.none;
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.panel,
+              border: Border.all(
+                color: hasAssignment
+                    ? accent.withValues(alpha: 0.22)
+                    : AppColors.border,
+                width: hasAssignment ? 1.4 : 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A000000),
+                  blurRadius: 14,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: hasAssignment
+                          ? accent.withValues(alpha: 0.1)
+                          : AppColors.panelSoft,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: AppColors.panelSoft,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: hasAssignment ? 0.72 : 1,
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: AppColors.panelSoft,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: hasAssignment
+                            ? accent.withValues(alpha: 0.12)
+                            : AppColors.panelSoft,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(height: 8, color: AppColors.panelSoft),
-            const SizedBox(height: 10),
-            Container(height: 8, color: AppColors.panelSoft),
-            const SizedBox(height: 10),
-            Container(height: 8, color: AppColors.panelSoft),
-            const Spacer(),
-            Align(
-              alignment: Alignment.bottomRight,
+        ),
+        if (hasAssignment)
+          Positioned(
+            left: 12,
+            bottom: 12,
+            child: _AssignmentGraphicMark(visualKind: visualKind, size: 30),
+          ),
+        if (visualKind == _AssignmentVisualKind.homework)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: ClipPath(
+              clipper: _CornerFoldClipper(),
               child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: AppColors.panelSoft,
-                  borderRadius: BorderRadius.circular(6),
+                width: 44,
+                height: 44,
+                color: accent.withValues(alpha: 0.1),
+              ),
+            ),
+          ),
+        if (visualKind == _AssignmentVisualKind.test)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: Container(
+              height: 10,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(8),
                 ),
               ),
             ),
-          ],
+          ),
+        if (submitted)
+          const Positioned(
+            left: 12,
+            right: 12,
+            top: 74,
+            child: _SubmittedStamp(),
+          ),
+      ],
+    );
+  }
+}
+
+class _AssignmentGraphicMark extends StatelessWidget {
+  const _AssignmentGraphicMark({required this.visualKind, required this.size});
+
+  final _AssignmentVisualKind visualKind;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (visualKind) {
+      _AssignmentVisualKind.textbook => Icons.menu_book_rounded,
+      _AssignmentVisualKind.homework => Icons.edit_note_rounded,
+      _AssignmentVisualKind.test => Icons.timer_outlined,
+      _AssignmentVisualKind.none => Icons.description_outlined,
+    };
+    final color = _assignmentAccentColor(visualKind);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Icon(icon, color: Colors.white, size: size * 0.58),
+    );
+  }
+}
+
+class _SubmittedStamp extends StatelessWidget {
+  const _SubmittedStamp();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.text.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const Text(
+        '제출됨',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
   }
 }
 
-class _AssignmentTypeBadge extends StatelessWidget {
-  const _AssignmentTypeBadge({required this.label});
-
-  final String label;
+class _CornerFoldClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    return Path()
+      ..moveTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, 0)
+      ..close();
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.text,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.panel,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
 String _formatItemDate(DateTime date) {
@@ -671,26 +823,43 @@ String _formatItemDate(DateTime date) {
   return DateFormat('MMM d, yyyy \'at\' h:mm a').format(date.toLocal());
 }
 
-String? _assignmentTypeLabel(NoteLibraryItem item) {
-  if (item.type == NoteItemType.folder) return null;
+enum _AssignmentVisualKind { none, textbook, homework, test }
+
+_AssignmentVisualKind _assignmentVisualKind(NoteLibraryItem item) {
+  if (item.type == NoteItemType.folder) return _AssignmentVisualKind.none;
   final assignmentType = (item.assignmentType ?? '').trim().toLowerCase();
-  if (item.isAssignmentSubmitted &&
-      (assignmentType == 'test' || assignmentType == 'exam')) {
-    return '제출됨';
-  }
   switch (assignmentType) {
     case 'textbook':
     case 'book':
     case 'material':
-      return '교재';
+      return _AssignmentVisualKind.textbook;
     case 'homework':
     case 'assignment':
-      return '과제';
+      return _AssignmentVisualKind.homework;
     case 'test':
     case 'exam':
-      return '시험';
+      return _AssignmentVisualKind.test;
     default:
-      return null;
+      return _AssignmentVisualKind.none;
+  }
+}
+
+bool _isSubmittedTest(NoteLibraryItem item) {
+  final assignmentType = (item.assignmentType ?? '').trim().toLowerCase();
+  return item.isAssignmentSubmitted &&
+      (assignmentType == 'test' || assignmentType == 'exam');
+}
+
+Color _assignmentAccentColor(_AssignmentVisualKind visualKind) {
+  switch (visualKind) {
+    case _AssignmentVisualKind.textbook:
+      return const Color(0xFF111418);
+    case _AssignmentVisualKind.homework:
+      return const Color(0xFF3B5BDB);
+    case _AssignmentVisualKind.test:
+      return const Color(0xFFB42318);
+    case _AssignmentVisualKind.none:
+      return AppColors.subtle;
   }
 }
 
