@@ -31,12 +31,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   final GlobalKey<_CanvasStageState> _canvasStageKey =
       GlobalKey<_CanvasStageState>();
   final ValueNotifier<int> _printedPageIndex = ValueNotifier<int>(0);
+  bool _searchVisible = false;
 
   @override
   void didUpdateWidget(covariant NoteEditorScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.documentId != widget.documentId) {
       _printedPageIndex.value = 0;
+      _searchVisible = false;
     }
   }
 
@@ -75,12 +77,20 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               document: document,
               printedPageIndex: _printedPageIndex,
               onPrintedPageJump: _jumpToPrintedPage,
+              onSearchPressed: _toggleSearch,
             ),
             _EditorToolBar(
               document: document,
               printedPageIndex: _printedPageIndex,
               onPrintedPageJump: _jumpToPrintedPage,
             ),
+            if (_searchVisible)
+              _InlineDocumentSearchBar(
+                document: document,
+                initialPrintedPageIndex: _printedPageIndex.value,
+                onPrintedPageJump: _jumpToPrintedPage,
+                onClose: () => setState(() => _searchVisible = false),
+              ),
             Expanded(
               child: _CanvasStage(
                 key: _canvasStageKey,
@@ -102,6 +112,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   void _jumpToPrintedPage(int pageNumber) {
     _canvasStageKey.currentState?.jumpToPrintedPage(pageNumber);
   }
+
+  void _toggleSearch() {
+    setState(() => _searchVisible = !_searchVisible);
+  }
 }
 
 class _EditorTopBar extends StatelessWidget {
@@ -109,11 +123,13 @@ class _EditorTopBar extends StatelessWidget {
     required this.document,
     required this.printedPageIndex,
     required this.onPrintedPageJump,
+    required this.onSearchPressed,
   });
 
   final NoteDocument document;
   final ValueListenable<int> printedPageIndex;
   final ValueChanged<int> onPrintedPageJump;
+  final VoidCallback onSearchPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -147,12 +163,7 @@ class _EditorTopBar extends StatelessWidget {
                   _EditorIconButton(
                     icon: Icons.search_rounded,
                     tooltip: '검색',
-                    onPressed: () => _showDocumentSearch(
-                      context,
-                      document: document,
-                      selectedPrintedPageIndex: printedPageIndex.value,
-                      onPrintedPageJump: onPrintedPageJump,
-                    ),
+                    onPressed: onSearchPressed,
                   ),
                   _EditorIconButton(
                     icon: Icons.ios_share_rounded,
@@ -229,6 +240,189 @@ class _EditorTopBar extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _InlineDocumentSearchBar extends StatefulWidget {
+  const _InlineDocumentSearchBar({
+    required this.document,
+    required this.initialPrintedPageIndex,
+    required this.onPrintedPageJump,
+    required this.onClose,
+  });
+
+  final NoteDocument document;
+  final int initialPrintedPageIndex;
+  final ValueChanged<int> onPrintedPageJump;
+  final VoidCallback onClose;
+
+  @override
+  State<_InlineDocumentSearchBar> createState() =>
+      _InlineDocumentSearchBarState();
+}
+
+class _InlineDocumentSearchBarState extends State<_InlineDocumentSearchBar> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  int _activeIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<NoteLibraryState>();
+    final query = _controller.text;
+    final results = _searchDocument(state, widget.document, query);
+    final hasQuery = query.trim().isNotEmpty;
+    final hasResults = results.isNotEmpty;
+    final currentIndex = hasResults
+        ? _activeIndex.clamp(0, results.length - 1).toInt()
+        : -1;
+    final counterText = !hasQuery
+        ? '0/0'
+        : hasResults
+        ? '${currentIndex + 1}/${results.length}'
+        : '0/0';
+
+    return Container(
+      height: 58,
+      color: AppColors.bg,
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  onChanged: _handleQueryChanged,
+                  onSubmitted: (_) => _jumpToActiveResult(results),
+                  decoration: InputDecoration(
+                    hintText: 'Search document',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon: query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear',
+                            onPressed: () {
+                              _controller.clear();
+                              setState(() => _activeIndex = 0);
+                              _focusNode.requestFocus();
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                          ),
+                    filled: true,
+                    fillColor: AppColors.panel,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: AppColors.text,
+                        width: 1.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _EditorIconButton(
+            icon: Icons.keyboard_arrow_left_rounded,
+            tooltip: 'Previous result',
+            enabled: hasResults,
+            onPressed: () => _moveSelection(results, -1),
+          ),
+          _EditorIconButton(
+            icon: Icons.keyboard_arrow_right_rounded,
+            tooltip: 'Next result',
+            enabled: hasResults,
+            onPressed: () => _moveSelection(results, 1),
+          ),
+          SizedBox(
+            width: 58,
+            child: Text(
+              counterText,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          _EditorIconButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Close search',
+            onPressed: widget.onClose,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleQueryChanged(String value) {
+    final results = _searchDocument(
+      context.read<NoteLibraryState>(),
+      widget.document,
+      value,
+    );
+    final nextIndex = _preferredResultIndex(results);
+    setState(() => _activeIndex = nextIndex);
+    if (results.isNotEmpty) {
+      widget.onPrintedPageJump(results[nextIndex].pageIndex + 1);
+    }
+  }
+
+  int _preferredResultIndex(List<_DocumentSearchResult> results) {
+    if (results.isEmpty) return 0;
+    final index = results.indexWhere(
+      (result) => result.pageIndex >= widget.initialPrintedPageIndex,
+    );
+    return index == -1 ? 0 : index;
+  }
+
+  void _moveSelection(List<_DocumentSearchResult> results, int delta) {
+    if (results.isEmpty) return;
+    final nextIndex = (_activeIndex + delta) % results.length;
+    final normalizedIndex = nextIndex < 0
+        ? nextIndex + results.length
+        : nextIndex;
+    setState(() => _activeIndex = normalizedIndex);
+    widget.onPrintedPageJump(results[normalizedIndex].pageIndex + 1);
+  }
+
+  void _jumpToActiveResult(List<_DocumentSearchResult> results) {
+    if (results.isEmpty) return;
+    final index = _activeIndex.clamp(0, results.length - 1).toInt();
+    widget.onPrintedPageJump(results[index].pageIndex + 1);
   }
 }
 
@@ -3515,306 +3709,6 @@ class _ShareExportAction extends StatelessWidget {
               if (trailing != null) ...[const SizedBox(width: 12), trailing!],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-void _showDocumentSearch(
-  BuildContext context, {
-  required NoteDocument document,
-  required int selectedPrintedPageIndex,
-  required ValueChanged<int> onPrintedPageJump,
-}) {
-  showGeneralDialog<void>(
-    context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.12),
-    barrierDismissible: true,
-    barrierLabel: '검색 닫기',
-    transitionDuration: const Duration(milliseconds: 140),
-    pageBuilder: (context, _, _) => SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 64, left: 18, right: 18),
-          child: _DocumentSearchSheet(
-            document: document,
-            selectedPrintedPageIndex: selectedPrintedPageIndex,
-            onPrintedPageJump: onPrintedPageJump,
-          ),
-        ),
-      ),
-    ),
-    transitionBuilder: (context, animation, _, child) => FadeTransition(
-      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, -0.04), end: Offset.zero)
-            .animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-            ),
-        child: child,
-      ),
-    ),
-  );
-}
-
-class _DocumentSearchSheet extends StatefulWidget {
-  const _DocumentSearchSheet({
-    required this.document,
-    required this.selectedPrintedPageIndex,
-    required this.onPrintedPageJump,
-  });
-
-  final NoteDocument document;
-  final int selectedPrintedPageIndex;
-  final ValueChanged<int> onPrintedPageJump;
-
-  @override
-  State<_DocumentSearchSheet> createState() => _DocumentSearchSheetState();
-}
-
-class _DocumentSearchSheetState extends State<_DocumentSearchSheet> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-    _focusNode = FocusNode();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<NoteLibraryState>();
-    final query = _controller.text;
-    final results = _searchDocument(state, widget.document, query);
-    final width = math.min(MediaQuery.sizeOf(context).width - 36, 560.0);
-    final maxHeight = math.min(MediaQuery.sizeOf(context).height - 104, 520.0);
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: width,
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        decoration: BoxDecoration(
-          color: AppColors.panel,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x24000000),
-              blurRadius: 24,
-              offset: Offset(0, 14),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  autofocus: true,
-                  textInputAction: TextInputAction.search,
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) => _openFirstResult(results),
-                  decoration: InputDecoration(
-                    hintText: '검색어 입력',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 22),
-                    suffixIcon: query.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: '검색어 지우기',
-                            onPressed: () {
-                              _controller.clear();
-                              setState(() {});
-                              _focusNode.requestFocus();
-                            },
-                            icon: const Icon(Icons.close_rounded, size: 20),
-                          ),
-                    filled: true,
-                    fillColor: AppColors.panelSoft,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 13,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(
-                        color: AppColors.text,
-                        width: 1.3,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const Divider(height: 1, color: AppColors.border),
-              Flexible(
-                child: _DocumentSearchResults(
-                  query: query,
-                  results: results,
-                  selectedPrintedPageIndex: widget.selectedPrintedPageIndex,
-                  onResultTap: _openResult,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openFirstResult(List<_DocumentSearchResult> results) {
-    if (results.isEmpty) return;
-    _openResult(results.first);
-  }
-
-  void _openResult(_DocumentSearchResult result) {
-    widget.onPrintedPageJump(result.pageIndex + 1);
-    Navigator.of(context).pop();
-  }
-}
-
-class _DocumentSearchResults extends StatelessWidget {
-  const _DocumentSearchResults({
-    required this.query,
-    required this.results,
-    required this.selectedPrintedPageIndex,
-    required this.onResultTap,
-  });
-
-  final String query;
-  final List<_DocumentSearchResult> results;
-  final int selectedPrintedPageIndex;
-  final ValueChanged<_DocumentSearchResult> onResultTap;
-
-  @override
-  Widget build(BuildContext context) {
-    if (query.trim().isEmpty) {
-      return const _DocumentSearchEmpty(message: '검색어를 입력하세요.');
-    }
-    if (results.isEmpty) {
-      return const _DocumentSearchEmpty(message: '검색 결과가 없습니다.');
-    }
-
-    return ListView.separated(
-      shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: results.length,
-      separatorBuilder: (_, _) =>
-          const Divider(height: 1, color: AppColors.border),
-      itemBuilder: (context, index) {
-        final result = results[index];
-        final selected = result.pageIndex == selectedPrintedPageIndex;
-        return InkWell(
-          onTap: () => onResultTap(result),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.text : AppColors.panelSoft,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${result.pageIndex + 1}',
-                    style: TextStyle(
-                      color: selected ? AppColors.panel : AppColors.text,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              result.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.text,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          if (selected)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 8),
-                              child: Text(
-                                '현재',
-                                style: TextStyle(
-                                  color: AppColors.muted,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        result.snippet,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 13,
-                          height: 1.25,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _DocumentSearchEmpty extends StatelessWidget {
-  const _DocumentSearchEmpty({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 34),
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: AppColors.muted,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );
