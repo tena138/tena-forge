@@ -8,6 +8,7 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../app/theme.dart';
@@ -360,10 +361,9 @@ class _EditorToolBar extends StatelessWidget {
                   icon: Icons.gesture_rounded,
                   label: '올가미',
                 ),
-                _ToolButton(
-                  tool: NoteTool.image,
-                  icon: Icons.image_outlined,
-                  label: '이미지',
+                _PhotoToolButton(
+                  document: document,
+                  printedPageIndex: printedPageIndex,
                 ),
                 _ToolButton(
                   tool: NoteTool.text,
@@ -644,6 +644,8 @@ class _CanvasStageState extends State<_CanvasStage> {
                       ),
                       if (printedPage != null)
                         _PrintedProblemPage(page: printedPage),
+                      if (strokes.any((stroke) => stroke.isImage))
+                        _ImageStrokeLayer(strokes: strokes),
                       CustomPaint(
                         painter: _NotebookPagePainter(strokes: strokes),
                         child: const SizedBox.expand(),
@@ -1197,6 +1199,69 @@ class _ToolButton extends StatelessWidget {
   }
 }
 
+class _PhotoToolButton extends StatelessWidget {
+  const _PhotoToolButton({
+    required this.document,
+    required this.printedPageIndex,
+  });
+
+  final NoteDocument document;
+  final ValueListenable<int> printedPageIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PassiveToolButton(
+      icon: Icons.image_outlined,
+      tooltip: '사진 추가',
+      onPressed: () => _pickAndInsertPhoto(context),
+    );
+  }
+
+  Future<void> _pickAndInsertPhoto(BuildContext context) async {
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1800,
+        imageQuality: 86,
+      );
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      if (!context.mounted) return;
+      if (bytes.isEmpty) {
+        _showSnack(context, '이미지를 읽지 못했습니다.');
+        return;
+      }
+
+      final originalSize = await _imageSizeFor(bytes);
+      if (!context.mounted) return;
+      final aspectRatio = originalSize.width <= 0 || originalSize.height <= 0
+          ? 1.0
+          : originalSize.width / originalSize.height;
+      final displayWidth = math.min(420.0, math.max(220.0, originalSize.width));
+      final displayHeight = displayWidth / aspectRatio;
+      final strokeDocumentId = _strokeDocumentIdForPageIndex(
+        document,
+        printedPageIndex.value,
+      );
+
+      context.read<NoteLibraryState>().addImageAt(
+        strokeDocumentId,
+        point: const Offset(140, 140),
+        imageData: base64Encode(bytes),
+        mimeType: picked.mimeType ?? _mimeTypeForImageName(picked.name),
+        imageWidth: displayWidth,
+        imageHeight: displayHeight,
+      );
+      context.read<NoteLibraryState>().selectTool(NoteTool.pen);
+    } catch (_) {
+      if (context.mounted) {
+        _showSnack(context, '사진을 추가하지 못했습니다.');
+      }
+    }
+  }
+}
+
 class _PassiveToolButton extends StatelessWidget {
   const _PassiveToolButton({
     required this.tooltip,
@@ -1736,6 +1801,47 @@ void _drawStrokePath(Canvas canvas, List<Offset> points, Paint paint) {
   canvas.drawPath(path, paint);
 }
 
+class _ImageStrokeLayer extends StatelessWidget {
+  const _ImageStrokeLayer({required this.strokes});
+
+  final List<NoteStroke> strokes;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageWidgets = <Widget>[];
+    for (final stroke in strokes) {
+      if (!stroke.isImage || stroke.points.isEmpty) continue;
+      Uint8List bytes;
+      try {
+        bytes = base64Decode(stroke.imageData!);
+      } catch (_) {
+        continue;
+      }
+      final point = stroke.points.first;
+      final width = stroke.imageWidth ?? 320;
+      final height = stroke.imageHeight ?? 220;
+      imageWidgets.add(
+        Positioned(
+          left: point.dx,
+          top: point.dy,
+          width: width,
+          height: height,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+            ),
+          ),
+        ),
+      );
+    }
+    if (imageWidgets.isEmpty) return const SizedBox.shrink();
+    return Stack(children: imageWidgets);
+  }
+}
+
 class _NotebookPagePainter extends CustomPainter {
   const _NotebookPagePainter({required this.strokes});
 
@@ -1749,6 +1855,7 @@ class _NotebookPagePainter extends CustomPainter {
   }
 
   void _drawStroke(Canvas canvas, NoteStroke stroke) {
+    if (stroke.isImage) return;
     if (stroke.text != null && stroke.points.isNotEmpty) {
       final painter = TextPainter(
         text: TextSpan(
@@ -1895,6 +2002,24 @@ bool _locksPageSwipeForTool(NoteTool tool) {
       tool == NoteTool.textExtractor ||
       tool == NoteTool.pointer ||
       tool == NoteTool.eraser;
+}
+
+Future<Size> _imageSizeFor(Uint8List bytes) async {
+  final codec = await ui.instantiateImageCodec(bytes);
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+  final size = Size(image.width.toDouble(), image.height.toDouble());
+  image.dispose();
+  return size;
+}
+
+String _mimeTypeForImageName(String name) {
+  final lower = name.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.heic')) return 'image/heic';
+  return 'image/jpeg';
 }
 
 PrintedNotePage? _printedPageForRef(NoteDocument document, String pageRef) {

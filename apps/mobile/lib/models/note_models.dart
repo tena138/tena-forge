@@ -186,6 +186,10 @@ class NoteStroke {
     required this.width,
     this.isHighlighter = false,
     this.text,
+    this.imageData,
+    this.imageMimeType,
+    this.imageWidth,
+    this.imageHeight,
   });
 
   final List<Offset> points;
@@ -193,4 +197,10 @@ class NoteStroke {
   final double width;
   final bool isHighlighter;
   final String? text;
+  final String? imageData;
+  final String? imageMimeType;
+  final double? imageWidth;
+  final double? imageHeight;
+
+  bool get isImage => imageData != null && imageData!.isNotEmpty;
 }

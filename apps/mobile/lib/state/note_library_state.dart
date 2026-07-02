@@ -526,6 +526,29 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  void addImageAt(
+    String documentId, {
+    required Offset point,
+    required String imageData,
+    required String mimeType,
+    required double imageWidth,
+    required double imageHeight,
+  }) {
+    if (imageData.isEmpty || imageWidth <= 0 || imageHeight <= 0) return;
+    addStroke(
+      documentId,
+      NoteStroke(
+        points: [point],
+        color: Colors.transparent,
+        width: 1,
+        imageData: imageData,
+        imageMimeType: mimeType,
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
+      ),
+    );
+  }
+
   int addBlankPage(
     String documentId, {
     required NotePageInsertPosition position,
@@ -867,6 +890,10 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
     'width': stroke.width,
     'is_highlighter': stroke.isHighlighter,
     'text': stroke.text,
+    'image_data': stroke.imageData,
+    'image_mime_type': stroke.imageMimeType,
+    'image_width': stroke.imageWidth,
+    'image_height': stroke.imageHeight,
   };
 
   Map<String, dynamic> _encodeStrokesByDocument(
@@ -1002,13 +1029,22 @@ class NoteLibraryState extends ChangeNotifier with WidgetsBindingObserver {
   NoteStroke? _decodeStroke(Map<String, dynamic> json) {
     final points = _decodePoints(json['points']);
     final text = json['text']?.toString();
-    if (points.isEmpty && (text == null || text.isEmpty)) return null;
+    final imageData = json['image_data']?.toString();
+    if (points.isEmpty &&
+        (text == null || text.isEmpty) &&
+        (imageData == null || imageData.isEmpty)) {
+      return null;
+    }
     return NoteStroke(
       points: points,
       color: Color((json['color'] as num?)?.toInt() ?? 0xFF111827),
       width: (json['width'] as num?)?.toDouble() ?? 3,
       isHighlighter: json['is_highlighter'] == true,
       text: text,
+      imageData: imageData,
+      imageMimeType: json['image_mime_type']?.toString(),
+      imageWidth: (json['image_width'] as num?)?.toDouble(),
+      imageHeight: (json['image_height'] as num?)?.toDouble(),
     );
   }
 
