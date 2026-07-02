@@ -146,7 +146,12 @@ class _EditorTopBar extends StatelessWidget {
                   _EditorIconButton(
                     icon: Icons.search_rounded,
                     tooltip: '검색',
-                    onPressed: () => _showSnack(context, '노트 내 검색을 열었습니다.'),
+                    onPressed: () => _showDocumentSearch(
+                      context,
+                      document: document,
+                      selectedPrintedPageIndex: printedPageIndex.value,
+                      onPrintedPageJump: onPrintedPageJump,
+                    ),
                   ),
                   _EditorIconButton(
                     icon: Icons.ios_share_rounded,
@@ -2042,6 +2047,384 @@ String _strokeDocumentIdForPageRef(String documentId, String pageRef) {
     return '$documentId::$pageId';
   }
   return documentId;
+}
+
+void _showDocumentSearch(
+  BuildContext context, {
+  required NoteDocument document,
+  required int selectedPrintedPageIndex,
+  required ValueChanged<int> onPrintedPageJump,
+}) {
+  showGeneralDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.12),
+    barrierDismissible: true,
+    barrierLabel: '검색 닫기',
+    transitionDuration: const Duration(milliseconds: 140),
+    pageBuilder: (context, _, _) => SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 64, left: 18, right: 18),
+          child: _DocumentSearchSheet(
+            document: document,
+            selectedPrintedPageIndex: selectedPrintedPageIndex,
+            onPrintedPageJump: onPrintedPageJump,
+          ),
+        ),
+      ),
+    ),
+    transitionBuilder: (context, animation, _, child) => FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, -0.04), end: Offset.zero)
+            .animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+        child: child,
+      ),
+    ),
+  );
+}
+
+class _DocumentSearchSheet extends StatefulWidget {
+  const _DocumentSearchSheet({
+    required this.document,
+    required this.selectedPrintedPageIndex,
+    required this.onPrintedPageJump,
+  });
+
+  final NoteDocument document;
+  final int selectedPrintedPageIndex;
+  final ValueChanged<int> onPrintedPageJump;
+
+  @override
+  State<_DocumentSearchSheet> createState() => _DocumentSearchSheetState();
+}
+
+class _DocumentSearchSheetState extends State<_DocumentSearchSheet> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<NoteLibraryState>();
+    final query = _controller.text;
+    final results = _searchDocument(state, widget.document, query);
+    final width = math.min(MediaQuery.sizeOf(context).width - 36, 560.0);
+    final maxHeight = math.min(MediaQuery.sizeOf(context).height - 104, 520.0);
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: width,
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x24000000),
+              blurRadius: 24,
+              offset: Offset(0, 14),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _openFirstResult(results),
+                  decoration: InputDecoration(
+                    hintText: '검색어 입력',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 22),
+                    suffixIcon: query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: '검색어 지우기',
+                            onPressed: () {
+                              _controller.clear();
+                              setState(() {});
+                              _focusNode.requestFocus();
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                          ),
+                    filled: true,
+                    fillColor: AppColors.panelSoft,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 13,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: AppColors.text,
+                        width: 1.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, color: AppColors.border),
+              Flexible(
+                child: _DocumentSearchResults(
+                  query: query,
+                  results: results,
+                  selectedPrintedPageIndex: widget.selectedPrintedPageIndex,
+                  onResultTap: _openResult,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openFirstResult(List<_DocumentSearchResult> results) {
+    if (results.isEmpty) return;
+    _openResult(results.first);
+  }
+
+  void _openResult(_DocumentSearchResult result) {
+    widget.onPrintedPageJump(result.pageIndex + 1);
+    Navigator.of(context).pop();
+  }
+}
+
+class _DocumentSearchResults extends StatelessWidget {
+  const _DocumentSearchResults({
+    required this.query,
+    required this.results,
+    required this.selectedPrintedPageIndex,
+    required this.onResultTap,
+  });
+
+  final String query;
+  final List<_DocumentSearchResult> results;
+  final int selectedPrintedPageIndex;
+  final ValueChanged<_DocumentSearchResult> onResultTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (query.trim().isEmpty) {
+      return const _DocumentSearchEmpty(message: '검색어를 입력하세요.');
+    }
+    if (results.isEmpty) {
+      return const _DocumentSearchEmpty(message: '검색 결과가 없습니다.');
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: results.length,
+      separatorBuilder: (_, _) =>
+          const Divider(height: 1, color: AppColors.border),
+      itemBuilder: (context, index) {
+        final result = results[index];
+        final selected = result.pageIndex == selectedPrintedPageIndex;
+        return InkWell(
+          onTap: () => onResultTap(result),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.text : AppColors.panelSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${result.pageIndex + 1}',
+                    style: TextStyle(
+                      color: selected ? AppColors.panel : AppColors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              result.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 8),
+                              child: Text(
+                                '현재',
+                                style: TextStyle(
+                                  color: AppColors.muted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        result.snippet,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 13,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DocumentSearchEmpty extends StatelessWidget {
+  const _DocumentSearchEmpty({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 34),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: AppColors.muted,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _DocumentSearchResult {
+  const _DocumentSearchResult({
+    required this.pageIndex,
+    required this.title,
+    required this.snippet,
+  });
+
+  final int pageIndex;
+  final String title;
+  final String snippet;
+}
+
+List<_DocumentSearchResult> _searchDocument(
+  NoteLibraryState state,
+  NoteDocument document,
+  String rawQuery,
+) {
+  final query = rawQuery.trim().toLowerCase();
+  if (query.isEmpty) return const [];
+
+  final pageRefs = _pageRefsForDocument(document);
+  final results = <_DocumentSearchResult>[];
+  for (var index = 0; index < pageRefs.length; index += 1) {
+    final pageRef = pageRefs[index];
+    final printedPage = _printedPageForRef(document, pageRef);
+    final strokeDocumentId = _strokeDocumentIdForPageRef(document.id, pageRef);
+    final textStrokes = state
+        .strokesFor(strokeDocumentId)
+        .map((stroke) => stroke.text?.trim())
+        .whereType<String>()
+        .where((text) => text.isNotEmpty);
+
+    final chunks = <String>[
+      document.title,
+      if (printedPage != null) '${printedPage.pageNumber}번',
+      if (printedPage != null) printedPage.title,
+      if (printedPage?.body?.trim().isNotEmpty ?? false) printedPage!.body!,
+      if (printedPage?.sourceLabel?.trim().isNotEmpty ?? false)
+        printedPage!.sourceLabel!,
+      if (printedPage != null) ...printedPage.tags,
+      ...textStrokes,
+    ].where((text) => text.trim().isNotEmpty).toList(growable: false);
+
+    final haystack = chunks.join('\n').toLowerCase();
+    if (!haystack.contains(query)) continue;
+
+    final fallbackTitle = '페이지 ${index + 1}';
+    final title = printedPage == null
+        ? fallbackTitle
+        : '${printedPage.pageNumber}번 ${printedPage.title}';
+    final snippet = _bestSearchSnippet(chunks, query, fallbackTitle);
+    results.add(
+      _DocumentSearchResult(pageIndex: index, title: title, snippet: snippet),
+    );
+  }
+  return results;
+}
+
+String _bestSearchSnippet(List<String> chunks, String query, String fallback) {
+  for (final chunk in chunks) {
+    final trimmed = chunk.trim();
+    if (trimmed.toLowerCase().contains(query)) {
+      return trimmed.length <= 120
+          ? trimmed
+          : '${trimmed.substring(0, 117)}...';
+    }
+  }
+  for (final chunk in chunks) {
+    final trimmed = chunk.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed.length <= 120
+          ? trimmed
+          : '${trimmed.substring(0, 117)}...';
+    }
+  }
+  return fallback;
 }
 
 void _showAddPagePanel(
