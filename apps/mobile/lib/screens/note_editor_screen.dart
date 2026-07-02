@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -764,6 +765,8 @@ class _CanvasStage extends StatefulWidget {
 class _CanvasStageState extends State<_CanvasStage> {
   static const double _minStrokePointDistance = 0.45;
   static const double _maxStrokeSegmentDistance = 3.5;
+  static const Duration _lineStraightenHoldDelay = Duration(milliseconds: 520);
+  static const double _lineStraightenMinLength = 36;
 
   final GlobalKey _pageBoundaryKey = GlobalKey();
   final PageController _printedPageController = PageController();
@@ -772,6 +775,8 @@ class _CanvasStageState extends State<_CanvasStage> {
   String? _draftDocumentId;
   int? _activeStrokePointer;
   String? _activeEraserDocumentId;
+  Timer? _lineStraightenTimer;
+  bool _draftStraightened = false;
   Offset? _laserPoint;
   String? _laserDocumentId;
   Offset? _textInputPoint;
@@ -787,10 +792,12 @@ class _CanvasStageState extends State<_CanvasStage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.documentId == widget.documentId) return;
     _currentPrintedPageIndex = 0;
+    _cancelLineStraightenTimer();
     _draftPoints = [];
     _draftDocumentId = null;
     _activeStrokePointer = null;
     _activeEraserDocumentId = null;
+    _draftStraightened = false;
     _laserPoint = null;
     _laserDocumentId = null;
     _clearTextInput();
@@ -803,6 +810,7 @@ class _CanvasStageState extends State<_CanvasStage> {
 
   @override
   void dispose() {
+    _cancelLineStraightenTimer();
     _textInputController?.dispose();
     _textInputFocusNode?.dispose();
     _printedPageController.dispose();
@@ -1103,11 +1111,13 @@ class _CanvasStageState extends State<_CanvasStage> {
   }
 
   void _handlePrintedPageChanged(int index) {
+    _cancelLineStraightenTimer();
     setState(() {
       _currentPrintedPageIndex = index;
       _draftPoints = [];
       _draftDocumentId = null;
       _activeStrokePointer = null;
+      _draftStraightened = false;
       _clearTextInput();
     });
     widget.onPrintedPageChanged(index);
@@ -1261,11 +1271,13 @@ class _CanvasStageState extends State<_CanvasStage> {
 
   void _handlePointerCancel(PointerCancelEvent event) {
     if (_activeStrokePointer != event.pointer) return;
+    _cancelLineStraightenTimer();
     setState(() {
       _activeStrokePointer = null;
       _activeEraserDocumentId = null;
       _draftPoints = [];
       _draftDocumentId = null;
+      _draftStraightened = false;
       _laserPoint = null;
       _laserDocumentId = null;
     });
@@ -1301,10 +1313,15 @@ class _CanvasStageState extends State<_CanvasStage> {
       case NoteTool.highlighter:
       case NoteTool.textExtractor:
         setState(() {
+          _cancelLineStraightenTimer();
           _draftPoints = [point];
           _draftDocumentId = strokeDocumentId;
+          _draftStraightened = false;
           _clearTextInput();
         });
+        if (state.selectedTool == NoteTool.pen) {
+          _scheduleLineStraightenHold();
+        }
       case NoteTool.eraser:
         state.eraseLastStroke(strokeDocumentId);
       case NoteTool.text:
@@ -1318,10 +1335,20 @@ class _CanvasStageState extends State<_CanvasStage> {
   void _updateStroke(Offset point) {
     if (_extractingSelectionText) return;
     final state = context.read<NoteLibraryState>();
+    if (state.selectedTool == NoteTool.pen && _draftStraightened) {
+      setState(() {
+        if (_draftPoints.isEmpty) return;
+        _draftPoints = [_draftPoints.first, point];
+      });
+      return;
+    }
     if (state.selectedTool == NoteTool.pen ||
         state.selectedTool == NoteTool.highlighter ||
         state.selectedTool == NoteTool.textExtractor) {
       setState(() => _appendDraftPoint(point));
+      if (state.selectedTool == NoteTool.pen) {
+        _scheduleLineStraightenHold();
+      }
     }
   }
 
@@ -1345,7 +1372,76 @@ class _CanvasStageState extends State<_CanvasStage> {
     _draftPoints.add(point);
   }
 
+  void _scheduleLineStraightenHold() {
+    _cancelLineStraightenTimer();
+    if (_activeStrokePointer == null || _draftPoints.length < 2) return;
+    _lineStraightenTimer = Timer(
+      _lineStraightenHoldDelay,
+      _straightenDraftLineIfEligible,
+    );
+  }
+
+  void _cancelLineStraightenTimer() {
+    _lineStraightenTimer?.cancel();
+    _lineStraightenTimer = null;
+  }
+
+  void _straightenDraftLineIfEligible() {
+    if (!mounted || _activeStrokePointer == null || _draftStraightened) return;
+    final state = context.read<NoteLibraryState>();
+    if (state.selectedTool != NoteTool.pen || !_canStraightenDraftLine()) {
+      return;
+    }
+    setState(() {
+      if (!_canStraightenDraftLine()) return;
+      _draftPoints = [_draftPoints.first, _draftPoints.last];
+      _draftStraightened = true;
+    });
+  }
+
+  bool _canStraightenDraftLine() {
+    if (_draftPoints.length < 4) return false;
+    final start = _draftPoints.first;
+    final end = _draftPoints.last;
+    final directDistance = (end - start).distance;
+    if (directDistance < _lineStraightenMinLength) return false;
+
+    var pathLength = 0.0;
+    var maxDeviation = 0.0;
+    for (var index = 1; index < _draftPoints.length; index += 1) {
+      pathLength += (_draftPoints[index] - _draftPoints[index - 1]).distance;
+      maxDeviation = math.max(
+        maxDeviation,
+        _distanceToLineSegment(_draftPoints[index], start, end),
+      );
+    }
+
+    if (pathLength / directDistance > 1.65) return false;
+    final allowedDeviation = math.min(
+      36.0,
+      math.max(8.0, directDistance * 0.14),
+    );
+    return maxDeviation <= allowedDeviation;
+  }
+
+  double _distanceToLineSegment(Offset point, Offset start, Offset end) {
+    final segment = end - start;
+    final lengthSquared = segment.dx * segment.dx + segment.dy * segment.dy;
+    if (lengthSquared == 0) return (point - start).distance;
+    final t =
+        (((point.dx - start.dx) * segment.dx) +
+            ((point.dy - start.dy) * segment.dy)) /
+        lengthSquared;
+    final clamped = t.clamp(0.0, 1.0).toDouble();
+    final projection = Offset(
+      start.dx + segment.dx * clamped,
+      start.dy + segment.dy * clamped,
+    );
+    return (point - projection).distance;
+  }
+
   void _finishStroke(BuildContext context) {
+    _cancelLineStraightenTimer();
     final state = context.read<NoteLibraryState>();
     if (state.selectedTool == NoteTool.textExtractor) {
       final selectionPoints = List<Offset>.from(_draftPoints);
@@ -1354,6 +1450,7 @@ class _CanvasStageState extends State<_CanvasStage> {
         setState(() {
           _draftPoints = [];
           _draftDocumentId = null;
+          _draftStraightened = false;
         });
         return;
       }
@@ -1380,6 +1477,7 @@ class _CanvasStageState extends State<_CanvasStage> {
       _draftPoints = [];
       _draftDocumentId = null;
       _activeStrokePointer = null;
+      _draftStraightened = false;
     });
   }
 
